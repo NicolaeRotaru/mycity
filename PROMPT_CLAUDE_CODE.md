@@ -75,10 +75,13 @@ piacenza-market/
 │   ├── Footer.tsx                        # Footer multi-colonna stile Amazon
 │   ├── Navbar.tsx                        # Navbar con search + carrello + account
 │   ├── ProductCard.tsx                   # Card cliccabile + "Aggiungi al carrello"
-│   ├── ProductGrid.tsx                   # 🆕 Griglia prodotti filtrabile
+│   ├── ProductGrid.tsx                   # 🆕 Griglia con skeleton + empty state
 │   ├── SellerSidebar.tsx                 # 🆕 Sidebar area venditore
+│   ├── SkeletonCard.tsx                  # 🆕 Loading skeleton cards
 │   ├── StoreCard.tsx
 │   ├── StoreShowcase.tsx                 # 🆕 Anteprima negozi in home
+│   ├── TrustBar.tsx                      # 🆕 Ribbon trust signals sopra navbar
+│   ├── ValueProps.tsx                    # 🆕 4 icone benefit
 │   ├── VendorForm.tsx                    # Con defaultValues
 │   ├── hooks/useCartCount.ts             # 🆕 Hook badge carrello
 │   ├── hooks/useProfile.ts               # 🆕 Hook globale ruolo/profile utente
@@ -87,6 +90,7 @@ piacenza-market/
 │       └── ToastProvider.tsx
 ├── lib/
 │   ├── cart.ts                           # 🆕 Helpers localStorage carrello
+│   ├── constants.ts                      # 🆕 FREE_SHIPPING_THRESHOLD, value props
 │   ├── format.ts                         # 🆕 Formatter € e date
 │   └── supabase/client.ts                # Client lazy via Proxy
 ├── migrations/

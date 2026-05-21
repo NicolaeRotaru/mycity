@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useCartCount } from './hooks/useCartCount';
 import { useProfile } from './hooks/useProfile';
 import CategoryBar from './CategoryBar';
+import TrustBar from './TrustBar';
 
 const Navbar = () => {
   const router = useRouter();
@@ -38,7 +39,9 @@ const Navbar = () => {
     '';
 
   return (
-    <header className="bg-gray-900 text-white sticky top-0 z-50 shadow">
+    <header className="sticky top-0 z-50 shadow-lg">
+      <TrustBar />
+      <div className="bg-gray-900 text-white">
       <div className="container mx-auto flex items-center gap-4 px-4 py-3">
         <Link href="/" className="text-2xl font-extrabold whitespace-nowrap">
           <span className="text-indigo-400">Piacenza</span>Market
@@ -122,6 +125,7 @@ const Navbar = () => {
         </nav>
       </div>
 
+      </div>
       {/* CategoryBar nascosta nell'area venditore */}
       {!pathname?.startsWith('/seller') && !pathname?.startsWith('/admin') && <CategoryBar />}
     </header>

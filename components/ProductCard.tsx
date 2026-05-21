@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 
 interface ProductCardProps {
   id: string;
@@ -13,46 +14,106 @@ interface ProductCardProps {
   price: number;
   images?: string[];
   rating?: number;
+  reviewCount?: number;
+  stock?: number;
+  createdAt?: string;
+  storeName?: string;
 }
 
-const ProductCard = ({ id, name, description, price, images, rating }: ProductCardProps) => {
-  const img = images?.[0] ?? 'https://placehold.co/400x400/eee/aaa?text=Foto';
+const ProductCard = ({
+  id, name, description, price, images, rating, reviewCount = 0,
+  stock, createdAt, storeName,
+}: ProductCardProps) => {
+  const img = images?.[0] ?? 'https://placehold.co/400x400/eef2ff/6366f1?text=Foto';
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     addToCart({ id, name, price, image: img });
-    toast.success(`${name} aggiunto al carrello`);
+    toast.success(`${name} aggiunto al carrello`, { duration: 2000 });
   };
+
+  const isNew = createdAt
+    ? (Date.now() - new Date(createdAt).getTime()) / 86400000 < NEW_PRODUCT_DAYS
+    : false;
+  const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
+  const isOutOfStock = stock === 0;
+  const freeShipping = price >= FREE_SHIPPING_THRESHOLD;
 
   return (
     <Link
       href={`/product/${id}`}
-      className="group bg-white border rounded-lg overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
+      className="group bg-white border rounded-xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col relative"
     >
-      <div className="relative w-full h-48 bg-gray-100 overflow-hidden">
+      {/* Badges in alto a sinistra */}
+      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+        {isNew && (
+          <span className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+            Nuovo
+          </span>
+        )}
+        {isOutOfStock && (
+          <span className="bg-gray-700 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+            Esaurito
+          </span>
+        )}
+        {isLowStock && !isOutOfStock && (
+          <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+            Ultimi {stock}!
+          </span>
+        )}
+      </div>
+
+      {/* Immagine */}
+      <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
         <Image
           src={img}
           alt={name}
           fill
-          className="object-cover group-hover:scale-105 transition-transform"
+          className="object-cover group-hover:scale-110 transition-transform duration-300"
           unoptimized
         />
       </div>
+
       <div className="p-3 flex flex-col flex-1">
-        <h3 className="font-semibold text-gray-800 line-clamp-2 mb-1">{name}</h3>
-        {rating !== undefined && (
-          <p className="text-yellow-500 text-sm mb-1">
-            {'★'.repeat(Math.round(rating))}{'☆'.repeat(5 - Math.round(rating))}
+        {storeName && (
+          <p className="text-[11px] text-gray-400 uppercase tracking-wide truncate">
+            {storeName}
           </p>
         )}
-        {description && <p className="text-gray-500 text-xs line-clamp-2 mb-2">{description}</p>}
-        <div className="mt-auto flex justify-between items-center pt-2">
-          <span className="text-lg font-bold text-indigo-700">{formatPrice(price)}</span>
+        <h3 className="font-semibold text-gray-800 line-clamp-2 mb-1 group-hover:text-indigo-600 transition-colors">
+          {name}
+        </h3>
+
+        {/* Rating */}
+        <div className="flex items-center gap-1 mb-1 text-xs">
+          <span className="text-yellow-500">
+            {rating !== undefined && rating > 0
+              ? `${'★'.repeat(Math.round(rating))}${'☆'.repeat(5 - Math.round(rating))}`
+              : '☆☆☆☆☆'}
+          </span>
+          <span className="text-gray-400">({reviewCount})</span>
+        </div>
+
+        {description && (
+          <p className="text-gray-500 text-xs line-clamp-1 mb-2">{description}</p>
+        )}
+
+        <div className="mt-auto pt-2">
+          <div className="flex items-baseline gap-2 mb-2">
+            <span className="text-xl font-extrabold text-gray-900">{formatPrice(price)}</span>
+            {freeShipping && (
+              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                SPED. GRATIS
+              </span>
+            )}
+          </div>
           <button
             onClick={handleAdd}
-            className="bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs font-bold px-3 py-1.5 rounded-full transition-colors"
+            disabled={isOutOfStock}
+            className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-gray-900 text-xs font-bold py-2 rounded-full transition-colors shadow-sm"
           >
-            + Carrello
+            {isOutOfStock ? 'Non disponibile' : '🛒 Aggiungi al carrello'}
           </button>
         </div>
       </div>
