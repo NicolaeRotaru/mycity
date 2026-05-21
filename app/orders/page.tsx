@@ -9,7 +9,7 @@ type OrderItem = {
   quantity: number;
   unit_price: number;
   product_id: string;
-  products: { name: string } | null;
+  products: { name: string }[] | null;  // Supabase restituisce sempre array nelle join
 };
 
 type Order = {
@@ -38,7 +38,7 @@ const fetchOrders = async (): Promise<Order[]> => {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return (data ?? []) as Order[];
+  return (data ?? []) as unknown as Order[];
 };
 
 const paymentBadge: Record<Order['payment_status'], { label: string; classes: string }> = {
@@ -123,7 +123,7 @@ export default function OrdersPage() {
               {order.order_items.map((item) => (
                 <div key={item.id} className="flex justify-between text-sm">
                   <span className="text-gray-700">
-                    {item.products?.name ?? 'Prodotto rimosso'}
+                    {item.products?.[0]?.name ?? 'Prodotto rimosso'}
                     <span className="text-gray-400 ml-2">×{item.quantity}</span>
                   </span>
                   <span className="font-medium text-gray-800">
