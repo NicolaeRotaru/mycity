@@ -220,7 +220,6 @@ module.exports = {
 ```ts
 import type { Config } from 'tailwindcss';
 import colors from 'tailwindcss/colors';
-import scrollbarHide from 'tailwind-scrollbar-hide';
 
 export default {
   content: ['./app/**/*.{js,ts,jsx,tsx}', './components/**/*.{js,ts,jsx,tsx}'],
@@ -229,9 +228,10 @@ export default {
       colors: { primary: colors.indigo, secondary: colors.pink },
     },
   },
-  plugins: [scrollbarHide],
+  plugins: [require('tailwind-scrollbar-hide')],
 } satisfies Config;
 ```
+> Nota: `tailwind-scrollbar-hide` è CommonJS e non ha default export TS. Usare `require()` direttamente nell'array `plugins` evita errori di build su Render/Vercel con TS strict.
 
 ### `.env.example`
 ```
