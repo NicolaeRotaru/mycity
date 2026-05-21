@@ -72,29 +72,73 @@ const Navbar = () => {
 
           {isBuyer && (
             <>
-              <Link href="/profile" className="hover:text-indigo-300 hidden sm:inline">
-                Ciao, {displayName}
+              <Link
+                href="/profile"
+                title="Il tuo account"
+                className="flex items-center gap-2 hover:text-indigo-300 transition-colors"
+              >
+                <span className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-sm font-bold uppercase">
+                  {(displayName?.[0] ?? '?')}
+                </span>
+                <span className="hidden sm:flex flex-col leading-tight">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wide">Ciao</span>
+                  <span className="font-semibold">{displayName}</span>
+                </span>
               </Link>
-              <Link href="/orders" className="hover:text-indigo-300 hidden sm:inline">Ordini</Link>
-              <Link href="/sell" className="bg-pink-500 hover:bg-pink-600 px-3 py-1.5 rounded font-semibold">
+              <Link
+                href="/orders"
+                title="I tuoi ordini"
+                className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors"
+              >
+                <span className="text-lg">📦</span>
+                <span className="hidden sm:inline">Ordini</span>
+              </Link>
+              <Link
+                href="/sell"
+                className="bg-pink-500 hover:bg-pink-600 px-3 py-1.5 rounded font-semibold whitespace-nowrap text-xs sm:text-sm"
+              >
                 Diventa venditore
               </Link>
-              <button onClick={handleSignOut} className="hover:text-indigo-300">Esci</button>
+              <button onClick={handleSignOut} title="Esci" className="hover:text-indigo-300 transition-colors">
+                <span className="hidden sm:inline">Esci</span>
+                <span className="sm:hidden text-lg">↪</span>
+              </button>
             </>
           )}
 
           {isSeller && (
             <>
-              <Link href="/seller/profile" className="hover:text-indigo-300 hidden sm:inline">
-                🏪 {displayName}
+              <Link
+                href="/seller/profile"
+                title="Profilo negozio"
+                className="flex items-center gap-2 hover:text-indigo-300 transition-colors"
+              >
+                <span className="w-8 h-8 rounded-full bg-pink-500/20 border border-pink-400/40 flex items-center justify-center text-sm">
+                  🏪
+                </span>
+                <span className="hidden sm:flex flex-col leading-tight">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wide">Negozio</span>
+                  <span className="font-semibold truncate max-w-[120px]">{displayName}</span>
+                </span>
               </Link>
-              <Link href="/seller/dashboard" className="bg-indigo-500 hover:bg-indigo-600 px-3 py-1.5 rounded font-semibold">
+              <Link
+                href="/seller/dashboard"
+                className="bg-indigo-500 hover:bg-indigo-600 px-3 py-1.5 rounded font-semibold whitespace-nowrap text-xs sm:text-sm"
+              >
                 Area venditore
               </Link>
-              <Link href="/seller/orders" className="hover:text-indigo-300 hidden sm:inline">
-                Ordini ricevuti
+              <Link
+                href="/seller/orders"
+                title="Ordini ricevuti"
+                className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors"
+              >
+                <span className="text-lg">📦</span>
+                <span className="hidden sm:inline">Ordini</span>
               </Link>
-              <button onClick={handleSignOut} className="hover:text-indigo-300">Esci</button>
+              <button onClick={handleSignOut} title="Esci" className="hover:text-indigo-300 transition-colors">
+                <span className="hidden sm:inline">Esci</span>
+                <span className="sm:hidden text-lg">↪</span>
+              </button>
             </>
           )}
 
