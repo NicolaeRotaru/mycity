@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useProfile } from './hooks/useProfile';
 
 const Footer = () => {
-  const { isSeller, isPendingSeller, isBuyer, isAuthenticated } = useProfile();
-  const isSellerArea = isSeller || isPendingSeller;
+  const { isSeller, isBuyer, isAuthenticated } = useProfile();
+  const isSellerArea = isSeller;
 
   return (
     <footer className="bg-gray-900 text-gray-300 mt-12">

@@ -1,71 +1,70 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import StoreLocationPicker, { StoreLocation } from './StoreLocationPicker';
 
 const VendorSchema = z.object({
-  storeName: z.string().min(3, 'Il nome deve essere di almeno 3 caratteri'),
-  storeLat: z.coerce.number({ invalid_type_error: 'Inserisci una latitudine valida' }),
-  storeLng: z.coerce.number({ invalid_type_error: 'Inserisci una longitudine valida' }),
+  storeName:  z.string().min(3, 'Il nome deve essere di almeno 3 caratteri'),
   storePhone: z.string().length(10, 'Il numero di telefono deve essere di 10 cifre'),
 });
 
-export type VendorFormData = z.infer<typeof VendorSchema>;
+type SchemaData = z.infer<typeof VendorSchema>;
 
-interface VendorFormProps {
+export type VendorFormData = SchemaData & {
+  storeAddress: string;
+  storeLat: number;
+  storeLng: number;
+};
+
+interface Props {
   onSubmit: (data: VendorFormData) => void;
   isLoading?: boolean;
   defaultValues?: Partial<VendorFormData>;
 }
 
-const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: VendorFormProps) => {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<VendorFormData>({
+const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
+  const { register, handleSubmit, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(VendorSchema),
-    defaultValues,
+    defaultValues: {
+      storeName:  defaultValues?.storeName  ?? '',
+      storePhone: defaultValues?.storePhone ?? '',
+    },
   });
 
+  const [location, setLocation] = useState<StoreLocation>({
+    address: defaultValues?.storeAddress ?? '',
+    lat:     defaultValues?.storeLat     ?? 45.0526,
+    lng:     defaultValues?.storeLng     ?? 9.6929,
+  });
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  const handleFormSubmit = (data: SchemaData) => {
+    if (!location.address.trim()) {
+      setLocationError("Inserisci l'indirizzo del negozio");
+      return;
+    }
+    onSubmit({
+      ...data,
+      storeAddress: location.address,
+      storeLat: location.lat,
+      storeLng: location.lng,
+    });
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Nome del negozio</label>
         <input
           {...register('storeName')}
           type="text"
-          placeholder="Nome del negozio"
+          placeholder="Es. Panificio Rossi"
           className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
         />
         {errors.storeName && <p className="text-red-500 text-sm mt-1">{errors.storeName.message}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Latitudine</label>
-          <input
-            {...register('storeLat')}
-            type="number"
-            step="any"
-            placeholder="45.0526"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
-          {errors.storeLat && <p className="text-red-500 text-sm mt-1">{errors.storeLat.message}</p>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Longitudine</label>
-          <input
-            {...register('storeLng')}
-            type="number"
-            step="any"
-            placeholder="9.6929"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
-          {errors.storeLng && <p className="text-red-500 text-sm mt-1">{errors.storeLng.message}</p>}
-        </div>
       </div>
 
       <div>
@@ -73,18 +72,31 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: VendorFormPr
         <input
           {...register('storePhone')}
           type="text"
-          placeholder="Telefono (10 cifre)"
+          placeholder="3331234567 (10 cifre)"
           className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
         />
         {errors.storePhone && <p className="text-red-500 text-sm mt-1">{errors.storePhone.message}</p>}
       </div>
 
+      <StoreLocationPicker
+        defaultValue={{
+          address: defaultValues?.storeAddress,
+          lat:     defaultValues?.storeLat,
+          lng:     defaultValues?.storeLng,
+        }}
+        onChange={(loc) => {
+          setLocation(loc);
+          if (loc.address.trim()) setLocationError(null);
+        }}
+      />
+      {locationError && <p className="text-red-500 text-sm">{locationError}</p>}
+
       <button
         type="submit"
         disabled={isLoading}
-        className="bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors"
+        className="bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white px-6 py-3 rounded font-semibold transition-colors"
       >
-        {isLoading ? 'Salvataggio...' : 'Salva'}
+        {isLoading ? 'Salvataggio...' : 'Salva negozio'}
       </button>
     </form>
   );

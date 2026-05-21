@@ -27,8 +27,8 @@ const SignUp = () => {
       if (error) throw error;
       toast.success(
         role === 'seller'
-          ? 'Registrazione completata! Accedi e completa il profilo del negozio.'
-          : 'Registrazione completata! Controlla la tua email.'
+          ? 'Registrazione completata! Accedi e completa i dati del tuo negozio.'
+          : 'Registrazione completata! Ora puoi accedere e iniziare a comprare.'
       );
       router.push('/sign-in');
     } catch (error: any) {
@@ -73,8 +73,8 @@ const SignUp = () => {
         </div>
 
         {role === 'seller' && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-800">
-            ℹ️ Dopo la registrazione dovrai completare i dati del negozio e attendere l'approvazione dell'admin.
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800">
+            ✅ Dopo la registrazione compili i dati del negozio e sei subito online — nessuna attesa.
           </div>
         )}
 

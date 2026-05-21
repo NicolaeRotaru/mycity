@@ -55,8 +55,6 @@ export const useProfile = () => {
     isLoading: query.isLoading,
     isAuthenticated: !!profile,
     isBuyer: role === 'buyer',
-    isSeller: role === 'seller' && !!profile?.is_approved,
-    isPendingSeller: role === 'pending_approval',
-    isApproved: !!profile?.is_approved,
+    isSeller: role === 'seller',
   };
 };

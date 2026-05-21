@@ -16,7 +16,7 @@ const Navbar = () => {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const cartCount = useCartCount();
-  const { profile, isAuthenticated, isSeller, isPendingSeller, isBuyer } = useProfile();
+  const { profile, isAuthenticated, isSeller, isBuyer } = useProfile();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,20 +98,8 @@ const Navbar = () => {
             </>
           )}
 
-          {isPendingSeller && (
-            <>
-              <Link
-                href="/seller/profile"
-                className="bg-yellow-500 hover:bg-yellow-600 text-gray-900 px-3 py-1.5 rounded font-semibold"
-              >
-                ⏳ In attesa di approvazione
-              </Link>
-              <button onClick={handleSignOut} className="hover:text-indigo-300">Esci</button>
-            </>
-          )}
-
           {/* Carrello: visibile solo a buyer e ospiti, non ai seller */}
-          {!isSeller && !isPendingSeller && (
+          {!isSeller && (
             <Link href="/cart" className="relative flex items-center gap-1 hover:text-indigo-300">
               <span className="text-xl">🛒</span>
               {cartCount > 0 && (

@@ -7,7 +7,7 @@ import { formatPrice } from '@/lib/format';
 import { useProfile } from '@/components/hooks/useProfile';
 
 export default function SellerDashboard() {
-  const { profile, isPendingSeller, isSeller } = useProfile();
+  const { profile, isSeller } = useProfile();
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['seller-stats'],
@@ -41,56 +41,8 @@ export default function SellerDashboard() {
         last30Count: last30.length,
       };
     },
-    enabled: isSeller || isPendingSeller,
+    enabled: isSeller,
   });
-
-  // Stato pending: mostra solo guida
-  if (isPendingSeller) {
-    return (
-      <div className="max-w-2xl space-y-6">
-        <div className="bg-gradient-to-r from-yellow-100 to-amber-100 border-2 border-yellow-400 rounded-xl p-6 space-y-3">
-          <div className="text-4xl">⏳</div>
-          <h1 className="text-2xl font-bold">Il tuo negozio è in attesa di approvazione</h1>
-          <p className="text-gray-700">
-            Grazie per esserti registrato come venditore! Stiamo verificando i tuoi dati. Riceverai una notifica appena il negozio sarà attivo (di solito entro 24 ore).
-          </p>
-          <Link
-            href="/seller/profile"
-            className="inline-block bg-yellow-500 hover:bg-yellow-600 text-white px-5 py-2.5 rounded-lg font-bold"
-          >
-            Completa i dati del negozio →
-          </Link>
-        </div>
-
-        <div className="bg-white border rounded-xl p-6 space-y-4">
-          <h2 className="font-bold text-lg">Cosa puoi fare nel frattempo</h2>
-          <div className="space-y-3 text-sm">
-            <div className="flex gap-3">
-              <span className="text-2xl">1️⃣</span>
-              <div>
-                <p className="font-semibold">Completa i dati del negozio</p>
-                <p className="text-gray-500">Nome, indirizzo, telefono — più informazioni dai, più velocemente verrai approvato.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-2xl">2️⃣</span>
-              <div>
-                <p className="font-semibold">Prepara il catalogo</p>
-                <p className="text-gray-500">Pensa ai primi 5-10 prodotti da pubblicare. Foto belle = più vendite.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="text-2xl">3️⃣</span>
-              <div>
-                <p className="font-semibold">Esplora il marketplace</p>
-                <p className="text-gray-500">Guarda come si presentano gli altri negozi su <Link href="/stores" className="text-indigo-600 hover:underline">/stores</Link>.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (isLoading || !stats) return <div className="text-center py-8 text-gray-400">Caricamento...</div>;
 

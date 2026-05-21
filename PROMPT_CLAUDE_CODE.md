@@ -78,6 +78,7 @@ piacenza-market/
 │   ├── ProductGrid.tsx                   # 🆕 Griglia con skeleton + empty state
 │   ├── SellerSidebar.tsx                 # 🆕 Sidebar area venditore
 │   ├── SkeletonCard.tsx                  # 🆕 Loading skeleton cards
+│   ├── StoreLocationPicker.tsx           # 🆕 Mappa Leaflet + geocoding indirizzo
 │   ├── StoreCard.tsx
 │   ├── StoreShowcase.tsx                 # 🆕 Anteprima negozi in home
 │   ├── TrustBar.tsx                      # 🆕 Ribbon trust signals sopra navbar
@@ -96,7 +97,8 @@ piacenza-market/
 ├── migrations/
 │   ├── 001_create_tables.sql             # Schema base + RLS + trigger
 │   ├── 002_categories_and_extras.sql     # 🆕 categories, storage, extra policy
-│   └── 003_signup_role.sql               # 🆕 Trigger legge role da raw_user_meta_data
+│   ├── 003_signup_role.sql               # 🆕 Trigger legge role da raw_user_meta_data
+│   └── 004_no_admin_approval.sql         # 🆕 Auto-approva seller + colonna store_address
 └── types/
     └── globals.d.ts
 ```
