@@ -81,6 +81,7 @@ piacenza-market/
 │   ├── StoreShowcase.tsx                 # 🆕 Anteprima negozi in home
 │   ├── VendorForm.tsx                    # Con defaultValues
 │   ├── hooks/useCartCount.ts             # 🆕 Hook badge carrello
+│   ├── hooks/useProfile.ts               # 🆕 Hook globale ruolo/profile utente
 │   └── providers/
 │       ├── QueryProvider.tsx
 │       └── ToastProvider.tsx
@@ -90,7 +91,8 @@ piacenza-market/
 │   └── supabase/client.ts                # Client lazy via Proxy
 ├── migrations/
 │   ├── 001_create_tables.sql             # Schema base + RLS + trigger
-│   └── 002_categories_and_extras.sql     # 🆕 categories, storage, extra policy
+│   ├── 002_categories_and_extras.sql     # 🆕 categories, storage, extra policy
+│   └── 003_signup_role.sql               # 🆕 Trigger legge role da raw_user_meta_data
 └── types/
     └── globals.d.ts
 ```
