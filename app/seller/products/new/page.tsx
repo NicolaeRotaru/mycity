@@ -10,6 +10,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import PhotoFillButton, { ExtractedProduct } from '@/components/seller/PhotoFillButton';
+import AttributesFields from '@/components/seller/AttributesFields';
+import { getAttributesForCategory } from '@/lib/category-attributes';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
@@ -25,22 +27,44 @@ export default function NewProductPage() {
   const router = useRouter();
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [attributes, setAttributes] = useState<Record<string, unknown>>({});
 
   const { data: categories = [] } = useQuery({
     queryKey: ['cats-form'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
-        .select('id, name')
+        .select('id, name, slug, parent_id')
         .order('name');
       if (error) throw error;
       return data ?? [];
     },
   });
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(Schema),
   });
+
+  const selectedCategoryId = watch('category_id');
+  const { fields: attrFields, topSlug } = getAttributesForCategory(
+    categories as any,
+    selectedCategoryId,
+  );
+  const topCategoryLabel = topSlug
+    ? (categories.find((c: any) => c.slug === topSlug)?.name as string | undefined)
+    : undefined;
+
+  const setAttribute = (key: string, value: unknown) => {
+    setAttributes((prev) => {
+      const next = { ...prev };
+      if (value === undefined || value === '' || value === null) {
+        delete next[key];
+      } else {
+        next[key] = value;
+      }
+      return next;
+    });
+  };
 
   const handleExtracted = (data: ExtractedProduct) => {
     if (data.name) setValue('name', data.name, { shouldValidate: true });
@@ -91,6 +115,7 @@ export default function NewProductPage() {
         category_id: form.category_id,
         seller_id: user.id,
         images: imageUrls,
+        attributes,
         status: 'available',
       });
       if (error) throw error;
@@ -142,6 +167,15 @@ export default function NewProductPage() {
             ))}
           </select>
           {errors.category_id && <p className="text-red-500 text-sm mt-1">{errors.category_id.message}</p>}
+        </div>
+
+        <div className="border-t pt-4">
+          <AttributesFields
+            fields={attrFields}
+            values={attributes}
+            onChange={setAttribute}
+            categoryLabel={topCategoryLabel}
+          />
         </div>
 
         <div>

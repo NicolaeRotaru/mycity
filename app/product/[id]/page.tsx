@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
+import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -175,6 +176,32 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             <h3 className="font-bold text-sm uppercase tracking-wide text-gray-500 mb-2">Descrizione</h3>
             <p className="text-gray-700 leading-relaxed whitespace-pre-line">{product.description}</p>
           </div>
+
+          {/* Caratteristiche */}
+          {product.attributes &&
+            typeof product.attributes === 'object' &&
+            Object.keys(product.attributes).length > 0 && (
+              <div>
+                <h3 className="font-bold text-sm uppercase tracking-wide text-gray-500 mb-2">
+                  Caratteristiche
+                </h3>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                  {Object.entries(product.attributes as Record<string, unknown>).map(
+                    ([key, value]) => (
+                      <div
+                        key={key}
+                        className="flex justify-between items-baseline gap-3 py-1.5 border-b border-gray-100"
+                      >
+                        <dt className="text-sm text-gray-500">{findLabelForKey(key)}</dt>
+                        <dd className="text-sm text-gray-800 font-medium text-right">
+                          {formatAttributeValue(value)}
+                        </dd>
+                      </div>
+                    ),
+                  )}
+                </dl>
+              </div>
+            )}
 
           {/* Trust signals */}
           <div className="grid grid-cols-2 gap-3 pt-2">
