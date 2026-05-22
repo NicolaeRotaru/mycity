@@ -44,19 +44,22 @@ const Navbar = () => {
     <header className="sticky top-0 z-50 shadow-lg">
       <TrustBar />
       <div className="bg-gray-900 text-white">
-      <div className="container mx-auto flex items-center gap-4 px-4 py-3">
-        <Link href="/" className="text-2xl font-extrabold whitespace-nowrap">
+      <div className="container mx-auto flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
+        <Link href="/" className="text-xl sm:text-2xl font-extrabold whitespace-nowrap">
           <span className="text-indigo-400">Piacenza</span>Market
         </Link>
 
-        <form onSubmit={handleSearch} className="flex-1 max-w-2xl">
+        <form
+          onSubmit={handleSearch}
+          className="order-3 w-full md:order-none md:flex-1 md:max-w-2xl md:w-auto"
+        >
           <div className="flex">
             <input
               type="text"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Cerca prodotti, negozi, categorie..."
-              className="w-full px-4 py-2 rounded-l-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              placeholder="Cerca prodotti, negozi..."
+              className="w-full px-4 py-2 rounded-l-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm sm:text-base"
             />
             <button type="submit" className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-r-md font-semibold">
               🔍
@@ -64,7 +67,7 @@ const Navbar = () => {
           </div>
         </form>
 
-        <nav className="flex items-center gap-5 text-sm">
+        <nav className="ml-auto flex items-center gap-3 sm:gap-5 text-sm">
           {!isAuthenticated && !isLoading && (
             <>
               <Link href="/sign-in" className="hover:text-indigo-300">Accedi</Link>
