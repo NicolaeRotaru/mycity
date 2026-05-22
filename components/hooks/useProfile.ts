@@ -18,15 +18,18 @@ export type Profile = {
 export const useProfile = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
       setUserEmail(data.user?.email ?? null);
+      setAuthChecked(true);
     });
     const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
       setUserId(session?.user?.id ?? null);
       setUserEmail(session?.user?.email ?? null);
+      setAuthChecked(true);
     });
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -49,11 +52,13 @@ export const useProfile = () => {
 
   const profile = query.data ?? null;
   const role = profile?.role;
+  const isAuthenticated = !!userId;
 
   return {
     profile,
-    isLoading: query.isLoading,
-    isAuthenticated: !!profile,
+    userEmail,
+    isLoading: !authChecked || (isAuthenticated && query.isLoading),
+    isAuthenticated,
     isBuyer: role === 'buyer',
     isSeller: role === 'seller',
   };

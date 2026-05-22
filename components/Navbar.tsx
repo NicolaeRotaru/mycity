@@ -16,7 +16,7 @@ const Navbar = () => {
   const qc = useQueryClient();
   const [q, setQ] = useState('');
   const cartCount = useCartCount();
-  const { profile, isAuthenticated, isSeller, isBuyer } = useProfile();
+  const { profile, userEmail, isAuthenticated, isLoading, isSeller, isBuyer } = useProfile();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +36,9 @@ const Navbar = () => {
     profile?.full_name?.split(' ')[0] ??
     profile?.store_name ??
     profile?.email?.split('@')[0] ??
+    userEmail?.split('@')[0] ??
     '';
+  const isAuthUnknownRole = isAuthenticated && !isBuyer && !isSeller;
 
   return (
     <header className="sticky top-0 z-50 shadow-lg">
@@ -63,10 +65,32 @@ const Navbar = () => {
         </form>
 
         <nav className="flex items-center gap-5 text-sm">
-          {!isAuthenticated && (
+          {!isAuthenticated && !isLoading && (
             <>
               <Link href="/sign-in" className="hover:text-indigo-300">Accedi</Link>
               <Link href="/sign-up" className="hover:text-indigo-300 hidden sm:inline">Registrati</Link>
+            </>
+          )}
+
+          {isAuthUnknownRole && (
+            <>
+              <Link
+                href="/profile"
+                title="Il tuo account"
+                className="flex items-center gap-2 hover:text-indigo-300 transition-colors"
+              >
+                <span className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-sm font-bold uppercase">
+                  {(displayName?.[0] ?? '?')}
+                </span>
+                <span className="hidden sm:flex flex-col leading-tight">
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wide">Ciao</span>
+                  <span className="font-semibold">{displayName || 'utente'}</span>
+                </span>
+              </Link>
+              <button onClick={handleSignOut} title="Esci" className="hover:text-indigo-300 transition-colors">
+                <span className="hidden sm:inline">Esci</span>
+                <span className="sm:hidden text-lg">↪</span>
+              </button>
             </>
           )}
 
