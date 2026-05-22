@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -20,6 +20,15 @@ export default function ProfilePage() {
   const router = useRouter();
   const qc = useQueryClient();
   const { register, handleSubmit, reset } = useForm<ProfileForm>();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    await supabase.auth.signOut();
+    qc.clear();
+    router.push('/sign-in');
+    router.refresh();
+  };
 
   const { data: profile, isLoading, error } = useQuery({
     queryKey: ['my-profile'],
@@ -127,6 +136,18 @@ export default function ProfilePage() {
             {update.isPending ? 'Salvataggio...' : 'Salva modifiche'}
           </button>
         </form>
+      </div>
+
+      <div className="mt-8 flex justify-end">
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="text-red-600 hover:text-red-700 font-semibold disabled:opacity-50 flex items-center gap-2"
+        >
+          <span>↪</span>
+          <span>{signingOut ? 'Disconnessione...' : 'Esci dal tuo account'}</span>
+        </button>
       </div>
     </div>
   );

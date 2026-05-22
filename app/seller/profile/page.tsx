@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import VendorForm, { VendorFormData } from '@/components/VendorForm';
@@ -7,6 +9,16 @@ import { toast } from 'sonner';
 
 export default function SellerProfilePage() {
   const qc = useQueryClient();
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    await supabase.auth.signOut();
+    qc.clear();
+    router.push('/sign-in');
+    router.refresh();
+  };
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['seller-profile'],
@@ -65,6 +77,18 @@ export default function SellerProfilePage() {
           onSubmit={(d) => update.mutate(d)}
           isLoading={update.isPending}
         />
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="text-red-600 hover:text-red-700 font-semibold disabled:opacity-50 flex items-center gap-2"
+        >
+          <span>↪</span>
+          <span>{signingOut ? 'Disconnessione...' : 'Esci dal tuo account'}</span>
+        </button>
       </div>
     </div>
   );
