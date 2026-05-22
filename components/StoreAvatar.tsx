@@ -3,7 +3,7 @@
 interface Props {
   logoUrl?: string | null;
   storeName?: string | null;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
   className?: string;
 }
 
@@ -11,6 +11,7 @@ const SIZE_CLASSES = {
   sm: 'w-10 h-10 text-xl',
   md: 'w-14 h-14 text-2xl',
   lg: 'w-20 h-20 text-4xl',
+  xl: 'w-28 h-28 text-5xl',
 } as const;
 
 const StoreAvatar = ({ logoUrl, storeName, size = 'md', className = '' }: Props) => {
