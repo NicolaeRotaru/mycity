@@ -7,10 +7,9 @@ const nextConfig = {
         hostname: '*.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'placehold.co',
-      },
+      { protocol: 'https', hostname: 'placehold.co' },
+      { protocol: 'https', hostname: 'loremflickr.com' },
+      { protocol: 'https', hostname: 'api.dicebear.com' },
     ],
   },
 };

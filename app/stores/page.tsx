@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import StoreAvatar from '@/components/StoreAvatar';
 
 export default function StoresPage() {
   const { data: stores = [], isLoading } = useQuery({
@@ -10,7 +11,7 @@ export default function StoresPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, store_name, store_phone, store_lat, store_lng')
+        .select('id, store_name, store_phone, store_lat, store_lng, store_logo')
         .eq('is_approved', true)
         .not('store_name', 'is', null)
         .order('store_name');
@@ -35,9 +36,7 @@ export default function StoresPage() {
               className="bg-white border rounded-lg p-6 hover:shadow-lg transition-shadow space-y-2"
             >
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center text-2xl">
-                  🏪
-                </div>
+                <StoreAvatar logoUrl={s.store_logo} storeName={s.store_name} size="sm" />
                 <h3 className="font-bold text-lg">{s.store_name}</h3>
               </div>
               <p className="text-sm text-gray-500">📞 {s.store_phone}</p>
