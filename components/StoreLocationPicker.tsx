@@ -5,6 +5,11 @@ import { useEffect, useRef, useState } from 'react';
 
 const PIACENZA_CENTER = { lat: 45.0526, lng: 9.6929 };
 
+const isValidLatLng = (lat: unknown, lng: unknown): lat is number =>
+  typeof lat === 'number' && typeof lng === 'number' &&
+  Number.isFinite(lat) && Number.isFinite(lng) &&
+  lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+
 export type StoreLocation = {
   address: string;
   lat: number;
@@ -21,14 +26,28 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
 
+  const initialCoords = isValidLatLng(defaultValue?.lat, defaultValue?.lng)
+    ? { lat: defaultValue!.lat as number, lng: defaultValue!.lng as number }
+    : PIACENZA_CENTER;
+  const hadInvalidStoredCoords =
+    (defaultValue?.lat !== undefined || defaultValue?.lng !== undefined) &&
+    !isValidLatLng(defaultValue?.lat, defaultValue?.lng);
+
   const [address, setAddress] = useState(defaultValue?.address ?? '');
-  const [coords, setCoords] = useState({
-    lat: defaultValue?.lat ?? PIACENZA_CENTER.lat,
-    lng: defaultValue?.lng ?? PIACENZA_CENTER.lng,
-  });
+  const [coords, setCoords] = useState(initialCoords);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    hadInvalidStoredCoords
+      ? 'Le coordinate salvate non sono valide. Cerca di nuovo l\'indirizzo o trascina il pin sulla mappa, poi salva.'
+      : null
+  );
+
+  // Sincronizza il parent con le coord (eventualmente sanificate) all'avvio
+  useEffect(() => {
+    onChange({ address, lat: initialCoords.lat, lng: initialCoords.lng });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Init mappa (una volta sola)
   useEffect(() => {
@@ -103,16 +122,28 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
     setSearching(true);
     setError(null);
     try {
-      const q = encodeURIComponent(`${address}, Piacenza, Italia`);
-      const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`);
+      const hasCity = /piacenza/i.test(address);
+      const hasCountry = /italia|italy/i.test(address);
+      const parts = [address];
+      if (!hasCity) parts.push('Piacenza');
+      if (!hasCountry) parts.push('Italia');
+      const q = encodeURIComponent(parts.join(', '));
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=it`
+      );
       const data = await res.json();
       if (!Array.isArray(data) || data.length === 0) {
         setError('Indirizzo non trovato. Prova ad essere più specifico o sposta il pin sulla mappa.');
         return;
       }
-      const newCoords = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-      setCoords(newCoords);
-      onChange({ ...newCoords, address });
+      const lat = parseFloat(data[0].lat);
+      const lng = parseFloat(data[0].lon);
+      if (!isValidLatLng(lat, lng)) {
+        setError('Posizione non valida ricevuta dal servizio. Sposta il pin sulla mappa.');
+        return;
+      }
+      setCoords({ lat, lng });
+      onChange({ address, lat, lng });
     } catch {
       setError('Errore di rete durante la ricerca. Riprova.');
     } finally {

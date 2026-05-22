@@ -46,6 +46,14 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
       setLocationError("Inserisci l'indirizzo del negozio");
       return;
     }
+    const validCoords =
+      Number.isFinite(location.lat) && Number.isFinite(location.lng) &&
+      location.lat >= -90 && location.lat <= 90 &&
+      location.lng >= -180 && location.lng <= 180;
+    if (!validCoords) {
+      setLocationError('Coordinate non valide. Cerca un indirizzo, usa la tua posizione, o sposta il pin sulla mappa.');
+      return;
+    }
     onSubmit({
       ...data,
       storeAddress: location.address,
