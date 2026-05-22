@@ -9,6 +9,7 @@ import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import PhotoFillButton, { ExtractedProduct } from '@/components/seller/PhotoFillButton';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
@@ -37,9 +38,20 @@ export default function NewProductPage() {
     },
   });
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(Schema),
   });
+
+  const handleExtracted = (data: ExtractedProduct) => {
+    if (data.name) setValue('name', data.name, { shouldValidate: true });
+    if (data.description) setValue('description', data.description, { shouldValidate: true });
+    if (data.suggested_price && data.suggested_price > 0) {
+      setValue('price', data.suggested_price as unknown as number, { shouldValidate: true });
+    }
+    if (data.category_id) {
+      setValue('category_id', data.category_id, { shouldValidate: true });
+    }
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     accept: { 'image/*': [] },
@@ -93,6 +105,8 @@ export default function NewProductPage() {
   return (
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold">Nuovo prodotto</h1>
+
+      <PhotoFillButton onFilled={handleExtracted} />
 
       <form onSubmit={handleSubmit((d) => create.mutate(d))} className="bg-white border rounded-lg p-6 space-y-4">
         <div>
