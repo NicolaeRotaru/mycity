@@ -1,12 +1,11 @@
 'use client';
 
-import { use } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid from '@/components/ProductGrid';
 
-export default function StorePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function StorePage({ params }: { params: { id: string } }) {
+  const { id } = params;
 
   const { data: store, isLoading } = useQuery({
     queryKey: ['store', id],
