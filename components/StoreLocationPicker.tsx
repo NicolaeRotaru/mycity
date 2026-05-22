@@ -3,7 +3,8 @@
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef, useState } from 'react';
 
-const PIACENZA_CENTER = { lat: 45.0526, lng: 9.6929 };
+// Centro Italia (Roma) come fallback iniziale prima che il seller imposti la propria posizione
+const DEFAULT_MAP_CENTER = { lat: 41.9028, lng: 12.4964 };
 
 const isValidLatLng = (lat: unknown, lng: unknown): lat is number =>
   typeof lat === 'number' && typeof lng === 'number' &&
@@ -28,7 +29,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
 
   const initialCoords = isValidLatLng(defaultValue?.lat, defaultValue?.lng)
     ? { lat: defaultValue!.lat as number, lng: defaultValue!.lng as number }
-    : PIACENZA_CENTER;
+    : DEFAULT_MAP_CENTER;
   const hadInvalidStoredCoords =
     (defaultValue?.lat !== undefined || defaultValue?.lng !== undefined) &&
     !isValidLatLng(defaultValue?.lat, defaultValue?.lng);
@@ -122,10 +123,8 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
     setSearching(true);
     setError(null);
     try {
-      const hasCity = /piacenza/i.test(address);
       const hasCountry = /italia|italy/i.test(address);
       const parts = [address];
-      if (!hasCity) parts.push('Piacenza');
       if (!hasCountry) parts.push('Italia');
       const q = encodeURIComponent(parts.join(', '));
       const res = await fetch(
@@ -193,7 +192,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
                 searchAddress();
               }
             }}
-            placeholder="Es. Via Roma 1, Piacenza"
+            placeholder="Es. Via Roma 1, Milano"
             className="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
           <button

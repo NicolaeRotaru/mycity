@@ -15,7 +15,7 @@ const Footer = () => {
         <div className="bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-600">
           <div className="container mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-white">
             <div>
-              <h3 className="text-xl md:text-2xl font-extrabold">Hai un'attività a Piacenza?</h3>
+              <h3 className="text-xl md:text-2xl font-extrabold">Hai un'attività nella tua città?</h3>
               <p className="text-indigo-100 text-sm">Inizia a vendere online in 5 minuti. Zero commissioni mensili.</p>
             </div>
             <Link
@@ -31,7 +31,7 @@ const Footer = () => {
       <div className="container mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-4 gap-8">
         <div>
           <h3 className="font-bold text-white mb-3 flex items-center gap-2">
-            <span className="text-indigo-400">●</span> Piacenza Market
+            <span className="text-indigo-400">●</span> MyCity
           </h3>
           <ul className="space-y-2 text-sm">
             <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
@@ -93,9 +93,9 @@ const Footer = () => {
         <div>
           <h3 className="font-bold text-white mb-3">Assistenza</h3>
           <ul className="space-y-2 text-sm">
-            <li className="text-gray-400">📧 info@piacenzamarket.it</li>
+            <li className="text-gray-400">📧 info@mycity.it</li>
             <li className="text-gray-400">📞 Lun-Ven 9-18</li>
-            <li className="text-gray-400">🏘️ Piacenza, Italia</li>
+            <li className="text-gray-400">🏘️ Italia</li>
           </ul>
           <div className="flex gap-2 mt-4">
             <span className="w-9 h-9 bg-white/5 hover:bg-white/15 rounded-full flex items-center justify-center cursor-pointer transition-colors" title="Facebook">f</span>
@@ -118,7 +118,7 @@ const Footer = () => {
       </div>
 
       <div className="border-t border-gray-800 py-4 text-center text-xs text-gray-500">
-        © {new Date().getFullYear()} Piacenza Market · Il mercato locale della tua città · P.IVA 00000000000
+        © {new Date().getFullYear()} MyCity · Il mercato locale della tua città · P.IVA 00000000000
       </div>
     </footer>
   );

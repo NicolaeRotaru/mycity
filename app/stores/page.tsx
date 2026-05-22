@@ -23,7 +23,7 @@ export default function StoresPage() {
 
   return (
     <div className="container mx-auto px-6 py-8">
-      <h1 className="text-3xl font-bold mb-6">Negozi a Piacenza</h1>
+      <h1 className="text-3xl font-bold mb-6">Negozi nella tua città</h1>
       {stores.length === 0 ? (
         <p className="text-gray-500">Nessun negozio approvato ancora.</p>
       ) : (

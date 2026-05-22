@@ -46,7 +46,7 @@ const Navbar = () => {
       <div className="bg-gray-900 text-white">
       <div className="container mx-auto flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3">
         <Link href="/" className="text-xl sm:text-2xl font-extrabold whitespace-nowrap">
-          <span className="text-indigo-400">Piacenza</span>Market
+          <span className="text-indigo-400">My</span>City
         </Link>
 
         <form

@@ -182,7 +182,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               { icon: '💰', label: 'Pagamento alla consegna' },
               { icon: '🚚', label: 'Consegna in 24-48h' },
               { icon: '↩️', label: 'Reso entro 14 giorni' },
-              { icon: '🏘️', label: 'Venditore di Piacenza' },
+              { icon: '🏘️', label: 'Venditore locale' },
             ].map((t) => (
               <div key={t.label} className="flex items-center gap-2 text-xs text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
                 <span className="text-lg">{t.icon}</span>

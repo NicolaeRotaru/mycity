@@ -5,7 +5,7 @@ import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 const messages = [
   `🚚 Spedizione GRATUITA sopra €${FREE_SHIPPING_THRESHOLD}`,
   '💰 Pagamento alla consegna in contanti',
-  '🏘️ Venditori 100% locali di Piacenza',
+  '🏘️ Venditori 100% locali della tua città',
   '⚡ Consegna in 24-48h nella tua zona',
 ];
 

@@ -124,7 +124,7 @@ export default function CheckoutPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Città</label>
                   <input
                     type="text" name="city" value={form.city} onChange={handleChange}
-                    placeholder="Piacenza"
+                    placeholder="La tua città"
                     className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   />
                 </div>

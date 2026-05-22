@@ -14,7 +14,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div className="space-y-6">
               <span className="inline-block bg-white/15 backdrop-blur border border-white/30 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider">
-                ⭐ Il mercato di Piacenza, online
+                ⭐ Il mercato della tua città, online
               </span>
               <h1 className="text-4xl md:text-6xl font-extrabold leading-tight">
                 Compra <span className="text-yellow-300">locale</span>,<br />
@@ -94,7 +94,7 @@ export default function Home() {
         <div className="flex justify-between items-end mb-6">
           <div>
             <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">🏪 Vicino a te</span>
-            <h2 className="text-3xl font-extrabold">Negozi di Piacenza</h2>
+            <h2 className="text-3xl font-extrabold">Negozi della tua città</h2>
             <p className="text-gray-500 text-sm mt-1">Sostieni i commercianti della tua città</p>
           </div>
           <Link href="/stores" className="text-indigo-600 hover:underline font-semibold hidden sm:inline">
@@ -111,7 +111,7 @@ export default function Home() {
             <span className="inline-block bg-white/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
               💼 Per i venditori
             </span>
-            <h2 className="text-3xl md:text-4xl font-extrabold">Hai un negozio a Piacenza? Vendi online in 5 minuti</h2>
+            <h2 className="text-3xl md:text-4xl font-extrabold">Hai un negozio nella tua città? Vendi online in 5 minuti</h2>
             <p className="text-pink-100 text-lg">
               Nessuna commissione mensile, nessun setup tecnico. Pubblica i tuoi prodotti e raggiungi i clienti della tua città.
             </p>

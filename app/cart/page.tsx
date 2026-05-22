@@ -30,7 +30,7 @@ export default function CartPage() {
       <div className="container mx-auto p-12 text-center space-y-4 max-w-md">
         <p className="text-7xl">🛒</p>
         <h1 className="text-2xl font-bold">Il tuo carrello è vuoto</h1>
-        <p className="text-gray-500">Scopri i prodotti dei negozi locali di Piacenza</p>
+        <p className="text-gray-500">Scopri i prodotti dei negozi locali della tua città</p>
         <Link
           href="/"
           className="inline-block bg-yellow-400 hover:bg-yellow-500 text-gray-900 px-8 py-3 rounded-lg font-bold shadow-md"
@@ -180,7 +180,7 @@ export default function CartPage() {
           <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm">
             <p className="font-bold text-indigo-900 mb-1">💡 Lo sapevi?</p>
             <p className="text-indigo-800">
-              Acquistando qui sostieni direttamente i commercianti di Piacenza. Niente intermediari, niente commissioni nascoste.
+              Acquistando qui sostieni direttamente i commercianti della tua città. Niente intermediari, niente commissioni nascoste.
             </p>
           </div>
         </div>

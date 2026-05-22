@@ -8,8 +8,8 @@ import ToastProvider from '@/components/providers/ToastProvider';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'Piacenza Market',
-  description: 'Il mercato locale di Piacenza',
+  title: 'MyCity',
+  description: 'Il mercato locale della tua città',
 };
 
 export const viewport = {

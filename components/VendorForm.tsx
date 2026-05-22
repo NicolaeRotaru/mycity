@@ -36,8 +36,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
 
   const [location, setLocation] = useState<StoreLocation>({
     address: defaultValues?.storeAddress ?? '',
-    lat:     defaultValues?.storeLat     ?? 45.0526,
-    lng:     defaultValues?.storeLng     ?? 9.6929,
+    lat:     defaultValues?.storeLat     ?? 41.9028,
+    lng:     defaultValues?.storeLng     ?? 12.4964,
   });
   const [locationError, setLocationError] = useState<string | null>(null);
 
