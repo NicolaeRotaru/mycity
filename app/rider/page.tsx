@@ -53,7 +53,9 @@ export default function RiderDashboardPage() {
       if (error) throw error;
       return (data ?? []) as unknown as (AvailableOrder & { rider_id: string | null })[];
     },
-    refetchInterval: 15_000,
+    refetchInterval: 60_000,   // dashboard rider: 1 min è sufficiente
+    refetchOnWindowFocus: true, // appena torna sulla tab fa refresh subito
+    staleTime: 15_000,
   });
 
   const myActive   = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED');

@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { addToCart } from '@/lib/cart';
@@ -85,8 +86,9 @@ const ProductCard = ({
           src={img}
           alt={name}
           fill
+          sizes="(min-width: 1024px) 240px, (min-width: 640px) 33vw, 50vw"
+          loading="lazy"
           className="object-cover group-hover:scale-110 transition-transform duration-300"
-          unoptimized
         />
         <button
           type="button"
@@ -146,4 +148,4 @@ const ProductCard = ({
   );
 };
 
-export default ProductCard;
+export default memo(ProductCard);

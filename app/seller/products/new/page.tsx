@@ -78,7 +78,20 @@ export default function NewProductPage() {
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/*': [] },
+    accept: {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png':  ['.png'],
+      'image/webp': ['.webp'],
+    },
+    maxSize: 5 * 1024 * 1024,           // 5 MB per file
+    maxFiles: 8,                          // max foto per upload
+    onDropRejected: (rejections) => {
+      const reason = rejections[0]?.errors[0]?.code;
+      if (reason === 'file-too-large')        toast.error('File troppo grande (max 5 MB)');
+      else if (reason === 'file-invalid-type') toast.error('Formato non supportato (solo JPG, PNG, WEBP)');
+      else if (reason === 'too-many-files')   toast.error('Massimo 8 foto per upload');
+      else                                     toast.error('File non valido');
+    },
     onDrop: async (files) => {
       setUploading(true);
       try {
@@ -87,8 +100,27 @@ export default function NewProductPage() {
 
         const uploaded: string[] = [];
         for (const file of files) {
-          const path = `${user.id}/${Date.now()}-${file.name}`;
-          const { error } = await supabase.storage.from('products').upload(path, file);
+          // Double-check lato client prima di committare a storage
+          if (file.size > 5 * 1024 * 1024) {
+            throw new Error(`File "${file.name}" troppo grande (max 5 MB)`);
+          }
+          if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            throw new Error(`Formato non valido per "${file.name}"`);
+          }
+          // Sanitizza il nome file: niente path traversal, solo charset safe
+          const safeName = file.name
+            .toLowerCase()
+            .replace(/[^a-z0-9.\-_]/g, '_')
+            .slice(-80);
+          const ext = file.type.split('/')[1];
+          const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName || `img.${ext}`}`;
+          const { error } = await supabase.storage
+            .from('products')
+            .upload(path, file, {
+              cacheControl: '3600',
+              upsert: false,
+              contentType: file.type,
+            });
           if (error) throw error;
           const { data } = supabase.storage.from('products').getPublicUrl(path);
           uploaded.push(data.publicUrl);

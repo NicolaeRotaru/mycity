@@ -537,8 +537,8 @@ export default function CheckoutPage() {
                           src={item.image ?? 'https://placehold.co/100x100/eef2ff/6366f1?text=?'}
                           alt={item.name}
                           fill
+                          sizes="40px"
                           className="object-cover"
-                          unoptimized
                         />
                       </div>
                       <div className="flex-1 min-w-0">

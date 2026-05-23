@@ -174,7 +174,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         {/* GALLERIA */}
         <div className="space-y-3">
           <div className="relative w-full aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl overflow-hidden border">
-            <Image src={images[activeImg]} alt={product.name} fill className="object-contain p-4" unoptimized />
+            <Image src={images[activeImg]} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" className="object-contain p-4" />
             {isOutOfStock && (
               <div className="absolute top-4 left-4 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-full">
                 ESAURITO
@@ -196,7 +196,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                     activeImg === i ? 'border-indigo-500' : 'border-transparent hover:border-gray-300'
                   }`}
                 >
-                  <Image src={img} alt="" fill className="object-cover" unoptimized />
+                  <Image src={img} alt="" fill sizes="80px" loading="lazy" className="object-cover" />
                 </button>
               ))}
             </div>
