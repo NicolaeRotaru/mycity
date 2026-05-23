@@ -132,7 +132,7 @@ const Footer = () => {
         <div>
           <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Esplora</h3>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
+            <li><Link href={isSellerArea ? '/?as=buyer' : '/'} className="hover:text-white transition-colors">Home</Link></li>
             <li><Link href="/stores" className="hover:text-white transition-colors">Negozi locali</Link></li>
             <li><Link href="/near" className="hover:text-white transition-colors">Vicino a te</Link></li>
             <li><Link href="/groups" className="hover:text-white transition-colors">Gruppi d'acquisto</Link></li>
