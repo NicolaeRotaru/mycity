@@ -457,24 +457,54 @@ const CategoryBarSlot = ({ show, hidden }: { show: boolean; hidden: boolean }) =
 
 /**
  * Restituisce true quando l'utente sta scrollando verso il basso oltre una
- * soglia minima. Usa requestAnimationFrame per throttle.
+ * soglia minima. Throttle via requestAnimationFrame.
+ *
+ * Anti-tremolio:
+ *  - ignora variazioni < 15px (overscroll, momentum, jitter touch)
+ *  - cooldown di 400ms tra un toggle e il successivo, più lungo della
+ *    transizione CSS (300ms): impedisce che il layout-shift causato dal
+ *    cambio di altezza della barra triggeri immediatamente l'evento
+ *    opposto creando il loop hide→show→hide
+ *  - ignora overscroll negativo (scrollY < 0 sui mobile con bounce)
  */
 function useScrollHide(threshold = 80) {
   const [hidden, setHidden] = useState(false);
   useEffect(() => {
-    let lastY = typeof window !== 'undefined' ? window.scrollY : 0;
+    let lastY = Math.max(0, typeof window !== 'undefined' ? window.scrollY : 0);
     let ticking = false;
+    let lastToggleAt = 0;
+    const COOLDOWN_MS = 400;
+    const JITTER_PX = 15;
+
     const onScroll = () => {
       if (ticking) return;
       ticking = true;
       window.requestAnimationFrame(() => {
-        const y = window.scrollY;
-        // Ignora micro-scroll
-        if (Math.abs(y - lastY) > 6) {
-          if (y > lastY && y > threshold) setHidden(true);   // giù → chiudi
-          else if (y < lastY)              setHidden(false);  // su → apri
+        const y = Math.max(0, window.scrollY);
+        const dy = y - lastY;
+
+        if (Math.abs(dy) < JITTER_PX) { ticking = false; return; }
+
+        const now = Date.now();
+        if (now - lastToggleAt < COOLDOWN_MS) {
+          // siamo ancora "freschi" da un toggle: aggiorna solo il riferimento
           lastY = y;
+          ticking = false;
+          return;
         }
+
+        if (dy > 0 && y > threshold) {
+          setHidden((cur) => {
+            if (!cur) lastToggleAt = now;
+            return true;
+          });
+        } else if (dy < 0) {
+          setHidden((cur) => {
+            if (cur) lastToggleAt = now;
+            return false;
+          });
+        }
+        lastY = y;
         ticking = false;
       });
     };
