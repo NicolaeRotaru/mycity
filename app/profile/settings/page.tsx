@@ -179,19 +179,26 @@ export default function SettingsPage() {
       return;
     }
     setDeleting(true);
-    // Soft-delete: marca profilo, invalida sessione. La cancellazione hard
-    // richiede un endpoint server-side con service-role key (TODO).
-    if (userId) {
-      await supabase.from('profiles').update({
-        full_name: '[utente eliminato]',
-        phone: null,
-        address: null,
-      }).eq('id', userId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Sessione scaduta, esegui di nuovo il login.');
+
+      const res = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || 'Eliminazione non riuscita');
+
+      await supabase.auth.signOut();
+      toast.success('Account eliminato. Ci dispiace vederti andare.');
+      router.push('/');
+    } catch (err: any) {
+      toast.error(err.message || 'Errore durante l\'eliminazione');
+    } finally {
+      setDeleting(false);
     }
-    await supabase.auth.signOut();
-    setDeleting(false);
-    toast.success('Account eliminato. Ci dispiace vederti andare.');
-    router.push('/');
   };
 
   if (loading) {
