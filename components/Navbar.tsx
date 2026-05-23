@@ -12,21 +12,28 @@ import CategoryBar from './CategoryBar';
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
 
 type NavLink = { href: string; label: string; icon: string };
+type NavSeparator = { type: 'separator'; label: string };
+type NavItem = NavLink | NavSeparator;
 
-const LINKS_BY_ROLE: Record<NonNullable<Role>, NavLink[]> = {
-  buyer: [
-    { href: '/',                  label: 'Home',                icon: '🏠' },
-    { href: '/near',              label: 'Vicino a te',         icon: '📍' },
-    { href: '/groups',            label: 'Gruppi d\'acquisto',  icon: '🤝' },
-    { href: '/stores',            label: 'Tutti i negozi',      icon: '🏪' },
-    { href: '/favorites',         label: 'Preferiti',           icon: '♥' },
-    { href: '/orders',            label: 'I miei ordini',       icon: '📦' },
-    { href: '/cart',              label: 'Carrello',            icon: '🛒' },
-    { href: '/profile/addresses', label: 'Indirizzi',           icon: '📌' },
-    { href: '/profile/referral',  label: 'Invita amici · €5',   icon: '🎁' },
-    { href: '/notifications',     label: 'Notifiche',           icon: '🔔' },
-    { href: '/profile',           label: 'Profilo',             icon: '👤' },
-  ],
+const isSeparator = (item: NavItem): item is NavSeparator =>
+  'type' in item && item.type === 'separator';
+
+const BUYER_LINKS: NavLink[] = [
+  { href: '/',                  label: 'Home',                icon: '🏠' },
+  { href: '/near',              label: 'Vicino a te',         icon: '📍' },
+  { href: '/groups',            label: 'Gruppi d\'acquisto',  icon: '🤝' },
+  { href: '/stores',            label: 'Tutti i negozi',      icon: '🏪' },
+  { href: '/favorites',         label: 'Preferiti',           icon: '♥' },
+  { href: '/orders',            label: 'I miei ordini',       icon: '📦' },
+  { href: '/cart',              label: 'Carrello',            icon: '🛒' },
+  { href: '/profile/addresses', label: 'Indirizzi',           icon: '📌' },
+  { href: '/profile/referral',  label: 'Invita amici · €5',   icon: '🎁' },
+  { href: '/notifications',     label: 'Notifiche',           icon: '🔔' },
+  { href: '/profile',           label: 'Profilo',             icon: '👤' },
+];
+
+const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
+  buyer: BUYER_LINKS,
   seller: [
     { href: '/seller',                 label: 'Dashboard',         icon: '📊' },
     { href: '/seller/products',        label: 'I miei prodotti',   icon: '📦' },
@@ -35,27 +42,49 @@ const LINKS_BY_ROLE: Record<NonNullable<Role>, NavLink[]> = {
     { href: '/seller/customers',       label: 'I miei clienti',    icon: '👥' },
     { href: '/seller/profile',         label: 'Profilo negozio',   icon: '🏪' },
     { href: '/notifications',          label: 'Notifiche',         icon: '🔔' },
-    { href: '/',                       label: 'Vai al marketplace', icon: '↗' },
+    { type: 'separator',               label: 'Come acquirente' },
+    { href: '/',                       label: 'Home marketplace',  icon: '🏠' },
+    { href: '/stores',                 label: 'Tutti i negozi',    icon: '🏪' },
+    { href: '/favorites',              label: 'Preferiti',         icon: '♥' },
+    { href: '/orders',                 label: 'I miei ordini',     icon: '📦' },
+    { href: '/cart',                   label: 'Carrello',          icon: '🛒' },
+    { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
   ],
   rider: [
     { href: '/rider',          label: 'Dashboard',     icon: '🛵' },
     { href: '/rider/history',  label: 'Storico',       icon: '📜' },
     { href: '/rider/profile',  label: 'Profilo',       icon: '👤' },
     { href: '/notifications',  label: 'Notifiche',     icon: '🔔' },
-    { href: '/',               label: 'Vai al marketplace', icon: '↗' },
+    { type: 'separator',       label: 'Come acquirente' },
+    { href: '/',                       label: 'Home marketplace',  icon: '🏠' },
+    { href: '/stores',                 label: 'Tutti i negozi',    icon: '🏪' },
+    { href: '/favorites',              label: 'Preferiti',         icon: '♥' },
+    { href: '/orders',                 label: 'I miei ordini',     icon: '📦' },
+    { href: '/cart',                   label: 'Carrello',          icon: '🛒' },
+    { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
   ],
   admin: [
     { href: '/admin',          label: 'Dashboard admin', icon: '🛡️' },
-    { href: '/admin/users',    label: 'Utenti',         icon: '👥' },
-    { href: '/admin/orders',   label: 'Ordini',         icon: '📦' },
-    { href: '/admin/products', label: 'Prodotti',       icon: '🛍️' },
-    { href: '/admin/coupons',  label: 'Coupon',         icon: '🎟️' },
-    { href: '/notifications',  label: 'Notifiche',      icon: '🔔' },
-    { href: '/',               label: 'Vai al marketplace', icon: '↗' },
+    { href: '/admin/users',    label: 'Utenti',          icon: '👥' },
+    { href: '/admin/orders',   label: 'Tutti gli ordini', icon: '📦' },
+    { href: '/admin/products', label: 'Tutti i prodotti', icon: '🛍️' },
+    { href: '/admin/coupons',  label: 'Coupon',          icon: '🎟️' },
+    { href: '/notifications',  label: 'Notifiche',       icon: '🔔' },
+    { type: 'separator',       label: 'Come acquirente' },
+    { href: '/',                       label: 'Home marketplace',  icon: '🏠' },
+    { href: '/near',                   label: 'Vicino a te',       icon: '📍' },
+    { href: '/groups',                 label: 'Gruppi d\'acquisto', icon: '🤝' },
+    { href: '/stores',                 label: 'Tutti i negozi',    icon: '🏪' },
+    { href: '/favorites',              label: 'Preferiti',         icon: '♥' },
+    { href: '/orders',                 label: 'I miei ordini',     icon: '📦' },
+    { href: '/cart',                   label: 'Carrello',          icon: '🛒' },
+    { href: '/profile/addresses',      label: 'Indirizzi',         icon: '📌' },
+    { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
+    { href: '/profile',                label: 'Profilo',           icon: '👤' },
   ],
 };
 
-const LINKS_GUEST: NavLink[] = [
+const LINKS_GUEST: NavItem[] = [
   { href: '/',         label: 'Home',       icon: '🏠' },
   { href: '/near',     label: 'Vicino a te', icon: '📍' },
   { href: '/stores',   label: 'Negozi',     icon: '🏪' },
@@ -63,7 +92,7 @@ const LINKS_GUEST: NavLink[] = [
   { href: '/sign-up',  label: 'Registrati', icon: '✨' },
 ];
 
-function getLinks(role: Role, isAuthenticated: boolean): NavLink[] {
+function getLinks(role: Role, isAuthenticated: boolean): NavItem[] {
   if (!isAuthenticated) return LINKS_GUEST;
   if (role && LINKS_BY_ROLE[role]) return LINKS_BY_ROLE[role];
   return LINKS_BY_ROLE.buyer;
@@ -103,19 +132,30 @@ const NavMenu = ({ role, isAuthenticated, onSignOut }: {
         <span className="text-sm">Menu</span>
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl ring-1 ring-black/5 z-50 overflow-hidden">
+        <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl ring-1 ring-black/5 z-50 overflow-hidden max-h-[80vh] overflow-y-auto">
           <ul className="py-1">
-            {links.map((l) => (
-              <li key={l.href}>
-                <Link
-                  href={l.href}
-                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                >
-                  <span className="text-lg">{l.icon}</span>
-                  <span className="font-medium">{l.label}</span>
-                </Link>
-              </li>
-            ))}
+            {links.map((l, i) => {
+              if (isSeparator(l)) {
+                return (
+                  <li key={`sep-${i}`} className="mt-1 pt-2 border-t border-gray-100">
+                    <div className="px-4 py-1 text-[10px] uppercase tracking-widest text-gray-400 font-bold">
+                      {l.label}
+                    </div>
+                  </li>
+                );
+              }
+              return (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
+                  >
+                    <span className="text-lg">{l.icon}</span>
+                    <span className="font-medium">{l.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
             {isAuthenticated && (
               <>
                 <li><div className="border-t border-gray-100 my-1" /></li>
