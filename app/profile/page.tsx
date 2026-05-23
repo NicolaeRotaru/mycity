@@ -113,10 +113,33 @@ export default function ProfilePage() {
           <h3 className="font-bold">Indirizzi</h3>
           <p className="text-sm text-gray-500 hidden sm:block">Casa, ufficio…</p>
         </Link>
+        <Link href="/profile/settings" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="text-3xl mb-2">⚙️</div>
+          <h3 className="font-bold">Impostazioni</h3>
+          <p className="text-sm text-gray-500 hidden sm:block">Password, notifiche, privacy</p>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <Link href="/groups" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">🤝</div>
           <h3 className="font-bold">Gruppi acquisto</h3>
           <p className="text-sm text-gray-500 hidden sm:block">Unisciti e risparmia</p>
+        </Link>
+        <Link href="/faq" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="text-3xl mb-2">❓</div>
+          <h3 className="font-bold">FAQ</h3>
+          <p className="text-sm text-gray-500 hidden sm:block">Domande frequenti</p>
+        </Link>
+        <Link href="/help" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="text-3xl mb-2">💡</div>
+          <h3 className="font-bold">Assistenza</h3>
+          <p className="text-sm text-gray-500 hidden sm:block">Centro di aiuto</p>
+        </Link>
+        <Link href="/contact" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="text-3xl mb-2">✉️</div>
+          <h3 className="font-bold">Contattaci</h3>
+          <p className="text-sm text-gray-500 hidden sm:block">Parla con noi</p>
         </Link>
       </div>
 
