@@ -4,9 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid from '@/components/ProductGrid';
 import StoreAvatar from '@/components/StoreAvatar';
-
-type HoursInterval = [string, string];
-type StoreHours = Partial<Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', HoursInterval[]>>;
+import { formatToday, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 
 const DAYS: { key: keyof StoreHours; label: string }[] = [
   { key: 'mon', label: 'Lunedì' },
@@ -18,17 +16,7 @@ const DAYS: { key: keyof StoreHours; label: string }[] = [
   { key: 'sun', label: 'Domenica' },
 ];
 
-// "Via Calzolai 12, Piacenza" -> "Via Calzolai 12"
-function streetFromAddress(address?: string | null) {
-  if (!address) return null;
-  const street = address.split(',')[0]?.trim();
-  return street && street.length > 0 ? street : null;
-}
-
-function formatIntervals(intervals?: HoursInterval[]) {
-  if (!intervals || intervals.length === 0) return 'Chiuso';
-  return intervals.map(([o, c]) => `${o} – ${c}`).join(' · ');
-}
+const DAY_KEYS: (keyof StoreHours)[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
 export default function StorePage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -46,9 +34,19 @@ export default function StorePage({ params }: { params: { id: string } }) {
     },
   });
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center">Caricamento...</div>;
+  if (isLoading) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center text-gray-500">
+        Caricamento...
+      </div>
+    );
+  }
   if (!store?.store_name || !store.is_approved) {
-    return <div className="container mx-auto p-8 text-center">Negozio non trovato.</div>;
+    return (
+      <div className="container mx-auto px-4 py-16 text-center text-gray-500">
+        Negozio non trovato.
+      </div>
+    );
   }
 
   const street = streetFromAddress(store.store_address);
@@ -59,50 +57,142 @@ export default function StorePage({ params }: { params: { id: string } }) {
       : null;
 
   const hours = (store.store_hours ?? {}) as StoreHours;
+  const todayKey = DAY_KEYS[new Date().getDay()];
+  const todayIntervals = hours[todayKey] ?? [];
+  const openNow = isOpenNow(todayIntervals);
+  const todayLabel = formatToday(todayIntervals);
   const hasHours = DAYS.some((d) => Array.isArray(hours[d.key]));
 
   return (
-    <div className="container mx-auto px-6 py-8 space-y-8">
-      <header className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl p-8 flex flex-col sm:flex-row items-center sm:items-start gap-6">
-        <StoreAvatar logoUrl={store.store_logo} storeName={store.store_name} size="xl" />
-        <div className="text-center sm:text-left space-y-1">
-          <h1 className="text-3xl font-bold">{store.store_name}</h1>
-          <p className="text-indigo-100">📞 {store.store_phone}</p>
-          {mapsQuery && (
-            <a
-              href={`https://www.google.com/maps?q=${mapsQuery}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-white/90 hover:text-white text-sm underline inline-block"
-            >
-              📍 {street ?? store.store_address ?? 'Apri su Google Maps'}
-            </a>
-          )}
+    <div className="container mx-auto px-4 py-6 max-w-5xl space-y-6">
+      {/* Hero card */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+        <div className="h-24 sm:h-32 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
+        <div className="px-6 pb-6 -mt-12 sm:-mt-14">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+            <div className="ring-4 ring-white rounded-full bg-white inline-block">
+              <StoreAvatar logoUrl={store.store_logo} storeName={store.store_name} size="xl" />
+            </div>
+            <div className="flex-1 sm:pb-2 min-w-0">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
+                  {store.store_name}
+                </h1>
+                {hasHours && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                      openNow
+                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                        : 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        openNow ? 'bg-emerald-500' : 'bg-gray-400'
+                      }`}
+                    />
+                    {openNow ? 'Aperto ora' : 'Chiuso ora'}
+                  </span>
+                )}
+              </div>
+              {street && (
+                <p className="text-gray-500 text-sm mt-1.5">{street}</p>
+              )}
+            </div>
+          </div>
         </div>
-      </header>
+      </div>
 
+      {/* Info grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <a
+          href={`tel:${store.store_phone}`}
+          className="bg-white border border-gray-200 rounded-xl p-4 hover:border-indigo-300 hover:shadow-sm transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
+              📞
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs text-gray-500 font-medium">Telefono</div>
+              <div className="text-gray-900 font-medium truncate">{store.store_phone}</div>
+            </div>
+          </div>
+        </a>
+
+        {mapsQuery && (
+          <a
+            href={`https://www.google.com/maps?q=${mapsQuery}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-white border border-gray-200 rounded-xl p-4 hover:border-indigo-300 hover:shadow-sm transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-lg">
+                📍
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-gray-500 font-medium">Indirizzo</div>
+                <div className="text-gray-900 font-medium truncate">
+                  {street ?? store.store_address ?? '—'}
+                </div>
+              </div>
+            </div>
+          </a>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-lg">
+              🕒
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs text-gray-500 font-medium">Oggi</div>
+              <div className="text-gray-900 font-medium truncate">{todayLabel}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Full hours */}
       {hasHours && (
-        <section className="bg-white border rounded-xl p-6">
-          <h2 className="text-xl font-bold mb-4">🕒 Orari di apertura</h2>
-          <ul className="divide-y">
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <h2 className="font-semibold text-lg text-gray-900 mb-4">Orari di apertura</h2>
+          <ul className="divide-y divide-gray-100">
             {DAYS.map((d) => {
               const intervals = hours[d.key];
               const closed = !intervals || intervals.length === 0;
+              const isToday = d.key === todayKey;
               return (
-                <li key={d.key} className="flex justify-between py-2 text-sm">
-                  <span className="font-medium text-gray-700">{d.label}</span>
-                  <span className={closed ? 'text-gray-400' : 'text-gray-900'}>
-                    {formatIntervals(intervals)}
+                <li
+                  key={d.key}
+                  className={`flex justify-between items-center py-2.5 text-sm ${
+                    isToday ? 'font-semibold text-gray-900' : 'text-gray-700'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {d.label}
+                    {isToday && (
+                      <span className="text-[10px] uppercase tracking-wider bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded">
+                        Oggi
+                      </span>
+                    )}
+                  </span>
+                  <span className={closed ? 'text-gray-400' : ''}>
+                    {closed ? 'Chiuso' : intervals.map(([o, c]) => `${o} – ${c}`).join(' · ')}
                   </span>
                 </li>
               );
             })}
           </ul>
-        </section>
+        </div>
       )}
 
+      {/* Products */}
       <section>
-        <h2 className="text-2xl font-bold mb-4">Prodotti del negozio</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4">
+          Prodotti del negozio
+        </h2>
         <ProductGrid sellerId={store.id} />
       </section>
     </div>
