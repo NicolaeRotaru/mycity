@@ -7,23 +7,58 @@ import { useProfile } from '@/components/hooks/useProfile';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const { profile, isAuthenticated, isLoading, isSeller, isAdmin } = useProfile();
+  const { profile, isAuthenticated, isLoading, isSeller, isAdmin, isBuyer, isRider } = useProfile();
   const isApproved = !!profile?.is_approved;
   const allowed = (isSeller && isApproved) || isAdmin;
   const pending = isSeller && !isApproved;
+  const wrongRole = isAuthenticated && !isSeller && !isAdmin; // buyer o rider qui
 
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) {
       router.replace('/sign-in?returnTo=/seller');
-      return;
     }
-    // Pending o rejected: non redirige, mostra schermata informativa sotto
-    if (!isSeller && !isAdmin) router.replace('/');
-  }, [isAuthenticated, isSeller, isAdmin, isLoading, router]);
+    // Niente più redirect silenzioso per wrong-role: mostriamo schermata
+  }, [isAuthenticated, isLoading, router]);
 
   if (isLoading || !isAuthenticated) {
     return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
+  }
+
+  // Buyer o rider che ha cliccato /seller per sbaglio (o ha digitato la URL)
+  if (wrongRole) {
+    return (
+      <div className="container mx-auto p-6 max-w-2xl">
+        <div className="bg-white border-2 border-indigo-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-indigo-100 flex items-center justify-center text-4xl mb-4">
+            🏪
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Quest'area è per i venditori</h1>
+          <p className="text-gray-600 mb-1">
+            Il tuo account è {isBuyer ? 'un acquirente' : isRider ? 'un rider' : 'di altro tipo'},
+            quindi non vedi la dashboard venditori.
+          </p>
+          <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+            Se hai un'attività e vuoi vendere su MyCity puoi inviare la richiesta. Approvazione entro 48h,
+            poi avrai una vetrina dedicata, abbonamento mensile, niente commissioni sulle vendite.
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center text-sm">
+            <Link
+              href="/sell"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-5 py-2.5 rounded-lg font-bold shadow"
+            >
+              🏪 Diventa venditore
+            </Link>
+            <Link
+              href={isRider ? '/rider' : '/?as=buyer'}
+              className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold"
+            >
+              ← Torna alla mia area
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (pending) {
