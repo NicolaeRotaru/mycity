@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 
-export type Role = 'buyer' | 'seller' | 'rider' | 'pending_approval';
+export type Role = 'buyer' | 'seller' | 'rider' | 'admin' | 'pending_approval';
 
 export type Profile = {
   id: string;
@@ -62,5 +62,6 @@ export const useProfile = () => {
     isBuyer: role === 'buyer',
     isSeller: role === 'seller',
     isRider: role === 'rider',
+    isAdmin: role === 'admin',
   };
 };

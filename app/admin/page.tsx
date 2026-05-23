@@ -1,89 +1,124 @@
 'use client';
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
-import { toast } from 'sonner';
+import Link from 'next/link';
+import { formatPrice } from '@/lib/format';
+import { ORDER_STATUS_LABEL, ORDER_STATUS_EMOJI, type OrderStatus } from '@/lib/order-status';
 
-type Profile = {
-  id: string;
-  role: string;
-  store_name: string | null;
-  is_approved: boolean;
+const StatCard = ({ label, value, color, href, icon }: { label: string; value: string | number; color: string; href?: string; icon: string }) => {
+  const inner = (
+    <div className={`bg-white border-2 rounded-xl p-5 hover:shadow-md transition-all border-${color}-200`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-2xl">{icon}</span>
+        <span className="text-xs uppercase tracking-wide text-gray-400 font-semibold">{label}</span>
+      </div>
+      <p className="text-3xl font-bold text-gray-900">{value}</p>
+    </div>
+  );
+  return href ? <Link href={href}>{inner}</Link> : inner;
 };
 
-const fetchProfiles = async (): Promise<Profile[]> => {
-  const { data, error } = await supabase.from('profiles').select('*');
-  if (error) throw error;
-  return data ?? [];
-};
+export default function AdminDashboard() {
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ['admin-stats'],
+    queryFn: async () => {
+      const [profilesRes, ordersRes, productsRes] = await Promise.all([
+        supabase.from('profiles').select('role'),
+        supabase.from('orders').select('total_price, delivery_status, created_at'),
+        supabase.from('products').select('status'),
+      ]);
 
-const Admin = () => {
-  const queryClient = useQueryClient();
+      const profiles = profilesRes.data ?? [];
+      const orders = ordersRes.data ?? [];
+      const products = productsRes.data ?? [];
 
-  const { data: profiles = [], isLoading } = useQuery({
-    queryKey: ['profiles'],
-    queryFn: fetchProfiles,
+      const byRole: Record<string, number> = {};
+      for (const p of profiles) byRole[p.role] = (byRole[p.role] ?? 0) + 1;
+
+      const byStatus: Record<string, number> = {};
+      for (const o of orders) byStatus[o.delivery_status] = (byStatus[o.delivery_status] ?? 0) + 1;
+
+      const totalRevenue = orders
+        .filter((o: any) => o.delivery_status === 'DELIVERED')
+        .reduce((s: number, o: any) => s + Number(o.total_price), 0);
+
+      const sevenDaysAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
+      const recent = orders.filter((o: any) => o.created_at >= sevenDaysAgo).length;
+
+      return {
+        users: {
+          total: profiles.length,
+          buyers: byRole.buyer ?? 0,
+          sellers: byRole.seller ?? 0,
+          riders: byRole.rider ?? 0,
+          admins: byRole.admin ?? 0,
+        },
+        orders: {
+          total: orders.length,
+          recent,
+          byStatus,
+          revenue: totalRevenue,
+        },
+        products: {
+          total: products.length,
+          available: products.filter((p: any) => p.status === 'available').length,
+        },
+      };
+    },
+    refetchInterval: 30_000,
   });
 
-  const toggleApproval = useMutation({
-    mutationFn: async ({ id, is_approved }: { id: string; is_approved: boolean }) => {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_approved, role: is_approved ? 'seller' : 'pending_approval' })
-        .eq('id', id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
-      toast.success('Stato aggiornato');
-    },
-    onError: (err: any) => toast.error(err.message),
-  });
-
-  if (isLoading) {
-    return <div className="container mx-auto p-8 text-center">Caricamento...</div>;
+  if (isLoading || !stats) {
+    return <div className="text-center py-8 text-gray-500">Caricamento statistiche...</div>;
   }
 
   return (
-    <div className="container mx-auto p-8">
-      <h2 className="text-2xl font-bold mb-6">Pannello Admin</h2>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse bg-white shadow rounded-lg overflow-hidden">
-          <thead className="bg-indigo-600 text-white">
-            <tr>
-              <th className="p-3 text-left">ID</th>
-              <th className="p-3 text-left">Ruolo</th>
-              <th className="p-3 text-left">Nome Negozio</th>
-              <th className="p-3 text-left">Approvato</th>
-              <th className="p-3 text-left">Azioni</th>
-            </tr>
-          </thead>
-          <tbody>
-            {profiles.map((profile) => (
-              <tr key={profile.id} className="border-t hover:bg-gray-50">
-                <td className="p-3 text-xs text-gray-500 font-mono">{profile.id.slice(0, 8)}…</td>
-                <td className="p-3">{profile.role}</td>
-                <td className="p-3">{profile.store_name ?? '—'}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-1 rounded-full text-xs font-semibold ${profile.is_approved ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                    {profile.is_approved ? 'Sì' : 'No'}
-                  </span>
-                </td>
-                <td className="p-3">
-                  <button
-                    onClick={() => toggleApproval.mutate({ id: profile.id, is_approved: !profile.is_approved })}
-                    className={`text-sm px-3 py-1 rounded transition-colors ${profile.is_approved ? 'bg-red-100 hover:bg-red-200 text-red-700' : 'bg-green-100 hover:bg-green-200 text-green-700'}`}
-                  >
-                    {profile.is_approved ? 'Revoca' : 'Approva'}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Dashboard amministratore</h1>
+        <p className="text-sm text-gray-500">Panoramica del marketplace in tempo reale.</p>
       </div>
+
+      <section>
+        <h2 className="font-bold text-gray-900 mb-3">👥 Utenti ({stats.users.total})</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Acquirenti" value={stats.users.buyers}  color="indigo" icon="🛒" href="/admin/users?role=buyer" />
+          <StatCard label="Venditori"  value={stats.users.sellers} color="pink"   icon="🏪" href="/admin/users?role=seller" />
+          <StatCard label="Rider"      value={stats.users.riders}  color="amber"  icon="🛵" href="/admin/users?role=rider" />
+          <StatCard label="Admin"      value={stats.users.admins}  color="rose"   icon="🛡️" href="/admin/users?role=admin" />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-bold text-gray-900 mb-3">📦 Ordini ({stats.orders.total})</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <StatCard label="Totali"          value={stats.orders.total}                color="blue"    icon="📦" href="/admin/orders" />
+          <StatCard label="Ultimi 7 giorni" value={stats.orders.recent}               color="violet"  icon="📈" href="/admin/orders" />
+          <StatCard label="Consegnati"      value={stats.orders.byStatus.DELIVERED ?? 0} color="emerald" icon="✅" />
+          <StatCard label="Ricavi totali"   value={formatPrice(stats.orders.revenue)} color="emerald" icon="💰" />
+        </div>
+
+        <div className="bg-white border rounded-xl p-5 mt-4">
+          <h3 className="font-semibold text-gray-900 mb-3">Stato degli ordini</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
+            {(['NEW','ACCEPTED','READY','ASSIGNED','PICKED_UP','OUT_FOR_DELIVERY','DELIVERED','CANCELED'] as OrderStatus[]).map((s) => (
+              <div key={s} className="flex items-center justify-between bg-gray-50 rounded px-3 py-2">
+                <span className="text-gray-700 truncate">{ORDER_STATUS_EMOJI[s]} {ORDER_STATUS_LABEL[s]}</span>
+                <span className="font-bold text-gray-900">{stats.orders.byStatus[s] ?? 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-bold text-gray-900 mb-3">🛍️ Catalogo</h2>
+        <div className="grid grid-cols-2 gap-3">
+          <StatCard label="Prodotti totali"    value={stats.products.total}     color="indigo"  icon="📦" href="/admin/products" />
+          <StatCard label="Disponibili online" value={stats.products.available} color="emerald" icon="🟢" />
+        </div>
+      </section>
     </div>
   );
-};
-
-export default Admin;
+}

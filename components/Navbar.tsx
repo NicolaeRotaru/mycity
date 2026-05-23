@@ -16,7 +16,7 @@ const Navbar = () => {
   const [q, setQ] = useState('');
   const cartCount = useCartCount();
   const notifCount = useNotificationsCount();
-  const { profile, userEmail, isAuthenticated, isLoading, isSeller, isRider } = useProfile();
+  const { profile, userEmail, isAuthenticated, isLoading, isSeller, isRider, isAdmin } = useProfile();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +79,18 @@ const Navbar = () => {
       </Link>
     );
   };
+
+  const AdminLink = () =>
+    isAdmin ? (
+      <Link
+        href="/admin"
+        title="Admin"
+        className="flex items-center gap-1.5 hover:text-rose-300 transition-colors text-sm"
+      >
+        <span className="text-xl">🛡️</span>
+        <span className="hidden md:inline">Admin</span>
+      </Link>
+    ) : null;
 
   const NotificationsIcon = () =>
     isAuthenticated ? (
@@ -160,6 +172,7 @@ const Navbar = () => {
             </Link>
             <div className="flex items-center gap-4">
               {!isLoading && <ProfileIcon compact />}
+              <AdminLink />
               <NotificationsIcon />
               <OrdersIcon />
               <CartIcon />
@@ -182,6 +195,7 @@ const Navbar = () => {
             <SearchForm className="flex-1 max-w-2xl" />
             <nav className="ml-auto flex items-center gap-5 text-sm">
               {!isLoading && <ProfileIcon />}
+              <AdminLink />
               <NotificationsIcon />
               <OrdersIcon />
               <CartIcon />
@@ -190,8 +204,11 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* CategoryBar nascosta nell'area venditore/rider/admin */}
-      {!pathname?.startsWith('/seller') && !pathname?.startsWith('/rider') && !pathname?.startsWith('/admin') && <CategoryBar />}
+      {/* CategoryBar nascosta nelle aree venditore/rider/admin */}
+      {!pathname?.startsWith('/seller')
+        && !pathname?.startsWith('/rider')
+        && !pathname?.startsWith('/admin')
+        && <CategoryBar />}
     </header>
   );
 };
