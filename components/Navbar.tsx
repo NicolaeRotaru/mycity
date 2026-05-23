@@ -41,7 +41,7 @@ const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
   buyer: BUYER_LINKS,
   seller: [
     { type: 'separator',               label: 'Operatività' },
-    { href: '/seller',                 label: 'Dashboard',         icon: '📊' },
+    { href: '/seller/dashboard',       label: 'Dashboard',         icon: '📊' },
     { href: '/seller/orders',          label: 'Ordini ricevuti',   icon: '🛒' },
     { href: '/seller/products',        label: 'I miei prodotti',   icon: '📦' },
     { href: '/seller/products/new',    label: 'Nuovo prodotto',    icon: '➕' },
