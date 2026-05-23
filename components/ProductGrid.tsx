@@ -20,7 +20,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice }: Props) =
       let q = supabase
         .from('products')
         .select(`
-          id, name, description, price, images, stock, created_at,
+          id, name, description, price, images, stock, created_at, seller_id,
           profiles!products_seller_id_fkey ( store_name )
         `)
         .eq('status', 'available')
@@ -61,6 +61,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice }: Props) =
           stock={p.stock}
           createdAt={p.created_at}
           storeName={p.profiles?.store_name ?? undefined}
+          sellerId={p.seller_id ?? undefined}
         />
       ))}
     </div>

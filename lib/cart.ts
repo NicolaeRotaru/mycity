@@ -6,6 +6,8 @@ export type CartItem = {
   price: number;
   quantity: number;
   image?: string;
+  sellerId?: string;
+  storeName?: string;
 };
 
 const KEY = 'cart';

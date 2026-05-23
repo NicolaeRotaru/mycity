@@ -72,8 +72,18 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
   const isOutOfStock = stock === 0;
 
+  const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
+
   const handleAdd = () => {
-    addToCart({ id: product.id, name: product.name, price, image: images[0], quantity });
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price,
+      image: images[0],
+      quantity,
+      sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
+      storeName: sellerProfile?.store_name ?? undefined,
+    });
     toast.success(`${product.name} aggiunto al carrello`, { duration: 2000 });
   };
 

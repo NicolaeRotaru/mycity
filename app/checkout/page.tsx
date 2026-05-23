@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { CartItem, getCart, clearCart } from '@/lib/cart';
+import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { notify } from '@/lib/notifications';
@@ -45,49 +45,78 @@ export default function CheckoutPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   useEffect(() => setCart(getCart()), []);
 
-  // Fetch seller_id per ogni prodotto nel carrello → raggruppamento per negozio
-  const { data: groups = [], isLoading: loadingGroups } = useQuery({
-    queryKey: ['checkout-groups', cart.map((c) => c.id).join(',')],
+  // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
+  // (formato nuovo). Per gli item vecchi senza sellerId, fa un lookup sui products.
+  const { data: cartData, isLoading: loadingGroups } = useQuery({
+    queryKey: ['checkout-groups', cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')],
     enabled: cart.length > 0,
     queryFn: async () => {
-      const ids = cart.map((c) => c.id);
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, seller_id, profiles!products_seller_id_fkey ( id, store_name, store_lat, store_lng, store_address )')
-        .in('id', ids);
-      if (error) throw error;
+      const itemsMissingSeller = cart.filter((c) => !c.sellerId);
 
+      // Lookup solo per gli item legacy senza sellerId
+      const lookupMap = new Map<string, string>(); // productId → sellerId
+      const sellerNames = new Map<string, string>(); // sellerId → store_name
+
+      if (itemsMissingSeller.length > 0) {
+        const { data: products, error: pErr } = await supabase
+          .from('products')
+          .select('id, seller_id')
+          .in('id', itemsMissingSeller.map((c) => c.id));
+        if (pErr) throw pErr;
+        for (const p of products ?? []) {
+          if (p.seller_id) lookupMap.set(p.id, p.seller_id);
+        }
+      }
+
+      // Recupera i nomi dei negozi (sia per quelli embedded che looked-up)
+      const allSellerIds = Array.from(
+        new Set([
+          ...cart.map((c) => c.sellerId).filter(Boolean) as string[],
+          ...Array.from(lookupMap.values()),
+        ]),
+      );
+      if (allSellerIds.length > 0) {
+        const { data: sellers } = await supabase
+          .from('profiles')
+          .select('id, store_name')
+          .in('id', allSellerIds);
+        for (const s of sellers ?? []) {
+          sellerNames.set(s.id, s.store_name ?? 'Negozio');
+        }
+      }
+
+      // Raggruppa
       const sellerMap = new Map<string, {
         sellerId: string;
         storeName: string;
-        storeLat: number | null;
-        storeLng: number | null;
-        storeAddress: string | null;
         items: CartItem[];
       }>();
+      const orphanItems: CartItem[] = [];
 
       for (const item of cart) {
-        const p = data?.find((d: any) => d.id === item.id);
-        if (!p?.seller_id) continue;
-        const seller = Array.isArray(p.profiles) ? p.profiles[0] : p.profiles;
-        const key = p.seller_id;
-        if (!sellerMap.has(key)) {
-          sellerMap.set(key, {
-            sellerId:     key,
-            storeName:    seller?.store_name ?? 'Negozio',
-            storeLat:     seller?.store_lat ?? null,
-            storeLng:     seller?.store_lng ?? null,
-            storeAddress: seller?.store_address ?? null,
+        const sellerId = item.sellerId ?? lookupMap.get(item.id);
+        if (!sellerId) {
+          orphanItems.push(item);
+          continue;
+        }
+        if (!sellerMap.has(sellerId)) {
+          sellerMap.set(sellerId, {
+            sellerId,
+            storeName: sellerNames.get(sellerId) ?? item.storeName ?? 'Negozio',
             items: [],
           });
         }
-        sellerMap.get(key)!.items.push(item);
+        sellerMap.get(sellerId)!.items.push(item);
       }
-      return Array.from(sellerMap.values());
+
+      return { groups: Array.from(sellerMap.values()), orphans: orphanItems };
     },
   });
 
-  const groupSubtotal = (g: typeof groups[number]) =>
+  const groups = cartData?.groups ?? [];
+  const orphans = cartData?.orphans ?? [];
+
+  const groupSubtotal = (g: { items: CartItem[] }) =>
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
 
   const grandSubtotal = groups.reduce((s, g) => s + groupSubtotal(g), 0);
@@ -282,6 +311,31 @@ export default function CheckoutPage() {
           {groups.length > 1 && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
               <strong>Il tuo carrello include prodotti da {groups.length} negozi diversi.</strong> Verranno creati {groups.length} ordini separati, uno per ciascun negozio. Ogni rider consegna il proprio ordine.
+            </div>
+          )}
+
+          {orphans.length > 0 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 space-y-3">
+              <p>
+                <strong>⚠ {orphans.length} {orphans.length === 1 ? 'prodotto non è più disponibile' : 'prodotti non sono più disponibili'}</strong>: {orphans.map((o) => o.name).join(', ')}.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  orphans.forEach((o) => removeFromCart(o.id));
+                  setCart(getCart());
+                  toast.success('Articoli non disponibili rimossi');
+                }}
+                className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg font-semibold text-sm"
+              >
+                Rimuovi dal carrello
+              </button>
+            </div>
+          )}
+
+          {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800">
+              <strong>⚠ Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.
             </div>
           )}
         </div>

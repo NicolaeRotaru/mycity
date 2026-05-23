@@ -18,18 +18,19 @@ interface ProductCardProps {
   stock?: number;
   createdAt?: string;
   storeName?: string;
+  sellerId?: string;
 }
 
 const ProductCard = ({
   id, name, description, price, images, rating, reviewCount = 0,
-  stock, createdAt, storeName,
+  stock, createdAt, storeName, sellerId,
 }: ProductCardProps) => {
   const img = images?.[0] ?? 'https://placehold.co/400x400/eef2ff/6366f1?text=Foto';
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    addToCart({ id, name, price, image: img });
+    addToCart({ id, name, price, image: img, sellerId, storeName });
     toast.success(`${name} aggiunto al carrello`, { duration: 2000 });
   };
 
