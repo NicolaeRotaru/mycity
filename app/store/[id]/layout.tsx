@@ -13,7 +13,7 @@ async function fetchStore(id: string) {
     });
     const { data } = await supabase
       .from('profiles')
-      .select('id, store_name, store_description, store_logo_url, store_address, is_approved, role')
+      .select('id, store_name, store_description, store_logo, store_address, is_approved, role')
       .eq('id', id)
       .single();
     return data as any;
@@ -32,7 +32,7 @@ export async function generateMetadata(
   const name = store.store_name ?? 'Negozio';
   const desc =
     (store.store_description ?? `Compra online da ${name} su MyCity. Consegna locale 24-48h o ritiro in negozio.`).slice(0, 160);
-  const img = store.store_logo_url ? [store.store_logo_url] : undefined;
+  const img = store.store_logo ? [store.store_logo] : undefined;
 
   return {
     title: `${name} · Negozio · MyCity`,

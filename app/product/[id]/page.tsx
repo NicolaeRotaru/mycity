@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
@@ -174,7 +175,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         {/* GALLERIA */}
         <div className="space-y-3">
           <div className="relative w-full aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl overflow-hidden border">
-            <Image src={images[activeImg]} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-contain p-4" />
+            <Image src={sizedImage(images[activeImg], 'detail')} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-contain p-4" />
             {isOutOfStock && (
               <div className="absolute top-4 left-4 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-full">
                 ESAURITO
@@ -196,7 +197,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                     activeImg === i ? 'border-indigo-500' : 'border-transparent hover:border-gray-300'
                   }`}
                 >
-                  <Image src={img} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-cover" />
+                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-cover" />
                 </button>
               ))}
             </div>

@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { sizedImage } from '@/lib/image-url';
 
 export default function SellerProductsPage() {
   const qc = useQueryClient();
@@ -82,7 +83,7 @@ export default function SellerProductsPage() {
                     <div className="flex items-center gap-3">
                       <div className="relative w-12 h-12 bg-gray-100 rounded shrink-0">
                         <Image
-                          src={p.images?.[0] ?? 'https://placehold.co/100x100/eee/aaa?text=?'}
+                          src={sizedImage(p.images?.[0] ?? 'https://placehold.co/100x100/eee/aaa?text=?', 'thumb')}
                           alt={p.name}
                           fill
                           sizes="48px"

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { CartItem, getCart, updateQuantity, removeFromCart, cartTotal, cartCount } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
+import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 
 export default function CartPage() {
@@ -84,7 +85,7 @@ export default function CartPage() {
             <div key={item.id} className="bg-white border rounded-xl p-4 flex gap-4 hover:shadow-md transition-shadow">
               <div className="relative w-24 h-24 bg-gray-100 rounded-lg shrink-0 overflow-hidden">
                 <Image
-                  src={item.image ?? 'https://placehold.co/200x200/eef2ff/6366f1?text=Foto'}
+                  src={sizedImage(item.image ?? 'https://placehold.co/200x200/eef2ff/6366f1?text=Foto', 'thumb')}
                   alt={item.name}
                   fill
                   sizes="96px"
