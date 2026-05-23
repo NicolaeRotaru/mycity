@@ -19,7 +19,7 @@ export default function HomeRedirectGuard() {
   useEffect(() => {
     if (isLoading) return;
     if (isAdmin)  { router.replace('/admin'); return; }
-    if (isSeller) { router.replace('/seller'); return; }
+    if (isSeller) { router.replace('/seller/dashboard'); return; }
     if (isRider)  { router.replace('/rider'); return; }
   }, [isLoading, isSeller, isRider, isAdmin, router]);
 
