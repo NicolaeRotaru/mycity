@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { auth, supabase } from '@/lib/supabase/client';
@@ -30,6 +30,22 @@ const SignInForm = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = safeInternalPath(searchParams.get('returnTo'), '/');
+
+  // Difesa lato client: se Supabase ha mandato l'utente qui invece che
+  // su /reset-password (Site URL configurata male), intercetta il flusso
+  // di recovery e redirigi alla pagina giusta — preservando l'hash con
+  // il token di accesso.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.location.hash.includes('type=recovery')) {
+      router.replace('/reset-password' + window.location.hash);
+      return;
+    }
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') router.replace('/reset-password');
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
