@@ -41,6 +41,7 @@ export default function SellerProfilePage() {
         store_address: form.storeAddress,
         store_lat:     form.storeLat,
         store_lng:     form.storeLng,
+        store_logo:    form.storeLogo,
       }).eq('id', user.id);
       if (error) throw error;
     },
@@ -73,6 +74,7 @@ export default function SellerProfilePage() {
             storeAddress: profile?.store_address ?? '',
             storeLat:     profile?.store_lat     ?? undefined,
             storeLng:     profile?.store_lng     ?? undefined,
+            storeLogo:    profile?.store_logo    ?? null,
           }}
           onSubmit={(d) => update.mutate(d)}
           isLoading={update.isPending}

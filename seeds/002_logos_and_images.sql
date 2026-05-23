@@ -3,28 +3,65 @@
 -- Tocca SOLO i seller demo (email @piacenza-demo.local). Idempotente:
 -- ri-eseguibile senza effetti collaterali, le UPDATE sovrascrivono lo stato.
 --
--- Logos: DiceBear "initials" — SVG colorato con le iniziali del negozio.
+-- Logos: foto Pexels tematiche per ogni negozio (square crop 400x400).
+-- Sono foto reali di prodotti che rappresentano il negozio.
 --
--- Immagini prodotti: Iconify Material Design Icons — un'icona specifica
--- per prodotto su sfondo colorato per categoria. Non sono foto reali ma
--- sono affidabili (CDN Iconify stabile), specifiche per prodotto e
--- riconoscibili. Per foto vere il seller puo' caricare immagini dal
--- proprio dashboard (campo `images` su prodotti).
+-- Immagini prodotti: Iconify Material Design Icons — placeholder
+-- che vengono poi sovrascritte dal seed 003 con vere foto Pexels.
 
 DO $$
 BEGIN
   ----------------------------------------------------------------
-  -- 1) Logo per ogni negozio demo
+  -- 1) Logo per ogni negozio demo (foto Pexels tematiche)
   ----------------------------------------------------------------
-  UPDATE profiles
-  SET store_logo =
-    'https://api.dicebear.com/9.x/initials/svg?seed='
-    || replace(store_name, ' ', '+')
-    || '&fontWeight=700&fontSize=42'
-  WHERE id IN (
-    SELECT id FROM auth.users WHERE email LIKE '%@piacenza-demo.local'
-  )
-    AND store_name IS NOT NULL;
+  -- Salumeria del Borgo: coppa stagionata
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/6416558/pexels-photo-6416558.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-aaaaaaaa0001';
+  -- Frutteto Verde: pomodorini freschi
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/14657386/pexels-photo-14657386.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-aaaaaaaa0002';
+  -- Boutique Eleganza: vestito elegante
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/2169300/pexels-photo-2169300.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-bbbbbbbb0001';
+  -- Stile Urbano: streetwear
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/19461512/pexels-photo-19461512.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-bbbbbbbb0002';
+  -- Casa Linda: tessili casa
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/9330891/pexels-photo-9330891.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-cccccccc0001';
+  -- Cucina Plus: utensili cucina
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/36552082/pexels-photo-36552082.png?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-cccccccc0002';
+  -- TechZone Piacenza: cuffie tech
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/3394648/pexels-photo-3394648.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-dddddddd0001';
+  -- Smart Store: accessori mobile
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/18311092/pexels-photo-18311092.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-dddddddd0002';
+  -- Libreria Romana: libri
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/4170628/pexels-photo-4170628.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-eeeeeeee0001';
+  -- Cartoleria Centrale: cancelleria
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/8230968/pexels-photo-8230968.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-eeeeeeee0002';
+  -- Verde Casa: piante
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/18254763/pexels-photo-18254763.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-ffffffff0001';
+  -- Giardino Bello: giardinaggio
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/14822844/pexels-photo-14822844.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-ffffffff0002';
+  -- Bellezza Naturale: cosmetici bio
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/4841466/pexels-photo-4841466.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-99999999a001';
+  -- Profumeria Charme: profumi
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/11288844/pexels-photo-11288844.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-99999999a002';
+  -- SportFit Piacenza: fitness
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/16148425/pexels-photo-16148425.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-88888888a001';
+  -- Outdoor Avventura: trekking outdoor
+  UPDATE profiles SET store_logo = 'https://images.pexels.com/photos/31861359/pexels-photo-31861359.jpeg?auto=compress&cs=tinysrgb&w=400&h=400&fit=crop'
+    WHERE id = '11111111-1111-1111-1111-88888888a002';
 
   ----------------------------------------------------------------
   -- 2) Icone prodotti (Iconify MDI), colorate per categoria

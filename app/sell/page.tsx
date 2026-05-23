@@ -29,6 +29,7 @@ const Sell = () => {
         store_address: formData.storeAddress,
         store_lat:     formData.storeLat,
         store_lng:     formData.storeLng,
+        store_logo:    formData.storeLogo,
         role:          'seller',
         is_approved:   true,
       }).eq('id', user.id);
@@ -68,6 +69,7 @@ const Sell = () => {
             storeAddress: profile?.store_address ?? '',
             storeLat:     profile?.store_lat     ?? undefined,
             storeLng:     profile?.store_lng     ?? undefined,
+            storeLogo:    profile?.store_logo    ?? null,
           }}
           onSubmit={(data) => updateProfile.mutate(data)}
           isLoading={updateProfile.isPending}

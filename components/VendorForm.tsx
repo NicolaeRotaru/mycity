@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useDropzone } from 'react-dropzone';
+import { toast } from 'sonner';
 import StoreLocationPicker, { StoreLocation } from './StoreLocationPicker';
+import StoreAvatar from './StoreAvatar';
+import { supabase } from '@/lib/supabase/client';
 
 const VendorSchema = z.object({
   storeName:  z.string().min(3, 'Il nome deve essere di almeno 3 caratteri'),
@@ -17,6 +21,7 @@ export type VendorFormData = SchemaData & {
   storeAddress: string;
   storeLat: number;
   storeLng: number;
+  storeLogo: string | null;
 };
 
 interface Props {
@@ -26,7 +31,7 @@ interface Props {
 }
 
 const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
-  const { register, handleSubmit, formState: { errors } } = useForm<SchemaData>({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(VendorSchema),
     defaultValues: {
       storeName:  defaultValues?.storeName  ?? '',
@@ -40,6 +45,38 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
     lng:     defaultValues?.storeLng     ?? 12.4964,
   });
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const storeName = watch('storeName');
+
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: { 'image/*': [] },
+    maxFiles: 1,
+    onDrop: async (files) => {
+      const file = files[0];
+      if (!file) return;
+      setUploadingLogo(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Non autenticato');
+        const ext = file.name.split('.').pop() ?? 'png';
+        const path = `logos/${user.id}/${Date.now()}.${ext}`;
+        const { error } = await supabase.storage.from('products').upload(path, file, {
+          upsert: true,
+          contentType: file.type,
+        });
+        if (error) throw error;
+        const { data } = supabase.storage.from('products').getPublicUrl(path);
+        setLogoUrl(data.publicUrl);
+        toast.success('Logo caricato');
+      } catch (err: any) {
+        toast.error(err.message || 'Errore nel caricamento');
+      } finally {
+        setUploadingLogo(false);
+      }
+    },
+  });
 
   const handleFormSubmit = (data: SchemaData) => {
     if (!location.address.trim()) {
@@ -59,11 +96,48 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
       storeAddress: location.address,
       storeLat: location.lat,
       storeLng: location.lng,
+      storeLogo: logoUrl,
     });
   };
 
   return (
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
+      {/* Logo upload */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Logo del negozio</label>
+        <div className="flex items-center gap-4">
+          <StoreAvatar logoUrl={logoUrl} storeName={storeName || defaultValues?.storeName} size="lg" />
+          <div
+            {...getRootProps()}
+            className={`flex-1 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors text-sm ${
+              isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-gray-400'
+            } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
+          >
+            <input {...getInputProps()} />
+            {uploadingLogo ? (
+              <p className="text-gray-500">Caricamento...</p>
+            ) : logoUrl ? (
+              <p className="text-gray-600">
+                <span className="font-medium">Sostituisci</span> · trascina o clicca
+              </p>
+            ) : (
+              <p className="text-gray-500">
+                <span className="font-medium text-indigo-600">Carica</span> un'immagine quadrata (PNG, JPG)
+              </p>
+            )}
+          </div>
+          {logoUrl && (
+            <button
+              type="button"
+              onClick={() => setLogoUrl(null)}
+              className="text-sm text-gray-500 hover:text-red-600 underline"
+            >
+              Rimuovi
+            </button>
+          )}
+        </div>
+      </div>
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Nome del negozio</label>
         <input
@@ -101,7 +175,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
 
       <button
         type="submit"
-        disabled={isLoading}
+        disabled={isLoading || uploadingLogo}
         className="bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white px-6 py-3 rounded font-semibold transition-colors"
       >
         {isLoading ? 'Salvataggio...' : 'Salva negozio'}
