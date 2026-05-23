@@ -104,9 +104,10 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS referral_code text,
   ADD COLUMN IF NOT EXISTS referred_by uuid REFERENCES public.profiles(id);
 
--- Genera referral_code univoco per profili esistenti
+-- Genera referral_code univoco per profili esistenti (usa md5 perche'
+-- UUID demo come 11111111-... darebbero tutti gli stessi primi 8 char)
 UPDATE public.profiles
-SET referral_code = upper(substr(replace(id::text, '-', ''), 1, 8))
+SET referral_code = upper(substr(md5(id::text), 1, 8))
 WHERE referral_code IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS profiles_referral_code_idx ON public.profiles(referral_code);
@@ -148,7 +149,7 @@ BEGIN
           ELSE 'buyer'
         END,
         CASE WHEN role_choice IN ('seller', 'rider') THEN true ELSE false END,
-        upper(substr(replace(new.id::text, '-', ''), 1, 8))
+        upper(substr(md5(new.id::text), 1, 8))
     );
     RETURN new;
 END;
