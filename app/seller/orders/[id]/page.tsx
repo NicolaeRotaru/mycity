@@ -12,6 +12,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { notify } from '@/lib/notifications';
+import SimpleQR from '@/components/SimpleQR';
 
 type OrderRow = {
   id: string;
@@ -60,6 +61,39 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       if (error) throw error;
       return data as unknown as OrderRow;
     },
+    refetchInterval: 30_000,
+  });
+
+  // Codice ritiro: visibile solo al seller (RLS lo limita ai propri ordini)
+  const { data: pickupCode } = useQuery({
+    queryKey: ['pickup-code', id],
+    enabled: !!order && ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status),
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('order_pickup_codes')
+        .select('code, verified_at')
+        .eq('order_id', id)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const reject = useMutation({
+    mutationFn: async (reason?: string) => {
+      const { data, error } = await supabase.rpc('seller_reject_order', {
+        p_order_id: id,
+        p_reason: reason ?? null,
+      });
+      if (error) throw error;
+      const r = data as { ok: boolean; reason?: string };
+      if (!r.ok) throw new Error(r.reason ?? 'Impossibile rifiutare');
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['seller-order', id] });
+      qc.invalidateQueries({ queryKey: ['seller-orders'] });
+      toast.success('Ordine rifiutato');
+    },
+    onError: (err: any) => toast.error(err.message),
   });
 
   const transition = useMutation({
@@ -95,14 +129,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
   const c = ORDER_STATUS_COLOR[order.delivery_status];
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
 
-  // Bottoni azione in base allo stato
-  const actions: { label: string; nextStatus: OrderStatus; timestampField: string; color: string }[] = [];
-  if (order.delivery_status === 'NEW') {
-    actions.push({ label: '✓ Accetta ordine', nextStatus: 'ACCEPTED', timestampField: 'accepted_at', color: 'bg-blue-600 hover:bg-blue-700' });
-    actions.push({ label: '✕ Rifiuta',          nextStatus: 'CANCELED', timestampField: 'canceled_at', color: 'bg-rose-600 hover:bg-rose-700' });
-  } else if (order.delivery_status === 'ACCEPTED') {
-    actions.push({ label: '📦 Pronto per il rider', nextStatus: 'READY', timestampField: 'ready_at', color: 'bg-violet-600 hover:bg-violet-700' });
-  }
+  const showPickupCode = ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status) && pickupCode?.code;
 
   return (
     <div className="space-y-6">
@@ -121,25 +148,66 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       </div>
 
       {/* AZIONI */}
-      {actions.length > 0 && (
+      {order.delivery_status === 'NEW' && (
         <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-600 mb-3">Cosa vuoi fare?</p>
+          <p className="text-sm text-gray-600 mb-3">Vuoi accettare questo ordine?</p>
           <div className="flex gap-2 flex-wrap">
-            {actions.map((a) => (
-              <button
-                key={a.nextStatus}
-                onClick={() => transition.mutate({ newStatus: a.nextStatus, timestampField: a.timestampField })}
-                disabled={transition.isPending}
-                className={`${a.color} text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50`}
-              >
-                {a.label}
-              </button>
-            ))}
+            <button
+              onClick={() => transition.mutate({ newStatus: 'ACCEPTED', timestampField: 'accepted_at' })}
+              disabled={transition.isPending}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+            >
+              ✓ Accetta ordine
+            </button>
+            <button
+              onClick={() => {
+                const reason = prompt('Motivo del rifiuto (visibile al cliente):');
+                if (reason !== null) reject.mutate(reason || undefined);
+              }}
+              disabled={reject.isPending}
+              className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+            >
+              ✕ Rifiuta
+            </button>
+          </div>
+        </div>
+      )}
+      {order.delivery_status === 'ACCEPTED' && (
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <p className="text-sm text-gray-600 mb-3">Quando hai finito di preparare l'ordine:</p>
+          <button
+            onClick={() => transition.mutate({ newStatus: 'READY', timestampField: 'ready_at' })}
+            disabled={transition.isPending}
+            className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+          >
+            📦 Pronto per il rider
+          </button>
+        </div>
+      )}
+
+      {/* CODICE RITIRO (visibile dopo ACCEPTED) */}
+      {showPickupCode && (
+        <div className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white rounded-2xl p-6 shadow-lg">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs uppercase tracking-widest text-cyan-100 font-semibold">Codice ritiro</p>
+              <p className="font-mono font-extrabold text-4xl sm:text-5xl tracking-[0.3em] my-2">
+                {pickupCode!.code}
+              </p>
+              <p className="text-sm text-cyan-100">
+                {pickupCode!.verified_at
+                  ? '✓ Codice già usato dal rider per ritirare.'
+                  : 'Mostra questo codice (o il QR) al rider quando viene a ritirare l\'ordine.'}
+              </p>
+            </div>
+            <div className="bg-white p-2 rounded-lg shrink-0">
+              <SimpleQR value={pickupCode!.code} size={120} />
+            </div>
           </div>
         </div>
       )}
 
-      {order.delivery_status === 'READY' && (
+      {order.delivery_status === 'READY' && !order.rider_id && (
         <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800">
           ⏳ In attesa che un rider prenda in carico questo ordine.
         </div>

@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import DeliveryMap, { MapPoint } from '@/components/DeliveryMap';
+import VerifyCodeDialog from '@/components/VerifyCodeDialog';
 import { formatPrice } from '@/lib/format';
 import {
   ORDER_STATUS_LABEL,
@@ -52,6 +53,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
   const router = useRouter();
   const [sharing, setSharing] = useState(false);
   const watchIdRef = useRef<number | null>(null);
+  const [verifyOpen, setVerifyOpen] = useState<'pickup' | 'delivery' | null>(null);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['rider-order', id],
@@ -72,6 +74,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     },
   });
 
+  // Transizione semplice (es. PICKED_UP → OUT_FOR_DELIVERY senza codice)
   const transition = useMutation({
     mutationFn: async (params: { newStatus: OrderStatus; timestampField?: string }) => {
       if (!order) throw new Error('Ordine non caricato');
@@ -80,22 +83,52 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       const { error } = await supabase.from('orders').update(update).eq('id', order.id);
       if (error) throw error;
 
-      // Notifica buyer + seller
       const msg = `${ORDER_STATUS_EMOJI[params.newStatus]} ${ORDER_STATUS_LABEL[params.newStatus]}`;
-      notify({ userId: order.user_id,   title: msg, body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/orders/${order.id}` });
-      notify({ userId: order.seller_id, title: msg, body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/seller/orders/${order.id}` });
+      notify({ userId: order.user_id, title: msg, body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/orders/${order.id}` });
     },
-    onSuccess: (_data, vars) => {
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rider-order', id] });
       qc.invalidateQueries({ queryKey: ['rider-orders'] });
       toast.success('Stato aggiornato');
-      if (vars.newStatus === 'DELIVERED') {
-        stopSharing();
-        setTimeout(() => router.push('/rider'), 800);
-      }
     },
     onError: (err: any) => toast.error(err.message),
   });
+
+  // Verifica codice pickup → server function (atomica + notifiche)
+  const verifyPickup = async (code: string) => {
+    const { data, error } = await supabase.rpc('verify_pickup_code', {
+      p_order_id: id,
+      p_code: code,
+    });
+    if (error) return { ok: false, reason: error.message };
+    const result = data as { ok: boolean; reason?: string };
+    if (result.ok) {
+      qc.invalidateQueries({ queryKey: ['rider-order', id] });
+      qc.invalidateQueries({ queryKey: ['rider-orders'] });
+      toast.success('✓ Ritiro confermato');
+      setVerifyOpen(null);
+    }
+    return result;
+  };
+
+  // Verifica codice delivery → server function (atomica + notifiche)
+  const verifyDelivery = async (code: string) => {
+    const { data, error } = await supabase.rpc('verify_delivery_code', {
+      p_order_id: id,
+      p_code: code,
+    });
+    if (error) return { ok: false, reason: error.message };
+    const result = data as { ok: boolean; reason?: string };
+    if (result.ok) {
+      qc.invalidateQueries({ queryKey: ['rider-order', id] });
+      qc.invalidateQueries({ queryKey: ['rider-orders'] });
+      toast.success('✓ Consegna confermata!');
+      stopSharing();
+      setVerifyOpen(null);
+      setTimeout(() => router.push('/rider'), 1000);
+    }
+    return result;
+  };
 
   // GPS sharing: aggiorna posizione ogni 5-10 secondi
   const startSharing = () => {
@@ -212,20 +245,59 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       </div>
 
       {/* AZIONE PRINCIPALE */}
-      {actions.length > 0 && (
+      {order.delivery_status === 'ASSIGNED' && (
+        <button
+          onClick={() => setVerifyOpen('pickup')}
+          className="w-full bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+        >
+          ✋ Conferma ritiro al negozio
+        </button>
+      )}
+      {order.delivery_status === 'PICKED_UP' && (
         <div className="space-y-2">
-          {actions.map((a) => (
-            <button
-              key={a.nextStatus}
-              onClick={() => transition.mutate({ newStatus: a.nextStatus, timestampField: a.timestampField })}
-              disabled={transition.isPending}
-              className={`${a.color} w-full text-white px-6 py-4 rounded-xl font-bold text-lg disabled:opacity-50 shadow-lg`}
-            >
-              {a.label}
-            </button>
-          ))}
+          <button
+            onClick={() => transition.mutate({ newStatus: 'OUT_FOR_DELIVERY' })}
+            disabled={transition.isPending}
+            className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+          >
+            🚚 Sto andando dal cliente
+          </button>
+          <button
+            onClick={() => setVerifyOpen('delivery')}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+          >
+            ✅ Conferma consegna al cliente
+          </button>
         </div>
       )}
+      {order.delivery_status === 'OUT_FOR_DELIVERY' && (
+        <button
+          onClick={() => setVerifyOpen('delivery')}
+          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+        >
+          ✅ Conferma consegna al cliente
+        </button>
+      )}
+
+      {/* Dialog verifica */}
+      <VerifyCodeDialog
+        open={verifyOpen === 'pickup'}
+        title="Codice ritiro"
+        description="Chiedi al negoziante il codice a 6 cifre per confermare il ritiro."
+        ctaLabel="Conferma ritiro"
+        ctaColor="bg-cyan-600 hover:bg-cyan-700"
+        onClose={() => setVerifyOpen(null)}
+        onSubmit={verifyPickup}
+      />
+      <VerifyCodeDialog
+        open={verifyOpen === 'delivery'}
+        title="Codice consegna"
+        description="Chiedi al cliente il codice a 6 cifre per chiudere la consegna."
+        ctaLabel="Conferma consegna"
+        ctaColor="bg-emerald-600 hover:bg-emerald-700"
+        onClose={() => setVerifyOpen(null)}
+        onSubmit={verifyDelivery}
+      />
 
       {/* NAVIGA */}
       {navTarget.lat && navTarget.lng && order.delivery_status !== 'DELIVERED' && (

@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import DeliveryMap, { MapPoint } from '@/components/DeliveryMap';
+import SimpleQR from '@/components/SimpleQR';
 import { formatPrice, formatDate } from '@/lib/format';
 import { addToCart, clearCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -87,6 +88,7 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
 export default function BuyerOrderDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
   const router = useRouter();
+  const qc = useQueryClient();
 
   const { data: order, isLoading, refetch } = useQuery({
     queryKey: ['order', id],
@@ -127,6 +129,40 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
   const isDelivered = status === 'DELIVERED';
+  const isCancellable = status === 'NEW';
+  const showDeliveryCode = status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY';
+
+  // Codice consegna: visibile solo al buyer (via RLS) e solo quando il rider e' in arrivo
+  const { data: deliveryCode } = useQuery({
+    queryKey: ['delivery-code', id],
+    enabled: showDeliveryCode,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('order_delivery_codes')
+        .select('code, verified_at')
+        .eq('order_id', id)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  const cancel = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('cancel_order', { p_order_id: id });
+      if (error) throw error;
+      const r = data as { ok: boolean; reason?: string };
+      if (!r.ok) {
+        if (r.reason === 'TOO_LATE') throw new Error('Il negozio ha già accettato l\'ordine, non puoi più annullarlo.');
+        throw new Error('Impossibile annullare');
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['order', id] });
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      toast.success('Ordine annullato');
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
 
   const handleReorder = () => {
     clearCart();
@@ -183,6 +219,52 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
             >
               🔁 Ripeti ordine
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ANNULLAMENTO (solo NEW) */}
+      {isCancellable && (
+        <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-amber-900">
+            ⏳ <strong>In attesa di conferma del negozio.</strong> Puoi annullare l'ordine finché il negozio non lo accetta.
+          </p>
+          <button
+            onClick={() => {
+              if (confirm('Annullare l\'ordine? Non sarà più recuperabile.')) cancel.mutate();
+            }}
+            disabled={cancel.isPending}
+            className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap"
+          >
+            ❌ Annulla ordine
+          </button>
+        </div>
+      )}
+
+      {status === 'CANCELED' && (
+        <div className="bg-rose-50 border-2 border-rose-200 rounded-xl p-4 text-sm text-rose-800">
+          ❌ Questo ordine è stato annullato.
+        </div>
+      )}
+
+      {/* CODICE CONSEGNA (visibile quando rider sta arrivando) */}
+      {showDeliveryCode && deliveryCode?.code && (
+        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 text-white rounded-2xl p-6 shadow-lg">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs uppercase tracking-widest text-emerald-100 font-semibold">Codice consegna</p>
+              <p className="font-mono font-extrabold text-4xl sm:text-5xl tracking-[0.3em] my-2">
+                {deliveryCode.code}
+              </p>
+              <p className="text-sm text-emerald-100">
+                {deliveryCode.verified_at
+                  ? '✓ Consegna confermata.'
+                  : 'Mostra questo codice (o il QR) al rider quando arriva. Senza questo codice, il rider non può chiudere la consegna.'}
+              </p>
+            </div>
+            <div className="bg-white p-2 rounded-lg shrink-0">
+              <SimpleQR value={deliveryCode.code} size={120} />
+            </div>
           </div>
         </div>
       )}
