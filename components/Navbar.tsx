@@ -279,6 +279,16 @@ const Navbar = () => {
   const profileHref = isSeller ? '/seller/profile' : isRider ? '/rider/profile' : '/profile';
   const ordersHref  = isSeller ? '/seller/orders'  : isRider ? '/rider'         : '/orders';
 
+  // CategoryBar: mostrata solo a buyer/guest, nascosta in aree pro e durante
+  // navigazione in aree pro anche se l'utente è buyer.
+  const isProRole = isAdmin || isSeller || isRider;
+  const isProArea =
+    !!pathname?.startsWith('/seller') ||
+    !!pathname?.startsWith('/rider')  ||
+    !!pathname?.startsWith('/admin');
+  const showCategoryBar = !isProRole && !isProArea;
+  const hideCategoryOnScroll = useScrollHide();
+
   const ProfileIcon = ({ compact = false }: { compact?: boolean }) => {
     if (!isAuthenticated) {
       return (
@@ -417,13 +427,58 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* CategoryBar (icone categorie) — nascosta nelle aree riservate */}
-      {!pathname?.startsWith('/seller')
-        && !pathname?.startsWith('/rider')
-        && !pathname?.startsWith('/admin')
-        && <CategoryBar />}
+      {/* CategoryBar: solo per buyer/guest, e con auto-hide su scroll giù */}
+      <CategoryBarSlot show={showCategoryBar} hidden={hideCategoryOnScroll} />
     </header>
   );
 };
+
+/**
+ * Wrapper che applica l'animazione "scrollo giù → si chiude / scrollo su → si apre"
+ * usando max-height. Tieni la mount/unmount controllata dal parent così evitiamo
+ * effetti sulle aree dove la barra non serve mai (seller/rider/admin).
+ */
+const CategoryBarSlot = ({ show, hidden }: { show: boolean; hidden: boolean }) => {
+  if (!show) return null;
+  return (
+    <div
+      aria-hidden={hidden}
+      className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
+        hidden ? 'max-h-0 opacity-0 pointer-events-none' : 'max-h-24 opacity-100'
+      }`}
+    >
+      <CategoryBar />
+    </div>
+  );
+};
+
+/**
+ * Restituisce true quando l'utente sta scrollando verso il basso oltre una
+ * soglia minima. Usa requestAnimationFrame per throttle.
+ */
+function useScrollHide(threshold = 80) {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    let lastY = typeof window !== 'undefined' ? window.scrollY : 0;
+    let ticking = false;
+    const onScroll = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(() => {
+        const y = window.scrollY;
+        // Ignora micro-scroll
+        if (Math.abs(y - lastY) > 6) {
+          if (y > lastY && y > threshold) setHidden(true);   // giù → chiudi
+          else if (y < lastY)              setHidden(false);  // su → apri
+          lastY = y;
+        }
+        ticking = false;
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [threshold]);
+  return hidden;
+}
 
 export default Navbar;
