@@ -10,7 +10,7 @@ type Activity = {
   created_at: string;
   delivery_status: string;
   delivery_city: string | null;
-  buyer: { full_name: string | null } | null;
+  delivery_full_name: string | null;
   seller: { store_name: string | null; id: string } | null;
 };
 
@@ -42,8 +42,7 @@ const LiveActivityFeed = () => {
       const { data } = await supabase
         .from('orders')
         .select(`
-          id, created_at, delivery_status, delivery_city,
-          buyer:profiles!orders_user_id_fkey ( full_name ),
+          id, created_at, delivery_status, delivery_city, delivery_full_name,
           seller:profiles!orders_seller_id_fkey ( id, store_name )
         `)
         .in('delivery_status', ['NEW', 'ACCEPTED', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED'])
@@ -96,7 +95,7 @@ const LiveActivityFeed = () => {
               </span>
               <div className="flex-1 min-w-0">
                 <p className="truncate">
-                  <strong className="text-gray-900">{anonName(a.buyer?.full_name)}</strong>
+                  <strong className="text-gray-900">{anonName(a.delivery_full_name)}</strong>
                   <span className="text-gray-500"> {verb} </span>
                   {a.seller?.id ? (
                     <Link href={`/store/${a.seller.id}`} className="font-semibold text-indigo-600 hover:underline">
