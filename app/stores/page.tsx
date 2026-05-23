@@ -153,8 +153,8 @@ export default function StoresPage() {
         </p>
       </div>
 
-      {/* Filtri sticky */}
-      <div className="sticky top-32 z-10 bg-white/95 backdrop-blur border border-gray-200 rounded-xl p-3 mb-6 shadow-sm space-y-2">
+      {/* Filtri */}
+      <div className="bg-white border border-gray-200 rounded-xl p-3 mb-6 shadow-sm space-y-2">
         <div className="flex gap-2 flex-wrap items-center">
           <input
             type="search"

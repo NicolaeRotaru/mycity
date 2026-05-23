@@ -34,7 +34,7 @@ export default function RiderDashboardPage() {
   const qc = useQueryClient();
   const router = useRouter();
 
-  // Ordini disponibili (READY + senza rider) + miei ordini attivi
+  // Ordini ACCEPTED/READY senza rider + i miei ordini attivi
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ['rider-orders'],
     queryFn: async () => {
@@ -48,7 +48,7 @@ export default function RiderDashboardPage() {
           seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_address ),
           order_items ( id, quantity )
         `)
-        .or(`and(delivery_status.eq.READY,rider_id.is.null),rider_id.eq.${user.id}`)
+        .or(`and(delivery_status.in.(ACCEPTED,READY),rider_id.is.null),rider_id.eq.${user.id}`)
         .order('created_at', { ascending: true });
       if (error) throw error;
       return (data ?? []) as unknown as (AvailableOrder & { rider_id: string | null })[];
@@ -56,8 +56,9 @@ export default function RiderDashboardPage() {
     refetchInterval: 15_000,
   });
 
-  const myActive = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED');
-  const available = orders.filter((o) => !o.rider_id && o.delivery_status === 'READY');
+  const myActive   = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED');
+  const available  = orders.filter((o) => !o.rider_id && o.delivery_status === 'READY');
+  const inPrep     = orders.filter((o) => !o.rider_id && o.delivery_status === 'ACCEPTED');
 
   const claim = useMutation({
     mutationFn: async (orderId: string) => {
@@ -193,6 +194,50 @@ export default function RiderDashboardPage() {
           </div>
         )}
       </section>
+
+      {/* ORDINI IN PREPARAZIONE — visibili ma non ancora claimabili */}
+      {inPrep.length > 0 && (
+        <section>
+          <h2 className="font-bold text-gray-900 mb-3">
+            In preparazione ({inPrep.length})
+            <span className="ml-2 text-xs font-normal text-gray-500">aspetta che il negozio li renda pronti</span>
+          </h2>
+          <div className="space-y-2">
+            {inPrep.map((o) => (
+              <div
+                key={o.id}
+                className="bg-white border border-gray-200 rounded-xl px-5 py-4 opacity-80"
+              >
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 ring-1 ring-blue-200">
+                        👨‍🍳 In preparazione
+                      </span>
+                      <span className="text-xs font-mono text-gray-400">#{o.id.slice(0, 6).toUpperCase()}</span>
+                    </div>
+                    <p className="font-semibold text-gray-900">🏪 {o.seller?.store_name}</p>
+                    <p className="text-xs text-gray-500">{o.seller?.store_address}</p>
+                    <p className="text-sm text-gray-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">Compenso</p>
+                      <p className="font-bold text-emerald-600">{formatPrice(o.shipping_cost || 4.9)}</p>
+                    </div>
+                    <button
+                      disabled
+                      className="bg-gray-200 text-gray-400 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap cursor-not-allowed"
+                    >
+                      ⏳ Attendi
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
