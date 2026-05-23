@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
@@ -26,7 +26,7 @@ const ROLE_LABELS: Record<string, { label: string; color: string; emoji: string 
   pending_approval:  { label: 'In attesa',       color: 'bg-yellow-100 text-yellow-700', emoji: '⏳' },
 };
 
-export default function AdminUsersPage() {
+function AdminUsersPageInner() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
   const initialFilter = searchParams.get('role') ?? 'all';
@@ -163,5 +163,13 @@ export default function AdminUsersPage() {
         </table>
       </div>
     </div>
+  );
+}
+
+export default function AdminUsersPage() {
+  return (
+    <Suspense fallback={<div className="text-center py-8 text-gray-500">Caricamento...</div>}>
+      <AdminUsersPageInner />
+    </Suspense>
   );
 }
