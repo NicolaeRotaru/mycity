@@ -101,7 +101,7 @@ const Footer = () => {
         </div>
       )}
 
-      <div className="container mx-auto px-6 py-12 grid grid-cols-2 md:grid-cols-5 gap-8">
+      <div className={`container mx-auto px-6 py-12 grid grid-cols-2 ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-2 md:col-span-1">
           <h3 className="font-bold text-white mb-3 flex items-center gap-2 text-lg">
@@ -140,19 +140,9 @@ const Footer = () => {
           </ul>
         </div>
 
-        {/* Categorie o area venditore */}
-        {isSellerArea ? (
-          <div>
-            <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Il tuo negozio</h3>
-            <ul className="space-y-2 text-sm">
-              <li><Link href="/seller/dashboard" className="hover:text-white transition-colors">Dashboard</Link></li>
-              <li><Link href="/seller/products" className="hover:text-white transition-colors">I tuoi prodotti</Link></li>
-              <li><Link href="/seller/products/new" className="hover:text-white transition-colors">Pubblica prodotto</Link></li>
-              <li><Link href="/seller/orders" className="hover:text-white transition-colors">Ordini ricevuti</Link></li>
-              <li><Link href="/profile/settings" className="hover:text-white transition-colors">Impostazioni</Link></li>
-            </ul>
-          </div>
-        ) : (
+        {/* Categorie — solo per buyer/guest. Per seller/rider la navigazione
+            del loro mestiere è nella sidebar dedicata, niente duplicati qui. */}
+        {!isSellerArea && (
           <div>
             <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Categorie</h3>
             <ul className="space-y-2 text-sm">
