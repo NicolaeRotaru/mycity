@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ConfirmDialog';
 
 type Coupon = {
   id: string;
@@ -237,7 +238,16 @@ export default function AdminCouponsPage() {
                 </td>
                 <td className="p-3">
                   <button
-                    onClick={() => { if (confirm(`Eliminare il coupon ${c.code}?`)) remove.mutate(c.id); }}
+                    onClick={async () => {
+                      const ok = await confirmDialog({
+                        title: 'Eliminare il coupon?',
+                        message: `Il codice ${c.code} non sarà più utilizzabile dai clienti.`,
+                        confirmLabel: 'Sì, elimina',
+                        danger: true,
+                        icon: '🎟️',
+                      });
+                      if (ok) remove.mutate(c.id);
+                    }}
                     className="text-xs text-rose-600 hover:underline"
                   >
                     Elimina

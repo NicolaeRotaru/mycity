@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
 import SimpleQR from '@/components/SimpleQR';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { formatPrice, formatDate } from '@/lib/format';
 import { addToCart, clearCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -231,8 +232,16 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
             ⏳ <strong>In attesa di conferma del negozio.</strong> Puoi annullare l'ordine finché il negozio non lo accetta.
           </p>
           <button
-            onClick={() => {
-              if (confirm('Annullare l\'ordine? Non sarà più recuperabile.')) cancel.mutate();
+            onClick={async () => {
+              const ok = await confirmDialog({
+                title: "Annullare l'ordine?",
+                message: "Una volta annullato non potrai più recuperarlo. Il negozio verrà avvisato e i prodotti torneranno disponibili.",
+                confirmLabel: 'Sì, annulla ordine',
+                cancelLabel: 'No, mantieni',
+                danger: true,
+                icon: '🗑️',
+              });
+              if (ok) cancel.mutate();
             }}
             disabled={cancel.isPending}
             className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap"

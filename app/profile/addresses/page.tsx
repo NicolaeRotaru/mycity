@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { confirmDialog } from '@/components/ConfirmDialog';
 
 type Addr = {
   id: string;
@@ -200,7 +201,16 @@ export default function AddressesPage() {
               <div className="flex flex-col gap-1 shrink-0">
                 <button onClick={() => startEdit(a)} className="text-xs text-indigo-600 hover:underline">Modifica</button>
                 <button
-                  onClick={() => { if (confirm('Eliminare questo indirizzo?')) remove.mutate(a.id); }}
+                  onClick={async () => {
+                    const ok = await confirmDialog({
+                      title: 'Eliminare questo indirizzo?',
+                      message: a.label ? `Stai per rimuovere "${a.label}".` : undefined,
+                      confirmLabel: 'Sì, elimina',
+                      danger: true,
+                      icon: '📍',
+                    });
+                    if (ok) remove.mutate(a.id);
+                  }}
                   className="text-xs text-rose-600 hover:underline"
                 >
                   Elimina

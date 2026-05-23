@@ -4,6 +4,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import QueryProvider from '@/components/providers/QueryProvider';
 import ToastProvider from '@/components/providers/ToastProvider';
+import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -58,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Footer />
         </QueryProvider>
         <ToastProvider />
+        <ConfirmDialogHost />
       </body>
     </html>
   );

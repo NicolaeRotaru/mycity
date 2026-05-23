@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { confirmDialog } from '@/components/ConfirmDialog';
 
 type Row = {
   id: string;
@@ -118,8 +119,15 @@ export default function AdminProductsPage() {
                   </td>
                   <td className="p-3">
                     <button
-                      onClick={() => {
-                        if (confirm(`Eliminare "${p.name}"?`)) remove.mutate(p.id);
+                      onClick={async () => {
+                        const ok = await confirmDialog({
+                          title: 'Eliminare il prodotto?',
+                          message: `"${p.name}" verrà rimosso definitivamente.`,
+                          confirmLabel: 'Sì, elimina',
+                          danger: true,
+                          icon: '🗑️',
+                        });
+                        if (ok) remove.mutate(p.id);
                       }}
                       className="text-xs bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded"
                     >
