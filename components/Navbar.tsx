@@ -254,6 +254,10 @@ const Navbar = () => {
   const cartCount = useCartCount();
   const notifCount = useNotificationsCount();
   const { profile, userEmail, isAuthenticated, isLoading, isSeller, isRider, isAdmin } = useProfile();
+  // IMPORTANTE: useScrollHide DEVE essere chiamato qui, prima di qualsiasi
+  // early-return. Le Rules of Hooks impongono che la sequenza di chiamate
+  // sia identica a ogni render.
+  const hideCategoryOnScroll = useScrollHide();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,7 +291,6 @@ const Navbar = () => {
     !!pathname?.startsWith('/rider')  ||
     !!pathname?.startsWith('/admin');
   const showCategoryBar = !isProRole && !isProArea;
-  const hideCategoryOnScroll = useScrollHide();
 
   const ProfileIcon = ({ compact = false }: { compact?: boolean }) => {
     if (!isAuthenticated) {
