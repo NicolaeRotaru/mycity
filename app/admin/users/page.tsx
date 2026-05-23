@@ -121,6 +121,27 @@ function AdminUsersPageInner() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const deleteAccount = useMutation({
+    mutationFn: async (id: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Sessione scaduta');
+      const res = await fetch(`/api/admin/users/${id}/delete`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error || 'Eliminazione fallita');
+      return body;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-stats'] });
+      toast.success('Account eliminato definitivamente');
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const suspend = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('profiles').update({
@@ -271,6 +292,24 @@ function AdminUsersPageInner() {
                           className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 px-2 py-1 rounded"
                         >
                           Sospendi
+                        </button>
+                      )}
+                      {p.role !== 'admin' && (
+                        <button
+                          onClick={async () => {
+                            const name = p.store_name ?? p.business_legal_name ?? p.full_name ?? `Utente ${p.id.slice(0, 6)}`;
+                            const ok = await confirmDialog({
+                              title: 'Eliminare definitivamente?',
+                              message: `${name} verrà rimosso da auth.users e il profilo anonimizzato. L'utente non potrà più accedere. Gli ordini storici restano per obblighi fiscali. Azione irreversibile.`,
+                              confirmLabel: 'Sì, elimina',
+                              danger: true,
+                              icon: '🗑️',
+                            });
+                            if (ok) deleteAccount.mutate(p.id);
+                          }}
+                          className="text-xs bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded"
+                        >
+                          Elimina
                         </button>
                       )}
                     </div>
