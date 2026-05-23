@@ -4,6 +4,7 @@ import Link from 'next/link';
 import StoreAvatar from './StoreAvatar';
 import StoreMediaCarousel, { type StoreMediaItem } from './StoreMediaCarousel';
 import { formatPrice } from '@/lib/format';
+import { sizedImage } from '@/lib/image-url';
 import {
   DAY_KEYS,
   formatToday,
@@ -147,10 +148,11 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
                   {p.images?.[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={p.images[0]}
+                      src={sizedImage(p.images[0], 'thumb')}
                       alt={p.name}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       loading="lazy"
+                      decoding="async"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-300 text-xl">📦</div>

@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { useFavorites } from './hooks/useFavorites';
 
@@ -27,7 +28,8 @@ const ProductCard = ({
   id, name, description, price, images, rating, reviewCount = 0,
   stock, createdAt, storeName, sellerId,
 }: ProductCardProps) => {
-  const img = images?.[0] ?? 'https://placehold.co/400x400/eef2ff/6366f1?text=Foto';
+  const rawImg = images?.[0] ?? 'https://placehold.co/400x400/eef2ff/6366f1?text=Foto';
+  const img = sizedImage(rawImg, 'card');
   const { favorites, toggle } = useFavorites();
   const isFav = favorites.has(id);
 
