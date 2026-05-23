@@ -12,14 +12,16 @@ type Store = StoreCardData & {
   store_lng: number | null;
 };
 
-type ProductLite = ProductPreview & { seller_id: string };
+type ProductLite = ProductPreview & { seller_id: string; category_id: string | null };
+
+type Category = { id: string; slug: string; name: string; parent_id: string | null; icon: string | null };
 
 type SortMode = 'rating' | 'name' | 'most-products';
 
 const fetchStoresData = async () => {
   const { data: storesRaw } = await supabase
     .from('profiles')
-    .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours')
+    .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media')
     .eq('is_approved', true)
     .not('store_name', 'is', null)
     .order('store_name');
@@ -27,13 +29,13 @@ const fetchStoresData = async () => {
   const stores = (storesRaw ?? []) as Store[];
   const storeIds = stores.map((s) => s.id);
   if (storeIds.length === 0) {
-    return { stores: [], productsByStore: {}, reviewsByStore: {}, countByStore: {} };
+    return { stores: [], productsByStore: {}, reviewsByStore: {}, countByStore: {}, categoriesByStore: {}, categories: [] };
   }
 
-  const [productsRes, reviewsRes, countsRes] = await Promise.all([
+  const [productsRes, reviewsRes, allProductsCatRes, categoriesRes] = await Promise.all([
     supabase
       .from('products')
-      .select('id, name, price, images, seller_id')
+      .select('id, name, price, images, seller_id, category_id')
       .in('seller_id', storeIds)
       .eq('status', 'available')
       .order('created_at', { ascending: false })
@@ -44,14 +46,20 @@ const fetchStoresData = async () => {
       .in('store_id', storeIds),
     supabase
       .from('products')
-      .select('id, seller_id')
+      .select('seller_id, category_id')
       .in('seller_id', storeIds)
       .eq('status', 'available'),
+    supabase
+      .from('categories')
+      .select('id, slug, name, parent_id, icon')
+      .is('parent_id', null)
+      .order('name'),
   ]);
 
   const products = (productsRes.data ?? []) as ProductLite[];
   const reviews = (reviewsRes.data ?? []) as { store_id: string; rating: number }[];
-  const counts = (countsRes.data ?? []) as { seller_id: string; id: string }[];
+  const allCats = (allProductsCatRes.data ?? []) as { seller_id: string; category_id: string | null }[];
+  const categories = (categoriesRes.data ?? []) as Category[];
 
   const productsByStore: Record<string, ProductLite[]> = {};
   for (const p of products) {
@@ -70,20 +78,25 @@ const fetchStoresData = async () => {
   }
 
   const countByStore: Record<string, number> = {};
-  for (const c of counts) {
+  const categoriesByStore: Record<string, Set<string>> = {};
+  for (const c of allCats) {
     countByStore[c.seller_id] = (countByStore[c.seller_id] ?? 0) + 1;
+    if (c.category_id) {
+      (categoriesByStore[c.seller_id] ??= new Set()).add(c.category_id);
+    }
   }
 
-  return { stores, productsByStore, reviewsByStore, countByStore };
+  return { stores, productsByStore, reviewsByStore, countByStore, categoriesByStore, categories };
 };
 
 export default function StoresPage() {
   const [search, setSearch] = useState('');
   const [onlyOpen, setOnlyOpen] = useState(false);
   const [sort, setSort] = useState<SortMode>('rating');
+  const [categoryId, setCategoryId] = useState<string>('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['stores-page-v3'],
+    queryKey: ['stores-page-v4'],
     queryFn: fetchStoresData,
     staleTime: 60_000,
   });
@@ -92,6 +105,8 @@ export default function StoresPage() {
   const productsByStore = data?.productsByStore ?? {};
   const reviewsByStore = data?.reviewsByStore ?? {};
   const countByStore = data?.countByStore ?? {};
+  const categoriesByStore = data?.categoriesByStore ?? {};
+  const categories = data?.categories ?? [];
 
   const filtered = useMemo(() => {
     const todayKey = DAY_KEYS[new Date().getDay()];
@@ -100,6 +115,10 @@ export default function StoresPage() {
       if (onlyOpen) {
         const hours = (s.store_hours ?? {}) as StoreHours;
         if (!isOpenNow(hours[todayKey])) return false;
+      }
+      if (categoryId) {
+        const cats = categoriesByStore[s.id];
+        if (!cats || !cats.has(categoryId)) return false;
       }
       return true;
     });
@@ -117,7 +136,7 @@ export default function StoresPage() {
       result = [...result].sort((a, b) => (countByStore[b.id] ?? 0) - (countByStore[a.id] ?? 0));
     }
     return result;
-  }, [stores, search, onlyOpen, sort, reviewsByStore, countByStore]);
+  }, [stores, search, onlyOpen, sort, categoryId, reviewsByStore, countByStore, categoriesByStore]);
 
   if (isLoading) {
     return <div className="container mx-auto p-12 text-center text-gray-500">Caricamento negozi...</div>;
@@ -135,7 +154,7 @@ export default function StoresPage() {
       </div>
 
       {/* Filtri sticky */}
-      <div className="sticky top-32 z-10 bg-white/95 backdrop-blur border border-gray-200 rounded-xl p-3 mb-6 shadow-sm">
+      <div className="sticky top-32 z-10 bg-white/95 backdrop-blur border border-gray-200 rounded-xl p-3 mb-6 shadow-sm space-y-2">
         <div className="flex gap-2 flex-wrap items-center">
           <input
             type="search"
@@ -147,9 +166,7 @@ export default function StoresPage() {
           <button
             onClick={() => setOnlyOpen((v) => !v)}
             className={`px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
-              onlyOpen
-                ? 'bg-emerald-500 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              onlyOpen ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             🟢 Aperti ora
@@ -164,6 +181,29 @@ export default function StoresPage() {
             <option value="name">A-Z</option>
           </select>
         </div>
+        {categories.length > 0 && (
+          <div className="flex gap-1.5 flex-wrap">
+            <button
+              onClick={() => setCategoryId('')}
+              className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
+                categoryId === '' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Tutti i settori
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => setCategoryId(c.id === categoryId ? '' : c.id)}
+                className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
+                  c.id === categoryId ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {c.icon} {c.name}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {filtered.length === 0 ? (

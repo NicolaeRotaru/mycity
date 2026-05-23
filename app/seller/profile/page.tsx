@@ -36,12 +36,14 @@ export default function SellerProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { error } = await supabase.from('profiles').update({
-        store_name:    form.storeName,
-        store_phone:   form.storePhone,
-        store_address: form.storeAddress,
-        store_lat:     form.storeLat,
-        store_lng:     form.storeLng,
-        store_logo:    form.storeLogo,
+        store_name:        form.storeName,
+        store_phone:       form.storePhone,
+        store_address:     form.storeAddress,
+        store_lat:         form.storeLat,
+        store_lng:         form.storeLng,
+        store_logo:        form.storeLogo,
+        store_media:       form.storeMedia,
+        store_description: form.storeDescription || null,
       }).eq('id', user.id);
       if (error) throw error;
     },
@@ -69,12 +71,14 @@ export default function SellerProfilePage() {
       <div className="bg-white border rounded-lg p-6">
         <VendorForm
           defaultValues={{
-            storeName:    profile?.store_name    ?? '',
-            storePhone:   profile?.store_phone   ?? '',
-            storeAddress: profile?.store_address ?? '',
-            storeLat:     profile?.store_lat     ?? undefined,
-            storeLng:     profile?.store_lng     ?? undefined,
-            storeLogo:    profile?.store_logo    ?? null,
+            storeName:        profile?.store_name        ?? '',
+            storePhone:       profile?.store_phone       ?? '',
+            storeAddress:     profile?.store_address     ?? '',
+            storeLat:         profile?.store_lat         ?? undefined,
+            storeLng:         profile?.store_lng         ?? undefined,
+            storeLogo:        profile?.store_logo        ?? null,
+            storeMedia:       Array.isArray(profile?.store_media) ? profile.store_media : [],
+            storeDescription: profile?.store_description ?? '',
           }}
           onSubmit={(d) => update.mutate(d)}
           isLoading={update.isPending}

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import StoreAvatar from './StoreAvatar';
+import StoreMediaCarousel, { type StoreMediaItem } from './StoreMediaCarousel';
 import { formatPrice } from '@/lib/format';
 import {
   DAY_KEYS,
@@ -17,6 +18,7 @@ export type StoreCardData = {
   store_address: string | null;
   store_logo: string | null;
   store_hours: any;
+  store_media?: StoreMediaItem[] | null;
 };
 
 export type ProductPreview = {
@@ -30,9 +32,9 @@ interface Props {
   store: StoreCardData;
   products?: ProductPreview[];
   reviews?: { avg: number; count: number };
-  /** distanza in km, opzionale: se presente compare in alto a destra */
+  /** distanza in km, opzionale: badge in alto a destra sopra il cover */
   distanceKm?: number | null;
-  /** se true mostra solo elementi essenziali (per showcase home) */
+  /** se true mostra solo elementi essenziali */
   compact?: boolean;
 }
 
@@ -49,16 +51,23 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
     : null;
 
   const showPreview = !compact && products.length > 0;
+  const media = Array.isArray(store.store_media) ? store.store_media : [];
 
   return (
     <Link
       href={`/store/${store.id}`}
       className="group bg-white border border-gray-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-indigo-300 hover:-translate-y-0.5 transition-all flex flex-col"
     >
-      {/* Banner gradient con badge stato */}
-      <div className="relative h-16 sm:h-20 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 shrink-0">
+      {/* Cover con media gallery e badge */}
+      <div className="relative">
+        <StoreMediaCarousel
+          media={media}
+          heightClass="h-32 sm:h-40"
+          fallbackClass="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500"
+        />
+        {/* Badge aperto/chiuso */}
         <span
-          className={`absolute top-2 right-2 sm:top-3 sm:right-3 inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold shadow ${
+          className={`absolute top-2 right-2 sm:top-3 sm:right-3 z-20 inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold shadow ${
             open ? 'bg-emerald-500 text-white' : 'bg-black/60 text-white'
           }`}
         >
@@ -66,28 +75,28 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
           {open ? 'Aperto' : 'Chiuso'}
         </span>
         {reviews && reviews.avg >= 4.5 && (
-          <span className="absolute top-2 left-2 sm:top-3 sm:left-3 inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold bg-amber-400 text-gray-900 shadow">
+          <span className="absolute top-2 left-2 sm:top-3 sm:left-3 z-20 inline-flex items-center gap-1 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold bg-amber-400 text-gray-900 shadow">
             🏆 Top
           </span>
         )}
         {distanceKm !== undefined && distanceKm !== null && (
-          <span className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold bg-white/90 text-gray-900 shadow">
+          <span className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 z-20 inline-flex items-center px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold bg-white/95 text-gray-900 shadow">
             📍 {distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`}
           </span>
         )}
       </div>
 
       <div className="px-4 sm:px-5 pb-4 sm:pb-5 flex-1 flex flex-col">
-        {/* Logo che sborda + info */}
-        <div className="flex items-start gap-3 -mt-8 sm:-mt-10 mb-2 sm:mb-3">
-          <div className="ring-4 ring-white rounded-full bg-white shrink-0">
+        {/* Logo + info — logo COMPLETAMENTE visibile (overlap ~30% sul cover) */}
+        <div className="flex items-end gap-3 -mt-7 sm:-mt-8 mb-3">
+          <div className="ring-4 ring-white rounded-full bg-white shrink-0 shadow-md">
             <StoreAvatar
               logoUrl={store.store_logo}
               storeName={store.store_name}
               size={compact ? 'md' : 'lg'}
             />
           </div>
-          <div className="flex-1 min-w-0 pt-9 sm:pt-11">
+          <div className="flex-1 min-w-0 pb-1">
             <h3 className="font-extrabold text-base sm:text-lg text-gray-900 group-hover:text-indigo-600 transition-colors truncate">
               {store.store_name}
             </h3>

@@ -8,7 +8,9 @@ import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
 import StoreLocationPicker, { StoreLocation } from './StoreLocationPicker';
 import StoreAvatar from './StoreAvatar';
+import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
+import type { StoreMediaItem } from './StoreMediaCarousel';
 
 const VendorSchema = z.object({
   storeName:  z.string().min(3, 'Il nome deve essere di almeno 3 caratteri'),
@@ -22,6 +24,8 @@ export type VendorFormData = SchemaData & {
   storeLat: number;
   storeLng: number;
   storeLogo: string | null;
+  storeDescription: string;
+  storeMedia: StoreMediaItem[];
 };
 
 interface Props {
@@ -47,6 +51,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [logoUrl, setLogoUrl] = useState<string | null>(defaultValues?.storeLogo ?? null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [media, setMedia] = useState<StoreMediaItem[]>(defaultValues?.storeMedia ?? []);
+  const [description, setDescription] = useState<string>(defaultValues?.storeDescription ?? '');
 
   const storeName = watch('storeName');
 
@@ -97,6 +103,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
       storeLat: location.lat,
       storeLng: location.lng,
       storeLogo: logoUrl,
+      storeMedia: media,
+      storeDescription: description.trim(),
     });
   };
 
@@ -138,6 +146,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
         </div>
       </div>
 
+      {/* Cover media gallery */}
+      <StoreMediaManager value={media} onChange={setMedia} />
+
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Nome del negozio</label>
         <input
@@ -147,6 +158,17 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
           className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
         />
         {errors.storeName && <p className="text-red-500 text-sm mt-1">{errors.storeName.message}</p>}
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Descrizione (opzionale)</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          placeholder="Cosa rende speciale il tuo negozio? Storia, tradizione, prodotti tipici…"
+          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+        />
       </div>
 
       <div>

@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -11,11 +12,22 @@ import { formatPrice } from '@/lib/format';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
+import { useFavorites } from '@/components/hooks/useFavorites';
+import { useProfile } from '@/components/hooks/useProfile';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const router = useRouter();
+  const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
+  const { isAuthenticated } = useProfile();
+  const { favorites, toggle: toggleFav } = useFavorites();
+  const isFav = favorites.has(id);
+
+  // Form recensione
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -32,10 +44,36 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     queryKey: ['reviews', id],
     queryFn: async () => {
       const { data, error } = await supabase.from('reviews')
-        .select('id, rating, comment, created_at').eq('product_id', id)
+        .select('id, rating, comment, created_at, user_id').eq('product_id', id)
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data ?? [];
+    },
+  });
+
+  const submitReview = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push(`/sign-in?returnTo=/product/${id}`);
+        throw new Error('REDIRECT');
+      }
+      const { error } = await supabase.from('reviews').insert({
+        product_id: id,
+        user_id: user.id,
+        rating: reviewRating,
+        comment: reviewComment.trim() || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reviews', id] });
+      setReviewComment('');
+      setReviewRating(5);
+      toast.success('Grazie per la recensione!');
+    },
+    onError: (err: any) => {
+      if (err?.message !== 'REDIRECT') toast.error(err.message ?? 'Errore');
     },
   });
 
@@ -176,7 +214,29 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             </Link>
           )}
 
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900">{product.name}</h1>
+          <div className="flex items-start justify-between gap-3">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex-1">{product.name}</h1>
+            <button
+              type="button"
+              onClick={() => {
+                toggleFav.mutate(id, {
+                  onError: (err: any) => {
+                    if (err?.message === 'AUTH_REQUIRED') {
+                      toast.error('Accedi per salvare nei preferiti');
+                    }
+                  },
+                });
+              }}
+              aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+              className={`shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center text-2xl transition-transform hover:scale-110 ${
+                isFav
+                  ? 'bg-rose-500 border-rose-500 text-white'
+                  : 'bg-white border-gray-200 text-gray-300 hover:text-rose-400 hover:border-rose-200'
+              }`}
+            >
+              {isFav ? '♥' : '♡'}
+            </button>
+          </div>
 
           {/* Rating */}
           <div className="flex items-center gap-3 flex-wrap">
@@ -313,8 +373,65 @@ export default function ProductPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* RECENSIONI */}
-      <section className="mt-12">
-        <h2 className="text-2xl font-extrabold mb-4">Recensioni dei clienti</h2>
+      <section className="mt-12 space-y-6">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="text-2xl font-extrabold">
+            Recensioni
+            {reviews.length > 0 && (
+              <span className="ml-3 text-base font-normal text-gray-500">
+                <span className="text-amber-400">★</span> {avgRating.toFixed(1)} ({reviews.length})
+              </span>
+            )}
+          </h2>
+        </div>
+
+        {/* Form nuova recensione */}
+        <div className="bg-white border-2 border-indigo-100 rounded-xl p-5">
+          <h3 className="font-bold text-gray-900 mb-3">Lascia la tua recensione</h3>
+          {!isAuthenticated ? (
+            <p className="text-sm text-gray-600">
+              <Link href={`/sign-in?returnTo=/product/${id}`} className="text-indigo-600 font-semibold hover:underline">
+                Accedi
+              </Link>{' '}
+              per recensire questo prodotto.
+            </p>
+          ) : (
+            <form
+              onSubmit={(e) => { e.preventDefault(); submitReview.mutate(); }}
+              className="space-y-3"
+            >
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setReviewRating(n)}
+                    className="text-3xl hover:scale-110 transition-transform"
+                    aria-label={`${n} stelle`}
+                  >
+                    <span className={n <= reviewRating ? 'text-amber-400' : 'text-gray-300'}>★</span>
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                rows={3}
+                placeholder="Scrivi un commento (opzionale)…"
+                className="w-full border p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+              />
+              <button
+                type="submit"
+                disabled={submitReview.isPending}
+                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-semibold text-sm"
+              >
+                {submitReview.isPending ? 'Invio…' : 'Pubblica recensione'}
+              </button>
+            </form>
+          )}
+        </div>
+
+        {/* Lista recensioni */}
         {reviews.length === 0 ? (
           <div className="bg-white border rounded-xl p-8 text-center">
             <p className="text-4xl mb-2">⭐</p>
@@ -325,10 +442,15 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {reviews.map((r: any) => (
               <div key={r.id} className="bg-white border rounded-xl p-5">
-                <p className="text-yellow-500 mb-2 text-lg">
-                  {'★'.repeat(Math.round(Number(r.rating)))}{'☆'.repeat(5 - Math.round(Number(r.rating)))}
-                </p>
-                <p className="text-gray-700">{r.comment}</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-amber-400 text-lg">
+                    {'★'.repeat(Math.round(Number(r.rating)))}{'☆'.repeat(5 - Math.round(Number(r.rating)))}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {new Date(r.created_at).toLocaleDateString('it-IT')}
+                  </p>
+                </div>
+                {r.comment && <p className="text-gray-700 text-sm">{r.comment}</p>}
               </div>
             ))}
           </div>

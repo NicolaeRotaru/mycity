@@ -24,14 +24,16 @@ const Sell = () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { error } = await supabase.from('profiles').update({
-        store_name:    formData.storeName,
-        store_phone:   formData.storePhone,
-        store_address: formData.storeAddress,
-        store_lat:     formData.storeLat,
-        store_lng:     formData.storeLng,
-        store_logo:    formData.storeLogo,
-        role:          'seller',
-        is_approved:   true,
+        store_name:        formData.storeName,
+        store_phone:       formData.storePhone,
+        store_address:     formData.storeAddress,
+        store_lat:         formData.storeLat,
+        store_lng:         formData.storeLng,
+        store_logo:        formData.storeLogo,
+        store_media:       formData.storeMedia,
+        store_description: formData.storeDescription || null,
+        role:              'seller',
+        is_approved:       true,
       }).eq('id', user.id);
       if (error) throw error;
     },
@@ -64,12 +66,14 @@ const Sell = () => {
       <div className="bg-white border rounded-xl p-6">
         <VendorForm
           defaultValues={{
-            storeName:    profile?.store_name    ?? '',
-            storePhone:   profile?.store_phone   ?? '',
-            storeAddress: profile?.store_address ?? '',
-            storeLat:     profile?.store_lat     ?? undefined,
-            storeLng:     profile?.store_lng     ?? undefined,
-            storeLogo:    profile?.store_logo    ?? null,
+            storeName:        profile?.store_name        ?? '',
+            storePhone:       profile?.store_phone       ?? '',
+            storeAddress:     profile?.store_address     ?? '',
+            storeLat:         profile?.store_lat         ?? undefined,
+            storeLng:         profile?.store_lng         ?? undefined,
+            storeLogo:        profile?.store_logo        ?? null,
+            storeMedia:       Array.isArray(profile?.store_media) ? profile.store_media : [],
+            storeDescription: profile?.store_description ?? '',
           }}
           onSubmit={(data) => updateProfile.mutate(data)}
           isLoading={updateProfile.isPending}

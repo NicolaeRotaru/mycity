@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid from '@/components/ProductGrid';
 import StoreAvatar from '@/components/StoreAvatar';
+import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
 import { formatToday, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 
 const DAYS: { key: keyof StoreHours; label: string }[] = [
@@ -26,7 +27,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, store_logo, store_hours')
+        .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, store_logo, store_hours, store_media, store_description')
         .eq('id', id)
         .single();
       if (error) throw error;
@@ -80,14 +81,20 @@ export default function StorePage({ params }: { params: { id: string } }) {
   const todayLabel = formatToday(todayIntervals);
   const hasHours = DAYS.some((d) => Array.isArray(hours[d.key]));
 
+  const media = (Array.isArray(store.store_media) ? store.store_media : []) as StoreMediaItem[];
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-5xl space-y-6">
-      {/* Hero card */}
+      {/* Hero card: COVER con media carousel + logo che NON viene tagliato */}
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="h-24 sm:h-32 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
-        <div className="px-6 pb-6 -mt-12 sm:-mt-14">
+        <StoreMediaCarousel
+          media={media}
+          heightClass="h-48 sm:h-72"
+          fallbackClass="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"
+        />
+        <div className="px-6 pb-6 -mt-12 sm:-mt-14 relative z-10">
           <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-            <div className="ring-4 ring-white rounded-full bg-white inline-block">
+            <div className="ring-4 ring-white rounded-full bg-white inline-block shadow-lg">
               <StoreAvatar logoUrl={store.store_logo} storeName={store.store_name} size="xl" />
             </div>
             <div className="flex-1 sm:pb-2 min-w-0">
@@ -114,6 +121,9 @@ export default function StorePage({ params }: { params: { id: string } }) {
               </div>
               {street && (
                 <p className="text-gray-500 text-sm mt-1.5">{street}</p>
+              )}
+              {store.store_description && (
+                <p className="text-gray-700 text-sm mt-3 leading-relaxed">{store.store_description}</p>
               )}
             </div>
           </div>
