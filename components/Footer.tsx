@@ -83,19 +83,22 @@ const Footer = () => {
 
   return (
     <footer className="bg-gray-900 text-gray-300 mt-12">
-      {/* CTA banner finale */}
+      {/* CTA banner finale — visibile solo a buyer/guest, mai a chi è già seller
+          o in attesa di approvazione */}
       {!isSellerArea && (
         <div className="bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-600">
           <div className="container mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-white">
             <div>
               <h3 className="text-xl md:text-2xl font-extrabold">Hai un'attività nella tua città?</h3>
-              <p className="text-indigo-100 text-sm">Inizia a vendere online in 5 minuti. Zero commissioni mensili.</p>
+              <p className="text-indigo-100 text-sm">
+                Apri il tuo negozio professionale su MyCity. Abbonamento mensile, niente commissioni sulle vendite, approvazione in 48h.
+              </p>
             </div>
             <Link
-              href={isAuthenticated ? '/sell' : '/sign-up'}
+              href={isAuthenticated ? '/sell' : '/sign-up?returnTo=/sell'}
               className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 px-7 py-3 rounded-lg font-bold whitespace-nowrap shadow-lg hover:scale-105 transition-all"
             >
-              🚀 Diventa venditore
+              🏪 Diventa venditore
             </Link>
           </div>
         </div>
@@ -175,7 +178,9 @@ const Footer = () => {
           <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Azienda</h3>
           <ul className="space-y-2 text-sm">
             <li><Link href="/about" className="hover:text-white transition-colors">Chi siamo</Link></li>
-            <li><Link href="/sell" className="hover:text-white transition-colors">Vendi su MyCity</Link></li>
+            {!isSellerArea && (
+              <li><Link href="/sell" className="hover:text-white transition-colors">Vendi su MyCity</Link></li>
+            )}
             <li><Link href="/terms" className="hover:text-white transition-colors">Termini di servizio</Link></li>
             <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy policy</Link></li>
             <li><Link href="/cookies" className="hover:text-white transition-colors">Cookie policy</Link></li>

@@ -2,30 +2,65 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useProfile } from '@/components/hooks/useProfile';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { profile, isAuthenticated, isLoading, isSeller, isAdmin } = useProfile();
-  const allowed = (isSeller && profile?.is_approved) || isAdmin;
+  const isApproved = !!profile?.is_approved;
+  const allowed = (isSeller && isApproved) || isAdmin;
+  const pending = isSeller && !isApproved;
 
   useEffect(() => {
     if (isLoading) return;
     if (!isAuthenticated) {
       router.replace('/sign-in?returnTo=/seller');
-    } else if (!allowed) {
-      router.replace('/');
+      return;
     }
-  }, [isAuthenticated, allowed, isLoading, router]);
+    // Pending o rejected: non redirige, mostra schermata informativa sotto
+    if (!isSeller && !isAdmin) router.replace('/');
+  }, [isAuthenticated, isSeller, isAdmin, isLoading, router]);
 
   if (isLoading || !isAuthenticated) {
     return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
+  }
+
+  if (pending) {
+    return (
+      <div className="container mx-auto p-6 max-w-2xl">
+        <div className="bg-white border-2 border-amber-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-amber-100 flex items-center justify-center text-4xl mb-4">
+            ⏳
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Negozio in attesa di approvazione</h1>
+          <p className="text-gray-600 mb-4 max-w-md mx-auto">
+            Stiamo verificando i dati della tua attività. La dashboard sarà disponibile non appena
+            il nostro team avrà approvato la richiesta (entro 48 ore lavorative).
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
+            <Link href="/sell" className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold">
+              ✏️ Modifica richiesta
+            </Link>
+            <Link href="/?as=buyer" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+              🏠 Vai al marketplace
+            </Link>
+            <Link href="/contact" className="bg-white border-2 hover:border-indigo-400 px-5 py-2.5 rounded-lg font-semibold">
+              ✉️ Contatti
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!allowed) {
     return (
       <div className="container mx-auto p-8 text-center">
         <p className="text-gray-500 text-lg">Accesso riservato ai venditori approvati.</p>
+        <Link href="/sell" className="mt-4 inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+          Invia richiesta
+        </Link>
       </div>
     );
   }
