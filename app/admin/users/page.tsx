@@ -6,95 +6,201 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/format';
+import { confirmDialog } from '@/components/ConfirmDialog';
 
 type Profile = {
   id: string;
   role: string;
   is_approved: boolean;
+  approval_status: string | null;
+  approval_requested_at: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
   store_name: string | null;
   full_name: string | null;
   phone: string | null;
   store_address: string | null;
+  legal_first_name: string | null;
+  legal_last_name: string | null;
+  legal_fiscal_code: string | null;
+  business_legal_name: string | null;
+  business_vat_number: string | null;
+  business_form: string | null;
+  business_address: string | null;
+  business_city: string | null;
+  business_pec: string | null;
   created_at: string;
 };
 
 const ROLE_LABELS: Record<string, { label: string; color: string; emoji: string }> = {
-  buyer:             { label: 'Acquirente',      color: 'bg-indigo-100 text-indigo-700', emoji: '🛒' },
-  seller:            { label: 'Venditore',       color: 'bg-pink-100 text-pink-700',     emoji: '🏪' },
-  rider:             { label: 'Rider',           color: 'bg-amber-100 text-amber-700',   emoji: '🛵' },
-  admin:             { label: 'Admin',           color: 'bg-rose-100 text-rose-700',     emoji: '🛡️' },
-  pending_approval:  { label: 'In attesa',       color: 'bg-yellow-100 text-yellow-700', emoji: '⏳' },
+  buyer:  { label: 'Acquirente', color: 'bg-indigo-100 text-indigo-700', emoji: '🛒' },
+  seller: { label: 'Venditore',  color: 'bg-pink-100 text-pink-700',     emoji: '🏪' },
+  rider:  { label: 'Rider',      color: 'bg-amber-100 text-amber-700',   emoji: '🛵' },
+  admin:  { label: 'Admin',      color: 'bg-rose-100 text-rose-700',     emoji: '🛡️' },
+};
+
+const APPROVAL_LABELS: Record<string, { label: string; color: string }> = {
+  pending:  { label: 'In attesa',  color: 'bg-yellow-100 text-yellow-800' },
+  approved: { label: 'Approvato',  color: 'bg-emerald-100 text-emerald-800' },
+  rejected: { label: 'Rifiutato',  color: 'bg-rose-100 text-rose-800' },
 };
 
 function AdminUsersPageInner() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
-  const initialFilter = searchParams.get('role') ?? 'all';
+  const initialFilter = searchParams.get('role') ?? 'pending';
   const [filter, setFilter] = useState<string>(initialFilter);
   const [search, setSearch] = useState('');
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, role, is_approved, store_name, full_name, phone, store_address, created_at')
-        .order('created_at', { ascending: false });
+        .select(`
+          id, role, is_approved, approval_status, approval_requested_at, approved_at, rejection_reason,
+          store_name, full_name, phone, store_address,
+          legal_first_name, legal_last_name, legal_fiscal_code,
+          business_legal_name, business_vat_number, business_form,
+          business_address, business_city, business_pec, created_at
+        `)
+        .order('approval_requested_at', { ascending: false, nullsFirst: false });
       if (error) throw error;
       return (data ?? []) as Profile[];
     },
   });
 
-  const updateRole = useMutation({
-    mutationFn: async ({ id, role, is_approved }: { id: string; role: string; is_approved: boolean }) => {
-      const { error } = await supabase.from('profiles').update({ role, is_approved }).eq('id', id);
+  const approve = useMutation({
+    mutationFn: async (id: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('profiles').update({
+        approval_status: 'approved',
+        is_approved: true,
+        approved_at: new Date().toISOString(),
+        approved_by: user?.id,
+        rejection_reason: null,
+      }).eq('id', id);
       if (error) throw error;
+      await supabase.from('notifications').insert({
+        user_id: id,
+        type: 'seller_approved',
+        title: '✅ Negozio approvato',
+        body: 'Il tuo negozio è stato approvato! Ora puoi accedere alla dashboard e pubblicare prodotti.',
+        link: '/seller/dashboard',
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
-      toast.success('Utente aggiornato');
+      toast.success('Venditore approvato e notificato');
     },
     onError: (err: any) => toast.error(err.message),
   });
 
+  const reject = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const { error } = await supabase.from('profiles').update({
+        approval_status: 'rejected',
+        is_approved: false,
+        rejection_reason: reason,
+      }).eq('id', id);
+      if (error) throw error;
+      await supabase.from('notifications').insert({
+        user_id: id,
+        type: 'seller_rejected',
+        title: '❌ Richiesta non approvata',
+        body: `La tua richiesta non è stata approvata. Motivo: ${reason}`,
+        link: '/sell',
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      toast.success('Richiesta rifiutata e notificata');
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const suspend = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('profiles').update({
+        is_approved: false,
+        approval_status: 'rejected',
+        rejection_reason: 'Sospeso da admin',
+      }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      toast.success('Negozio sospeso');
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const pendingCount = profiles.filter((p) => p.approval_status === 'pending' && p.role === 'seller').length;
+
   const filtered = profiles.filter((p) => {
-    if (filter !== 'all' && p.role !== filter) return false;
+    if (filter === 'pending') {
+      if (!(p.role === 'seller' && p.approval_status === 'pending')) return false;
+    } else if (filter !== 'all' && p.role !== filter) {
+      return false;
+    }
     if (search) {
       const s = search.toLowerCase();
       return (
         p.full_name?.toLowerCase().includes(s) ||
         p.store_name?.toLowerCase().includes(s) ||
+        p.business_legal_name?.toLowerCase().includes(s) ||
+        p.business_vat_number?.toLowerCase().includes(s) ||
         p.phone?.includes(s)
       );
     }
     return true;
   });
 
+  const detail = detailId ? profiles.find((p) => p.id === detailId) : null;
+
   if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Utenti</h1>
-        <p className="text-sm text-gray-500">{filtered.length} risultati</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Utenti</h1>
+          <p className="text-sm text-gray-500">{filtered.length} risultati</p>
+        </div>
+        {pendingCount > 0 && filter !== 'pending' && (
+          <button
+            onClick={() => setFilter('pending')}
+            className="bg-yellow-100 hover:bg-yellow-200 text-yellow-900 px-4 py-2 rounded-lg font-semibold text-sm"
+          >
+            ⏳ {pendingCount} richieste in attesa
+          </button>
+        )}
       </div>
 
       <div className="flex gap-2 flex-wrap">
-        {['all', 'buyer', 'seller', 'rider', 'admin', 'pending_approval'].map((r) => (
+        {[
+          { key: 'pending', label: `In attesa${pendingCount > 0 ? ` (${pendingCount})` : ''}` },
+          { key: 'all',     label: 'Tutti' },
+          { key: 'buyer',   label: 'Acquirenti' },
+          { key: 'seller',  label: 'Venditori' },
+          { key: 'rider',   label: 'Rider' },
+          { key: 'admin',   label: 'Admin' },
+        ].map((opt) => (
           <button
-            key={r}
-            onClick={() => setFilter(r)}
+            key={opt.key}
+            onClick={() => setFilter(opt.key)}
             className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-              filter === r ? 'bg-rose-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              filter === opt.key ? 'bg-rose-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            {r === 'all' ? 'Tutti' : ROLE_LABELS[r]?.label ?? r}
+            {opt.label}
           </button>
         ))}
         <input
           type="search"
-          placeholder="Cerca nome, negozio, telefono…"
+          placeholder="Cerca nome, negozio, P.IVA, telefono…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="ml-auto border rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-64"
@@ -107,48 +213,61 @@ function AdminUsersPageInner() {
             <tr>
               <th className="p-3 text-left">Utente</th>
               <th className="p-3 text-left">Ruolo</th>
-              <th className="p-3 text-left">Contatto</th>
+              <th className="p-3 text-left">Stato</th>
               <th className="p-3 text-left">Iscritto</th>
               <th className="p-3 text-left">Azioni</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p) => {
+            {filtered.length === 0 ? (
+              <tr><td colSpan={5} className="p-8 text-center text-gray-400">Nessun utente</td></tr>
+            ) : filtered.map((p) => {
               const r = ROLE_LABELS[p.role] ?? ROLE_LABELS.buyer;
+              const a = p.approval_status ? APPROVAL_LABELS[p.approval_status] : null;
+              const isPending = p.role === 'seller' && p.approval_status === 'pending';
               return (
                 <tr key={p.id} className="border-t hover:bg-gray-50">
                   <td className="p-3">
-                    <div>
-                      <p className="font-semibold text-gray-900">
-                        {p.store_name ?? p.full_name ?? '—'}
-                      </p>
-                      <p className="text-xs text-gray-400 font-mono">{p.id.slice(0, 8)}…</p>
-                    </div>
+                    <p className="font-semibold text-gray-900">
+                      {p.store_name ?? p.business_legal_name ?? p.full_name ?? '—'}
+                    </p>
+                    <p className="text-xs text-gray-400 font-mono">{p.id.slice(0, 8)}…</p>
                   </td>
                   <td className="p-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}`}>
-                      <span>{r.emoji}</span>
-                      {r.label}
+                      <span>{r.emoji}</span>{r.label}
                     </span>
                   </td>
-                  <td className="p-3 text-gray-700">
-                    {p.phone && <p>📞 {p.phone}</p>}
-                    {p.store_address && <p className="text-xs text-gray-500">📍 {p.store_address}</p>}
-                  </td>
-                  <td className="p-3 text-gray-500 whitespace-nowrap">{formatDate(p.created_at)}</td>
                   <td className="p-3">
-                    <div className="flex gap-2">
-                      {!p.is_approved && (
+                    {p.role === 'seller' && a && (
+                      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${a.color}`}>
+                        {a.label}
+                      </span>
+                    )}
+                  </td>
+                  <td className="p-3 text-gray-500 whitespace-nowrap text-xs">{formatDate(p.created_at)}</td>
+                  <td className="p-3">
+                    <div className="flex gap-1 flex-wrap">
+                      {isPending && (
                         <button
-                          onClick={() => updateRole.mutate({ id: p.id, role: p.role === 'pending_approval' ? 'seller' : p.role, is_approved: true })}
-                          className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded"
+                          onClick={() => setDetailId(p.id)}
+                          className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded font-semibold"
                         >
-                          Approva
+                          Esamina
                         </button>
                       )}
-                      {p.is_approved && p.role !== 'admin' && (
+                      {!isPending && p.role === 'seller' && p.is_approved && (
                         <button
-                          onClick={() => updateRole.mutate({ id: p.id, role: p.role, is_approved: false })}
+                          onClick={async () => {
+                            const ok = await confirmDialog({
+                              title: 'Sospendere il negozio?',
+                              message: `${p.store_name ?? 'Il venditore'} non potrà più operare finché non lo riapprovi.`,
+                              confirmLabel: 'Sospendi',
+                              danger: true,
+                              icon: '⏸️',
+                            });
+                            if (ok) suspend.mutate(p.id);
+                          }}
                           className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 px-2 py-1 rounded"
                         >
                           Sospendi
@@ -162,6 +281,109 @@ function AdminUsersPageInner() {
           </tbody>
         </table>
       </div>
+
+      {/* Pannello dettaglio richiesta */}
+      {detail && (
+        <DetailPanel
+          profile={detail}
+          onClose={() => setDetailId(null)}
+          onApprove={() => { approve.mutate(detail.id); setDetailId(null); }}
+          onReject={async () => {
+            const reason = window.prompt('Motivo del rifiuto (visibile al venditore):');
+            if (!reason?.trim()) return;
+            reject.mutate({ id: detail.id, reason: reason.trim() });
+            setDetailId(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function DetailPanel({
+  profile, onClose, onApprove, onReject,
+}: {
+  profile: Profile;
+  onClose: () => void;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+      <div
+        className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-3xl shadow-2xl max-h-[92vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-white border-b px-5 py-4 flex items-center justify-between z-10">
+          <div>
+            <h2 className="font-bold text-lg">Richiesta venditore</h2>
+            <p className="text-xs text-gray-500">
+              {profile.approval_requested_at && `Inviata il ${formatDate(profile.approval_requested_at)}`}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-2xl text-gray-400 hover:text-gray-700 px-2">×</button>
+        </div>
+
+        <div className="p-5 space-y-5 text-sm">
+          <DetailGroup title="🏪 Vetrina">
+            <DetailRow label="Nome negozio">{profile.store_name ?? '—'}</DetailRow>
+            <DetailRow label="Indirizzo negozio">{profile.store_address ?? '—'}</DetailRow>
+          </DetailGroup>
+
+          <DetailGroup title="👤 Titolare">
+            <DetailRow label="Nome e cognome">
+              {profile.legal_first_name} {profile.legal_last_name}
+            </DetailRow>
+            <DetailRow label="Codice fiscale">
+              <code>{profile.legal_fiscal_code ?? '—'}</code>
+            </DetailRow>
+            <DetailRow label="Telefono">{profile.phone ?? '—'}</DetailRow>
+          </DetailGroup>
+
+          <DetailGroup title="🧾 Azienda">
+            <DetailRow label="Ragione sociale">{profile.business_legal_name ?? '—'}</DetailRow>
+            <DetailRow label="P.IVA"><code>{profile.business_vat_number ?? '—'}</code></DetailRow>
+            <DetailRow label="Forma giuridica">{profile.business_form ?? '—'}</DetailRow>
+            <DetailRow label="Sede legale">
+              {profile.business_address} — {profile.business_city}
+            </DetailRow>
+            <DetailRow label="PEC">{profile.business_pec ?? '—'}</DetailRow>
+          </DetailGroup>
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t px-5 py-4 flex gap-3">
+          <button
+            onClick={onReject}
+            className="flex-1 px-4 py-3 rounded-lg border-2 border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold"
+          >
+            ❌ Rifiuta
+          </button>
+          <button
+            onClick={onApprove}
+            className="flex-1 px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
+          >
+            ✅ Approva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="font-bold text-gray-900 mb-2">{title}</h3>
+      <div className="bg-gray-50 rounded-lg divide-y">{children}</div>
+    </div>
+  );
+}
+
+function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="px-3 py-2 flex items-baseline gap-3">
+      <span className="text-xs text-gray-500 w-32 shrink-0">{label}</span>
+      <span className="text-gray-900">{children}</span>
     </div>
   );
 }

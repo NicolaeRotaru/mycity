@@ -111,7 +111,7 @@ export default function AboutPage() {
         <Link href="/sell" className="block bg-gradient-to-br from-pink-600 to-orange-500 text-white rounded-2xl p-6 hover:shadow-lg transition-all">
           <div className="text-3xl mb-2">🏪</div>
           <h3 className="text-lg font-bold mb-1">Diventa venditore</h3>
-          <p className="text-pink-100 text-sm">Pubblica il tuo negozio in 5 minuti.</p>
+          <p className="text-pink-100 text-sm">Vetrina professionale, niente commissioni, approvazione 48h.</p>
         </Link>
       </div>
     </div>
