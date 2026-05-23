@@ -74,14 +74,14 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
 
   const showPreview = !compact && products.length > 0;
   const media = Array.isArray(store.store_media) ? store.store_media : [];
+  const storeHref = `/store/${store.id}`;
 
   return (
-    <Link
-      href={`/store/${store.id}`}
+    <article
       className="group bg-white border border-gray-200 rounded-2xl overflow-hidden hover:shadow-xl hover:border-indigo-300 hover:-translate-y-0.5 transition-all flex flex-col"
     >
-      {/* Cover con media + logo posizionato DENTRO la cover (sovrapposto) */}
-      <div className="relative">
+      {/* Cover + logo + badges → link al negozio */}
+      <Link href={storeHref} aria-label={`Apri ${store.store_name}`} className="relative block">
         <StoreMediaCarousel
           media={media}
           heightClass={compact ? 'h-32' : 'h-36 sm:h-44'}
@@ -120,18 +120,18 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
             📍 {distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`}
           </span>
         )}
-      </div>
+      </Link>
 
       <div className="px-4 sm:px-5 pt-3 pb-4 sm:pb-5 flex-1 flex flex-col">
-        {/* Nome + rating sempre visibile */}
-        <div className="mb-2">
+        {/* Nome + rating → link al negozio */}
+        <Link href={storeHref} className="block mb-2">
           <h3 className="font-extrabold text-base sm:text-lg text-gray-900 group-hover:text-indigo-600 transition-colors truncate">
             {store.store_name}
           </h3>
           {reviews ? <StarsRow avg={reviews.avg} count={reviews.count} /> : <StarsEmpty />}
-        </div>
+        </Link>
 
-        {/* Indirizzo + orario */}
+        {/* Indirizzo + orario (testo, non cliccabile) */}
         <div className="text-xs text-gray-500 mb-3 flex flex-wrap gap-x-3 gap-y-1">
           {street && <span className="truncate">📍 {street}</span>}
           <span className={open ? 'text-emerald-600 font-semibold' : 'text-gray-500'}>
@@ -139,18 +139,24 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
           </span>
         </div>
 
-        {/* Preview prodotti — nome + prezzo */}
+        {/* Preview prodotti — ogni cella linka alla pagina del prodotto */}
         {showPreview && (
           <div className="grid grid-cols-4 gap-1.5 mb-3">
             {products.slice(0, 4).map((p) => (
-              <div key={p.id} className="min-w-0">
-                <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 mb-1">
+              <Link
+                key={p.id}
+                href={`/product/${p.id}`}
+                title={p.name}
+                aria-label={`Apri prodotto ${p.name}`}
+                className="min-w-0 group/p rounded-lg p-0.5 -m-0.5 hover:bg-indigo-50 transition-colors"
+              >
+                <div className="aspect-square rounded-md overflow-hidden bg-gray-100 mb-1">
                   {p.images?.[0] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={sizedImage(p.images[0], 'thumb')}
                       alt={p.name}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      className="w-full h-full object-cover group-hover/p:scale-110 transition-transform duration-300"
                       loading="lazy"
                       decoding="async"
                     />
@@ -158,22 +164,19 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
                     <div className="w-full h-full flex items-center justify-center text-gray-300 text-xl">📦</div>
                   )}
                 </div>
-                <p
-                  className="text-[10px] leading-tight text-gray-700 line-clamp-2 min-h-[2.2em]"
-                  title={p.name}
-                >
+                <p className="text-[10px] leading-tight text-gray-700 line-clamp-2 min-h-[2.2em] group-hover/p:text-indigo-700">
                   {p.name}
                 </p>
                 <p className="text-[11px] font-bold text-gray-900 leading-none mt-0.5">
                   {formatPrice(p.price)}
                 </p>
-              </div>
+              </Link>
             ))}
           </div>
         )}
 
-        {/* CTA */}
-        <div className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
+        {/* CTA → link al negozio */}
+        <Link href={storeHref} className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
           {minPrice !== null ? (
             <span className="text-xs text-gray-500 truncate min-w-0">
               Da <strong className="text-gray-900">{formatPrice(minPrice)}</strong>
@@ -184,9 +187,9 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
           <span className="text-sm font-bold text-indigo-600 group-hover:translate-x-1 transition-transform whitespace-nowrap">
             Esplora →
           </span>
-        </div>
+        </Link>
       </div>
-    </Link>
+    </article>
   );
 };
 
