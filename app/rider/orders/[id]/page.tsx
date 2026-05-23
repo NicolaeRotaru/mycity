@@ -1,0 +1,289 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
+import { toast } from 'sonner';
+import DeliveryMap, { MapPoint } from '@/components/DeliveryMap';
+import { formatPrice } from '@/lib/format';
+import {
+  ORDER_STATUS_LABEL,
+  ORDER_STATUS_EMOJI,
+  ORDER_STATUS_COLOR,
+  type OrderStatus,
+} from '@/lib/order-status';
+import { notify } from '@/lib/notifications';
+
+type OrderRow = {
+  id: string;
+  user_id: string;
+  seller_id: string;
+  total_price: number;
+  shipping_cost: number;
+  delivery_status: OrderStatus;
+  delivery_full_name: string | null;
+  delivery_phone: string | null;
+  delivery_address: string | null;
+  delivery_city: string | null;
+  delivery_zip: string | null;
+  delivery_notes: string | null;
+  delivery_lat: number | null;
+  delivery_lng: number | null;
+  seller: {
+    store_name: string | null;
+    store_phone: string | null;
+    store_address: string | null;
+    store_lat: number | null;
+    store_lng: number | null;
+  } | null;
+  order_items: {
+    id: string;
+    quantity: number;
+    unit_price: number;
+    products: { name: string } | null;
+  }[];
+};
+
+export default function RiderOrderDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
+  const qc = useQueryClient();
+  const router = useRouter();
+  const [sharing, setSharing] = useState(false);
+  const watchIdRef = useRef<number | null>(null);
+
+  const { data: order, isLoading } = useQuery({
+    queryKey: ['rider-order', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          id, user_id, seller_id, total_price, shipping_cost, delivery_status,
+          delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
+          delivery_lat, delivery_lng,
+          seller:profiles!orders_seller_id_fkey ( store_name, store_phone, store_address, store_lat, store_lng ),
+          order_items ( id, quantity, unit_price, products ( name ) )
+        `)
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data as unknown as OrderRow;
+    },
+  });
+
+  const transition = useMutation({
+    mutationFn: async (params: { newStatus: OrderStatus; timestampField?: string }) => {
+      if (!order) throw new Error('Ordine non caricato');
+      const update: Record<string, any> = { delivery_status: params.newStatus };
+      if (params.timestampField) update[params.timestampField] = new Date().toISOString();
+      const { error } = await supabase.from('orders').update(update).eq('id', order.id);
+      if (error) throw error;
+
+      // Notifica buyer + seller
+      const msg = `${ORDER_STATUS_EMOJI[params.newStatus]} ${ORDER_STATUS_LABEL[params.newStatus]}`;
+      notify({ userId: order.user_id,   title: msg, body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/orders/${order.id}` });
+      notify({ userId: order.seller_id, title: msg, body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/seller/orders/${order.id}` });
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['rider-order', id] });
+      qc.invalidateQueries({ queryKey: ['rider-orders'] });
+      toast.success('Stato aggiornato');
+      if (vars.newStatus === 'DELIVERED') {
+        stopSharing();
+        setTimeout(() => router.push('/rider'), 800);
+      }
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  // GPS sharing: aggiorna posizione ogni 5-10 secondi
+  const startSharing = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocalizzazione non supportata');
+      return;
+    }
+    setSharing(true);
+    const wid = navigator.geolocation.watchPosition(
+      async (pos) => {
+        await supabase
+          .from('orders')
+          .update({
+            rider_lat: pos.coords.latitude,
+            rider_lng: pos.coords.longitude,
+            rider_position_updated_at: new Date().toISOString(),
+          })
+          .eq('id', id);
+      },
+      (err) => {
+        toast.error('Errore GPS: ' + err.message);
+        setSharing(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15_000 },
+    );
+    watchIdRef.current = wid;
+  };
+
+  const stopSharing = () => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+    setSharing(false);
+  };
+
+  useEffect(() => () => stopSharing(), []);
+
+  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
+  if (!order) return <div className="text-center py-8 text-gray-500">Ordine non trovato.</div>;
+
+  const c = ORDER_STATUS_COLOR[order.delivery_status];
+  const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
+
+  const points: MapPoint[] = [];
+  if (order.seller?.store_lat && order.seller?.store_lng) {
+    points.push({ lat: order.seller.store_lat, lng: order.seller.store_lng, label: 'Negozio', color: 'indigo' });
+  }
+  if (order.delivery_lat && order.delivery_lng) {
+    points.push({ lat: order.delivery_lat, lng: order.delivery_lng, label: 'Cliente', color: 'rose' });
+  }
+
+  // Azioni in base allo stato
+  const actions: { label: string; nextStatus: OrderStatus; timestampField?: string; color: string }[] = [];
+  if (order.delivery_status === 'ASSIGNED') {
+    actions.push({ label: '✋ Ho ritirato l\'ordine', nextStatus: 'PICKED_UP', timestampField: 'picked_up_at', color: 'bg-cyan-600 hover:bg-cyan-700' });
+  } else if (order.delivery_status === 'PICKED_UP') {
+    actions.push({ label: '🚚 In consegna al cliente', nextStatus: 'OUT_FOR_DELIVERY', color: 'bg-purple-600 hover:bg-purple-700' });
+  } else if (order.delivery_status === 'OUT_FOR_DELIVERY') {
+    actions.push({ label: '✅ Consegnato', nextStatus: 'DELIVERED', timestampField: 'delivered_at', color: 'bg-emerald-600 hover:bg-emerald-700' });
+  }
+
+  // Destinazione corrente per il "Naviga"
+  const navTarget =
+    order.delivery_status === 'OUT_FOR_DELIVERY' || order.delivery_status === 'PICKED_UP'
+      ? { lat: order.delivery_lat, lng: order.delivery_lng, label: order.delivery_address }
+      : { lat: order.seller?.store_lat, lng: order.seller?.store_lng, label: order.seller?.store_address };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <Link href="/rider" className="text-sm text-amber-600 hover:underline">← Dashboard</Link>
+          <h1 className="text-2xl font-bold text-gray-900 mt-1">
+            #{order.id.slice(0, 6).toUpperCase()}
+          </h1>
+        </div>
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ring-1 ${c.bg} ${c.text} ${c.ring}`}>
+          <span>{ORDER_STATUS_EMOJI[order.delivery_status]}</span>
+          {ORDER_STATUS_LABEL[order.delivery_status]}
+        </span>
+      </div>
+
+      {/* MAPPA */}
+      {points.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <DeliveryMap points={points} className="w-full h-72 z-0" />
+        </div>
+      )}
+
+      {/* GPS SHARING */}
+      <div className={`rounded-xl p-5 border-2 ${sharing ? 'bg-emerald-50 border-emerald-300' : 'bg-amber-50 border-amber-300'}`}>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="font-bold text-gray-900">
+              {sharing ? '📡 Posizione condivisa' : '📍 Condividi posizione'}
+            </p>
+            <p className="text-sm text-gray-600">
+              {sharing
+                ? 'Il cliente vede la tua posizione in tempo reale.'
+                : 'Attiva il GPS per far vedere al cliente dove sei.'}
+            </p>
+          </div>
+          {sharing ? (
+            <button onClick={stopSharing} className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold">
+              Disattiva
+            </button>
+          ) : (
+            <button onClick={startSharing} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold">
+              Attiva GPS
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* AZIONE PRINCIPALE */}
+      {actions.length > 0 && (
+        <div className="space-y-2">
+          {actions.map((a) => (
+            <button
+              key={a.nextStatus}
+              onClick={() => transition.mutate({ newStatus: a.nextStatus, timestampField: a.timestampField })}
+              disabled={transition.isPending}
+              className={`${a.color} w-full text-white px-6 py-4 rounded-xl font-bold text-lg disabled:opacity-50 shadow-lg`}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* NAVIGA */}
+      {navTarget.lat && navTarget.lng && order.delivery_status !== 'DELIVERED' && (
+        <a
+          href={`https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold text-center"
+        >
+          🧭 Naviga su Google Maps
+        </a>
+      )}
+
+      {/* NEGOZIO */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">Ritira al negozio</h3>
+        <p className="font-semibold text-gray-900">{order.seller?.store_name}</p>
+        <p className="text-sm text-gray-700">{order.seller?.store_address}</p>
+        {order.seller?.store_phone && (
+          <a href={`tel:${order.seller.store_phone}`} className="text-sm text-indigo-600 hover:underline mt-1 inline-block">
+            📞 {order.seller.store_phone}
+          </a>
+        )}
+      </div>
+
+      {/* CLIENTE */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">Consegna a</h3>
+        <p className="font-semibold text-gray-900">{order.delivery_full_name}</p>
+        <p className="text-sm text-gray-700">{order.delivery_address}, {order.delivery_zip} {order.delivery_city}</p>
+        {order.delivery_phone && (
+          <a href={`tel:${order.delivery_phone}`} className="text-sm text-indigo-600 hover:underline mt-1 inline-block">
+            📞 {order.delivery_phone}
+          </a>
+        )}
+        {order.delivery_notes && (
+          <p className="text-sm text-gray-600 italic mt-2 bg-amber-50 p-2 rounded">📝 {order.delivery_notes}</p>
+        )}
+      </div>
+
+      {/* PRODOTTI */}
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Articoli ({order.order_items.length})</h3>
+        </div>
+        <div className="divide-y divide-gray-100 text-sm">
+          {order.order_items.map((it) => (
+            <div key={it.id} className="px-5 py-2.5 flex justify-between">
+              <span>{it.products?.name ?? 'Prodotto'} <span className="text-gray-400">×{it.quantity}</span></span>
+              <span className="text-gray-600">{formatPrice(Number(it.unit_price) * it.quantity)}</span>
+            </div>
+          ))}
+        </div>
+        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-sm flex justify-between font-bold">
+          <span>Totale (da incassare in contanti)</span>
+          <span className="text-indigo-700">{formatPrice(order.total_price)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}

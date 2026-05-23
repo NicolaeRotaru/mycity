@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { useProfile } from './hooks/useProfile';
 
 const Footer = () => {
-  const { isSeller, isBuyer, isAuthenticated, isLoading } = useProfile();
-  const isSellerArea = isSeller;
-  const isAuthUnknownRole = isAuthenticated && !isBuyer && !isSeller;
+  const { isSeller, isBuyer, isRider, isAuthenticated, isLoading } = useProfile();
+  const isSellerArea = isSeller || isRider;
+  const isAuthUnknownRole = isAuthenticated && !isBuyer && !isSeller && !isRider;
 
   return (
     <footer className="bg-gray-900 text-gray-300 mt-12">

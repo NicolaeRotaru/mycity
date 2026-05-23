@@ -16,7 +16,7 @@ const Navbar = () => {
   const [q, setQ] = useState('');
   const cartCount = useCartCount();
   const notifCount = useNotificationsCount();
-  const { profile, userEmail, isAuthenticated, isLoading, isSeller, isBuyer } = useProfile();
+  const { profile, userEmail, isAuthenticated, isLoading, isSeller, isRider } = useProfile();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,8 +32,8 @@ const Navbar = () => {
     userEmail?.split('@')[0] ??
     '';
 
-  const profileHref = isSeller ? '/seller/profile' : '/profile';
-  const ordersHref = isSeller ? '/seller/orders' : '/orders';
+  const profileHref = isSeller ? '/seller/profile' : isRider ? '/rider/profile' : '/profile';
+  const ordersHref  = isSeller ? '/seller/orders'  : isRider ? '/rider'         : '/orders';
 
   // Avatar + label, riusato in mobile (compatto) e desktop
   const ProfileIcon = ({ compact = false }: { compact?: boolean }) => {
@@ -59,15 +59,17 @@ const Navbar = () => {
           className={`${
             isSeller
               ? 'bg-pink-500/20 border-pink-400/40'
+              : isRider
+              ? 'bg-amber-500/20 border-amber-400/40'
               : 'bg-indigo-500/20 border-indigo-400/40'
           } w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold uppercase shrink-0`}
         >
-          {isSeller ? '🏪' : (displayName?.[0] ?? '?')}
+          {isSeller ? '🏪' : isRider ? '🛵' : (displayName?.[0] ?? '?')}
         </span>
         {!compact && (
           <span className="hidden sm:flex flex-col leading-tight">
             <span className="text-[10px] text-gray-400 uppercase tracking-wide">
-              {isSeller ? 'Negozio' : 'Ciao'}
+              {isSeller ? 'Negozio' : isRider ? 'Rider' : 'Ciao'}
             </span>
             <span className="font-semibold truncate max-w-[120px]">
               {displayName || 'utente'}
@@ -99,16 +101,16 @@ const Navbar = () => {
     isAuthenticated ? (
       <Link
         href={ordersHref}
-        title={isSeller ? 'Ordini ricevuti' : 'I tuoi ordini'}
+        title={isSeller ? 'Ordini ricevuti' : isRider ? 'Consegne' : 'I tuoi ordini'}
         className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors text-sm"
       >
-        <span className="text-xl">📦</span>
-        <span className="hidden md:inline">Ordini</span>
+        <span className="text-xl">{isRider ? '🛵' : '📦'}</span>
+        <span className="hidden md:inline">{isRider ? 'Consegne' : 'Ordini'}</span>
       </Link>
     ) : null;
 
   const CartIcon = () =>
-    !isSeller ? (
+    !isSeller && !isRider ? (
       <Link
         href="/cart"
         title="Carrello"
@@ -188,8 +190,8 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* CategoryBar nascosta nell'area venditore/admin */}
-      {!pathname?.startsWith('/seller') && !pathname?.startsWith('/admin') && <CategoryBar />}
+      {/* CategoryBar nascosta nell'area venditore/rider/admin */}
+      {!pathname?.startsWith('/seller') && !pathname?.startsWith('/rider') && !pathname?.startsWith('/admin') && <CategoryBar />}
     </header>
   );
 };

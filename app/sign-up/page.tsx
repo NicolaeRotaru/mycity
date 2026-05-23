@@ -6,7 +6,31 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 
-type Role = 'buyer' | 'seller';
+type Role = 'buyer' | 'seller' | 'rider';
+
+const ROLES: { value: Role; emoji: string; title: string; subtitle: string; color: string }[] = [
+  {
+    value: 'buyer',
+    emoji: '🛒',
+    title: 'Acquirente',
+    subtitle: 'Compra dai negozi locali',
+    color: 'indigo',
+  },
+  {
+    value: 'seller',
+    emoji: '🏪',
+    title: 'Venditore',
+    subtitle: 'Vendi i tuoi prodotti',
+    color: 'pink',
+  },
+  {
+    value: 'rider',
+    emoji: '🛵',
+    title: 'Rider',
+    subtitle: 'Consegna ordini nella tua zona',
+    color: 'amber',
+  },
+];
 
 const SignUp = () => {
   const [email, setEmail] = useState('');
@@ -25,11 +49,13 @@ const SignUp = () => {
         options: { data: { role } },
       });
       if (error) throw error;
-      toast.success(
+      const successMsg =
         role === 'seller'
           ? 'Registrazione completata! Accedi e completa i dati del tuo negozio.'
-          : 'Registrazione completata! Ora puoi accedere e iniziare a comprare.'
-      );
+          : role === 'rider'
+          ? 'Registrazione completata! Accedi per iniziare a consegnare.'
+          : 'Registrazione completata! Ora puoi accedere e iniziare a comprare.';
+      toast.success(successMsg);
       router.push('/sign-in');
     } catch (error: any) {
       toast.error(error.message || 'Errore durante la registrazione');
@@ -38,43 +64,56 @@ const SignUp = () => {
     }
   };
 
+  const colorClasses: Record<string, { border: string; bg: string; btn: string }> = {
+    indigo: {
+      border: 'border-indigo-500 bg-indigo-50',
+      bg: 'bg-indigo-50 border-indigo-200 text-indigo-800',
+      btn: 'bg-indigo-600 hover:bg-indigo-700',
+    },
+    pink: {
+      border: 'border-pink-500 bg-pink-50',
+      bg: 'bg-pink-50 border-pink-200 text-pink-800',
+      btn: 'bg-pink-500 hover:bg-pink-600',
+    },
+    amber: {
+      border: 'border-amber-500 bg-amber-50',
+      bg: 'bg-amber-50 border-amber-200 text-amber-800',
+      btn: 'bg-amber-500 hover:bg-amber-600',
+    },
+  };
+
+  const selectedRole = ROLES.find((r) => r.value === role)!;
+  const cls = colorClasses[selectedRole.color];
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
       <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md space-y-6">
         <h2 className="text-2xl font-bold text-gray-800">Crea il tuo account</h2>
 
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setRole('buyer')}
-            className={`p-4 rounded-lg border-2 text-left transition-all ${
-              role === 'buyer'
-                ? 'border-indigo-500 bg-indigo-50'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            <div className="text-2xl mb-1">🛒</div>
-            <div className="font-bold text-sm">Acquirente</div>
-            <div className="text-xs text-gray-500">Compra dai negozi locali</div>
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole('seller')}
-            className={`p-4 rounded-lg border-2 text-left transition-all ${
-              role === 'seller'
-                ? 'border-pink-500 bg-pink-50'
-                : 'border-gray-200 hover:border-gray-300'
-            }`}
-          >
-            <div className="text-2xl mb-1">🏪</div>
-            <div className="font-bold text-sm">Venditore</div>
-            <div className="text-xs text-gray-500">Vendi i tuoi prodotti</div>
-          </button>
+        <div className="grid grid-cols-3 gap-2">
+          {ROLES.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              onClick={() => setRole(r.value)}
+              className={`p-3 rounded-lg border-2 text-left transition-all ${
+                role === r.value
+                  ? colorClasses[r.color].border
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="text-2xl mb-1">{r.emoji}</div>
+              <div className="font-bold text-sm">{r.title}</div>
+              <div className="text-xs text-gray-500 leading-tight">{r.subtitle}</div>
+            </button>
+          ))}
         </div>
 
-        {role === 'seller' && (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-xs text-emerald-800">
-            ✅ Dopo la registrazione compili i dati del negozio e sei subito online — nessuna attesa.
+        {role !== 'buyer' && (
+          <div className={`border rounded-lg p-3 text-xs ${cls.bg}`}>
+            {role === 'seller'
+              ? '✅ Dopo la registrazione compili i dati del negozio e sei subito online.'
+              : '✅ Dopo la registrazione potrai vedere gli ordini disponibili per il ritiro.'}
           </div>
         )}
 
@@ -105,17 +144,11 @@ const SignUp = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className={`w-full disabled:opacity-50 text-white px-4 py-2 rounded transition-colors ${
-              role === 'seller'
-                ? 'bg-pink-500 hover:bg-pink-600'
-                : 'bg-indigo-600 hover:bg-indigo-700'
-            }`}
+            className={`w-full disabled:opacity-50 text-white px-4 py-2 rounded transition-colors ${cls.btn}`}
           >
             {isLoading
               ? 'Registrazione in corso...'
-              : role === 'seller'
-              ? 'Registrati come venditore'
-              : 'Registrati come acquirente'}
+              : `Registrati come ${selectedRole.title.toLowerCase()}`}
           </button>
         </form>
 
