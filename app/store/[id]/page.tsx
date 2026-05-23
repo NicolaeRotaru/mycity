@@ -85,48 +85,42 @@ export default function StorePage({ params }: { params: { id: string } }) {
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-5xl space-y-6">
-      {/* Hero card: COVER con media carousel + logo che NON viene tagliato */}
+      {/* Hero card: COVER con media + logo DENTRO la cover (fully visible) */}
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-        <StoreMediaCarousel
-          media={media}
-          heightClass="h-48 sm:h-72"
-          fallbackClass="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"
-        />
-        <div className="px-6 pb-6 -mt-12 sm:-mt-14 relative z-10">
-          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
-            <div className="ring-4 ring-white rounded-full bg-white inline-block shadow-lg">
-              <StoreAvatar logoUrl={store.store_logo} storeName={store.store_name} size="xl" />
-            </div>
-            <div className="flex-1 sm:pb-2 min-w-0">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
-                  {store.store_name}
-                </h1>
-                {hasHours && (
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                      openNow
-                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
-                        : 'bg-gray-100 text-gray-600 ring-1 ring-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        openNow ? 'bg-emerald-500' : 'bg-gray-400'
-                      }`}
-                    />
-                    {openNow ? 'Aperto ora' : 'Chiuso ora'}
-                  </span>
-                )}
-              </div>
-              {street && (
-                <p className="text-gray-500 text-sm mt-1.5">{street}</p>
-              )}
-              {store.store_description && (
-                <p className="text-gray-700 text-sm mt-3 leading-relaxed">{store.store_description}</p>
-              )}
-            </div>
+        <div className="relative">
+          <StoreMediaCarousel
+            media={media}
+            heightClass="h-48 sm:h-72"
+            fallbackClass="bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"
+          />
+          {/* Overlay scuro per contrasto logo + nome */}
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
+          {/* Logo posizionato in basso a sinistra, dentro la cover */}
+          <div className="absolute bottom-4 left-4 z-20 ring-4 ring-white rounded-full bg-white shadow-2xl">
+            <StoreAvatar logoUrl={store.store_logo} storeName={store.store_name} size="xl" />
           </div>
+          {/* Badge stato in alto a destra */}
+          {hasHours && (
+            <span
+              className={`absolute top-4 right-4 z-20 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold shadow ${
+                openNow ? 'bg-emerald-500 text-white' : 'bg-black/60 text-white'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              {openNow ? 'Aperto ora' : 'Chiuso ora'}
+            </span>
+          )}
+        </div>
+
+        {/* Info principali sotto la cover */}
+        <div className="px-6 py-5">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 truncate">
+            {store.store_name}
+          </h1>
+          {street && <p className="text-gray-500 text-sm mt-1">{street}</p>}
+          {store.store_description && (
+            <p className="text-gray-700 text-sm mt-3 leading-relaxed">{store.store_description}</p>
+          )}
         </div>
       </div>
 
