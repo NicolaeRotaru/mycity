@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { confirmDialog } from '@/components/ConfirmDialog';
 
 export default function SellerProductsPage() {
   const qc = useQueryClient();
@@ -116,8 +117,15 @@ export default function SellerProductsPage() {
                       {p.status === 'available' ? 'Disattiva' : 'Attiva'}
                     </button>
                     <button
-                      onClick={() => {
-                        if (confirm(`Eliminare "${p.name}"?`)) remove.mutate(p.id);
+                      onClick={async () => {
+                        const ok = await confirmDialog({
+                          title: 'Eliminare il prodotto?',
+                          message: `"${p.name}" verrà rimosso dal tuo catalogo. L'azione è irreversibile.`,
+                          confirmLabel: 'Sì, elimina',
+                          danger: true,
+                          icon: '🗑️',
+                        });
+                        if (ok) remove.mutate(p.id);
                       }}
                       className="text-red-600 hover:underline"
                     >
