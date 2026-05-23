@@ -48,26 +48,49 @@ const APPROVAL_LABELS: Record<string, { label: string; color: string }> = {
 function AdminUsersPageInner() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
-  const initialFilter = searchParams.get('role') ?? 'pending';
+  const initialFilter = searchParams.get('role') ?? 'all';
   const [filter, setFilter] = useState<string>(initialFilter);
   const [search, setSearch] = useState('');
   const [detailId, setDetailId] = useState<string | null>(null);
 
-  const { data: profiles = [], isLoading } = useQuery({
+  const { data: profiles = [], isLoading, error } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Prima provo la query completa con i campi della migration 021.
+      // Se fallisce (es. migration non ancora applicata) faccio fallback
+      // a una select minimale così la pagina resta usabile.
+      const fullSelect = `
+        id, role, is_approved, approval_status, approval_requested_at, approved_at, rejection_reason,
+        store_name, full_name, phone, store_address,
+        legal_first_name, legal_last_name, legal_fiscal_code,
+        business_legal_name, business_vat_number, business_form,
+        business_address, business_city, business_pec, created_at
+      `;
+      const minimalSelect = `id, role, is_approved, store_name, full_name, phone, store_address, created_at`;
+
+      const tryFull = await supabase
         .from('profiles')
-        .select(`
-          id, role, is_approved, approval_status, approval_requested_at, approved_at, rejection_reason,
-          store_name, full_name, phone, store_address,
-          legal_first_name, legal_last_name, legal_fiscal_code,
-          business_legal_name, business_vat_number, business_form,
-          business_address, business_city, business_pec, created_at
-        `)
-        .order('approval_requested_at', { ascending: false, nullsFirst: false });
-      if (error) throw error;
-      return (data ?? []) as Profile[];
+        .select(fullSelect)
+        .order('created_at', { ascending: false });
+      if (!tryFull.error) return (tryFull.data ?? []) as Profile[];
+
+      console.warn('admin/users: full select failed, fallback to minimal', tryFull.error.code);
+      const min = await supabase
+        .from('profiles')
+        .select(minimalSelect)
+        .order('created_at', { ascending: false });
+      if (min.error) throw min.error;
+      // Riempi i campi mancanti con null per non rompere la tipizzazione
+      return (min.data ?? []).map((p: any) => ({
+        ...p,
+        approval_status: null,
+        approval_requested_at: null,
+        approved_at: null,
+        rejection_reason: null,
+        legal_first_name: null, legal_last_name: null, legal_fiscal_code: null,
+        business_legal_name: null, business_vat_number: null, business_form: null,
+        business_address: null, business_city: null, business_pec: null,
+      })) as Profile[];
     },
   });
 
@@ -183,6 +206,19 @@ function AdminUsersPageInner() {
 
   if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
 
+  if (error) {
+    return (
+      <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-sm text-rose-900">
+        <p className="font-bold mb-1">⚠️ Errore nel caricamento utenti</p>
+        <p className="mb-2">{(error as any)?.message ?? 'Errore sconosciuto'}</p>
+        <p className="text-xs">
+          Se non l'hai ancora fatto, verifica di avere applicato le migration più recenti su Supabase
+          (in particolare <code>021_seller_kyc_and_approval.sql</code>).
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -241,7 +277,17 @@ function AdminUsersPageInner() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-gray-400">Nessun utente</td></tr>
+              <tr>
+                <td colSpan={5} className="p-8 text-center text-gray-400">
+                  {profiles.length === 0
+                    ? 'Nessun utente registrato sulla piattaforma.'
+                    : search
+                      ? `Nessun risultato per "${search}"`
+                      : filter === 'pending'
+                        ? 'Nessuna richiesta in attesa di approvazione 🎉'
+                        : `Nessun utente con ruolo "${filter}"`}
+                </td>
+              </tr>
             ) : filtered.map((p) => {
               const r = ROLE_LABELS[p.role] ?? ROLE_LABELS.buyer;
               const a = p.approval_status ? APPROVAL_LABELS[p.approval_status] : null;
