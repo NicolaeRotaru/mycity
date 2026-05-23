@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -11,6 +11,8 @@ const SignIn = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get('returnTo') ?? '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,7 +21,7 @@ const SignIn = () => {
       const { error } = await auth.signIn(email, password);
       if (error) throw error;
       toast.success('Accesso effettuato!');
-      router.push('/');
+      router.push(returnTo);
       router.refresh();
     } catch (error: any) {
       toast.error(error.message || 'Errore durante il login');

@@ -10,10 +10,10 @@ const messages = [
 ];
 
 const TrustBar = () => (
-  <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-xs sm:text-sm overflow-hidden">
-    <div className="container mx-auto px-4 py-1.5 flex items-center justify-center gap-6 overflow-x-auto scrollbar-hide whitespace-nowrap font-medium">
+  <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-xs sm:text-sm">
+    <div className="container mx-auto px-4 py-1.5 flex items-center justify-start sm:justify-center gap-6 overflow-x-auto scrollbar-hide whitespace-nowrap font-medium">
       {messages.map((m, i) => (
-        <span key={i} className="flex items-center">{m}</span>
+        <span key={i} className="flex items-center shrink-0">{m}</span>
       ))}
     </div>
   </div>

@@ -129,10 +129,21 @@ export default function CheckoutPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
+  // Check stato auth all'avvio
+  const { data: authUser } = useQuery({
+    queryKey: ['auth-user'],
+    queryFn: async () => (await supabase.auth.getUser()).data.user,
+    staleTime: 60_000,
+  });
+
   const placeOrders = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Devi essere autenticato per completare l\'ordine');
+      if (!user) {
+        // Niente errore: redirezione al sign-in mantenendo il checkout come destinazione
+        router.push('/sign-in?returnTo=/checkout');
+        throw new Error('REDIRECT_TO_SIGNIN');
+      }
       if (groups.length === 0) throw new Error('Il carrello è vuoto');
 
       // Geocode indirizzo via Nominatim (fallback: lascia null)
@@ -209,11 +220,18 @@ export default function CheckoutPage() {
         router.push('/orders');
       }
     },
-    onError: (err: any) => toast.error(err.message || 'Errore durante il checkout'),
+    onError: (err: any) => {
+      if (err?.message === 'REDIRECT_TO_SIGNIN') return; // gia' redirezionato
+      toast.error(err.message || 'Errore durante il checkout');
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!authUser) {
+      router.push('/sign-in?returnTo=/checkout');
+      return;
+    }
     if (!form.fullName.trim() || !form.address.trim() || !form.city.trim() || !form.zip.trim() || !form.phone.trim()) {
       toast.error('Compila tutti i campi obbligatori');
       return;
@@ -245,6 +263,20 @@ export default function CheckoutPage() {
         <div className="w-8 sm:w-16 h-px bg-gray-300" />
         <Step num={3} label="Conferma" />
       </div>
+
+      {!authUser && (
+        <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-indigo-900">
+            <strong>🔑 Per completare l'ordine devi accedere</strong> — i tuoi articoli restano nel carrello.
+          </p>
+          <Link
+            href="/sign-in?returnTo=/checkout"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap"
+          >
+            Accedi ora
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">

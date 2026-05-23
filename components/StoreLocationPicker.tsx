@@ -178,7 +178,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         <label className="block text-sm font-medium text-gray-700 mb-1">
           Indirizzo del negozio
         </label>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input
             type="text"
             value={address}
@@ -193,13 +193,13 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
               }
             }}
             placeholder="Es. Via Roma 1, Milano"
-            className="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="w-full sm:flex-1 min-w-0 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
           <button
             type="button"
             onClick={searchAddress}
             disabled={searching}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded disabled:opacity-50 whitespace-nowrap font-semibold"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded disabled:opacity-50 whitespace-nowrap font-semibold shrink-0"
           >
             {searching ? 'Cerco...' : '🔍 Cerca'}
           </button>

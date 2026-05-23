@@ -19,12 +19,12 @@ const CategoryShowcase = () => {
   });
 
   return (
-    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4">
-      {categories.map((c: any) => (
+    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4">
+      {categories.slice(0, 9).map((c: any) => (
         <Link
           key={c.id}
           href={`/category/${c.slug}`}
-          className="bg-white border rounded-lg p-4 text-center hover:shadow-md hover:border-indigo-400 transition-all"
+          className="bg-white border rounded-xl p-4 text-center hover:shadow-md hover:border-indigo-400 transition-all"
         >
           <div className="text-4xl mb-2">{c.icon}</div>
           <p className="text-sm font-semibold text-gray-700">{c.name}</p>
