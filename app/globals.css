@@ -15,5 +15,10 @@ body {
   from { opacity: 0; transform: scale(0.92) translateY(8px); }
   to   { opacity: 1; transform: scale(1) translateY(0); }
 }
-.animate-fadeIn { animation: fadeIn 150ms ease-out; }
-.animate-popIn  { animation: popIn 180ms cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+.animate-fadeIn  { animation: fadeIn 150ms ease-out; }
+.animate-popIn   { animation: popIn 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+.animate-slideUp { animation: slideUp 260ms cubic-bezier(0.16, 1, 0.3, 1); }
