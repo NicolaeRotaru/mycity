@@ -1,59 +1,82 @@
 'use client';
 
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
-import StoreAvatar from './StoreAvatar';
-import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import StorePreviewCard, { type ProductPreview, type StoreCardData } from './StorePreviewCard';
+
+type Store = StoreCardData;
+type ProductLite = ProductPreview & { seller_id: string };
+
+const fetchShowcase = async () => {
+  const { data: storesRaw } = await supabase
+    .from('profiles')
+    .select('id, store_name, store_address, store_logo, store_hours')
+    .eq('is_approved', true)
+    .not('store_name', 'is', null)
+    .limit(6);
+
+  const stores = (storesRaw ?? []) as Store[];
+  const storeIds = stores.map((s) => s.id);
+  if (storeIds.length === 0) return { stores: [], productsByStore: {}, reviewsByStore: {} };
+
+  const [productsRes, reviewsRes] = await Promise.all([
+    supabase
+      .from('products')
+      .select('id, name, price, images, seller_id')
+      .in('seller_id', storeIds)
+      .eq('status', 'available')
+      .order('created_at', { ascending: false })
+      .limit(200),
+    supabase
+      .from('store_reviews')
+      .select('store_id, rating')
+      .in('store_id', storeIds),
+  ]);
+
+  const productsByStore: Record<string, ProductLite[]> = {};
+  for (const p of (productsRes.data ?? []) as ProductLite[]) {
+    (productsByStore[p.seller_id] ??= []).push(p);
+  }
+
+  const reviewsByStore: Record<string, { avg: number; count: number }> = {};
+  for (const r of (reviewsRes.data ?? []) as { store_id: string; rating: number }[]) {
+    const ex = reviewsByStore[r.store_id];
+    if (ex) {
+      ex.avg = (ex.avg * ex.count + r.rating) / (ex.count + 1);
+      ex.count += 1;
+    } else {
+      reviewsByStore[r.store_id] = { avg: r.rating, count: 1 };
+    }
+  }
+
+  return { stores, productsByStore, reviewsByStore };
+};
 
 const StoreShowcase = () => {
-  const { data: stores = [] } = useQuery({
-    queryKey: ['stores-showcase'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, store_name, store_phone, store_logo, store_hours')
-        .eq('is_approved', true)
-        .not('store_name', 'is', null)
-        .limit(6);
-      if (error) throw error;
-      return data ?? [];
-    },
+  const { data } = useQuery({
+    queryKey: ['stores-showcase-v2'],
+    queryFn: fetchShowcase,
+    staleTime: 60_000,
   });
+
+  const stores = data?.stores ?? [];
+  const productsByStore = data?.productsByStore ?? {};
+  const reviewsByStore = data?.reviewsByStore ?? {};
 
   if (stores.length === 0) {
     return <p className="text-gray-500 text-sm">Nessun negozio approvato ancora.</p>;
   }
 
-  const todayKey = DAY_KEYS[new Date().getDay()];
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-      {stores.map((s: any) => {
-        const hours = (s.store_hours ?? {}) as StoreHours;
-        const open = isOpenNow(hours[todayKey]);
-        return (
-          <Link
-            key={s.id}
-            href={`/store/${s.id}`}
-            className="bg-white border rounded-lg p-5 hover:shadow-md transition-all flex items-center gap-4"
-          >
-            <StoreAvatar logoUrl={s.store_logo} storeName={s.store_name} size="md" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-gray-800 truncate">{s.store_name}</h3>
-              </div>
-              <p className="text-xs text-gray-500 truncate">📞 {s.store_phone}</p>
-              <span className={`inline-flex items-center gap-1 mt-1 text-[11px] font-medium px-2 py-0.5 rounded-full ring-1 ${
-                open ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                     : 'bg-gray-100 text-gray-600 ring-gray-200'
-              }`}>
-                <span>●</span>{open ? 'Aperto ora' : 'Chiuso'}
-              </span>
-            </div>
-          </Link>
-        );
-      })}
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {stores.map((s) => (
+        <StorePreviewCard
+          key={s.id}
+          store={s}
+          products={productsByStore[s.id] ?? []}
+          reviews={reviewsByStore[s.id]}
+        />
+      ))}
     </div>
   );
 };
