@@ -4,10 +4,12 @@ import CategoryShowcase from '@/components/CategoryShowcase';
 import StoreShowcase from '@/components/StoreShowcase';
 import ValueProps from '@/components/ValueProps';
 import LiveActivityFeed from '@/components/LiveActivityFeed';
+import HomeRedirectGuard from '@/components/HomeRedirectGuard';
 
 export default function Home() {
   return (
     <div>
+      <HomeRedirectGuard />
       {/* HERO */}
       <section className="relative bg-gradient-to-br from-indigo-700 via-purple-700 to-pink-600 text-white overflow-hidden">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_30%_20%,white_0,transparent_50%),radial-gradient(circle_at_70%_60%,white_0,transparent_50%)]" />
