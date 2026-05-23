@@ -156,7 +156,13 @@ const NavMenu = ({ role, isAuthenticated, onSignOut }: {
         <span className="text-sm">Menu</span>
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl ring-1 ring-black/5 z-50 overflow-hidden max-h-[80vh] overflow-y-auto">
+        <div
+          className="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl ring-1 ring-black/5 z-50 overflow-y-auto overscroll-contain pb-[max(env(safe-area-inset-bottom),12px)]"
+          style={{
+            maxHeight:
+              'min(calc(100dvh - 160px - env(safe-area-inset-bottom)), calc(100vh - 220px))',
+          }}
+        >
           <ul className="py-1">
             {links.map((l, i) => {
               if (isSeparator(l)) {
