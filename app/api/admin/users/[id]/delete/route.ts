@@ -18,8 +18,15 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   const supabaseAnon    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const supabaseService = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseAnon || !supabaseService) {
+  if (!supabaseUrl || !supabaseAnon) {
     return NextResponse.json({ error: 'Servizio non configurato.' }, { status: 503 });
+  }
+  if (!supabaseService) {
+    // Admin si merita un messaggio specifico
+    return NextResponse.json(
+      { error: 'Manca SUPABASE_SERVICE_ROLE_KEY nelle variabili d\'ambiente del server. Aggiungila in Render → Environment.' },
+      { status: 503 },
+    );
   }
   if (!targetId || targetId.length < 10) {
     return NextResponse.json({ error: 'ID utente non valido.' }, { status: 400 });
