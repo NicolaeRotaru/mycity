@@ -186,8 +186,13 @@ export default function CheckoutPage() {
   const [appliedCoupon, setAppliedCoupon] = useState<{ coupon: Coupon; discount: number; freeShipping: boolean } | null>(null);
   const [couponError, setCouponError] = useState<string | null>(null);
 
+  // Ritiro in negozio (-10%, no spedizione)
+  const [pickupInStore, setPickupInStore] = useState(false);
+  const PICKUP_DISCOUNT_PERCENT = 10;
+
   // Distanza-based shipping per ogni gruppo, se entrambe le coords sono note
   const shippingFor = (g: { storeLat: number | null; storeLng: number | null; items: CartItem[] }): number => {
+    if (pickupInStore) return 0;
     const subtotal = groupSubtotal(g);
     if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
     if (g.storeLat && g.storeLng && form.lat && form.lng) {
@@ -210,9 +215,10 @@ export default function CheckoutPage() {
   };
 
   const grandSubtotal = groups.reduce((s, g) => s + groupSubtotal(g), 0);
+  const pickupDiscount = pickupInStore ? Math.round(grandSubtotal * (PICKUP_DISCOUNT_PERCENT / 100) * 100) / 100 : 0;
   const grandShipping = appliedCoupon?.freeShipping ? 0 : groups.reduce((s, g) => s + shippingFor(g), 0);
   const discount = appliedCoupon?.discount ?? 0;
-  const grandTotal = Math.max(0, grandSubtotal + grandShipping - discount);
+  const grandTotal = Math.max(0, grandSubtotal + grandShipping - discount - pickupDiscount);
 
   const placeOrders = useMutation({
     mutationFn: async () => {
@@ -250,9 +256,13 @@ export default function CheckoutPage() {
       for (const g of groups) {
         const subtotal = groupSubtotal(g);
         const shipping = appliedCoupon?.freeShipping ? 0 : shippingFor(g);
-        const portionOfDiscount = grandSubtotal > 0
+        const portionOfCoupon = grandSubtotal > 0
           ? Math.round((couponDiscount * (subtotal / grandSubtotal)) * 100) / 100
           : 0;
+        const portionOfPickup = pickupInStore
+          ? Math.round(subtotal * (PICKUP_DISCOUNT_PERCENT / 100) * 100) / 100
+          : 0;
+        const portionOfDiscount = portionOfCoupon + portionOfPickup;
         const total = Math.max(0, subtotal + shipping - portionOfDiscount);
 
         const { data: order, error: orderError } = await supabase.from('orders').insert({
@@ -262,6 +272,7 @@ export default function CheckoutPage() {
           shipping_cost: shipping,
           discount_amount: portionOfDiscount,
           coupon_code: couponCodeUsed,
+          pickup_in_store: pickupInStore,
           payment_status: 'PENDING',
           delivery_status: 'NEW',
           delivery_full_name: form.fullName,
@@ -437,6 +448,31 @@ export default function CheckoutPage() {
             </form>
           </div>
 
+          {/* RITIRO IN NEGOZIO */}
+          <label className={`block border-2 rounded-xl p-4 cursor-pointer transition-all ${
+            pickupInStore ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white hover:border-emerald-200'
+          }`}>
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={pickupInStore}
+                onChange={(e) => setPickupInStore(e.target.checked)}
+                className="mt-1 w-4 h-4 accent-emerald-600"
+              />
+              <div className="flex-1">
+                <p className="font-bold text-gray-900">🏪 Ritira tu in negozio — risparmia {PICKUP_DISCOUNT_PERCENT}%</p>
+                <p className="text-sm text-gray-600 mt-0.5">
+                  Niente spedizione, sconto subito. Vai tu al negozio quando l'ordine è pronto.
+                </p>
+              </div>
+              {pickupInStore && (
+                <span className="bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
+                  −{formatPrice(pickupDiscount)}
+                </span>
+              )}
+            </div>
+          </label>
+
           {/* PAGAMENTO */}
           <div className="bg-white border rounded-xl p-6">
             <h2 className="text-xl font-bold flex items-center gap-2 mb-4">💳 Metodo di pagamento</h2>
@@ -565,6 +601,12 @@ export default function CheckoutPage() {
                   {grandShipping === 0 ? 'GRATUITA' : formatPrice(grandShipping)}
                 </span>
               </div>
+              {pickupDiscount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Sconto ritiro in negozio</span>
+                  <span className="font-semibold">−{formatPrice(pickupDiscount)}</span>
+                </div>
+              )}
               {discount > 0 && (
                 <div className="flex justify-between text-emerald-700">
                   <span>Sconto codice</span>

@@ -8,6 +8,7 @@ const links = [
   { href: '/seller/products',      label: 'I miei prodotti',   icon: '📦' },
   { href: '/seller/products/new',  label: 'Nuovo prodotto',    icon: '➕' },
   { href: '/seller/orders',        label: 'Ordini ricevuti',   icon: '🛒' },
+  { href: '/seller/customers',     label: 'I miei clienti',    icon: '👥' },
   { href: '/seller/profile',       label: 'Profilo negozio',   icon: '🏪' },
 ];
 

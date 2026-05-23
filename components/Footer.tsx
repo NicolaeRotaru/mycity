@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useProfile } from './hooks/useProfile';
+import NewsletterForm from './NewsletterForm';
 
 const Footer = () => {
   const { isSeller, isBuyer, isRider, isAuthenticated, isLoading } = useProfile();
@@ -104,6 +105,15 @@ const Footer = () => {
           </div>
         </div>
       </div>
+
+      {/* Newsletter */}
+      {!isSellerArea && (
+        <div className="border-t border-gray-800 bg-gray-950">
+          <div className="container mx-auto px-6 py-6 max-w-2xl">
+            <NewsletterForm />
+          </div>
+        </div>
+      )}
 
       {/* Trust strip */}
       <div className="border-t border-gray-800">

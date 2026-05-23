@@ -81,6 +81,22 @@ export default function ProfilePage() {
     <div className="container mx-auto px-6 py-8 max-w-3xl">
       <h1 className="text-2xl font-bold mb-6">Il tuo account</h1>
 
+      {/* BANNER INVITA AMICI */}
+      <Link
+        href="/profile/referral"
+        className="block bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl p-5 mb-6 hover:shadow-lg transition-all"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="font-extrabold text-lg">🎁 Invita un amico, prendete €5 entrambi</p>
+            <p className="text-indigo-100 text-sm">Condividi il tuo codice referral</p>
+          </div>
+          <span className="bg-white text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shrink-0">
+            Scopri →
+          </span>
+        </div>
+      </Link>
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <Link href="/orders" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">📦</div>
@@ -97,10 +113,10 @@ export default function ProfilePage() {
           <h3 className="font-bold">Indirizzi</h3>
           <p className="text-sm text-gray-500 hidden sm:block">Casa, ufficio…</p>
         </Link>
-        <Link href="/cart" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">🛒</div>
-          <h3 className="font-bold">Carrello</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">Articoli in attesa</p>
+        <Link href="/groups" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="text-3xl mb-2">🤝</div>
+          <h3 className="font-bold">Gruppi acquisto</h3>
+          <p className="text-sm text-gray-500 hidden sm:block">Unisciti e risparmia</p>
         </Link>
       </div>
 

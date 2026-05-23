@@ -3,6 +3,7 @@ import ProductGrid from '@/components/ProductGrid';
 import CategoryShowcase from '@/components/CategoryShowcase';
 import StoreShowcase from '@/components/StoreShowcase';
 import ValueProps from '@/components/ValueProps';
+import LiveActivityFeed from '@/components/LiveActivityFeed';
 
 export default function Home() {
   return (
@@ -102,6 +103,11 @@ export default function Home() {
           </Link>
         </div>
         <StoreShowcase />
+      </section>
+
+      {/* LIVE ACTIVITY FEED */}
+      <section className="container mx-auto px-6">
+        <LiveActivityFeed />
       </section>
 
       {/* CTA VENDITORE */}
