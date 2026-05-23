@@ -18,7 +18,7 @@ type NavItem = NavLink | NavSeparator;
 const isSeparator = (item: NavItem): item is NavSeparator =>
   'type' in item && item.type === 'separator';
 
-const BUYER_LINKS: NavLink[] = [
+const BUYER_LINKS: NavItem[] = [
   { href: '/',                  label: 'Home',                icon: '🏠' },
   { href: '/near',              label: 'Vicino a te',         icon: '📍' },
   { href: '/groups',            label: 'Gruppi d\'acquisto',  icon: '🤝' },
@@ -30,6 +30,11 @@ const BUYER_LINKS: NavLink[] = [
   { href: '/profile/referral',  label: 'Invita amici · €5',   icon: '🎁' },
   { href: '/notifications',     label: 'Notifiche',           icon: '🔔' },
   { href: '/profile',           label: 'Profilo',             icon: '👤' },
+  { href: '/profile/settings',  label: 'Impostazioni',        icon: '⚙️' },
+  { type: 'separator',          label: 'Informazioni' },
+  { href: '/faq',               label: 'FAQ',                 icon: '❓' },
+  { href: '/help',              label: 'Centro assistenza',   icon: '💡' },
+  { href: '/contact',           label: 'Contattaci',          icon: '✉️' },
 ];
 
 const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
@@ -42,6 +47,7 @@ const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
     { href: '/seller/customers',       label: 'I miei clienti',    icon: '👥' },
     { href: '/seller/profile',         label: 'Profilo negozio',   icon: '🏪' },
     { href: '/notifications',          label: 'Notifiche',         icon: '🔔' },
+    { href: '/profile/settings',       label: 'Impostazioni',      icon: '⚙️' },
     { type: 'separator',               label: 'Come acquirente' },
     { href: '/',                       label: 'Home marketplace',  icon: '🏠' },
     { href: '/stores',                 label: 'Tutti i negozi',    icon: '🏪' },
@@ -49,12 +55,17 @@ const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
     { href: '/orders',                 label: 'I miei ordini',     icon: '📦' },
     { href: '/cart',                   label: 'Carrello',          icon: '🛒' },
     { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
+    { type: 'separator',               label: 'Informazioni' },
+    { href: '/faq',                    label: 'FAQ',               icon: '❓' },
+    { href: '/help',                   label: 'Centro assistenza', icon: '💡' },
+    { href: '/contact',                label: 'Contattaci',        icon: '✉️' },
   ],
   rider: [
     { href: '/rider',          label: 'Dashboard',     icon: '🛵' },
     { href: '/rider/history',  label: 'Storico',       icon: '📜' },
     { href: '/rider/profile',  label: 'Profilo',       icon: '👤' },
     { href: '/notifications',  label: 'Notifiche',     icon: '🔔' },
+    { href: '/profile/settings', label: 'Impostazioni', icon: '⚙️' },
     { type: 'separator',       label: 'Come acquirente' },
     { href: '/',                       label: 'Home marketplace',  icon: '🏠' },
     { href: '/stores',                 label: 'Tutti i negozi',    icon: '🏪' },
@@ -62,6 +73,10 @@ const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
     { href: '/orders',                 label: 'I miei ordini',     icon: '📦' },
     { href: '/cart',                   label: 'Carrello',          icon: '🛒' },
     { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
+    { type: 'separator',               label: 'Informazioni' },
+    { href: '/faq',                    label: 'FAQ',               icon: '❓' },
+    { href: '/help',                   label: 'Centro assistenza', icon: '💡' },
+    { href: '/contact',                label: 'Contattaci',        icon: '✉️' },
   ],
   admin: [
     { href: '/admin',          label: 'Dashboard admin', icon: '🛡️' },
@@ -81,6 +96,11 @@ const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
     { href: '/profile/addresses',      label: 'Indirizzi',         icon: '📌' },
     { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
     { href: '/profile',                label: 'Profilo',           icon: '👤' },
+    { href: '/profile/settings',       label: 'Impostazioni',      icon: '⚙️' },
+    { type: 'separator',               label: 'Informazioni' },
+    { href: '/faq',                    label: 'FAQ',               icon: '❓' },
+    { href: '/help',                   label: 'Centro assistenza', icon: '💡' },
+    { href: '/contact',                label: 'Contattaci',        icon: '✉️' },
   ],
 };
 
@@ -90,6 +110,10 @@ const LINKS_GUEST: NavItem[] = [
   { href: '/stores',   label: 'Negozi',     icon: '🏪' },
   { href: '/sign-in',  label: 'Accedi',     icon: '🔑' },
   { href: '/sign-up',  label: 'Registrati', icon: '✨' },
+  { type: 'separator', label: 'Informazioni' },
+  { href: '/faq',      label: 'FAQ',                 icon: '❓' },
+  { href: '/help',     label: 'Centro assistenza',   icon: '💡' },
+  { href: '/contact',  label: 'Contattaci',          icon: '✉️' },
 ];
 
 function getLinks(role: Role, isAuthenticated: boolean): NavItem[] {
