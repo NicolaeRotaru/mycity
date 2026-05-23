@@ -82,7 +82,7 @@ export default function SettingsPage() {
     setPrefs(loadPrefs());
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) {
-        router.push('/sign-in?next=/profile/settings');
+        router.push('/sign-in?returnTo=/profile/settings');
         return;
       }
       setEmail(data.user.email ?? '');

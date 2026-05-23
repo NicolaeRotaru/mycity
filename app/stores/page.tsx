@@ -32,23 +32,20 @@ const fetchStoresData = async () => {
     return { stores: [], productsByStore: {}, reviewsByStore: {}, countByStore: {}, categoriesByStore: {}, categories: [] };
   }
 
-  const [productsRes, reviewsRes, allProductsCatRes, categoriesRes] = await Promise.all([
+  // 3 query parallele (era 4 — la query di conteggio era ridondante con
+  // products). Da products deriviamo display + count + categorie per store.
+  const [productsRes, reviewsRes, categoriesRes] = await Promise.all([
     supabase
       .from('products')
       .select('id, name, price, images, seller_id, category_id')
       .in('seller_id', storeIds)
       .eq('status', 'available')
       .order('created_at', { ascending: false })
-      .limit(400),
+      .limit(600),
     supabase
       .from('store_reviews')
       .select('store_id, rating')
       .in('store_id', storeIds),
-    supabase
-      .from('products')
-      .select('seller_id, category_id')
-      .in('seller_id', storeIds)
-      .eq('status', 'available'),
     supabase
       .from('categories')
       .select('id, slug, name, parent_id, icon')
@@ -58,12 +55,17 @@ const fetchStoresData = async () => {
 
   const products = (productsRes.data ?? []) as ProductLite[];
   const reviews = (reviewsRes.data ?? []) as { store_id: string; rating: number }[];
-  const allCats = (allProductsCatRes.data ?? []) as { seller_id: string; category_id: string | null }[];
   const categories = (categoriesRes.data ?? []) as Category[];
 
   const productsByStore: Record<string, ProductLite[]> = {};
+  const countByStore: Record<string, number> = {};
+  const categoriesByStore: Record<string, Set<string>> = {};
   for (const p of products) {
     (productsByStore[p.seller_id] ??= []).push(p);
+    countByStore[p.seller_id] = (countByStore[p.seller_id] ?? 0) + 1;
+    if (p.category_id) {
+      (categoriesByStore[p.seller_id] ??= new Set()).add(p.category_id);
+    }
   }
 
   const reviewsByStore: Record<string, { avg: number; count: number }> = {};
@@ -74,15 +76,6 @@ const fetchStoresData = async () => {
       ex.count += 1;
     } else {
       reviewsByStore[r.store_id] = { avg: r.rating, count: 1 };
-    }
-  }
-
-  const countByStore: Record<string, number> = {};
-  const categoriesByStore: Record<string, Set<string>> = {};
-  for (const c of allCats) {
-    countByStore[c.seller_id] = (countByStore[c.seller_id] ?? 0) + 1;
-    if (c.category_id) {
-      (categoriesByStore[c.seller_id] ??= new Set()).add(c.category_id);
     }
   }
 
@@ -98,7 +91,8 @@ export default function StoresPage() {
   const { data, isLoading } = useQuery({
     queryKey: ['stores-page-v4'],
     queryFn: fetchStoresData,
-    staleTime: 60_000,
+    staleTime: 30_000,
+    gcTime: 10 * 60_000,
   });
 
   const stores = data?.stores ?? [];

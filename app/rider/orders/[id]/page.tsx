@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import DeliveryMap, { MapPoint } from '@/components/DeliveryMap';
+import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
 import VerifyCodeDialog from '@/components/VerifyCodeDialog';
 import { formatPrice } from '@/lib/format';
 import {

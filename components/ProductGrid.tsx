@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
@@ -30,7 +31,12 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
         .order('created_at', { ascending: false });
       if (categoryId) q = q.eq('category_id', categoryId);
       if (sellerId)   q = q.eq('seller_id', sellerId);
-      if (search)     q = q.ilike('name', `%${search}%`);
+      // ilike: scappa i wildcard SQL nel termine di ricerca per evitare DoS
+      // con pattern tipo "%%%%" su tabelle grandi.
+      if (search) {
+        const safe = search.replace(/[%_]/g, '\\$&').slice(0, 100);
+        q = q.ilike('name', `%${safe}%`);
+      }
       if (maxPrice !== undefined) q = q.lte('price', maxPrice);
       if (minPrice !== undefined) q = q.gte('price', minPrice);
       if (limit)      q = q.limit(limit);
@@ -40,16 +46,17 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
     },
   });
 
-  if (isLoading) return <SkeletonGrid count={limit ?? 8} />;
+  // Memoizza il filtro client-side per non rifiltrare a ogni render del parent.
+  const filtered = useMemo(() => {
+    if (!onlyOpenStores) return products;
+    const todayKey = DAY_KEYS[new Date().getDay()];
+    return products.filter((p: any) => {
+      const hours = (p.profiles?.store_hours ?? {}) as StoreHours;
+      return isOpenNow(hours[todayKey]);
+    });
+  }, [products, onlyOpenStores]);
 
-  // Filtro client-side per "negozi aperti ora"
-  const todayKey = DAY_KEYS[new Date().getDay()];
-  const filtered = onlyOpenStores
-    ? products.filter((p: any) => {
-        const hours = (p.profiles?.store_hours ?? {}) as StoreHours;
-        return isOpenNow(hours[todayKey]);
-      })
-    : products;
+  if (isLoading) return <SkeletonGrid count={limit ?? 8} />;
 
   if (filtered.length === 0) {
     return (

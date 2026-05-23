@@ -8,7 +8,6 @@ import { formatPrice, formatDate } from '@/lib/format';
 type CustomerRow = {
   userId: string;
   fullName: string | null;
-  phone: string | null;
   totalSpent: number;
   ordersCount: number;
   lastOrderAt: string;
@@ -37,7 +36,7 @@ export default function SellerCustomersPage() {
         .from('orders')
         .select(`
           id, user_id, total_price, created_at,
-          buyer:profiles!orders_user_id_fkey ( full_name, phone )
+          buyer:profiles!orders_user_id_fkey ( full_name )
         `)
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false });
@@ -49,12 +48,11 @@ export default function SellerCustomersPage() {
         if (existing) {
           existing.totalSpent += Number(o.total_price);
           existing.ordersCount += 1;
-          existing.firstOrderAt = o.created_at; // ultimo nel loop (più vecchio per ordering desc) → first = più vecchio
+          existing.firstOrderAt = o.created_at;
         } else {
           byUser.set(o.user_id, {
             userId:     o.user_id,
             fullName:   o.buyer?.full_name ?? null,
-            phone:      o.buyer?.phone ?? null,
             totalSpent: Number(o.total_price),
             ordersCount: 1,
             lastOrderAt: o.created_at,
@@ -70,7 +68,7 @@ export default function SellerCustomersPage() {
   const filtered = customers.filter((c) => {
     if (search) {
       const s = search.toLowerCase();
-      if (!c.fullName?.toLowerCase().includes(s) && !c.phone?.includes(s)) return false;
+      if (!c.fullName?.toLowerCase().includes(s)) return false;
     }
     const daysAgo = (date: string) => (Date.now() - new Date(date).getTime()) / 86400000;
     if (filter === 'vip') return c.ordersCount >= 5;
@@ -124,7 +122,7 @@ export default function SellerCustomersPage() {
         ))}
         <input
           type="search"
-          placeholder="Cerca nome o telefono…"
+          placeholder="Cerca nome…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="ml-auto border rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-56"
@@ -154,11 +152,7 @@ export default function SellerCustomersPage() {
                   <tr key={c.userId} className="border-t hover:bg-gray-50">
                     <td className="p-3">
                       <p className="font-semibold text-gray-900">{c.fullName ?? 'Cliente'}</p>
-                      {c.phone && (
-                        <a href={`tel:${c.phone}`} className="text-xs text-indigo-600 hover:underline">
-                          📞 {c.phone}
-                        </a>
-                      )}
+                      <p className="text-xs text-gray-400">ID: {c.userId.slice(0, 8)}…</p>
                     </td>
                     <td className="p-3 text-right font-bold">{c.ordersCount}</td>
                     <td className="p-3 text-right font-semibold text-emerald-700">{formatPrice(c.totalSpent)}</td>

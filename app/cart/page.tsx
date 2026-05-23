@@ -87,8 +87,8 @@ export default function CartPage() {
                   src={item.image ?? 'https://placehold.co/200x200/eef2ff/6366f1?text=Foto'}
                   alt={item.name}
                   fill
+                  sizes="96px"
                   className="object-cover"
-                  unoptimized
                 />
               </div>
               <div className="flex-1 flex flex-col justify-between min-w-0">

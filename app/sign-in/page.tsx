@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/lib/supabase/client';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import { toast } from 'sonner';
 
 const SignInForm = () => {
@@ -12,7 +13,7 @@ const SignInForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnTo = searchParams.get('returnTo') ?? '/';
+  const returnTo = safeInternalPath(searchParams.get('returnTo'), '/');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

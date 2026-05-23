@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import * as z from 'zod';
+import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
-import StoreLocationPicker, { StoreLocation } from './StoreLocationPicker';
+import StoreLocationPicker, { StoreLocation } from './StoreLocationPickerLazy';
 import StoreAvatar from './StoreAvatar';
 import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';

@@ -50,7 +50,8 @@ const LiveActivityFeed = () => {
         .limit(8);
       return (data ?? []) as unknown as Activity[];
     },
-    refetchInterval: 30_000,
+    // Niente refetchInterval: il refresh avviene via Realtime sotto.
+    staleTime: 60_000,
   });
 
   // Subscribe a nuovi ordini in tempo reale

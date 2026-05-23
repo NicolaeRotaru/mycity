@@ -12,7 +12,6 @@ export const metadata = {
   description:
     'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 24-48h, pagamento alla consegna.',
   manifest: '/manifest.json',
-  themeColor: '#4f46e5',
   icons: {
     icon: '/icon-192.svg',
     apple: '/icon-192.svg',

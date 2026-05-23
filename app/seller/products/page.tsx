@@ -85,8 +85,8 @@ export default function SellerProductsPage() {
                           src={p.images?.[0] ?? 'https://placehold.co/100x100/eee/aaa?text=?'}
                           alt={p.name}
                           fill
+                          sizes="48px"
                           className="object-cover rounded"
-                          unoptimized
                         />
                       </div>
                       <Link href={`/product/${p.id}`} className="font-semibold hover:text-indigo-600">

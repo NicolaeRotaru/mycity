@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import DeliveryMap, { MapPoint } from '@/components/DeliveryMap';
+import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
 import SimpleQR from '@/components/SimpleQR';
 import { formatPrice, formatDate } from '@/lib/format';
 import { addToCart, clearCart } from '@/lib/cart';
