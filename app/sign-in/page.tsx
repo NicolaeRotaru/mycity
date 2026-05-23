@@ -55,7 +55,7 @@ const SignInForm = () => {
     setSendingReset(true);
     try {
       const redirectTo = typeof window !== 'undefined'
-        ? `${window.location.origin}/sign-in`
+        ? `${window.location.origin}/reset-password`
         : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
       if (error) throw error;
