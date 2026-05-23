@@ -15,12 +15,15 @@ type NavLink = { href: string; label: string; icon: string };
 
 const LINKS_BY_ROLE: Record<NonNullable<Role>, NavLink[]> = {
   buyer: [
-    { href: '/',              label: 'Home',                icon: '🏠' },
-    { href: '/stores',        label: 'Tutti i negozi',      icon: '🏪' },
-    { href: '/orders',        label: 'I miei ordini',       icon: '📦' },
-    { href: '/cart',          label: 'Carrello',            icon: '🛒' },
-    { href: '/notifications', label: 'Notifiche',           icon: '🔔' },
-    { href: '/profile',       label: 'Profilo',             icon: '👤' },
+    { href: '/',                  label: 'Home',                icon: '🏠' },
+    { href: '/near',              label: 'Vicino a te',         icon: '📍' },
+    { href: '/stores',            label: 'Tutti i negozi',      icon: '🏪' },
+    { href: '/favorites',         label: 'Preferiti',           icon: '♥' },
+    { href: '/orders',            label: 'I miei ordini',       icon: '📦' },
+    { href: '/cart',              label: 'Carrello',            icon: '🛒' },
+    { href: '/profile/addresses', label: 'Indirizzi',           icon: '📌' },
+    { href: '/notifications',     label: 'Notifiche',           icon: '🔔' },
+    { href: '/profile',           label: 'Profilo',             icon: '👤' },
   ],
   seller: [
     { href: '/seller',                 label: 'Dashboard',         icon: '📊' },
@@ -43,15 +46,17 @@ const LINKS_BY_ROLE: Record<NonNullable<Role>, NavLink[]> = {
     { href: '/admin/users',    label: 'Utenti',         icon: '👥' },
     { href: '/admin/orders',   label: 'Ordini',         icon: '📦' },
     { href: '/admin/products', label: 'Prodotti',       icon: '🛍️' },
+    { href: '/admin/coupons',  label: 'Coupon',         icon: '🎟️' },
     { href: '/notifications',  label: 'Notifiche',      icon: '🔔' },
     { href: '/',               label: 'Vai al marketplace', icon: '↗' },
   ],
 };
 
 const LINKS_GUEST: NavLink[] = [
-  { href: '/',         label: 'Home',     icon: '🏠' },
-  { href: '/stores',   label: 'Negozi',   icon: '🏪' },
-  { href: '/sign-in',  label: 'Accedi',   icon: '🔑' },
+  { href: '/',         label: 'Home',       icon: '🏠' },
+  { href: '/near',     label: 'Vicino a te', icon: '📍' },
+  { href: '/stores',   label: 'Negozi',     icon: '🏪' },
+  { href: '/sign-in',  label: 'Accedi',     icon: '🔑' },
   { href: '/sign-up',  label: 'Registrati', icon: '✨' },
 ];
 

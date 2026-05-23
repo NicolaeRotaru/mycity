@@ -15,30 +15,48 @@ export default function SellerDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      const [{ count: productCount }, { count: availableCount }, { data: items }] = await Promise.all([
+      const [{ count: productCount }, { count: availableCount }, { data: items }, { data: storeReviews }] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }).eq('seller_id', user.id),
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('seller_id', user.id).eq('status', 'available'),
         supabase.from('order_items')
           .select('quantity, unit_price, orders(created_at), products!inner(seller_id)')
           .eq('products.seller_id', user.id),
+        supabase.from('store_reviews').select('rating').eq('store_id', user.id),
       ]);
 
       const itemsArr = items ?? [];
       const revenue = itemsArr.reduce((s: number, it: any) => s + Number(it.unit_price) * it.quantity, 0);
-      const last30 = itemsArr.filter((it: any) => {
-        const d = new Date(it.orders?.created_at ?? 0).getTime();
-        return Date.now() - d < 30 * 86400000;
-      });
-      const revenue30 = last30.reduce((s: number, it: any) => s + Number(it.unit_price) * it.quantity, 0);
+
+      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+      const startOf7d = new Date(Date.now() - 7 * 86400000);
+      const startOf30d = new Date(Date.now() - 30 * 86400000);
+
+      const inRange = (it: any, from: Date) => new Date(it.orders?.created_at ?? 0) >= from;
+      const sum = (arr: any[]) => arr.reduce((s, it) => s + Number(it.unit_price) * it.quantity, 0);
+
+      const today = itemsArr.filter((it: any) => inRange(it, startOfToday));
+      const last7 = itemsArr.filter((it: any) => inRange(it, startOf7d));
+      const last30 = itemsArr.filter((it: any) => inRange(it, startOf30d));
+
+      const reviews = storeReviews ?? [];
+      const avgRating = reviews.length > 0
+        ? reviews.reduce((s, r: any) => s + r.rating, 0) / reviews.length
+        : 0;
 
       return {
         productCount: productCount ?? 0,
         availableCount: availableCount ?? 0,
         orderCount: itemsArr.length,
         revenue,
-        revenue30,
+        revenueToday: sum(today),
+        revenue7: sum(last7),
+        revenue30: sum(last30),
+        ordersToday: today.length,
+        orders7: last7.length,
         last30Count: last30.length,
+        avgRating,
+        reviewCount: reviews.length,
       };
     },
     enabled: isSeller,
@@ -61,6 +79,28 @@ export default function SellerDashboard() {
         </Link>
       </div>
 
+      {/* CASSA — incassi per periodo */}
+      <div className="bg-white border-2 border-emerald-200 rounded-xl p-5">
+        <h2 className="font-bold text-gray-900 mb-3 flex items-center gap-2">💰 Cassa</h2>
+        <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="bg-emerald-50 rounded-lg p-3">
+            <p className="text-xs uppercase tracking-wide text-emerald-700 font-semibold">Oggi</p>
+            <p className="text-xl sm:text-2xl font-bold text-emerald-900 mt-1">{formatPrice(stats.revenueToday)}</p>
+            <p className="text-xs text-emerald-600">{stats.ordersToday} articoli</p>
+          </div>
+          <div className="bg-indigo-50 rounded-lg p-3">
+            <p className="text-xs uppercase tracking-wide text-indigo-700 font-semibold">7 giorni</p>
+            <p className="text-xl sm:text-2xl font-bold text-indigo-900 mt-1">{formatPrice(stats.revenue7)}</p>
+            <p className="text-xs text-indigo-600">{stats.orders7} articoli</p>
+          </div>
+          <div className="bg-purple-50 rounded-lg p-3">
+            <p className="text-xs uppercase tracking-wide text-purple-700 font-semibold">30 giorni</p>
+            <p className="text-xl sm:text-2xl font-bold text-purple-900 mt-1">{formatPrice(stats.revenue30)}</p>
+            <p className="text-xs text-purple-600">{stats.last30Count} articoli</p>
+          </div>
+        </div>
+      </div>
+
       {/* KPI cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
@@ -68,14 +108,7 @@ export default function SellerDashboard() {
           value={formatPrice(stats.revenue)}
           icon="💰"
           accent="emerald"
-          hint={stats.revenue30 > 0 ? `+${formatPrice(stats.revenue30)} ultimi 30 giorni` : 'Nessuna vendita ancora'}
-        />
-        <KpiCard
-          label="Articoli venduti"
-          value={stats.orderCount}
-          icon="📦"
-          accent="indigo"
-          hint={stats.last30Count > 0 ? `${stats.last30Count} negli ultimi 30 giorni` : '—'}
+          hint={`${stats.orderCount} articoli venduti`}
         />
         <KpiCard
           label="Prodotti in vendita"
@@ -86,10 +119,17 @@ export default function SellerDashboard() {
         />
         <KpiCard
           label="Valutazione media"
-          value="—"
+          value={stats.avgRating > 0 ? stats.avgRating.toFixed(1) + ' ★' : '—'}
           icon="⭐"
           accent="amber"
-          hint="In arrivo"
+          hint={stats.reviewCount > 0 ? `${stats.reviewCount} recensioni` : 'Nessuna recensione'}
+        />
+        <KpiCard
+          label="Articoli totali"
+          value={stats.orderCount}
+          icon="📦"
+          accent="indigo"
+          hint="Dall'inizio"
         />
       </div>
 

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
 import { SkeletonGrid } from './SkeletonCard';
+import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 
 interface Props {
   categoryId?: string;
@@ -11,24 +12,27 @@ interface Props {
   search?: string;
   limit?: number;
   maxPrice?: number;
+  minPrice?: number;
+  onlyOpenStores?: boolean;
 }
 
-const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice }: Props) => {
+const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores }: Props) => {
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products', { categoryId, sellerId, search, limit, maxPrice }],
+    queryKey: ['products', { categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores }],
     queryFn: async () => {
       let q = supabase
         .from('products')
         .select(`
           id, name, description, price, images, stock, created_at, seller_id,
-          profiles!products_seller_id_fkey ( store_name )
+          profiles!products_seller_id_fkey ( store_name, store_hours )
         `)
         .eq('status', 'available')
         .order('created_at', { ascending: false });
       if (categoryId) q = q.eq('category_id', categoryId);
       if (sellerId)   q = q.eq('seller_id', sellerId);
       if (search)     q = q.ilike('name', `%${search}%`);
-      if (maxPrice)   q = q.lte('price', maxPrice);
+      if (maxPrice !== undefined) q = q.lte('price', maxPrice);
+      if (minPrice !== undefined) q = q.gte('price', minPrice);
       if (limit)      q = q.limit(limit);
       const { data, error } = await q;
       if (error) throw error;
@@ -38,7 +42,16 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice }: Props) =
 
   if (isLoading) return <SkeletonGrid count={limit ?? 8} />;
 
-  if (products.length === 0) {
+  // Filtro client-side per "negozi aperti ora"
+  const todayKey = DAY_KEYS[new Date().getDay()];
+  const filtered = onlyOpenStores
+    ? products.filter((p: any) => {
+        const hours = (p.profiles?.store_hours ?? {}) as StoreHours;
+        return isOpenNow(hours[todayKey]);
+      })
+    : products;
+
+  if (filtered.length === 0) {
     return (
       <div className="text-center py-16 bg-white border rounded-xl">
         <p className="text-5xl mb-3">🔍</p>
@@ -50,7 +63,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice }: Props) =
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-      {products.map((p: any) => (
+      {filtered.map((p: any) => (
         <ProductCard
           key={p.id}
           id={p.id}

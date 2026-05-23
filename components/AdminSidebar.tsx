@@ -8,6 +8,7 @@ const links = [
   { href: '/admin/users',    label: 'Utenti',    icon: '👥' },
   { href: '/admin/orders',   label: 'Ordini',    icon: '📦' },
   { href: '/admin/products', label: 'Prodotti',  icon: '🛍️' },
+  { href: '/admin/coupons',  label: 'Coupon',    icon: '🎟️' },
 ];
 
 const AdminSidebar = () => {

@@ -34,6 +34,23 @@ export default function StorePage({ params }: { params: { id: string } }) {
     },
   });
 
+  const { data: reviews = [] } = useQuery({
+    queryKey: ['store-reviews', id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('store_reviews')
+        .select('id, rating, comment, created_at')
+        .eq('store_id', id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      return data ?? [];
+    },
+  });
+
+  const avgRating = reviews.length > 0
+    ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length
+    : 0;
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-16 text-center text-gray-500">
@@ -184,6 +201,38 @@ export default function StorePage({ params }: { params: { id: string } }) {
                 </li>
               );
             })}
+          </ul>
+        </div>
+      )}
+
+      {/* RECENSIONI */}
+      {reviews.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <h2 className="font-semibold text-lg text-gray-900">⭐ Recensioni clienti</h2>
+            <div className="flex items-center gap-1">
+              <span className="text-amber-400 text-lg">
+                {'★'.repeat(Math.round(avgRating))}{'☆'.repeat(5 - Math.round(avgRating))}
+              </span>
+              <span className="text-sm text-gray-600 font-medium">
+                {avgRating.toFixed(1)} ({reviews.length})
+              </span>
+            </div>
+          </div>
+          <ul className="space-y-3">
+            {reviews.slice(0, 5).map((r: any) => (
+              <li key={r.id} className="border-b border-gray-100 last:border-0 pb-3 last:pb-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-amber-400 text-sm">
+                    {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(r.created_at).toLocaleDateString('it-IT')}
+                  </span>
+                </div>
+                {r.comment && <p className="text-sm text-gray-700">{r.comment}</p>}
+              </li>
+            ))}
           </ul>
         </div>
       )}

@@ -87,8 +87,36 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     toast.success(`${product.name} aggiunto al carrello`, { duration: 2000 });
   };
 
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.name,
+    description: product.description ?? undefined,
+    image: images,
+    offers: {
+      '@type': 'Offer',
+      price: price.toFixed(2),
+      priceCurrency: 'EUR',
+      availability: isOutOfStock
+        ? 'https://schema.org/OutOfStock'
+        : 'https://schema.org/InStock',
+      seller: sellerProfile?.store_name
+        ? { '@type': 'LocalBusiness', name: sellerProfile.store_name }
+        : undefined,
+    },
+    aggregateRating: avgRating > 0 ? {
+      '@type': 'AggregateRating',
+      ratingValue: avgRating.toFixed(1),
+      reviewCount: reviews.length,
+    } : undefined,
+  };
+
   return (
     <div className="container mx-auto px-4 sm:px-6 py-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+      />
       {/* Breadcrumb */}
       <nav className="text-sm text-gray-500 mb-4">
         <Link href="/" className="hover:underline">Home</Link>

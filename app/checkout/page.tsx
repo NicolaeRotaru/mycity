@@ -11,6 +11,8 @@ import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { notify } from '@/lib/notifications';
+import { haversineKm, riderFee } from '@/lib/geo';
+import { validateCoupon, type Coupon } from '@/lib/coupons';
 
 type AddressForm = {
   fullName: string;
@@ -68,7 +70,7 @@ export default function CheckoutPage() {
         }
       }
 
-      // Recupera i nomi dei negozi (sia per quelli embedded che looked-up)
+      const sellerInfo = new Map<string, { name: string; lat: number | null; lng: number | null }>();
       const allSellerIds = Array.from(
         new Set([
           ...cart.map((c) => c.sellerId).filter(Boolean) as string[],
@@ -78,17 +80,22 @@ export default function CheckoutPage() {
       if (allSellerIds.length > 0) {
         const { data: sellers } = await supabase
           .from('profiles')
-          .select('id, store_name')
+          .select('id, store_name, store_lat, store_lng')
           .in('id', allSellerIds);
         for (const s of sellers ?? []) {
-          sellerNames.set(s.id, s.store_name ?? 'Negozio');
+          sellerInfo.set(s.id, {
+            name: s.store_name ?? 'Negozio',
+            lat: s.store_lat,
+            lng: s.store_lng,
+          });
         }
       }
 
-      // Raggruppa
       const sellerMap = new Map<string, {
         sellerId: string;
         storeName: string;
+        storeLat: number | null;
+        storeLng: number | null;
         items: CartItem[];
       }>();
       const orphanItems: CartItem[] = [];
@@ -100,9 +107,12 @@ export default function CheckoutPage() {
           continue;
         }
         if (!sellerMap.has(sellerId)) {
+          const info = sellerInfo.get(sellerId);
           sellerMap.set(sellerId, {
             sellerId,
-            storeName: sellerNames.get(sellerId) ?? item.storeName ?? 'Negozio',
+            storeName: info?.name ?? item.storeName ?? 'Negozio',
+            storeLat: info?.lat ?? null,
+            storeLng: info?.lng ?? null,
             items: [],
           });
         }
@@ -119,22 +129,90 @@ export default function CheckoutPage() {
   const groupSubtotal = (g: { items: CartItem[] }) =>
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
 
-  const grandSubtotal = groups.reduce((s, g) => s + groupSubtotal(g), 0);
-  const grandShipping = groups.reduce((s, g) => s + SHIPPING_COST_FOR(groupSubtotal(g)), 0);
-  const grandTotal = grandSubtotal + grandShipping;
-
-  const [form, setForm] = useState<AddressForm>({
-    fullName: '', address: '', city: 'Piacenza', zip: '29121', phone: '', notes: '',
-  });
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-
   // Check stato auth all'avvio
   const { data: authUser } = useQuery({
     queryKey: ['auth-user'],
     queryFn: async () => (await supabase.auth.getUser()).data.user,
     staleTime: 60_000,
   });
+
+  // Indirizzi salvati
+  const { data: savedAddresses = [] } = useQuery({
+    queryKey: ['user-addresses', authUser?.id],
+    enabled: !!authUser?.id,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('user_addresses')
+        .select('*')
+        .eq('user_id', authUser!.id)
+        .order('is_default', { ascending: false });
+      return data ?? [];
+    },
+  });
+
+  const [form, setForm] = useState<AddressForm & { lat: number | null; lng: number | null }>({
+    fullName: '', address: '', city: 'Piacenza', zip: '29121', phone: '', notes: '',
+    lat: null, lng: null,
+  });
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  // Quando arrivano gli indirizzi salvati, pre-seleziona il default
+  useEffect(() => {
+    if (savedAddresses.length > 0 && !form.fullName) {
+      const def = savedAddresses.find((a: any) => a.is_default) ?? savedAddresses[0];
+      setForm({
+        fullName: def.full_name, address: def.address, city: def.city,
+        zip: def.zip, phone: def.phone, notes: def.notes ?? '',
+        lat: def.lat, lng: def.lng,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedAddresses]);
+
+  const useSavedAddress = (id: string) => {
+    if (!id) return;
+    const a = savedAddresses.find((x: any) => x.id === id);
+    if (!a) return;
+    setForm({
+      fullName: a.full_name, address: a.address, city: a.city,
+      zip: a.zip, phone: a.phone, notes: a.notes ?? '',
+      lat: a.lat, lng: a.lng,
+    });
+  };
+
+  // Coupon
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ coupon: Coupon; discount: number; freeShipping: boolean } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  // Distanza-based shipping per ogni gruppo, se entrambe le coords sono note
+  const shippingFor = (g: { storeLat: number | null; storeLng: number | null; items: CartItem[] }): number => {
+    const subtotal = groupSubtotal(g);
+    if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
+    if (g.storeLat && g.storeLng && form.lat && form.lng) {
+      const km = haversineKm(g.storeLat, g.storeLng, form.lat, form.lng);
+      return riderFee(km);
+    }
+    return SHIPPING_COST_FOR(subtotal);
+  };
+
+  const applyCoupon = async () => {
+    setCouponError(null);
+    const result = await validateCoupon(couponCode, grandSubtotal, authUser?.id ?? null);
+    if (!result.ok) {
+      setCouponError(result.reason);
+      setAppliedCoupon(null);
+      return;
+    }
+    setAppliedCoupon({ coupon: result.coupon, discount: result.discount, freeShipping: result.freeShipping });
+    toast.success(`Codice "${result.coupon.code}" applicato`);
+  };
+
+  const grandSubtotal = groups.reduce((s, g) => s + groupSubtotal(g), 0);
+  const grandShipping = appliedCoupon?.freeShipping ? 0 : groups.reduce((s, g) => s + shippingFor(g), 0);
+  const discount = appliedCoupon?.discount ?? 0;
+  const grandTotal = Math.max(0, grandSubtotal + grandShipping - discount);
 
   const placeOrders = useMutation({
     mutationFn: async () => {
@@ -146,35 +224,44 @@ export default function CheckoutPage() {
       }
       if (groups.length === 0) throw new Error('Il carrello è vuoto');
 
-      // Geocode indirizzo via Nominatim (fallback: lascia null)
-      let deliveryLat: number | null = null;
-      let deliveryLng: number | null = null;
-      try {
-        const q = encodeURIComponent(`${form.address}, ${form.zip} ${form.city}, Italia`);
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=it`,
-        );
-        const json = await res.json();
-        if (Array.isArray(json) && json[0]) {
-          deliveryLat = parseFloat(json[0].lat);
-          deliveryLng = parseFloat(json[0].lon);
-        }
-      } catch {
-        // continua senza coord — la mappa sara' centrata sul negozio
+      // Coords delivery: usa quelle dell'indirizzo salvato; altrimenti geocoda
+      let deliveryLat: number | null = form.lat;
+      let deliveryLng: number | null = form.lng;
+      if (deliveryLat == null || deliveryLng == null) {
+        try {
+          const q = encodeURIComponent(`${form.address}, ${form.zip} ${form.city}, Italia`);
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=it`,
+          );
+          const json = await res.json();
+          if (Array.isArray(json) && json[0]) {
+            deliveryLat = parseFloat(json[0].lat);
+            deliveryLng = parseFloat(json[0].lon);
+          }
+        } catch {}
       }
 
       const createdOrders: string[] = [];
 
+      // Distribuisce lo sconto in proporzione al subtotale di ogni gruppo
+      const couponDiscount = appliedCoupon?.discount ?? 0;
+      const couponCodeUsed = appliedCoupon?.coupon.code ?? null;
+
       for (const g of groups) {
         const subtotal = groupSubtotal(g);
-        const shipping = SHIPPING_COST_FOR(subtotal);
-        const total = subtotal + shipping;
+        const shipping = appliedCoupon?.freeShipping ? 0 : shippingFor(g);
+        const portionOfDiscount = grandSubtotal > 0
+          ? Math.round((couponDiscount * (subtotal / grandSubtotal)) * 100) / 100
+          : 0;
+        const total = Math.max(0, subtotal + shipping - portionOfDiscount);
 
         const { data: order, error: orderError } = await supabase.from('orders').insert({
           user_id: user.id,
           seller_id: g.sellerId,
           total_price: total,
           shipping_cost: shipping,
+          discount_amount: portionOfDiscount,
+          coupon_code: couponCodeUsed,
           payment_status: 'PENDING',
           delivery_status: 'NEW',
           delivery_full_name: form.fullName,
@@ -283,6 +370,29 @@ export default function CheckoutPage() {
           {/* INDIRIZZO */}
           <div className="bg-white border rounded-xl p-6 space-y-4">
             <h2 className="text-xl font-bold flex items-center gap-2">📍 Indirizzo di consegna</h2>
+
+            {savedAddresses.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Indirizzo salvato
+                </label>
+                <select
+                  onChange={(e) => useSavedAddress(e.target.value)}
+                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                >
+                  {savedAddresses.map((a: any) => (
+                    <option key={a.id} value={a.id}>
+                      📍 {a.label} — {a.address}, {a.city}
+                      {a.is_default ? ' (predefinito)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Oppure modifica i campi sotto. <Link href="/profile/addresses" className="text-indigo-600 hover:underline">Gestisci indirizzi</Link>
+                </p>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-4" id="checkout-form">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome e cognome</label>
@@ -406,6 +516,44 @@ export default function CheckoutPage() {
               ))}
             </div>
 
+            {/* Coupon input */}
+            <div className="px-5 py-3 border-t bg-gray-50/50">
+              {appliedCoupon ? (
+                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded px-3 py-2 text-sm">
+                  <span className="text-emerald-800">
+                    ✓ <strong>{appliedCoupon.coupon.code}</strong> applicato (−{formatPrice(appliedCoupon.discount)})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setAppliedCoupon(null); setCouponCode(''); }}
+                    className="text-rose-600 hover:underline text-xs"
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => { setCouponCode(e.target.value); setCouponError(null); }}
+                      placeholder="Codice sconto (es. BENVENUTO10)"
+                      className="flex-1 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyCoupon}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded text-sm font-semibold"
+                    >
+                      Applica
+                    </button>
+                  </div>
+                  {couponError && <p className="text-xs text-rose-600">{couponError}</p>}
+                </div>
+              )}
+            </div>
+
             <div className="px-5 py-4 space-y-2 border-t bg-gray-50/50 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Subtotale</span>
@@ -417,6 +565,12 @@ export default function CheckoutPage() {
                   {grandShipping === 0 ? 'GRATUITA' : formatPrice(grandShipping)}
                 </span>
               </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-emerald-700">
+                  <span>Sconto codice</span>
+                  <span className="font-semibold">−{formatPrice(discount)}</span>
+                </div>
+              )}
               <div className="flex justify-between pt-2 border-t font-bold text-lg">
                 <span>Totale</span>
                 <span className="text-indigo-700">{formatPrice(grandTotal)}</span>

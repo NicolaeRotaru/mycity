@@ -6,6 +6,7 @@ import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
+import { useFavorites } from './hooks/useFavorites';
 
 interface ProductCardProps {
   id: string;
@@ -26,12 +27,25 @@ const ProductCard = ({
   stock, createdAt, storeName, sellerId,
 }: ProductCardProps) => {
   const img = images?.[0] ?? 'https://placehold.co/400x400/eef2ff/6366f1?text=Foto';
+  const { favorites, toggle } = useFavorites();
+  const isFav = favorites.has(id);
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     addToCart({ id, name, price, image: img, sellerId, storeName });
     toast.success(`${name} aggiunto al carrello`, { duration: 2000 });
+  };
+
+  const handleFav = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggle.mutate(id, {
+      onError: (err: any) => {
+        if (err?.message === 'AUTH_REQUIRED') toast.error('Accedi per salvare nei preferiti');
+        else toast.error('Errore');
+      },
+    });
   };
 
   const isNew = createdAt
@@ -65,7 +79,7 @@ const ProductCard = ({
         )}
       </div>
 
-      {/* Immagine */}
+      {/* Immagine + favorite button */}
       <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
         <Image
           src={img}
@@ -74,6 +88,16 @@ const ProductCard = ({
           className="object-cover group-hover:scale-110 transition-transform duration-300"
           unoptimized
         />
+        <button
+          type="button"
+          onClick={handleFav}
+          aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-white/90 hover:bg-white shadow flex items-center justify-center text-lg transition-transform hover:scale-110"
+        >
+          <span className={isFav ? 'text-rose-500' : 'text-gray-300'}>
+            {isFav ? '♥' : '♡'}
+          </span>
+        </button>
       </div>
 
       <div className="p-3 flex flex-col flex-1">

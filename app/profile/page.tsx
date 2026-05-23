@@ -81,21 +81,26 @@ export default function ProfilePage() {
     <div className="container mx-auto px-6 py-8 max-w-3xl">
       <h1 className="text-2xl font-bold mb-6">Il tuo account</h1>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <Link href="/orders" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">📦</div>
           <h3 className="font-bold">I tuoi ordini</h3>
-          <p className="text-sm text-gray-500">Traccia, restituisci e ripeti gli acquisti</p>
+          <p className="text-sm text-gray-500 hidden sm:block">Traccia e ripeti</p>
         </Link>
-        <Link href="/seller/dashboard" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">🏪</div>
-          <h3 className="font-bold">Area venditore</h3>
-          <p className="text-sm text-gray-500">Gestisci il tuo negozio</p>
+        <Link href="/favorites" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="text-3xl mb-2">♥</div>
+          <h3 className="font-bold">Preferiti</h3>
+          <p className="text-sm text-gray-500 hidden sm:block">I tuoi prodotti salvati</p>
+        </Link>
+        <Link href="/profile/addresses" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
+          <div className="text-3xl mb-2">📍</div>
+          <h3 className="font-bold">Indirizzi</h3>
+          <p className="text-sm text-gray-500 hidden sm:block">Casa, ufficio…</p>
         </Link>
         <Link href="/cart" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">🛒</div>
-          <h3 className="font-bold">Il tuo carrello</h3>
-          <p className="text-sm text-gray-500">Articoli in attesa</p>
+          <h3 className="font-bold">Carrello</h3>
+          <p className="text-sm text-gray-500 hidden sm:block">Articoli in attesa</p>
         </Link>
       </div>
 

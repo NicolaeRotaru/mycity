@@ -3,9 +3,12 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import DeliveryMap, { MapPoint } from '@/components/DeliveryMap';
 import { formatPrice, formatDate } from '@/lib/format';
+import { addToCart, clearCart } from '@/lib/cart';
+import { toast } from 'sonner';
 import {
   BUYER_TIMELINE,
   ORDER_STATUS_EMOJI,
@@ -48,10 +51,12 @@ type OrderRow = {
     store_lng: number | null;
   } | null;
   rider: { full_name: string | null } | null;
+  seller_id: string | null;
   order_items: {
     id: string;
     quantity: number;
     unit_price: number;
+    product_id: string | null;
     products: { name: string; images: string[] | null } | null;
   }[];
 };
@@ -67,8 +72,9 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
       rider_lat, rider_lng, rider_position_updated_at, rider_id,
       seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_phone, store_address, store_lat, store_lng ),
       rider:profiles!orders_rider_id_fkey ( full_name ),
+      seller_id,
       order_items (
-        id, quantity, unit_price,
+        id, quantity, unit_price, product_id,
         products ( name, images )
       )
     `)
@@ -80,6 +86,7 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
 
 export default function BuyerOrderDetailPage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const router = useRouter();
 
   const { data: order, isLoading, refetch } = useQuery({
     queryKey: ['order', id],
@@ -119,6 +126,27 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
   }
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
+  const isDelivered = status === 'DELIVERED';
+
+  const handleReorder = () => {
+    clearCart();
+    let added = 0;
+    for (const it of order.order_items) {
+      if (!it.product_id || !it.products?.name) continue;
+      addToCart({
+        id: it.product_id,
+        name: it.products.name,
+        price: Number(it.unit_price),
+        image: it.products.images?.[0],
+        quantity: it.quantity,
+        sellerId: order.seller_id ?? undefined,
+        storeName: order.seller?.store_name ?? undefined,
+      });
+      added++;
+    }
+    toast.success(`${added} articoli aggiunti al carrello!`);
+    router.push('/cart');
+  };
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl space-y-6">
@@ -136,6 +164,28 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
           {ORDER_STATUS_LABEL[status]}
         </span>
       </div>
+
+      {isDelivered && (
+        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-emerald-800 font-medium">
+            ✅ Ordine consegnato! Com'è andata?
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <Link
+              href={`/orders/${id}/review`}
+              className="bg-amber-400 hover:bg-amber-500 text-gray-900 px-4 py-2 rounded-lg font-semibold text-sm"
+            >
+              ⭐ Lascia recensione
+            </Link>
+            <button
+              onClick={handleReorder}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm"
+            >
+              🔁 Ripeti ordine
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* TIMELINE */}
       <div className="bg-white border border-gray-200 rounded-xl p-6">
