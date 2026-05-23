@@ -538,6 +538,7 @@ export default function CheckoutPage() {
                           alt={item.name}
                           fill
                           sizes="40px"
+                          unoptimized
                           className="object-cover"
                         />
                       </div>

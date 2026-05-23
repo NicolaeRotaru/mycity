@@ -86,6 +86,7 @@ export default function SellerProductsPage() {
                           alt={p.name}
                           fill
                           sizes="48px"
+                          unoptimized
                           className="object-cover rounded"
                         />
                       </div>

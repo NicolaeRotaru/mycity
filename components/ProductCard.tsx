@@ -88,6 +88,7 @@ const ProductCard = ({
           fill
           sizes="(min-width: 1024px) 240px, (min-width: 640px) 33vw, 50vw"
           loading="lazy"
+          unoptimized
           className="object-cover group-hover:scale-110 transition-transform duration-300"
         />
         <button
