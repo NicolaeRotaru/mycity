@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import SellerSidebar from '@/components/SellerSidebar';
 import { useProfile } from '@/components/hooks/useProfile';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
@@ -32,8 +31,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div className="container mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
-      <SellerSidebar />
+    <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-6xl">
       <main>{children}</main>
     </div>
   );
