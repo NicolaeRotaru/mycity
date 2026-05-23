@@ -138,28 +138,33 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
           </span>
         </div>
 
-        {/* Preview prodotti */}
+        {/* Preview prodotti — nome + prezzo */}
         {showPreview && (
           <div className="grid grid-cols-4 gap-1.5 mb-3">
             {products.slice(0, 4).map((p) => (
-              <div
-                key={p.id}
-                className="aspect-square rounded-lg overflow-hidden bg-gray-100 relative"
-              >
-                {p.images?.[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={p.images[0]}
-                    alt={p.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-300 text-xl">📦</div>
-                )}
-                <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[10px] font-bold py-0.5 text-center backdrop-blur">
+              <div key={p.id} className="min-w-0">
+                <div className="aspect-square rounded-lg overflow-hidden bg-gray-100 mb-1">
+                  {p.images?.[0] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.images[0]}
+                      alt={p.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-300 text-xl">📦</div>
+                  )}
+                </div>
+                <p
+                  className="text-[10px] leading-tight text-gray-700 line-clamp-2 min-h-[2.2em]"
+                  title={p.name}
+                >
+                  {p.name}
+                </p>
+                <p className="text-[11px] font-bold text-gray-900 leading-none mt-0.5">
                   {formatPrice(p.price)}
-                </span>
+                </p>
               </div>
             ))}
           </div>
