@@ -78,9 +78,8 @@ const SOCIALS = [
 ];
 
 const Footer = () => {
-  const { isSeller, isBuyer, isRider, isAuthenticated, isLoading } = useProfile();
+  const { isSeller, isRider, isAuthenticated } = useProfile();
   const isSellerArea = isSeller || isRider;
-  const isAuthUnknownRole = isAuthenticated && !isBuyer && !isSeller && !isRider;
 
   return (
     <footer className="bg-gray-900 text-gray-300 mt-12">
@@ -194,44 +193,6 @@ const Footer = () => {
         </div>
       </div>
 
-      {/* Account quick-links */}
-      <div className="border-t border-gray-800">
-        <div className="container mx-auto px-6 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {!isAuthenticated && !isLoading && (
-              <>
-                <Link href="/sign-in" className="hover:text-white transition-colors">🔑 Accedi</Link>
-                <Link href="/sign-up" className="hover:text-white transition-colors">✨ Registrati</Link>
-              </>
-            )}
-            {isAuthUnknownRole && (
-              <Link href="/profile" className="hover:text-white transition-colors">👤 Il tuo account</Link>
-            )}
-            {isBuyer && (
-              <>
-                <Link href="/profile" className="hover:text-white transition-colors">👤 Account</Link>
-                <Link href="/orders" className="hover:text-white transition-colors">📦 Ordini</Link>
-                <Link href="/favorites" className="hover:text-white transition-colors">♥ Preferiti</Link>
-                <Link href="/cart" className="hover:text-white transition-colors">🛒 Carrello</Link>
-                <Link href="/profile/settings" className="hover:text-white transition-colors">⚙️ Impostazioni</Link>
-              </>
-            )}
-            {isSellerArea && (
-              <>
-                <Link href="/seller/profile" className="hover:text-white transition-colors">🏪 Profilo negozio</Link>
-                <Link href="/seller/orders" className="hover:text-white transition-colors">📦 Ordini ricevuti</Link>
-                <Link href="/profile/settings" className="hover:text-white transition-colors">⚙️ Impostazioni</Link>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-3 text-gray-400 text-xs">
-            <span title="Email">📧 info@mycity.it</span>
-            <span title="Orari">📞 Lun–Ven 9–18</span>
-            <span title="Sede">🏘️ Piacenza, IT</span>
-          </div>
-        </div>
-      </div>
-
       {/* Newsletter */}
       {!isSellerArea && (
         <div className="border-t border-gray-800 bg-gray-950">
@@ -241,7 +202,7 @@ const Footer = () => {
         </div>
       )}
 
-      {/* Trust strip */}
+      {/* Trust strip + contatti compatti */}
       <div className="border-t border-gray-800">
         <div className="container mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-400">
           <div className="flex items-center gap-4 flex-wrap justify-center">
@@ -250,9 +211,10 @@ const Footer = () => {
             <span className="flex items-center gap-1">🔒 Acquisto sicuro</span>
             <span className="flex items-center gap-1">↩️ Reso entro 14 giorni</span>
           </div>
-          <div className="flex items-center gap-2 text-gray-500">
-            <span title="Visa">💳</span>
-            <span>Carta · Contanti · PayPal*</span>
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-gray-500 justify-center">
+            <a href="mailto:info@mycity.it" className="hover:text-gray-300 transition-colors">📧 info@mycity.it</a>
+            <span>📞 Lun–Ven 9–18</span>
+            <span>🏘️ Piacenza, IT</span>
           </div>
         </div>
       </div>
