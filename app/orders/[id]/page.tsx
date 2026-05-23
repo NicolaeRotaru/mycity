@@ -110,29 +110,10 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
     };
   }, [id, refetch]);
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
-  if (!order) return <div className="container mx-auto p-8 text-center text-gray-500">Ordine non trovato.</div>;
-
-  const status = order.delivery_status;
-  const c = ORDER_STATUS_COLOR[status];
-
-  const points: MapPoint[] = [];
-  if (order.seller?.store_lat && order.seller?.store_lng) {
-    points.push({ lat: order.seller.store_lat, lng: order.seller.store_lng, label: 'Negozio', color: 'indigo' });
-  }
-  if (order.delivery_lat && order.delivery_lng) {
-    points.push({ lat: order.delivery_lat, lng: order.delivery_lng, label: 'Casa tua', color: 'rose' });
-  }
-  if (order.rider_lat && order.rider_lng && status !== 'DELIVERED' && status !== 'CANCELED') {
-    points.push({ lat: order.rider_lat, lng: order.rider_lng, label: 'Rider', color: 'amber' });
-  }
-
-  const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
-  const isDelivered = status === 'DELIVERED';
-  const isCancellable = status === 'NEW';
+  // Tutti gli hook DEVONO stare prima degli early return (Rules of Hooks)
+  const status = order?.delivery_status;
   const showDeliveryCode = status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY';
 
-  // Codice consegna: visibile solo al buyer (via RLS) e solo quando il rider e' in arrivo
   const { data: deliveryCode } = useQuery({
     queryKey: ['delivery-code', id],
     enabled: showDeliveryCode,
@@ -163,6 +144,26 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
     },
     onError: (err: any) => toast.error(err.message),
   });
+
+  if (isLoading) return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
+  if (!order || !status) return <div className="container mx-auto p-8 text-center text-gray-500">Ordine non trovato.</div>;
+
+  const c = ORDER_STATUS_COLOR[status];
+
+  const points: MapPoint[] = [];
+  if (order.seller?.store_lat && order.seller?.store_lng) {
+    points.push({ lat: order.seller.store_lat, lng: order.seller.store_lng, label: 'Negozio', color: 'indigo' });
+  }
+  if (order.delivery_lat && order.delivery_lng) {
+    points.push({ lat: order.delivery_lat, lng: order.delivery_lng, label: 'Casa tua', color: 'rose' });
+  }
+  if (order.rider_lat && order.rider_lng && status !== 'DELIVERED' && status !== 'CANCELED') {
+    points.push({ lat: order.rider_lat, lng: order.rider_lng, label: 'Rider', color: 'amber' });
+  }
+
+  const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
+  const isDelivered = status === 'DELIVERED';
+  const isCancellable = status === 'NEW';
 
   const handleReorder = () => {
     clearCart();
