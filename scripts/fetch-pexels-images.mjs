@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Genera supabase/migrations/20240101010003_seed_pexels_images.sql con vere foto Pexels SPECIFICHE per ogni prodotto.
+// Genera seeds/003_pexels_images.sql con vere foto Pexels SPECIFICHE per ogni prodotto.
 //
 // Uso:
 //   PEXELS_API_KEY=xxx node scripts/fetch-pexels-images.mjs
@@ -424,7 +424,7 @@ async function fetchPexels(query) {
 }
 
 async function main() {
-  const sqlFile = path.resolve('supabase/migrations/20240101010001_seed_piacenza_stores.sql');
+  const sqlFile = path.resolve('seeds/001_piacenza_stores.sql');
   const raw = await fs.readFile(sqlFile, 'utf-8');
   const sellerNames = Object.keys(SELLERS).join('|');
   const productRe = new RegExp(`\\((${sellerNames}),\\s*c_\\w+,\\s*'((?:[^']|'')+)'`, 'g');
@@ -485,7 +485,7 @@ async function main() {
   }
   lines.push('END $$;', '', "NOTIFY pgrst, 'reload schema';", '');
 
-  const outPath = path.resolve('supabase/migrations/20240101010003_seed_pexels_images.sql');
+  const outPath = path.resolve('seeds/003_pexels_images.sql');
   await fs.writeFile(outPath, lines.join('\n'));
   console.log(`\nScritto ${outPath} con ${written} UPDATE.`);
 }
