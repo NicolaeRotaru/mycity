@@ -1,5 +1,6 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
+import type { Metadata, Viewport } from 'next';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import QueryProvider from '@/components/providers/QueryProvider';
@@ -7,12 +8,11 @@ import ToastProvider from '@/components/providers/ToastProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
   description:
     'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 24-48h, pagamento alla consegna.',
   manifest: '/manifest.json',
-  themeColor: '#4f46e5',
   icons: {
     icon: '/icon-192.svg',
     apple: '/icon-192.svg',
@@ -25,7 +25,7 @@ export const metadata = {
   },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
