@@ -71,6 +71,11 @@ const nextConfig = {
   },
   experimental: {
     optimizePackageImports: ['lucide-react', 'sonner', '@tanstack/react-query'],
+    // pdfkit + fontkit + restructure hanno dipendenze native (iconv-lite,
+    // brotli, ecc.) che webpack non riesce a bundlare lato server. Le
+    // teniamo "external": Next le importa direttamente da node_modules a
+    // runtime (server-only), niente warning di build.
+    serverComponentsExternalPackages: ['pdfkit', 'fontkit', 'restructure'],
   },
   async headers() {
     return [
