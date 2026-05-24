@@ -10,7 +10,13 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   const { profile, isAuthenticated, isLoading, isSeller, isAdmin, isBuyer, isRider } = useProfile();
   const isApproved = !!profile?.is_approved;
   const allowed = (isSeller && isApproved) || isAdmin;
-  const pending = isSeller && !isApproved;
+  const approvalStatus = (profile as any)?.approval_status as string | undefined;
+  const isPending   = isSeller && approvalStatus === 'pending';
+  const isSuspended = isSeller && approvalStatus === 'suspended';
+  const isRejected  = isSeller && approvalStatus === 'rejected';
+  // Fallback per database senza migration 021/022: se non c'e' status,
+  // un seller non approvato e' trattato come pending
+  const pending = isSeller && !isApproved && !isSuspended && !isRejected;
   const wrongRole = isAuthenticated && !isSeller && !isAdmin; // buyer o rider qui
 
   useEffect(() => {
@@ -61,7 +67,61 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  if (pending) {
+  if (isSuspended) {
+    return (
+      <div className="container mx-auto p-6 max-w-2xl">
+        <div className="bg-white border-2 border-orange-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-orange-100 flex items-center justify-center text-4xl mb-4">
+            ⏸️
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Negozio temporaneamente sospeso</h1>
+          <p className="text-gray-600 mb-4 max-w-md mx-auto">
+            Un amministratore ha sospeso il tuo negozio. La vendita è bloccata fino a quando non verrà riattivato.
+            Contatta il supporto per chiarimenti.
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
+            <Link href="/contact" className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-bold shadow">
+              ✉️ Contatta il supporto
+            </Link>
+            <Link href="/?as=buyer" className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold">
+              🏠 Vai al marketplace
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isRejected) {
+    return (
+      <div className="container mx-auto p-6 max-w-2xl">
+        <div className="bg-white border-2 border-rose-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-rose-100 flex items-center justify-center text-4xl mb-4">
+            ❌
+          </div>
+          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Richiesta non approvata</h1>
+          {(profile as any)?.rejection_reason && (
+            <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 max-w-md mx-auto mb-3">
+              <strong>Motivo:</strong> {(profile as any).rejection_reason}
+            </p>
+          )}
+          <p className="text-gray-600 mb-4 max-w-md mx-auto">
+            La tua candidatura come venditore non è stata approvata. Puoi correggere i dati e ripresentare la richiesta.
+          </p>
+          <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
+            <Link href="/sell" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold shadow">
+              ✏️ Ripresenta la richiesta
+            </Link>
+            <Link href="/?as=buyer" className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold">
+              🏠 Vai al marketplace
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isPending || pending) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="bg-white border-2 border-amber-200 rounded-2xl p-8 text-center">

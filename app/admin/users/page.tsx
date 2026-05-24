@@ -40,9 +40,10 @@ const ROLE_LABELS: Record<string, { label: string; color: string; emoji: string 
 };
 
 const APPROVAL_LABELS: Record<string, { label: string; color: string }> = {
-  pending:  { label: 'In attesa',  color: 'bg-yellow-100 text-yellow-800' },
-  approved: { label: 'Approvato',  color: 'bg-emerald-100 text-emerald-800' },
-  rejected: { label: 'Rifiutato',  color: 'bg-rose-100 text-rose-800' },
+  pending:   { label: 'In attesa',  color: 'bg-yellow-100 text-yellow-800' },
+  approved:  { label: 'Approvato',  color: 'bg-emerald-100 text-emerald-800' },
+  rejected:  { label: 'Rifiutato',  color: 'bg-rose-100 text-rose-800' },
+  suspended: { label: 'Sospeso',    color: 'bg-orange-100 text-orange-800' },
 };
 
 function AdminUsersPageInner() {
@@ -144,6 +145,31 @@ function AdminUsersPageInner() {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const reactivate = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('profiles').update({
+        is_approved: true,
+        approval_status: 'approved',
+        rejection_reason: null,
+        approved_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+      await supabase.from('notifications').insert({
+        user_id: id,
+        type: 'seller_reactivated',
+        title: '✅ Negozio riattivato',
+        body: 'Il tuo negozio è di nuovo operativo. Puoi tornare a vendere su MyCity.',
+        link: '/seller/dashboard',
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-stats'] });
+      toast.success('Negozio riattivato');
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const deleteAccount = useMutation({
     mutationFn: async (id: string) => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -169,10 +195,17 @@ function AdminUsersPageInner() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('profiles').update({
         is_approved: false,
-        approval_status: 'rejected',
-        rejection_reason: 'Sospeso da admin',
+        approval_status: 'suspended',
+        rejection_reason: null,
       }).eq('id', id);
       if (error) throw error;
+      await supabase.from('notifications').insert({
+        user_id: id,
+        type: 'seller_suspended',
+        title: '⏸️ Negozio sospeso',
+        body: 'Il tuo negozio è stato temporaneamente sospeso da un amministratore. Contatta il supporto per chiarimenti.',
+        link: '/contact',
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-users'] });
@@ -291,7 +324,10 @@ function AdminUsersPageInner() {
             ) : filtered.map((p) => {
               const r = ROLE_LABELS[p.role] ?? ROLE_LABELS.buyer;
               const a = p.approval_status ? APPROVAL_LABELS[p.approval_status] : null;
-              const isPending = p.role === 'seller' && p.approval_status === 'pending';
+              const isSeller    = p.role === 'seller';
+              const isPending   = isSeller && p.approval_status === 'pending';
+              const isApproved  = isSeller && p.approval_status === 'approved' && p.is_approved;
+              const isSuspended = isSeller && p.approval_status === 'suspended';
               return (
                 <tr key={p.id} className="border-t hover:bg-gray-50">
                   <td className="p-3">
@@ -323,21 +359,39 @@ function AdminUsersPageInner() {
                           Esamina
                         </button>
                       )}
-                      {!isPending && p.role === 'seller' && p.is_approved && (
+                      {isApproved && (
                         <button
                           onClick={async () => {
                             const ok = await confirmDialog({
                               title: 'Sospendere il negozio?',
-                              message: `${p.store_name ?? 'Il venditore'} non potrà più operare finché non lo riapprovi.`,
-                              confirmLabel: 'Sospendi',
+                              message: `${p.store_name ?? 'Il venditore'} non potrà più operare finché non lo riattiverai. È diverso dal rifiuto: la richiesta resta valida e basta cliccare "Riattiva" per farlo tornare online.`,
+                              confirmLabel: 'Sì, sospendi',
+                              cancelLabel: 'Annulla',
                               danger: true,
                               icon: '⏸️',
                             });
                             if (ok) suspend.mutate(p.id);
                           }}
-                          className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 px-2 py-1 rounded"
+                          className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-800 px-2 py-1 rounded font-semibold"
                         >
                           Sospendi
+                        </button>
+                      )}
+                      {isSuspended && (
+                        <button
+                          onClick={async () => {
+                            const ok = await confirmDialog({
+                              title: 'Riattivare il negozio?',
+                              message: `${p.store_name ?? 'Il venditore'} tornerà operativo immediatamente e riceverà una notifica.`,
+                              confirmLabel: 'Sì, riattiva',
+                              cancelLabel: 'Annulla',
+                              icon: '▶️',
+                            });
+                            if (ok) reactivate.mutate(p.id);
+                          }}
+                          className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded font-semibold"
+                        >
+                          Riattiva
                         </button>
                       )}
                       {p.role !== 'admin' && (
