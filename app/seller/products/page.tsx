@@ -110,9 +110,15 @@ export default function SellerProductsPage() {
                     </span>
                   </td>
                   <td className="p-3 text-right space-x-2 whitespace-nowrap">
+                    <Link
+                      href={`/seller/products/${p.id}/edit`}
+                      className="text-indigo-600 hover:underline font-semibold"
+                    >
+                      Modifica
+                    </Link>
                     <button
                       onClick={() => toggleStatus.mutate({ id: p.id, status: p.status })}
-                      className="text-indigo-600 hover:underline"
+                      className="text-gray-700 hover:underline"
                     >
                       {p.status === 'available' ? 'Disattiva' : 'Attiva'}
                     </button>
