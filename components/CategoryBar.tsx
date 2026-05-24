@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { Store } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
 type Category = { id: string; slug: string; name: string; icon: string | null };
@@ -23,28 +24,32 @@ const CategoryBar = () => {
   });
 
   return (
-    <div className="bg-gray-800 border-t border-gray-700 relative">
-      <div className="container mx-auto px-4 flex items-center gap-5 overflow-x-auto scrollbar-hide py-2.5 text-sm">
+    <div className="bg-white border-b border-gray-200 relative">
+      <div className="container mx-auto px-4 flex items-center gap-1 overflow-x-auto scrollbar-hide py-2 text-sm">
         <Link
           href="/stores"
-          className="text-white hover:text-indigo-300 whitespace-nowrap font-semibold py-1 shrink-0"
+          className="flex items-center gap-1.5 text-gray-900 hover:text-indigo-600 whitespace-nowrap font-semibold px-3 py-1.5 rounded-md hover:bg-indigo-50 shrink-0 transition-colors"
         >
-          🏪 Tutti i negozi
+          <Store size={16} strokeWidth={2} />
+          Tutti i negozi
         </Link>
+        <span aria-hidden className="w-px h-5 bg-gray-200 mx-1 shrink-0" />
         {categories.map((c) => (
           <Link
             key={c.id}
             href={`/category/${c.slug}`}
-            className="text-gray-200 hover:text-white whitespace-nowrap py-1 shrink-0"
+            className="text-gray-600 hover:text-indigo-700 hover:bg-gray-50 whitespace-nowrap px-3 py-1.5 rounded-md shrink-0 transition-colors font-medium"
           >
-            {c.icon} {c.name}
+            {/* Le icone delle categorie sono editabili da admin per categoria,
+                quindi le lasciamo come emoji — sono "contenuto", non UI chrome */}
+            {c.icon && <span className="mr-1">{c.icon}</span>}
+            {c.name}
           </Link>
         ))}
       </div>
-      {/* Sfumatura sul bordo destro: suggerisce che c'è altro contenuto scorribile */}
       <div
         aria-hidden
-        className="pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-gray-800 to-transparent sm:hidden"
+        className="pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-white to-transparent sm:hidden"
       />
     </div>
   );

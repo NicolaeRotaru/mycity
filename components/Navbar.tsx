@@ -3,6 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import {
+  Bell, ShoppingCart, Package, Bike, Shield, Menu as MenuIcon,
+  Search, LogOut, Store, Truck, Banknote, MapPin, Zap,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
@@ -161,9 +165,9 @@ const NavMenu = ({ role, isAuthenticated, onSignOut }: {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-label="Menu di navigazione"
-        className="flex items-center gap-1 bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg font-semibold whitespace-nowrap"
+        className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg font-semibold whitespace-nowrap"
       >
-        <span className="text-lg leading-none">≡</span>
+        <MenuIcon size={18} strokeWidth={2.2} />
         <span className="text-sm">Menu</span>
       </button>
       {open && (
@@ -206,7 +210,7 @@ const NavMenu = ({ role, isAuthenticated, onSignOut }: {
                     onClick={() => { setOpen(false); onSignOut(); }}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50"
                   >
-                    <span className="text-lg">↪</span>
+                    <LogOut size={16} strokeWidth={2} />
                     <span className="font-medium">Esci</span>
                   </button>
                 </li>
@@ -238,10 +242,10 @@ const SearchForm = ({ className = '', onSubmit, q, setQ }: {
       />
       <button
         type="submit"
-        className="bg-indigo-500 hover:bg-indigo-600 px-4 py-2 rounded-r-md font-semibold shrink-0"
+        className="bg-indigo-600 hover:bg-indigo-700 px-4 rounded-r-md font-semibold shrink-0 flex items-center justify-center text-white"
         aria-label="Cerca"
       >
-        🔍
+        <Search size={18} strokeWidth={2.2} />
       </button>
     </div>
   </form>
@@ -301,6 +305,7 @@ const Navbar = () => {
         </div>
       );
     }
+    const initial = displayName?.[0]?.toUpperCase() ?? '?';
     return (
       <Link
         href={profileHref}
@@ -309,12 +314,12 @@ const Navbar = () => {
       >
         <span
           className={`${
-            isSeller ? 'bg-pink-500/20 border-pink-400/40' :
-            isRider  ? 'bg-amber-500/20 border-amber-400/40' :
-                        'bg-indigo-500/20 border-indigo-400/40'
-          } w-9 h-9 rounded-full border flex items-center justify-center text-sm font-bold uppercase shrink-0`}
+            isSeller ? 'bg-pink-500/15 ring-pink-400/30 text-pink-300' :
+            isRider  ? 'bg-amber-500/15 ring-amber-400/30 text-amber-300' :
+                        'bg-indigo-500/15 ring-indigo-400/30 text-indigo-300'
+          } w-9 h-9 rounded-full ring-1 flex items-center justify-center text-sm font-bold uppercase shrink-0`}
         >
-          {isSeller ? '🏪' : isRider ? '🛵' : (displayName?.[0] ?? '?')}
+          {isSeller ? <Store size={16} strokeWidth={2.2} /> : isRider ? <Bike size={16} strokeWidth={2.2} /> : initial}
         </span>
         {!compact && (
           <span className="hidden sm:flex flex-col leading-tight">
@@ -331,7 +336,7 @@ const Navbar = () => {
   const AdminLink = () =>
     isAdmin ? (
       <Link href="/admin" title="Admin" className="hidden md:flex items-center gap-1.5 hover:text-rose-300 transition-colors text-sm">
-        <span className="text-xl">🛡️</span>
+        <Shield size={18} strokeWidth={2} />
         <span>Admin</span>
       </Link>
     ) : null;
@@ -343,9 +348,9 @@ const Navbar = () => {
         title="Notifiche"
         className="relative flex items-center hover:text-indigo-300 transition-colors"
       >
-        <span className="text-xl">🔔</span>
+        <Bell size={20} strokeWidth={2} />
         {notifCount > 0 && (
-          <span className="absolute -top-1.5 -right-2 bg-pink-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+          <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
             {notifCount > 99 ? '99+' : notifCount}
           </span>
         )}
@@ -359,7 +364,7 @@ const Navbar = () => {
         title={isSeller ? 'Ordini ricevuti' : isRider ? 'Consegne' : 'I tuoi ordini'}
         className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors text-sm"
       >
-        <span className="text-xl">{isRider ? '🛵' : '📦'}</span>
+        {isRider ? <Bike size={20} strokeWidth={2} /> : <Package size={20} strokeWidth={2} />}
         <span className="hidden md:inline">{isRider ? 'Consegne' : 'Ordini'}</span>
       </Link>
     ) : null;
@@ -369,11 +374,11 @@ const Navbar = () => {
       <Link
         href="/cart"
         title="Carrello"
-        className="relative flex items-center gap-1 hover:text-indigo-300 transition-colors text-sm"
+        className="relative flex items-center gap-1.5 hover:text-indigo-300 transition-colors text-sm"
       >
-        <span className="text-xl">🛒</span>
+        <ShoppingCart size={20} strokeWidth={2} />
         {cartCount > 0 && (
-          <span className="absolute -top-2 -right-3 bg-pink-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+          <span className="absolute -top-2 -right-3 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
             {cartCount}
           </span>
         )}
@@ -382,20 +387,32 @@ const Navbar = () => {
     ) : null;
 
   return (
-    <header className="sticky top-0 z-50 shadow-lg">
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white text-xs sm:text-sm">
-        <div className="container mx-auto px-4 py-1.5 flex items-center justify-start sm:justify-center gap-6 overflow-x-auto scrollbar-hide whitespace-nowrap font-medium">
-          <span className="shrink-0">🚚 Spedizione GRATUITA sopra €30</span>
-          <span className="shrink-0">💰 Pagamento alla consegna</span>
-          <span className="shrink-0">🏘️ Venditori 100% locali</span>
-          <span className="shrink-0">⚡ Consegna in 24-48h</span>
+    <header className="sticky top-0 z-50 shadow-sm">
+      <div className="bg-gray-950 text-gray-200 text-xs sm:text-sm border-b border-gray-800">
+        <div className="container mx-auto px-4 py-2 flex items-center justify-start sm:justify-center gap-6 overflow-x-auto scrollbar-hide whitespace-nowrap">
+          <span className="flex items-center gap-1.5 shrink-0">
+            <Truck size={14} strokeWidth={2} className="text-indigo-400" />
+            <span className="font-medium">Spedizione gratuita sopra €30</span>
+          </span>
+          <span className="flex items-center gap-1.5 shrink-0">
+            <Banknote size={14} strokeWidth={2} className="text-indigo-400" />
+            <span className="font-medium">Pagamento alla consegna</span>
+          </span>
+          <span className="flex items-center gap-1.5 shrink-0">
+            <MapPin size={14} strokeWidth={2} className="text-indigo-400" />
+            <span className="font-medium">Venditori 100% locali</span>
+          </span>
+          <span className="flex items-center gap-1.5 shrink-0">
+            <Zap size={14} strokeWidth={2} className="text-indigo-400" />
+            <span className="font-medium">Consegna in 24-48h</span>
+          </span>
         </div>
       </div>
       <div className="bg-gray-900 text-white">
         {/* MOBILE */}
         <div className="md:hidden">
           <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-3">
-            <Link href="/" className="text-xl font-extrabold whitespace-nowrap">
+            <Link href="/" className="text-xl font-bold tracking-tight whitespace-nowrap">
               <span className="text-indigo-400">My</span>City
             </Link>
             <div className="flex items-center gap-4">
@@ -414,7 +431,7 @@ const Navbar = () => {
         {/* DESKTOP */}
         <div className="hidden md:block">
           <div className="container mx-auto flex items-center gap-4 px-4 py-3">
-            <Link href="/" className="text-2xl font-extrabold whitespace-nowrap">
+            <Link href="/" className="text-2xl font-bold tracking-tight whitespace-nowrap">
               <span className="text-indigo-400">My</span>City
             </Link>
             <NavMenu role={role} isAuthenticated={isAuthenticated} onSignOut={handleSignOut} />

@@ -3,6 +3,7 @@
 import { memo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Heart, ShoppingCart, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -66,18 +67,18 @@ const ProductCard = ({
       {/* Badges in alto a sinistra */}
       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
         {isNew && (
-          <span className="bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+          <span className="bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
             Nuovo
           </span>
         )}
         {isOutOfStock && (
-          <span className="bg-gray-700 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+          <span className="bg-gray-700 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
             Esaurito
           </span>
         )}
         {isLowStock && !isOutOfStock && (
-          <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
-            Ultimi {stock}!
+          <span className="bg-rose-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
+            Ultimi {stock}
           </span>
         )}
       </div>
@@ -97,11 +98,13 @@ const ProductCard = ({
           type="button"
           onClick={handleFav}
           aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
-          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-white/90 hover:bg-white shadow flex items-center justify-center text-lg transition-transform hover:scale-110"
+          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-white/95 hover:bg-white shadow flex items-center justify-center transition-transform hover:scale-110"
         >
-          <span className={isFav ? 'text-rose-500' : 'text-gray-300'}>
-            {isFav ? '♥' : '♡'}
-          </span>
+          <Heart
+            size={16}
+            strokeWidth={2}
+            className={isFav ? 'text-rose-500 fill-rose-500' : 'text-gray-400'}
+          />
         </button>
       </div>
 
@@ -130,20 +133,28 @@ const ProductCard = ({
         )}
 
         <div className="mt-auto pt-2">
-          <div className="flex items-baseline gap-2 mb-2">
-            <span className="text-xl font-extrabold text-gray-900">{formatPrice(price)}</span>
+          <div className="flex items-baseline gap-2 mb-2 flex-wrap">
+            <span className="text-xl font-bold text-gray-900">{formatPrice(price)}</span>
             {freeShipping && (
-              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                SPED. GRATIS
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+                <Truck size={10} strokeWidth={2.4} />
+                Sped. gratis
               </span>
             )}
           </div>
           <button
             onClick={handleAdd}
             disabled={isOutOfStock}
-            className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-gray-900 text-xs font-bold py-2 rounded-full transition-colors shadow-sm"
+            className="w-full inline-flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-indigo-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white text-xs font-semibold py-2 rounded-lg transition-colors"
           >
-            {isOutOfStock ? 'Non disponibile' : '🛒 Aggiungi al carrello'}
+            {isOutOfStock ? (
+              'Non disponibile'
+            ) : (
+              <>
+                <ShoppingCart size={14} strokeWidth={2.2} />
+                Aggiungi al carrello
+              </>
+            )}
           </button>
         </div>
       </div>
