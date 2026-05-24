@@ -1,20 +1,16 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
 
-// NOTA IMPORTANTE
-// ----------------
-// In questa app il client Supabase usa localStorage (default), quindi la
-// sessione NON viaggia nei cookie HTTP. Il middleware non può quindi
-// verificarla in modo affidabile lato server.
-//
-// Per non rompere la navigazione, il middleware funziona in modalità
-// "defense-in-depth": se trova un cookie Supabase valido e l'utente non
-// ha i permessi giusti, blocca; altrimenti lascia passare e si affida al
-// check client-side nei layout di /admin, /seller, /rider.
-//
-// Per protezione server-side reale, in futuro: switch a `@supabase/ssr`
-// con `createServerClient` (sessione in cookie firmati) e poi questo
-// middleware potrà essere strict.
+/**
+ * Middleware strict: il client browser usa @supabase/ssr, la sessione
+ * viaggia nei cookie. Il middleware verifica il JWT lato server in
+ * modo affidabile e fa due cose:
+ *
+ *  1) Refresh dei cookie sessione se scaduti (chiamando getUser()).
+ *  2) Enforcement delle aree role-protected (/admin, /seller, /rider):
+ *     se l'utente non ha il ruolo giusto, redirect a /.
+ *  3) Gate verifica email: se non confermata, redirect a /auth/verify-email.
+ */
 
 const ROLE_PROTECTED: Array<{ prefix: string; allowed: ('admin' | 'seller' | 'rider')[] }> = [
   { prefix: '/admin',  allowed: ['admin'] },
@@ -31,62 +27,67 @@ function findRoleRule(pathname: string) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const res = NextResponse.next({ request: { headers: req.headers } });
+
+  if (!SUPABASE_URL || !SUPABASE_KEY) return res;
+
+  // Client server-side che legge/scrive cookie su richiesta+risposta.
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_KEY, {
+    cookies: {
+      get(name: string) {
+        return req.cookies.get(name)?.value;
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        req.cookies.set({ name, value, ...options });
+        res.cookies.set({ name, value, ...options });
+      },
+      remove(name: string, options: CookieOptions) {
+        req.cookies.set({ name, value: '', ...options });
+        res.cookies.set({ name, value: '', ...options });
+      },
+    },
+  });
+
+  // Refresh sessione (best-effort)
+  const { data: userResp } = await supabase.auth.getUser();
+  const user = userResp?.user ?? null;
+
   const roleRule = findRoleRule(pathname);
+  if (!roleRule) return res;
 
-  // Solo le aree role-protected attivano la verifica. Per /profile, /orders,
-  // /cart, ecc. ci affidiamo al client perché senza cookie non possiamo
-  // distinguere un guest da un utente loggato via localStorage.
-  if (!roleRule) return NextResponse.next();
-  if (!SUPABASE_URL || !SUPABASE_KEY) return NextResponse.next();
-
-  // Cerca cookie Supabase. Se non c'è, lascia passare (client farà il check).
-  const authCookie = req.cookies
-    .getAll()
-    .find((c) => c.name.startsWith('sb-') && c.name.endsWith('-auth-token'));
-  if (!authCookie?.value) return NextResponse.next();
-
-  let accessToken: string | null = null;
-  try {
-    const raw = authCookie.value.startsWith('base64-')
-      ? atob(authCookie.value.slice('base64-'.length))
-      : authCookie.value;
-    const parsed = JSON.parse(raw);
-    accessToken = parsed?.access_token ?? null;
-  } catch {
-    return NextResponse.next();
+  if (!user) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/sign-in';
+    url.searchParams.set('returnTo', pathname);
+    return NextResponse.redirect(url);
   }
-  if (!accessToken) return NextResponse.next();
 
-  try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-      global: { headers: { Authorization: `Bearer ${accessToken}` } },
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data: userResp } = await supabase.auth.getUser(accessToken);
-    const userId = userResp?.user?.id;
-    if (!userId) return NextResponse.next();
-
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, is_approved')
-      .eq('id', userId)
-      .single();
-
-    const role = profile?.role as 'buyer' | 'seller' | 'rider' | 'admin' | undefined;
-    const approved = !!profile?.is_approved;
-
-    // Solo se siamo SICURI che l'utente non ha il ruolo, blocca.
-    if (role && (!roleRule.allowed.includes(role as any) || !approved)) {
-      const url = req.nextUrl.clone();
-      url.pathname = '/';
-      return NextResponse.redirect(url);
-    }
-    return NextResponse.next();
-  } catch {
-    return NextResponse.next();
+  if (!user.email_confirmed_at) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/auth/verify-email';
+    return NextResponse.redirect(url);
   }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, is_approved')
+    .eq('id', user.id)
+    .single();
+
+  const role = profile?.role as 'buyer' | 'seller' | 'rider' | 'admin' | undefined;
+  const approved = !!profile?.is_approved;
+
+  if (!role || !roleRule.allowed.includes(role as any) || !approved) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/';
+    return NextResponse.redirect(url);
+  }
+
+  return res;
 }
 
 export const config = {
-  matcher: ['/((?!_next/|api/|favicon|icon-|manifest|sitemap|robots).*)'],
+  matcher: [
+    '/((?!_next/|api/|favicon|icon-|manifest|sitemap|robots).*)',
+  ],
 };

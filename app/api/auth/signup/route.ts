@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/supabase/client';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { verifyTurnstileToken } from '@/lib/captcha';
+import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
 
 const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 
 export async function POST(request: Request) {
-  // Rate limit più stretto per signup: 5 / ora per IP (anti spam account)
+  // Rate limit: 5 / ora per IP (anti spam account)
   const ip = getClientIp(request);
   const rl = rateLimit({ key: `signup:${ip}`, max: 5, windowMs: 60 * 60_000 });
   if (!rl.allowed) {
@@ -17,7 +19,7 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { email?: unknown; password?: unknown };
+  let body: { email?: unknown; password?: unknown; captchaToken?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -26,6 +28,7 @@ export async function POST(request: Request) {
 
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body.password === 'string' ? body.password : '';
+  const captchaToken = typeof body.captchaToken === 'string' ? body.captchaToken : '';
 
   if (!EMAIL_RE.test(email) || email.length > 254) {
     return NextResponse.json({ error: 'Email non valida' }, { status: 400 });
@@ -37,8 +40,18 @@ export async function POST(request: Request) {
     );
   }
 
+  // CAPTCHA: se la chiave non è configurata la verifica è skipped (dev).
+  const cap = await verifyTurnstileToken(captchaToken, ip);
+  if (!cap.ok) {
+    return NextResponse.json({ error: cap.reason }, { status: 400 });
+  }
+
   try {
-    const { data, error } = await auth.signUp(email, password);
+    const emailRedirectTo = `${env.appUrl()}/auth/callback`;
+    const { data, error } = await auth.signUp(email, password, {
+      captchaToken,
+      emailRedirectTo,
+    });
     if (error) {
       return NextResponse.json(
         { error: 'Registrazione non riuscita. Controlla i dati e riprova.' },
