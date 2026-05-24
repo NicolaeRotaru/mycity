@@ -15,7 +15,7 @@ async function fetchProduct(id: string) {
       .from('products')
       .select(`
         id, name, description, price, images, status,
-        profiles!products_seller_id_fkey ( store_name )
+        profiles!products_seller_id_fkey ( store_name, is_approved )
       `)
       .eq('id', id)
       .single();
@@ -53,7 +53,10 @@ export async function generateMetadata(
       description: desc,
       images: img,
     },
-    robots: product.status === 'available' ? undefined : { index: false },
+    // Niente indicizzazione se il negozio non è approvato o il prodotto non è disponibile
+    robots: product.status === 'available' && product.profiles?.is_approved
+      ? undefined
+      : { index: false },
     alternates: { canonical: `/product/${params.id}` },
   };
 }

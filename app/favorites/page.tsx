@@ -16,15 +16,17 @@ export default function FavoritesPage() {
         .select(`
           product_id,
           products (
-            id, name, description, price, images, stock, created_at, seller_id,
-            profiles!products_seller_id_fkey ( store_name )
+            id, name, description, price, images, stock, created_at, seller_id, status,
+            profiles!products_seller_id_fkey ( store_name, is_approved )
           )
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+      // Filtra i preferiti il cui negozio è sospeso/non approvato o il
+      // prodotto è stato venduto/disabilitato.
       return (data ?? [])
         .map((f: any) => f.products)
-        .filter(Boolean);
+        .filter((p: any) => p && p.profiles?.is_approved && p.status === 'available');
     },
   });
 

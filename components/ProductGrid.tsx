@@ -25,9 +25,12 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
         .from('products')
         .select(`
           id, name, description, price, images, stock, created_at, seller_id,
-          profiles!products_seller_id_fkey ( store_name, store_hours )
+          profiles!products_seller_id_fkey!inner ( store_name, store_hours, is_approved )
         `)
         .eq('status', 'available')
+        // Filtra i prodotti dei negozi sospesi/rifiutati/non approvati.
+        // !inner sopra rende l'eq sul campo profili effettivo.
+        .eq('profiles.is_approved', true)
         .order('created_at', { ascending: false });
       if (categoryId) q = q.eq('category_id', categoryId);
       if (sellerId)   q = q.eq('seller_id', sellerId);

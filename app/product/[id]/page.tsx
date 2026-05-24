@@ -34,7 +34,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     queryKey: ['product', id],
     queryFn: async () => {
       const { data, error } = await supabase.from('products').select(`
-        *, categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name )
+        *, categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved )
       `).eq('id', id).single();
       if (error) throw error;
       return data;
@@ -96,6 +96,22 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   }
 
   if (!product) return <div className="container mx-auto p-8 text-center">Prodotto non trovato.</div>;
+
+  // Negozio sospeso o non approvato → prodotto non acquistabile
+  if (!product.profiles?.is_approved) {
+    return (
+      <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
+        <div className="text-5xl mb-3">🚫</div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">Prodotto non disponibile</h1>
+        <p className="text-sm text-gray-600 mb-5">
+          Questo prodotto non è al momento acquistabile perché il negozio non è operativo.
+        </p>
+        <a href="/" className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+          ← Torna al marketplace
+        </a>
+      </div>
+    );
+  }
 
   const images: string[] = Array.isArray(product.images) && product.images.length > 0
     ? (product.images as string[])
