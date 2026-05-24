@@ -189,6 +189,13 @@ export default function CheckoutPage() {
 
   // Ritiro in negozio (-10%, no spedizione)
   const [pickupInStore, setPickupInStore] = useState(false);
+
+  // Pagamento: 'cod' = contanti alla consegna (sempre disponibile);
+  // 'card' = Stripe Checkout, disponibile solo se la sitewide publishable
+  // key e' configurata su Render (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
+  const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
+  const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
+  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>(stripeAvailable ? 'card' : 'cod');
   const PICKUP_DISCOUNT_PERCENT = 10;
 
   // Distanza-based shipping per ogni gruppo, se entrambe le coords sono note
@@ -284,6 +291,7 @@ export default function CheckoutPage() {
           delivery_notes: form.notes || null,
           delivery_lat: deliveryLat,
           delivery_lng: deliveryLng,
+          payment_method: 'cod',
         }).select().single();
         if (orderError) throw orderError;
 
@@ -325,6 +333,58 @@ export default function CheckoutPage() {
     },
   });
 
+  // Mutation: pagamento con carta via Stripe Checkout.
+  // Limitazione MVP: supporta solo carrelli single-seller. Multi-seller
+  // con carta richiederebbe creare N sessioni Stripe e gestire il flusso
+  // a step. Per ora multi-seller forza COD (radio "Carta" disabilitata).
+  const payWithStripe = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/sign-in?returnTo=/checkout');
+        throw new Error('REDIRECT_TO_SIGNIN');
+      }
+      if (groups.length !== 1) {
+        throw new Error('Il pagamento con carta supporta un solo negozio per volta. Rimuovi gli articoli degli altri negozi o usa contanti.');
+      }
+      const g = groups[0];
+      const shipping = appliedCoupon?.freeShipping ? 0 : shippingFor(g);
+
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          sellerId: g.sellerId,
+          items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity })),
+          shippingCents: Math.round(shipping * 100),
+          metadata: {
+            delivery_address: form.address,
+            delivery_city: form.city,
+            delivery_zip: form.zip,
+            delivery_phone: form.phone,
+            delivery_notes: form.notes ?? '',
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.url) {
+        throw new Error(data?.error ?? 'Errore creazione pagamento');
+      }
+      return data.url as string;
+    },
+    onSuccess: (url) => {
+      // Redirect alla pagina Stripe Hosted Checkout. Il rientro avviene
+      // su /orders?stripe=success o /cart?stripe=canceled (vedi /api/stripe/checkout).
+      window.location.assign(url);
+    },
+    onError: (err: any) => {
+      if (err?.message === 'REDIRECT_TO_SIGNIN') return;
+      toast.error(err.message || 'Errore durante il pagamento');
+    },
+  });
+
+  const isCheckingOut = placeOrders.isPending || payWithStripe.isPending;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!authUser) {
@@ -335,7 +395,11 @@ export default function CheckoutPage() {
       toast.error('Compila tutti i campi obbligatori');
       return;
     }
-    placeOrders.mutate();
+    if (paymentMethod === 'card' && stripeAvailable) {
+      payWithStripe.mutate();
+    } else {
+      placeOrders.mutate();
+    }
   };
 
   if (cart.length === 0) {
@@ -477,12 +541,58 @@ export default function CheckoutPage() {
           {/* PAGAMENTO */}
           <div className="bg-white border rounded-xl p-6">
             <h2 className="text-xl font-bold flex items-center gap-2 mb-4">💳 Metodo di pagamento</h2>
-            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 flex items-start gap-3">
-              <input type="radio" checked readOnly className="mt-1" />
-              <div>
-                <p className="font-bold text-gray-900">Contanti alla consegna</p>
-                <p className="text-sm text-gray-600">Paghi al rider quando ricevi il pacco.</p>
-              </div>
+            <div className="space-y-3">
+              {stripeAvailable && (
+                <label
+                  className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
+                    paymentMethod === 'card'
+                      ? 'border-indigo-400 bg-indigo-50'
+                      : 'border-gray-200 bg-white hover:border-indigo-200'
+                  } ${groups.length > 1 ? 'opacity-60 cursor-not-allowed' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="card"
+                    checked={paymentMethod === 'card'}
+                    disabled={groups.length > 1}
+                    onChange={() => setPaymentMethod('card')}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="font-bold text-gray-900">💳 Carta di credito / debito</p>
+                    <p className="text-sm text-gray-600">
+                      Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
+                    </p>
+                    {groups.length > 1 && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        ⚠ Il pagamento con carta richiede ordini da un solo negozio per volta.
+                      </p>
+                    )}
+                  </div>
+                </label>
+              )}
+
+              <label
+                className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
+                  paymentMethod === 'cod'
+                    ? 'border-yellow-400 bg-yellow-50'
+                    : 'border-gray-200 bg-white hover:border-yellow-200'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="paymentMethod"
+                  value="cod"
+                  checked={paymentMethod === 'cod'}
+                  onChange={() => setPaymentMethod('cod')}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <p className="font-bold text-gray-900">💵 Contanti alla consegna</p>
+                  <p className="text-sm text-gray-600">Paghi al rider quando ricevi il pacco.</p>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -624,10 +734,18 @@ export default function CheckoutPage() {
             <button
               type="submit"
               form="checkout-form"
-              disabled={placeOrders.isPending}
-              className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:opacity-50 text-gray-900 py-4 font-extrabold text-base transition-colors shadow-lg"
+              disabled={isCheckingOut}
+              className={`w-full disabled:opacity-50 py-4 font-extrabold text-base transition-colors shadow-lg ${
+                paymentMethod === 'card'
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                  : 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'
+              }`}
             >
-              {placeOrders.isPending ? 'Elaborazione...' : `✓ Conferma ordine · ${formatPrice(grandTotal)}`}
+              {isCheckingOut
+                ? (paymentMethod === 'card' ? 'Apertura pagamento sicuro…' : 'Elaborazione…')
+                : (paymentMethod === 'card'
+                    ? `🔒 Paga con carta · ${formatPrice(grandTotal)}`
+                    : `✓ Conferma ordine · ${formatPrice(grandTotal)}`)}
             </button>
           </div>
         </div>
