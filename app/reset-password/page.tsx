@@ -23,12 +23,21 @@ import { toast } from 'sonner';
  */
 
 function translateError(msg: string): string {
-  const m = msg.toLowerCase();
-  if (m.includes('same as the old')) return 'La nuova password deve essere diversa da quella precedente';
-  if (m.includes('weak'))            return 'Password troppo debole. Usane una più lunga.';
-  if (m.includes('token') || m.includes('expired'))
-                                     return 'Link di reset scaduto o non valido. Richiedi un nuovo link dalla pagina di accesso.';
-  return 'Errore durante l\'aggiornamento della password';
+  const m = (msg || '').toLowerCase();
+  if (m.includes('same as') || m.includes('should be different'))
+    return 'La nuova password deve essere diversa da quella precedente';
+  if (m.includes('weak') || m.includes('at least'))
+    return 'Password troppo debole. Usane una più lunga, con maiuscole/numeri/simboli.';
+  if (m.includes('expired') || m.includes('jwt'))
+    return 'Sessione scaduta. Richiedi un nuovo link di reset dalla pagina di accesso.';
+  if (m.includes('invalid') && m.includes('token'))
+    return 'Link di reset non valido. Richiedine uno nuovo dalla pagina di accesso.';
+  if (m.includes('rate') || m.includes('too many'))
+    return 'Troppi tentativi. Riprova fra qualche minuto.';
+  if (m.includes('not authenticated') || m.includes('no session'))
+    return 'Sessione persa. Apri di nuovo il link dall\'email.';
+  // Niente match: mostra il messaggio originale per debug
+  return msg ? `Errore: ${msg}` : 'Errore durante l\'aggiornamento della password';
 }
 
 function ResetPasswordInner() {
@@ -78,12 +87,22 @@ function ResetPasswordInner() {
     }
     setSubmitting(true);
     try {
+      // Diagnostica: verifica che ci sia ancora una sessione attiva
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) {
+        toast.error('Sessione di reset persa. Richiedi un nuovo link dalla pagina di accesso.');
+        setSubmitting(false);
+        return;
+      }
       const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      if (error) {
+        // Log completo in console per debug
+        console.error('updateUser failed:', { status: (error as any).status, message: error.message, name: (error as any).name });
+        throw error;
+      }
       setDone(true);
       toast.success('Password aggiornata con successo');
       await supabase.auth.signOut();
-      // Aspetta un secondo così l'utente legge il messaggio di successo
       setTimeout(() => router.push('/sign-in'), 1200);
     } catch (err: any) {
       toast.error(translateError(err?.message ?? ''));
