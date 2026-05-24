@@ -2,15 +2,18 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { requireSupabasePublic } from '@/lib/env';
 
 let _supabase: SupabaseClient | null = null;
 
 function getClient(): SupabaseClient {
   if (_supabase) return _supabase;
-  const { url, key } = requireSupabasePublic();
-  // createBrowserClient gestisce la sessione in cookie (SameSite=Lax)
-  // così il middleware server-side può leggerla in modo affidabile.
+  // Must use literal access — Next.js only inlines process.env.NEXT_PUBLIC_*
+  // at build time when the key appears as a string literal, not via dynamic bracket access.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    throw new Error('Variabili Supabase mancanti: controlla NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  }
   _supabase = createBrowserClient(url, key);
   return _supabase;
 }
