@@ -1,0 +1,103 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
+import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
+import { getAdminSupabase } from '@/lib/supabase/server';
+
+export const runtime = 'nodejs';
+
+const Body = z.object({
+  orderId: z.string().uuid(),
+});
+
+/**
+ * Rilascia il payout al seller per un ordine DELIVERED.
+ *
+ * Tipicamente chiamato da una cron job 7 giorni dopo la consegna
+ * (per coprire il periodo di recesso 14gg al consumatore).
+ * In MVP puo' essere chiamato manualmente da admin o dal trigger
+ * "delivered" se non c'e' politica escrow.
+ *
+ * SOLO admin / cron. Verifica la chiave x-internal-secret.
+ */
+export async function POST(req: NextRequest) {
+  if (!isStripeConfigured()) {
+    return NextResponse.json({ error: 'Stripe non configurato' }, { status: 503 });
+  }
+
+  const internalKey = req.headers.get('x-internal-secret');
+  if (!internalKey || internalKey !== process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  let body;
+  try {
+    body = Body.parse(await req.json());
+  } catch (e: any) {
+    return NextResponse.json({ error: 'Bad request', details: e?.message }, { status: 400 });
+  }
+
+  const admin = getAdminSupabase();
+  const { data: order, error } = await admin
+    .from('orders')
+    .select('id, seller_id, payout_status, seller_payout_cents, stripe_payment_intent, delivery_status')
+    .eq('id', body.orderId)
+    .single();
+
+  if (error || !order) {
+    return NextResponse.json({ error: 'Ordine non trovato' }, { status: 404 });
+  }
+  if (order.delivery_status !== 'DELIVERED') {
+    return NextResponse.json({ error: 'Ordine non ancora consegnato' }, { status: 409 });
+  }
+  if (order.payout_status !== 'HELD') {
+    return NextResponse.json({ error: `Payout in stato ${order.payout_status}, no-op` }, { status: 409 });
+  }
+  if (!order.seller_payout_cents || order.seller_payout_cents <= 0) {
+    return NextResponse.json({ error: 'Importo payout non valido' }, { status: 400 });
+  }
+
+  const { data: seller } = await admin
+    .from('profiles')
+    .select('stripe_account_id, stripe_payouts_enabled')
+    .eq('id', order.seller_id)
+    .single();
+
+  if (!seller?.stripe_account_id || !seller.stripe_payouts_enabled) {
+    return NextResponse.json(
+      { error: 'Seller non ha completato l\'onboarding Stripe Connect' },
+      { status: 409 },
+    );
+  }
+
+  try {
+    const stripe = getStripe();
+    const transfer = await stripe.transfers.create({
+      amount: order.seller_payout_cents,
+      currency: 'eur',
+      destination: seller.stripe_account_id,
+      transfer_group: `order_${order.id}`,
+      metadata: {
+        order_id: order.id,
+        seller_id: order.seller_id,
+      },
+    });
+
+    await admin
+      .from('orders')
+      .update({
+        stripe_transfer_id: transfer.id,
+        payout_status: 'TRANSFERRED',
+        payout_at: new Date().toISOString(),
+      })
+      .eq('id', order.id);
+
+    return NextResponse.json({ ok: true, transferId: transfer.id }, { status: 200 });
+  } catch (err: any) {
+    console.error('[stripe] transfer failed', err);
+    await admin
+      .from('orders')
+      .update({ payout_status: 'FAILED' })
+      .eq('id', order.id);
+    return NextResponse.json({ error: 'Transfer failed' }, { status: 500 });
+  }
+}
