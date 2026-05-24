@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import Turnstile from '@/components/Turnstile';
 
 type Role = 'buyer' | 'seller' | 'rider';
 
@@ -20,10 +21,15 @@ const colorClasses: Record<string, { border: string; bg: string; btn: string }> 
   amber:  { border: 'border-amber-500 bg-amber-50',   bg: 'bg-amber-50 border-amber-200 text-amber-800',   btn: 'bg-amber-500 hover:bg-amber-600' },
 };
 
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? '';
+
 function SignUpInner() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [acceptTos, setAcceptTos] = useState(false);
   const [role, setRole] = useState<Role>('buyer');
+  const [captchaToken, setCaptchaToken] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -31,9 +37,16 @@ function SignUpInner() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!acceptTos) {
+      toast.error('Devi accettare Termini e Privacy per registrarti');
+      return;
+    }
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      toast.error('Completa il controllo anti-bot');
+      return;
+    }
     setIsLoading(true);
     try {
-      // Look up referrer da referral code (best effort)
       let referrerId: string | null = null;
       if (refCode) {
         const { data: ref } = await supabase
@@ -44,14 +57,18 @@ function SignUpInner() {
         referrerId = ref?.id ?? null;
       }
 
+      const emailRedirectTo = `${APP_URL || window.location.origin}/auth/callback`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { role } },
+        options: {
+          data: { role },
+          captchaToken: captchaToken || undefined,
+          emailRedirectTo,
+        },
       });
       if (error) throw error;
 
-      // Crea referral record se applicabile
       if (referrerId && data.user?.id && data.user.id !== referrerId) {
         await supabase.from('referrals').insert({
           referrer_id: referrerId,
@@ -60,15 +77,8 @@ function SignUpInner() {
         });
       }
 
-      const successMsg = refCode
-        ? `Registrazione completata! Hai €5 di sconto sul primo ordine. 🎉`
-        : role === 'seller'
-        ? 'Registrazione completata! Accedi e completa i dati del tuo negozio.'
-        : role === 'rider'
-        ? 'Registrazione completata! Accedi per iniziare a consegnare.'
-        : 'Registrazione completata! Ora puoi accedere e iniziare a comprare.';
-      toast.success(successMsg);
-      router.push('/sign-in');
+      toast.success('Registrazione completata! Controlla la tua email per confermare.');
+      router.push('/auth/verify-email');
     } catch (error: any) {
       toast.error(error.message || 'Errore durante la registrazione');
     } finally {
@@ -110,15 +120,40 @@ function SignUpInner() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-            placeholder="la-tua@email.it" required
+            placeholder="la-tua@email.it" required autoComplete="email"
             className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••" required minLength={6}
+            placeholder="Almeno 8 caratteri" required minLength={8} autoComplete="new-password"
             className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400" />
         </div>
+
+        <label className="flex items-start gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={acceptTos}
+            onChange={(e) => setAcceptTos(e.target.checked)}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600"
+          />
+          <span>
+            Ho letto e accetto i{' '}
+            <Link href="/terms" target="_blank" className="text-indigo-600 underline">Termini di servizio</Link>{' '}e l&apos;
+            <Link href="/privacy" target="_blank" className="text-indigo-600 underline">Informativa sulla privacy</Link>.
+          </span>
+        </label>
+
+        {TURNSTILE_SITE_KEY && (
+          <div className="flex justify-center">
+            <Turnstile
+              siteKey={TURNSTILE_SITE_KEY}
+              onVerify={setCaptchaToken}
+              onExpire={() => setCaptchaToken('')}
+            />
+          </div>
+        )}
+
         <button
           type="submit"
           disabled={isLoading}

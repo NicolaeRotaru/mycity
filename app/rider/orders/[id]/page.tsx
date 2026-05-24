@@ -16,6 +16,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { notify } from '@/lib/notifications';
+import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 
 type OrderRow = {
   id: string;
@@ -24,6 +25,8 @@ type OrderRow = {
   total_price: number;
   shipping_cost: number;
   delivery_status: OrderStatus;
+  payment_method: 'cod' | 'card' | null;
+  cash_confirmed_at: string | null;
   delivery_full_name: string | null;
   delivery_phone: string | null;
   delivery_address: string | null;
@@ -62,6 +65,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         .from('orders')
         .select(`
           id, user_id, seller_id, total_price, shipping_cost, delivery_status,
+          payment_method, cash_confirmed_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           delivery_lat, delivery_lng,
           seller:profiles!orders_seller_id_fkey ( store_name, store_phone, store_address, store_lat, store_lng ),
@@ -352,10 +356,41 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
           ))}
         </div>
         <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-sm flex justify-between font-bold">
-          <span>Totale (da incassare in contanti)</span>
+          <span>
+            {order.payment_method === 'card'
+              ? 'Totale (gia\' pagato online)'
+              : 'Totale (da incassare in contanti)'}
+          </span>
           <span className="text-indigo-700">{formatPrice(order.total_price)}</span>
         </div>
       </div>
+
+      {/* CASH ON DELIVERY: conferma incasso */}
+      {order.payment_method === 'cod'
+        && (order.delivery_status === 'PICKED_UP' || order.delivery_status === 'OUT_FOR_DELIVERY' || order.delivery_status === 'DELIVERED')
+        && !order.cash_confirmed_at && (
+          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-3">
+            <div>
+              <p className="font-bold text-amber-900">⚠ Conferma incasso obbligatoria</p>
+              <p className="text-sm text-amber-800">
+                Devi confermare l&apos;importo ricevuto, con una foto del pagamento. Senza
+                conferma l&apos;ordine non viene chiuso e potresti non ricevere il rimborso del
+                tuo compenso.
+              </p>
+            </div>
+            <CashConfirmDialog
+              orderId={order.id}
+              expectedCents={Math.round(Number(order.total_price) * 100)}
+              onConfirmed={() => qc.invalidateQueries({ queryKey: ['rider-order', id] })}
+            />
+          </div>
+        )}
+
+      {order.payment_method === 'cod' && order.cash_confirmed_at && (
+        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 text-sm text-emerald-900">
+          ✓ Incasso confermato il {new Date(order.cash_confirmed_at).toLocaleString('it-IT')}.
+        </div>
+      )}
     </div>
   );
 }

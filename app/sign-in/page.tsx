@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { auth, supabase } from '@/lib/supabase/client';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { toast } from 'sonner';
+import Turnstile from '@/components/Turnstile';
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
 // Traduzioni dei messaggi più comuni che Supabase restituisce in inglese.
 // Tutto ciò che non matcha cade nel fallback generico.
@@ -27,6 +30,7 @@ const SignInForm = () => {
   const [showPwd, setShowPwd] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = safeInternalPath(searchParams.get('returnTo'), '/');
@@ -49,10 +53,22 @@ const SignInForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      toast.error('Completa il controllo anti-bot');
+      return;
+    }
     setIsLoading(true);
     try {
-      const { error } = await auth.signIn(email, password);
+      const { data, error } = await auth.signIn(email, password, { captchaToken });
       if (error) throw error;
+
+      // Gate verifica email anche client-side (difesa in profondità)
+      if (data?.user && !data.user.email_confirmed_at) {
+        toast.error('Devi confermare la tua email prima di accedere');
+        router.push('/auth/verify-email');
+        return;
+      }
+
       toast.success('Accesso effettuato!');
       router.push(returnTo);
       router.refresh();
@@ -134,6 +150,15 @@ const SignInForm = () => {
             </button>
           </div>
         </div>
+        {TURNSTILE_SITE_KEY && (
+          <div className="flex justify-center">
+            <Turnstile
+              siteKey={TURNSTILE_SITE_KEY}
+              onVerify={setCaptchaToken}
+              onExpire={() => setCaptchaToken('')}
+            />
+          </div>
+        )}
         <button
           type="submit"
           disabled={isLoading}
