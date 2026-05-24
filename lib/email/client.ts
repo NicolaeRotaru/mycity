@@ -50,7 +50,7 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       subject: input.subject,
       html: input.html,
       text: input.text,
-      replyTo: input.replyTo ?? env.resendReplyTo(),
+      reply_to: input.replyTo ?? env.resendReplyTo(),
       tags: input.tags,
     });
     if (error) {
