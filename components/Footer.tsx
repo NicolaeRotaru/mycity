@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import NewsletterForm from './NewsletterForm';
 
@@ -200,16 +201,30 @@ const Footer = () => {
       {/* Trust strip + contatti compatti */}
       <div className="border-t border-gray-800">
         <div className="container mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-400">
-          <div className="flex items-center gap-4 flex-wrap justify-center">
-            <span className="flex items-center gap-1">💰 Pagamento alla consegna</span>
-            <span className="flex items-center gap-1">🚚 Spedizione 24-48h</span>
-            <span className="flex items-center gap-1">🔒 Acquisto sicuro</span>
-            <span className="flex items-center gap-1">↩️ Reso entro 14 giorni</span>
+          <div className="flex items-center gap-5 flex-wrap justify-center">
+            <span className="flex items-center gap-1.5">
+              <Banknote size={14} strokeWidth={2} /> Pagamento alla consegna
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Truck size={14} strokeWidth={2} /> Spedizione 24-48h
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Lock size={14} strokeWidth={2} /> Acquisto sicuro
+            </span>
+            <span className="flex items-center gap-1.5">
+              <RotateCcw size={14} strokeWidth={2} /> Reso entro 14 giorni
+            </span>
           </div>
           <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-gray-500 justify-center">
-            <a href="mailto:info@mycity.it" className="hover:text-gray-300 transition-colors">📧 info@mycity.it</a>
-            <span>📞 Lun–Ven 9–18</span>
-            <span>🏘️ Piacenza, IT</span>
+            <a href="mailto:info@mycity.it" className="inline-flex items-center gap-1.5 hover:text-gray-300 transition-colors">
+              <Mail size={13} strokeWidth={2} /> info@mycity.it
+            </a>
+            <span className="inline-flex items-center gap-1.5">
+              <Phone size={13} strokeWidth={2} /> Lun-Ven 9-18
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <MapPin size={13} strokeWidth={2} /> Piacenza, IT
+            </span>
           </div>
         </div>
       </div>
