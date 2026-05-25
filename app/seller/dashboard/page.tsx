@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { useProfile } from '@/components/hooks/useProfile';
+import SellerHealthScore from '@/components/seller/SellerHealthScore';
 
 export default function SellerDashboard() {
   const { profile, isSeller } = useProfile();
@@ -78,6 +79,9 @@ export default function SellerDashboard() {
           ➕ Pubblica un prodotto
         </Link>
       </div>
+
+      {/* Health Score */}
+      <SellerHealthScore />
 
       {/* CASSA — incassi per periodo */}
       <div className="bg-white border-2 border-emerald-200 rounded-xl p-5">

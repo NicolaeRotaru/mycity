@@ -2,11 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', sans-serif;
+:root {
+  /* CSS variables per font; sostituite a runtime dal layout.tsx */
+  --font-serif: 'Fraunces', Georgia, serif;
 }
 
-/* Animazioni per ConfirmDialog (e modali futuri) */
+html {
+  background-color: #FBF7F0; /* cream-100 */
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #FBF7F0;
+  color: #2C2A28; /* ink-800 */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headlines in serif: "editoriale, artigianale" */
+h1, h2, h3, .font-serif-display {
+  font-family: var(--font-serif);
+  letter-spacing: -0.01em;
+}
+
+/* Default focus ring più visibile e on-brand */
+:focus-visible {
+  outline: 2px solid #C0492C;
+  outline-offset: 2px;
+}
+
+/* Animazioni legacy (mantenute per ConfirmDialog ecc.) */
 @keyframes fadeIn {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -22,3 +47,79 @@ body {
 .animate-fadeIn  { animation: fadeIn 150ms ease-out; }
 .animate-popIn   { animation: popIn 200ms cubic-bezier(0.16, 1, 0.3, 1); }
 .animate-slideUp { animation: slideUp 260ms cubic-bezier(0.16, 1, 0.3, 1); }
+
+/* Skeleton loader shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #F5EDD9 0px,
+    #FBF7F0 200px,
+    #F5EDD9 400px
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s linear infinite;
+}
+@keyframes shimmer {
+  0%   { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+
+/* Bottom-tab safe area iOS */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0); }
+
+/* Sticky bottom nav: spazio per non coprire contenuti */
+@media (max-width: 767px) {
+  body { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0)); }
+}
+
+/* Card hover lift universale */
+.card-hover {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease-out;
+}
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px -8px rgba(192, 73, 44, 0.18);
+}
+
+/* Pulsing dot per status live (es. "negozio aperto") */
+.dot-live {
+  position: relative;
+}
+.dot-live::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.4;
+  animation: pulseSoft 2.5s ease-in-out infinite;
+}
+@keyframes pulseSoft {
+  0%, 100% { transform: scale(1); opacity: 0.4; }
+  50%      { transform: scale(1.6); opacity: 0; }
+}
+
+/* Marquee / ticker animation per top promo bar rotante */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 30s linear infinite;
+}
+.animate-marquee:hover {
+  animation-play-state: paused;
+}
+
+/* Confetti burst (purchase success) */
+.confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  animation: confettiBurst 1.2s ease-out forwards;
+}
+@keyframes confettiBurst {
+  0%   { transform: translate(0, 0) rotate(0); opacity: 1; }
+  100% { transform: var(--end-transform); opacity: 0; }
+}

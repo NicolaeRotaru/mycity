@@ -16,6 +16,11 @@ import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
 import ContactSellerButton from '@/components/ContactSellerButton';
+import ProductViewTracker from '@/components/ProductViewTracker';
+import ProductQA from '@/components/ProductQA';
+import RecentlyViewed from '@/components/RecentlyViewed';
+import StickyAddToCart from '@/components/StickyAddToCart';
+import SimilarProducts from '@/components/SimilarProducts';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -483,13 +488,33 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         )}
       </section>
 
-      {/* CORRELATI */}
-      {product.category_id && (
-        <section className="mt-12">
-          <h2 className="text-2xl font-extrabold mb-4">Potrebbe piacerti anche</h2>
-          <ProductGrid categoryId={product.category_id} limit={4} />
-        </section>
-      )}
+      {/* Q&A */}
+      <section className="mt-12">
+        <ProductQA
+          productId={id}
+          sellerId={sellerProfile?.id ?? product.seller_id}
+        />
+      </section>
+
+      {/* Ultimi visti dell'utente (esclude questo prodotto) */}
+      <section className="mt-12">
+        <RecentlyViewed excludeId={id} />
+      </section>
+
+      {/* CORRELATI: SimilarProducts intelligente (seller + categoria) */}
+      <section className="mt-12">
+        <SimilarProducts
+          productId={id}
+          categoryId={product.category_id ?? undefined}
+          sellerId={sellerProfile?.id ?? product.seller_id}
+        />
+      </section>
+
+      {/* Sticky CTA mobile */}
+      <StickyAddToCart price={price} available={!isOutOfStock} onAdd={handleAdd} />
+
+      {/* Tracking view (side-effect only) */}
+      <ProductViewTracker productId={id} />
     </div>
   );
 }

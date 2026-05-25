@@ -55,6 +55,11 @@ export const env = {
   // Google Analytics 4 (caricato solo con consenso analytics)
   gaMeasurementId: () => readEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID'),
 
+  // Web Push (VAPID keys per notifiche push browser-native)
+  vapidPublicKey: () => readEnv('NEXT_PUBLIC_VAPID_PUBLIC_KEY'),
+  vapidPrivateKey: () => readEnv('VAPID_PRIVATE_KEY'),
+  vapidSubject: () => readEnv('VAPID_SUBJECT') ?? 'mailto:no-reply@mycity.it',
+
   // App URL pubblico (per link in email, redirect Stripe, ecc.)
   appUrl: () => readEnv('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000',
 };

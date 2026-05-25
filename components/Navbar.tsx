@@ -1,276 +1,43 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Bell, MessageCircle, ShoppingCart, Package, Bike, Shield, Menu as MenuIcon,
-  Search, LogOut, Store, Truck, Banknote, MapPin, Zap,
+  Bell, MessageCircle, ShoppingCart, Heart, Bike, Shield, Store, LogOut,
+  Sparkles, Package, ChevronDown,
 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
 import { useNotificationsCount } from './hooks/useNotificationsCount';
 import { useMessagesUnread } from './hooks/useMessagesUnread';
+import { useFavorites } from './hooks/useFavorites';
+import LocationPill from './LocationPill';
+import PromoTicker from './PromoTicker';
+import SearchBar from './SearchBar';
 import CategoryBar from './CategoryBar';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
 
-type NavLink = { href: string; label: string; icon: string };
-type NavSeparator = { type: 'separator'; label: string };
-type NavItem = NavLink | NavSeparator;
-
-const isSeparator = (item: NavItem): item is NavSeparator =>
-  'type' in item && item.type === 'separator';
-
-const BUYER_LINKS: NavItem[] = [
-  { href: '/',                  label: 'Home',                icon: '🏠' },
-  { href: '/near',              label: 'Vicino a te',         icon: '📍' },
-  { href: '/groups',            label: 'Gruppi d\'acquisto',  icon: '🤝' },
-  { href: '/stores',            label: 'Tutti i negozi',      icon: '🏪' },
-  { href: '/favorites',         label: 'Preferiti',           icon: '♥' },
-  { href: '/orders',            label: 'I miei ordini',       icon: '📦' },
-  { href: '/cart',              label: 'Carrello',            icon: '🛒' },
-  { href: '/profile/addresses', label: 'Indirizzi',           icon: '📌' },
-  { href: '/profile/referral',  label: 'Invita amici · €5',   icon: '🎁' },
-  { href: '/messages',          label: 'Messaggi',            icon: '💬' },
-  { href: '/notifications',     label: 'Notifiche',           icon: '🔔' },
-  { href: '/profile',           label: 'Profilo',             icon: '👤' },
-  { href: '/profile/settings',  label: 'Impostazioni',        icon: '⚙️' },
-  { type: 'separator',          label: 'Informazioni' },
-  { href: '/faq',               label: 'FAQ',                 icon: '❓' },
-  { href: '/help',              label: 'Centro assistenza',   icon: '💡' },
-  { href: '/contact',           label: 'Contattaci',          icon: '✉️' },
-];
-
-const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
-  buyer: BUYER_LINKS,
-  seller: [
-    { type: 'separator',               label: 'Operatività' },
-    { href: '/seller/dashboard',       label: 'Dashboard',         icon: '📊' },
-    { href: '/seller/orders',          label: 'Ordini ricevuti',   icon: '🛒' },
-    { href: '/seller/products',        label: 'I miei prodotti',   icon: '📦' },
-    { href: '/seller/products/new',    label: 'Nuovo prodotto',    icon: '➕' },
-    { type: 'separator',               label: 'Business' },
-    { href: '/seller/earnings',        label: 'Guadagni',          icon: '💶' },
-    { href: '/seller/reviews',         label: 'Recensioni',        icon: '⭐' },
-    { href: '/seller/customers',       label: 'I miei clienti',    icon: '👥' },
-    { type: 'separator',               label: 'Account' },
-    { href: '/seller/profile',         label: 'Profilo negozio',   icon: '🏪' },
-    { href: '/profile/settings',       label: 'Impostazioni',      icon: '⚙️' },
-    { href: '/messages',               label: 'Messaggi clienti',  icon: '💬' },
-    { href: '/notifications',          label: 'Notifiche',         icon: '🔔' },
-    { type: 'separator',               label: 'Aiuto' },
-    { href: '/seller/help',            label: 'Centro venditori',  icon: '💡' },
-    { href: '/faq',                    label: 'FAQ',               icon: '❓' },
-    { href: '/contact',                label: 'Contattaci',        icon: '✉️' },
-    { type: 'separator',               label: 'Come acquirente' },
-    { href: '/?as=buyer',              label: 'Home marketplace',  icon: '🏠' },
-    { href: '/stores',                 label: 'Tutti i negozi',    icon: '🏪' },
-    { href: '/favorites',              label: 'Preferiti',         icon: '♥' },
-    { href: '/orders',                 label: 'I miei ordini',     icon: '📦' },
-    { href: '/cart',                   label: 'Carrello',          icon: '🛒' },
-    { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
-  ],
-  rider: [
-    { type: 'separator',         label: 'Operatività' },
-    { href: '/rider',            label: 'Dashboard',         icon: '🛵' },
-    { href: '/rider/availability', label: 'Disponibilità',   icon: '🟢' },
-    { href: '/rider/history',    label: 'Storico consegne',  icon: '📜' },
-    { type: 'separator',         label: 'Business' },
-    { href: '/rider/earnings',   label: 'Guadagni',          icon: '💶' },
-    { href: '/rider/reviews',    label: 'Recensioni',        icon: '⭐' },
-    { type: 'separator',         label: 'Account' },
-    { href: '/rider/profile',    label: 'Profilo',           icon: '👤' },
-    { href: '/profile/settings', label: 'Impostazioni',      icon: '⚙️' },
-    { href: '/notifications',    label: 'Notifiche',         icon: '🔔' },
-    { type: 'separator',         label: 'Aiuto' },
-    { href: '/rider/help',       label: 'Centro rider',      icon: '💡' },
-    { href: '/faq',              label: 'FAQ',               icon: '❓' },
-    { href: '/contact',          label: 'Contattaci',        icon: '✉️' },
-    { type: 'separator',         label: 'Come acquirente' },
-    { href: '/?as=buyer',              label: 'Home marketplace',  icon: '🏠' },
-    { href: '/stores',                 label: 'Tutti i negozi',    icon: '🏪' },
-    { href: '/favorites',              label: 'Preferiti',         icon: '♥' },
-    { href: '/orders',                 label: 'I miei ordini',     icon: '📦' },
-    { href: '/cart',                   label: 'Carrello',          icon: '🛒' },
-    { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
-  ],
-  admin: [
-    { href: '/admin',          label: 'Dashboard admin', icon: '🛡️' },
-    { href: '/admin/users',    label: 'Utenti',          icon: '👥' },
-    { href: '/admin/orders',   label: 'Tutti gli ordini', icon: '📦' },
-    { href: '/admin/products', label: 'Tutti i prodotti', icon: '🛍️' },
-    { href: '/admin/coupons',  label: 'Coupon',          icon: '🎟️' },
-    { href: '/notifications',  label: 'Notifiche',       icon: '🔔' },
-    { type: 'separator',       label: 'Come acquirente' },
-    { href: '/?as=buyer',              label: 'Home marketplace',  icon: '🏠' },
-    { href: '/near',                   label: 'Vicino a te',       icon: '📍' },
-    { href: '/groups',                 label: 'Gruppi d\'acquisto', icon: '🤝' },
-    { href: '/stores',                 label: 'Tutti i negozi',    icon: '🏪' },
-    { href: '/favorites',              label: 'Preferiti',         icon: '♥' },
-    { href: '/orders',                 label: 'I miei ordini',     icon: '📦' },
-    { href: '/cart',                   label: 'Carrello',          icon: '🛒' },
-    { href: '/profile/addresses',      label: 'Indirizzi',         icon: '📌' },
-    { href: '/profile/referral',       label: 'Invita amici · €5', icon: '🎁' },
-    { href: '/profile',                label: 'Profilo',           icon: '👤' },
-    { href: '/profile/settings',       label: 'Impostazioni',      icon: '⚙️' },
-    { type: 'separator',               label: 'Informazioni' },
-    { href: '/faq',                    label: 'FAQ',               icon: '❓' },
-    { href: '/help',                   label: 'Centro assistenza', icon: '💡' },
-    { href: '/contact',                label: 'Contattaci',        icon: '✉️' },
-  ],
-};
-
-const LINKS_GUEST: NavItem[] = [
-  { href: '/',         label: 'Home',       icon: '🏠' },
-  { href: '/near',     label: 'Vicino a te', icon: '📍' },
-  { href: '/stores',   label: 'Negozi',     icon: '🏪' },
-  { href: '/sign-in',  label: 'Accedi',     icon: '🔑' },
-  { href: '/sign-up',  label: 'Registrati', icon: '✨' },
-  { type: 'separator', label: 'Informazioni' },
-  { href: '/faq',      label: 'FAQ',                 icon: '❓' },
-  { href: '/help',     label: 'Centro assistenza',   icon: '💡' },
-  { href: '/contact',  label: 'Contattaci',          icon: '✉️' },
-];
-
-function getLinks(role: Role, isAuthenticated: boolean): NavItem[] {
-  if (!isAuthenticated) return LINKS_GUEST;
-  if (role && LINKS_BY_ROLE[role]) return LINKS_BY_ROLE[role];
-  return LINKS_BY_ROLE.buyer;
-}
-
-const NavMenu = ({ role, isAuthenticated, onSignOut }: {
-  role: Role;
-  isAuthenticated: boolean;
-  onSignOut: () => void;
-}) => {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  const pathname = usePathname();
-
-  useEffect(() => setOpen(false), [pathname]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
-  }, [open]);
-
-  const links = getLinks(role, isAuthenticated);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Menu di navigazione"
-        className="flex items-center gap-1.5 bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg font-semibold whitespace-nowrap"
-      >
-        <MenuIcon size={18} strokeWidth={2.2} />
-        <span className="text-sm">Menu</span>
-      </button>
-      {open && (
-        <div
-          className="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl ring-1 ring-black/5 z-50 overflow-y-auto overscroll-contain pb-[max(env(safe-area-inset-bottom),12px)]"
-          style={{
-            maxHeight:
-              'min(calc(100dvh - 160px - env(safe-area-inset-bottom)), calc(100vh - 220px))',
-          }}
-        >
-          <ul className="py-1">
-            {links.map((l, i) => {
-              if (isSeparator(l)) {
-                return (
-                  <li key={`sep-${i}`} className="mt-1 pt-2 border-t border-gray-100">
-                    <div className="px-4 py-1 text-[10px] uppercase tracking-widest text-gray-400 font-bold">
-                      {l.label}
-                    </div>
-                  </li>
-                );
-              }
-              return (
-                <li key={l.href}>
-                  <Link
-                    href={l.href}
-                    className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700"
-                  >
-                    <span className="text-lg">{l.icon}</span>
-                    <span className="font-medium">{l.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
-            {isAuthenticated && (
-              <>
-                <li><div className="border-t border-gray-100 my-1" /></li>
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => { setOpen(false); onSignOut(); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50"
-                  >
-                    <LogOut size={16} strokeWidth={2} />
-                    <span className="font-medium">Esci</span>
-                  </button>
-                </li>
-              </>
-            )}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Estratto OUT del Navbar component, altrimenti viene rimontato ad ogni
-// re-render → su mobile la tastiera si chiude ad ogni lettera digitata.
-const SearchForm = ({ className = '', onSubmit, q, setQ }: {
-  className?: string;
-  onSubmit: (e: React.FormEvent) => void;
-  q: string;
-  setQ: (v: string) => void;
-}) => (
-  <form onSubmit={onSubmit} className={className}>
-    <div className="flex">
-      <input
-        type="text"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Cerca prodotti, negozi..."
-        className="w-full min-w-0 px-4 py-2 rounded-l-md text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-400 text-sm sm:text-base"
-      />
-      <button
-        type="submit"
-        className="bg-indigo-600 hover:bg-indigo-700 px-4 rounded-r-md font-semibold shrink-0 flex items-center justify-center text-white"
-        aria-label="Cerca"
-      >
-        <Search size={18} strokeWidth={2.2} />
-      </button>
-    </div>
-  </form>
-);
-
-const Navbar = () => {
+/**
+ * Navbar redesignata "Mediterranean Modern":
+ *  - top: PromoTicker (ticker rotante con highlight)
+ *  - main: logo · LocationPill · SearchBar · accountCluster
+ *  - sub: CategoryBar sticky (no auto-hide, l'utente la deve sempre vedere)
+ *  - mobile: una riga compatta in alto + MobileTabBar in fondo (in layout)
+ *
+ * Si nasconde solo su sign-in / sign-up (auth flow distraction-free).
+ */
+export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const [q, setQ] = useState('');
+  const { profile, userEmail, isAuthenticated, isLoading, isSeller, isRider, isAdmin } = useProfile();
   const cartCount = useCartCount();
   const notifCount = useNotificationsCount();
   const msgUnread = useMessagesUnread();
-  const { profile, userEmail, isAuthenticated, isLoading, isSeller, isRider, isAdmin } = useProfile();
-  // IMPORTANTE: useScrollHide DEVE essere chiamato qui, prima di qualsiasi
-  // early-return. Le Rules of Hooks impongono che la sequenza di chiamate
-  // sia identica a ogni render.
-  const hideCategoryOnScroll = useScrollHide();
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (q.trim()) router.push(`/search?q=${encodeURIComponent(q.trim())}`);
-  };
+  const { favorites } = useFavorites();
+  const favCount = favorites.size;
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -280,277 +47,284 @@ const Navbar = () => {
 
   if (pathname?.startsWith('/sign-in') || pathname?.startsWith('/sign-up')) return null;
 
+  const role: Role =
+    isAdmin ? 'admin' :
+    isSeller ? 'seller' :
+    isRider ? 'rider' :
+    isAuthenticated ? 'buyer' : null;
+
   const displayName =
     profile?.full_name?.split(' ')[0] ??
     profile?.store_name ??
     profile?.email?.split('@')[0] ??
     userEmail?.split('@')[0] ??
-    '';
+    'utente';
 
-  const role: Role = isAdmin ? 'admin' : isSeller ? 'seller' : isRider ? 'rider' : isAuthenticated ? 'buyer' : null;
   const profileHref = isSeller ? '/seller/profile' : isRider ? '/rider/profile' : '/profile';
-  const ordersHref  = isSeller ? '/seller/orders'  : isRider ? '/rider'         : '/orders';
 
-  // CategoryBar: mostrata solo a buyer/guest, nascosta in aree pro e durante
-  // navigazione in aree pro anche se l'utente è buyer.
-  const isProRole = isAdmin || isSeller || isRider;
+  // CategoryBar mostrata solo per buyer/guest in aree pubbliche (no /seller, /rider, /admin)
   const isProArea =
     !!pathname?.startsWith('/seller') ||
-    !!pathname?.startsWith('/rider')  ||
+    !!pathname?.startsWith('/rider') ||
     !!pathname?.startsWith('/admin');
-  const showCategoryBar = !isProRole && !isProArea;
-
-  const ProfileIcon = ({ compact = false }: { compact?: boolean }) => {
-    if (!isAuthenticated) {
-      return (
-        <div className="flex items-center gap-3 text-sm">
-          <Link href="/sign-in" className="hover:text-indigo-300">Accedi</Link>
-          <Link href="/sign-up" className="hover:text-indigo-300 hidden sm:inline">Registrati</Link>
-        </div>
-      );
-    }
-    const initial = displayName?.[0]?.toUpperCase() ?? '?';
-    return (
-      <Link
-        href={profileHref}
-        title="Il tuo account"
-        className="flex items-center gap-2 hover:text-indigo-300 transition-colors"
-      >
-        <span
-          className={`${
-            isSeller ? 'bg-pink-500/15 ring-pink-400/30 text-pink-300' :
-            isRider  ? 'bg-amber-500/15 ring-amber-400/30 text-amber-300' :
-                        'bg-indigo-500/15 ring-indigo-400/30 text-indigo-300'
-          } w-9 h-9 rounded-full ring-1 flex items-center justify-center text-sm font-bold uppercase shrink-0`}
-        >
-          {isSeller ? <Store size={16} strokeWidth={2.2} /> : isRider ? <Bike size={16} strokeWidth={2.2} /> : initial}
-        </span>
-        {!compact && (
-          <span className="hidden sm:flex flex-col leading-tight">
-            <span className="text-[10px] text-gray-400 uppercase tracking-wide">
-              {isSeller ? 'Negozio' : isRider ? 'Rider' : 'Ciao'}
-            </span>
-            <span className="font-semibold truncate max-w-[120px]">{displayName || 'utente'}</span>
-          </span>
-        )}
-      </Link>
-    );
-  };
-
-  const AdminLink = () =>
-    isAdmin ? (
-      <Link href="/admin" title="Admin" className="hidden md:flex items-center gap-1.5 hover:text-rose-300 transition-colors text-sm">
-        <Shield size={18} strokeWidth={2} />
-        <span>Admin</span>
-      </Link>
-    ) : null;
-
-  const NotificationsIcon = () =>
-    isAuthenticated ? (
-      <Link
-        href="/notifications"
-        title="Notifiche"
-        className="relative flex items-center hover:text-indigo-300 transition-colors"
-      >
-        <Bell size={20} strokeWidth={2} />
-        {notifCount > 0 && (
-          <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
-            {notifCount > 99 ? '99+' : notifCount}
-          </span>
-        )}
-      </Link>
-    ) : null;
-
-  const MessagesIcon = () =>
-    isAuthenticated ? (
-      <Link
-        href="/messages"
-        title="Messaggi"
-        className="relative flex items-center hover:text-indigo-300 transition-colors"
-      >
-        <MessageCircle size={20} strokeWidth={2} />
-        {msgUnread > 0 && (
-          <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
-            {msgUnread > 99 ? '99+' : msgUnread}
-          </span>
-        )}
-      </Link>
-    ) : null;
-
-  const OrdersIcon = () =>
-    isAuthenticated ? (
-      <Link
-        href={ordersHref}
-        title={isSeller ? 'Ordini ricevuti' : isRider ? 'Consegne' : 'I tuoi ordini'}
-        className="flex items-center gap-1.5 hover:text-indigo-300 transition-colors text-sm"
-      >
-        {isRider ? <Bike size={20} strokeWidth={2} /> : <Package size={20} strokeWidth={2} />}
-        <span className="hidden md:inline">{isRider ? 'Consegne' : 'Ordini'}</span>
-      </Link>
-    ) : null;
-
-  const CartIcon = () =>
-    !isSeller && !isRider ? (
-      <Link
-        href="/cart"
-        title="Carrello"
-        className="relative flex items-center gap-1.5 hover:text-indigo-300 transition-colors text-sm"
-      >
-        <ShoppingCart size={20} strokeWidth={2} />
-        {cartCount > 0 && (
-          <span className="absolute -top-2 -right-3 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
-            {cartCount}
-          </span>
-        )}
-        <span className="hidden md:inline">Carrello</span>
-      </Link>
-    ) : null;
+  const showCategoryBar = !isProArea && !isSeller && !isRider && !isAdmin;
 
   return (
-    <header className="sticky top-0 z-50 shadow-sm">
-      <div className="bg-gray-950 text-gray-200 text-xs sm:text-sm border-b border-gray-800">
-        <div className="container mx-auto px-4 py-2 flex items-center justify-start sm:justify-center gap-6 overflow-x-auto scrollbar-hide whitespace-nowrap">
-          <span className="flex items-center gap-1.5 shrink-0">
-            <Truck size={14} strokeWidth={2} className="text-indigo-400" />
-            <span className="font-medium">Spedizione gratuita sopra €30</span>
-          </span>
-          <span className="flex items-center gap-1.5 shrink-0">
-            <Banknote size={14} strokeWidth={2} className="text-indigo-400" />
-            <span className="font-medium">Pagamento alla consegna</span>
-          </span>
-          <span className="flex items-center gap-1.5 shrink-0">
-            <MapPin size={14} strokeWidth={2} className="text-indigo-400" />
-            <span className="font-medium">Venditori 100% locali</span>
-          </span>
-          <span className="flex items-center gap-1.5 shrink-0">
-            <Zap size={14} strokeWidth={2} className="text-indigo-400" />
-            <span className="font-medium">Consegna in 24-48h</span>
-          </span>
-        </div>
-      </div>
-      <div className="bg-gray-900 text-white">
-        {/* MOBILE */}
-        <div className="md:hidden">
-          <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-3">
-            <Link href="/" className="text-xl font-bold tracking-tight whitespace-nowrap">
-              <span className="text-indigo-400">My</span>City
-            </Link>
-            <div className="flex items-center gap-4">
-              {!isLoading && <ProfileIcon compact />}
-              <MessagesIcon />
-              <NotificationsIcon />
-              <OrdersIcon />
-              <CartIcon />
-            </div>
-          </div>
-          <div className="container mx-auto px-4 pb-3 flex items-center gap-2">
-            <NavMenu role={role} isAuthenticated={isAuthenticated} onSignOut={handleSignOut} />
-            <SearchForm className="flex-1 min-w-0" onSubmit={handleSearch} q={q} setQ={setQ} />
-          </div>
-        </div>
+    <header className="sticky top-0 z-40 shadow-warm-sm">
+      <PromoTicker />
 
+      {/* MAIN — bg primary (terracotta), accenti accent (mustard) */}
+      <div className="bg-primary-700 text-white">
         {/* DESKTOP */}
         <div className="hidden md:block">
-          <div className="container mx-auto flex items-center gap-4 px-4 py-3">
-            <Link href="/" className="text-2xl font-bold tracking-tight whitespace-nowrap">
-              <span className="text-indigo-400">My</span>City
-            </Link>
-            <NavMenu role={role} isAuthenticated={isAuthenticated} onSignOut={handleSignOut} />
-            <SearchForm className="flex-1 max-w-2xl" onSubmit={handleSearch} q={q} setQ={setQ} />
-            <nav className="ml-auto flex items-center gap-5 text-sm">
-              {!isLoading && <ProfileIcon />}
-              <AdminLink />
-              <MessagesIcon />
-              <NotificationsIcon />
-              <OrdersIcon />
-              <CartIcon />
-            </nav>
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex items-center gap-4">
+              <Link href="/" className="text-2xl font-serif font-bold tracking-tight whitespace-nowrap leading-none">
+                <span className="text-accent-300">My</span>City
+              </Link>
+              <LocationPill />
+              <div className="flex-1 max-w-2xl">
+                <SearchBar />
+              </div>
+
+              <nav className="ml-auto flex items-center gap-2 text-sm">
+                {!isAuthenticated && !isLoading && (
+                  <>
+                    <Link href="/sign-in" className="px-3 py-2 hover:text-accent-300 font-medium">Accedi</Link>
+                    <Link href="/sign-up" className="bg-accent-500 hover:bg-accent-600 text-ink-900 px-4 py-2 rounded-full font-semibold transition-colors">
+                      Registrati
+                    </Link>
+                  </>
+                )}
+
+                {isAuthenticated && (
+                  <>
+                    {role === 'buyer' && (
+                      <IconButton href="/favorites" label="Preferiti" badge={favCount}>
+                        <Heart size={20} strokeWidth={2} />
+                      </IconButton>
+                    )}
+                    <IconButton href="/messages" label="Messaggi" badge={msgUnread}>
+                      <MessageCircle size={20} strokeWidth={2} />
+                    </IconButton>
+                    <IconButton href="/notifications" label="Notifiche" badge={notifCount}>
+                      <Bell size={20} strokeWidth={2} />
+                    </IconButton>
+                    {role === 'buyer' && (
+                      <CartButton count={cartCount} />
+                    )}
+                    {isSeller && (
+                      <Link href="/seller/orders" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold">
+                        <Package size={16} strokeWidth={2.2} />
+                        Ordini
+                      </Link>
+                    )}
+                    {isRider && (
+                      <Link href="/rider" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold">
+                        <Bike size={16} strokeWidth={2.2} />
+                        Consegne
+                      </Link>
+                    )}
+                    {isAdmin && (
+                      <Link href="/admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold">
+                        <Shield size={16} strokeWidth={2.2} />
+                        Admin
+                      </Link>
+                    )}
+                    <UserMenu
+                      displayName={displayName}
+                      role={role}
+                      profileHref={profileHref}
+                      isSeller={isSeller}
+                      isRider={isRider}
+                      isAdmin={isAdmin}
+                      onSignOut={handleSignOut}
+                    />
+                  </>
+                )}
+              </nav>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* CategoryBar: solo per buyer/guest, e con auto-hide su scroll giù */}
-      <CategoryBarSlot show={showCategoryBar} hidden={hideCategoryOnScroll} />
+        {/* MOBILE */}
+        <div className="md:hidden">
+          <div className="container mx-auto px-3 py-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <Link href="/" className="text-xl font-serif font-bold whitespace-nowrap leading-none">
+                <span className="text-accent-300">My</span>City
+              </Link>
+              <LocationPill compact />
+              {isAuthenticated && role === 'buyer' && (
+                <Link href="/cart" aria-label="Carrello" className="relative ml-auto p-2">
+                  <ShoppingCart size={22} strokeWidth={2} />
+                  {cartCount > 0 && (
+                    <span className="absolute top-0 right-0 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                      {cartCount > 99 ? '99+' : cartCount}
+                    </span>
+                  )}
+                </Link>
+              )}
+              {!isAuthenticated && !isLoading && (
+                <Link href="/sign-in" className="ml-auto text-sm font-medium hover:text-accent-300">Accedi</Link>
+              )}
+            </div>
+            <div className="mt-2">
+              <SearchBar placeholder="Cerca a Piacenza..." />
+            </div>
+          </div>
+        </div>
+
+        {/* SUB — CategoryBar sticky, no auto-hide */}
+        {showCategoryBar && (
+          <div className="border-t border-primary-600/40 bg-primary-700">
+            <CategoryBar />
+          </div>
+        )}
+      </div>
     </header>
   );
-};
+}
 
-/**
- * Wrapper che applica l'animazione "scrollo giù → si chiude / scrollo su → si apre"
- * usando max-height. Tieni la mount/unmount controllata dal parent così evitiamo
- * effetti sulle aree dove la barra non serve mai (seller/rider/admin).
- */
-const CategoryBarSlot = ({ show, hidden }: { show: boolean; hidden: boolean }) => {
-  if (!show) return null;
+// ---------------------------------------------------------------------------
+
+const IconButton = ({ href, label, badge, children }: { href: string; label: string; badge?: number; children: React.ReactNode }) => (
+  <Link
+    href={href}
+    title={label}
+    className="relative p-2 hover:bg-white/10 rounded-full transition-colors"
+  >
+    {children}
+    {badge && badge > 0 ? (
+      <span className="absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+        {badge > 99 ? '99+' : badge}
+      </span>
+    ) : null}
+  </Link>
+);
+
+const CartButton = ({ count }: { count: number }) => (
+  <Link
+    href="/cart"
+    title="Carrello"
+    className="ml-1 inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-ink-900 px-3 py-2 rounded-full text-sm font-bold transition-colors relative"
+  >
+    <ShoppingCart size={16} strokeWidth={2.4} />
+    <span className="hidden lg:inline">Carrello</span>
+    {count > 0 && (
+      <span className="bg-ink-900 text-accent-500 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+        {count > 99 ? '99+' : count}
+      </span>
+    )}
+  </Link>
+);
+
+const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, onSignOut }: {
+  displayName: string;
+  role: Role;
+  profileHref: string;
+  isSeller: boolean;
+  isRider: boolean;
+  isAdmin: boolean;
+  onSignOut: () => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const pathname = usePathname();
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [open]);
+
+  const initial = displayName?.[0]?.toUpperCase() ?? '?';
+
   return (
-    <div
-      aria-hidden={hidden}
-      className={`overflow-hidden transition-[max-height,opacity] duration-300 ease-out ${
-        hidden ? 'max-h-0 opacity-0 pointer-events-none' : 'max-h-24 opacity-100'
-      }`}
-    >
-      <CategoryBar />
+    <div ref={ref} className="relative ml-1">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 hover:bg-white/10 px-2 py-1.5 rounded-full transition-colors"
+        aria-label="Menu account"
+      >
+        <span className={`w-9 h-9 rounded-full ring-2 ring-white/20 flex items-center justify-center text-sm font-bold uppercase ${
+          isSeller ? 'bg-accent-500 text-ink-900' :
+          isRider  ? 'bg-olive-500 text-white' :
+          isAdmin  ? 'bg-secondary-500 text-white' :
+                     'bg-cream-200 text-primary-700'
+        }`}>
+          {isSeller ? <Store size={16} /> : isRider ? <Bike size={16} /> : initial}
+        </span>
+        <span className="hidden xl:flex flex-col leading-tight text-left">
+          <span className="text-[10px] uppercase tracking-wide opacity-70">
+            {isSeller ? 'Negozio' : isRider ? 'Rider' : isAdmin ? 'Admin' : 'Ciao'}
+          </span>
+          <span className="font-semibold text-sm truncate max-w-[120px]">{displayName}</span>
+        </span>
+        <ChevronDown size={14} strokeWidth={2.4} className="opacity-70 hidden xl:block" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-warm-lg ring-1 ring-ink-100 overflow-hidden z-50">
+          <div className="px-4 py-3 border-b border-ink-100 bg-cream-100">
+            <p className="text-xs text-ink-500 uppercase tracking-wide">Ciao</p>
+            <p className="font-semibold text-ink-900 truncate">{displayName}</p>
+          </div>
+          <ul className="py-1 text-ink-700">
+            <MenuLink href={profileHref} icon="👤" label="Il mio profilo" />
+            {role === 'buyer' && (
+              <>
+                <MenuLink href="/orders" icon="📦" label="I miei ordini" />
+                <MenuLink href="/favorites" icon="♥" label="Preferiti" />
+                <MenuLink href="/profile/addresses" icon="📌" label="Indirizzi" />
+                <MenuLink href="/profile/loyalty" icon="✨" label="Punti & Livello" />
+                <MenuLink href="/profile/referral" icon="🎁" label="Invita amici · €5" />
+              </>
+            )}
+            {isSeller && (
+              <>
+                <MenuLink href="/seller/dashboard" icon="📊" label="Dashboard" />
+                <MenuLink href="/seller/products" icon="📦" label="I miei prodotti" />
+                <MenuLink href="/seller/orders" icon="🛒" label="Ordini ricevuti" />
+                <MenuLink href="/seller/earnings" icon="💶" label="Guadagni" />
+              </>
+            )}
+            {isRider && (
+              <>
+                <MenuLink href="/rider" icon="🛵" label="Dashboard" />
+                <MenuLink href="/rider/availability" icon="🟢" label="Disponibilità" />
+                <MenuLink href="/rider/earnings" icon="💶" label="Guadagni" />
+              </>
+            )}
+            <MenuLink href="/profile/settings" icon="⚙️" label="Impostazioni" />
+            <MenuLink href="/faq" icon="❓" label="FAQ" />
+            <li><div className="border-t border-ink-100 my-1" /></li>
+            <li>
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-secondary-600 hover:bg-secondary-50 font-medium"
+              >
+                <LogOut size={16} strokeWidth={2.2} />
+                Esci
+              </button>
+            </li>
+          </ul>
+        </div>
+      )}
     </div>
   );
 };
 
-/**
- * Restituisce true quando l'utente sta scrollando verso il basso oltre una
- * soglia minima. Throttle via requestAnimationFrame.
- *
- * Anti-tremolio:
- *  - ignora variazioni < 15px (overscroll, momentum, jitter touch)
- *  - cooldown di 400ms tra un toggle e il successivo, più lungo della
- *    transizione CSS (300ms): impedisce che il layout-shift causato dal
- *    cambio di altezza della barra triggeri immediatamente l'evento
- *    opposto creando il loop hide→show→hide
- *  - ignora overscroll negativo (scrollY < 0 sui mobile con bounce)
- */
-function useScrollHide(threshold = 80) {
-  const [hidden, setHidden] = useState(false);
-  useEffect(() => {
-    let lastY = Math.max(0, typeof window !== 'undefined' ? window.scrollY : 0);
-    let ticking = false;
-    let lastToggleAt = 0;
-    const COOLDOWN_MS = 400;
-    const JITTER_PX = 15;
-
-    const onScroll = () => {
-      if (ticking) return;
-      ticking = true;
-      window.requestAnimationFrame(() => {
-        const y = Math.max(0, window.scrollY);
-        const dy = y - lastY;
-
-        if (Math.abs(dy) < JITTER_PX) { ticking = false; return; }
-
-        const now = Date.now();
-        if (now - lastToggleAt < COOLDOWN_MS) {
-          // siamo ancora "freschi" da un toggle: aggiorna solo il riferimento
-          lastY = y;
-          ticking = false;
-          return;
-        }
-
-        if (dy > 0 && y > threshold) {
-          setHidden((cur) => {
-            if (!cur) lastToggleAt = now;
-            return true;
-          });
-        } else if (dy < 0) {
-          setHidden((cur) => {
-            if (cur) lastToggleAt = now;
-            return false;
-          });
-        }
-        lastY = y;
-        ticking = false;
-      });
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [threshold]);
-  return hidden;
-}
-
-export default Navbar;
+const MenuLink = ({ href, icon, label }: { href: string; icon: string; label: string }) => (
+  <li>
+    <Link href={href} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-cream-100">
+      <span className="text-base w-5 text-center">{icon}</span>
+      <span className="font-medium">{label}</span>
+    </Link>
+  </li>
+);

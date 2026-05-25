@@ -1,12 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import Honeypot from '@/components/Honeypot';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
   const [sending, setSending] = useState(false);
+  const honeypotRef = useRef('');
+  const startedAtRef = useRef(Date.now());
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,12 +17,28 @@ export default function ContactPage() {
       toast.error('Compila tutti i campi obbligatori');
       return;
     }
+    // Bot guards
+    if (honeypotRef.current) { toast.success('Messaggio inviato! Ti risponderemo entro 24h.'); return; }
+    if (Date.now() - startedAtRef.current < 2000) { toast.success('Messaggio inviato!'); return; }
+
     setSending(true);
-    // Mock invio (Resend è installato ma non integrato in questo MVP)
-    await new Promise((r) => setTimeout(r, 700));
-    setSending(false);
-    toast.success('Messaggio inviato! Ti risponderemo entro 24h lavorative.');
-    setForm({ name: '', email: '', subject: 'Domanda generale', message: '' });
+    try {
+      const res = await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ...form, company: honeypotRef.current }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? 'Invio non riuscito');
+      }
+      toast.success('Messaggio inviato! Ti risponderemo entro 24h lavorative.');
+      setForm({ name: '', email: '', subject: 'Domanda generale', message: '' });
+    } catch (err: any) {
+      toast.error(err.message ?? 'Errore');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -54,6 +73,7 @@ export default function ContactPage() {
         <div className="md:col-span-3 bg-white border border-gray-200 rounded-2xl p-6">
           <h2 className="text-xl font-bold mb-4">Scrivici un messaggio</h2>
           <form onSubmit={submit} className="space-y-4">
+            <Honeypot value={honeypotRef.current} onChange={(v) => (honeypotRef.current = v)} name="company" />
             <div className="grid sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Nome *</label>

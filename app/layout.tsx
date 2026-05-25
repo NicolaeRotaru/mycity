@@ -1,16 +1,24 @@
 import './globals.css';
-import { Inter } from 'next/font/google';
+import { Inter, Fraunces } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
+import MobileTabBar from '@/components/MobileTabBar';
 import QueryProvider from '@/components/providers/QueryProvider';
 import ToastProvider from '@/components/providers/ToastProvider';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import CookieBanner from '@/components/CookieBanner';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
+import DailyCheckIn from '@/components/DailyCheckIn';
 import { Suspense } from 'react';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
+const fraunces = Fraunces({
+  subsets: ['latin'],
+  variable: '--font-serif',
+  display: 'swap',
+  weight: ['400', '500', '600', '700', '800'],
+});
 
 export const metadata: Metadata = {
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
@@ -33,7 +41,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  themeColor: '#4f46e5',
+  themeColor: '#C0492C',
 };
 
 // Schema markup Organization a livello di sito
@@ -51,8 +59,8 @@ const orgSchema = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="it" suppressHydrationWarning>
-      <body className={inter.className}>
+    <html lang="it" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable}`}>
+      <body className={`${inter.className} bg-cream-100 text-ink-800`}>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
@@ -61,6 +69,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Navbar />
           <main className="min-h-screen">{children}</main>
           <Footer />
+          <MobileTabBar />
+          <DailyCheckIn />
         </QueryProvider>
         <ToastProvider />
         <ConfirmDialogHost />
