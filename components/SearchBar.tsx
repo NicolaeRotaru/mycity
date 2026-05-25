@@ -48,13 +48,11 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
     queryFn: async (): Promise<Suggestion[]> => {
       const term = debounced;
       const pattern = `%${term}%`;
+      // 1) Prodotti via RPC smart (FTS italiano + trigram fallback). Più
+      //    rilevante di ILIKE: matcha morfologicamente (es. "salumeria"
+      //    matcha "salumerie") e ordina per ranking semantico.
       const [productsRes, storesRes, categoriesRes] = await Promise.all([
-        supabase
-          .from('products')
-          .select('id, name, price, images, profiles!products_seller_id_fkey ( store_name, is_approved )')
-          .ilike('name', pattern)
-          .eq('status', 'available')
-          .limit(6),
+        supabase.rpc('search_products_smart', { q: term, lim: 6 }),
         supabase
           .from('profiles')
           .select('id, store_name, store_logo_url')
@@ -69,16 +67,14 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
           .limit(3),
       ]);
 
-      const products: Suggestion[] = (productsRes.data ?? [])
-        .filter((p: any) => p.profiles?.is_approved)
-        .map((p: any) => ({
-          kind: 'product' as const,
-          id: p.id,
-          name: p.name,
-          price: Number(p.price),
-          image: Array.isArray(p.images) && p.images[0] ? p.images[0] : null,
-          store: p.profiles?.store_name ?? null,
-        }));
+      const products: Suggestion[] = (productsRes.data ?? []).map((p: any) => ({
+        kind: 'product' as const,
+        id: p.id,
+        name: p.name,
+        price: Number(p.price),
+        image: Array.isArray(p.images) && p.images[0] ? p.images[0] : null,
+        store: p.store_name ?? null,
+      }));
       const stores: Suggestion[] = (storesRes.data ?? []).map((s: any) => ({
         kind: 'store' as const,
         id: s.id,
