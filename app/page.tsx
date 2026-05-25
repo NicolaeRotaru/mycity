@@ -86,40 +86,55 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Card di destra "Anteprima negozio" */}
+            {/* Card di destra "Anteprima negozio" — carosello prodotti scrollabile */}
             <div className="hidden md:flex justify-center">
               <div className="relative w-full max-w-sm">
-                <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-6 space-y-4">
+                <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-6 space-y-4 overflow-hidden">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
                       <Coffee size={22} strokeWidth={2} />
                     </div>
-                    <div>
-                      <p className="font-semibold text-ink-900">Salumeria del Borgo</p>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink-900 truncate">Salumeria del Borgo</p>
                       <p className="text-xs text-ink-500 flex items-center gap-1">
                         <MapPin size={12} strokeWidth={2} /> Via Calzolai 12 · 0.4 km
                       </p>
                     </div>
-                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200">
-                      <span className="relative inline-flex">
-                        <span className="w-1.5 h-1.5 rounded-full bg-olive-600" />
-                      </span>
+                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-olive-600 animate-pulse-soft" />
                       Aperto
                     </span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { name: 'Coppa DOP', price: '€9,50' },
-                      { name: 'Pancetta',  price: '€7,80' },
-                      { name: 'Salame',    price: '€12,00' },
-                    ].map((p) => (
-                      <div key={p.name} className="bg-cream-100 rounded-lg p-2">
-                        <div className="aspect-square rounded bg-gradient-to-br from-accent-100 to-primary-100 mb-1.5" />
-                        <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
-                        <p className="text-xs font-semibold text-ink-900">{p.price}</p>
-                      </div>
-                    ))}
+
+                  {/* Carosello orizzontale: 10 prodotti, almeno 3 scroll */}
+                  <div className="relative -mx-6 px-6">
+                    <div className="flex gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
+                      {[
+                        { name: 'Coppa DOP',        price: '€9,50',  grad: 'from-accent-100 to-primary-100' },
+                        { name: 'Pancetta',         price: '€7,80',  grad: 'from-primary-100 to-secondary-100' },
+                        { name: 'Salame',           price: '€12,00', grad: 'from-secondary-100 to-accent-100' },
+                        { name: 'Prosciutto crudo', price: '€15,00', grad: 'from-accent-100 to-cream-300' },
+                        { name: 'Mortadella',       price: '€6,40',  grad: 'from-cream-300 to-primary-100' },
+                        { name: 'Bresaola',         price: '€18,00', grad: 'from-primary-100 to-accent-200' },
+                        { name: 'Speck IGP',        price: '€14,50', grad: 'from-accent-200 to-secondary-100' },
+                        { name: 'Lonzino',          price: '€10,90', grad: 'from-secondary-100 to-primary-200' },
+                        { name: 'Culatello',        price: '€24,00', grad: 'from-primary-200 to-cream-300' },
+                        { name: 'Pancetta arr.',    price: '€9,20',  grad: 'from-cream-300 to-accent-200' },
+                      ].map((p) => (
+                        <div key={p.name} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
+                          <div className={`aspect-square rounded bg-gradient-to-br ${p.grad} mb-1.5`} />
+                          <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
+                          <p className="text-xs font-semibold text-ink-900">{p.price}</p>
+                        </div>
+                      ))}
+                      {/* Spacer finale per evitare che l'ultimo sia tagliato dal fade */}
+                      <div aria-hidden className="shrink-0 w-2" />
+                    </div>
+                    {/* Fade ai bordi che suggerisce lo scroll */}
+                    <div aria-hidden className="pointer-events-none absolute left-0 top-0 bottom-1 w-6 bg-gradient-to-r from-white to-transparent" />
+                    <div aria-hidden className="pointer-events-none absolute right-0 top-0 bottom-1 w-6 bg-gradient-to-l from-white to-transparent" />
                   </div>
+
                   <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
                     <span className="text-ink-500">Consegna stimata</span>
                     <span className="font-semibold text-ink-900">oggi, entro 18:00</span>
