@@ -1,3 +1,5 @@
+import { MapPin, Phone } from 'lucide-react';
+
 interface StoreCardProps {
   id: string;
   name: string;
@@ -10,17 +12,21 @@ const StoreCard = ({ id, name, lat, lng, phone }: StoreCardProps) => {
   const mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
 
   return (
-    <div className="border rounded-lg p-4 space-y-2 hover:shadow-md transition-shadow">
-      <h3 className="text-xl font-bold">{name}</h3>
+    <div className="border border-cream-300 rounded-xl p-4 space-y-2 hover:shadow-warm transition-shadow bg-white">
+      <h3 className="text-xl font-serif font-bold text-ink-900">{name}</h3>
       <a
         href={mapsUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-sm text-indigo-600 hover:underline"
+        className="inline-flex items-center gap-1.5 text-sm text-primary-700 hover:underline"
       >
-        📍 {lat.toFixed(4)}, {lng.toFixed(4)}
+        <MapPin size={14} strokeWidth={2.2} />
+        {lat.toFixed(4)}, {lng.toFixed(4)}
       </a>
-      <p className="text-gray-600">📞 {phone}</p>
+      <p className="inline-flex items-center gap-1.5 text-ink-600">
+        <Phone size={14} strokeWidth={2.2} />
+        {phone}
+      </p>
     </div>
   );
 };

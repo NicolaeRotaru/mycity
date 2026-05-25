@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
 import { SkeletonGrid } from './SkeletonCard';
@@ -63,10 +64,10 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
 
   if (filtered.length === 0) {
     return (
-      <div className="text-center py-16 bg-white border rounded-xl">
-        <p className="text-5xl mb-3">🔍</p>
-        <p className="text-gray-600 font-semibold mb-1">Nessun prodotto trovato</p>
-        <p className="text-sm text-gray-400">Prova a modificare i filtri o cerca qualcos'altro</p>
+      <div className="text-center py-16 bg-white border border-cream-300 rounded-xl">
+        <SearchX size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" />
+        <p className="text-ink-700 font-semibold mb-1">Nessun prodotto trovato</p>
+        <p className="text-sm text-ink-400">Prova a modificare i filtri o cerca qualcos&apos;altro</p>
       </div>
     );
   }

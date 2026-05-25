@@ -29,7 +29,7 @@ const ProductCard = ({
   id, name, description, price, images, rating, reviewCount = 0,
   stock, createdAt, storeName, sellerId,
 }: ProductCardProps) => {
-  const rawImg = images?.[0] ?? 'https://placehold.co/400x400/eef2ff/6366f1?text=Foto';
+  const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
   const img = sizedImage(rawImg, 'card');
   const { favorites, toggle } = useFavorites();
   const isFav = favorites.has(id);
@@ -66,29 +66,29 @@ const ProductCard = ({
   return (
     <Link
       href={`/product/${id}`}
-      className="group bg-white border rounded-xl overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-200 flex flex-col relative"
+      className="group bg-white border border-cream-200 rounded-xl overflow-hidden hover:shadow-warm-lg hover:-translate-y-1 hover:border-primary-200 transition-all duration-200 flex flex-col relative"
     >
       {/* Badges in alto a sinistra */}
       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
         {isNew && (
-          <span className="bg-emerald-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
+          <span className="bg-olive-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
             Nuovo
           </span>
         )}
         {isOutOfStock && (
-          <span className="bg-gray-700 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
+          <span className="bg-ink-700 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
             Esaurito
           </span>
         )}
         {isLowStock && !isOutOfStock && (
-          <span className="bg-rose-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
+          <span className="bg-secondary-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
             Ultimi {stock}
           </span>
         )}
       </div>
 
       {/* Immagine + favorite button */}
-      <div className="relative w-full h-48 bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+      <div className="relative w-full h-48 bg-gradient-to-br from-cream-50 to-cream-200 overflow-hidden">
         <Image
           src={img}
           alt={name}
@@ -107,40 +107,40 @@ const ProductCard = ({
           <Heart
             size={16}
             strokeWidth={2}
-            className={`${isFav ? 'text-rose-500 fill-rose-500' : 'text-gray-400'} ${heartBeat ? 'animate-heart-beat' : ''}`}
+            className={`${isFav ? 'text-secondary-500 fill-secondary-500' : 'text-ink-400'} ${heartBeat ? 'animate-heart-beat' : ''}`}
           />
         </button>
       </div>
 
       <div className="p-3 flex flex-col flex-1">
         {storeName && (
-          <p className="text-[11px] text-gray-400 uppercase tracking-wide truncate">
+          <p className="text-[11px] text-ink-400 uppercase tracking-wide truncate">
             {storeName}
           </p>
         )}
-        <h3 className="font-semibold text-gray-800 line-clamp-2 mb-1 group-hover:text-indigo-600 transition-colors">
+        <h3 className="font-semibold text-ink-800 line-clamp-2 mb-1 group-hover:text-primary-700 transition-colors">
           {name}
         </h3>
 
         {/* Rating */}
         <div className="flex items-center gap-1 mb-1 text-xs">
-          <span className="text-yellow-500">
+          <span className="text-accent-500">
             {rating !== undefined && rating > 0
               ? `${'★'.repeat(Math.round(rating))}${'☆'.repeat(5 - Math.round(rating))}`
               : '☆☆☆☆☆'}
           </span>
-          <span className="text-gray-400">({reviewCount})</span>
+          <span className="text-ink-400">({reviewCount})</span>
         </div>
 
         {description && (
-          <p className="text-gray-500 text-xs line-clamp-1 mb-2">{description}</p>
+          <p className="text-ink-500 text-xs line-clamp-1 mb-2">{description}</p>
         )}
 
         <div className="mt-auto pt-2">
           <div className="flex items-baseline gap-2 mb-2 flex-wrap">
-            <span className="text-xl font-bold text-gray-900">{formatPrice(price)}</span>
+            <span className="text-xl font-bold text-ink-900">{formatPrice(price)}</span>
             {freeShipping && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
+              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-olive-700 bg-olive-50 px-1.5 py-0.5 rounded">
                 <Truck size={10} strokeWidth={2.4} />
                 Sped. gratis
               </span>
@@ -149,7 +149,7 @@ const ProductCard = ({
           <button
             onClick={handleAdd}
             disabled={isOutOfStock}
-            className="w-full inline-flex items-center justify-center gap-1.5 bg-gray-900 hover:bg-indigo-600 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed text-white text-xs font-semibold py-2 rounded-lg transition-colors"
+            className="w-full inline-flex items-center justify-center gap-1.5 bg-ink-900 hover:bg-primary-700 disabled:bg-cream-200 disabled:text-ink-400 disabled:cursor-not-allowed text-white text-xs font-semibold py-2 rounded-lg transition-colors"
           >
             {isOutOfStock ? (
               'Non disponibile'
