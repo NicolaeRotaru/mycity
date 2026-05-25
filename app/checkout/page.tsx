@@ -171,7 +171,7 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedAddresses]);
 
-  const useSavedAddress = (id: string) => {
+  const applySavedAddress = (id: string) => {
     if (!id) return;
     const a = savedAddresses.find((x: any) => x.id === id);
     if (!a) return;
@@ -453,7 +453,7 @@ export default function CheckoutPage() {
                   Indirizzo salvato
                 </label>
                 <select
-                  onChange={(e) => useSavedAddress(e.target.value)}
+                  onChange={(e) => applySavedAddress(e.target.value)}
                   className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 >
                   {savedAddresses.map((a: any) => (

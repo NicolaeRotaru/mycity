@@ -52,6 +52,9 @@ export const env = {
   // Sentry (error tracking) — solo wiring qui, attivazione separata
   sentryDsn: () => readEnv('NEXT_PUBLIC_SENTRY_DSN'),
 
+  // Google Analytics 4 (caricato solo con consenso analytics)
+  gaMeasurementId: () => readEnv('NEXT_PUBLIC_GA_MEASUREMENT_ID'),
+
   // App URL pubblico (per link in email, redirect Stripe, ecc.)
   appUrl: () => readEnv('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000',
 };

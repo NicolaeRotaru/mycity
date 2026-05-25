@@ -1,17 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import Honeypot from './Honeypot';
 
 const NewsletterForm = () => {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
+  const honeypotRef = useRef('');
+  const startedAtRef = useRef(Date.now());
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
+    // Bot guard 1: honeypot riempito
+    if (honeypotRef.current) {
+      setSubscribed(true); // simula successo, non insospettire
+      return;
+    }
+    // Bot guard 2: form compilato troppo velocemente (< 1.5s)
+    if (Date.now() - startedAtRef.current < 1500) {
+      setSubscribed(true);
+      return;
+    }
     setLoading(true);
     try {
       const { error } = await supabase
@@ -37,6 +50,7 @@ const NewsletterForm = () => {
 
   return (
     <form onSubmit={submit} className="space-y-2">
+      <Honeypot value={honeypotRef.current} onChange={(v) => (honeypotRef.current = v)} name="company" />
       <p className="text-xs text-gray-400">
         📬 <strong>Cosa c'è nel piatto a Piacenza</strong> — ricetta + storia di un negoziante + 3 offerte. Ogni venerdì.
       </p>
