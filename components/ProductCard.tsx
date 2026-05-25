@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Heart, ShoppingCart, Truck } from 'lucide-react';
@@ -33,6 +33,7 @@ const ProductCard = ({
   const img = sizedImage(rawImg, 'card');
   const { favorites, toggle } = useFavorites();
   const isFav = favorites.has(id);
+  const [heartBeat, setHeartBeat] = useState(false);
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -44,6 +45,9 @@ const ProductCard = ({
   const handleFav = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    // Trigger animazione heart-beat ad ogni click (anche unfavorite)
+    setHeartBeat(true);
+    setTimeout(() => setHeartBeat(false), 600);
     toggle.mutate(id, {
       onError: (err: any) => {
         if (err?.message === 'AUTH_REQUIRED') toast.error('Accedi per salvare nei preferiti');
@@ -103,7 +107,7 @@ const ProductCard = ({
           <Heart
             size={16}
             strokeWidth={2}
-            className={isFav ? 'text-rose-500 fill-rose-500' : 'text-gray-400'}
+            className={`${isFav ? 'text-rose-500 fill-rose-500' : 'text-gray-400'} ${heartBeat ? 'animate-heart-beat' : ''}`}
           />
         </button>
       </div>

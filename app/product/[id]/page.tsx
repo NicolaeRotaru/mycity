@@ -20,6 +20,7 @@ import ProductViewTracker from '@/components/ProductViewTracker';
 import ProductQA from '@/components/ProductQA';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import StickyAddToCart from '@/components/StickyAddToCart';
+import SimilarProducts from '@/components/SimilarProducts';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -500,13 +501,14 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         <RecentlyViewed excludeId={id} />
       </section>
 
-      {/* CORRELATI */}
-      {product.category_id && (
-        <section className="mt-12">
-          <h2 className="text-2xl font-serif font-bold mb-4 text-ink-900">Potrebbe piacerti anche</h2>
-          <ProductGrid categoryId={product.category_id} limit={4} />
-        </section>
-      )}
+      {/* CORRELATI: SimilarProducts intelligente (seller + categoria) */}
+      <section className="mt-12">
+        <SimilarProducts
+          productId={id}
+          categoryId={product.category_id ?? undefined}
+          sellerId={sellerProfile?.id ?? product.seller_id}
+        />
+      </section>
 
       {/* Sticky CTA mobile */}
       <StickyAddToCart price={price} available={!isOutOfStock} onAdd={handleAdd} />
