@@ -230,6 +230,12 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
             >
               ↩️ Richiedi reso
             </Link>
+            <Link
+              href={`/orders/${id}/dispute`}
+              className="bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 px-4 py-2 rounded-lg font-semibold text-sm"
+            >
+              ⚠️ Apri reclamo
+            </Link>
             {order.invoice_pdf_url && (
               <a
                 href={order.invoice_pdf_url}
