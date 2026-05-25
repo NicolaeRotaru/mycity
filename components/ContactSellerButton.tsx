@@ -22,15 +22,14 @@ type Props = {
  */
 export default function ContactSellerButton({ sellerId, className = '', label = 'Contatta il negozio' }: Props) {
   const router = useRouter();
-  const { isAuthenticated, isSeller, isRider, isAdmin, profile } = useProfile();
+  const { isAuthenticated, isRider, isAdmin, profile } = useProfile();
   const [loading, setLoading] = useState(false);
 
   // Non mostrare il bottone se sono lo stesso seller (vedo il mio prodotto)
   if (isAuthenticated && profile?.id === sellerId) return null;
-  // I rider e admin operano in aree pro: niente chat dal listing pubblico
+  // I rider e admin operano in aree pro: niente chat dal listing pubblico.
+  // I seller possono scrivere ad altri seller (es. per fornitura).
   if (isRider || isAdmin) return null;
-  // I seller possono comunque scrivere ad altri seller (ad es. per fornitura)
-  void isSeller;
 
   const handleClick = async () => {
     if (!isAuthenticated) {

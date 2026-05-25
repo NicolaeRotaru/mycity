@@ -7,6 +7,12 @@ import { useQuery } from '@tanstack/react-query';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
+type Counterpart = {
+  id: string;
+  full_name: string | null;
+  store_name: string | null;
+};
+
 type ConversationRow = {
   id: string;
   buyer_id: string;
@@ -15,8 +21,8 @@ type ConversationRow = {
   last_message_preview: string | null;
   buyer_unread_count: number;
   seller_unread_count: number;
-  buyer: { id: string; full_name: string | null; email: string | null } | null;
-  seller: { id: string; store_name: string | null; full_name: string | null } | null;
+  buyer: Counterpart | null;
+  seller: Counterpart | null;
 };
 
 function formatRelative(iso: string): string {
@@ -51,14 +57,14 @@ export default function MessagesListPage() {
         .select(`
           id, buyer_id, seller_id, last_message_at, last_message_preview,
           buyer_unread_count, seller_unread_count,
-          buyer:profiles!conversations_buyer_id_fkey ( id, full_name, email ),
-          seller:profiles!conversations_seller_id_fkey ( id, store_name, full_name )
+          buyer:profiles!conversations_buyer_id_fkey ( id, full_name, store_name ),
+          seller:profiles!conversations_seller_id_fkey ( id, full_name, store_name )
         `)
         .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`)
         .order('last_message_at', { ascending: false })
         .limit(50);
       if (error) throw error;
-      return (data ?? []) as any;
+      return (data ?? []) as unknown as ConversationRow[];
     },
   });
 

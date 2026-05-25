@@ -17,12 +17,17 @@ type Message = {
   read_at: string | null;
 };
 
+type CounterpartProfile = {
+  full_name: string | null;
+  store_name: string | null;
+};
+
 type Conversation = {
   id: string;
   buyer_id: string;
   seller_id: string;
-  buyer: { full_name: string | null; email: string | null } | null;
-  seller: { store_name: string | null; full_name: string | null } | null;
+  buyer: CounterpartProfile | null;
+  seller: CounterpartProfile | null;
 };
 
 function formatTime(iso: string): string {
@@ -63,13 +68,13 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
         .from('conversations')
         .select(`
           id, buyer_id, seller_id,
-          buyer:profiles!conversations_buyer_id_fkey ( full_name, email ),
-          seller:profiles!conversations_seller_id_fkey ( store_name, full_name )
+          buyer:profiles!conversations_buyer_id_fkey ( full_name, store_name ),
+          seller:profiles!conversations_seller_id_fkey ( full_name, store_name )
         `)
         .eq('id', params.id)
         .maybeSingle();
       if (error) throw error;
-      return data as any;
+      return data as unknown as Conversation | null;
     },
   });
 
@@ -168,10 +173,10 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
   }
 
   const iAmBuyer = conversation.buyer_id === userId;
+  const counterpart = iAmBuyer ? conversation.seller : conversation.buyer;
   const counterpartName =
-    (iAmBuyer ? conversation.seller?.store_name : conversation.buyer?.full_name) ??
-    (iAmBuyer ? conversation.seller?.full_name : conversation.buyer?.email) ??
-    'Utente';
+    (iAmBuyer ? counterpart?.store_name : counterpart?.full_name) ??
+    counterpart?.full_name ?? 'Utente';
 
   // Raggruppamento separatori di data
   const items: Array<{ type: 'date'; label: string; key: string } | { type: 'msg'; msg: Message }> = [];

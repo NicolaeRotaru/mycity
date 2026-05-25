@@ -5,10 +5,13 @@
 -- di fare aggregazioni lato client.
 -- Idempotente.
 
+-- FK su profiles (non auth.users) così PostgREST può fare gli embed join
+-- `profiles!conversations_buyer_id_fkey ( ... )`. Funziona perché profiles.id
+-- È auth.users.id (1:1 enforced).
 CREATE TABLE IF NOT EXISTS public.conversations (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    buyer_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    seller_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    buyer_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    seller_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     last_message_at timestamptz NOT NULL DEFAULT now(),
     last_message_preview text,
     buyer_unread_count int NOT NULL DEFAULT 0,
@@ -43,7 +46,7 @@ CREATE POLICY conversations_update_participants ON public.conversations
 CREATE TABLE IF NOT EXISTS public.messages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
-    sender_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    sender_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
     body text NOT NULL CHECK (char_length(body) BETWEEN 1 AND 4000),
     read_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now()
