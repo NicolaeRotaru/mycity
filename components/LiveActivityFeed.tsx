@@ -74,21 +74,24 @@ const LiveActivityFeed = () => {
   if (activities.length === 0) return null;
 
   return (
-    <section className="bg-white border border-gray-200 rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-bold text-gray-900 flex items-center gap-2">
-          <span className={`inline-block w-2 h-2 rounded-full bg-emerald-500 ${pulse ? 'animate-ping' : 'animate-pulse'}`} />
-          Cosa sta succedendo ora
+    <section className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="font-serif font-bold text-ink-900 text-lg flex items-center gap-2.5">
+          <span className="relative inline-flex">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-olive-500" />
+            <span className={`absolute inset-0 inline-block w-2.5 h-2.5 rounded-full bg-olive-500 ${pulse ? 'animate-ping' : 'animate-pulse-soft'}`} />
+          </span>
+          Cosa sta succedendo a Piacenza
         </h2>
-        <span className="text-xs text-gray-400">In tempo reale</span>
+        <span className="text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
       </div>
-      <ul className="space-y-2">
+      <ul className="space-y-1">
         {activities.map((a) => {
           const verb = a.delivery_status === 'DELIVERED'
             ? 'ha ricevuto un ordine da'
             : 'ha appena ordinato da';
           return (
-            <li key={a.id} className="flex items-center gap-3 text-sm py-1.5 border-b border-gray-50 last:border-0">
+            <li key={a.id} className="flex items-center gap-3 text-sm py-2 border-b border-cream-200 last:border-0 hover:bg-cream-50 -mx-2 px-2 rounded transition-colors">
               <span className="text-lg shrink-0">
                 {a.delivery_status === 'DELIVERED' ? '✅' :
                  a.delivery_status === 'OUT_FOR_DELIVERY' ? '🚚' :
@@ -96,18 +99,18 @@ const LiveActivityFeed = () => {
               </span>
               <div className="flex-1 min-w-0">
                 <p className="truncate">
-                  <strong className="text-gray-900">{anonName(a.delivery_full_name)}</strong>
-                  <span className="text-gray-500"> {verb} </span>
+                  <strong className="text-ink-900">{anonName(a.delivery_full_name)}</strong>
+                  <span className="text-ink-500"> {verb} </span>
                   {a.seller?.id ? (
-                    <Link href={`/store/${a.seller.id}`} className="font-semibold text-indigo-600 hover:underline">
+                    <Link href={`/store/${a.seller.id}`} className="font-semibold text-primary-700 hover:underline">
                       {a.seller.store_name ?? 'un negozio'}
                     </Link>
                   ) : (
-                    <span className="font-semibold text-gray-700">{a.seller?.store_name ?? 'un negozio'}</span>
+                    <span className="font-semibold text-ink-700">{a.seller?.store_name ?? 'un negozio'}</span>
                   )}
                 </p>
               </div>
-              <span className="text-xs text-gray-400 shrink-0">{timeAgo(a.created_at)}</span>
+              <span className="text-xs text-ink-400 shrink-0">{timeAgo(a.created_at)}</span>
             </li>
           );
         })}

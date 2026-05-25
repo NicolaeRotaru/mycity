@@ -1,95 +1,109 @@
 import Link from 'next/link';
-import { ShoppingBag, Store, Check, ShieldCheck, MapPin, Sparkles, ArrowRight, Flame } from 'lucide-react';
+import { Store, Check, ShieldCheck, MapPin, ArrowRight, Heart, Sparkles, Gift, Coffee } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import CategoryShowcase from '@/components/CategoryShowcase';
 import StoreShowcase from '@/components/StoreShowcase';
-import ValueProps from '@/components/ValueProps';
 import LiveActivityFeed from '@/components/LiveActivityFeed';
 import HomeRedirectGuard from '@/components/HomeRedirectGuard';
+import NewsletterForm from '@/components/NewsletterForm';
+import DropOfDay from '@/components/home/DropOfDay';
+import StoryOfDay from '@/components/home/StoryOfDay';
+import TrendingNow from '@/components/home/TrendingNow';
 
+/**
+ * Homepage MyCity — "Mediterranean Modern" + edit del giorno.
+ *
+ * Architettura del feed (top → bottom):
+ *  1. Hero: claim + CTA + card prodotto fake "premium"
+ *  2. Drop del giorno (urgenza + countdown)
+ *  3. Storia di oggi (content + brand locale)
+ *  4. Trending now (FOMO + social proof)
+ *  5. Categorie (discoverability)
+ *  6. Live activity (FOMO continuo)
+ *  7. Negozi vicini (proximity)
+ *  8. Trust band (riassurance)
+ *  9. Newsletter incentive
+ * 10. CTA venditore (acquisizione supply)
+ */
 export default function Home() {
   return (
-    <div>
+    <div className="bg-cream-100">
       <HomeRedirectGuard />
 
-      {/* HERO — sobrio, brand subtle nello sfondo, copy chiaro */}
-      <section className="relative overflow-hidden bg-white">
-        {/* Decorazione: gradient blob discreto in sfondo, non protagonista */}
-        <div
-          aria-hidden
-          className="absolute -top-32 -right-32 w-[600px] h-[600px] rounded-full bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 blur-3xl opacity-70"
-        />
-        <div
-          aria-hidden
-          className="absolute -bottom-40 -left-20 w-[500px] h-[500px] rounded-full bg-gradient-to-tr from-amber-50 to-indigo-50 blur-3xl opacity-60"
-        />
+      {/* HERO — cream background, terracotta accents, serif headline */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-cream-50 to-cream-100">
+        {/* Decorazione discreta */}
+        <div aria-hidden className="absolute -top-20 -right-20 w-[500px] h-[500px] rounded-full bg-primary-200/40 blur-3xl" />
+        <div aria-hidden className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-accent-200/40 blur-3xl" />
 
-        <div className="container mx-auto px-6 py-16 md:py-24 relative">
-          <div className="grid grid-cols-1 md:grid-cols-[1.1fr_1fr] gap-12 items-center">
-            <div className="space-y-7">
-              <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-indigo-100">
+        <div className="container mx-auto px-4 sm:px-6 py-12 md:py-20 relative">
+          <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10 items-center">
+            <div className="space-y-6">
+              <span className="inline-flex items-center gap-1.5 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-primary-200">
                 <Sparkles size={14} strokeWidth={2.4} />
-                Il mercato della tua città, online
+                Il marketplace della tua città
               </span>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight tracking-tight text-gray-900">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-[1.05] tracking-tight text-ink-900">
                 Compra dai negozi<br />
-                <span className="text-indigo-600">della tua città</span>
+                <span className="text-primary-700 italic">veri</span> di Piacenza.
               </h1>
-              <p className="text-lg text-gray-600 max-w-xl leading-relaxed">
+              <p className="text-lg text-ink-600 max-w-xl leading-relaxed">
                 Alimentari, abbigliamento, casa, elettronica: tutto dai commercianti
-                locali. <strong className="text-gray-900">Paghi alla consegna</strong>,
+                della tua via. <strong className="text-ink-900">Paghi alla consegna</strong>,
                 ricevi a casa in 24-48h.
               </p>
 
               <div className="flex flex-wrap gap-3">
                 <Link
                   href="/search"
-                  className="inline-flex items-center gap-2 bg-gray-900 hover:bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                  className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-full font-semibold transition-colors shadow-warm"
                 >
-                  <ShoppingBag size={18} strokeWidth={2.2} />
-                  Inizia ad acquistare
+                  Inizia a esplorare
+                  <ArrowRight size={18} strokeWidth={2.2} />
                 </Link>
                 <Link
                   href="/stores"
-                  className="inline-flex items-center gap-2 bg-white hover:bg-gray-50 text-gray-900 border border-gray-300 px-6 py-3 rounded-lg font-semibold transition-colors"
+                  className="inline-flex items-center gap-2 bg-white hover:bg-cream-50 text-ink-900 border border-cream-300 px-6 py-3 rounded-full font-semibold transition-colors"
                 >
                   <Store size={18} strokeWidth={2.2} />
                   Esplora i negozi
                 </Link>
               </div>
 
-              <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 text-sm text-gray-600">
+              <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 text-sm text-ink-600">
                 <span className="inline-flex items-center gap-1.5">
-                  <Check size={16} strokeWidth={2.4} className="text-emerald-600" />
-                  Spedizione gratuita sopra €30
+                  <Check size={16} strokeWidth={2.4} className="text-olive-600" />
+                  Spedizione gratis sopra €30
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Check size={16} strokeWidth={2.4} className="text-emerald-600" />
+                  <Check size={16} strokeWidth={2.4} className="text-olive-600" />
                   Reso entro 14 giorni
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <Check size={16} strokeWidth={2.4} className="text-emerald-600" />
-                  Nessun account obbligatorio per pagare
+                  <Check size={16} strokeWidth={2.4} className="text-olive-600" />
+                  Pagamento alla consegna
                 </span>
               </div>
             </div>
 
-            {/* Card di destra: anteprima "marketplace" pulita, non un'emoji */}
+            {/* Card di destra "Anteprima negozio" */}
             <div className="hidden md:flex justify-center">
               <div className="relative w-full max-w-sm">
-                <div className="bg-white border border-gray-200 rounded-2xl shadow-xl p-6 space-y-4">
+                <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-6 space-y-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
-                      <Store size={22} strokeWidth={2} />
+                    <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
+                      <Coffee size={22} strokeWidth={2} />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">Salumeria del Borgo</p>
-                      <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <p className="font-semibold text-ink-900">Salumeria del Borgo</p>
+                      <p className="text-xs text-ink-500 flex items-center gap-1">
                         <MapPin size={12} strokeWidth={2} /> Via Calzolai 12 · 0.4 km
                       </p>
                     </div>
-                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full ring-1 ring-emerald-100">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200">
+                      <span className="relative inline-flex">
+                        <span className="w-1.5 h-1.5 rounded-full bg-olive-600" />
+                      </span>
                       Aperto
                     </span>
                   </div>
@@ -99,19 +113,19 @@ export default function Home() {
                       { name: 'Pancetta',  price: '€7,80' },
                       { name: 'Salame',    price: '€12,00' },
                     ].map((p) => (
-                      <div key={p.name} className="bg-gray-50 rounded-lg p-2">
-                        <div className="aspect-square rounded bg-gradient-to-br from-amber-100 to-rose-100 mb-1.5" />
-                        <p className="text-[10px] text-gray-600 truncate">{p.name}</p>
-                        <p className="text-xs font-semibold text-gray-900">{p.price}</p>
+                      <div key={p.name} className="bg-cream-100 rounded-lg p-2">
+                        <div className="aspect-square rounded bg-gradient-to-br from-accent-100 to-primary-100 mb-1.5" />
+                        <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
+                        <p className="text-xs font-semibold text-ink-900">{p.price}</p>
                       </div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between text-xs pt-2 border-t border-gray-100">
-                    <span className="text-gray-500">Consegna stimata</span>
-                    <span className="font-semibold text-gray-900">oggi, entro 18:00</span>
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
+                    <span className="text-ink-500">Consegna stimata</span>
+                    <span className="font-semibold text-ink-900">oggi, entro 18:00</span>
                   </div>
                 </div>
-                <div className="absolute -top-4 -right-4 bg-amber-400 text-gray-900 px-3 py-1.5 rounded-full font-semibold text-xs shadow-lg ring-2 ring-white">
+                <div className="absolute -top-4 -right-4 bg-accent-500 text-ink-900 px-3 py-1.5 rounded-full font-bold text-xs shadow-warm-lg ring-2 ring-white">
                   100% locale
                 </div>
               </div>
@@ -120,86 +134,145 @@ export default function Home() {
         </div>
       </section>
 
-      <ValueProps />
+      {/* DROP DEL GIORNO */}
+      <section className="container mx-auto px-4 sm:px-6 py-10">
+        <DropOfDay />
+      </section>
+
+      {/* STORIA DI OGGI */}
+      <section className="container mx-auto px-4 sm:px-6 py-10">
+        <StoryOfDay />
+      </section>
+
+      {/* TRENDING NOW */}
+      <section className="container mx-auto px-4 sm:px-6 py-10">
+        <TrendingNow />
+      </section>
 
       {/* CATEGORIE */}
-      <section className="container mx-auto px-6 py-12 md:py-16">
+      <section className="container mx-auto px-4 sm:px-6 py-12">
         <div className="text-center mb-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Cosa cerchi oggi?</h2>
-          <p className="text-gray-500 text-sm mt-2">Tutte le categorie del mercato locale</p>
+          <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">Cosa cerchi oggi?</h2>
+          <p className="text-ink-500 text-sm mt-2">Tutte le categorie del mercato locale</p>
         </div>
         <CategoryShowcase />
       </section>
 
-      {/* PRODOTTI IN EVIDENZA */}
-      <section className="bg-gray-50 border-y border-gray-100 py-12 md:py-16">
-        <div className="container mx-auto px-6">
-          <div className="flex justify-between items-end mb-8 gap-4 flex-wrap">
+      {/* LIVE ACTIVITY + Trust band */}
+      <section className="container mx-auto px-4 sm:px-6 py-10 grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6">
+        <LiveActivityFeed />
+        <div className="bg-white border border-cream-300 rounded-2xl p-6 shadow-warm">
+          <h3 className="font-serif font-bold text-ink-900 text-lg mb-4">Perché scegliere MyCity</h3>
+          <ul className="space-y-3">
+            {[
+              { icon: '💰', t: 'Paghi alla consegna', d: 'Niente carta, niente registrazione obbligatoria.' },
+              { icon: '🏘️', t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
+              { icon: '🚚', t: 'Consegna in 24-48h', d: 'Rider del territorio, percorsi brevi.' },
+              { icon: '↩️', t: 'Reso entro 14 giorni', d: 'Cambi idea? Ti rimborsiamo senza domande.' },
+            ].map((v) => (
+              <li key={v.t} className="flex items-start gap-3">
+                <span className="text-2xl shrink-0">{v.icon}</span>
+                <div>
+                  <p className="font-semibold text-ink-900">{v.t}</p>
+                  <p className="text-sm text-ink-600">{v.d}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      {/* PRODOTTI POPOLARI (catalogo grosso) */}
+      <section className="bg-white border-y border-cream-300 py-12">
+        <div className="container mx-auto px-4 sm:px-6">
+          <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
             <div>
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-700">
-                <Flame size={14} strokeWidth={2.4} />
-                In evidenza
+              <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
+                <Heart size={14} strokeWidth={2.4} />
+                I più amati
               </span>
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">I prodotti più amati</h2>
+              <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">
+                Prodotti che vanno forte
+              </h2>
             </div>
-            <Link href="/search" className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold text-sm">
-              Vedi tutto <ArrowRight size={16} strokeWidth={2.2} />
+            <Link href="/search" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
+              Vedi tutto <ArrowRight size={16} strokeWidth={2.4} />
             </Link>
           </div>
           <ProductGrid limit={8} />
         </div>
       </section>
 
-      {/* NEGOZI */}
-      <section className="container mx-auto px-6 py-12 md:py-16">
-        <div className="flex justify-between items-end mb-8 gap-4 flex-wrap">
+      {/* NEGOZI VICINI */}
+      <section className="container mx-auto px-4 sm:px-6 py-12">
+        <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
           <div>
-            <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-indigo-700">
+            <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
               <MapPin size={14} strokeWidth={2.4} />
               Vicino a te
             </span>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">Negozi della tua città</h2>
-            <p className="text-gray-500 text-sm mt-1">Sostieni i commercianti del tuo quartiere</p>
+            <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">
+              I negozi del tuo quartiere
+            </h2>
+            <p className="text-ink-500 text-sm mt-1">Sostieni chi vende davvero qui</p>
           </div>
-          <Link href="/stores" className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold text-sm">
-            Tutti i negozi <ArrowRight size={16} strokeWidth={2.2} />
+          <Link href="/stores" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
+            Tutti i negozi <ArrowRight size={16} strokeWidth={2.4} />
           </Link>
         </div>
         <StoreShowcase />
       </section>
 
-      {/* LIVE ACTIVITY FEED */}
-      <section className="container mx-auto px-6 pb-8">
-        <LiveActivityFeed />
+      {/* NEWSLETTER + REFERRAL */}
+      <section className="bg-gradient-to-br from-accent-100 via-accent-50 to-cream-100 border-y border-cream-300">
+        <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div>
+            <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ring-1 ring-primary-200">
+              <Gift size={14} strokeWidth={2.4} />
+              €5 in regalo
+            </span>
+            <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-3 mb-3">
+              Iscriviti e prendi <span className="text-primary-700">€5 di sconto</span><br />
+              al primo ordine.
+            </h2>
+            <p className="text-ink-700 text-base">
+              Ogni venerdì ricevi <strong>"Cosa c'è nel piatto a Piacenza"</strong>:
+              una ricetta, la storia di un negoziante, 3 offerte selezionate. Niente spam.
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-warm-lg p-6 border border-cream-300">
+            <NewsletterForm variant="light" />
+          </div>
+        </div>
       </section>
 
-      {/* CTA VENDITORE — calmer, fact-based */}
-      <section className="bg-gray-900 text-white">
-        <div className="container mx-auto px-6 py-16 md:py-20 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+      {/* CTA VENDITORE */}
+      <section className="bg-ink-900 text-white">
+        <div className="container mx-auto px-4 sm:px-6 py-16 md:py-20 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
           <div className="space-y-5">
             <span className="inline-flex items-center gap-1.5 bg-white/10 text-white px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-white/15">
               <ShieldCheck size={14} strokeWidth={2.4} />
               Per i venditori
             </span>
-            <h2 className="text-3xl md:text-4xl font-bold leading-tight tracking-tight">
+            <h2 className="text-3xl md:text-4xl font-serif font-bold leading-tight tracking-tight">
               Hai un'attività?<br />
-              Portala online su MyCity.
+              <span className="text-accent-400">Portala online</span> con MyCity.
             </h2>
-            <p className="text-gray-400 text-base md:text-lg leading-relaxed">
-              Vetrina dedicata, prodotti illimitati, zero commissioni sulle vendite.
-              Abbonamento mensile, approvazione del team in 48 ore.
+            <p className="text-ink-300 text-base md:text-lg leading-relaxed">
+              Vetrina dedicata, prodotti illimitati, <strong className="text-white">zero commissioni</strong> sulle vendite.
+              Abbonamento mensile fisso, approvazione del team in 48 ore.
             </p>
             <div className="flex flex-wrap gap-3 pt-2">
               <Link
                 href="/sell"
-                className="inline-flex items-center gap-2 bg-white text-gray-900 hover:bg-gray-100 px-6 py-3 rounded-lg font-semibold transition-colors"
+                className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-400 text-ink-900 px-6 py-3 rounded-full font-bold transition-colors shadow-lg"
               >
-                <Store size={18} strokeWidth={2.2} />
+                <Store size={18} strokeWidth={2.4} />
                 Diventa venditore
               </Link>
               <Link
                 href="/stores"
-                className="inline-flex items-center gap-2 bg-transparent hover:bg-white/10 text-white border border-white/30 px-6 py-3 rounded-lg font-semibold transition-colors"
+                className="inline-flex items-center gap-2 bg-transparent hover:bg-white/10 text-white border border-white/30 px-6 py-3 rounded-full font-semibold transition-colors"
               >
                 Vedi chi vende già
               </Link>
@@ -208,14 +281,14 @@ export default function Home() {
 
           <div className="grid grid-cols-2 gap-3">
             {[
-              { n: '€50/mese', l: 'Abbonamento, niente commissioni sulle vendite' },
-              { n: '48h',      l: 'Per l\'approvazione del negozio' },
+              { n: '€50/mese', l: 'Abbonamento fisso, zero commissioni sul venduto' },
+              { n: '48h',      l: "Per l'approvazione del negozio" },
               { n: '∞',        l: 'Prodotti pubblicabili' },
-              { n: 'IBAN',     l: 'Bonifico mensile sui tuoi incassi' },
+              { n: 'IBAN',     l: 'Bonifico mensile dei tuoi incassi' },
             ].map((s) => (
               <div key={s.l} className="bg-white/5 ring-1 ring-white/10 rounded-xl p-5">
-                <div className="text-2xl md:text-3xl font-bold mb-2">{s.n}</div>
-                <div className="text-xs text-gray-400 leading-snug">{s.l}</div>
+                <div className="text-2xl md:text-3xl font-serif font-bold mb-2 text-accent-400">{s.n}</div>
+                <div className="text-xs text-ink-300 leading-snug">{s.l}</div>
               </div>
             ))}
           </div>
