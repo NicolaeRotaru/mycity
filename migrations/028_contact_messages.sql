@@ -19,9 +19,20 @@ CREATE TABLE IF NOT EXISTS public.contact_messages (
     created_at timestamptz NOT NULL DEFAULT now()
 );
 
-ALTER TABLE public.contact_messages
-    ADD CONSTRAINT contact_messages_email_format
-    CHECK (email ~* '^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
+-- Email format check: ALTER TABLE ADD CONSTRAINT non supporta IF NOT EXISTS,
+-- usiamo DO block + check su pg_constraint per essere idempotente.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'contact_messages_email_format'
+      AND conrelid = 'public.contact_messages'::regclass
+  ) THEN
+    ALTER TABLE public.contact_messages
+      ADD CONSTRAINT contact_messages_email_format
+      CHECK (email ~* '^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$');
+  END IF;
+END$$;
 
 CREATE INDEX IF NOT EXISTS contact_status_created_idx
     ON public.contact_messages(status, created_at DESC);
