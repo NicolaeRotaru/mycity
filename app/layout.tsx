@@ -9,6 +9,7 @@ import ToastProvider from '@/components/providers/ToastProvider';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import CookieBanner from '@/components/CookieBanner';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
+import DailyCheckIn from '@/components/DailyCheckIn';
 import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -69,6 +70,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main className="min-h-screen">{children}</main>
           <Footer />
           <MobileTabBar />
+          <DailyCheckIn />
         </QueryProvider>
         <ToastProvider />
         <ConfirmDialogHost />

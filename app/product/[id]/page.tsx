@@ -16,6 +16,10 @@ import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
 import ContactSellerButton from '@/components/ContactSellerButton';
+import ProductViewTracker from '@/components/ProductViewTracker';
+import ProductQA from '@/components/ProductQA';
+import RecentlyViewed from '@/components/RecentlyViewed';
+import StickyAddToCart from '@/components/StickyAddToCart';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -483,13 +487,32 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         )}
       </section>
 
+      {/* Q&A */}
+      <section className="mt-12">
+        <ProductQA
+          productId={id}
+          sellerId={sellerProfile?.id ?? product.seller_id}
+        />
+      </section>
+
+      {/* Ultimi visti dell'utente (esclude questo prodotto) */}
+      <section className="mt-12">
+        <RecentlyViewed excludeId={id} />
+      </section>
+
       {/* CORRELATI */}
       {product.category_id && (
         <section className="mt-12">
-          <h2 className="text-2xl font-extrabold mb-4">Potrebbe piacerti anche</h2>
+          <h2 className="text-2xl font-serif font-bold mb-4 text-ink-900">Potrebbe piacerti anche</h2>
           <ProductGrid categoryId={product.category_id} limit={4} />
         </section>
       )}
+
+      {/* Sticky CTA mobile */}
+      <StickyAddToCart price={price} available={!isOutOfStock} onAdd={handleAdd} />
+
+      {/* Tracking view (side-effect only) */}
+      <ProductViewTracker productId={id} />
     </div>
   );
 }
