@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Store, Check, ShieldCheck, MapPin, ArrowRight, Heart, Sparkles, Gift, Coffee } from 'lucide-react';
+import { Store, Check, ShieldCheck, MapPin, ArrowRight, Heart, Sparkles, Gift, Coffee, Banknote, Home as HomeIcon, Truck, RotateCcw } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import CategoryShowcase from '@/components/CategoryShowcase';
 import StoreShowcase from '@/components/StoreShowcase';
@@ -180,13 +180,20 @@ export default function Home() {
           <h3 className="font-serif font-bold text-ink-900 text-lg mb-4">Perché scegliere MyCity</h3>
           <ul className="space-y-3">
             {[
-              { icon: '💰', t: 'Paghi alla consegna', d: 'Niente carta, niente registrazione obbligatoria.' },
-              { icon: '🏘️', t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
-              { icon: '🚚', t: 'Consegna in 24-48h', d: 'Rider del territorio, percorsi brevi.' },
-              { icon: '↩️', t: 'Reso entro 14 giorni', d: 'Cambi idea? Ti rimborsiamo senza domande.' },
+              { Icon: Banknote, color: 'olive',     t: 'Paghi alla consegna',     d: 'Niente carta, niente registrazione obbligatoria.' },
+              { Icon: HomeIcon, color: 'primary',   t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
+              { Icon: Truck,    color: 'accent',    t: 'Consegna in 24-48h',       d: 'Rider del territorio, percorsi brevi.' },
+              { Icon: RotateCcw,color: 'secondary', t: 'Reso entro 14 giorni',    d: 'Cambi idea? Ti rimborsiamo senza domande.' },
             ].map((v) => (
               <li key={v.t} className="flex items-start gap-3">
-                <span className="text-2xl shrink-0">{v.icon}</span>
+                <span className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                  v.color === 'olive'     ? 'bg-olive-100 text-olive-700' :
+                  v.color === 'primary'   ? 'bg-primary-100 text-primary-700' :
+                  v.color === 'accent'    ? 'bg-accent-100 text-accent-700' :
+                                            'bg-secondary-100 text-secondary-700'
+                }`}>
+                  <v.Icon size={20} strokeWidth={2.2} />
+                </span>
                 <div>
                   <p className="font-semibold text-ink-900">{v.t}</p>
                   <p className="text-sm text-ink-600">{v.d}</p>

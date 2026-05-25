@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin } from 'lucide-react';
+import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Store, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import NewsletterForm from './NewsletterForm';
 
@@ -83,23 +83,24 @@ const Footer = () => {
   const isSellerArea = isSeller || isRider;
 
   return (
-    <footer className="bg-gray-900 text-gray-300 mt-12">
+    <footer className="bg-ink-900 text-ink-300 mt-12">
       {/* CTA banner finale — visibile solo a buyer/guest, mai a chi è già seller
           o in attesa di approvazione */}
       {!isSellerArea && (
-        <div className="bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-600">
+        <div className="bg-gradient-to-r from-primary-700 via-primary-600 to-secondary-700">
           <div className="container mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-white">
             <div>
-              <h3 className="text-xl md:text-2xl font-extrabold">Hai un'attività nella tua città?</h3>
-              <p className="text-indigo-100 text-sm">
+              <h3 className="text-xl md:text-2xl font-serif font-bold">Hai un'attività nella tua città?</h3>
+              <p className="text-cream-100 text-sm">
                 Apri il tuo negozio professionale su MyCity. Abbonamento mensile, niente commissioni sulle vendite, approvazione in 48h.
               </p>
             </div>
             <Link
               href={isAuthenticated ? '/sell' : '/sign-up?returnTo=/sell'}
-              className="bg-yellow-400 hover:bg-yellow-300 text-gray-900 px-7 py-3 rounded-lg font-bold whitespace-nowrap shadow-lg hover:scale-105 transition-all"
+              className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-400 text-ink-900 px-7 py-3 rounded-full font-bold whitespace-nowrap shadow-lg hover:scale-105 transition-all"
             >
-              🏪 Diventa venditore
+              <Store size={18} strokeWidth={2.4} />
+              Diventa venditore
             </Link>
           </div>
         </div>
@@ -108,8 +109,8 @@ const Footer = () => {
       <div className={`container mx-auto px-6 py-12 grid grid-cols-2 ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-2 md:col-span-1">
-          <h3 className="font-bold text-white mb-3 flex items-center gap-2 text-lg">
-            <span className="text-indigo-400">●</span> MyCity
+          <h3 className="font-serif font-bold text-white mb-3 flex items-center gap-2 text-lg">
+            <span className="text-accent-400 text-xl">●</span> <span><span className="text-accent-400">My</span>City</span>
           </h3>
           <p className="text-sm text-gray-400 mb-4 leading-relaxed">
             Il marketplace dei negozi di Piacenza. Compra dai commercianti locali, ricevi a casa in 24-48h.
@@ -150,11 +151,11 @@ const Footer = () => {
           <div>
             <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Categorie</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/category/alimentari" className="hover:text-white transition-colors">🍎 Alimentari</Link></li>
-              <li><Link href="/category/abbigliamento" className="hover:text-white transition-colors">👕 Abbigliamento</Link></li>
-              <li><Link href="/category/casa" className="hover:text-white transition-colors">🏠 Casa & Cucina</Link></li>
-              <li><Link href="/category/elettronica" className="hover:text-white transition-colors">💻 Elettronica</Link></li>
-              <li><Link href="/category/libri" className="hover:text-white transition-colors">📚 Libri</Link></li>
+              <li><Link href="/category/alimentari" className="inline-flex items-center gap-2 hover:text-white transition-colors"><Apple size={14} strokeWidth={2.2} className="text-accent-400" />Alimentari</Link></li>
+              <li><Link href="/category/abbigliamento" className="inline-flex items-center gap-2 hover:text-white transition-colors"><Shirt size={14} strokeWidth={2.2} className="text-accent-400" />Abbigliamento</Link></li>
+              <li><Link href="/category/casa" className="inline-flex items-center gap-2 hover:text-white transition-colors"><HomeIcon size={14} strokeWidth={2.2} className="text-accent-400" />Casa &amp; Cucina</Link></li>
+              <li><Link href="/category/elettronica" className="inline-flex items-center gap-2 hover:text-white transition-colors"><Smartphone size={14} strokeWidth={2.2} className="text-accent-400" />Elettronica</Link></li>
+              <li><Link href="/category/libri" className="inline-flex items-center gap-2 hover:text-white transition-colors"><BookOpen size={14} strokeWidth={2.2} className="text-accent-400" />Libri</Link></li>
             </ul>
           </div>
         )}
