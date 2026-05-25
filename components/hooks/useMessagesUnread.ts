@@ -52,13 +52,24 @@ export const useMessagesUnread = () => {
 
   useEffect(() => {
     if (!userId) return;
-    const ch = supabase
-      .channel('msg-unread-' + userId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
-        refetchRef.current();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(ch); };
+    // Channel name unico per effect run: previene il caso in cui Supabase JS
+    // riusa un'istanza già subscribed (race condition tra cleanup async e
+    // re-mount sincrono). Date.now() garantisce unicità.
+    // Try/catch difensivo: se Supabase rifiuta il subscribe per qualsiasi
+    // motivo (es. Realtime non abilitato sul DB, migration non applicata),
+    // logghiamo ma non crashiamo l'app — il polling ogni 60s resta attivo.
+    let ch: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      ch = supabase
+        .channel(`msg-unread-${userId}-${Date.now()}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+          refetchRef.current();
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('[useMessagesUnread] realtime subscribe failed:', err);
+    }
+    return () => { if (ch) { try { supabase.removeChannel(ch); } catch { /* noop */ } } };
   }, [userId]); // solo userId — refetch via ref
 
   return unread;

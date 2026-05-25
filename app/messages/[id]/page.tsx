@@ -96,21 +96,26 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
   // Realtime: nuovi messaggi → push in cache locale, niente refetch.
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
-      .channel('msg-' + params.id)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${params.id}` },
-        (payload) => {
-          const newMsg = payload.new as Message;
-          qc.setQueryData<Message[]>(['messages', params.id], (prev = []) => {
-            if (prev.find((m) => m.id === newMsg.id)) return prev;
-            return [...prev, newMsg];
-          });
-        },
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel(`msg-${params.id}-${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${params.id}` },
+          (payload) => {
+            const newMsg = payload.new as Message;
+            qc.setQueryData<Message[]>(['messages', params.id], (prev = []) => {
+              if (prev.find((m) => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+          },
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('[messages-thread] realtime subscribe failed:', err);
+    }
+    return () => { if (channel) { try { supabase.removeChannel(channel); } catch { /* noop */ } } };
   }, [userId, params.id, qc]);
 
   // Auto scroll bottom su nuovi messaggi
