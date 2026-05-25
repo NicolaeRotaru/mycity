@@ -76,13 +76,18 @@ export default function MessagesListPage() {
 
   useEffect(() => {
     if (!userId) return;
-    const channel = supabase
-      .channel('conv-list-' + userId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
-        refetchRef.current();
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    try {
+      channel = supabase
+        .channel(`conv-list-${userId}-${Date.now()}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+          refetchRef.current();
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('[messages-list] realtime subscribe failed:', err);
+    }
+    return () => { if (channel) { try { supabase.removeChannel(channel); } catch { /* noop */ } } };
   }, [userId]);
 
   if (!userId || isLoading) {
