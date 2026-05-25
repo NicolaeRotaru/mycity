@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
 
@@ -387,19 +388,11 @@ export default function SettingsPage() {
                 <div className="mt-3 flex items-start justify-between gap-4 p-3 border rounded-lg">
                   <div>
                     <div className="font-semibold">📲 Notifiche push del browser</div>
-                    <div className="text-xs text-gray-500">Avvisi immediati anche a schermo bloccato.</div>
+                    <div className="text-xs text-gray-500">
+                      Avvisi immediati anche a schermo bloccato (richiede permesso).
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleRequestPushPermission}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${
-                      prefs.push_enabled
-                        ? 'bg-green-100 text-green-700 border border-green-300'
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                    }`}
-                  >
-                    {prefs.push_enabled ? '✓ Attive' : 'Attiva'}
-                  </button>
+                  <PushNotificationOptIn />
                 </div>
               </div>
             </section>

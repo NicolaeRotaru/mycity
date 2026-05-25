@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <title>Offline · MyCity</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: #FBF7F0; color: #1C1A18; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+    .wrap { max-width: 28rem; text-align: center; }
+    h1 { font-size: 1.8rem; margin: 0 0 0.5rem; color: #C0492C; }
+    p { color: #57534E; line-height: 1.5; }
+    .icon { font-size: 4rem; margin-bottom: 1rem; }
+    button { background: #C0492C; color: white; border: 0; padding: 0.75rem 1.5rem; border-radius: 999px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="icon">🌐</div>
+    <h1>Sei offline</h1>
+    <p>Sembra che la connessione sia caduta. Quando torni online, riproveremo a caricare la pagina.</p>
+    <button onclick="location.reload()">Riprova</button>
+  </div>
+</body>
+</html>
