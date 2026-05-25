@@ -131,7 +131,27 @@ CREATE TRIGGER trg_update_conv_on_msg
 
 -- Abilita Realtime per UI live: il client si iscrive ai canali postgres_changes
 -- filtrati per conversation_id. RLS si applica anche sui broadcast Realtime.
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.conversations;
+-- ALTER PUBLICATION ADD TABLE non supporta IF NOT EXISTS → usiamo DO block
+-- con check su pg_publication_tables per rendere il blocco idempotente.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'messages'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime'
+      AND schemaname = 'public'
+      AND tablename = 'conversations'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.conversations;
+  END IF;
+END$$;
 
 NOTIFY pgrst, 'reload schema';

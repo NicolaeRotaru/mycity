@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -69,14 +69,21 @@ export default function MessagesListPage() {
   });
 
   // Realtime: re-fetch quando arriva un messaggio in una delle mie conversazioni.
+  // `refetch` cambia identity ad ogni render → ref stabile per non ricreare
+  // il channel (Supabase: "cannot add postgres_changes callbacks after subscribe").
+  const refetchRef = useRef(refetch);
+  useEffect(() => { refetchRef.current = refetch; }, [refetch]);
+
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
       .channel('conv-list-' + userId)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => refetch())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+        refetchRef.current();
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [userId, refetch]);
+  }, [userId]);
 
   if (!userId || isLoading) {
     return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
