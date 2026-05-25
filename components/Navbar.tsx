@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Bell, ShoppingCart, Package, Bike, Shield, Menu as MenuIcon,
+  Bell, MessageCircle, ShoppingCart, Package, Bike, Shield, Menu as MenuIcon,
   Search, LogOut, Store, Truck, Banknote, MapPin, Zap,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
 import { useNotificationsCount } from './hooks/useNotificationsCount';
+import { useMessagesUnread } from './hooks/useMessagesUnread';
 import CategoryBar from './CategoryBar';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
@@ -32,6 +33,7 @@ const BUYER_LINKS: NavItem[] = [
   { href: '/cart',              label: 'Carrello',            icon: '🛒' },
   { href: '/profile/addresses', label: 'Indirizzi',           icon: '📌' },
   { href: '/profile/referral',  label: 'Invita amici · €5',   icon: '🎁' },
+  { href: '/messages',          label: 'Messaggi',            icon: '💬' },
   { href: '/notifications',     label: 'Notifiche',           icon: '🔔' },
   { href: '/profile',           label: 'Profilo',             icon: '👤' },
   { href: '/profile/settings',  label: 'Impostazioni',        icon: '⚙️' },
@@ -56,6 +58,7 @@ const LINKS_BY_ROLE: Record<NonNullable<Role>, NavItem[]> = {
     { type: 'separator',               label: 'Account' },
     { href: '/seller/profile',         label: 'Profilo negozio',   icon: '🏪' },
     { href: '/profile/settings',       label: 'Impostazioni',      icon: '⚙️' },
+    { href: '/messages',               label: 'Messaggi clienti',  icon: '💬' },
     { href: '/notifications',          label: 'Notifiche',         icon: '🔔' },
     { type: 'separator',               label: 'Aiuto' },
     { href: '/seller/help',            label: 'Centro venditori',  icon: '💡' },
@@ -257,6 +260,7 @@ const Navbar = () => {
   const [q, setQ] = useState('');
   const cartCount = useCartCount();
   const notifCount = useNotificationsCount();
+  const msgUnread = useMessagesUnread();
   const { profile, userEmail, isAuthenticated, isLoading, isSeller, isRider, isAdmin } = useProfile();
   // IMPORTANTE: useScrollHide DEVE essere chiamato qui, prima di qualsiasi
   // early-return. Le Rules of Hooks impongono che la sequenza di chiamate
@@ -357,6 +361,22 @@ const Navbar = () => {
       </Link>
     ) : null;
 
+  const MessagesIcon = () =>
+    isAuthenticated ? (
+      <Link
+        href="/messages"
+        title="Messaggi"
+        className="relative flex items-center hover:text-indigo-300 transition-colors"
+      >
+        <MessageCircle size={20} strokeWidth={2} />
+        {msgUnread > 0 && (
+          <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+            {msgUnread > 99 ? '99+' : msgUnread}
+          </span>
+        )}
+      </Link>
+    ) : null;
+
   const OrdersIcon = () =>
     isAuthenticated ? (
       <Link
@@ -417,6 +437,7 @@ const Navbar = () => {
             </Link>
             <div className="flex items-center gap-4">
               {!isLoading && <ProfileIcon compact />}
+              <MessagesIcon />
               <NotificationsIcon />
               <OrdersIcon />
               <CartIcon />
@@ -439,6 +460,7 @@ const Navbar = () => {
             <nav className="ml-auto flex items-center gap-5 text-sm">
               {!isLoading && <ProfileIcon />}
               <AdminLink />
+              <MessagesIcon />
               <NotificationsIcon />
               <OrdersIcon />
               <CartIcon />

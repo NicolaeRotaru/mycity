@@ -15,6 +15,7 @@ import ProductGrid from '@/components/ProductGrid';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
+import ContactSellerButton from '@/components/ContactSellerButton';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -380,6 +381,14 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             >
               Acquista ora
             </Link>
+
+            {(sellerProfile?.id ?? product.seller_id) && (
+              <ContactSellerButton
+                sellerId={sellerProfile?.id ?? product.seller_id}
+                className="w-full"
+                label="💬 Contatta il venditore"
+              />
+            )}
 
             <div className="pt-3 border-t space-y-1.5 text-xs text-gray-500">
               <p>📦 Venduto e spedito da <strong className="text-gray-700">{product.profiles?.store_name}</strong></p>

@@ -7,6 +7,8 @@ import QueryProvider from '@/components/providers/QueryProvider';
 import ToastProvider from '@/components/providers/ToastProvider';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import CookieBanner from '@/components/CookieBanner';
+import GoogleAnalytics from '@/components/GoogleAnalytics';
+import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -63,6 +65,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ToastProvider />
         <ConfirmDialogHost />
         <CookieBanner />
+        <Suspense fallback={null}>
+          <GoogleAnalytics />
+        </Suspense>
       </body>
     </html>
   );
