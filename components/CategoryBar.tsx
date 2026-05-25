@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Store } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -17,39 +18,57 @@ const fetchTopCategories = async (): Promise<Category[]> => {
   return data ?? [];
 };
 
+/**
+ * Category bar dentro al primary navbar (terracotta).
+ * Sempre visibile (no auto-hide su scroll) per non disorientare.
+ * Highlight della categoria attiva basato su pathname.
+ */
 const CategoryBar = () => {
+  const pathname = usePathname() ?? '';
   const { data: categories = [] } = useQuery({
     queryKey: ['top-categories'],
     queryFn: fetchTopCategories,
   });
 
+  const isActive = (href: string) => pathname === href || pathname.startsWith(href + '/');
+
   return (
-    <div className="bg-white border-b border-gray-200 relative">
-      <div className="container mx-auto px-4 flex items-center gap-1 overflow-x-auto scrollbar-hide py-2 text-sm">
+    <div className="relative">
+      <div className="container mx-auto px-3 sm:px-4 flex items-center gap-1 overflow-x-auto scrollbar-hide py-2 text-sm">
         <Link
           href="/stores"
-          className="flex items-center gap-1.5 text-gray-900 hover:text-indigo-600 whitespace-nowrap font-semibold px-3 py-1.5 rounded-md hover:bg-indigo-50 shrink-0 transition-colors"
+          className={`flex items-center gap-1.5 whitespace-nowrap font-semibold px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+            isActive('/stores')
+              ? 'bg-accent-500 text-ink-900'
+              : 'text-white hover:bg-white/15'
+          }`}
         >
-          <Store size={16} strokeWidth={2} />
+          <Store size={14} strokeWidth={2.2} />
           Tutti i negozi
         </Link>
-        <span aria-hidden className="w-px h-5 bg-gray-200 mx-1 shrink-0" />
-        {categories.map((c) => (
-          <Link
-            key={c.id}
-            href={`/category/${c.slug}`}
-            className="text-gray-600 hover:text-indigo-700 hover:bg-gray-50 whitespace-nowrap px-3 py-1.5 rounded-md shrink-0 transition-colors font-medium"
-          >
-            {/* Le icone delle categorie sono editabili da admin per categoria,
-                quindi le lasciamo come emoji — sono "contenuto", non UI chrome */}
-            {c.icon && <span className="mr-1">{c.icon}</span>}
-            {c.name}
-          </Link>
-        ))}
+        <span aria-hidden className="w-px h-5 bg-white/20 mx-1 shrink-0" />
+        {categories.map((c) => {
+          const href = `/category/${c.slug}`;
+          const active = isActive(href);
+          return (
+            <Link
+              key={c.id}
+              href={href}
+              className={`whitespace-nowrap px-3 py-1.5 rounded-full shrink-0 transition-colors font-medium ${
+                active
+                  ? 'bg-accent-500 text-ink-900'
+                  : 'text-white/90 hover:text-white hover:bg-white/15'
+              }`}
+            >
+              {c.icon && <span className="mr-1">{c.icon}</span>}
+              {c.name}
+            </Link>
+          );
+        })}
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-white to-transparent sm:hidden"
+        className="pointer-events-none absolute top-0 right-0 h-full w-8 bg-gradient-to-l from-primary-700 to-transparent sm:hidden"
       />
     </div>
   );

@@ -1,6 +1,19 @@
 import type { Config } from 'tailwindcss';
 import colors from 'tailwindcss/colors';
 
+/**
+ * MyCity Design System — "Mediterranean Modern"
+ *
+ * Palette ispirata ai colori della cucina/mercato italiano:
+ *  - terracotta (primary): tegole, cotto, terra dei portici
+ *  - cream (background): muri intonacati, pane, lino
+ *  - mustard (accent): saffron, zafferano, ocra
+ *  - olive (success): verde dei colli piacentini
+ *  - charcoal (text): inchiostro tipografico
+ *
+ * Tutta scelta per evocare "caldo, locale, autentico" invece del freddo
+ * "SaaS B2B" della palette indigo/grey precedente.
+ */
 export default {
   content: [
     './app/**/*.{js,ts,jsx,tsx}',
@@ -9,8 +22,145 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: colors.indigo,
-        secondary: colors.pink,
+        // Tonalità primaria: terracotta calda (era indigo)
+        primary: {
+          50:  '#FDF4F1',
+          100: '#FAE3DC',
+          200: '#F5C5B6',
+          300: '#EE9F86',
+          400: '#E47A5A',
+          500: '#D55F3F',
+          600: '#C0492C', // primary brand
+          700: '#A03B25',
+          800: '#7F2F1F',
+          900: '#5C211A',
+          950: '#321009',
+        },
+        // Accent mustard (CTA energetici, badge)
+        accent: {
+          50:  '#FEF8EC',
+          100: '#FDECC8',
+          200: '#FBD891',
+          300: '#F4BC53',
+          400: '#EFA830',
+          500: '#E8A33D', // accent brand
+          600: '#C4801F',
+          700: '#9D621C',
+          800: '#7F4F1E',
+          900: '#69411C',
+        },
+        // Olive (status positivi, success, "fresco")
+        olive: {
+          50:  '#F6F8F1',
+          100: '#E9EEDE',
+          200: '#D3DCBE',
+          300: '#B0C195',
+          400: '#8FA672',
+          500: '#7C8B5A',
+          600: '#5A7C42', // success brand
+          700: '#456236',
+          800: '#384E2C',
+          900: '#2E4127',
+        },
+        // Cream / sand (background)
+        cream: {
+          50:  '#FEFCF8',
+          100: '#FBF7F0',  // page background
+          200: '#F5EDD9',
+          300: '#EEDFBA',
+          400: '#E6CC95',
+          500: '#D9B36F',
+        },
+        // Charcoal (text)
+        ink: {
+          50:  '#F5F5F4',
+          100: '#E7E5E4',
+          200: '#D6D3D1',
+          300: '#A8A29E',
+          400: '#78716C',
+          500: '#57534E',
+          600: '#44403C',
+          700: '#3C3835',
+          800: '#2C2A28', // body text
+          900: '#1C1A18', // headlines
+        },
+        // Aliasing alle palette default per uso libero
+        secondary: colors.rose,
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-serif)', 'Georgia', 'serif'],
+      },
+      borderRadius: {
+        // Bordi un filo più morbidi (era 0.5rem default)
+        DEFAULT: '0.5rem',
+        lg: '0.75rem',
+        xl: '1rem',
+        '2xl': '1.25rem',
+      },
+      boxShadow: {
+        // Shadow tinte calde (rgba terracotta), non grigie neutre
+        'warm-sm':  '0 1px 2px 0 rgba(192, 73, 44, 0.05)',
+        'warm':     '0 4px 12px -2px rgba(192, 73, 44, 0.08), 0 2px 4px -1px rgba(192, 73, 44, 0.04)',
+        'warm-lg':  '0 12px 32px -8px rgba(192, 73, 44, 0.15), 0 4px 8px -2px rgba(192, 73, 44, 0.06)',
+        'warm-xl':  '0 24px 48px -12px rgba(192, 73, 44, 0.22)',
+      },
+      animation: {
+        // Micro-interazioni
+        'heart-beat':  'heartBeat 0.6s ease-in-out',
+        'confetti':    'confetti 1s ease-out',
+        'shimmer':     'shimmer 2s linear infinite',
+        'pulse-soft':  'pulseSoft 2.5s ease-in-out infinite',
+        'slide-up':    'slideUp 260ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'slide-down':  'slideDown 260ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'fade-in':     'fadeIn 200ms ease-out',
+        'pop-in':      'popIn 240ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'fly-to-cart': 'flyToCart 700ms cubic-bezier(0.5, 0, 0.5, 1)',
+        'count-up':    'countUp 600ms ease-out',
+      },
+      keyframes: {
+        heartBeat: {
+          '0%, 100%':  { transform: 'scale(1)' },
+          '30%':       { transform: 'scale(1.4)' },
+          '60%':       { transform: 'scale(0.95)' },
+        },
+        confetti: {
+          '0%':   { transform: 'translateY(0) rotate(0)', opacity: '1' },
+          '100%': { transform: 'translateY(-120px) rotate(720deg)', opacity: '0' },
+        },
+        shimmer: {
+          '0%':   { backgroundPosition: '-1000px 0' },
+          '100%': { backgroundPosition: '1000px 0' },
+        },
+        pulseSoft: {
+          '0%, 100%': { opacity: '1' },
+          '50%':      { opacity: '0.6' },
+        },
+        slideUp: {
+          from: { transform: 'translateY(100%)' },
+          to:   { transform: 'translateY(0)' },
+        },
+        slideDown: {
+          from: { transform: 'translateY(-100%)' },
+          to:   { transform: 'translateY(0)' },
+        },
+        fadeIn: {
+          from: { opacity: '0' },
+          to:   { opacity: '1' },
+        },
+        popIn: {
+          from: { opacity: '0', transform: 'scale(0.92) translateY(8px)' },
+          to:   { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
+        flyToCart: {
+          '0%':   { transform: 'translate(0, 0) scale(1)', opacity: '1' },
+          '70%':  { opacity: '0.8' },
+          '100%': { transform: 'translate(200px, -300px) scale(0.2)', opacity: '0' },
+        },
+        countUp: {
+          from: { transform: 'translateY(20px)', opacity: '0' },
+          to:   { transform: 'translateY(0)', opacity: '1' },
+        },
       },
     },
   },
