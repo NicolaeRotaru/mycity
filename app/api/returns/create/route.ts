@@ -1,7 +1,9 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser, getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -24,15 +26,12 @@ const Body = z.object({
  * Lo stato iniziale e' REQUESTED. Il seller ricevera' notifica e
  * potra' approvare/rifiutare via /api/returns/[id]/decide.
  */
-export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Autenticazione richiesta' }, { status: 401 });
-
+export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());
   } catch (e: any) {
-    return NextResponse.json({ error: 'Dati non validi', details: e?.message }, { status: 400 });
+    return ApiErrors.invalidRequest('Dati non validi', e?.message);
   }
 
   const supa = getServerSupabase();
@@ -42,23 +41,15 @@ export async function POST(req: NextRequest) {
     .eq('id', body.orderId)
     .single();
 
-  if (oErr || !order) return NextResponse.json({ error: 'Ordine non trovato' }, { status: 404 });
-  if (order.user_id !== user.id) {
-    return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 });
-  }
-  if (order.delivery_status !== 'DELIVERED') {
-    return NextResponse.json({ error: 'L\'ordine non risulta consegnato' }, { status: 409 });
-  }
+  if (oErr || !order) return ApiErrors.notFound('Ordine non trovato');
+  if (order.user_id !== user.id) return ApiErrors.forbidden();
+  if (order.delivery_status !== 'DELIVERED') return ApiErrors.invalidRequest("L'ordine non risulta consegnato");
 
   // Vincolo 14 giorni dal consegna (recesso)
   if (order.delivered_at) {
     const deliveredAt = new Date(order.delivered_at).getTime();
     const days = (Date.now() - deliveredAt) / (1000 * 60 * 60 * 24);
-    if (days > 14) {
-      return NextResponse.json({
-        error: 'Termine per il recesso scaduto (14 giorni dalla consegna).',
-      }, { status: 409 });
-    }
+    if (days > 14) return ApiErrors.invalidRequest('Termine per il recesso scaduto (14 giorni dalla consegna).');
   }
 
   // Anti-doppione: max 1 reso open per ordine
@@ -69,9 +60,7 @@ export async function POST(req: NextRequest) {
     .in('status', ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'])
     .limit(1)
     .maybeSingle();
-  if (existing) {
-    return NextResponse.json({ error: 'Esiste gia\' una richiesta di reso aperta per questo ordine' }, { status: 409 });
-  }
+  if (existing) return ApiErrors.invalidRequest("Esiste già una richiesta di reso aperta per questo ordine");
 
   const admin = getAdminSupabase();
   const { data: ret, error: insErr } = await admin
@@ -90,8 +79,8 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (insErr || !ret) {
-    logger.error('[returns] insert failed', insErr);
-    return NextResponse.json({ error: 'Creazione reso fallita' }, { status: 500 });
+    logger.error(insErr, { context: 'returns-insert' });
+    return ApiErrors.internal('Creazione reso fallita');
   }
 
   // Notifica seller (best-effort)
@@ -103,4 +92,4 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json({ id: ret.id, status: 'REQUESTED' }, { status: 201 });
-}
+});

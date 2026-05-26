@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { withAdminAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -51,74 +53,31 @@ const KYC_FIELDS = {
   approval_status: 'rejected',
 };
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+async function handler(_req: NextRequest, caller: { id: string }, { params }: { params: { id: string } }) {
   const targetId = params.id;
 
   const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnon    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const supabaseService = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!supabaseUrl || !supabaseAnon) {
-    return NextResponse.json({ error: 'Servizio non configurato.' }, { status: 503 });
-  }
-  if (!supabaseService) {
-    return NextResponse.json(
-      { error: 'Manca SUPABASE_SERVICE_ROLE_KEY nelle variabili d\'ambiente del server. Aggiungila in Render → Environment.' },
-      { status: 503 },
-    );
-  }
-  if (!targetId || targetId.length < 10) {
-    return NextResponse.json({ error: 'ID utente non valido.' }, { status: 400 });
-  }
+  if (!supabaseUrl || !supabaseService) return ApiErrors.unavailable();
+  if (!targetId || targetId.length < 10) return ApiErrors.invalidRequest('ID utente non valido.');
 
-  // 1) Verifica JWT del chiamante
-  const authHeader = req.headers.get('authorization');
-  const bearer = authHeader?.toLowerCase().startsWith('bearer ')
-    ? authHeader.slice(7).trim()
-    : null;
-  if (!bearer) {
-    return NextResponse.json({ error: 'Autenticazione richiesta.' }, { status: 401 });
-  }
-
-  const supaUser = createClient(supabaseUrl, supabaseAnon, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: userResp, error: userErr } = await supaUser.auth.getUser(bearer);
-  const caller = userResp?.user;
-  if (userErr || !caller) {
-    return NextResponse.json({ error: 'Sessione non valida.' }, { status: 401 });
-  }
-
-  // 2) Verifica ruolo admin
   const admin = createClient(supabaseUrl, supabaseService, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
-  const { data: callerProfile } = await admin
-    .from('profiles')
-    .select('role')
-    .eq('id', caller.id)
-    .single();
-  if (callerProfile?.role !== 'admin') {
-    return NextResponse.json({ error: 'Riservato agli amministratori.' }, { status: 403 });
-  }
 
-  // 3) Anti lock-out
+  // Anti lock-out
   if (caller.id === targetId) {
-    return NextResponse.json(
-      { error: 'Non puoi eliminare il tuo stesso account da qui. Usa Impostazioni → Elimina account.' },
-      { status: 400 },
-    );
+    return ApiErrors.invalidRequest('Non puoi eliminare il tuo stesso account da qui. Usa Impostazioni → Elimina account.');
   }
 
-  // 4) Esistenza target
+  // Esistenza target
   const { data: targetProfile } = await admin
     .from('profiles')
     .select('id, role, full_name, store_name')
     .eq('id', targetId)
     .single();
-  if (!targetProfile) {
-    return NextResponse.json({ error: 'Utente non trovato.' }, { status: 404 });
-  }
+  if (!targetProfile) return ApiErrors.notFound('Utente non trovato.');
 
   // 5) Anonimizzazione resiliente
   const full = await admin.from('profiles').update({ ...SAFE_FIELDS, ...KYC_FIELDS }).eq('id', targetId);
@@ -150,3 +109,6 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     deleted: { id: targetId, role: targetProfile.role, name: targetProfile.store_name ?? targetProfile.full_name },
   });
 }
+
+export const DELETE = (req: NextRequest, ctx: { params: { id: string } }) =>
+  withAdminAuth(async ({ user }) => handler(req, user, ctx))(req);
