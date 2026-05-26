@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 /**
  * Admin "Today" dashboard — 1 colpo d'occhio per tutte le metriche vitali.
@@ -70,7 +71,7 @@ export default function AdminTodayPage() {
   });
 
   if (!stats) {
-    return <div className="text-center py-12 text-ink-500">Caricamento dashboard…</div>;
+    return <LoadingState />;
   }
 
   const KpiCard = ({ icon: Icon, label, value, href, color = 'primary', alert }: any) => {

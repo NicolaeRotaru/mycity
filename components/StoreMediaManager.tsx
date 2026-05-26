@@ -5,6 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
+import { friendlyError } from '@/lib/errors';
 
 interface Props {
   value: StoreMediaItem[];
@@ -53,7 +54,7 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
             contentType: file.type,
           });
           if (error) {
-            toast.error(error.message);
+            toast.error(friendlyError(error));
             continue;
           }
           const { data } = supabase.storage.from('products').getPublicUrl(path);
@@ -62,7 +63,7 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
         onChange(next);
         toast.success('Media caricato');
       } catch (err: any) {
-        toast.error(err.message || 'Errore upload');
+        toast.error(friendlyError(err));
       } finally {
         setUploading(false);
       }

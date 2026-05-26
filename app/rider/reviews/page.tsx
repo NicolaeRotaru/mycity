@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Review = {
   id: string;
@@ -65,7 +66,7 @@ export default function RiderReviewsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-ink-400">Caricamento…</div>
+        <LoadingState />
       ) : reviews.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
           <div className="text-5xl mb-3">🛵</div>

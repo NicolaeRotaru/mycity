@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type CustomerRow = {
   userId: string;
@@ -82,7 +83,7 @@ export default function SellerCustomersPage() {
     ? customers.reduce((s, c) => s + c.totalSpent / c.ordersCount, 0) / customers.length
     : 0;
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento…</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">

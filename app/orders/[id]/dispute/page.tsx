@@ -7,6 +7,7 @@ import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'not_received',      label: 'Non l\'ho ricevuto',          hint: 'L\'ordine risulta consegnato ma non l\'hai ricevuto.' },
@@ -72,7 +73,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
     }
   };
 
-  if (!order) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+  if (!order) return <LoadingState />;
 
   const selectedReason = REASONS.find((r) => r.value === reason);
 

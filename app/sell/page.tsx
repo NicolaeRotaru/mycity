@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useProfile } from '@/components/hooks/useProfile';
 import SellerApplicationForm, { type SellerApplicationData } from '@/components/SellerApplicationForm';
+import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const fetchProfile = async () => {
   const { data: { user } } = await supabase.auth.getUser();
@@ -86,11 +88,11 @@ export default function SellPage() {
       qc.invalidateQueries({ queryKey: ['auth-profile'] });
       toast.success('Richiesta inviata! Ti contatteremo entro 48h.');
     },
-    onError: (err: any) => toast.error(err.message || 'Errore nel salvataggio'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (profileLoading || isLoading) {
-    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+    return <LoadingState />;
   }
 
   if (!isAuthenticated) {

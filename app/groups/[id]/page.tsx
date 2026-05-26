@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { useProfile } from '@/components/hooks/useProfile';
 import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type GroupOrder = {
   id: string;
@@ -131,7 +132,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
     },
   });
 
-  if (isLoading || !group) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+  if (isLoading || !group) return <LoadingState />;
 
   const progress = Math.min(100, (group.current_quantity / group.target_quantity) * 100);
   const missing = Math.max(0, group.target_quantity - group.current_quantity);

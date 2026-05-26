@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
 import { trackSignupCompleted } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type Role = 'buyer' | 'seller' | 'rider';
 
@@ -83,7 +84,7 @@ function SignUpInner() {
       toast.success('Registrazione completata! Controlla la tua email per confermare.');
       router.push('/auth/verify-email');
     } catch (error: any) {
-      toast.error(error.message || 'Errore durante la registrazione');
+      toast.error(friendlyError(error));
     } finally {
       setIsLoading(false);
     }

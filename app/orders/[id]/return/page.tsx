@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const REASONS = [
   { value: 'DAMAGED',           label: '📦 Prodotto danneggiato' },
@@ -77,7 +78,7 @@ export default function NewReturnPage() {
     }
   }
 
-  if (!order) return <div className="container mx-auto p-6">Caricamento…</div>;
+  if (!order) return <LoadingState />;
 
   return (
     <div className="container mx-auto max-w-xl px-4 py-8">

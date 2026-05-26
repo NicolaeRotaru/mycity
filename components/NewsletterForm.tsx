@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Honeypot from './Honeypot';
+import { friendlyError } from '@/lib/errors';
 
 type Props = {
   /** "dark" per il Footer su sfondo scuro; "light" per la sezione newsletter homepage. */
@@ -31,7 +32,7 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
       setSubscribed(true);
       toast.success('Iscritto! Riceverai la newsletter ogni venerdì.');
     } catch (err: any) {
-      toast.error(err.message || 'Errore');
+      toast.error(friendlyError(err));
     } finally {
       setLoading(false);
     }

@@ -16,6 +16,7 @@ import { haversineKm, riderFee } from '@/lib/geo';
 import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type AddressForm = {
   fullName: string;
@@ -365,7 +366,7 @@ export default function CheckoutPage() {
     },
     onError: (err: any) => {
       if (err?.message === 'REDIRECT_TO_SIGNIN') return; // gia' redirezionato
-      toast.error(err.message || 'Errore durante il checkout');
+      toast.error(friendlyError(err));
     },
   });
 
@@ -415,7 +416,7 @@ export default function CheckoutPage() {
     },
     onError: (err: any) => {
       if (err?.message === 'REDIRECT_TO_SIGNIN') return;
-      toast.error(err.message || 'Errore durante il pagamento');
+      toast.error(friendlyError(err));
     },
   });
 

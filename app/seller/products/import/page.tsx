@@ -7,6 +7,7 @@ import { Upload, Download, ArrowLeft, FileSpreadsheet, CheckCircle2, AlertCircle
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type ParsedRow = {
   name: string;
@@ -153,7 +154,7 @@ export default function BulkImportProductsPage() {
     }
   };
 
-  if (!userId) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+  if (!userId) return <LoadingState />;
 
   const validCount = parsed.filter((r) => r.errors.length === 0).length;
   const errorCount = parsed.filter((r) => r.errors.length > 0).length;

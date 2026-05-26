@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type PeriodKey = 'today' | '7d' | '30d' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -77,7 +78,7 @@ export default function RiderEarningsPage() {
     return next;
   }, []);
 
-  if (isLoading) return <div className="text-center py-8 text-ink-400">Caricamento guadagni…</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">

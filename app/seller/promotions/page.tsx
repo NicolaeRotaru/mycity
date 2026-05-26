@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
 import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Promo = {
   id: string;
@@ -109,7 +110,7 @@ export default function SellerPromotionsPage() {
     },
   });
 
-  if (!userId) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+  if (!userId) return <LoadingState />;
 
   const active = promos.filter((p) => p.status === 'active' && new Date(p.ends_at) > new Date());
   const past = promos.filter((p) => p.status !== 'active' || new Date(p.ends_at) <= new Date());

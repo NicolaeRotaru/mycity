@@ -12,6 +12,7 @@ import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 const VendorSchema = z.object({
   storeName:  z.string().min(3, 'Il nome deve essere di almeno 3 caratteri'),
@@ -78,7 +79,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
         setLogoUrl(data.publicUrl);
         toast.success('Logo caricato');
       } catch (err: any) {
-        toast.error(err.message || 'Errore nel caricamento');
+        toast.error(friendlyError(err));
       } finally {
         setUploadingLogo(false);
       }

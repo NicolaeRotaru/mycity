@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -133,7 +134,7 @@ export default function StoresPage() {
   }, [stores, search, onlyOpen, sort, categoryId, reviewsByStore, countByStore, categoriesByStore]);
 
   if (isLoading) {
-    return <div className="container mx-auto p-12 text-center text-ink-500">Caricamento negozi...</div>;
+    return <LoadingState />;
   }
 
   return (

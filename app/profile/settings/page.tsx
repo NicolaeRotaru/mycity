@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import PublicProfileToggle from '@/components/PublicProfileToggle';
+import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
 
@@ -114,7 +116,7 @@ export default function SettingsPage() {
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setChangingPwd(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(friendlyError(error));
       return;
     }
     toast.success('Password aggiornata con successo');
@@ -130,7 +132,7 @@ export default function SettingsPage() {
     const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
     setChangingEmail(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(friendlyError(error));
       return;
     }
     toast.success('Ti abbiamo inviato un\'email per confermare il nuovo indirizzo');
@@ -197,14 +199,14 @@ export default function SettingsPage() {
       toast.success('Account eliminato. Ci dispiace vederti andare.');
       router.push('/');
     } catch (err: any) {
-      toast.error(err.message || 'Errore durante l\'eliminazione');
+      toast.error(friendlyError(err));
     } finally {
       setDeleting(false);
     }
   };
 
   if (loading) {
-    return <div className="container mx-auto px-6 py-12 text-center text-ink-500">Caricamento impostazioni...</div>;
+    return <LoadingState />;
   }
 
   return (

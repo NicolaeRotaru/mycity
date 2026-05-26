@@ -7,6 +7,7 @@ import { TrendingUp, Eye, ShoppingCart, Star, ArrowLeft, Sparkles } from 'lucide
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { useRouter } from 'next/navigation';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerAnalyticsPage() {
   const router = useRouter();
@@ -105,7 +106,7 @@ export default function SellerAnalyticsPage() {
     },
   });
 
-  if (!userId || isLoading) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+  if (!userId || isLoading) return <LoadingState />;
   if (!analytics) return null;
 
   return (

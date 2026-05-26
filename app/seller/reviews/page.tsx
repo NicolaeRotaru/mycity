@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Review = {
   id: string;
@@ -73,7 +74,7 @@ export default function SellerReviewsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-ink-400">Caricamento recensioni…</div>
+        <LoadingState />
       ) : reviews.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
           <div className="text-5xl mb-3">📝</div>

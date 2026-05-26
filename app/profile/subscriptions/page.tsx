@@ -8,6 +8,7 @@ import { RefreshCw, ArrowLeft, Pause, Play, Trash2, Calendar } from 'lucide-reac
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Subscription = {
   id: string;
@@ -68,7 +69,7 @@ export default function SubscriptionsPage() {
     },
   });
 
-  if (!userId) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+  if (!userId) return <LoadingState />;
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-3xl space-y-6">
