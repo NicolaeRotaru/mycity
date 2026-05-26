@@ -79,7 +79,7 @@ export default function AdminTodayPage() {
       olive: 'bg-olive-50 text-olive-700 border-olive-200',
       accent: 'bg-accent-50 text-accent-700 border-accent-200',
       rose: 'bg-rose-50 text-rose-700 border-rose-200',
-      amber: 'bg-amber-50 text-amber-700 border-amber-200',
+      amber: 'bg-accent-50 text-accent-700 border-accent-200',
     };
     const inner = (
       <div className={`border-2 rounded-xl p-4 ${alert ? colorMap.rose : 'bg-white border-cream-300'} transition-all hover:shadow-warm`}>

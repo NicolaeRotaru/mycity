@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getCurrentUser, getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (insErr || !ret) {
-    console.error('[returns] insert failed', insErr);
+    logger.error('[returns] insert failed', insErr);
     return NextResponse.json({ error: 'Creazione reso fallita' }, { status: 500 });
   }
 

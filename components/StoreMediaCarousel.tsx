@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import { sizedImage } from '@/lib/image-url';
 
 export type StoreMediaItem = {
   type: 'image' | 'video';
@@ -22,7 +24,7 @@ interface Props {
 const StoreMediaCarousel = ({
   media,
   heightClass = 'h-44 sm:h-56',
-  fallbackClass = 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500',
+  fallbackClass = 'bg-gradient-to-br from-primary-500 via-purple-500 to-pink-500',
   rounded = '',
   className = '',
 }: Props) => {
@@ -53,7 +55,7 @@ const StoreMediaCarousel = ({
   }
 
   return (
-    <div className={`relative w-full ${heightClass} ${rounded} overflow-hidden bg-gray-100 ${className}`}>
+    <div className={`relative w-full ${heightClass} ${rounded} overflow-hidden bg-cream-100 ${className}`}>
       <div
         ref={scrollerRef}
         className="flex w-full h-full overflow-x-auto snap-x snap-mandatory scrollbar-hide"
@@ -62,8 +64,14 @@ const StoreMediaCarousel = ({
         {media.map((m, i) => (
           <div key={i} className="snap-center shrink-0 w-full h-full relative">
             {m.type === 'image' ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={m.url} alt="" className="w-full h-full object-cover" />
+              <Image
+                src={sizedImage(m.url, 'hero')}
+                alt=""
+                fill
+                sizes="(max-width: 768px) 100vw, 1024px"
+                className="object-cover"
+                priority={i === 0}
+              />
             ) : (
               <video
                 src={m.url}

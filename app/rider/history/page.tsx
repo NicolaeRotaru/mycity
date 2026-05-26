@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { formatPrice, formatDate } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function RiderHistoryPage() {
   const { data: orders = [], isLoading } = useQuery({
@@ -22,19 +23,19 @@ export default function RiderHistoryPage() {
     },
   });
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   const totalEarned = orders.reduce((s: number, o: any) => s + Number(o.shipping_cost || 0), 0);
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Storico consegne</h1>
-        <p className="text-sm text-gray-500">{orders.length} consegne completate · {formatPrice(totalEarned)} guadagnati</p>
+        <h1 className="text-2xl font-bold text-ink-900">Storico consegne</h1>
+        <p className="text-sm text-ink-500">{orders.length} consegne completate · {formatPrice(totalEarned)} guadagnati</p>
       </div>
 
       {orders.length === 0 ? (
-        <div className="bg-white border rounded-lg p-12 text-center text-gray-500">
+        <div className="bg-white border rounded-lg p-12 text-center text-ink-500">
           Non hai ancora completato consegne.
         </div>
       ) : (
@@ -43,15 +44,15 @@ export default function RiderHistoryPage() {
             <Link
               key={o.id}
               href={`/rider/orders/${o.id}`}
-              className="block bg-white border border-gray-200 rounded-xl px-5 py-3 hover:shadow-md transition-all"
+              className="block bg-white border border-cream-300 rounded-xl px-5 py-3 hover:shadow-md transition-all"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-mono text-gray-400">#{o.id.slice(0, 6).toUpperCase()}</p>
-                  <p className="text-sm text-gray-700 truncate">{o.delivery_address}, {o.delivery_city}</p>
-                  <p className="text-xs text-gray-500">{o.delivered_at ? formatDate(o.delivered_at) : '—'}</p>
+                  <p className="text-sm font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</p>
+                  <p className="text-sm text-ink-700 truncate">{o.delivery_address}, {o.delivery_city}</p>
+                  <p className="text-xs text-ink-500">{o.delivered_at ? formatDate(o.delivered_at) : '—'}</p>
                 </div>
-                <span className="font-bold text-emerald-600">+{formatPrice(o.shipping_cost || 0)}</span>
+                <span className="font-bold text-olive-600">+{formatPrice(o.shipping_cost || 0)}</span>
               </div>
             </Link>
           ))}

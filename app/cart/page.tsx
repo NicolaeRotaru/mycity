@@ -49,34 +49,34 @@ export default function CartPage() {
     <div className="container mx-auto px-4 sm:px-6 py-8">
       {/* Step indicator (carrello attivo) */}
       <div className="flex items-center gap-2 text-sm mb-6">
-        <span className="font-bold text-indigo-700">1. Carrello</span>
-        <span className="text-gray-300">›</span>
-        <span className="text-gray-400">2. Indirizzo</span>
-        <span className="text-gray-300">›</span>
-        <span className="text-gray-400">3. Conferma</span>
+        <span className="font-bold text-primary-800">1. Carrello</span>
+        <span className="text-ink-300">›</span>
+        <span className="text-ink-400">2. Indirizzo</span>
+        <span className="text-ink-300">›</span>
+        <span className="text-ink-400">3. Conferma</span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* COLONNA SX: prodotti */}
         <div className="lg:col-span-2 space-y-4">
           <h1 className="text-2xl font-bold">
-            Il tuo carrello <span className="text-gray-400 font-normal">({count} articoli)</span>
+            Il tuo carrello <span className="text-ink-400 font-normal">({count} articoli)</span>
           </h1>
 
           {/* Progress free shipping */}
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+          <div className="bg-olive-50 border border-olive-200 rounded-xl p-4">
             {freeShipping ? (
-              <p className="text-emerald-700 font-semibold flex items-center gap-2">
+              <p className="text-olive-700 font-semibold flex items-center gap-2">
                 <span className="text-2xl">🎉</span> Hai sbloccato la <strong>spedizione gratuita</strong>!
               </p>
             ) : (
               <>
-                <p className="text-emerald-800 font-medium mb-2">
+                <p className="text-olive-800 font-medium mb-2">
                   Ti mancano solo <strong>{formatPrice(missing)}</strong> per la <strong>spedizione gratuita</strong> 🚚
                 </p>
-                <div className="w-full bg-emerald-100 rounded-full h-2 overflow-hidden">
+                <div className="w-full bg-olive-100 rounded-full h-2 overflow-hidden">
                   <div
-                    className="bg-emerald-500 h-2 rounded-full transition-all duration-500"
+                    className="bg-olive-500 h-2 rounded-full transition-all duration-500"
                     style={{ width: `${shippingProgress}%` }}
                   />
                 </div>
@@ -86,7 +86,7 @@ export default function CartPage() {
 
           {items.map((item) => (
             <div key={item.id} className="bg-white border rounded-xl p-4 flex gap-4 hover:shadow-md transition-shadow">
-              <div className="relative w-24 h-24 bg-gray-100 rounded-lg shrink-0 overflow-hidden">
+              <div className="relative w-24 h-24 bg-cream-100 rounded-lg shrink-0 overflow-hidden">
                 <Image
                   src={sizedImage(item.image ?? 'https://placehold.co/200x200/eef2ff/6366f1?text=Foto', 'thumb')}
                   alt={item.name}
@@ -99,32 +99,32 @@ export default function CartPage() {
               <div className="flex-1 flex flex-col justify-between min-w-0">
                 <Link
                   href={`/product/${item.id}`}
-                  className="font-semibold hover:text-indigo-600 line-clamp-2"
+                  className="font-semibold hover:text-primary-700 line-clamp-2"
                 >
                   {item.name}
                 </Link>
-                <p className="text-xs text-emerald-600 font-semibold">✓ Disponibile · Spedizione 24-48h</p>
+                <p className="text-xs text-olive-600 font-semibold">✓ Disponibile · Spedizione 24-48h</p>
                 <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <div className="flex items-center border rounded-lg">
                       <button
                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        className="w-8 h-8 hover:bg-gray-100 rounded-l-lg"
+                        className="w-8 h-8 hover:bg-cream-100 rounded-l-lg"
                       >−</button>
                       <span className="w-8 text-center font-semibold">{item.quantity}</span>
                       <button
                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        className="w-8 h-8 hover:bg-gray-100 rounded-r-lg"
+                        className="w-8 h-8 hover:bg-cream-100 rounded-r-lg"
                       >+</button>
                     </div>
                     <button
                       onClick={() => removeFromCart(item.id)}
-                      className="text-gray-400 hover:text-red-600 text-sm ml-2"
+                      className="text-ink-400 hover:text-red-600 text-sm ml-2"
                     >
                       🗑️ Rimuovi
                     </button>
                   </div>
-                  <span className="font-bold text-gray-900 text-lg">{formatPrice(item.price * item.quantity)}</span>
+                  <span className="font-bold text-ink-900 text-lg">{formatPrice(item.price * item.quantity)}</span>
                 </div>
               </div>
             </div>
@@ -132,7 +132,7 @@ export default function CartPage() {
 
           <Link
             href="/"
-            className="inline-block text-indigo-600 hover:underline font-semibold text-sm mt-2"
+            className="inline-block text-primary-700 hover:underline font-semibold text-sm mt-2"
           >
             ← Continua lo shopping
           </Link>
@@ -143,17 +143,17 @@ export default function CartPage() {
           <div className="bg-white border rounded-xl p-6 space-y-4 shadow-sm">
             <h2 className="text-lg font-bold flex items-center justify-between">
               Riepilogo ordine
-              <span className="text-xs font-normal text-gray-400">{count} articoli</span>
+              <span className="text-xs font-normal text-ink-400">{count} articoli</span>
             </h2>
 
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">Subtotale</span>
+                <span className="text-ink-600">Subtotale</span>
                 <span className="font-semibold">{formatPrice(total)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Spedizione</span>
-                <span className={`font-semibold ${freeShipping ? 'text-emerald-600' : 'text-gray-900'}`}>
+                <span className="text-ink-600">Spedizione</span>
+                <span className={`font-semibold ${freeShipping ? 'text-olive-600' : 'text-ink-900'}`}>
                   {freeShipping ? 'GRATUITA' : formatPrice(shippingCost)}
                 </span>
               </div>
@@ -162,8 +162,8 @@ export default function CartPage() {
             <div className="border-t pt-3 flex justify-between items-baseline">
               <span className="font-bold">Totale</span>
               <div className="text-right">
-                <div className="text-2xl font-extrabold text-indigo-700">{formatPrice(finalTotal)}</div>
-                <div className="text-[10px] text-gray-400 uppercase">IVA inclusa</div>
+                <div className="text-2xl font-extrabold text-primary-800">{formatPrice(finalTotal)}</div>
+                <div className="text-[10px] text-ink-400 uppercase">IVA inclusa</div>
               </div>
             </div>
 
@@ -180,7 +180,7 @@ export default function CartPage() {
               <ShareCartButton items={items} />
             </div>
 
-            <div className="space-y-2 pt-2 text-xs text-gray-500">
+            <div className="space-y-2 pt-2 text-xs text-ink-500">
               <p className="flex items-center gap-2"><span>💳</span> Pagamento in contanti alla consegna</p>
               <p className="flex items-center gap-2"><span>🔒</span> I tuoi dati sono al sicuro</p>
               <p className="flex items-center gap-2"><span>↩️</span> Reso facile entro 14 giorni</p>
@@ -188,9 +188,9 @@ export default function CartPage() {
             </div>
           </div>
 
-          <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm">
-            <p className="font-bold text-indigo-900 mb-1">💡 Lo sapevi?</p>
-            <p className="text-indigo-800">
+          <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm">
+            <p className="font-bold text-primary-900 mb-1">💡 Lo sapevi?</p>
+            <p className="text-primary-800">
               Acquistando qui sostieni direttamente i commercianti della tua città. Niente intermediari, niente commissioni nascoste.
             </p>
           </div>

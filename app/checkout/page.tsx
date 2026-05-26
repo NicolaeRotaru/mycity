@@ -29,12 +29,12 @@ const Step = ({ num, label, active, done }: { num: number; label: string; active
   <div className="flex items-center gap-2">
     <div
       className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-        done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-500'
+        done ? 'bg-olive-500 text-white' : active ? 'bg-primary-700 text-white' : 'bg-cream-200 text-ink-500'
       }`}
     >
       {done ? '✓' : num}
     </div>
-    <span className={`text-sm font-semibold ${active ? 'text-indigo-700' : done ? 'text-emerald-700' : 'text-gray-400'}`}>
+    <span className={`text-sm font-semibold ${active ? 'text-primary-800' : done ? 'text-olive-700' : 'text-ink-400'}`}>
       {label}
     </span>
   </div>
@@ -440,8 +440,8 @@ export default function CheckoutPage() {
   if (cart.length === 0) {
     return (
       <div className="container mx-auto p-12 text-center space-y-4">
-        <p className="text-gray-500 text-lg">Il tuo carrello è vuoto.</p>
-        <Link href="/" className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg">
+        <p className="text-ink-500 text-lg">Il tuo carrello è vuoto.</p>
+        <Link href="/" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-6 py-2 rounded-lg">
           Torna al negozio
         </Link>
       </div>
@@ -449,27 +449,27 @@ export default function CheckoutPage() {
   }
 
   if (loadingGroups) {
-    return <div className="container mx-auto p-12 text-center text-gray-500">Caricamento...</div>;
+    return <div className="container mx-auto p-12 text-center text-ink-500">Caricamento...</div>;
   }
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl">
       <div className="flex items-center justify-center gap-4 sm:gap-8 mb-8 flex-wrap">
         <Step num={1} label="Carrello" done />
-        <div className="w-8 sm:w-16 h-px bg-gray-300" />
+        <div className="w-8 sm:w-16 h-px bg-cream-300" />
         <Step num={2} label="Indirizzo" active />
-        <div className="w-8 sm:w-16 h-px bg-gray-300" />
+        <div className="w-8 sm:w-16 h-px bg-cream-300" />
         <Step num={3} label="Conferma" />
       </div>
 
       {!authUser && (
-        <div className="bg-indigo-50 border-2 border-indigo-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm text-indigo-900">
+        <div className="bg-primary-50 border-2 border-primary-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-primary-900">
             <strong>🔑 Per completare l'ordine devi accedere</strong> — i tuoi articoli restano nel carrello.
           </p>
           <Link
             href="/sign-in?returnTo=/checkout"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap"
+            className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap"
           >
             Accedi ora
           </Link>
@@ -484,12 +484,12 @@ export default function CheckoutPage() {
 
             {savedAddresses.length > 0 && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-ink-700 mb-1">
                   Indirizzo salvato
                 </label>
                 <select
                   onChange={(e) => applySavedAddress(e.target.value)}
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400"
                 >
                   {savedAddresses.map((a: any) => (
                     <option key={a.id} value={a.id}>
@@ -498,75 +498,75 @@ export default function CheckoutPage() {
                     </option>
                   ))}
                 </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  Oppure modifica i campi sotto. <Link href="/profile/addresses" className="text-indigo-600 hover:underline">Gestisci indirizzi</Link>
+                <p className="text-xs text-ink-400 mt-1">
+                  Oppure modifica i campi sotto. <Link href="/profile/addresses" className="text-primary-700 hover:underline">Gestisci indirizzi</Link>
                 </p>
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4" id="checkout-form">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome e cognome</label>
+                <label className="block text-sm font-medium text-ink-700 mb-1">Nome e cognome</label>
                 <input type="text" name="fullName" value={form.fullName} onChange={handleChange}
                   placeholder="Mario Rossi"
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Indirizzo</label>
+                <label className="block text-sm font-medium text-ink-700 mb-1">Indirizzo</label>
                 <input type="text" name="address" value={form.address} onChange={handleChange}
                   placeholder="Via Roma 1"
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Città</label>
+                  <label className="block text-sm font-medium text-ink-700 mb-1">Città</label>
                   <input type="text" name="city" value={form.city} onChange={handleChange}
-                    className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CAP</label>
+                  <label className="block text-sm font-medium text-ink-700 mb-1">CAP</label>
                   <input type="text" name="zip" value={form.zip} onChange={handleChange}
-                    className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                    className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Telefono</label>
+                <label className="block text-sm font-medium text-ink-700 mb-1">Telefono</label>
                 <input type="tel" name="phone" value={form.phone} onChange={handleChange}
                   placeholder="3331234567"
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                <p className="text-xs text-gray-400 mt-1">Il rider ti chiamerà se serve per la consegna</p>
+                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
+                <p className="text-xs text-ink-400 mt-1">Il rider ti chiamerà se serve per la consegna</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Note per il rider <span className="text-gray-400 font-normal">(opzionale)</span>
+                <label className="block text-sm font-medium text-ink-700 mb-1">
+                  Note per il rider <span className="text-ink-400 font-normal">(opzionale)</span>
                 </label>
                 <textarea name="notes" value={form.notes} onChange={handleChange}
                   rows={2}
                   placeholder="Es. citofono Rossi, suonare al 2° piano…"
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
+                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none" />
               </div>
             </form>
           </div>
 
           {/* RITIRO IN NEGOZIO */}
           <label className={`block border-2 rounded-xl p-4 cursor-pointer transition-all ${
-            pickupInStore ? 'border-emerald-400 bg-emerald-50' : 'border-gray-200 bg-white hover:border-emerald-200'
+            pickupInStore ? 'border-olive-400 bg-olive-50' : 'border-cream-300 bg-white hover:border-olive-200'
           }`}>
             <div className="flex items-start gap-3">
               <input
                 type="checkbox"
                 checked={pickupInStore}
                 onChange={(e) => setPickupInStore(e.target.checked)}
-                className="mt-1 w-4 h-4 accent-emerald-600"
+                className="mt-1 w-4 h-4 accent-olive-600"
               />
               <div className="flex-1">
-                <p className="font-bold text-gray-900">🏪 Ritira tu in negozio — risparmia {PICKUP_DISCOUNT_PERCENT}%</p>
-                <p className="text-sm text-gray-600 mt-0.5">
+                <p className="font-bold text-ink-900">🏪 Ritira tu in negozio — risparmia {PICKUP_DISCOUNT_PERCENT}%</p>
+                <p className="text-sm text-ink-600 mt-0.5">
                   Niente spedizione, sconto subito. Vai tu al negozio quando l'ordine è pronto.
                 </p>
               </div>
               {pickupInStore && (
-                <span className="bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
+                <span className="bg-olive-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
                   −{formatPrice(pickupDiscount)}
                 </span>
               )}
@@ -583,8 +583,8 @@ export default function CheckoutPage() {
                 className="mt-1 w-4 h-4 accent-primary-600"
               />
               <div className="flex-1">
-                <p className="font-bold text-gray-900">🏢 Sto comprando per la mia azienda — voglio la fattura elettronica</p>
-                <p className="text-sm text-gray-600 mt-0.5">
+                <p className="font-bold text-ink-900">🏢 Sto comprando per la mia azienda — voglio la fattura elettronica</p>
+                <p className="text-sm text-ink-600 mt-0.5">
                   Inviata via SDI/PEC entro 12 giorni. Detraibilità completa.
                 </p>
               </div>
@@ -650,8 +650,8 @@ export default function CheckoutPage() {
                 <label
                   className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
                     paymentMethod === 'card'
-                      ? 'border-indigo-400 bg-indigo-50'
-                      : 'border-gray-200 bg-white hover:border-indigo-200'
+                      ? 'border-primary-400 bg-primary-50'
+                      : 'border-cream-300 bg-white hover:border-primary-200'
                   } ${groups.length > 1 ? 'opacity-60 cursor-not-allowed' : ''}`}
                 >
                   <input
@@ -664,12 +664,12 @@ export default function CheckoutPage() {
                     className="mt-1"
                   />
                   <div className="flex-1">
-                    <p className="font-bold text-gray-900">💳 Carta di credito / debito</p>
-                    <p className="text-sm text-gray-600">
+                    <p className="font-bold text-ink-900">💳 Carta di credito / debito</p>
+                    <p className="text-sm text-ink-600">
                       Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
                     </p>
                     {groups.length > 1 && (
-                      <p className="text-xs text-amber-700 mt-1">
+                      <p className="text-xs text-accent-700 mt-1">
                         ⚠ Il pagamento con carta richiede ordini da un solo negozio per volta.
                       </p>
                     )}
@@ -680,8 +680,8 @@ export default function CheckoutPage() {
               <label
                 className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
                   paymentMethod === 'cod'
-                    ? 'border-yellow-400 bg-yellow-50'
-                    : 'border-gray-200 bg-white hover:border-yellow-200'
+                    ? 'border-accent-400 bg-accent-50'
+                    : 'border-cream-300 bg-white hover:border-accent-200'
                 }`}
               >
                 <input
@@ -693,8 +693,8 @@ export default function CheckoutPage() {
                   className="mt-1"
                 />
                 <div className="flex-1">
-                  <p className="font-bold text-gray-900">💵 Contanti alla consegna</p>
-                  <p className="text-sm text-gray-600">Paghi al rider quando ricevi il pacco.</p>
+                  <p className="font-bold text-ink-900">💵 Contanti alla consegna</p>
+                  <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
                 </div>
               </label>
             </div>
@@ -702,7 +702,7 @@ export default function CheckoutPage() {
 
           {/* RIEPILOGO PER NEGOZIO */}
           {groups.length > 1 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+            <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-800">
               <strong>Il tuo carrello include prodotti da {groups.length} negozi diversi.</strong> Verranno creati {groups.length} ordini separati, uno per ciascun negozio. Ogni rider consegna il proprio ordine.
             </div>
           )}
@@ -736,18 +736,18 @@ export default function CheckoutPage() {
         {/* RIEPILOGO ORDINE */}
         <div className="lg:sticky lg:top-32 h-fit space-y-4">
           <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-gray-50 border-b px-5 py-3 flex justify-between items-center">
+            <div className="bg-cream-50 border-b px-5 py-3 flex justify-between items-center">
               <h2 className="font-bold">Riepilogo ordine</h2>
-              <span className="text-xs text-gray-400">{cart.length} articoli</span>
+              <span className="text-xs text-ink-400">{cart.length} articoli</span>
             </div>
 
             <div className="divide-y max-h-72 overflow-y-auto">
               {groups.map((g) => (
                 <div key={g.sellerId} className="px-5 py-3">
-                  <p className="text-xs font-semibold text-indigo-700 mb-2">🏪 {g.storeName}</p>
+                  <p className="text-xs font-semibold text-primary-800 mb-2">🏪 {g.storeName}</p>
                   {g.items.map((item) => (
                     <div key={item.id} className="flex gap-3 items-center pl-2 py-1">
-                      <div className="relative w-10 h-10 bg-gray-100 rounded shrink-0 overflow-hidden">
+                      <div className="relative w-10 h-10 bg-cream-100 rounded shrink-0 overflow-hidden">
                         <Image
                           src={sizedImage(item.image ?? 'https://placehold.co/100x100/eef2ff/6366f1?text=?', 'thumb')}
                           alt={item.name}
@@ -758,10 +758,10 @@ export default function CheckoutPage() {
                         />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-800 text-sm truncate">{item.name}</p>
-                        <p className="text-xs text-gray-400">×{item.quantity}</p>
+                        <p className="font-medium text-ink-800 text-sm truncate">{item.name}</p>
+                        <p className="text-xs text-ink-400">×{item.quantity}</p>
                       </div>
-                      <span className="font-semibold text-gray-800 text-sm">{formatPrice(item.price * item.quantity)}</span>
+                      <span className="font-semibold text-ink-800 text-sm">{formatPrice(item.price * item.quantity)}</span>
                     </div>
                   ))}
                 </div>
@@ -769,10 +769,10 @@ export default function CheckoutPage() {
             </div>
 
             {/* Coupon input */}
-            <div className="px-5 py-3 border-t bg-gray-50/50">
+            <div className="px-5 py-3 border-t bg-cream-50/50">
               {appliedCoupon ? (
-                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded px-3 py-2 text-sm">
-                  <span className="text-emerald-800">
+                <div className="flex items-center justify-between bg-olive-50 border border-olive-200 rounded px-3 py-2 text-sm">
+                  <span className="text-olive-800">
                     ✓ <strong>{appliedCoupon.coupon.code}</strong> applicato (−{formatPrice(appliedCoupon.discount)})
                   </span>
                   <button
@@ -791,12 +791,12 @@ export default function CheckoutPage() {
                       value={couponCode}
                       onChange={(e) => { setCouponCode(e.target.value); setCouponError(null); }}
                       placeholder="Codice sconto (es. BENVENUTO10)"
-                      className="flex-1 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="flex-1 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
                     />
                     <button
                       type="button"
                       onClick={applyCoupon}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded text-sm font-semibold"
+                      className="bg-primary-700 hover:bg-primary-800 text-white px-3 py-2 rounded text-sm font-semibold"
                     >
                       Applica
                     </button>
@@ -806,32 +806,32 @@ export default function CheckoutPage() {
               )}
             </div>
 
-            <div className="px-5 py-4 space-y-2 border-t bg-gray-50/50 text-sm">
+            <div className="px-5 py-4 space-y-2 border-t bg-cream-50/50 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-600">Subtotale</span>
+                <span className="text-ink-600">Subtotale</span>
                 <span className="font-semibold">{formatPrice(grandSubtotal)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Spedizione</span>
-                <span className={`font-semibold ${grandShipping === 0 ? 'text-emerald-600' : ''}`}>
+                <span className="text-ink-600">Spedizione</span>
+                <span className={`font-semibold ${grandShipping === 0 ? 'text-olive-600' : ''}`}>
                   {grandShipping === 0 ? 'GRATUITA' : formatPrice(grandShipping)}
                 </span>
               </div>
               {pickupDiscount > 0 && (
-                <div className="flex justify-between text-emerald-700">
+                <div className="flex justify-between text-olive-700">
                   <span>Sconto ritiro in negozio</span>
                   <span className="font-semibold">−{formatPrice(pickupDiscount)}</span>
                 </div>
               )}
               {discount > 0 && (
-                <div className="flex justify-between text-emerald-700">
+                <div className="flex justify-between text-olive-700">
                   <span>Sconto codice</span>
                   <span className="font-semibold">−{formatPrice(discount)}</span>
                 </div>
               )}
               <div className="flex justify-between pt-2 border-t font-bold text-lg">
                 <span>Totale</span>
-                <span className="text-indigo-700">{formatPrice(grandTotal)}</span>
+                <span className="text-primary-800">{formatPrice(grandTotal)}</span>
               </div>
             </div>
 
@@ -841,8 +841,8 @@ export default function CheckoutPage() {
               disabled={isCheckingOut}
               className={`w-full disabled:opacity-50 py-4 font-extrabold text-base transition-colors shadow-lg ${
                 paymentMethod === 'card'
-                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                  : 'bg-yellow-400 hover:bg-yellow-500 text-gray-900'
+                  ? 'bg-primary-700 hover:bg-primary-800 text-white'
+                  : 'bg-accent-400 hover:bg-accent-500 text-ink-900'
               }`}
             >
               {isCheckingOut

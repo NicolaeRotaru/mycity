@@ -83,12 +83,12 @@ export function ConfirmDialogHost() {
   const icon = state.icon ?? (isDanger ? '⚠️' : '✓');
 
   const accentBar = isDanger
-    ? 'bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500'
-    : 'bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600';
+    ? 'bg-gradient-to-r from-rose-500 via-orange-500 to-accent-500'
+    : 'bg-gradient-to-r from-primary-600 via-purple-600 to-pink-600';
 
   const iconBg = isDanger
     ? 'bg-gradient-to-br from-rose-100 to-orange-100 text-rose-600 ring-rose-200'
-    : 'bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-600 ring-indigo-200';
+    : 'bg-gradient-to-br from-primary-100 to-purple-100 text-primary-700 ring-primary-200';
 
   return (
     <div
@@ -107,7 +107,7 @@ export function ConfirmDialogHost() {
 
         {/* Handle del bottom sheet (solo mobile) */}
         <div className="sm:hidden flex justify-center pt-2 pb-1">
-          <div className="w-10 h-1 rounded-full bg-gray-200" />
+          <div className="w-10 h-1 rounded-full bg-cream-200" />
         </div>
 
         {/* Corpo */}
@@ -119,12 +119,12 @@ export function ConfirmDialogHost() {
           </div>
           <h2
             id="confirm-title"
-            className="text-lg sm:text-xl font-extrabold text-gray-900 leading-snug"
+            className="text-lg sm:text-xl font-extrabold text-ink-900 leading-snug"
           >
             {state.title}
           </h2>
           {state.message && (
-            <p className="mt-2 text-sm text-gray-500 leading-relaxed max-w-[36ch] mx-auto">
+            <p className="mt-2 text-sm text-ink-500 leading-relaxed max-w-[36ch] mx-auto">
               {state.message}
             </p>
           )}
@@ -135,7 +135,7 @@ export function ConfirmDialogHost() {
           <button
             type="button"
             onClick={() => closeWith(false)}
-            className="px-4 py-3 rounded-xl font-semibold text-gray-700 bg-white border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 active:scale-[0.98] transition-all"
+            className="px-4 py-3 rounded-xl font-semibold text-ink-700 bg-white border-2 border-cream-300 hover:border-cream-300 hover:bg-cream-50 active:scale-[0.98] transition-all"
           >
             {state.cancelLabel ?? 'Annulla'}
           </button>
@@ -146,7 +146,7 @@ export function ConfirmDialogHost() {
             className={`px-4 py-3 rounded-xl font-bold text-white shadow-md active:scale-[0.98] transition-all ${
               isDanger
                 ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
-                : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-indigo-200'
+                : 'bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 shadow-indigo-200'
             }`}
           >
             {state.confirmLabel ?? 'Conferma'}

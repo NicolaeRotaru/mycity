@@ -4,6 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { getInvoiceProvider } from '@/lib/invoicing/providers';
 import { renderInvoicePdf } from '@/lib/invoicing/pdf';
 import type { InvoiceDoc } from '@/lib/invoicing/types';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
   const { data: numberData, error: numErr } = await admin
     .rpc('next_invoice_number', { p_seller: order.seller_id, p_year: year });
   if (numErr) {
-    console.error('[invoice] number allocation failed', numErr);
+    logger.error('[invoice] number allocation failed', numErr);
     return NextResponse.json({ error: 'Numero fattura non allocato' }, { status: 500 });
   }
   const invoiceNumber = numberData as string;
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
   try {
     pdfBytes = await renderInvoicePdf(doc);
   } catch (e: any) {
-    console.error('[invoice] pdf render failed', e);
+    logger.error('[invoice] pdf render failed', e);
     return NextResponse.json({ error: 'Errore generazione PDF' }, { status: 500 });
   }
 
@@ -129,7 +130,7 @@ export async function POST(req: NextRequest) {
       upsert: true,
     });
   if (upErr) {
-    console.warn('[invoice] storage upload failed (bucket "invoices" esiste?):', upErr.message);
+    logger.warn('[invoice] storage upload failed (bucket "invoices" esiste?):', upErr.message);
   }
   const { data: signed } = await admin.storage
     .from('invoices')

@@ -5,6 +5,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate, refundIssuedTemplate } from '@/lib/email/templates';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 // Stripe webhook: leggi raw body, niente parsing automatico Next
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
   try {
     event = getStripe().webhooks.constructEvent(raw, sig, secret);
   } catch (err: any) {
-    console.error('[stripe] signature verification failed', err?.message);
+    logger.error(err, { context: 'stripe-webhook-signature' });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
@@ -67,11 +68,11 @@ export async function POST(req: NextRequest) {
       }
       default:
         // Eventi non gestiti: log e basta
-        console.log('[stripe] unhandled event', event.type);
+        logger.info('Unhandled Stripe event', { type: event.type });
     }
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err: any) {
-    console.error('[stripe] handler error', err);
+    logger.error(err, { context: 'stripe-webhook-handler' });
     return NextResponse.json({ error: 'Handler error' }, { status: 500 });
   }
 }
@@ -118,7 +119,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     .single();
 
   if (orderErr || !order) {
-    console.error('[stripe] order insert failed', orderErr);
+    logger.error(orderErr, { context: 'stripe-order-insert' });
     return;
   }
 

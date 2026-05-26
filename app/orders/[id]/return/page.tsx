@@ -81,33 +81,33 @@ export default function NewReturnPage() {
 
   return (
     <div className="container mx-auto max-w-xl px-4 py-8">
-      <Link href={`/orders/${params.id}`} className="text-sm text-indigo-600 hover:underline">
+      <Link href={`/orders/${params.id}`} className="text-sm text-primary-700 hover:underline">
         ← Torna all&apos;ordine
       </Link>
-      <h1 className="mt-2 text-2xl font-bold text-slate-900">Richiedi un reso</h1>
-      <p className="mt-1 text-sm text-slate-600">
+      <h1 className="mt-2 text-2xl font-bold text-ink-900">Richiedi un reso</h1>
+      <p className="mt-1 text-sm text-ink-600">
         Hai 14 giorni dalla consegna per richiedere il reso (recesso legale).
       </p>
 
-      <div className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-slate-200">
-        <label className="block text-sm font-medium text-slate-700">Motivo del reso</label>
+      <div className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+        <label className="block text-sm font-medium text-ink-700">Motivo del reso</label>
         <div className="mt-2 space-y-2">
           {REASONS.map((r) => (
-            <label key={r.value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
+            <label key={r.value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-cream-300 p-3 hover:bg-cream-50">
               <input
                 type="radio"
                 name="reason"
                 value={r.value}
                 checked={reason === r.value}
                 onChange={(e) => setReason(e.target.value)}
-                className="h-4 w-4 text-indigo-600"
+                className="h-4 w-4 text-primary-700"
               />
               <span className="text-sm">{r.label}</span>
             </label>
           ))}
         </div>
 
-        <label className="mt-6 block text-sm font-medium text-slate-700">
+        <label className="mt-6 block text-sm font-medium text-ink-700">
           Dettagli aggiuntivi (opzionale)
         </label>
         <textarea
@@ -115,19 +115,19 @@ export default function NewReturnPage() {
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
           maxLength={2000}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+          className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-sm"
           placeholder="Descrivi il problema in dettaglio…"
         />
 
-        <label className="mt-6 block text-sm font-medium text-slate-700">
+        <label className="mt-6 block text-sm font-medium text-ink-700">
           Foto (max 8)
         </label>
         <div className="mt-2 flex flex-wrap gap-2">
           {photos.map((p) => (
-            <img key={p} src={p} alt="prova" className="h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200" />
+            <img key={p} src={p} alt="prova" className="h-20 w-20 rounded-lg object-cover ring-1 ring-cream-300" />
           ))}
           {photos.length < 8 && (
-            <label className="inline-flex h-20 w-20 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-slate-300 text-2xl text-slate-400 hover:bg-slate-50">
+            <label className="inline-flex h-20 w-20 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-cream-300 text-2xl text-ink-400 hover:bg-cream-50">
               {uploading ? '…' : '+'}
               <input
                 type="file"
@@ -145,7 +145,7 @@ export default function NewReturnPage() {
         <button
           onClick={submit}
           disabled={submitting}
-          className="mt-6 w-full rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="mt-6 w-full rounded-lg bg-primary-700 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
         >
           {submitting ? 'Invio…' : 'Invia richiesta di reso'}
         </button>

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -96,10 +97,10 @@ export async function POST(req: NextRequest) {
   // 1) Anonimizzazione resiliente
   const full = await admin.from('profiles').update({ ...SAFE_FIELDS, ...KYC_FIELDS }).eq('id', user.id);
   if (full.error) {
-    console.warn('account delete: full anonymize failed, fallback', full.error.message);
+    logger.warn('account delete: full anonymize failed, fallback', full.error.message);
     const safe = await admin.from('profiles').update(SAFE_FIELDS).eq('id', user.id);
     if (safe.error) {
-      console.error('account delete: even safe anonymize failed', safe.error);
+      logger.error('account delete: even safe anonymize failed', safe.error);
       return NextResponse.json(
         { error: 'Impossibile aggiornare il profilo. Contatta il supporto.' },
         { status: 500 },
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
   // 2) Cancellazione hard
   const { error: delErr } = await admin.auth.admin.deleteUser(user.id);
   if (delErr) {
-    console.error('account delete: auth deletion failed', delErr);
+    logger.error('account delete: auth deletion failed', delErr);
     return NextResponse.json(
       { error: "Profilo anonimizzato ma cancellazione dell'account non riuscita. Contatta il supporto." },
       { status: 500 },

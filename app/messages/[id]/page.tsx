@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Message = {
   id: string;
@@ -164,13 +165,13 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
     sendMutation.mutate(trimmed);
   };
 
-  if (!userId) return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
+  if (!userId) return <LoadingState />;
   if (!conversation) {
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
         <div className="text-5xl mb-3">💬</div>
         <h1 className="text-xl font-bold mb-2">Conversazione non trovata</h1>
-        <Link href="/messages" className="inline-block mt-4 text-indigo-600 font-semibold hover:underline">
+        <Link href="/messages" className="inline-block mt-4 text-primary-700 font-semibold hover:underline">
           ← Torna ai messaggi
         </Link>
       </div>
@@ -200,24 +201,24 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
       <div className="bg-white sm:border sm:rounded-xl flex flex-col h-[calc(100dvh-160px)] sm:h-[calc(100dvh-200px)]">
         {/* HEADER */}
         <div className="flex items-center gap-3 p-4 border-b">
-          <Link href="/messages" className="text-gray-500 hover:text-gray-700">
+          <Link href="/messages" className="text-ink-500 hover:text-ink-700">
             <ArrowLeft size={20} />
           </Link>
           <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-            iAmBuyer ? 'bg-pink-100 text-pink-700' : 'bg-indigo-100 text-indigo-700'
+            iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
           }`}>
             {counterpartName[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-gray-900 truncate">{counterpartName}</h2>
-            <p className="text-xs text-gray-500">{iAmBuyer ? 'Negozio' : 'Cliente'}</p>
+            <h2 className="font-semibold text-ink-900 truncate">{counterpartName}</h2>
+            <p className="text-xs text-ink-500">{iAmBuyer ? 'Negozio' : 'Cliente'}</p>
           </div>
         </div>
 
         {/* THREAD */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-cream-50">
           {items.length === 0 ? (
-            <div className="text-center text-gray-400 text-sm py-12">
+            <div className="text-center text-ink-400 text-sm py-12">
               Scrivi il primo messaggio per iniziare la conversazione.
             </div>
           ) : (
@@ -225,7 +226,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
               if (it.type === 'date') {
                 return (
                   <div key={it.key} className="flex justify-center my-3">
-                    <span className="text-xs text-gray-500 bg-white px-3 py-1 rounded-full border">{it.label}</span>
+                    <span className="text-xs text-ink-500 bg-white px-3 py-1 rounded-full border">{it.label}</span>
                   </div>
                 );
               }
@@ -233,10 +234,10 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
               return (
                 <div key={it.msg.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[80%] sm:max-w-[70%] rounded-2xl px-4 py-2 text-sm shadow-sm ${
-                    mine ? 'bg-indigo-600 text-white rounded-br-sm' : 'bg-white text-gray-900 border rounded-bl-sm'
+                    mine ? 'bg-primary-700 text-white rounded-br-sm' : 'bg-white text-ink-900 border rounded-bl-sm'
                   }`}>
                     <p className="whitespace-pre-wrap break-words">{it.msg.body}</p>
-                    <p className={`text-[10px] mt-0.5 text-right ${mine ? 'text-indigo-200' : 'text-gray-400'}`}>
+                    <p className={`text-[10px] mt-0.5 text-right ${mine ? 'text-indigo-200' : 'text-ink-400'}`}>
                       {formatTime(it.msg.created_at)}
                     </p>
                   </div>
@@ -256,13 +257,13 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
             placeholder="Scrivi un messaggio..."
             maxLength={4000}
             disabled={sendMutation.isPending}
-            className="flex-1 border border-gray-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:opacity-60"
+            className="flex-1 border border-cream-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-60"
           />
           <button
             type="submit"
             disabled={sendMutation.isPending || !text.trim()}
             aria-label="Invia"
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-full p-3"
+            className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white rounded-full p-3"
           >
             <Send size={18} />
           </button>

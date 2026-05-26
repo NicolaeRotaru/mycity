@@ -204,15 +204,15 @@ export default function SettingsPage() {
   };
 
   if (loading) {
-    return <div className="container mx-auto px-6 py-12 text-center text-gray-500">Caricamento impostazioni...</div>;
+    return <div className="container mx-auto px-6 py-12 text-center text-ink-500">Caricamento impostazioni...</div>;
   }
 
   return (
     <div className="container mx-auto px-6 py-8 max-w-5xl">
       <div className="mb-6">
-        <Link href="/profile" className="text-sm text-indigo-600 hover:underline">← Il tuo account</Link>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 mt-2">⚙️ Impostazioni</h1>
-        <p className="text-sm text-gray-600">Gestisci account, sicurezza, notifiche e privacy.</p>
+        <Link href="/profile" className="text-sm text-primary-700 hover:underline">← Il tuo account</Link>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-ink-900 mt-2">⚙️ Impostazioni</h1>
+        <p className="text-sm text-ink-600">Gestisci account, sicurezza, notifiche e privacy.</p>
       </div>
 
       <div className="grid md:grid-cols-[220px_1fr] gap-6">
@@ -226,8 +226,8 @@ export default function SettingsPage() {
                 onClick={() => setTab(t.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm border-l-4 transition-colors ${
                   tab === t.id
-                    ? 'bg-indigo-50 border-indigo-600 text-indigo-700 font-bold'
-                    : 'border-transparent text-gray-700 hover:bg-gray-50'
+                    ? 'bg-primary-50 border-indigo-600 text-primary-800 font-bold'
+                    : 'border-transparent text-ink-700 hover:bg-cream-50'
                 }`}
               >
                 <span className="text-lg">{t.icon}</span>
@@ -243,8 +243,8 @@ export default function SettingsPage() {
             <section className="bg-white border rounded-xl p-6 space-y-6">
               <div>
                 <h2 className="text-lg font-bold mb-1">Email di accesso</h2>
-                <p className="text-sm text-gray-500 mb-4">
-                  Email attuale: <span className="font-mono text-gray-900">{email}</span>
+                <p className="text-sm text-ink-500 mb-4">
+                  Email attuale: <span className="font-mono text-ink-900">{email}</span>
                 </p>
                 <form onSubmit={handleChangeEmail} className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -252,17 +252,17 @@ export default function SettingsPage() {
                     placeholder="nuova-email@example.com"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    className="flex-1 border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="flex-1 border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
                   />
                   <button
                     type="submit"
                     disabled={changingEmail || !newEmail.trim()}
-                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold"
+                    className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold"
                   >
                     {changingEmail ? 'Invio...' : 'Cambia email'}
                   </button>
                 </form>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-ink-500 mt-2">
                   Ti invieremo un'email di conferma al nuovo indirizzo.
                 </p>
               </div>
@@ -271,11 +271,11 @@ export default function SettingsPage() {
 
               <div>
                 <h2 className="text-lg font-bold mb-1">Lingua</h2>
-                <p className="text-sm text-gray-500 mb-3">Lingua dell'interfaccia.</p>
+                <p className="text-sm text-ink-500 mb-3">Lingua dell'interfaccia.</p>
                 <select
                   value={prefs.language}
                   onChange={(e) => updatePref('language', e.target.value as 'it' | 'en')}
-                  className="border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
                 >
                   <option value="it">🇮🇹 Italiano</option>
                   <option value="en">🇬🇧 English (presto)</option>
@@ -286,8 +286,8 @@ export default function SettingsPage() {
 
               <div>
                 <h2 className="text-lg font-bold mb-1">Dati personali</h2>
-                <p className="text-sm text-gray-500 mb-3">Per modificare nome, telefono, indirizzo principale:</p>
-                <Link href="/profile" className="inline-flex items-center gap-2 bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg font-semibold text-sm text-gray-900 transition-colors">
+                <p className="text-sm text-ink-500 mb-3">Per modificare nome, telefono, indirizzo principale:</p>
+                <Link href="/profile" className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 px-4 py-2 rounded-lg font-semibold text-sm text-ink-900 transition-colors">
                   Modifica profilo →
                 </Link>
               </div>
@@ -297,7 +297,7 @@ export default function SettingsPage() {
           {tab === 'password' && (
             <section className="bg-white border rounded-xl p-6">
               <h2 className="text-lg font-bold mb-1">🔐 Cambia password</h2>
-              <p className="text-sm text-gray-500 mb-5">Usa una password di almeno 8 caratteri, diversa dalle altre.</p>
+              <p className="text-sm text-ink-500 mb-5">Usa una password di almeno 8 caratteri, diversa dalle altre.</p>
               <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
                 <div>
                   <label className="block text-sm font-medium mb-1">Password attuale</label>
@@ -306,7 +306,7 @@ export default function SettingsPage() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     autoComplete="current-password"
-                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
                   />
                 </div>
                 <div>
@@ -317,7 +317,7 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     autoComplete="new-password"
                     minLength={8}
-                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
                   />
                 </div>
                 <div>
@@ -328,13 +328,13 @@ export default function SettingsPage() {
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     autoComplete="new-password"
                     minLength={8}
-                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
                   />
                 </div>
                 <button
                   type="submit"
                   disabled={changingPwd || !newPassword || !confirmPassword}
-                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold"
+                  className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold"
                 >
                   {changingPwd ? 'Aggiornamento...' : 'Aggiorna password'}
                 </button>
@@ -346,7 +346,7 @@ export default function SettingsPage() {
             <section className="bg-white border rounded-xl p-6 space-y-5">
               <div>
                 <h2 className="text-lg font-bold mb-1">🔔 Preferenze notifiche</h2>
-                <p className="text-sm text-gray-500">Scegli cosa vuoi ricevere e come.</p>
+                <p className="text-sm text-ink-500">Scegli cosa vuoi ricevere e come.</p>
               </div>
 
               <div className="space-y-3">
@@ -389,7 +389,7 @@ export default function SettingsPage() {
                 <div className="mt-3 flex items-start justify-between gap-4 p-3 border rounded-lg">
                   <div>
                     <div className="font-semibold">📲 Notifiche push del browser</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-ink-500">
                       Avvisi immediati anche a schermo bloccato (richiede permesso).
                     </div>
                   </div>
@@ -403,18 +403,18 @@ export default function SettingsPage() {
             <section className="bg-white border rounded-xl p-6 space-y-5">
               <div>
                 <h2 className="text-lg font-bold mb-1">🛡️ Privacy e dati</h2>
-                <p className="text-sm text-gray-500">Hai pieno controllo sui tuoi dati.</p>
+                <p className="text-sm text-ink-500">Hai pieno controllo sui tuoi dati.</p>
               </div>
 
               <div className="border rounded-lg p-4">
                 <h3 className="font-bold mb-1">📥 Scarica i tuoi dati</h3>
-                <p className="text-sm text-gray-600 mb-3">
+                <p className="text-sm text-ink-600 mb-3">
                   Esporta in JSON tutto quello che abbiamo su di te: profilo, ordini, indirizzi, preferenze.
                 </p>
                 <button
                   type="button"
                   onClick={handleDownloadData}
-                  className="bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-lg text-sm font-semibold text-gray-900"
+                  className="bg-cream-100 hover:bg-cream-200 px-4 py-2 rounded-lg text-sm font-semibold text-ink-900"
                 >
                   Esporta dati (JSON)
                 </button>
@@ -426,18 +426,18 @@ export default function SettingsPage() {
               <div className="border rounded-lg p-4">
                 <h3 className="font-bold mb-1">📄 Documenti</h3>
                 <ul className="text-sm space-y-1">
-                  <li><Link href="/terms" className="text-indigo-600 hover:underline">Termini di servizio</Link></li>
-                  <li><Link href="/privacy" className="text-indigo-600 hover:underline">Privacy policy</Link></li>
-                  <li><Link href="/cookies" className="text-indigo-600 hover:underline">Cookie policy</Link></li>
+                  <li><Link href="/terms" className="text-primary-700 hover:underline">Termini di servizio</Link></li>
+                  <li><Link href="/privacy" className="text-primary-700 hover:underline">Privacy policy</Link></li>
+                  <li><Link href="/cookies" className="text-primary-700 hover:underline">Cookie policy</Link></li>
                 </ul>
               </div>
 
               <div className="border rounded-lg p-4">
                 <h3 className="font-bold mb-1">📧 Contatta il responsabile privacy</h3>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-ink-600">
                   Per esercitare i tuoi diritti GDPR (accesso, rettifica, opposizione, cancellazione):
                 </p>
-                <a href="mailto:privacy@mycity.it" className="text-indigo-600 hover:underline text-sm">privacy@mycity.it</a>
+                <a href="mailto:privacy@mycity.it" className="text-primary-700 hover:underline text-sm">privacy@mycity.it</a>
               </div>
             </section>
           )}
@@ -445,7 +445,7 @@ export default function SettingsPage() {
           {tab === 'danger' && (
             <section className="bg-white border-2 border-red-200 rounded-xl p-6">
               <h2 className="text-lg font-bold text-red-700 mb-1">⚠️ Zona pericolosa</h2>
-              <p className="text-sm text-gray-600 mb-5">Azioni irreversibili. Procedi con cautela.</p>
+              <p className="text-sm text-ink-600 mb-5">Azioni irreversibili. Procedi con cautela.</p>
 
               <div className="bg-red-50 border border-red-200 rounded-lg p-5">
                 <h3 className="font-bold text-red-900 mb-2">Elimina il tuo account</h3>
@@ -485,10 +485,10 @@ function Toggle({
   label: string; desc: string; value: boolean; onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex items-start justify-between gap-4 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
+    <label className="flex items-start justify-between gap-4 p-3 border rounded-lg hover:bg-cream-50 cursor-pointer">
       <div>
         <div className="font-semibold">{label}</div>
-        <div className="text-xs text-gray-500">{desc}</div>
+        <div className="text-xs text-ink-500">{desc}</div>
       </div>
       <button
         type="button"
@@ -496,7 +496,7 @@ function Toggle({
         aria-checked={value}
         onClick={() => onChange(!value)}
         className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-          value ? 'bg-indigo-600' : 'bg-gray-300'
+          value ? 'bg-primary-700' : 'bg-cream-300'
         }`}
       >
         <span

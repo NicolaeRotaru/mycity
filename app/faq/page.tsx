@@ -21,7 +21,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'Cos\'è un gruppo d\'acquisto?',
-        a: <>I gruppi d&apos;acquisto sono offerte a tempo: quando un numero minimo di persone aderisce, tutti ricevono lo sconto. Scopri le offerte attive nella sezione <Link href="/groups" className="text-indigo-600 underline">Gruppi d&apos;acquisto</Link>.</>,
+        a: <>I gruppi d&apos;acquisto sono offerte a tempo: quando un numero minimo di persone aderisce, tutti ricevono lo sconto. Scopri le offerte attive nella sezione <Link href="/groups" className="text-primary-700 underline">Gruppi d&apos;acquisto</Link>.</>,
       },
       {
         q: 'Posso annullare un ordine?',
@@ -93,15 +93,15 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'Come modifico i miei dati?',
-        a: <>Da <Link href="/profile" className="text-indigo-600 underline">Il tuo account</Link> puoi aggiornare nome, telefono, indirizzo. Da <Link href="/profile/settings" className="text-indigo-600 underline">Impostazioni</Link> cambi password e preferenze notifiche.</>,
+        a: <>Da <Link href="/profile" className="text-primary-700 underline">Il tuo account</Link> puoi aggiornare nome, telefono, indirizzo. Da <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni</Link> cambi password e preferenze notifiche.</>,
       },
       {
         q: 'Come elimino il mio account?',
-        a: <>Vai su <Link href="/profile/settings" className="text-indigo-600 underline">Impostazioni → Elimina account</Link>. La cancellazione è permanente e rimuove tutti i tuoi dati.</>,
+        a: <>Vai su <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Elimina account</Link>. La cancellazione è permanente e rimuove tutti i tuoi dati.</>,
       },
       {
         q: 'Ho dimenticato la password',
-        a: <>Vai sulla pagina <Link href="/sign-in" className="text-indigo-600 underline">Accedi</Link> e clicca su "Password dimenticata?" per riceverla via email.</>,
+        a: <>Vai sulla pagina <Link href="/sign-in" className="text-primary-700 underline">Accedi</Link> e clicca su "Password dimenticata?" per riceverla via email.</>,
       },
     ],
   },
@@ -111,7 +111,7 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'Come divento venditore?',
-        a: <>Registra il tuo negozio in 5 minuti dalla pagina <Link href="/sell" className="text-indigo-600 underline">Vendi su MyCity</Link>. Serve P.IVA attiva.</>,
+        a: <>Registra il tuo negozio in 5 minuti dalla pagina <Link href="/sell" className="text-primary-700 underline">Vendi su MyCity</Link>. Serve P.IVA attiva.</>,
       },
       {
         q: 'Quanto costa vendere?',
@@ -147,14 +147,14 @@ export default function FaqPage() {
   return (
     <div className="container mx-auto px-6 py-10 max-w-4xl">
       <div className="text-center mb-10">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-3">Domande frequenti</h1>
-        <p className="text-gray-600">Tutto quello che devi sapere su MyCity. Non trovi la risposta? <Link href="/contact" className="text-indigo-600 underline">Scrivici</Link>.</p>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">Domande frequenti</h1>
+        <p className="text-ink-600">Tutto quello che devi sapere su MyCity. Non trovi la risposta? <Link href="/contact" className="text-primary-700 underline">Scrivici</Link>.</p>
       </div>
 
       <div className="space-y-8">
         {SECTIONS.map((section) => (
           <section key={section.title}>
-            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <h2 className="text-xl font-bold text-ink-900 mb-4 flex items-center gap-2">
               <span className="text-2xl">{section.icon}</span> {section.title}
             </h2>
             <div className="space-y-2">
@@ -162,18 +162,18 @@ export default function FaqPage() {
                 const key = `${section.title}-${i}`;
                 const isOpen = !!open[key];
                 return (
-                  <div key={key} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div key={key} className="bg-white border border-cream-300 rounded-lg overflow-hidden">
                     <button
                       type="button"
                       onClick={() => toggle(key)}
                       aria-expanded={isOpen}
-                      className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                      className="w-full flex items-center justify-between gap-4 px-4 py-3 text-left hover:bg-cream-50 transition-colors"
                     >
-                      <span className="font-semibold text-gray-900">{item.q}</span>
-                      <span className={`text-gray-400 text-xl transition-transform ${isOpen ? 'rotate-45' : ''}`}>+</span>
+                      <span className="font-semibold text-ink-900">{item.q}</span>
+                      <span className={`text-ink-400 text-xl transition-transform ${isOpen ? 'rotate-45' : ''}`}>+</span>
                     </button>
                     {isOpen && (
-                      <div className="px-4 pb-4 text-sm text-gray-700 leading-relaxed border-t border-gray-100 pt-3">
+                      <div className="px-4 pb-4 text-sm text-ink-700 leading-relaxed border-t border-cream-200 pt-3">
                         {item.a}
                       </div>
                     )}
@@ -185,10 +185,10 @@ export default function FaqPage() {
         ))}
       </div>
 
-      <div className="mt-12 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-2xl p-8 text-center">
+      <div className="mt-12 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-2xl p-8 text-center">
         <h3 className="text-xl font-bold mb-2">Non hai trovato la risposta?</h3>
-        <p className="text-indigo-100 mb-4">Il nostro team risponde entro 24 ore lavorative.</p>
-        <Link href="/contact" className="inline-block bg-white text-indigo-700 px-6 py-3 rounded-lg font-bold hover:bg-indigo-50 transition-colors">
+        <p className="text-primary-100 mb-4">Il nostro team risponde entro 24 ore lavorative.</p>
+        <Link href="/contact" className="inline-block bg-white text-primary-800 px-6 py-3 rounded-lg font-bold hover:bg-primary-50 transition-colors">
           ✉️ Contattaci
         </Link>
       </div>

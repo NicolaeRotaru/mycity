@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient } from '@supabase/supabase-js';
 import { rateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 // Eseguito sempre lato server, mai bundled nel client.
 export const runtime = 'nodejs';
@@ -191,14 +192,14 @@ export async function POST(req: NextRequest) {
 
     const toolBlock = response.content.find((b) => b.type === 'tool_use');
     if (!toolBlock || toolBlock.type !== 'tool_use') {
-      console.error('Anthropic non ha restituito un tool_use');
+      logger.error('Anthropic non ha restituito un tool_use');
       return jsonError(502, 'Risposta AI inattesa. Riprova.');
     }
     toolInput = toolBlock.input as ExtractInput;
   } catch (err: any) {
     // Log solo lo status code, mai il messaggio raw (potrebbe contenere
     // frammenti della API key o dell'input).
-    console.error('Errore chiamata Anthropic, status:', err?.status);
+    logger.error('Errore chiamata Anthropic, status:', err?.status);
     if (err?.status === 401) return jsonError(503, 'API key Anthropic non valida.');
     if (err?.status === 429) return jsonError(429, 'Limite richieste raggiunto. Riprova tra qualche minuto.');
     return jsonError(502, 'Errore nel servizio AI. Riprova.');

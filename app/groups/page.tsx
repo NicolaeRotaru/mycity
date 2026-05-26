@@ -50,21 +50,21 @@ export default function GroupsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <div className="bg-gradient-to-r from-amber-500 to-rose-500 text-white rounded-2xl p-6 mb-6">
+      <div className="bg-gradient-to-r from-accent-500 to-rose-500 text-white rounded-2xl p-6 mb-6">
         <h1 className="text-3xl font-extrabold">🤝 Gruppi d'acquisto</h1>
-        <p className="text-amber-50 mt-2 max-w-2xl">
+        <p className="text-accent-50 mt-2 max-w-2xl">
           Unisciti ai tuoi vicini: più persone si uniscono, più scendi di prezzo.
           Quando si raggiunge il target, l'offerta si attiva per tutti.
         </p>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-500">Caricamento…</div>
+        <div className="text-center py-12 text-ink-500">Caricamento…</div>
       ) : groups.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
           <p className="text-5xl mb-3">🤝</p>
-          <p className="text-gray-700 font-semibold">Nessun gruppo attivo al momento</p>
-          <p className="text-sm text-gray-500 mt-1">Torna presto, oppure proponi un acquisto di gruppo al tuo negozio preferito.</p>
+          <p className="text-ink-700 font-semibold">Nessun gruppo attivo al momento</p>
+          <p className="text-sm text-ink-500 mt-1">Torna presto, oppure proponi un acquisto di gruppo al tuo negozio preferito.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -75,10 +75,10 @@ export default function GroupsPage() {
               <Link
                 key={g.id}
                 href={`/groups/${g.id}`}
-                className="block bg-white border-2 border-amber-200 rounded-xl overflow-hidden hover:shadow-lg transition-all"
+                className="block bg-white border-2 border-accent-200 rounded-xl overflow-hidden hover:shadow-lg transition-all"
               >
                 <div className="flex">
-                  <div className="w-28 h-28 bg-gray-100 shrink-0">
+                  <div className="w-28 h-28 bg-cream-100 shrink-0">
                     {img && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={img} alt="" className="w-full h-full object-cover" />
@@ -86,28 +86,28 @@ export default function GroupsPage() {
                   </div>
                   <div className="flex-1 p-3 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-bold text-gray-900 line-clamp-2 text-sm">{g.product?.name ?? 'Prodotto'}</h3>
+                      <h3 className="font-bold text-ink-900 line-clamp-2 text-sm">{g.product?.name ?? 'Prodotto'}</h3>
                       <span className="bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded shrink-0">
                         -{g.discount_percent}%
                       </span>
                     </div>
-                    <p className="text-xs text-gray-500">🏪 {g.seller?.store_name}</p>
+                    <p className="text-xs text-ink-500">🏪 {g.seller?.store_name}</p>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className="font-extrabold text-lg text-rose-600">{formatPrice(g.discounted_price)}</span>
-                      <span className="text-xs text-gray-400 line-through">{formatPrice(g.unit_price)}</span>
+                      <span className="text-xs text-ink-400 line-through">{formatPrice(g.unit_price)}</span>
                     </div>
                   </div>
                 </div>
                 <div className="px-3 pb-3">
                   <div className="flex justify-between text-xs mb-1">
-                    <span className="font-semibold text-gray-700">
+                    <span className="font-semibold text-ink-700">
                       {g.current_quantity} / {g.target_quantity} partecipanti
                     </span>
-                    <span className="text-amber-600 font-semibold">⏱ {timeLeft(g.deadline)}</span>
+                    <span className="text-accent-600 font-semibold">⏱ {timeLeft(g.deadline)}</span>
                   </div>
-                  <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+                  <div className="bg-cream-200 rounded-full h-2 overflow-hidden">
                     <div
-                      className="bg-gradient-to-r from-amber-400 to-rose-500 h-full transition-all"
+                      className="bg-gradient-to-r from-accent-400 to-rose-500 h-full transition-all"
                       style={{ width: `${progress}%` }}
                     />
                   </div>

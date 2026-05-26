@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Inbox, Mail, CheckCircle2, AlertOctagon, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { Modal } from '@/components/ui/Modal';
 
 type Message = {
   id: string;
@@ -160,10 +161,13 @@ export default function AdminSupportPage() {
         </div>
       )}
 
-      {openId && detail && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-warm-xl animate-popIn space-y-4">
-            <h3 className="text-lg font-serif font-bold text-ink-900">Aggiorna stato</h3>
+      <Modal
+        open={!!openId && !!detail}
+        onClose={() => setOpenId(null)}
+        title="Aggiorna stato"
+      >
+        {openId && detail && (
+          <div className="space-y-4">
 
             <div className="bg-cream-50 rounded-lg p-3 text-sm text-ink-700 max-h-40 overflow-y-auto">
               <p className="font-semibold mb-1">{detail.name} — {detail.subject}</p>
@@ -202,8 +206,8 @@ export default function AdminSupportPage() {
               Annulla
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

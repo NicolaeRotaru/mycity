@@ -116,8 +116,8 @@ function ResetPasswordInner() {
     return (
       <Card>
         <div className="text-center py-6">
-          <div className="w-12 h-12 mx-auto rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin mb-3" />
-          <p className="text-sm text-gray-500">Verifica del link di reset…</p>
+          <div className="w-12 h-12 mx-auto rounded-full border-4 border-primary-200 border-t-indigo-600 animate-spin mb-3" />
+          <p className="text-sm text-ink-500">Verifica del link di reset…</p>
         </div>
       </Card>
     );
@@ -129,14 +129,14 @@ function ResetPasswordInner() {
       <Card>
         <div className="text-center">
           <div className="text-5xl mb-3">⏰</div>
-          <h1 className="text-xl font-bold text-gray-900 mb-2">Link non valido o scaduto</h1>
-          <p className="text-sm text-gray-600 mb-5">
+          <h1 className="text-xl font-bold text-ink-900 mb-2">Link non valido o scaduto</h1>
+          <p className="text-sm text-ink-600 mb-5">
             Il link di reset password potrebbe essere stato usato o essere scaduto.
             Richiedine uno nuovo dalla pagina di accesso.
           </p>
           <Link
             href="/sign-in"
-            className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold"
+            className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold"
           >
             Vai al login
           </Link>
@@ -150,11 +150,11 @@ function ResetPasswordInner() {
     return (
       <Card>
         <div className="text-center py-6">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl mb-3">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-olive-100 text-olive-600 flex items-center justify-center text-3xl mb-3">
             ✓
           </div>
-          <h1 className="text-xl font-bold text-gray-900 mb-1">Password aggiornata!</h1>
-          <p className="text-sm text-gray-600">Tra un istante ti porto al login con la nuova password.</p>
+          <h1 className="text-xl font-bold text-ink-900 mb-1">Password aggiornata!</h1>
+          <p className="text-sm text-ink-600">Tra un istante ti porto al login con la nuova password.</p>
         </div>
       </Card>
     );
@@ -164,12 +164,12 @@ function ResetPasswordInner() {
   return (
     <Card>
       <div className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">Nuova password</h1>
-        <p className="text-sm text-gray-500 mt-1">Scegli una password sicura, di almeno 8 caratteri.</p>
+        <h1 className="text-2xl font-bold text-ink-900">Nuova password</h1>
+        <p className="text-sm text-ink-500 mt-1">Scegli una password sicura, di almeno 8 caratteri.</p>
       </div>
       <form onSubmit={submit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Nuova password</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1">Nuova password</label>
           <div className="relative">
             <input
               type={showPwd ? 'text' : 'password'}
@@ -180,20 +180,20 @@ function ResetPasswordInner() {
               autoComplete="new-password"
               required
               placeholder="••••••••"
-              className="w-full border p-2 pr-12 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border p-2 pr-12 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
             <button
               type="button"
               onClick={() => setShowPwd((v) => !v)}
               aria-label={showPwd ? 'Nascondi password' : 'Mostra password'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-ink-500 hover:text-ink-700 px-2 py-1"
             >
               {showPwd ? '🙈' : '👁'}
             </button>
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Conferma nuova password</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1">Conferma nuova password</label>
           <input
             type={showPwd ? 'text' : 'password'}
             value={confirm}
@@ -203,7 +203,7 @@ function ResetPasswordInner() {
             autoComplete="new-password"
             required
             placeholder="••••••••"
-            className={`w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
+            className={`w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 ${
               confirm && password !== confirm ? 'border-rose-300' : ''
             }`}
           />
@@ -218,7 +218,7 @@ function ResetPasswordInner() {
         <button
           type="submit"
           disabled={submitting || password.length < 8 || password !== confirm}
-          className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-40 text-white px-4 py-3 rounded-lg font-bold transition-colors shadow"
+          className="w-full bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-40 text-white px-4 py-3 rounded-lg font-bold transition-colors shadow"
         >
           {submitting ? 'Aggiornamento…' : 'Imposta nuova password'}
         </button>
@@ -229,7 +229,7 @@ function ResetPasswordInner() {
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-cream-50 p-4">
       <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
         {children}
       </div>
@@ -245,7 +245,7 @@ function PasswordStrength({ value }: { value: string }) {
     { ok: /[^A-Za-z0-9]/.test(value),   label: 'Un simbolo (consigliato)' },
   ];
   const ok = checks.filter((c) => c.ok).length;
-  const colors = ['bg-gray-200', 'bg-rose-400', 'bg-orange-400', 'bg-amber-400', 'bg-emerald-500'];
+  const colors = ['bg-cream-200', 'bg-rose-400', 'bg-orange-400', 'bg-accent-400', 'bg-olive-500'];
   const labels = ['', 'Debole', 'Sufficiente', 'Buona', 'Forte'];
 
   if (!value) return null;
@@ -256,14 +256,14 @@ function PasswordStrength({ value }: { value: string }) {
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className={`h-1.5 flex-1 rounded ${i < ok ? colors[ok] : 'bg-gray-200'}`}
+            className={`h-1.5 flex-1 rounded ${i < ok ? colors[ok] : 'bg-cream-200'}`}
           />
         ))}
       </div>
-      <p className="text-xs text-gray-500 mb-2">{labels[ok]}</p>
+      <p className="text-xs text-ink-500 mb-2">{labels[ok]}</p>
       <ul className="text-xs space-y-0.5">
         {checks.map((c) => (
-          <li key={c.label} className={c.ok ? 'text-emerald-600' : 'text-gray-400'}>
+          <li key={c.label} className={c.ok ? 'text-olive-600' : 'text-ink-400'}>
             {c.ok ? '✓' : '○'} {c.label}
           </li>
         ))}
@@ -274,7 +274,7 @@ function PasswordStrength({ value }: { value: string }) {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<Card><p className="text-center text-gray-500">Caricamento…</p></Card>}>
+    <Suspense fallback={<Card><p className="text-center text-ink-500">Caricamento…</p></Card>}>
       <ResetPasswordInner />
     </Suspense>
   );

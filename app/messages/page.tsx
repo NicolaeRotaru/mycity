@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Counterpart = {
   id: string;
@@ -91,29 +92,29 @@ export default function MessagesListPage() {
   }, [userId]);
 
   if (!userId || isLoading) {
-    return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
+    return <LoadingState />;
   }
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-3xl">
       <div className="flex items-center gap-3 mb-6">
-        <MessageCircle size={28} className="text-indigo-600" />
+        <MessageCircle size={28} className="text-primary-700" />
         <div>
           <h1 className="text-2xl font-bold">Messaggi</h1>
-          <p className="text-sm text-gray-500">Conversazioni con i negozi</p>
+          <p className="text-sm text-ink-500">Conversazioni con i negozi</p>
         </div>
       </div>
 
       {conversations.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
           <p className="text-6xl mb-3">💬</p>
-          <p className="text-gray-600 font-semibold mb-1">Nessuna conversazione</p>
-          <p className="text-sm text-gray-400">
+          <p className="text-ink-600 font-semibold mb-1">Nessuna conversazione</p>
+          <p className="text-sm text-ink-400">
             Scrivi a un negozio dalla scheda prodotto per fare domande prima di acquistare.
           </p>
         </div>
       ) : (
-        <div className="bg-white border rounded-xl divide-y divide-gray-100 overflow-hidden">
+        <div className="bg-white border rounded-xl divide-y divide-cream-100 overflow-hidden">
           {conversations.map((c) => {
             const iAmBuyer = c.buyer_id === userId;
             const counterpart = iAmBuyer ? c.seller : c.buyer;
@@ -125,24 +126,24 @@ export default function MessagesListPage() {
               <Link
                 key={c.id}
                 href={`/messages/${c.id}`}
-                className="block hover:bg-gray-50 transition-colors"
+                className="block hover:bg-cream-50 transition-colors"
               >
                 <div className="flex items-start gap-3 p-4">
                   <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-                    iAmBuyer ? 'bg-pink-100 text-pink-700' : 'bg-indigo-100 text-indigo-700'
+                    iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
                   }`}>
                     {counterpartName[0]?.toUpperCase() ?? '?'}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline justify-between gap-2 mb-0.5">
-                      <h3 className={`font-semibold truncate ${unread > 0 ? 'text-gray-900' : 'text-gray-700'}`}>
+                      <h3 className={`font-semibold truncate ${unread > 0 ? 'text-ink-900' : 'text-ink-700'}`}>
                         {counterpartName}
                       </h3>
-                      <span className="text-xs text-gray-400 shrink-0">
+                      <span className="text-xs text-ink-400 shrink-0">
                         {formatRelative(c.last_message_at)}
                       </span>
                     </div>
-                    <p className={`text-sm truncate ${unread > 0 ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>
+                    <p className={`text-sm truncate ${unread > 0 ? 'text-ink-900 font-medium' : 'text-ink-500'}`}>
                       {c.last_message_preview ?? '(nessun messaggio)'}
                     </p>
                   </div>

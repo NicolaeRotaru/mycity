@@ -112,25 +112,25 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
     <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-5">
       {/* Logo upload */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Logo del negozio</label>
+        <label className="block text-sm font-medium text-ink-700 mb-2">Logo del negozio</label>
         <div className="flex items-center gap-4">
           <StoreAvatar logoUrl={logoUrl} storeName={storeName || defaultValues?.storeName} size="lg" />
           <div
             {...getRootProps()}
             className={`flex-1 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors text-sm ${
-              isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-gray-400'
+              isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
             } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
           >
             <input {...getInputProps()} />
             {uploadingLogo ? (
-              <p className="text-gray-500">Caricamento...</p>
+              <p className="text-ink-500">Caricamento...</p>
             ) : logoUrl ? (
-              <p className="text-gray-600">
+              <p className="text-ink-600">
                 <span className="font-medium">Sostituisci</span> · trascina o clicca
               </p>
             ) : (
-              <p className="text-gray-500">
-                <span className="font-medium text-indigo-600">Carica</span> un'immagine quadrata (PNG, JPG)
+              <p className="text-ink-500">
+                <span className="font-medium text-primary-700">Carica</span> un'immagine quadrata (PNG, JPG)
               </p>
             )}
           </div>
@@ -138,7 +138,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
             <button
               type="button"
               onClick={() => setLogoUrl(null)}
-              className="text-sm text-gray-500 hover:text-red-600 underline"
+              className="text-sm text-ink-500 hover:text-red-600 underline"
             >
               Rimuovi
             </button>
@@ -150,34 +150,34 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
       <StoreMediaManager value={media} onChange={setMedia} />
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Nome del negozio</label>
+        <label className="block text-sm font-medium text-ink-700 mb-1">Nome del negozio</label>
         <input
           {...register('storeName')}
           type="text"
           placeholder="Es. Panificio Rossi"
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
         />
         {errors.storeName && <p className="text-red-500 text-sm mt-1">{errors.storeName.message}</p>}
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Descrizione (opzionale)</label>
+        <label className="block text-sm font-medium text-ink-700 mb-1">Descrizione (opzionale)</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
           placeholder="Cosa rende speciale il tuo negozio? Storia, tradizione, prodotti tipici…"
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Telefono</label>
+        <label className="block text-sm font-medium text-ink-700 mb-1">Telefono</label>
         <input
           {...register('storePhone')}
           type="text"
           placeholder="3331234567 (10 cifre)"
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
         />
         {errors.storePhone && <p className="text-red-500 text-sm mt-1">{errors.storePhone.message}</p>}
       </div>

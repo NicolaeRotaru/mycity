@@ -21,7 +21,7 @@ const ERROR_LABELS: Record<string, string> = {
 
 const VerifyCodeDialog = ({
   open, title, description, onClose, onSubmit, ctaLabel,
-  ctaColor = 'bg-emerald-600 hover:bg-emerald-700',
+  ctaColor = 'bg-olive-600 hover:bg-olive-700',
 }: Props) => {
   const [code, setCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -70,8 +70,8 @@ const VerifyCodeDialog = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div>
-          <h2 className="text-xl font-extrabold text-gray-900">{title}</h2>
-          <p className="text-sm text-gray-500 mt-1">{description}</p>
+          <h2 className="text-xl font-extrabold text-ink-900">{title}</h2>
+          <p className="text-sm text-ink-500 mt-1">{description}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -87,7 +87,7 @@ const VerifyCodeDialog = ({
               setError(null);
             }}
             placeholder="000000"
-            className="w-full text-center font-mono text-4xl tracking-[0.5em] font-bold border-2 border-gray-300 rounded-xl py-4 focus:outline-none focus:border-indigo-500"
+            className="w-full text-center font-mono text-4xl tracking-[0.5em] font-bold border-2 border-cream-300 rounded-xl py-4 focus:outline-none focus:border-indigo-500"
             autoComplete="one-time-code"
           />
           {error && (
@@ -99,7 +99,7 @@ const VerifyCodeDialog = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold"
+              className="flex-1 bg-cream-100 hover:bg-cream-200 text-ink-700 py-3 rounded-lg font-semibold"
             >
               Annulla
             </button>

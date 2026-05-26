@@ -12,14 +12,14 @@ export default function TermsPage() {
   return (
     <div className="container mx-auto px-6 py-10 max-w-3xl">
       <div className="mb-8">
-        <Link href="/" className="text-sm text-indigo-600 hover:underline">← Home</Link>
-        <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mt-2 mb-2">Termini di servizio</h1>
-        <p className="text-sm text-gray-500">Versione {VERSION} — in vigore dal {EFFECTIVE_DATE}</p>
+        <Link href="/" className="text-sm text-primary-700 hover:underline">← Home</Link>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mt-2 mb-2">Termini di servizio</h1>
+        <p className="text-sm text-ink-500">Versione {VERSION} — in vigore dal {EFFECTIVE_DATE}</p>
       </div>
 
-      <div className="prose prose-gray max-w-none space-y-6 text-gray-700 leading-relaxed">
+      <div className="prose prose-gray max-w-none space-y-6 text-ink-700 leading-relaxed">
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">1. Premesse e definizioni</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">1. Premesse e definizioni</h2>
           <p>
             I presenti Termini di Servizio (&quot;<strong>Termini</strong>&quot;) regolano l&apos;utilizzo
             della piattaforma MyCity (il &quot;<strong>Servizio</strong>&quot;), gestita da
@@ -36,14 +36,14 @@ export default function TermsPage() {
           </p>
           <p>
             Accedendo o utilizzando il Servizio dichiari di aver letto, compreso e accettato i
-            presenti Termini, l&apos;<Link href="/privacy" className="text-indigo-600 underline">Informativa
-            sulla privacy</Link> e la <Link href="/cookies" className="text-indigo-600 underline">Cookie
+            presenti Termini, l&apos;<Link href="/privacy" className="text-primary-700 underline">Informativa
+            sulla privacy</Link> e la <Link href="/cookies" className="text-primary-700 underline">Cookie
             policy</Link>.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">2. Natura del Servizio (P2B Regulation)</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">2. Natura del Servizio (P2B Regulation)</h2>
           <p>
             MyCity è un servizio di intermediazione online ai sensi del Regolamento (UE) 2019/1150
             (&quot;P2B Regulation&quot;): mette in contatto Acquirenti e Venditori e facilita pagamenti
@@ -61,7 +61,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">3. Registrazione e account</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">3. Registrazione e account</h2>
           <p>
             Per utilizzare il Servizio devi avere almeno <strong>18 anni</strong> e creare un account
             fornendo dati veritieri, completi e aggiornati. Sei responsabile della riservatezza delle
@@ -74,12 +74,12 @@ export default function TermsPage() {
           </p>
           <p>
             Devi avvisarci immediatamente di ogni uso non autorizzato del tuo account scrivendo a{' '}
-            <a href="mailto:security@mycity.it" className="text-indigo-600 underline">security@mycity.it</a>.
+            <a href="mailto:security@mycity.it" className="text-primary-700 underline">security@mycity.it</a>.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">4. Ordini e formazione del contratto</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">4. Ordini e formazione del contratto</h2>
           <p>
             L&apos;invio dell&apos;ordine costituisce proposta di acquisto irrevocabile; il contratto
             si perfeziona con l&apos;accettazione del Venditore (che può rifiutare per indisponibilità
@@ -92,7 +92,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">5. Pagamenti</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">5. Pagamenti</h2>
           <p>
             I pagamenti sono gestiti da provider PSP autorizzati (Stripe, S.A.). MyCity, in qualità
             di marketplace facilitator, incassa l&apos;importo dell&apos;ordine in custodia
@@ -112,7 +112,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">6. Consegne</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">6. Consegne</h2>
           <p>
             Le consegne sono affidate a Rider partner. I tempi indicati sono stimati e non
             vincolanti, salvo diversa garanzia espressa. È responsabilità dell&apos;Acquirente
@@ -123,7 +123,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">7. Diritto di recesso (consumatori)</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">7. Diritto di recesso (consumatori)</h2>
           <p>
             Ai sensi degli artt. 52 e ss. del D.Lgs. 206/2005 (Codice del Consumo), l&apos;Acquirente
             che agisce come consumatore ha diritto di recedere dal contratto entro{' '}
@@ -138,7 +138,7 @@ export default function TermsPage() {
           </p>
           <p>
             Per esercitare il recesso usa il flusso &quot;Richiedi reso&quot; nel dettaglio ordine
-            o scrivi a <a href="mailto:resi@mycity.it" className="text-indigo-600 underline">resi@mycity.it</a>.
+            o scrivi a <a href="mailto:resi@mycity.it" className="text-primary-700 underline">resi@mycity.it</a>.
             Le spese di restituzione sono a carico dell&apos;Acquirente salvo prodotto difettoso o
             errore del Venditore.
           </p>
@@ -149,7 +149,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">8. Garanzia legale di conformità</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">8. Garanzia legale di conformità</h2>
           <p>
             Per i consumatori si applica la <strong>garanzia legale di conformità di 24 mesi</strong>{' '}
             (D.Lgs. 170/2021). In caso di difetto, l&apos;Acquirente ha diritto, a sua scelta, alla
@@ -159,7 +159,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">9. Obblighi dei Venditori</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">9. Obblighi dei Venditori</h2>
           <p>I Venditori si impegnano a:</p>
           <ul className="list-disc list-inside space-y-1">
             <li>pubblicare informazioni veritiere, complete e non ingannevoli;</li>
@@ -177,7 +177,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">10. Obblighi dei Rider</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">10. Obblighi dei Rider</h2>
           <p>
             I Rider operano come lavoratori autonomi o parasubordinati. Devono essere in possesso
             di assicurazione RC, patente di guida valida (se applicabile), idoneità sanitaria (se
@@ -186,7 +186,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">11. Contenuti pubblicati dagli utenti</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">11. Contenuti pubblicati dagli utenti</h2>
           <p>
             Recensioni, foto e domande pubblicate dagli Utenti devono essere veritieri, originali e
             non lesivi di diritti di terzi. MyCity si riserva il diritto di moderare, oscurare o
@@ -199,7 +199,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">12. Contenuti e condotte proibiti</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">12. Contenuti e condotte proibiti</h2>
           <p>È vietato:</p>
           <ul className="list-disc list-inside space-y-1">
             <li>pubblicare contenuti illegali, contraffatti, offensivi, ingannevoli, discriminatori;</li>
@@ -215,7 +215,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">13. Limitazione di responsabilità</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">13. Limitazione di responsabilità</h2>
           <p>
             MyCity fornisce il Servizio &quot;as is&quot; e non garantisce continuità ininterrotta o
             assenza di errori. Nei limiti consentiti dalla legge, MyCity non è responsabile per:
@@ -230,17 +230,17 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">14. Sospensione e cessazione</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">14. Sospensione e cessazione</h2>
           <p>
             MyCity può sospendere o chiudere il tuo account, dandone comunicazione, in caso di:
             (a) violazione dei Termini; (b) attività sospette di frode; (c) ordini interrogazione di
             autorità competenti. Puoi cancellare il tuo account in qualsiasi momento dalla pagina
-            <Link href="/profile/settings" className="text-indigo-600 underline"> Impostazioni</Link>.
+            <Link href="/profile/settings" className="text-primary-700 underline"> Impostazioni</Link>.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">15. Modifiche ai Termini</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">15. Modifiche ai Termini</h2>
           <p>
             Possiamo modificare i presenti Termini in qualsiasi momento. Le modifiche sostanziali
             saranno comunicate con preavviso di <strong>30 giorni</strong> via email e notifica in
@@ -251,20 +251,20 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">16. Risoluzione delle controversie (ODR)</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">16. Risoluzione delle controversie (ODR)</h2>
           <p>
             Per i consumatori è disponibile la piattaforma europea di risoluzione delle controversie
             online (ODR):{' '}
-            <a href="https://ec.europa.eu/consumers/odr/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">
+            <a href="https://ec.europa.eu/consumers/odr/" target="_blank" rel="noopener noreferrer" className="text-primary-700 underline">
               ec.europa.eu/consumers/odr
             </a>.
             Inoltre, puoi contattare il nostro servizio clienti scrivendo a{' '}
-            <a href="mailto:reclami@mycity.it" className="text-indigo-600 underline">reclami@mycity.it</a>.
+            <a href="mailto:reclami@mycity.it" className="text-primary-700 underline">reclami@mycity.it</a>.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">17. Legge applicabile e foro competente</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">17. Legge applicabile e foro competente</h2>
           <p>
             I presenti Termini sono regolati dalla <strong>legge italiana</strong>. Per le controversie
             con consumatori è competente in via esclusiva il foro del luogo di residenza o domicilio
@@ -274,16 +274,16 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">18. Contatti</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">18. Contatti</h2>
           <p>
             Per domande sui Termini scrivi a{' '}
-            <a href="mailto:legal@mycity.it" className="text-indigo-600 underline">legal@mycity.it</a>{' '}
-            oppure utilizza la <Link href="/contact" className="text-indigo-600 underline">pagina contatti</Link>.
+            <a href="mailto:legal@mycity.it" className="text-primary-700 underline">legal@mycity.it</a>{' '}
+            oppure utilizza la <Link href="/contact" className="text-primary-700 underline">pagina contatti</Link>.
           </p>
         </section>
       </div>
 
-      <div className="mt-10 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+      <div className="mt-10 p-4 bg-accent-50 border border-accent-200 rounded-lg text-xs text-accent-900">
         <strong>Avviso legale:</strong> questo documento è un modello di partenza ispirato alla
         normativa italiana ed europea (Cod. Cons., GDPR, P2B Regulation, D.Lgs. 170/2021).
         Prima del lancio in produzione DEVE essere validato da un avvocato esperto in diritto

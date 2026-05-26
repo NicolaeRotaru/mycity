@@ -165,13 +165,13 @@ export default function AdminCashbackPage() {
                 <td className="px-4 py-3">
                   <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${
                     c.status === 'active' ? 'bg-olive-100 text-olive-800' :
-                    c.status === 'paused' ? 'bg-amber-100 text-amber-800' :
-                    'bg-gray-100 text-gray-600'
+                    c.status === 'paused' ? 'bg-accent-100 text-accent-800' :
+                    'bg-cream-100 text-ink-600'
                   }`}>{c.status}</span>
                 </td>
                 <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
                   {c.status === 'active' && (
-                    <button onClick={() => setStatus.mutate({ id: c.id, status: 'paused' })} className="text-amber-700 hover:text-amber-800 text-xs font-semibold inline-flex items-center gap-1">
+                    <button onClick={() => setStatus.mutate({ id: c.id, status: 'paused' })} className="text-accent-700 hover:text-accent-800 text-xs font-semibold inline-flex items-center gap-1">
                       <Pause size={12} strokeWidth={2.4} /> Pausa
                     </button>
                   )}

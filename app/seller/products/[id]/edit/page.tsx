@@ -188,7 +188,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="text-center py-10 text-gray-500">Caricamento prodotto…</div>;
+  if (isLoading) return <div className="text-center py-10 text-ink-500">Caricamento prodotto…</div>;
   if (error) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
@@ -205,12 +205,12 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <Link href="/seller/products" className="text-sm text-indigo-600 hover:underline">
+          <Link href="/seller/products" className="text-sm text-primary-700 hover:underline">
             ← I miei prodotti
           </Link>
           <h1 className="text-2xl font-bold mt-1">Modifica prodotto</h1>
           {product?.status === 'sold' && (
-            <p className="text-xs text-amber-700 bg-amber-50 inline-block px-2 py-0.5 rounded mt-1">
+            <p className="text-xs text-accent-700 bg-accent-50 inline-block px-2 py-0.5 rounded mt-1">
               ⚠ Attualmente segnato come esaurito — non è visibile ai clienti
             </p>
           )}
@@ -219,7 +219,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
           href={`/product/${id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded font-semibold"
+          className="text-sm bg-cream-100 hover:bg-cream-200 px-3 py-1.5 rounded font-semibold"
         >
           👁 Vedi pubblico
         </Link>
@@ -283,13 +283,13 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
           <div
             {...getRootProps()}
             className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-              isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400'
+              isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-primary-400'
             }`}
           >
             <input {...getInputProps()} />
             {uploading
-              ? <p className="text-gray-500">Caricamento…</p>
-              : <p className="text-gray-500">Trascina nuove foto o clicca per selezionarle</p>}
+              ? <p className="text-ink-500">Caricamento…</p>
+              : <p className="text-ink-500">Trascina nuove foto o clicca per selezionarle</p>}
           </div>
           {imageUrls.length > 0 && (
             <div className="grid grid-cols-4 gap-2 mt-3">
@@ -314,7 +314,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
               ))}
             </div>
           )}
-          <p className="text-xs text-gray-400 mt-1">La prima foto è la copertina mostrata nelle liste.</p>
+          <p className="text-xs text-ink-400 mt-1">La prima foto è la copertina mostrata nelle liste.</p>
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row gap-2 pt-4 border-t">
@@ -338,7 +338,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
           <button
             type="submit"
             disabled={update.isPending || uploading || (!isDirty && imageUrls.join('|') === (Array.isArray(product?.images) ? product.images : []).join('|') && JSON.stringify(attributes) === JSON.stringify(product?.attributes ?? {}))}
-            className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-40 text-white py-3 rounded-lg font-bold shadow"
+            className="flex-1 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-40 text-white py-3 rounded-lg font-bold shadow"
           >
             {update.isPending ? 'Salvataggio…' : '💾 Salva modifiche'}
           </button>

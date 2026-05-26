@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import VendorForm, { VendorFormData } from '@/components/VendorForm';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerProfilePage() {
   const qc = useQueryClient();
@@ -55,16 +56,16 @@ export default function SellerProfilePage() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="text-center py-8 text-gray-400">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="max-w-xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Profilo negozio</h1>
-        <p className="text-sm text-gray-500">Aggiorna i dati visibili ai clienti</p>
+        <p className="text-sm text-ink-500">Aggiorna i dati visibili ai clienti</p>
       </div>
 
-      <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 text-emerald-800 text-sm">
+      <div className="bg-olive-50 border border-olive-200 rounded-lg p-4 text-olive-800 text-sm">
         ✅ Negozio attivo · I tuoi prodotti sono visibili nel marketplace
       </div>
 

@@ -4,16 +4,16 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { formatPrice } from '@/lib/format';
-import { ORDER_STATUS_LABEL, ORDER_STATUS_EMOJI, type OrderStatus } from '@/lib/order-status';
+import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
 
 const StatCard = ({ label, value, color, href, icon }: { label: string; value: string | number; color: string; href?: string; icon: string }) => {
   const inner = (
     <div className={`bg-white border-2 rounded-xl p-5 hover:shadow-md transition-all border-${color}-200`}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-2xl">{icon}</span>
-        <span className="text-xs uppercase tracking-wide text-gray-400 font-semibold">{label}</span>
+        <span className="text-xs uppercase tracking-wide text-ink-400 font-semibold">{label}</span>
       </div>
-      <p className="text-3xl font-bold text-gray-900">{value}</p>
+      <p className="text-3xl font-bold text-ink-900">{value}</p>
     </div>
   );
   return href ? <Link href={href}>{inner}</Link> : inner;
@@ -70,18 +70,18 @@ export default function AdminDashboard() {
   });
 
   if (isLoading || !stats) {
-    return <div className="text-center py-8 text-gray-500">Caricamento statistiche...</div>;
+    return <div className="text-center py-8 text-ink-500">Caricamento statistiche...</div>;
   }
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard amministratore</h1>
-        <p className="text-sm text-gray-500">Panoramica del marketplace in tempo reale.</p>
+        <h1 className="text-2xl font-bold text-ink-900">Dashboard amministratore</h1>
+        <p className="text-sm text-ink-500">Panoramica del marketplace in tempo reale.</p>
       </div>
 
       <section>
-        <h2 className="font-bold text-gray-900 mb-3">👥 Utenti ({stats.users.total})</h2>
+        <h2 className="font-bold text-ink-900 mb-3">👥 Utenti ({stats.users.total})</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard label="Acquirenti" value={stats.users.buyers}  color="indigo" icon="🛒" href="/admin/users?role=buyer" />
           <StatCard label="Venditori"  value={stats.users.sellers} color="pink"   icon="🏪" href="/admin/users?role=seller" />
@@ -91,7 +91,7 @@ export default function AdminDashboard() {
       </section>
 
       <section>
-        <h2 className="font-bold text-gray-900 mb-3">📦 Ordini ({stats.orders.total})</h2>
+        <h2 className="font-bold text-ink-900 mb-3">📦 Ordini ({stats.orders.total})</h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <StatCard label="Totali"          value={stats.orders.total}                color="blue"    icon="📦" href="/admin/orders" />
           <StatCard label="Ultimi 7 giorni" value={stats.orders.recent}               color="violet"  icon="📈" href="/admin/orders" />
@@ -100,20 +100,26 @@ export default function AdminDashboard() {
         </div>
 
         <div className="bg-white border rounded-xl p-5 mt-4">
-          <h3 className="font-semibold text-gray-900 mb-3">Stato degli ordini</h3>
+          <h3 className="font-semibold text-ink-900 mb-3">Stato degli ordini</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-            {(['NEW','ACCEPTED','READY','ASSIGNED','PICKED_UP','OUT_FOR_DELIVERY','DELIVERED','CANCELED'] as OrderStatus[]).map((s) => (
-              <div key={s} className="flex items-center justify-between bg-gray-50 rounded px-3 py-2">
-                <span className="text-gray-700 truncate">{ORDER_STATUS_EMOJI[s]} {ORDER_STATUS_LABEL[s]}</span>
-                <span className="font-bold text-gray-900">{stats.orders.byStatus[s] ?? 0}</span>
+            {(['NEW','ACCEPTED','READY','ASSIGNED','PICKED_UP','OUT_FOR_DELIVERY','DELIVERED','CANCELED'] as OrderStatus[]).map((s) => {
+              const Icon = ORDER_STATUS_ICON[s];
+              return (
+              <div key={s} className="flex items-center justify-between bg-cream-50 rounded px-3 py-2">
+                <span className="text-ink-700 truncate inline-flex items-center gap-1.5">
+                  <Icon size={14} strokeWidth={2.2} aria-hidden />
+                  {ORDER_STATUS_LABEL[s]}
+                </span>
+                <span className="font-bold text-ink-900">{stats.orders.byStatus[s] ?? 0}</span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
 
       <section>
-        <h2 className="font-bold text-gray-900 mb-3">🛍️ Catalogo</h2>
+        <h2 className="font-bold text-ink-900 mb-3">🛍️ Catalogo</h2>
         <div className="grid grid-cols-2 gap-3">
           <StatCard label="Prodotti totali"    value={stats.products.total}     color="indigo"  icon="📦" href="/admin/products" />
           <StatCard label="Disponibili online" value={stats.products.available} color="emerald" icon="🟢" />

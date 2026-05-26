@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { getAdminSupabase, getCurrentUser } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -43,7 +44,7 @@ export async function POST(req: Request) {
     ip,
   });
   if (error) {
-    console.error('[contact] insert failed:', error);
+    logger.error('[contact] insert failed:', error);
     return NextResponse.json({ error: 'Errore interno' }, { status: 500 });
   }
 

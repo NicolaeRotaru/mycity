@@ -30,7 +30,7 @@ const StoreAvatar = ({ logoUrl, storeName, size = 'md', className = '' }: Props)
 
   return (
     <div
-      className={`${sizeClass} bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center shrink-0 ${className}`}
+      className={`${sizeClass} bg-primary-100 text-primary-700 rounded-full flex items-center justify-center shrink-0 ${className}`}
     >
       🏪
     </div>

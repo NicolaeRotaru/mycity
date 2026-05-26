@@ -133,34 +133,34 @@ export default function StoresPage() {
   }, [stores, search, onlyOpen, sort, categoryId, reviewsByStore, countByStore, categoriesByStore]);
 
   if (isLoading) {
-    return <div className="container mx-auto p-12 text-center text-gray-500">Caricamento negozi...</div>;
+    return <div className="container mx-auto p-12 text-center text-ink-500">Caricamento negozi...</div>;
   }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="mb-6">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900">
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-ink-900">
           Negozi di Piacenza
         </h1>
-        <p className="text-gray-500 mt-1">
+        <p className="text-ink-500 mt-1">
           {stores.length} negozi locali pronti a consegnarti a casa
         </p>
       </div>
 
       {/* Filtri */}
-      <div className="bg-white border border-gray-200 rounded-xl p-3 mb-6 shadow-sm space-y-2">
+      <div className="bg-white border border-cream-300 rounded-xl p-3 mb-6 shadow-sm space-y-2">
         <div className="flex gap-2 flex-wrap items-center">
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="🔍 Cerca per nome negozio…"
-            className="flex-1 min-w-[160px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="flex-1 min-w-[160px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
           <button
             onClick={() => setOnlyOpen((v) => !v)}
             className={`px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
-              onlyOpen ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              onlyOpen ? 'bg-olive-500 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
             }`}
           >
             🟢 Aperti ora
@@ -180,7 +180,7 @@ export default function StoresPage() {
             <button
               onClick={() => setCategoryId('')}
               className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
-                categoryId === '' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                categoryId === '' ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
               }`}
             >
               Tutti i settori
@@ -190,7 +190,7 @@ export default function StoresPage() {
                 key={c.id}
                 onClick={() => setCategoryId(c.id === categoryId ? '' : c.id)}
                 className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
-                  c.id === categoryId ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  c.id === categoryId ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
                 }`}
               >
                 {c.icon} {c.name}
@@ -201,7 +201,7 @@ export default function StoresPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-500 bg-white border rounded-xl">
+        <div className="text-center py-16 text-ink-500 bg-white border rounded-xl">
           <p className="text-5xl mb-3">🔍</p>
           <p className="font-semibold">Nessun negozio trovato con questi filtri.</p>
         </div>

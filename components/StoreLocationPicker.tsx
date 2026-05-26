@@ -175,7 +175,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
+        <label className="block text-sm font-medium text-ink-700 mb-1">
           Indirizzo del negozio
         </label>
         <div className="flex flex-col sm:flex-row gap-2">
@@ -193,13 +193,13 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
               }
             }}
             placeholder="Es. Via Roma 1, Milano"
-            className="w-full sm:flex-1 min-w-0 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="w-full sm:flex-1 min-w-0 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
           <button
             type="button"
             onClick={searchAddress}
             disabled={searching}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded disabled:opacity-50 whitespace-nowrap font-semibold shrink-0"
+            className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded disabled:opacity-50 whitespace-nowrap font-semibold shrink-0"
           >
             {searching ? 'Cerco...' : '🔍 Cerca'}
           </button>
@@ -211,11 +211,11 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
           type="button"
           onClick={useMyLocation}
           disabled={locating}
-          className="text-indigo-600 hover:underline disabled:opacity-50"
+          className="text-primary-700 hover:underline disabled:opacity-50"
         >
           {locating ? '📡 Ricerca posizione...' : '🎯 Usa la mia posizione attuale'}
         </button>
-        <span className="text-xs text-gray-400 font-mono">
+        <span className="text-xs text-ink-400 font-mono">
           📍 {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
         </span>
       </div>
@@ -228,10 +228,10 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
 
       <div
         ref={mapDivRef}
-        className="w-full h-64 rounded-lg border bg-gray-100 z-0"
+        className="w-full h-64 rounded-lg border bg-cream-100 z-0"
       />
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-ink-500">
         💡 Cerca un indirizzo, usa la tua posizione, oppure <strong>trascina il pin</strong> sulla mappa per impostare la posizione esatta del negozio.
       </p>
     </div>

@@ -6,6 +6,7 @@ import { Heart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from '@/components/ProductCard';
 import EmptyState from '@/components/EmptyState';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function FavoritesPage() {
   const { data: products = [], isLoading } = useQuery({
@@ -32,7 +33,7 @@ export default function FavoritesPage() {
     },
   });
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   if (products.length === 0) {
     return (
@@ -52,7 +53,7 @@ export default function FavoritesPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">I tuoi preferiti ({products.length})</h1>
+      <h1 className="text-2xl font-bold text-ink-900 mb-6">I tuoi preferiti ({products.length})</h1>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {products.map((p: any) => (
           <ProductCard

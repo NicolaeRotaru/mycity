@@ -11,12 +11,12 @@ import VerifyCodeDialog from '@/components/VerifyCodeDialog';
 import { formatPrice } from '@/lib/format';
 import {
   ORDER_STATUS_LABEL,
-  ORDER_STATUS_EMOJI,
-  ORDER_STATUS_COLOR,
   type OrderStatus,
 } from '@/lib/order-status';
+import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type OrderRow = {
   id: string;
@@ -87,8 +87,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       const { error } = await supabase.from('orders').update(update).eq('id', order.id);
       if (error) throw error;
 
-      const msg = `${ORDER_STATUS_EMOJI[params.newStatus]} ${ORDER_STATUS_LABEL[params.newStatus]}`;
-      notify({ userId: order.user_id, title: msg, body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/orders/${order.id}` });
+      notify({ userId: order.user_id, title: ORDER_STATUS_LABEL[params.newStatus], body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/orders/${order.id}` });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rider-order', id] });
@@ -180,10 +179,9 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
 
   useEffect(() => () => stopSharing(), []);
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
-  if (!order) return <div className="text-center py-8 text-gray-500">Ordine non trovato.</div>;
+  if (isLoading) return <LoadingState />;
+  if (!order) return <div className="text-center py-8 text-ink-500">Ordine non trovato.</div>;
 
-  const c = ORDER_STATUS_COLOR[order.delivery_status];
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
 
   const points: MapPoint[] = [];
@@ -199,9 +197,9 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
   if (order.delivery_status === 'ASSIGNED') {
     actions.push({ label: '✋ Ho ritirato l\'ordine', nextStatus: 'PICKED_UP', timestampField: 'picked_up_at', color: 'bg-cyan-600 hover:bg-cyan-700' });
   } else if (order.delivery_status === 'PICKED_UP') {
-    actions.push({ label: '🚚 In consegna al cliente', nextStatus: 'OUT_FOR_DELIVERY', color: 'bg-purple-600 hover:bg-purple-700' });
+    actions.push({ label: '🚚 In consegna al cliente', nextStatus: 'OUT_FOR_DELIVERY', color: 'bg-secondary-700 hover:bg-purple-700' });
   } else if (order.delivery_status === 'OUT_FOR_DELIVERY') {
-    actions.push({ label: '✅ Consegnato', nextStatus: 'DELIVERED', timestampField: 'delivered_at', color: 'bg-emerald-600 hover:bg-emerald-700' });
+    actions.push({ label: '✅ Consegnato', nextStatus: 'DELIVERED', timestampField: 'delivered_at', color: 'bg-olive-600 hover:bg-olive-700' });
   }
 
   // Destinazione corrente per il "Naviga"
@@ -214,32 +212,29 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <Link href="/rider" className="text-sm text-amber-600 hover:underline">← Dashboard</Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-1">
+          <Link href="/rider" className="text-sm text-accent-600 hover:underline">← Dashboard</Link>
+          <h1 className="text-2xl font-bold text-ink-900 mt-1">
             #{order.id.slice(0, 6).toUpperCase()}
           </h1>
         </div>
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ring-1 ${c.bg} ${c.text} ${c.ring}`}>
-          <span>{ORDER_STATUS_EMOJI[order.delivery_status]}</span>
-          {ORDER_STATUS_LABEL[order.delivery_status]}
-        </span>
+        <OrderStatusBadge status={order.delivery_status} />
       </div>
 
       {/* MAPPA */}
       {points.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+        <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
           <DeliveryMap points={points} className="w-full h-72 z-0" />
         </div>
       )}
 
       {/* GPS SHARING */}
-      <div className={`rounded-xl p-5 border-2 ${sharing ? 'bg-emerald-50 border-emerald-300' : 'bg-amber-50 border-amber-300'}`}>
+      <div className={`rounded-xl p-5 border-2 ${sharing ? 'bg-olive-50 border-olive-300' : 'bg-accent-50 border-accent-300'}`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <p className="font-bold text-gray-900">
+            <p className="font-bold text-ink-900">
               {sharing ? '📡 Posizione condivisa' : '📍 Condividi posizione'}
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-ink-600">
               {sharing
                 ? 'Il cliente vede la tua posizione in tempo reale.'
                 : 'Attiva il GPS per far vedere al cliente dove sei.'}
@@ -250,7 +245,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
               Disattiva
             </button>
           ) : (
-            <button onClick={startSharing} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold">
+            <button onClick={startSharing} className="bg-olive-600 hover:bg-olive-700 text-white px-4 py-2 rounded-lg font-semibold">
               Attiva GPS
             </button>
           )}
@@ -271,13 +266,13 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
           <button
             onClick={() => transition.mutate({ newStatus: 'OUT_FOR_DELIVERY' })}
             disabled={transition.isPending}
-            className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+            className="w-full bg-secondary-700 hover:bg-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
           >
             🚚 Sto andando dal cliente
           </button>
           <button
             onClick={() => setVerifyOpen('delivery')}
-            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+            className="w-full bg-olive-600 hover:bg-olive-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
           >
             ✅ Conferma consegna al cliente
           </button>
@@ -286,7 +281,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       {order.delivery_status === 'OUT_FOR_DELIVERY' && (
         <button
           onClick={() => setVerifyOpen('delivery')}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+          className="w-full bg-olive-600 hover:bg-olive-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
         >
           ✅ Conferma consegna al cliente
         </button>
@@ -307,7 +302,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         title="Codice consegna"
         description="Chiedi al cliente il codice a 6 cifre per chiudere la consegna."
         ctaLabel="Conferma consegna"
-        ctaColor="bg-emerald-600 hover:bg-emerald-700"
+        ctaColor="bg-olive-600 hover:bg-olive-700"
         onClose={() => setVerifyOpen(null)}
         onSubmit={verifyDelivery}
       />
@@ -318,59 +313,59 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
           href={`https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-full bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold text-center"
+          className="block w-full bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-xl font-semibold text-center"
         >
           🧭 Naviga su Google Maps
         </a>
       )}
 
       {/* NEGOZIO */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">Ritira al negozio</h3>
-        <p className="font-semibold text-gray-900">{order.seller?.store_name}</p>
-        <p className="text-sm text-gray-700">{order.seller?.store_address}</p>
+      <div className="bg-white border border-cream-300 rounded-xl p-5">
+        <h3 className="text-xs uppercase tracking-wide text-ink-500 font-semibold mb-2">Ritira al negozio</h3>
+        <p className="font-semibold text-ink-900">{order.seller?.store_name}</p>
+        <p className="text-sm text-ink-700">{order.seller?.store_address}</p>
         {order.seller?.store_phone && (
-          <a href={`tel:${order.seller.store_phone}`} className="text-sm text-indigo-600 hover:underline mt-1 inline-block">
+          <a href={`tel:${order.seller.store_phone}`} className="text-sm text-primary-700 hover:underline mt-1 inline-block">
             📞 {order.seller.store_phone}
           </a>
         )}
       </div>
 
       {/* CLIENTE */}
-      <div className="bg-white border border-gray-200 rounded-xl p-5">
-        <h3 className="text-xs uppercase tracking-wide text-gray-500 font-semibold mb-2">Consegna a</h3>
-        <p className="font-semibold text-gray-900">{order.delivery_full_name}</p>
-        <p className="text-sm text-gray-700">{order.delivery_address}, {order.delivery_zip} {order.delivery_city}</p>
+      <div className="bg-white border border-cream-300 rounded-xl p-5">
+        <h3 className="text-xs uppercase tracking-wide text-ink-500 font-semibold mb-2">Consegna a</h3>
+        <p className="font-semibold text-ink-900">{order.delivery_full_name}</p>
+        <p className="text-sm text-ink-700">{order.delivery_address}, {order.delivery_zip} {order.delivery_city}</p>
         {order.delivery_phone && (
-          <a href={`tel:${order.delivery_phone}`} className="text-sm text-indigo-600 hover:underline mt-1 inline-block">
+          <a href={`tel:${order.delivery_phone}`} className="text-sm text-primary-700 hover:underline mt-1 inline-block">
             📞 {order.delivery_phone}
           </a>
         )}
         {order.delivery_notes && (
-          <p className="text-sm text-gray-600 italic mt-2 bg-amber-50 p-2 rounded">📝 {order.delivery_notes}</p>
+          <p className="text-sm text-ink-600 italic mt-2 bg-accent-50 p-2 rounded">📝 {order.delivery_notes}</p>
         )}
       </div>
 
       {/* PRODOTTI */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Articoli ({order.order_items.length})</h3>
+      <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-cream-200">
+          <h3 className="font-semibold text-ink-900">Articoli ({order.order_items.length})</h3>
         </div>
-        <div className="divide-y divide-gray-100 text-sm">
+        <div className="divide-y divide-cream-100 text-sm">
           {order.order_items.map((it) => (
             <div key={it.id} className="px-5 py-2.5 flex justify-between">
-              <span>{it.products?.name ?? 'Prodotto'} <span className="text-gray-400">×{it.quantity}</span></span>
-              <span className="text-gray-600">{formatPrice(Number(it.unit_price) * it.quantity)}</span>
+              <span>{it.products?.name ?? 'Prodotto'} <span className="text-ink-400">×{it.quantity}</span></span>
+              <span className="text-ink-600">{formatPrice(Number(it.unit_price) * it.quantity)}</span>
             </div>
           ))}
         </div>
-        <div className="px-5 py-3 border-t border-gray-100 bg-gray-50 text-sm flex justify-between font-bold">
+        <div className="px-5 py-3 border-t border-cream-200 bg-cream-50 text-sm flex justify-between font-bold">
           <span>
             {order.payment_method === 'card'
               ? 'Totale (gia\' pagato online)'
               : 'Totale (da incassare in contanti)'}
           </span>
-          <span className="text-indigo-700">{formatPrice(order.total_price)}</span>
+          <span className="text-primary-800">{formatPrice(order.total_price)}</span>
         </div>
       </div>
 
@@ -378,10 +373,10 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       {order.payment_method === 'cod'
         && (order.delivery_status === 'PICKED_UP' || order.delivery_status === 'OUT_FOR_DELIVERY' || order.delivery_status === 'DELIVERED')
         && !order.cash_confirmed_at && (
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 space-y-3">
+          <div className="bg-accent-50 border-2 border-accent-300 rounded-xl p-4 space-y-3">
             <div>
-              <p className="font-bold text-amber-900">⚠ Conferma incasso obbligatoria</p>
-              <p className="text-sm text-amber-800">
+              <p className="font-bold text-accent-900">⚠ Conferma incasso obbligatoria</p>
+              <p className="text-sm text-accent-800">
                 Devi confermare l&apos;importo ricevuto, con una foto del pagamento. Senza
                 conferma l&apos;ordine non viene chiuso e potresti non ricevere il rimborso del
                 tuo compenso.
@@ -396,7 +391,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         )}
 
       {order.payment_method === 'cod' && order.cash_confirmed_at && (
-        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-4 text-sm text-emerald-900">
+        <div className="bg-olive-50 border-2 border-olive-200 rounded-xl p-4 text-sm text-olive-900">
           ✓ Incasso confermato il {new Date(order.cash_confirmed_at).toLocaleString('it-IT')}.
         </div>
       )}

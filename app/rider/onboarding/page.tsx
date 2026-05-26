@@ -120,14 +120,14 @@ export default function RiderOnboardingPage() {
 
   return (
     <div className="container mx-auto max-w-2xl px-4 py-8">
-      <h1 className="text-2xl font-bold text-slate-900">Onboarding rider</h1>
-      <p className="mt-2 text-sm text-slate-600">
+      <h1 className="text-2xl font-bold text-ink-900">Onboarding rider</h1>
+      <p className="mt-2 text-sm text-ink-600">
         Completa i 3 passi qui sotto per attivare il tuo account rider. Dopo la verifica
         potrai accettare consegne.
       </p>
 
-      <section className="mt-8 rounded-2xl bg-white p-6 shadow ring-1 ring-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">1. Dati anagrafici</h2>
+      <section className="mt-8 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+        <h2 className="text-lg font-semibold text-ink-900">1. Dati anagrafici</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Field label="Nome" value={form.legal_first_name} onChange={(v) => setForm((f) => ({ ...f, legal_first_name: v }))} />
           <Field label="Cognome" value={form.legal_last_name} onChange={(v) => setForm((f) => ({ ...f, legal_last_name: v }))} />
@@ -136,15 +136,15 @@ export default function RiderOnboardingPage() {
         </div>
       </section>
 
-      <section className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">2. Mezzo di trasporto</h2>
+      <section className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+        <h2 className="text-lg font-semibold text-ink-900">2. Mezzo di trasporto</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="text-sm">
-            <span className="block font-medium text-slate-700">Tipo</span>
+            <span className="block font-medium text-ink-700">Tipo</span>
             <select
               value={form.rider_vehicle_type}
               onChange={(e) => setForm((f) => ({ ...f, rider_vehicle_type: e.target.value as any }))}
-              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2"
             >
               <option value="BIKE">Bici</option>
               <option value="EBIKE">E-bike</option>
@@ -158,22 +158,22 @@ export default function RiderOnboardingPage() {
         </div>
       </section>
 
-      <section className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-slate-200">
-        <h2 className="text-lg font-semibold text-slate-900">3. Documenti</h2>
+      <section className="mt-6 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+        <h2 className="text-lg font-semibold text-ink-900">3. Documenti</h2>
         <div className="mt-4 space-y-4">
           {DOCS.map((d) => {
             const uploaded = !!profile?.[columnForKind(d.kind)];
             return (
-              <div key={d.kind} className="rounded-xl border border-slate-200 p-4">
+              <div key={d.kind} className="rounded-xl border border-cream-300 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-medium text-slate-900">
+                    <div className="font-medium text-ink-900">
                       {d.label} {d.required && <span className="text-rose-600">*</span>}
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5">{d.hint}</div>
-                    {uploaded && <div className="mt-1 text-xs text-emerald-700">✓ Caricato</div>}
+                    <div className="text-xs text-ink-500 mt-0.5">{d.hint}</div>
+                    {uploaded && <div className="mt-1 text-xs text-olive-700">✓ Caricato</div>}
                   </div>
-                  <label className="inline-flex cursor-pointer items-center rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200">
+                  <label className="inline-flex cursor-pointer items-center rounded-lg bg-cream-100 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-cream-200">
                     {uploading === d.kind ? 'Caricamento…' : (uploaded ? 'Sostituisci' : 'Carica')}
                     <input
                       type="file"
@@ -196,7 +196,7 @@ export default function RiderOnboardingPage() {
         <button
           onClick={saveAndStartCheck}
           disabled={submitting || !allRequiredUploaded}
-          className="rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+          className="rounded-lg bg-primary-700 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
         >
           {submitting ? 'Invio verifica…' : 'Salva e avvia verifica'}
         </button>
@@ -208,12 +208,12 @@ export default function RiderOnboardingPage() {
 function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
   return (
     <label className="text-sm">
-      <span className="block font-medium text-slate-700">{label}</span>
+      <span className="block font-medium text-ink-700">{label}</span>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+        className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2"
       />
     </label>
   );

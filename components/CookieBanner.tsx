@@ -50,21 +50,21 @@ export default function CookieBanner() {
       aria-describedby="cookie-banner-desc"
       className="fixed inset-x-0 bottom-0 z-[100] p-3 sm:p-4"
     >
-      <div className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-slate-200">
-        <h2 id="cookie-banner-title" className="text-base font-semibold text-slate-900">
+      <div className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-cream-300">
+        <h2 id="cookie-banner-title" className="text-base font-semibold text-ink-900">
           🍪 Cookie e tecnologie simili
         </h2>
-        <p id="cookie-banner-desc" className="mt-1 text-sm text-slate-600">
+        <p id="cookie-banner-desc" className="mt-1 text-sm text-ink-600">
           Usiamo cookie tecnici (sempre attivi) e, previo tuo consenso, cookie funzionali,
           di analisi e di marketing per migliorare il servizio. Puoi accettare tutto,
           rifiutare tutto, o personalizzare le tue scelte. Leggi la nostra{' '}
-          <Link href="/cookies" className="text-indigo-600 underline hover:text-indigo-800">
+          <Link href="/cookies" className="text-primary-700 underline hover:text-primary-800">
             cookie policy
           </Link>.
         </p>
 
         {mode === 'custom' && (
-          <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200">
+          <div className="mt-4 space-y-2 rounded-xl bg-cream-50 p-3 ring-1 ring-cream-300">
             <Row label="Cookie necessari" desc="Sessione, sicurezza, anti-frode. Sempre attivi." checked disabled />
             <Row
               label="Funzionali"
@@ -91,7 +91,7 @@ export default function CookieBanner() {
           <button
             type="button"
             onClick={() => { rejectAll(); close(); }}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
+            className="rounded-lg px-4 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
           >
             Rifiuta tutto
           </button>
@@ -99,7 +99,7 @@ export default function CookieBanner() {
             <button
               type="button"
               onClick={() => setMode('custom')}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
             >
               Personalizza
             </button>
@@ -107,7 +107,7 @@ export default function CookieBanner() {
             <button
               type="button"
               onClick={() => { writeConsent(draft); close(); }}
-              className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
+              className="rounded-lg px-4 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
             >
               Salva preferenze
             </button>
@@ -115,7 +115,7 @@ export default function CookieBanner() {
           <button
             type="button"
             onClick={() => { acceptAll(); close(); }}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
+            className="rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800"
           >
             Accetta tutto
           </button>
@@ -141,11 +141,11 @@ function Row({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange?.(e.target.checked)}
-        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 disabled:opacity-60"
+        className="mt-0.5 h-4 w-4 rounded border-cream-300 text-primary-700 disabled:opacity-60"
       />
       <span className="flex-1">
-        <span className="block text-sm font-medium text-slate-900">{label}</span>
-        <span className="block text-xs text-slate-500">{desc}</span>
+        <span className="block text-sm font-medium text-ink-900">{label}</span>
+        <span className="block text-xs text-ink-500">{desc}</span>
       </span>
     </label>
   );

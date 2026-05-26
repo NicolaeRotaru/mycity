@@ -12,7 +12,7 @@ interface Props {
 const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) => {
   if (fields.length === 0) {
     return (
-      <p className="text-sm text-gray-500 italic">
+      <p className="text-sm text-ink-500 italic">
         Seleziona una categoria per vedere le caratteristiche specifiche del prodotto.
       </p>
     );
@@ -21,10 +21,10 @@ const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) =>
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-bold text-gray-800">
+        <h3 className="font-bold text-ink-800">
           Caratteristiche{categoryLabel ? ` · ${categoryLabel}` : ''}
         </h3>
-        <span className="text-xs text-gray-500">Tutti i campi sono opzionali</span>
+        <span className="text-xs text-ink-500">Tutti i campi sono opzionali</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -32,13 +32,13 @@ const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) =>
           const value = values[f.key];
           const id = `attr-${f.key}`;
           const labelEl = (
-            <label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor={id} className="block text-sm font-medium text-ink-700 mb-1">
               {f.label}
-              {f.unit && <span className="text-gray-400 ml-1">({f.unit})</span>}
+              {f.unit && <span className="text-ink-400 ml-1">({f.unit})</span>}
             </label>
           );
           const helpEl = f.helpText && (
-            <p className="text-xs text-gray-400 mt-1">{f.helpText}</p>
+            <p className="text-xs text-ink-400 mt-1">{f.helpText}</p>
           );
 
           if (f.type === 'text') {
@@ -51,7 +51,7 @@ const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) =>
                   value={(value as string) ?? ''}
                   onChange={(e) => onChange(f.key, e.target.value)}
                   placeholder={f.placeholder}
-                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
                 />
                 {helpEl}
               </div>
@@ -67,7 +67,7 @@ const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) =>
                   value={(value as string) ?? ''}
                   onChange={(e) => onChange(f.key, e.target.value)}
                   placeholder={f.placeholder}
-                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
                 />
                 {helpEl}
               </div>
@@ -83,7 +83,7 @@ const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) =>
                   value={(value as number | string) ?? ''}
                   onChange={(e) => onChange(f.key, e.target.value === '' ? undefined : Number(e.target.value))}
                   placeholder={f.placeholder}
-                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
                 />
                 {helpEl}
               </div>
@@ -97,7 +97,7 @@ const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) =>
                   id={id}
                   value={(value as string) ?? ''}
                   onChange={(e) => onChange(f.key, e.target.value || undefined)}
-                  className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary-400"
                 >
                   <option value="">—</option>
                   {f.options?.map((opt) => (
@@ -116,9 +116,9 @@ const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) =>
                   type="checkbox"
                   checked={Boolean(value)}
                   onChange={(e) => onChange(f.key, e.target.checked)}
-                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-400"
+                  className="w-4 h-4 text-primary-700 rounded focus:ring-primary-400"
                 />
-                <label htmlFor={id} className="text-sm text-gray-700">{f.label}</label>
+                <label htmlFor={id} className="text-sm text-ink-700">{f.label}</label>
               </div>
             );
           }
@@ -131,7 +131,7 @@ const AttributesFields = ({ fields, values, onChange, categoryLabel }: Props) =>
                   type="date"
                   value={(value as string) ?? ''}
                   onChange={(e) => onChange(f.key, e.target.value || undefined)}
-                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
                 />
                 {helpEl}
               </div>

@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -122,10 +123,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   // 5) Anonimizzazione resiliente
   const full = await admin.from('profiles').update({ ...SAFE_FIELDS, ...KYC_FIELDS }).eq('id', targetId);
   if (full.error) {
-    console.warn('admin delete: full anonymize failed, fallback', full.error.message);
+    logger.warn('admin delete: full anonymize failed, fallback', full.error.message);
     const safe = await admin.from('profiles').update(SAFE_FIELDS).eq('id', targetId);
     if (safe.error) {
-      console.error('admin delete: even safe anonymize failed', safe.error);
+      logger.error('admin delete: even safe anonymize failed', safe.error);
       // L'admin si merita il dettaglio dell'errore
       return NextResponse.json(
         { error: `Anonimizzazione fallita: ${safe.error.message}`, code: safe.error.code },
@@ -137,7 +138,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   // 6) Cancella da auth.users
   const { error: delErr } = await admin.auth.admin.deleteUser(targetId);
   if (delErr) {
-    console.error('admin delete: auth deletion failed', delErr);
+    logger.error('admin delete: auth deletion failed', delErr);
     return NextResponse.json(
       { error: `Profilo anonimizzato ma cancellazione auth fallita: ${delErr.message}` },
       { status: 500 },

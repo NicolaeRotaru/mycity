@@ -7,12 +7,11 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import {
-  ORDER_STATUS_LABEL,
-  ORDER_STATUS_EMOJI,
-  ORDER_STATUS_COLOR,
   type OrderStatus,
 } from '@/lib/order-status';
+import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type AvailableOrder = {
   id: string;
@@ -101,47 +100,43 @@ export default function RiderDashboardPage() {
     onError: (err: any) => toast.error(err.message || 'Errore'),
   });
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard rider</h1>
-        <p className="text-sm text-gray-500">Prendi gli ordini pronti e portali ai clienti.</p>
+        <h1 className="text-2xl font-bold text-ink-900">Dashboard rider</h1>
+        <p className="text-sm text-ink-500">Prendi gli ordini pronti e portali ai clienti.</p>
       </div>
 
       {/* MIEI ORDINI ATTIVI */}
       <section>
-        <h2 className="font-bold text-gray-900 mb-3">Le tue consegne attive ({myActive.length})</h2>
+        <h2 className="font-bold text-ink-900 mb-3">Le tue consegne attive ({myActive.length})</h2>
         {myActive.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-500">
+          <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-500">
             Nessuna consegna in corso. Prendi un ordine qui sotto per iniziare.
           </div>
         ) : (
           <div className="space-y-2">
             {myActive.map((o) => {
-              const c = ORDER_STATUS_COLOR[o.delivery_status];
               return (
                 <Link
                   key={o.id}
                   href={`/rider/orders/${o.id}`}
-                  className="block bg-white border-2 border-amber-300 rounded-xl px-5 py-4 hover:shadow-md transition-all"
+                  className="block bg-white border-2 border-accent-300 rounded-xl px-5 py-4 hover:shadow-md transition-all"
                 >
                   <div className="flex items-center justify-between flex-wrap gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${c.bg} ${c.text} ${c.ring}`}>
-                          <span>{ORDER_STATUS_EMOJI[o.delivery_status]}</span>
-                          {ORDER_STATUS_LABEL[o.delivery_status]}
-                        </span>
-                        <span className="text-xs font-mono text-gray-400">#{o.id.slice(0, 6).toUpperCase()}</span>
+                        <OrderStatusBadge status={o.delivery_status} size="sm" />
+                        <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                       </div>
-                      <p className="font-semibold text-gray-900">🏪 {o.seller?.store_name}</p>
-                      <p className="text-sm text-gray-500 truncate">→ {o.delivery_address}, {o.delivery_city}</p>
+                      <p className="font-semibold text-ink-900">🏪 {o.seller?.store_name}</p>
+                      <p className="text-sm text-ink-500 truncate">→ {o.delivery_address}, {o.delivery_city}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-gray-500">Compenso</p>
-                      <p className="font-bold text-emerald-600">{formatPrice(o.shipping_cost || 4.9)}</p>
+                      <p className="text-xs text-ink-500">Compenso</p>
+                      <p className="font-bold text-olive-600">{formatPrice(o.shipping_cost || 4.9)}</p>
                     </div>
                   </div>
                 </Link>
@@ -153,9 +148,9 @@ export default function RiderDashboardPage() {
 
       {/* ORDINI DISPONIBILI */}
       <section>
-        <h2 className="font-bold text-gray-900 mb-3">Ordini disponibili ({available.length})</h2>
+        <h2 className="font-bold text-ink-900 mb-3">Ordini disponibili ({available.length})</h2>
         {available.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-xl p-8 text-center text-gray-500">
+          <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-500">
             Nessun ordine pronto al momento. Riprova tra un po'.
           </div>
         ) : (
@@ -163,7 +158,7 @@ export default function RiderDashboardPage() {
             {available.map((o) => (
               <div
                 key={o.id}
-                className="bg-white border border-gray-200 rounded-xl px-5 py-4 hover:shadow-md transition-all"
+                className="bg-white border border-cream-300 rounded-xl px-5 py-4 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="min-w-0 flex-1">
@@ -171,21 +166,21 @@ export default function RiderDashboardPage() {
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 ring-1 ring-violet-200">
                         📦 Pronto
                       </span>
-                      <span className="text-xs font-mono text-gray-400">#{o.id.slice(0, 6).toUpperCase()}</span>
+                      <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                     </div>
-                    <p className="font-semibold text-gray-900">🏪 {o.seller?.store_name}</p>
-                    <p className="text-xs text-gray-500">{o.seller?.store_address}</p>
-                    <p className="text-sm text-gray-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
+                    <p className="font-semibold text-ink-900">🏪 {o.seller?.store_name}</p>
+                    <p className="text-xs text-ink-500">{o.seller?.store_address}</p>
+                    <p className="text-sm text-ink-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="text-xs text-gray-500">Compenso</p>
-                      <p className="font-bold text-emerald-600">{formatPrice(o.shipping_cost || 4.9)}</p>
+                      <p className="text-xs text-ink-500">Compenso</p>
+                      <p className="font-bold text-olive-600">{formatPrice(o.shipping_cost || 4.9)}</p>
                     </div>
                     <button
                       onClick={() => claim.mutate(o.id)}
                       disabled={claim.isPending}
-                      className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap"
+                      className="bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap"
                     >
                       Accetta
                     </button>
@@ -200,36 +195,36 @@ export default function RiderDashboardPage() {
       {/* ORDINI IN PREPARAZIONE — visibili ma non ancora claimabili */}
       {inPrep.length > 0 && (
         <section>
-          <h2 className="font-bold text-gray-900 mb-3">
+          <h2 className="font-bold text-ink-900 mb-3">
             In preparazione ({inPrep.length})
-            <span className="ml-2 text-xs font-normal text-gray-500">aspetta che il negozio li renda pronti</span>
+            <span className="ml-2 text-xs font-normal text-ink-500">aspetta che il negozio li renda pronti</span>
           </h2>
           <div className="space-y-2">
             {inPrep.map((o) => (
               <div
                 key={o.id}
-                className="bg-white border border-gray-200 rounded-xl px-5 py-4 opacity-80"
+                className="bg-white border border-cream-300 rounded-xl px-5 py-4 opacity-80"
               >
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 ring-1 ring-blue-200">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-800 ring-1 ring-primary-200">
                         👨‍🍳 In preparazione
                       </span>
-                      <span className="text-xs font-mono text-gray-400">#{o.id.slice(0, 6).toUpperCase()}</span>
+                      <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                     </div>
-                    <p className="font-semibold text-gray-900">🏪 {o.seller?.store_name}</p>
-                    <p className="text-xs text-gray-500">{o.seller?.store_address}</p>
-                    <p className="text-sm text-gray-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
+                    <p className="font-semibold text-ink-900">🏪 {o.seller?.store_name}</p>
+                    <p className="text-xs text-ink-500">{o.seller?.store_address}</p>
+                    <p className="text-sm text-ink-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
-                      <p className="text-xs text-gray-500">Compenso</p>
-                      <p className="font-bold text-emerald-600">{formatPrice(o.shipping_cost || 4.9)}</p>
+                      <p className="text-xs text-ink-500">Compenso</p>
+                      <p className="font-bold text-olive-600">{formatPrice(o.shipping_cost || 4.9)}</p>
                     </div>
                     <button
                       disabled
-                      className="bg-gray-200 text-gray-400 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap cursor-not-allowed"
+                      className="bg-cream-200 text-ink-400 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap cursor-not-allowed"
                     >
                       ⏳ Attendi
                     </button>

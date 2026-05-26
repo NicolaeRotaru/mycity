@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
   <div className="flex gap-1">
@@ -17,7 +18,7 @@ const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) 
         className="text-4xl transition-transform hover:scale-110"
         aria-label={`${n} ${n === 1 ? 'stella' : 'stelle'}`}
       >
-        <span className={n <= value ? 'text-amber-400' : 'text-gray-300'}>★</span>
+        <span className={n <= value ? 'text-accent-400' : 'text-ink-300'}>★</span>
       </button>
     ))}
   </div>
@@ -82,13 +83,13 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
-  if (!order) return <div className="container mx-auto p-8 text-center text-gray-500">Ordine non trovato.</div>;
+  if (isLoading) return <LoadingState />;
+  if (!order) return <div className="container mx-auto p-8 text-center text-ink-500">Ordine non trovato.</div>;
   if (order.delivery_status !== 'DELIVERED') {
     return (
       <div className="container mx-auto p-8 text-center space-y-3">
-        <p className="text-gray-700">Puoi lasciare una recensione solo per ordini consegnati.</p>
-        <Link href={`/orders/${id}`} className="text-indigo-600 hover:underline">← Torna all'ordine</Link>
+        <p className="text-ink-700">Puoi lasciare una recensione solo per ordini consegnati.</p>
+        <Link href={`/orders/${id}`} className="text-primary-700 hover:underline">← Torna all'ordine</Link>
       </div>
     );
   }
@@ -96,22 +97,22 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
   return (
     <div className="container mx-auto px-4 py-8 max-w-xl space-y-6">
       <div>
-        <Link href={`/orders/${id}`} className="text-sm text-indigo-600 hover:underline">← Torna all'ordine</Link>
-        <h1 className="text-2xl font-bold text-gray-900 mt-1">Lascia una recensione</h1>
-        <p className="text-sm text-gray-500">Le tue stelle aiutano gli altri clienti a scegliere.</p>
+        <Link href={`/orders/${id}`} className="text-sm text-primary-700 hover:underline">← Torna all'ordine</Link>
+        <h1 className="text-2xl font-bold text-ink-900 mt-1">Lascia una recensione</h1>
+        <p className="text-sm text-ink-500">Le tue stelle aiutano gli altri clienti a scegliere.</p>
       </div>
 
       <div className="bg-white border rounded-xl p-6 space-y-4">
         <div>
-          <p className="font-semibold text-gray-900">🏪 {order.seller?.store_name ?? 'Negozio'}</p>
-          <p className="text-xs text-gray-500 mb-3">Com'è stato il negozio? Qualità, packaging, prodotti.</p>
+          <p className="font-semibold text-ink-900">🏪 {order.seller?.store_name ?? 'Negozio'}</p>
+          <p className="text-xs text-ink-500 mb-3">Com'è stato il negozio? Qualità, packaging, prodotti.</p>
           <StarRating value={storeRating} onChange={setStoreRating} />
           <textarea
             value={storeComment}
             onChange={(e) => setStoreComment(e.target.value)}
             rows={2}
             placeholder="Scrivi un commento (opzionale)…"
-            className="w-full mt-3 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+            className="w-full mt-3 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
           />
         </div>
       </div>
@@ -119,15 +120,15 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
       {order.rider_id && (
         <div className="bg-white border rounded-xl p-6 space-y-4">
           <div>
-            <p className="font-semibold text-gray-900">🛵 {order.rider?.full_name ?? 'Il tuo rider'}</p>
-            <p className="text-xs text-gray-500 mb-3">Com'è stato il rider? Puntualità, gentilezza.</p>
+            <p className="font-semibold text-ink-900">🛵 {order.rider?.full_name ?? 'Il tuo rider'}</p>
+            <p className="text-xs text-ink-500 mb-3">Com'è stato il rider? Puntualità, gentilezza.</p>
             <StarRating value={riderRating} onChange={setRiderRating} />
             <textarea
               value={riderComment}
               onChange={(e) => setRiderComment(e.target.value)}
               rows={2}
               placeholder="Scrivi un commento (opzionale)…"
-              className="w-full mt-3 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+              className="w-full mt-3 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
             />
           </div>
         </div>
@@ -136,7 +137,7 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
       <button
         onClick={() => submit.mutate()}
         disabled={submit.isPending}
-        className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-3 rounded-xl font-bold"
+        className="w-full bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white py-3 rounded-xl font-bold"
       >
         {submit.isPending ? 'Invio…' : 'Invia recensione'}
       </button>

@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type ProfileForm = {
   full_name: string;
@@ -71,7 +72,7 @@ export default function ProfilePage() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
   if (error || !profile) {
     if (typeof window !== 'undefined') router.push('/sign-in');
     return null;
@@ -84,14 +85,14 @@ export default function ProfilePage() {
       {/* BANNER INVITA AMICI */}
       <Link
         href="/profile/referral"
-        className="block bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl p-5 mb-6 hover:shadow-lg transition-all"
+        className="block bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-xl p-5 mb-6 hover:shadow-lg transition-all"
       >
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="font-extrabold text-lg">🎁 Invita un amico, prendete €5 entrambi</p>
-            <p className="text-indigo-100 text-sm">Condividi il tuo codice referral</p>
+            <p className="text-primary-100 text-sm">Condividi il tuo codice referral</p>
           </div>
-          <span className="bg-white text-indigo-700 px-3 py-1.5 rounded-lg font-bold text-sm shrink-0">
+          <span className="bg-white text-primary-800 px-3 py-1.5 rounded-lg font-bold text-sm shrink-0">
             Scopri →
           </span>
         </div>
@@ -101,22 +102,22 @@ export default function ProfilePage() {
         <Link href="/orders" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">📦</div>
           <h3 className="font-bold">I tuoi ordini</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">Traccia e ripeti</p>
+          <p className="text-sm text-ink-500 hidden sm:block">Traccia e ripeti</p>
         </Link>
         <Link href="/favorites" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">♥</div>
           <h3 className="font-bold">Preferiti</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">I tuoi prodotti salvati</p>
+          <p className="text-sm text-ink-500 hidden sm:block">I tuoi prodotti salvati</p>
         </Link>
         <Link href="/profile/addresses" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">📍</div>
           <h3 className="font-bold">Indirizzi</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">Casa, ufficio…</p>
+          <p className="text-sm text-ink-500 hidden sm:block">Casa, ufficio…</p>
         </Link>
         <Link href="/profile/settings" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">⚙️</div>
           <h3 className="font-bold">Impostazioni</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">Password, notifiche, privacy</p>
+          <p className="text-sm text-ink-500 hidden sm:block">Password, notifiche, privacy</p>
         </Link>
       </div>
 
@@ -124,28 +125,28 @@ export default function ProfilePage() {
         <Link href="/groups" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">🤝</div>
           <h3 className="font-bold">Gruppi acquisto</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">Unisciti e risparmia</p>
+          <p className="text-sm text-ink-500 hidden sm:block">Unisciti e risparmia</p>
         </Link>
         <Link href="/faq" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">❓</div>
           <h3 className="font-bold">FAQ</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">Domande frequenti</p>
+          <p className="text-sm text-ink-500 hidden sm:block">Domande frequenti</p>
         </Link>
         <Link href="/help" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">💡</div>
           <h3 className="font-bold">Assistenza</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">Centro di aiuto</p>
+          <p className="text-sm text-ink-500 hidden sm:block">Centro di aiuto</p>
         </Link>
         <Link href="/contact" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
           <div className="text-3xl mb-2">✉️</div>
           <h3 className="font-bold">Contattaci</h3>
-          <p className="text-sm text-gray-500 hidden sm:block">Parla con noi</p>
+          <p className="text-sm text-ink-500 hidden sm:block">Parla con noi</p>
         </Link>
       </div>
 
       <div className="bg-white border rounded-lg p-6">
         <h2 className="text-lg font-bold mb-4">Dati personali</h2>
-        <p className="text-sm text-gray-500 mb-4">
+        <p className="text-sm text-ink-500 mb-4">
           Email: <span className="font-mono">{profile.email}</span>
         </p>
         <form
@@ -175,7 +176,7 @@ export default function ProfilePage() {
           <button
             type="submit"
             disabled={update.isPending}
-            className="sm:col-span-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-2 rounded transition-colors"
+            className="sm:col-span-2 bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white py-2 rounded transition-colors"
           >
             {update.isPending ? 'Salvataggio...' : 'Salva modifiche'}
           </button>

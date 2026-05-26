@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerProductsPage() {
   const qc = useQueryClient();
@@ -49,7 +50,7 @@ export default function SellerProductsPage() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="text-center py-8">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">
@@ -66,13 +67,13 @@ export default function SellerProductsPage() {
       </div>
 
       {products.length === 0 ? (
-        <div className="bg-white border rounded-lg p-12 text-center text-gray-500">
+        <div className="bg-white border rounded-lg p-12 text-center text-ink-500">
           Non hai ancora pubblicato prodotti.
         </div>
       ) : (
         <div className="bg-white border rounded-lg overflow-hidden overflow-x-auto">
           <table className="w-full text-sm min-w-[700px]">
-            <thead className="bg-gray-50 border-b">
+            <thead className="bg-cream-50 border-b">
               <tr>
                 <th className="text-left p-3">Prodotto</th>
                 <th className="text-left p-3">Categoria</th>
@@ -84,10 +85,10 @@ export default function SellerProductsPage() {
             </thead>
             <tbody>
               {products.map((p: any) => (
-                <tr key={p.id} className="border-t hover:bg-gray-50">
+                <tr key={p.id} className="border-t hover:bg-cream-50">
                   <td className="p-3">
                     <div className="flex items-center gap-3">
-                      <div className="relative w-12 h-12 bg-gray-100 rounded shrink-0">
+                      <div className="relative w-12 h-12 bg-cream-100 rounded shrink-0">
                         <Image
                           src={sizedImage(p.images?.[0] ?? 'https://placehold.co/100x100/eee/aaa?text=?', 'thumb')}
                           alt={p.name}
@@ -97,7 +98,7 @@ export default function SellerProductsPage() {
                           className="object-cover rounded"
                         />
                       </div>
-                      <Link href={`/product/${p.id}`} className="font-semibold hover:text-indigo-600">
+                      <Link href={`/product/${p.id}`} className="font-semibold hover:text-primary-700">
                         {p.name}
                       </Link>
                     </div>
@@ -107,9 +108,9 @@ export default function SellerProductsPage() {
                   <td className="p-3">{p.stock ?? 0}</td>
                   <td className="p-3">
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      p.status === 'available' ? 'bg-green-100 text-green-700' :
-                      p.status === 'sold'      ? 'bg-gray-200 text-gray-700' :
-                                                 'bg-yellow-100 text-yellow-700'
+                      p.status === 'available' ? 'bg-olive-100 text-olive-700' :
+                      p.status === 'sold'      ? 'bg-cream-200 text-ink-700' :
+                                                 'bg-accent-100 text-accent-700'
                     }`}>
                       {p.status === 'available' ? 'In vendita' : p.status === 'sold' ? 'Esaurito' : 'In approvazione'}
                     </span>
@@ -117,13 +118,13 @@ export default function SellerProductsPage() {
                   <td className="p-3 text-right space-x-2 whitespace-nowrap">
                     <Link
                       href={`/seller/products/${p.id}/edit`}
-                      className="text-indigo-600 hover:underline font-semibold"
+                      className="text-primary-700 hover:underline font-semibold"
                     >
                       Modifica
                     </Link>
                     <button
                       onClick={() => toggleStatus.mutate({ id: p.id, status: p.status })}
-                      className="text-gray-700 hover:underline"
+                      className="text-ink-700 hover:underline"
                     >
                       {p.status === 'available' ? 'Disattiva' : 'Attiva'}
                     </button>

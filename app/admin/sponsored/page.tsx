@@ -86,8 +86,8 @@ export default function AdminSponsoredPage() {
 
   const STATUS_BADGE: Record<Listing['status'], string> = {
     active: 'bg-olive-100 text-olive-800',
-    paused: 'bg-amber-100 text-amber-800',
-    ended: 'bg-gray-100 text-gray-600',
+    paused: 'bg-accent-100 text-accent-800',
+    ended: 'bg-cream-100 text-ink-600',
   };
 
   const totalSpent = listings.reduce((s, l) => s + l.spent_cents, 0);
@@ -183,7 +183,7 @@ export default function AdminSponsoredPage() {
                   </td>
                   <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
                     {l.status === 'active' && (
-                      <button onClick={() => setStatus.mutate({ id: l.id, status: 'paused' })} className="text-amber-700 hover:text-amber-800 text-xs font-semibold inline-flex items-center gap-1">
+                      <button onClick={() => setStatus.mutate({ id: l.id, status: 'paused' })} className="text-accent-700 hover:text-accent-800 text-xs font-semibold inline-flex items-center gap-1">
                         <Pause size={12} strokeWidth={2.4} /> Pausa
                       </button>
                     )}
