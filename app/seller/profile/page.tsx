@@ -8,6 +8,7 @@ import VendorForm, { VendorFormData } from '@/components/VendorForm';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function SellerProfilePage() {
   const qc = useQueryClient();
@@ -23,7 +24,7 @@ export default function SellerProfilePage() {
   };
 
   const { data: profile, isLoading } = useQuery({
-    queryKey: ['seller-profile'],
+    queryKey: queryKeys.seller.profile,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -50,11 +51,11 @@ export default function SellerProfilePage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['seller-profile'] });
-      qc.invalidateQueries({ queryKey: ['auth-profile'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.profile });
+      qc.invalidateQueries({ queryKey: queryKeys.profile.auth });
       toast.success('Profilo aggiornato!');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

@@ -7,6 +7,7 @@ import { Trophy, Lock, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Achievement = {
   id: string;
@@ -45,7 +46,7 @@ export default function AchievementsPage() {
   }, [router]);
 
   const { data: achievements = [] } = useQuery({
-    queryKey: ['achievements-all'],
+    queryKey: queryKeys.achievements.allList,
     queryFn: async (): Promise<Achievement[]> => {
       const { data } = await supabase
         .from('achievements')
@@ -57,7 +58,7 @@ export default function AchievementsPage() {
   });
 
   const { data: unlocked = new Set<string>() } = useQuery({
-    queryKey: ['user-achievements', userId],
+    queryKey: queryKeys.achievements.byUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async () => {
       const { data } = await supabase

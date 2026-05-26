@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type ProfileForm = {
   full_name: string;
@@ -33,7 +34,7 @@ export default function ProfilePage() {
   };
 
   const { data: profile, isLoading, error } = useQuery({
-    queryKey: ['my-profile'],
+    queryKey: queryKeys.profile.mine,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -67,10 +68,10 @@ export default function ProfilePage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['my-profile'] });
+      qc.invalidateQueries({ queryKey: queryKeys.profile.mine });
       toast.success('Profilo aggiornato!');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

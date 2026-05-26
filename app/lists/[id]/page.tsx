@@ -14,6 +14,7 @@ import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * /lists/[id] — Detail di una lista.
@@ -64,7 +65,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
   }, []);
 
   const { data: list } = useQuery({
-    queryKey: ['list', params.id],
+    queryKey: queryKeys.lists.detail(params.id),
     queryFn: async (): Promise<ListData | null> => {
       const { data } = await supabase
         .from('product_lists')
@@ -79,7 +80,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
   });
 
   const { data: items = [] } = useQuery({
-    queryKey: ['list-items', params.id],
+    queryKey: queryKeys.lists.items(params.id),
     queryFn: async (): Promise<Item[]> => {
       const { data } = await supabase
         .from('product_list_items')
@@ -113,9 +114,9 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
     onSuccess: () => {
       toast.success('Aggiornato');
       setEditTitle(false);
-      qc.invalidateQueries({ queryKey: ['list', params.id] });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const toggleVisibility = useMutation({
@@ -128,7 +129,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
     },
     onSuccess: () => {
       toast.success(list?.is_public ? 'Lista resa privata' : 'Lista resa pubblica');
-      qc.invalidateQueries({ queryKey: ['list', params.id] });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
     },
   });
 
@@ -142,7 +143,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['list-items', params.id] });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.items(params.id) });
     },
   });
 
@@ -156,7 +157,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['list-items', params.id] });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.items(params.id) });
     },
   });
 

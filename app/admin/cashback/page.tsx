@@ -9,6 +9,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Admin: Cashback Campaigns.
@@ -64,7 +65,7 @@ export default function AdminCashbackPage() {
   const [editing, setEditing] = useState<Partial<Campaign> | null>(null);
 
   const { data: campaigns = [] } = useQuery({
-    queryKey: ['admin-cashback'],
+    queryKey: queryKeys.admin.cashback,
     queryFn: async (): Promise<Campaign[]> => {
       const { data } = await supabase
         .from('cashback_campaigns')
@@ -99,9 +100,9 @@ export default function AdminCashbackPage() {
     onSuccess: () => {
       toast.success('Campagna salvata');
       setEditing(null);
-      qc.invalidateQueries({ queryKey: ['admin-cashback'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.cashback });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const setStatus = useMutation({
@@ -110,7 +111,7 @@ export default function AdminCashbackPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-cashback'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.cashback });
     },
   });
 
@@ -121,7 +122,7 @@ export default function AdminCashbackPage() {
     },
     onSuccess: () => {
       toast.success('Eliminata');
-      qc.invalidateQueries({ queryKey: ['admin-cashback'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.cashback });
     },
   });
 

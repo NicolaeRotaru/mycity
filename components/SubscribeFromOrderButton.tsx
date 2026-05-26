@@ -101,7 +101,7 @@ export default function SubscribeFromOrderButton({ orderId, sellerId, items, del
       toast.success(`Abbonamento creato! Riceverai ogni ${frequency === 'weekly' ? 'settimana' : frequency === 'biweekly' ? '2 settimane' : 'mese'}`);
       setOpen(false);
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   return (

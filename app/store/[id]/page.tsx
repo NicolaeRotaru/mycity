@@ -9,6 +9,7 @@ import { formatToday, isOpenNow, streetFromAddress, type StoreHours } from '@/li
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
+import { queryKeys } from '@/lib/queries/keys';
 
 const DAYS: { key: keyof StoreHours; label: string }[] = [
   { key: 'mon', label: 'Lunedì' },
@@ -26,7 +27,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
   const { id } = params;
 
   const { data: store, isLoading } = useQuery({
-    queryKey: ['store', id],
+    queryKey: queryKeys.stores.detail(id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
@@ -39,7 +40,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
   });
 
   const { data: reviews = [] } = useQuery({
-    queryKey: ['store-reviews', id],
+    queryKey: queryKeys.reviews.store(id),
     queryFn: async () => {
       const { data } = await supabase
         .from('store_reviews')

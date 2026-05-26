@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { useRouter } from 'next/navigation';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function SellerAnalyticsPage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function SellerAnalyticsPage() {
   }, [router]);
 
   const { data: analytics, isLoading } = useQuery({
-    queryKey: ['seller-analytics', userId],
+    queryKey: queryKeys.seller.analytics(userId ?? ''),
     enabled: !!userId,
     queryFn: async () => {
       const since30 = new Date(Date.now() - 30 * 86400000).toISOString();

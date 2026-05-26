@@ -28,6 +28,7 @@ import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -45,7 +46,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
 
   const { data: product, isLoading } = useQuery({
-    queryKey: ['product', id],
+    queryKey: queryKeys.products.detail(id),
     queryFn: async () => {
       const { data, error } = await supabase.from('products').select(`
         *, categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved )
@@ -56,7 +57,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   });
 
   const { data: reviews = [] } = useQuery({
-    queryKey: ['reviews', id],
+    queryKey: queryKeys.reviews.detail(id),
     queryFn: async () => {
       const { data, error } = await supabase.from('reviews')
         .select('id, rating, comment, created_at, user_id, photo_urls, verified_purchase').eq('product_id', id)
@@ -109,7 +110,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['reviews', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.reviews.detail(id) });
       setReviewComment('');
       setReviewRating(5);
       setReviewPhotos([]);

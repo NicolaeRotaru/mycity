@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Trophy, Medal, Crown, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Entry = {
   user_id: string;
@@ -22,7 +23,7 @@ function anonName(full: string | null, store: string | null): string {
 
 export default function ReferralLeaderboardPage() {
   const { data: entries = [], isLoading } = useQuery({
-    queryKey: ['referral-leaderboard'],
+    queryKey: queryKeys.referrals.leaderboard,
     queryFn: async (): Promise<Entry[]> => {
       const { data } = await supabase
         .from('referral_leaderboard')

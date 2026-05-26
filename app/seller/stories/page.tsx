@@ -45,7 +45,7 @@ export default function SellerStoriesPage() {
   const [uploading, setUploading] = useState(false);
 
   const { data: stories = [] } = useQuery({
-    queryKey: ['my-seller-stories'],
+    queryKey: queryKeys.seller.myStories,
     queryFn: async (): Promise<Story[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -93,10 +93,10 @@ export default function SellerStoriesPage() {
       setImage(null);
       setCaption('');
       setLinkUrl('');
-      qc.invalidateQueries({ queryKey: ['my-seller-stories'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.myStories });
       qc.invalidateQueries({ queryKey: queryKeys.seller.storiesActive });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
     onSettled: () => setUploading(false),
   });
 
@@ -107,10 +107,10 @@ export default function SellerStoriesPage() {
     },
     onSuccess: () => {
       toast.success('Storia rimossa');
-      qc.invalidateQueries({ queryKey: ['my-seller-stories'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.myStories });
       qc.invalidateQueries({ queryKey: queryKeys.seller.storiesActive });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   function hoursLeft(expiresAt: string): number {

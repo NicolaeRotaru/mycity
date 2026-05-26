@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type GiftCard = {
   code: string;
@@ -51,7 +52,7 @@ export default function GiftCardsPage() {
   }, [router]);
 
   const { data: cards = [] } = useQuery({
-    queryKey: ['gift-cards', userId],
+    queryKey: queryKeys.giftCards.byUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<GiftCard[]> => {
       const { data } = await supabase
@@ -83,10 +84,10 @@ export default function GiftCardsPage() {
     onSuccess: ({ code }) => {
       toast.success(`Gift card creata! Codice: ${code}`);
       setRecipientName(''); setRecipientEmail(''); setMessage('');
-      qc.invalidateQueries({ queryKey: ['gift-cards'] });
+      qc.invalidateQueries({ queryKey: queryKeys.giftCards.all });
       setTab('mine');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (!userId) return <LoadingState />;

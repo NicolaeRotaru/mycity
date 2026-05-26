@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Question = {
   id: string;
@@ -44,7 +45,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
   const [answerText, setAnswerText] = useState<Record<string, string>>({});
 
   const { data: questions = [], isLoading } = useQuery({
-    queryKey: ['qa', productId],
+    queryKey: queryKeys.qa.product(productId),
     queryFn: async (): Promise<Question[]> => {
       const { data, error } = await supabase
         .from('product_questions')
@@ -78,7 +79,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
     },
     onSuccess: () => {
       setText('');
-      qc.invalidateQueries({ queryKey: ['qa', productId] });
+      qc.invalidateQueries({ queryKey: queryKeys.qa.product(productId) });
       toast.success('Domanda inviata. Riceverai una notifica quando ti rispondono.');
     },
     onError: (err: any) => {
@@ -96,10 +97,10 @@ export default function ProductQA({ productId, sellerId }: Props) {
     },
     onSuccess: (_d, vars) => {
       setAnswerText((s) => ({ ...s, [vars.questionId]: '' }));
-      qc.invalidateQueries({ queryKey: ['qa', productId] });
+      qc.invalidateQueries({ queryKey: queryKeys.qa.product(productId) });
       toast.success('Risposta pubblicata!');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const isSellerOfThis = profile?.id === sellerId;

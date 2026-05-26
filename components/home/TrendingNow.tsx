@@ -7,6 +7,7 @@ import { TrendingUp, ArrowRight, Flame } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Trending = {
   product_id: string;
@@ -27,7 +28,7 @@ type Trending = {
  */
 export default function TrendingNow() {
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['trending-now'],
+    queryKey: queryKeys.home.trendingNow,
     queryFn: async (): Promise<Trending[]> => {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       // Aggreghiamo lato client: RPC sarebbe più elegante ma rischia di non

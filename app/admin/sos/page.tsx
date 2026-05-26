@@ -65,7 +65,7 @@ export default function AdminSOSPage() {
       toast.success('SOS risolto');
       qc.invalidateQueries({ queryKey: queryKeys.admin.sos });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const active = sosList.filter((s) => !s.resolved_at);

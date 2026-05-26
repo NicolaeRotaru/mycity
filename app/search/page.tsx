@@ -8,6 +8,7 @@ import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating';
 
@@ -23,7 +24,7 @@ function SearchInner() {
   const [sort, setSort] = useState<SortOption>('relevance');
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['all-categories'],
+    queryKey: queryKeys.categories.allList,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')

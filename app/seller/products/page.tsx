@@ -39,7 +39,7 @@ export default function SellerProductsPage() {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
       toast.success('Prodotto eliminato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const toggleStatus = useMutation({
@@ -49,7 +49,7 @@ export default function SellerProductsPage() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.seller.products }),
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

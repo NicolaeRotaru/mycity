@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Addr = {
   id: string;
@@ -36,7 +37,7 @@ export default function AddressesPage() {
   const [showForm, setShowForm] = useState(false);
 
   const { data: addresses = [], isLoading } = useQuery({
-    queryKey: ['addresses'],
+    queryKey: queryKeys.addresses.all,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -81,13 +82,13 @@ export default function AddressesPage() {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['addresses'] });
+      qc.invalidateQueries({ queryKey: queryKeys.addresses.all });
       setShowForm(false);
       setEditing(null);
       setForm(empty);
       toast.success('Indirizzo salvato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const remove = useMutation({
@@ -95,7 +96,7 @@ export default function AddressesPage() {
       await supabase.from('user_addresses').delete().eq('id', id);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['addresses'] });
+      qc.invalidateQueries({ queryKey: queryKeys.addresses.all });
       toast.success('Indirizzo eliminato');
     },
   });

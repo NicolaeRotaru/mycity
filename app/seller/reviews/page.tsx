@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Review = {
   id: string;
@@ -27,7 +28,7 @@ export default function SellerReviewsPage() {
   const [filter, setFilter] = useState<'all' | 5 | 4 | 3 | 2 | 1>('all');
 
   const { data: reviews = [], isLoading } = useQuery<Review[]>({
-    queryKey: ['seller-reviews'],
+    queryKey: queryKeys.seller.reviews,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');

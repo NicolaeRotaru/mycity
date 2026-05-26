@@ -86,10 +86,10 @@ export default function SellPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.profile.me });
-      qc.invalidateQueries({ queryKey: ['auth-profile'] });
+      qc.invalidateQueries({ queryKey: queryKeys.profile.auth });
       toast.success('Richiesta inviata! Ti contatteremo entro 48h.');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (profileLoading || isLoading) {

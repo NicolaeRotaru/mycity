@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { Modal } from '@/components/ui/Modal';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Dispute = {
   id: string;
@@ -49,7 +50,7 @@ export default function AdminDisputesPage() {
   const [refundEur, setRefundEur] = useState('');
 
   const { data: disputes = [], isLoading } = useQuery({
-    queryKey: ['admin-disputes', filter],
+    queryKey: queryKeys.admin.disputes2(filter),
     queryFn: async (): Promise<Dispute[]> => {
       let q = supabase
         .from('disputes')
@@ -85,13 +86,13 @@ export default function AdminDisputesPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-disputes'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.disputes2() });
       setOpenId(null);
       setResolution('');
       setRefundEur('');
       toast.success('Reclamo aggiornato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const detail = disputes.find((d) => d.id === openId);

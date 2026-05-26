@@ -99,7 +99,7 @@ export default function RiderDashboardPage() {
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

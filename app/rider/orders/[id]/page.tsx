@@ -63,7 +63,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
   const [verifyOpen, setVerifyOpen] = useState<'pickup' | 'delivery' | null>(null);
 
   const { data: order, isLoading } = useQuery({
-    queryKey: ['rider-order', id],
+    queryKey: queryKeys.rider.order(id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
@@ -94,11 +94,11 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       notify({ userId: order.user_id, title: ORDER_STATUS_LABEL[params.newStatus], body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/orders/${order.id}` });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rider-order', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('Stato aggiornato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   // Verifica codice pickup → server function (atomica + notifiche)
@@ -110,7 +110,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     if (error) return { ok: false, reason: error.message };
     const result = data as { ok: boolean; reason?: string };
     if (result.ok) {
-      qc.invalidateQueries({ queryKey: ['rider-order', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('✓ Ritiro confermato');
       setVerifyOpen(null);
@@ -127,7 +127,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     if (error) return { ok: false, reason: error.message };
     const result = data as { ok: boolean; reason?: string };
     if (result.ok) {
-      qc.invalidateQueries({ queryKey: ['rider-order', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('✓ Consegna confermata!');
       stopSharing();
@@ -389,7 +389,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
             <CashConfirmDialog
               orderId={order.id}
               expectedCents={Math.round(Number(order.total_price) * 100)}
-              onConfirmed={() => qc.invalidateQueries({ queryKey: ['rider-order', id] })}
+              onConfirmed={() => qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) })}
             />
           </div>
         )}

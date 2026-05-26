@@ -122,7 +122,7 @@ function AdminUsersPageInner() {
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
       toast.success('Venditore approvato e notificato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const reject = useMutation({
@@ -145,7 +145,7 @@ function AdminUsersPageInner() {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       toast.success('Richiesta rifiutata e notificata');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const reactivate = useMutation({
@@ -170,7 +170,7 @@ function AdminUsersPageInner() {
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
       toast.success('Negozio riattivato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const deleteAccount = useMutation({
@@ -191,7 +191,7 @@ function AdminUsersPageInner() {
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
       toast.success('Account eliminato definitivamente');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const suspend = useMutation({
@@ -214,7 +214,7 @@ function AdminUsersPageInner() {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       toast.success('Negozio sospeso');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const pendingCount = profiles.filter((p) => p.approval_status === 'pending' && p.role === 'seller').length;

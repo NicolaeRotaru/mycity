@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Category = { id: string; slug: string; name: string; icon: string | null };
 
@@ -30,7 +31,7 @@ const CategoriesDropdown = ({ className = '' }: Props) => {
   const rootRef = useRef<HTMLDivElement>(null);
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['top-categories'],
+    queryKey: queryKeys.categories.top,
     queryFn: fetchTopCategories,
   });
 
