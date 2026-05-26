@@ -13,6 +13,7 @@ const links = [
   { href: '/admin/events',         label: 'Eventi',         icon: '📅' },
   { href: '/admin/sponsored',      label: 'Sponsored',      icon: '📣' },
   { href: '/admin/cashback',       label: 'Cashback',       icon: '🪙' },
+  { href: '/admin/sos',            label: 'SOS Rider',      icon: '🆘' },
 ];
 
 const AdminSidebar = () => {

@@ -34,8 +34,9 @@ export async function generateMetadata(
     (store.store_description ?? `Compra online da ${name} su MyCity. Consegna locale 24-48h o ritiro in negozio.`).slice(0, 160);
   const img = store.store_logo ? [store.store_logo] : undefined;
 
+  const cityHint = store.store_address ? ' a Piacenza' : '';
   return {
-    title: `${name} · Negozio · MyCity`,
+    title: `${name}${cityHint} — Acquista online · MyCity Piacenza`,
     description: desc,
     openGraph: {
       title: name,

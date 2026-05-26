@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { trackProductViewed } from '@/lib/analytics/events';
 
 type Props = { productId: string };
 
@@ -19,6 +20,7 @@ export default function ProductViewTracker({ productId }: Props) {
     const key = `mc_viewed_${productId}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
+    trackProductViewed(productId);
 
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();

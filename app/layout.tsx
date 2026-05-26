@@ -12,6 +12,9 @@ import GoogleAnalytics from '@/components/GoogleAnalytics';
 import DailyCheckIn from '@/components/DailyCheckIn';
 import WelcomeCreditBanner from '@/components/WelcomeCreditBanner';
 import CartCrossDeviceSync from '@/components/CartCrossDeviceSync';
+import BuyerOnboardingTour from '@/components/BuyerOnboardingTour';
+import PostHogProvider from '@/lib/analytics/posthog';
+import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -75,6 +78,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <MobileTabBar />
           <DailyCheckIn />
           <CartCrossDeviceSync />
+          <BuyerOnboardingTour />
         </QueryProvider>
         <ToastProvider />
         <ConfirmDialogHost />
@@ -82,6 +86,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}>
           <GoogleAnalytics />
         </Suspense>
+        <Suspense fallback={null}>
+          <PostHogProvider />
+        </Suspense>
+        <SentryProvider />
       </body>
     </html>
   );

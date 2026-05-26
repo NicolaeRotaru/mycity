@@ -2,8 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { Heart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from '@/components/ProductCard';
+import EmptyState from '@/components/EmptyState';
 
 export default function FavoritesPage() {
   const { data: products = [], isLoading } = useQuery({
@@ -34,13 +36,16 @@ export default function FavoritesPage() {
 
   if (products.length === 0) {
     return (
-      <div className="container mx-auto p-8 text-center space-y-4">
-        <p className="text-5xl">♡</p>
-        <p className="text-gray-500 text-lg">Nessun preferito ancora.</p>
-        <p className="text-gray-400 text-sm">Tocca il cuoricino su un prodotto per salvarlo qui.</p>
-        <Link href="/" className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg">
-          Scopri i prodotti
-        </Link>
+      <div className="container mx-auto py-12 max-w-2xl">
+        <EmptyState
+          icon={Heart}
+          title="Nessun preferito ancora"
+          description="Tocca il cuoricino su un prodotto per salvarlo qui e ritrovarlo dopo."
+          ctaLabel="Esplora i prodotti"
+          ctaHref="/search"
+          secondaryLabel="Negozi vicini"
+          secondaryHref="/near"
+        />
       </div>
     );
   }

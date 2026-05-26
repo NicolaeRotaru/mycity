@@ -170,6 +170,16 @@ const Footer = () => {
             <li><Link href="/help" className="hover:text-white transition-colors">Centro assistenza</Link></li>
             <li><Link href="/faq" className="hover:text-white transition-colors">Domande frequenti</Link></li>
             <li><Link href="/contact" className="hover:text-white transition-colors">Contattaci</Link></li>
+            <li>
+              <a
+                href={`https://wa.me/${(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '393000000000').replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Ciao MyCity, ho una domanda')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-white transition-colors inline-flex items-center gap-1"
+              >
+                💬 WhatsApp Business
+              </a>
+            </li>
             <li><Link href="/shipping" className="hover:text-white transition-colors">Spedizioni</Link></li>
             <li><Link href="/returns" className="hover:text-white transition-colors">Resi e rimborsi</Link></li>
             {isAuthenticated && (
@@ -189,6 +199,7 @@ const Footer = () => {
             <li><Link href="/terms" className="hover:text-white transition-colors">Termini di servizio</Link></li>
             <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy policy</Link></li>
             <li><Link href="/cookies" className="hover:text-white transition-colors">Cookie policy</Link></li>
+            <li><Link href="/accessibility" className="hover:text-white transition-colors">Dichiarazione accessibilità</Link></li>
           </ul>
         </div>
       </div>

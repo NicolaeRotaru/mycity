@@ -53,6 +53,8 @@ export const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number
       });
     } catch { /* noop */ }
   }
+  // PostHog event (fire and forget)
+  import('@/lib/analytics/events').then((m) => m.trackAddToCart(item.id, qty, Math.round(item.price * 100))).catch(() => {});
 };
 
 export const removeFromCart = (id: string) => {
