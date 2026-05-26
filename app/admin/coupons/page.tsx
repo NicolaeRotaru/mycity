@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Coupon = {
   id: string;
@@ -44,7 +45,7 @@ export default function AdminCouponsPage() {
   const [form, setForm] = useState(empty);
 
   const { data: coupons = [], isLoading } = useQuery({
-    queryKey: ['admin-coupons'],
+    queryKey: queryKeys.admin.coupons,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('coupons')
@@ -71,19 +72,19 @@ export default function AdminCouponsPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-coupons'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.coupons });
       setShowForm(false);
       setForm(empty);
       toast.success('Coupon creato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const toggle = useMutation({
     mutationFn: async (c: Coupon) => {
       await supabase.from('coupons').update({ active: !c.active }).eq('id', c.id);
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-coupons'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.admin.coupons }),
   });
 
   const remove = useMutation({
@@ -91,7 +92,7 @@ export default function AdminCouponsPage() {
       await supabase.from('coupons').delete().eq('id', id);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-coupons'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.coupons });
       toast.success('Coupon eliminato');
     },
   });

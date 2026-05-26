@@ -38,7 +38,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
 
   // Carica il prodotto (con check di proprietà)
   const { data: product, isLoading, error } = useQuery({
-    queryKey: ['seller-product', id],
+    queryKey: queryKeys.seller.product(id),
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -56,7 +56,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
   });
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['cats-form'],
+    queryKey: queryKeys.categories.form,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
@@ -166,12 +166,12 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
-      qc.invalidateQueries({ queryKey: ['seller-product', id] });
-      qc.invalidateQueries({ queryKey: ['product', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.product(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.products.detail(id) });
       toast.success('Modifiche salvate');
       router.push('/seller/products');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const removeProduct = useMutation({
@@ -188,7 +188,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       toast.success('Prodotto eliminato');
       router.push('/seller/products');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

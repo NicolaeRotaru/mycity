@@ -8,6 +8,7 @@ import { useProfile } from '@/components/hooks/useProfile';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
 import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 
 export default function SellerDashboard() {
@@ -169,9 +170,7 @@ export default function SellerDashboard() {
       <div className="bg-white border rounded-xl p-6">
         <h2 className="font-bold mb-4">Azioni rapide</h2>
         <div className="flex flex-wrap gap-3">
-          <Link href="/seller/products/new" className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2.5 rounded-lg font-semibold">
-            ➕ Aggiungi prodotto
-          </Link>
+          <Button href="/seller/products/new">➕ Aggiungi prodotto</Button>
           <Link href="/seller/orders" className="bg-white border-2 hover:border-primary-400 px-4 py-2.5 rounded-lg font-semibold">
             📦 Gestisci ordini
           </Link>

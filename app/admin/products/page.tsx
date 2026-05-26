@@ -51,7 +51,7 @@ export default function AdminProductsPage() {
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
       toast.success('Prodotto eliminato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const filtered = products.filter((p) => {

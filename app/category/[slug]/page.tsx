@@ -5,12 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid from '@/components/ProductGrid';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function CategoryPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
 
   const { data: category, isLoading } = useQuery({
-    queryKey: ['category', slug],
+    queryKey: queryKeys.categories.bySlug(slug),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
@@ -23,7 +24,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
   });
 
   const { data: subcategories = [] } = useQuery({
-    queryKey: ['subcategories', category?.id],
+    queryKey: [...queryKeys.categories.all, 'sub', category?.id],
     queryFn: async () => {
       if (!category) return [];
       const { data, error } = await supabase

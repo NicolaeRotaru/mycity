@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Promo = {
   id: string;
@@ -67,7 +68,7 @@ export default function SellerPromotionsPage() {
   }, [router]);
 
   const { data: promos = [] } = useQuery({
-    queryKey: ['seller-promotions', userId],
+    queryKey: queryKeys.seller.promotionsByUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<Promo[]> => {
       const { data } = await supabase
@@ -93,10 +94,10 @@ export default function SellerPromotionsPage() {
     },
     onSuccess: () => {
       toast.success('Promozione creata! È già attiva e visibile ai buyer.');
-      qc.invalidateQueries({ queryKey: ['seller-promotions'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.promotions });
       setShowWizard(false);
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const cancel = useMutation({
@@ -106,7 +107,7 @@ export default function SellerPromotionsPage() {
     },
     onSuccess: () => {
       toast.success('Promo cancellata');
-      qc.invalidateQueries({ queryKey: ['seller-promotions'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.promotions });
     },
   });
 

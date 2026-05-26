@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -110,12 +111,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             La tua candidatura come venditore non è stata approvata. Puoi correggere i dati e ripresentare la richiesta.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Link href="/sell" className="bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-bold shadow">
-              ✏️ Ripresenta la richiesta
-            </Link>
-            <Link href="/?as=buyer" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
-              🏠 Vai al marketplace
-            </Link>
+            <Button href="/sell">✏️ Ripresenta la richiesta</Button>
+            <Button href="/?as=buyer" variant="secondary">🏠 Vai al marketplace</Button>
           </div>
         </div>
       </div>
@@ -135,15 +132,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             il nostro team avrà approvato la richiesta (entro 48 ore lavorative).
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Link href="/sell" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
-              ✏️ Modifica richiesta
-            </Link>
-            <Link href="/?as=buyer" className="bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold">
-              🏠 Vai al marketplace
-            </Link>
-            <Link href="/contact" className="bg-white border-2 hover:border-primary-400 px-5 py-2.5 rounded-lg font-semibold">
-              ✉️ Contatti
-            </Link>
+            <Button href="/sell" variant="secondary">✏️ Modifica richiesta</Button>
+            <Button href="/?as=buyer">🏠 Vai al marketplace</Button>
+            <Button href="/contact" variant="secondary">✉️ Contatti</Button>
           </div>
         </div>
       </div>
@@ -154,9 +145,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     return (
       <div className="container mx-auto p-8 text-center">
         <p className="text-ink-500 text-lg">Accesso riservato ai venditori approvati.</p>
-        <Link href="/sell" className="mt-4 inline-block bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold">
-          Invia richiesta
-        </Link>
+        <div className="mt-4"><Button href="/sell">Invia richiesta</Button></div>
       </div>
     );
   }

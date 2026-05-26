@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from './StorePreviewCard';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Store = StoreCardData;
 type ProductLite = ProductPreview & { seller_id: string };
@@ -54,7 +55,7 @@ const fetchShowcase = async () => {
 
 const StoreShowcase = () => {
   const { data } = useQuery({
-    queryKey: ['stores-showcase-v2'],
+    queryKey: queryKeys.stores.showcase,
     queryFn: fetchShowcase,
     staleTime: 60_000,
   });

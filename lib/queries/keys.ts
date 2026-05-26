@@ -26,6 +26,8 @@ export const queryKeys = {
     detail:  (id: string)    => [...queryKeys.orders.details(), id] as const,
     sellerOrder: (id: string)=> [...queryKeys.orders.all, 'seller', id] as const,
     riderOrder:  (id: string)=> [...queryKeys.orders.all, 'rider', id] as const,
+    deliveryCode: (id: string) => ['delivery-code', id] as const,
+    forReview: (id: string)  => ['order-for-review', id] as const,
   },
 
   products: {
@@ -44,6 +46,9 @@ export const queryKeys = {
     detail:  (id: string)    => [...queryKeys.stores.all, id] as const,
     nearby:  (lat: number, lng: number) =>
                               [...queryKeys.stores.all, 'nearby', lat, lng] as const,
+    page:                    ['stores', 'page-v4'] as const,
+    showcase:                ['stores', 'showcase-v2'] as const,
+    nearV2:                  ['near-stores-v2'] as const,
   },
 
   cart: {
@@ -59,6 +64,7 @@ export const queryKeys = {
   profile: {
     all:                     ['profile'] as const,
     me:                      ['profile', 'me'] as const,
+    mine:                    ['profile', 'mine'] as const,
     byId:    (id: string)    => ['profile', 'detail', id] as const,
     auth:                    ['profile', 'auth'] as const,
   },
@@ -73,17 +79,27 @@ export const queryKeys = {
     all:                     ['messages'] as const,
     unread:                  ['messages', 'unread'] as const,
     conversation: (id: string) => ['messages', 'conversation', id] as const,
+    byParam: (id: string)    => ['messages', id] as const,
   },
 
   loyalty: {
     all:                     ['loyalty'] as const,
     account:                 ['loyalty', 'account'] as const,
     transactions:            ['loyalty', 'transactions'] as const,
+    accountByUser: (uid: string) => ['loyalty', 'account', uid] as const,
+    txsByUser:     (uid: string) => ['loyalty', 'txs', uid] as const,
   },
 
-  achievements: {
-    all:                     ['achievements'] as const,
-    mine:                    ['achievements', 'mine'] as const,
+  giftCards: {
+    all:                     ['gift-cards'] as const,
+    byUser:  (uid: string)   => ['gift-cards', uid] as const,
+  },
+
+  referrals: {
+    all:                     ['referrals'] as const,
+    mine:                    ['my-referral'] as const,
+    stats:   (code: string)  => ['referral-stats', code] as const,
+    leaderboard:             ['referral-leaderboard'] as const,
   },
 
   admin: {
@@ -103,16 +119,28 @@ export const queryKeys = {
     shopOfMonth: (month: string) => ['admin', 'shop-of-month', month] as const,
     shopOfMonthLeaderboard:  ['admin', 'shop-of-month', 'leaderboard'] as const,
     approvedSellers:         ['admin', 'approved-sellers'] as const,
+    cashback:                ['admin', 'cashback'] as const,
+    coupons:                 ['admin', 'coupons'] as const,
+    orders:                  ['admin', 'orders'] as const,
+    disputes2: (filter?: string) => ['admin', 'disputes', filter ?? 'all'] as const,
   },
 
   seller: {
     all:                     ['seller'] as const,
     stats:                   ['seller', 'stats'] as const,
     products:                ['seller', 'products'] as const,
+    product: (id: string)    => ['seller', 'product', id] as const,
     orders:                  ['seller', 'orders'] as const,
     order:   (id: string)    => ['seller', 'order', id] as const,
     customers:               ['seller', 'customers'] as const,
     earnings:                ['seller', 'earnings'] as const,
+    profile:                 ['seller', 'profile'] as const,
+    promotions:              ['seller', 'promotions'] as const,
+    promotionsByUser: (uid: string) => ['seller', 'promotions', uid] as const,
+    analytics: (uid: string) => ['seller', 'analytics', uid] as const,
+    reviews:                 ['seller', 'reviews'] as const,
+    pickupCode: (orderId: string) => ['seller', 'pickup-code', orderId] as const,
+    myStories:               ['seller', 'my-stories'] as const,
     storiesActive:           ['seller', 'stories', 'active'] as const,
     onboardingChecklist: (uid: string) =>
                               ['seller', 'onboarding', uid] as const,
@@ -125,6 +153,64 @@ export const queryKeys = {
     earnings:                ['rider', 'earnings'] as const,
     orders:                  ['rider', 'orders'] as const,
     activeOrder:             ['rider', 'active-order'] as const,
+    order:   (id: string)    => ['rider', 'order', id] as const,
+    profile:                 ['rider', 'profile'] as const,
+  },
+
+  groups: {
+    all:                     ['groups'] as const,
+    detail:  (id: string)    => ['groups', 'detail', id] as const,
+    participation: (id: string) => ['groups', 'participation', id] as const,
+    order:   (id: string)    => ['groups', 'order', id] as const,
+  },
+
+  qa: {
+    all:                     ['qa'] as const,
+    product: (productId: string) => ['qa', productId] as const,
+  },
+
+  addresses: {
+    all:                     ['addresses'] as const,
+    byUser:  (uid: string)   => ['addresses', uid] as const,
+  },
+
+  reviews: {
+    all:                     ['reviews'] as const,
+    detail:  (id: string)    => ['reviews', id] as const,
+    store:   (id: string)    => ['reviews', 'store', id] as const,
+  },
+
+  events: {
+    all:                     ['events'] as const,
+    public:                  ['events', 'public'] as const,
+    rsvpCounts:              ['events', 'rsvp-counts'] as const,
+  },
+
+  shopOfMonth: {
+    current:                 ['shop-of-month', 'current'] as const,
+    leaderboard:             ['shop-of-month', 'leaderboard'] as const,
+    page:                    ['shop-of-month-page'] as const,
+  },
+
+  categories: {
+    all:                     ['categories'] as const,
+    allList:                 ['all-categories'] as const,
+    top:                     ['categories', 'top'] as const,
+    sub:     (id: string)    => ['categories', 'sub', id] as const,
+    form:                    ['categories', 'form'] as const,
+    bySlug:  (slug: string)  => ['category', slug] as const,
+  },
+
+  subscriptions: {
+    all:                     ['subscriptions'] as const,
+    byUser:  (uid: string)   => ['subscriptions', uid] as const,
+  },
+
+  achievements: {
+    all:                     ['achievements'] as const,
+    allList:                 ['achievements-all'] as const,
+    mine:                    ['achievements', 'mine'] as const,
+    byUser:  (uid: string)   => ['achievements', uid] as const,
   },
 
   home: {
@@ -134,6 +220,7 @@ export const queryKeys = {
     drop:                    ['home', 'drop'] as const,
     storyOfDay: (date: string)=> ['home', 'story-of-day', date] as const,
     trending:                ['home', 'trending'] as const,
+    trendingNow:             ['home', 'trending-now'] as const,
     sponsored: (placement: string, categorySlug?: string) =>
                               ['home', 'sponsored', placement, categorySlug ?? null] as const,
   },
@@ -142,8 +229,11 @@ export const queryKeys = {
     all:                     ['lists'] as const,
     public:                  ['lists', 'public'] as const,
     featured:                ['lists', 'featured'] as const,
+    featuredV2:              ['lists-featured'] as const,
     mine:                    ['lists', 'mine'] as const,
+    mineMin:                 ['lists', 'mine-min'] as const,
     detail:  (id: string)    => ['lists', 'detail', id] as const,
     items:   (id: string)    => ['lists', 'items', id] as const,
+    containing: (productId: string) => ['lists', 'containing', productId] as const,
   },
 } as const;

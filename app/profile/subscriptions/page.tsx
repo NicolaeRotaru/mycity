@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Subscription = {
   id: string;
@@ -46,7 +47,7 @@ export default function SubscriptionsPage() {
   }, [router]);
 
   const { data: subs = [] } = useQuery({
-    queryKey: ['subscriptions', userId],
+    queryKey: queryKeys.subscriptions.byUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<Subscription[]> => {
       const { data } = await supabase
@@ -64,7 +65,7 @@ export default function SubscriptionsPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['subscriptions'] });
+      qc.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
       toast.success('Aggiornato');
     },
   });

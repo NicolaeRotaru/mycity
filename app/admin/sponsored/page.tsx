@@ -70,9 +70,9 @@ export default function AdminSponsoredPage() {
     },
     onSuccess: () => {
       toast.success('Aggiornato');
-      qc.invalidateQueries({ queryKey: ['admin-sponsored'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'sponsored'] });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const del = useMutation({
@@ -82,9 +82,9 @@ export default function AdminSponsoredPage() {
     },
     onSuccess: () => {
       toast.success('Eliminato');
-      qc.invalidateQueries({ queryKey: ['admin-sponsored'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'sponsored'] });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const STATUS_BADGE: Record<Listing['status'], string> = {

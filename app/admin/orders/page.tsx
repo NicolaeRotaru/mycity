@@ -11,6 +11,7 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Row = {
   id: string;
@@ -29,7 +30,7 @@ export default function AdminOrdersPage() {
   const [filter, setFilter] = useState<typeof FILTERS[number]>('all');
 
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['admin-orders'],
+    queryKey: queryKeys.admin.orders,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import Honeypot from '@/components/Honeypot';
 import { friendlyError } from '@/lib/errors';
+import { Button } from '@/components/ui/Button';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
@@ -127,13 +128,9 @@ export default function ContactPage() {
             <p className="text-xs text-ink-500">
               Inviando il messaggio accetti la nostra <Link href="/privacy" className="text-primary-700 underline">Privacy Policy</Link>.
             </p>
-            <button
-              type="submit"
-              disabled={sending}
-              className="w-full bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white py-3 rounded-lg font-bold transition-colors"
-            >
+            <Button type="submit" loading={sending} fullWidth size="lg">
               {sending ? 'Invio in corso...' : '✉️ Invia messaggio'}
-            </button>
+            </Button>
           </form>
         </div>
 

@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
+import { queryKeys } from '@/lib/queries/keys';
 
 const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
   <div className="flex gap-1">
@@ -36,7 +37,7 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
   const [riderComment, setRiderComment] = useState('');
 
   const { data: order, isLoading } = useQuery({
-    queryKey: ['order-for-review', id],
+    queryKey: queryKeys.orders.forReview(id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
@@ -83,7 +84,7 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
       toast.success('Grazie per la recensione! 🌟');
       router.push(`/orders/${id}`);
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

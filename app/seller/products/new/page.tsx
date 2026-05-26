@@ -15,6 +15,7 @@ import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
@@ -33,7 +34,7 @@ export default function NewProductPage() {
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
 
   const { data: categories = [] } = useQuery({
-    queryKey: ['cats-form'],
+    queryKey: queryKeys.categories.form,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')
@@ -159,7 +160,7 @@ export default function NewProductPage() {
       toast.success('Prodotto pubblicato!');
       router.push('/seller/products');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   return (

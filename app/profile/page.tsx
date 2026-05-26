@@ -8,7 +8,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type ProfileForm = {
   full_name: string;
@@ -33,7 +35,7 @@ export default function ProfilePage() {
   };
 
   const { data: profile, isLoading, error } = useQuery({
-    queryKey: ['my-profile'],
+    queryKey: queryKeys.profile.mine,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -67,10 +69,10 @@ export default function ProfilePage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['my-profile'] });
+      qc.invalidateQueries({ queryKey: queryKeys.profile.mine });
       toast.success('Profilo aggiornato!');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;
@@ -174,13 +176,11 @@ export default function ProfilePage() {
             <label className="block text-sm font-medium mb-1">Città</label>
             <input {...register('city')} className="w-full border p-2 rounded" />
           </div>
-          <button
-            type="submit"
-            disabled={update.isPending}
-            className="sm:col-span-2 bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white py-2 rounded transition-colors"
-          >
-            {update.isPending ? 'Salvataggio...' : 'Salva modifiche'}
-          </button>
+          <div className="sm:col-span-2">
+            <Button type="submit" loading={update.isPending} fullWidth>
+              Salva modifiche
+            </Button>
+          </div>
         </form>
       </div>
 

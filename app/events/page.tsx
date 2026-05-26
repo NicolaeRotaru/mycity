@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Pagina Eventi MyCity — mercatino virtuale settimanale, flash sale, lancio prodotto.
@@ -71,7 +72,7 @@ export default function EventsPage() {
   }, []);
 
   const { data: events = [], isLoading } = useQuery({
-    queryKey: ['events-public'],
+    queryKey: queryKeys.events.public,
     queryFn: async (): Promise<EventRow[]> => {
       const { data } = await supabase
         .from('marketplace_events')
@@ -105,13 +106,13 @@ export default function EventsPage() {
     },
     onSuccess: (going) => {
       toast.success(going ? 'Ci sei! Ti ricorderemo l\'evento.' : 'Cancellazione confermata');
-      qc.invalidateQueries({ queryKey: ['events-public'] });
+      qc.invalidateQueries({ queryKey: queryKeys.events.public });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const { data: rsvpCounts = {} } = useQuery({
-    queryKey: ['events-rsvp-counts'],
+    queryKey: queryKeys.events.rsvpCounts,
     queryFn: async (): Promise<Record<string, number>> => {
       const { data } = await supabase.from('event_rsvps').select('event_id');
       const counts: Record<string, number> = {};

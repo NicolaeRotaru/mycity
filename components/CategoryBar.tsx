@@ -9,6 +9,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Category = { id: string; slug: string; name: string; icon: string | null };
 
@@ -53,7 +54,7 @@ const fetchTopCategories = async (): Promise<Category[]> => {
 const CategoryBar = () => {
   const pathname = usePathname() ?? '';
   const { data: categories = [] } = useQuery({
-    queryKey: ['top-categories'],
+    queryKey: queryKeys.categories.top,
     queryFn: fetchTopCategories,
   });
 

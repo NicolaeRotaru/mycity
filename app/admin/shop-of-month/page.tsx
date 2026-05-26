@@ -102,9 +102,9 @@ export default function AdminShopOfMonthPage() {
     onSuccess: () => {
       toast.success('Negozio del mese aggiornato');
       qc.invalidateQueries({ queryKey: queryKeys.admin.shopOfMonth(firstOfMonth) });
-      qc.invalidateQueries({ queryKey: ['shop-of-month-current'] });
+      qc.invalidateQueries({ queryKey: queryKeys.shopOfMonth.current });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   return (

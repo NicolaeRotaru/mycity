@@ -7,7 +7,9 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Addr = {
   id: string;
@@ -36,7 +38,7 @@ export default function AddressesPage() {
   const [showForm, setShowForm] = useState(false);
 
   const { data: addresses = [], isLoading } = useQuery({
-    queryKey: ['addresses'],
+    queryKey: queryKeys.addresses.all,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -81,13 +83,13 @@ export default function AddressesPage() {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['addresses'] });
+      qc.invalidateQueries({ queryKey: queryKeys.addresses.all });
       setShowForm(false);
       setEditing(null);
       setForm(empty);
       toast.success('Indirizzo salvato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const remove = useMutation({
@@ -95,7 +97,7 @@ export default function AddressesPage() {
       await supabase.from('user_addresses').delete().eq('id', id);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['addresses'] });
+      qc.invalidateQueries({ queryKey: queryKeys.addresses.all });
       toast.success('Indirizzo eliminato');
     },
   });
@@ -172,12 +174,10 @@ export default function AddressesPage() {
             <span>Imposta come indirizzo predefinito</span>
           </label>
           <div className="flex gap-2">
-            <button type="submit" disabled={save.isPending} className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded font-semibold">
-              {save.isPending ? 'Salvataggio…' : 'Salva'}
-            </button>
-            <button type="button" onClick={() => { setShowForm(false); setEditing(null); }} className="text-ink-600 hover:text-ink-900 px-3">
+            <Button type="submit" loading={save.isPending}>Salva</Button>
+            <Button variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>
               Annulla
-            </button>
+            </Button>
           </div>
         </form>
       )}

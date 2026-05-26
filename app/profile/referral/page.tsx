@@ -7,12 +7,13 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
-    queryKey: ['my-referral'],
+    queryKey: queryKeys.referrals.mine,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -26,7 +27,7 @@ export default function ReferralPage() {
   });
 
   const { data: stats } = useQuery({
-    queryKey: ['referral-stats', profile?.referral_code],
+    queryKey: queryKeys.referrals.stats(profile?.referral_code ?? ''),
     enabled: !!profile?.referral_code,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();

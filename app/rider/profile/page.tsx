@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function RiderProfilePage() {
   const qc = useQueryClient();
@@ -14,7 +15,7 @@ export default function RiderProfilePage() {
   const [signingOut, setSigningOut] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
-    queryKey: ['rider-profile'],
+    queryKey: queryKeys.rider.profile,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -42,11 +43,11 @@ export default function RiderProfilePage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['rider-profile'] });
-      qc.invalidateQueries({ queryKey: ['auth-profile'] });
+      qc.invalidateQueries({ queryKey: queryKeys.rider.profile });
+      qc.invalidateQueries({ queryKey: queryKeys.profile.auth });
       toast.success('Profilo aggiornato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const handleSignOut = async () => {

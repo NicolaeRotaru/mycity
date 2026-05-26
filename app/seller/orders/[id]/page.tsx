@@ -70,7 +70,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
 
   // Codice ritiro: visibile solo al seller (RLS lo limita ai propri ordini)
   const { data: pickupCode } = useQuery({
-    queryKey: ['pickup-code', id],
+    queryKey: queryKeys.seller.pickupCode(id),
     enabled: !!order && ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status),
     queryFn: async () => {
       const { data } = await supabase
@@ -97,7 +97,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
       toast.success('Ordine rifiutato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const transition = useMutation({
@@ -124,7 +124,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
       toast.success('Stato aggiornato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

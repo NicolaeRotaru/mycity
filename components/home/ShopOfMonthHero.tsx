@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Crown, ArrowRight, Vote } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Hero "Negozio del mese" in home.
@@ -23,7 +24,7 @@ import { sizedImage } from '@/lib/image-url';
  */
 export default function ShopOfMonthHero() {
   const { data: pick, isLoading } = useQuery({
-    queryKey: ['shop-of-month-current'],
+    queryKey: queryKeys.shopOfMonth.current,
     queryFn: async () => {
       const firstOfMonth = new Date();
       firstOfMonth.setDate(1);

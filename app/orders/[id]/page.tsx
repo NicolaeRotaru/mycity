@@ -138,7 +138,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
   const showDeliveryCode = status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY';
 
   const { data: deliveryCode } = useQuery({
-    queryKey: ['delivery-code', id],
+    queryKey: queryKeys.orders.deliveryCode(id),
     enabled: showDeliveryCode,
     queryFn: async () => {
       const { data } = await supabase
@@ -165,7 +165,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
       qc.invalidateQueries({ queryKey: queryKeys.orders.all });
       toast.success('Ordine annullato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

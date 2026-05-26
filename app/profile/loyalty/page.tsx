@@ -15,6 +15,7 @@ import {
   POINTS_REDEEM_RATE,
   type LoyaltyAccount,
 } from '@/lib/loyalty';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Tx = { id: string; delta: number; reason: string; created_at: string };
 
@@ -44,13 +45,13 @@ export default function LoyaltyPage() {
   }, [router]);
 
   const { data: account } = useQuery<LoyaltyAccount | null>({
-    queryKey: ['loyalty-account', userId],
+    queryKey: queryKeys.loyalty.accountByUser(userId ?? ''),
     enabled: !!userId,
     queryFn: () => fetchLoyaltyAccount(),
   });
 
   const { data: txs = [] } = useQuery<Tx[]>({
-    queryKey: ['loyalty-txs', userId],
+    queryKey: queryKeys.loyalty.txsByUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async () => {
       const { data } = await supabase

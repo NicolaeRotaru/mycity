@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { useEffect, useState } from 'react';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Pagina "Negozio del mese" — hero del pick attuale + voto democratico.
@@ -75,7 +76,7 @@ export default function ShopOfMonthPage() {
   }, [firstOfMonth]);
 
   const { data: pick } = useQuery({
-    queryKey: ['shop-of-month-page'],
+    queryKey: queryKeys.shopOfMonth.page,
     queryFn: async () => {
       const { data } = await supabase
         .from('shop_of_month')
@@ -90,7 +91,7 @@ export default function ShopOfMonthPage() {
   });
 
   const { data: leaderboard = [] } = useQuery({
-    queryKey: ['shop-of-month-leaderboard'],
+    queryKey: queryKeys.shopOfMonth.leaderboard,
     queryFn: async (): Promise<LeaderboardRow[]> => {
       const { data } = await supabase
         .from('shop_of_month_leaderboard')
@@ -114,9 +115,9 @@ export default function ShopOfMonthPage() {
     },
     onSuccess: () => {
       toast.success('Voto registrato — grazie!');
-      qc.invalidateQueries({ queryKey: ['shop-of-month-leaderboard'] });
+      qc.invalidateQueries({ queryKey: queryKeys.shopOfMonth.leaderboard });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   return (

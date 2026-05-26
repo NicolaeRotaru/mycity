@@ -10,6 +10,7 @@ import { formatPrice } from '@/lib/format';
 import { useProfile } from '@/components/hooks/useProfile';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type GroupOrder = {
   id: string;
@@ -45,7 +46,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
   const { isAuthenticated } = useProfile();
 
   const { data: group, isLoading, refetch } = useQuery({
-    queryKey: ['group-order', id],
+    queryKey: queryKeys.groups.order(id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('group_orders')
@@ -76,7 +77,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
   }, [id, refetch]);
 
   const { data: myParticipation } = useQuery({
-    queryKey: ['my-group-participation', id],
+    queryKey: queryKeys.groups.participation(id),
     enabled: isAuthenticated,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -106,8 +107,8 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['group-order', id] });
-      qc.invalidateQueries({ queryKey: ['my-group-participation', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.order(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.participation(id) });
       toast.success('🎉 Sei nel gruppo! Quando si raggiunge il target verrai contattato.');
     },
     onError: (err: any) => {
@@ -126,8 +127,8 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
         .eq('user_id', user.id);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['group-order', id] });
-      qc.invalidateQueries({ queryKey: ['my-group-participation', id] });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.order(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.groups.participation(id) });
       toast.success('Hai abbandonato il gruppo');
     },
   });

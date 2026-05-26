@@ -16,6 +16,7 @@ import { haversineKm, riderFee } from '@/lib/geo';
 import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 
 type AddressForm = {
@@ -443,9 +444,7 @@ export default function CheckoutPage() {
     return (
       <div className="container mx-auto p-12 text-center space-y-4">
         <p className="text-ink-500 text-lg">Il tuo carrello è vuoto.</p>
-        <Link href="/" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-6 py-2 rounded-lg">
-          Torna al negozio
-        </Link>
+        <Button href="/">Torna al negozio</Button>
       </div>
     );
   }

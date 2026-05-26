@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * /lists — Liste curate (tastemakers).
@@ -41,7 +42,7 @@ export default function ListsPage() {
   const [newDesc, setNewDesc] = useState('');
 
   const { data: featuredLists = [] } = useQuery({
-    queryKey: ['lists-featured'],
+    queryKey: queryKeys.lists.featuredV2,
     queryFn: async (): Promise<List[]> => {
       const { data } = await supabase
         .from('product_lists')
@@ -76,7 +77,7 @@ export default function ListsPage() {
   });
 
   const { data: myLists = [] } = useQuery({
-    queryKey: ['lists-mine'],
+    queryKey: queryKeys.lists.mine,
     queryFn: async (): Promise<List[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
@@ -114,10 +115,10 @@ export default function ListsPage() {
       toast.success('Lista creata');
       setShowNew(false);
       setNewTitle(''); setNewDesc(''); setNewEmoji('⭐');
-      qc.invalidateQueries({ queryKey: ['lists-mine'] });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
       window.location.href = `/lists/${id}`;
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const ListCard = ({ list }: { list: List }) => {

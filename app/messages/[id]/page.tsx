@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Message = {
   id: string;
@@ -81,7 +82,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
   });
 
   const { data: messages = [] } = useQuery({
-    queryKey: ['messages', params.id],
+    queryKey: queryKeys.messages.byParam(params.id),
     enabled: !!userId,
     queryFn: async (): Promise<Message[]> => {
       const { data, error } = await supabase
@@ -154,9 +155,9 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
       setText('');
       // Niente refetch: il Realtime ci aggiorna; ma se per qualche motivo
       // non arriva subito, invalida dopo 1s come safety net.
-      setTimeout(() => qc.invalidateQueries({ queryKey: ['messages', params.id] }), 1000);
+      setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.messages.byParam(params.id) }), 1000);
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const handleSend = (e: React.FormEvent) => {

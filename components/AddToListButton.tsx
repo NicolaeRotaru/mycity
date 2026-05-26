@@ -6,6 +6,7 @@ import { ListChecks, Plus, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Pulsante "Aggiungi a lista" sulle product page.
@@ -24,7 +25,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
   const [newListTitle, setNewListTitle] = useState('');
 
   const { data: lists = [] } = useQuery({
-    queryKey: ['lists-mine-min'],
+    queryKey: queryKeys.lists.mineMin,
     enabled: open,
     queryFn: async (): Promise<List[]> => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -39,7 +40,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
   });
 
   const { data: inLists = [] } = useQuery({
-    queryKey: ['lists-containing', productId],
+    queryKey: queryKeys.lists.containing(productId),
     enabled: open,
     queryFn: async (): Promise<string[]> => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -76,10 +77,10 @@ export default function AddToListButton({ productId }: { productId: string }) {
     },
     onSuccess: (added) => {
       toast.success(added ? 'Aggiunto alla lista' : 'Rimosso dalla lista');
-      qc.invalidateQueries({ queryKey: ['lists-containing', productId] });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId) });
       qc.invalidateQueries({ queryKey: ['list-items'] });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const createAndAdd = useMutation({
@@ -101,10 +102,10 @@ export default function AddToListButton({ productId }: { productId: string }) {
     onSuccess: () => {
       toast.success('Lista creata e prodotto aggiunto');
       setNewListTitle('');
-      qc.invalidateQueries({ queryKey: ['lists-mine-min'] });
-      qc.invalidateQueries({ queryKey: ['lists-containing', productId] });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.mineMin });
+      qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId) });
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   return (

@@ -10,6 +10,8 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
+import { queryKeys } from '@/lib/queries/keys';
 
 type GiftCard = {
   code: string;
@@ -51,7 +53,7 @@ export default function GiftCardsPage() {
   }, [router]);
 
   const { data: cards = [] } = useQuery({
-    queryKey: ['gift-cards', userId],
+    queryKey: queryKeys.giftCards.byUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<GiftCard[]> => {
       const { data } = await supabase
@@ -83,10 +85,10 @@ export default function GiftCardsPage() {
     onSuccess: ({ code }) => {
       toast.success(`Gift card creata! Codice: ${code}`);
       setRecipientName(''); setRecipientEmail(''); setMessage('');
-      qc.invalidateQueries({ queryKey: ['gift-cards'] });
+      qc.invalidateQueries({ queryKey: queryKeys.giftCards.all });
       setTab('mine');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (!userId) return <LoadingState />;
@@ -187,14 +189,16 @@ export default function GiftCardsPage() {
             <p><strong>Come funziona:</strong> generi un codice univoco da inviare al destinatario. Lui lo riscatta su MyCity e ha credito di €{amount} per 2 anni.</p>
           </div>
 
-          <button
+          <Button
             type="submit"
-            disabled={create.isPending || !recipientName.trim() || !recipientEmail.trim()}
-            className="w-full inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-bold transition-colors"
+            loading={create.isPending}
+            disabled={!recipientName.trim() || !recipientEmail.trim()}
+            fullWidth
+            size="lg"
+            icon={Send}
           >
-            <Send size={18} />
-            {create.isPending ? 'Creazione…' : `Regala €${amount}`}
-          </button>
+            Regala €{amount}
+          </Button>
         </form>
       )}
 

@@ -69,7 +69,7 @@ export default function AdminSupportPage() {
       setNotes('');
       toast.success('Stato aggiornato');
     },
-    onError: (err: any) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const detail = messages.find((m) => m.id === openId);

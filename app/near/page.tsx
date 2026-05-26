@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { haversineKm } from '@/lib/geo';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -76,7 +77,7 @@ export default function NearMePage() {
   }, []);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['near-stores-v2'],
+    queryKey: queryKeys.stores.nearV2,
     queryFn: fetchNearData,
   });
 

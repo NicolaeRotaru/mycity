@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -90,7 +91,7 @@ export default function StoresPage() {
   const [categoryId, setCategoryId] = useState<string>('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['stores-page-v4'],
+    queryKey: queryKeys.stores.page,
     queryFn: fetchStoresData,
     staleTime: 30_000,
     gcTime: 10 * 60_000,
