@@ -8,6 +8,7 @@ import { Gift, Send, ArrowLeft, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { friendlyError } from '@/lib/errors';
 
 type GiftCard = {
   code: string;
@@ -84,7 +85,7 @@ export default function GiftCardsPage() {
       qc.invalidateQueries({ queryKey: ['gift-cards'] });
       setTab('mine');
     },
-    onError: (err: any) => toast.error(err.message ?? 'Errore'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (!userId) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;

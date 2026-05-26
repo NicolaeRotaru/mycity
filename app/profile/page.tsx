@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type ProfileForm = {
   full_name: string;
@@ -69,7 +70,7 @@ export default function ProfilePage() {
       qc.invalidateQueries({ queryKey: ['my-profile'] });
       toast.success('Profilo aggiornato!');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

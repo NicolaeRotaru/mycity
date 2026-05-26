@@ -17,6 +17,7 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type OrderRow = {
   id: string;
@@ -94,7 +95,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       qc.invalidateQueries({ queryKey: ['rider-orders'] });
       toast.success('Stato aggiornato');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   // Verifica codice pickup → server function (atomica + notifiche)

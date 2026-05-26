@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * /lists — Liste curate (tastemakers).
@@ -116,7 +117,7 @@ export default function ListsPage() {
       qc.invalidateQueries({ queryKey: ['lists-mine'] });
       window.location.href = `/lists/${id}`;
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const ListCard = ({ list }: { list: List }) => {

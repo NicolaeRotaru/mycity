@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 export default function SellerProductsPage() {
   const qc = useQueryClient();
@@ -37,7 +38,7 @@ export default function SellerProductsPage() {
       qc.invalidateQueries({ queryKey: ['seller-products'] });
       toast.success('Prodotto eliminato');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const toggleStatus = useMutation({
@@ -47,7 +48,7 @@ export default function SellerProductsPage() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['seller-products'] }),
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

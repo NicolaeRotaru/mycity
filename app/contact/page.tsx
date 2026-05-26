@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import Honeypot from '@/components/Honeypot';
+import { friendlyError } from '@/lib/errors';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
@@ -35,7 +36,7 @@ export default function ContactPage() {
       toast.success('Messaggio inviato! Ti risponderemo entro 24h lavorative.');
       setForm({ name: '', email: '', subject: 'Domanda generale', message: '' });
     } catch (err: any) {
-      toast.error(err.message ?? 'Errore');
+      toast.error(friendlyError(err));
     } finally {
       setSending(false);
     }

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type Addr = {
   id: string;
@@ -86,7 +87,7 @@ export default function AddressesPage() {
       setForm(empty);
       toast.success('Indirizzo salvato');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const remove = useMutation({

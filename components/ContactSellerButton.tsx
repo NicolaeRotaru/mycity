@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
+import { friendlyError } from '@/lib/errors';
 
 type Props = {
   sellerId: string;
@@ -48,7 +49,7 @@ export default function ContactSellerButton({ sellerId, className = '', label = 
       if (!res.ok) throw new Error(json.error ?? 'Errore');
       router.push(`/messages/${json.conversationId}`);
     } catch (err: any) {
-      toast.error(err.message ?? 'Impossibile aprire la chat');
+      toast.error(friendlyError(err));
     } finally {
       setLoading(false);
     }

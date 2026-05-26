@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { useEffect, useState } from 'react';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Pagina "Negozio del mese" — hero del pick attuale + voto democratico.
@@ -115,7 +116,7 @@ export default function ShopOfMonthPage() {
       toast.success('Voto registrato — grazie!');
       qc.invalidateQueries({ queryKey: ['shop-of-month-leaderboard'] });
     },
-    onError: (err: any) => toast.error(err.message ?? 'Errore'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   return (

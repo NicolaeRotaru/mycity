@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type Row = {
   id: string;
@@ -49,7 +50,7 @@ export default function AdminProductsPage() {
       qc.invalidateQueries({ queryKey: ['admin-stats'] });
       toast.success('Prodotto eliminato');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const filtered = products.filter((p) => {
@@ -99,7 +100,7 @@ export default function AdminProductsPage() {
                       <div className="w-10 h-10 rounded bg-cream-100 overflow-hidden shrink-0">
                         {img && (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={img} alt="" className="w-full h-full object-cover" />
+                          <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
                         )}
                       </div>
                       <span className="font-medium text-ink-900">{p.name}</span>

@@ -7,6 +7,7 @@ import { auth, supabase } from '@/lib/supabase/client';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
@@ -179,7 +180,7 @@ const SignInForm = () => {
 
 const SignIn = () => (
   <div className="min-h-screen flex items-center justify-center bg-cream-50 p-4">
-    <Suspense fallback={<div className="text-ink-500">Caricamento...</div>}>
+    <Suspense fallback={<LoadingState variant="inline" />}>
       <SignInForm />
     </Suspense>
   </div>

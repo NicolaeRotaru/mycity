@@ -102,11 +102,11 @@ const Field = ({
 }: { label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode }) => (
   <div>
     <label className="block text-sm font-semibold text-ink-700 mb-1">
-      {label} {required && <span className="text-rose-500">*</span>}
+      {label} {required && <span className="text-rose-500" aria-label="obbligatorio">*</span>}
     </label>
     {children}
     {hint && !error && <p className="text-xs text-ink-400 mt-1">{hint}</p>}
-    {error && <p className="text-xs text-rose-600 mt-1">{error}</p>}
+    {error && <p role="alert" aria-live="polite" className="text-xs text-rose-600 mt-1">{error}</p>}
   </div>
 );
 

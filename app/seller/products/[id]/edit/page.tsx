@@ -14,6 +14,7 @@ import AttributesFields from '@/components/seller/AttributesFields';
 import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { getAttributesForCategory } from '@/lib/category-attributes';
+import { friendlyError } from '@/lib/errors';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
@@ -139,7 +140,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         setImageUrls((prev) => [...prev, ...uploaded]);
         toast.success('Immagini caricate');
       } catch (err: any) {
-        toast.error(err.message);
+        toast.error(friendlyError(err));
       } finally {
         setUploading(false);
       }
@@ -168,7 +169,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       toast.success('Modifiche salvate');
       router.push('/seller/products');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const removeProduct = useMutation({
@@ -185,7 +186,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       toast.success('Prodotto eliminato');
       router.push('/seller/products');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <div className="text-center py-10 text-ink-500">Caricamento prodotto…</div>;
@@ -229,7 +230,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         <div>
           <label className="block text-sm font-medium mb-1">Nome prodotto</label>
           <input {...register('name')} className="w-full border p-2 rounded" />
-          {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name.message}</p>}
+          {errors.name && <p role="alert" aria-live="polite" className="text-rose-600 text-sm mt-1">{errors.name.message}</p>}
         </div>
 
         <div>
@@ -243,14 +244,14 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
             />
           </div>
           <textarea {...register('description')} rows={4} className="w-full border p-2 rounded" />
-          {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description.message}</p>}
+          {errors.description && <p role="alert" aria-live="polite" className="text-rose-600 text-sm mt-1">{errors.description.message}</p>}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">Prezzo (€)</label>
             <input type="number" step="0.01" {...register('price')} className="w-full border p-2 rounded" />
-            {errors.price && <p className="text-red-500 text-sm mt-1">{errors.price.message}</p>}
+            {errors.price && <p role="alert" aria-live="polite" className="text-rose-600 text-sm mt-1">{errors.price.message}</p>}
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Disponibilità</label>
@@ -266,7 +267,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
-          {errors.category_id && <p className="text-red-500 text-sm mt-1">{errors.category_id.message}</p>}
+          {errors.category_id && <p role="alert" aria-live="polite" className="text-rose-600 text-sm mt-1">{errors.category_id.message}</p>}
         </div>
 
         <div className="border-t pt-4">
@@ -296,7 +297,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
               {imageUrls.map((url, i) => (
                 <div key={url} className="relative aspect-square">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="w-full h-full object-cover rounded" />
+                  <img src={url} alt="" loading="lazy" className="w-full h-full object-cover rounded" />
                   <button
                     type="button"
                     onClick={() => setImageUrls((u) => u.filter((_, j) => j !== i))}

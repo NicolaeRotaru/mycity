@@ -8,6 +8,7 @@ import { MessageSquare, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
+import { friendlyError } from '@/lib/errors';
 
 type Question = {
   id: string;
@@ -81,7 +82,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
       toast.success('Domanda inviata. Riceverai una notifica quando ti rispondono.');
     },
     onError: (err: any) => {
-      if (err.message !== 'REDIRECT') toast.error(err.message ?? 'Errore');
+      if (err.message !== 'REDIRECT') toast.error(friendlyError(err));
     },
   });
 
@@ -98,7 +99,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
       qc.invalidateQueries({ queryKey: ['qa', productId] });
       toast.success('Risposta pubblicata!');
     },
-    onError: (err: any) => toast.error(err.message ?? 'Errore'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const isSellerOfThis = profile?.id === sellerId;

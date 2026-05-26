@@ -13,6 +13,7 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import SimpleQR from '@/components/SimpleQR';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type OrderRow = {
   id: string;
@@ -93,7 +94,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       qc.invalidateQueries({ queryKey: ['seller-orders'] });
       toast.success('Ordine rifiutato');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const transition = useMutation({
@@ -120,7 +121,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       qc.invalidateQueries({ queryKey: ['seller-orders'] });
       toast.success('Stato aggiornato');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;
@@ -249,7 +250,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
                 <div className="w-14 h-14 rounded bg-cream-100 overflow-hidden flex items-center justify-center shrink-0">
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
                   ) : '📦'}
                 </div>
                 <div className="flex-1 min-w-0">

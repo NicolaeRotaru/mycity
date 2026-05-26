@@ -100,7 +100,7 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
               <div className="w-20 h-16 rounded overflow-hidden bg-black shrink-0">
                 {m.type === 'image' ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.url} alt="" className="w-full h-full object-cover" />
+                  <img src={m.url} alt="" loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <video src={m.url} muted playsInline className="w-full h-full object-cover" />
                 )}

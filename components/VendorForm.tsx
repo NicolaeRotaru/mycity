@@ -11,6 +11,7 @@ import StoreAvatar from './StoreAvatar';
 import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const VendorSchema = z.object({
   storeName:  z.string().min(3, 'Il nome deve essere di almeno 3 caratteri'),
@@ -123,7 +124,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
           >
             <input {...getInputProps()} />
             {uploadingLogo ? (
-              <p className="text-ink-500">Caricamento...</p>
+              <LoadingState variant="inline" />
             ) : logoUrl ? (
               <p className="text-ink-600">
                 <span className="font-medium">Sostituisci</span> · trascina o clicca

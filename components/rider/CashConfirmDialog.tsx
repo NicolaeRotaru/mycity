@@ -162,7 +162,7 @@ function PhotoSlot({
       </div>
       <div className="mt-1 flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-cream-300 bg-cream-50">
         {url ? (
-          <img src={url} alt="" className="h-full w-full rounded-lg object-cover" />
+          <img src={url} alt="" loading="lazy" className="h-full w-full rounded-lg object-cover" />
         ) : (
           <span className="text-xl text-ink-400">{uploading ? '…' : '📷'}</span>
         )}

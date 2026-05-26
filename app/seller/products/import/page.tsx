@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Upload, Download, ArrowLeft, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 
 type ParsedRow = {
   name: string;
@@ -146,7 +147,7 @@ export default function BulkImportProductsPage() {
       toast.success(`${valid.length} prodotti importati 🎉`);
       router.push('/seller/products');
     } catch (err: any) {
-      toast.error(err.message ?? 'Import fallito');
+      toast.error(friendlyError(err));
     } finally {
       setImporting(false);
     }

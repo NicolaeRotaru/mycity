@@ -114,13 +114,13 @@ export default function AdminTodayPage() {
             <p className="font-bold text-rose-900">Richiede attenzione immediata</p>
             <ul className="text-sm text-rose-800 mt-1 space-y-0.5">
               {stats.sosActiveCount > 0 && (
-                <li>🆘 {stats.sosActiveCount} SOS rider attivo — <Link href="/admin/sos" className="underline font-semibold">apri</Link></li>
+                <li>{stats.sosActiveCount} SOS rider attivo — <Link href="/admin/sos" className="underline font-semibold">apri</Link></li>
               )}
               {stats.ordersProblemCount > 0 && (
-                <li>⏰ {stats.ordersProblemCount} ordini in problema (NEW/ACCEPTED da +4h) — <Link href="/admin/orders" className="underline font-semibold">verifica</Link></li>
+                <li>{stats.ordersProblemCount} ordini in problema (NEW/ACCEPTED da +4h) — <Link href="/admin/orders" className="underline font-semibold">verifica</Link></li>
               )}
               {stats.disputesOpenCount > 0 && (
-                <li>⚠️ {stats.disputesOpenCount} dispute aperte — <Link href="/admin/disputes" className="underline font-semibold">risolvi</Link></li>
+                <li>{stats.disputesOpenCount} dispute aperte — <Link href="/admin/disputes" className="underline font-semibold">risolvi</Link></li>
               )}
             </ul>
           </div>
@@ -129,7 +129,10 @@ export default function AdminTodayPage() {
 
       {/* KPI today */}
       <section>
-        <h2 className="font-bold text-ink-900 mb-3">📊 Oggi</h2>
+        <h2 className="font-bold text-ink-900 mb-3 inline-flex items-center gap-2">
+          <TrendingUp size={16} strokeWidth={2.4} className="text-primary-700" aria-hidden />
+          Oggi
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiCard icon={ShoppingBag} label="Ordini oggi" value={stats.ordersTodayCount} href="/admin/orders" color="primary" />
           <KpiCard icon={Euro} label="GMV oggi" value={formatPrice(stats.gmvToday)} color="olive" />
@@ -140,7 +143,10 @@ export default function AdminTodayPage() {
 
       {/* KPI in attesa */}
       <section>
-        <h2 className="font-bold text-ink-900 mb-3">⏳ In attesa</h2>
+        <h2 className="font-bold text-ink-900 mb-3 inline-flex items-center gap-2">
+          <Clock size={16} strokeWidth={2.4} className="text-ink-500" aria-hidden />
+          In attesa
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <KpiCard icon={Clock} label="Ordini NEW" value={stats.ordersPendingCount} href="/admin/orders" color="primary" />
           <KpiCard icon={UserCheck} label="Seller pending" value={stats.sellersPendingCount} href="/admin/users?role=seller" color="accent" />

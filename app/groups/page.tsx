@@ -81,7 +81,7 @@ export default function GroupsPage() {
                   <div className="w-28 h-28 bg-cream-100 shrink-0">
                     {img && (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={img} alt="" className="w-full h-full object-cover" />
+                      <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
                     )}
                   </div>
                   <div className="flex-1 p-3 min-w-0">

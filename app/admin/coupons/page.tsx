@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type Coupon = {
   id: string;
@@ -75,7 +76,7 @@ export default function AdminCouponsPage() {
       setForm(empty);
       toast.success('Coupon creato');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const toggle = useMutation({
