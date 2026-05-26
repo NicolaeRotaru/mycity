@@ -125,13 +125,13 @@ function SignUpInner() {
           <label className="block text-sm font-medium text-ink-700 mb-1">Email</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="la-tua@email.it" required autoComplete="email"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400" />
+            className="w-full border p-2 rounded text-base focus:outline-none focus:ring-2 focus:ring-primary-400" />
         </div>
         <div>
           <label className="block text-sm font-medium text-ink-700 mb-1">Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder="Almeno 8 caratteri" required minLength={8} autoComplete="new-password"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400" />
+            className="w-full border p-2 rounded text-base focus:outline-none focus:ring-2 focus:ring-primary-400" />
         </div>
 
         <label className="flex items-start gap-2 text-sm text-ink-700">
