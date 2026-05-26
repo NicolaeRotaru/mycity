@@ -21,6 +21,8 @@ import ProductQA from '@/components/ProductQA';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import StickyAddToCart from '@/components/StickyAddToCart';
 import SimilarProducts from '@/components/SimilarProducts';
+import PriceComparison from '@/components/PriceComparison';
+import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -28,13 +30,14 @@ export default function ProductPage({ params }: { params: { id: string } }) {
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
-  const { isAuthenticated } = useProfile();
+  const { isAuthenticated, profile } = useProfile();
   const { favorites, toggle: toggleFav } = useFavorites();
   const isFav = favorites.has(id);
 
   // Form recensione
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
+  const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
 
   const { data: product, isLoading } = useQuery({
     queryKey: ['product', id],
@@ -51,7 +54,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     queryKey: ['reviews', id],
     queryFn: async () => {
       const { data, error } = await supabase.from('reviews')
-        .select('id, rating, comment, created_at, user_id').eq('product_id', id)
+        .select('id, rating, comment, created_at, user_id, photo_urls, verified_purchase').eq('product_id', id)
+        .order('verified_purchase', { ascending: false })
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data ?? [];
@@ -65,19 +69,50 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         router.push(`/sign-in?returnTo=/product/${id}`);
         throw new Error('REDIRECT');
       }
+      // Verified purchase: controlla se l'utente ha un ordine consegnato
+      // contenente questo prodotto. Trust & Safety: badge anti-fake reviews.
+      const { data: orderItems } = await supabase
+        .from('order_items')
+        .select('id, orders!inner(user_id, delivery_status)')
+        .eq('product_id', id)
+        .eq('orders.user_id', user.id)
+        .eq('orders.delivery_status', 'DELIVERED')
+        .limit(1);
+      const verified = (orderItems?.length ?? 0) > 0;
+
       const { error } = await supabase.from('reviews').insert({
         product_id: id,
         user_id: user.id,
         rating: reviewRating,
         comment: reviewComment.trim() || null,
+        photo_urls: reviewPhotos.length > 0 ? reviewPhotos : null,
+        verified_purchase: verified,
       });
       if (error) throw error;
+
+      // Bonus loyalty per recensione con foto (CRM Manager: +engagement).
+      // Best-effort: se la RPC non esiste (migration 027 non applicata), ignora.
+      if (reviewPhotos.length > 0) {
+        try {
+          await supabase.rpc('award_loyalty_points', {
+            p_user: user.id,
+            p_delta: 20,
+            p_reason: 'review_with_photo',
+            p_order: null,
+          });
+        } catch { /* noop */ }
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['reviews', id] });
       setReviewComment('');
       setReviewRating(5);
-      toast.success('Grazie per la recensione!');
+      setReviewPhotos([]);
+      toast.success(
+        reviewPhotos.length > 0
+          ? `Grazie! Recensione pubblicata · +20 punti loyalty per le foto 🎉`
+          : 'Grazie per la recensione!'
+      );
     },
     onError: (err: any) => {
       if (err?.message !== 'REDIRECT') toast.error(err.message ?? 'Errore');
@@ -282,6 +317,10 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               <span className="text-4xl font-extrabold text-gray-900">{formatPrice(price)}</span>
               <span className="text-sm text-gray-400">IVA inclusa</span>
             </div>
+            {/* Trust signal forte: confronto vs media categoria (Behavioral Scientist) */}
+            <div className="mb-2">
+              <PriceComparison productId={id} categoryId={product.category_id ?? null} currentPrice={price} />
+            </div>
             {freeShipping ? (
               <p className="text-emerald-600 font-semibold text-sm">
                 ✓ <strong>Spedizione GRATUITA</strong> · Consegna in 24-48h
@@ -449,12 +488,20 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                 onChange={(e) => setReviewComment(e.target.value)}
                 rows={3}
                 placeholder="Scrivi un commento (opzionale)…"
-                className="w-full border p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                className="w-full border border-cream-300 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
               />
+              {/* Foto recensione: +20 punti, +35% credibilità (CRO Specialist) */}
+              {profile?.id && (
+                <PhotoReviewUpload
+                  userId={profile.id}
+                  productId={id}
+                  onUploaded={setReviewPhotos}
+                />
+              )}
               <button
                 type="submit"
                 disabled={submitReview.isPending}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-semibold text-sm"
+                className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-semibold text-sm"
               >
                 {submitReview.isPending ? 'Invio…' : 'Pubblica recensione'}
               </button>
@@ -472,16 +519,35 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {reviews.map((r: any) => (
-              <div key={r.id} className="bg-white border rounded-xl p-5">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-amber-400 text-lg">
-                    {'★'.repeat(Math.round(Number(r.rating)))}{'☆'.repeat(5 - Math.round(Number(r.rating)))}
-                  </p>
-                  <p className="text-xs text-gray-400">
+              <div key={r.id} className="bg-white border border-cream-200 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <p className="text-accent-500 text-lg">
+                      {'★'.repeat(Math.round(Number(r.rating)))}{'☆'.repeat(5 - Math.round(Number(r.rating)))}
+                    </p>
+                    {/* Verified Purchase badge — Trust & Safety insight */}
+                    {r.verified_purchase && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-olive-100 text-olive-800 px-2 py-0.5 rounded-full">
+                        ✓ Acquisto verificato
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-ink-400">
                     {new Date(r.created_at).toLocaleDateString('it-IT')}
                   </p>
                 </div>
-                {r.comment && <p className="text-gray-700 text-sm">{r.comment}</p>}
+                {r.comment && <p className="text-ink-700 text-sm mb-2">{r.comment}</p>}
+                {/* Foto recensione: grid responsive (Mobile Engineer) */}
+                {Array.isArray(r.photo_urls) && r.photo_urls.length > 0 && (
+                  <div className="grid grid-cols-4 gap-1.5 mt-2">
+                    {r.photo_urls.slice(0, 4).map((url: string, i: number) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden bg-cream-100 hover:opacity-80">
+                        <img src={url} alt="Foto recensione" className="w-full h-full object-cover" loading="lazy" />
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

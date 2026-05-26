@@ -7,6 +7,7 @@ import { CartItem, getCart, updateQuantity, removeFromCart, cartTotal, cartCount
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
+import ShareCartButton from '@/components/ShareCartButton';
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -166,10 +167,16 @@ export default function CartPage() {
 
             <Link
               href="/checkout"
-              className="block w-full text-center bg-yellow-400 hover:bg-yellow-500 text-gray-900 py-3.5 rounded-lg font-bold shadow-md hover:shadow-lg transition-all"
+              className="block w-full text-center bg-accent-500 hover:bg-accent-600 text-ink-900 py-3.5 rounded-lg font-bold shadow-warm hover:shadow-warm-lg transition-all"
             >
               🔒 Procedi al checkout
             </Link>
+
+            {/* Lista spesa condivisibile — Growth PM: viral coefficient,
+                Behavioral Scientist: social proof + commitment partner */}
+            <div className="text-center pt-1">
+              <ShareCartButton items={items} />
+            </div>
 
             <div className="space-y-2 pt-2 text-xs text-gray-500">
               <p className="flex items-center gap-2"><span>💳</span> Pagamento in contanti alla consegna</p>

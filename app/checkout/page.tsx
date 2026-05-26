@@ -319,6 +319,9 @@ export default function CheckoutPage() {
     },
     onSuccess: (orderIds) => {
       clearCart();
+      // Behavioral Scientist + CRO: gratifica immediata su purchase success.
+      // Flag in sessionStorage → la order detail page mostra ConfettiBurst.
+      try { sessionStorage.setItem('mc_just_ordered', '1'); } catch { /* noop */ }
       if (orderIds.length === 1) {
         toast.success('Ordine effettuato! 🎉');
         router.push(`/orders/${orderIds[0]}`);
