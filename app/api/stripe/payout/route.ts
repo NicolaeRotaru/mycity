@@ -1,8 +1,10 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { withInternalAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -18,23 +20,16 @@ const Body = z.object({
  * In MVP puo' essere chiamato manualmente da admin o dal trigger
  * "delivered" se non c'e' politica escrow.
  *
- * SOLO admin / cron. Verifica la chiave x-internal-secret.
+ * SOLO server-to-server. Verifica la chiave x-internal-secret.
  */
-export async function POST(req: NextRequest) {
-  if (!isStripeConfigured()) {
-    return NextResponse.json({ error: 'Stripe non configurato' }, { status: 503 });
-  }
-
-  const internalKey = req.headers.get('x-internal-secret');
-  if (!internalKey || internalKey !== process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
+  if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
 
   let body;
   try {
     body = Body.parse(await req.json());
   } catch (e: any) {
-    return NextResponse.json({ error: 'Bad request', details: e?.message }, { status: 400 });
+    return ApiErrors.invalidRequest('Bad request', e?.message);
   }
 
   const admin = getAdminSupabase();
@@ -44,9 +39,7 @@ export async function POST(req: NextRequest) {
     .eq('id', body.orderId)
     .single();
 
-  if (error || !order) {
-    return NextResponse.json({ error: 'Ordine non trovato' }, { status: 404 });
-  }
+  if (error || !order) return ApiErrors.notFound('Ordine non trovato');
   if (order.delivery_status !== 'DELIVERED') {
     return NextResponse.json({ error: 'Ordine non ancora consegnato' }, { status: 409 });
   }
@@ -54,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Payout in stato ${order.payout_status}, no-op` }, { status: 409 });
   }
   if (!order.seller_payout_cents || order.seller_payout_cents <= 0) {
-    return NextResponse.json({ error: 'Importo payout non valido' }, { status: 400 });
+    return ApiErrors.invalidRequest('Importo payout non valido');
   }
 
   const { data: seller } = await admin
@@ -65,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   if (!seller?.stripe_account_id || !seller.stripe_payouts_enabled) {
     return NextResponse.json(
-      { error: 'Seller non ha completato l\'onboarding Stripe Connect' },
+      { error: "Seller non ha completato l'onboarding Stripe Connect" },
       { status: 409 },
     );
   }
@@ -99,6 +92,6 @@ export async function POST(req: NextRequest) {
       .from('orders')
       .update({ payout_status: 'FAILED' })
       .eq('id', order.id);
-    return NextResponse.json({ error: 'Transfer failed' }, { status: 500 });
+    return ApiErrors.internal('Transfer failed');
   }
-}
+});

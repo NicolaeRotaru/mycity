@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser, getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -20,15 +22,12 @@ const Body = z.object({
  * altrimenti il rimborso e' lasciato a quando il pacco torna indietro
  * (transizione RECEIVED -> REFUNDED via altro endpoint).
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Autenticazione richiesta' }, { status: 401 });
-
+async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
   let body;
   try {
     body = Body.parse(await req.json());
   } catch (e: any) {
-    return NextResponse.json({ error: 'Dati non validi', details: e?.message }, { status: 400 });
+    return ApiErrors.invalidRequest('Dati non validi', e?.message);
   }
 
   const supa = getServerSupabase();
@@ -38,13 +37,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     .eq('id', params.id)
     .single();
 
-  if (error || !ret) return NextResponse.json({ error: 'Reso non trovato' }, { status: 404 });
+  if (error || !ret) return ApiErrors.notFound('Reso non trovato');
   if (ret.seller_id !== user.id) {
     // Admin puo' decidere comunque
     const { data: prof } = await supa.from('profiles').select('role').eq('id', user.id).single();
-    if (prof?.role !== 'admin') {
-      return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 });
-    }
+    if (prof?.role !== 'admin') return ApiErrors.forbidden();
   }
   if (ret.status !== 'REQUESTED') {
     return NextResponse.json({ error: `Reso gia' in stato ${ret.status}` }, { status: 409 });
@@ -95,7 +92,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
     .eq('id', params.id);
 
-  if (updErr) return NextResponse.json({ error: 'Update fallito' }, { status: 500 });
+  if (updErr) return ApiErrors.internal('Update fallito');
 
   // Notifica buyer
   await admin.from('notifications').insert({
@@ -121,3 +118,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   return NextResponse.json({ ok: true, status: newStatus, refundId }, { status: 200 });
 }
+
+export const POST = (req: NextRequest, ctx: { params: { id: string } }) =>
+  withAuth(async ({ user }) => handler(req, user, ctx.params))(req);

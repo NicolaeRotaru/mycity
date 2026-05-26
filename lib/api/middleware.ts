@@ -120,3 +120,19 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
     return handler(req);
   };
 }
+
+/**
+ * Wrapper: richiede x-internal-secret = SUPABASE_SERVICE_ROLE_KEY.
+ * Per endpoint server-to-server (trigger DB, cron interni, edge functions).
+ * Non esponi mai a client browser.
+ */
+export function withInternalAuth(handler: (req: NextRequest) => Promise<NextResponse>) {
+  return async (req: NextRequest): Promise<NextResponse> => {
+    const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const provided = req.headers.get('x-internal-secret');
+    if (!expected || !provided || provided !== expected) {
+      return ApiErrors.forbidden();
+    }
+    return handler(req);
+  };
+}

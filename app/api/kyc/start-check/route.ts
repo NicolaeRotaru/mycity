@@ -1,6 +1,8 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { getCurrentUser, getAdminSupabase } from '@/lib/supabase/server';
+import { NextResponse } from 'next/server';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { getKycProvider, viesVatLookup } from '@/lib/kyc/providers';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -18,10 +20,7 @@ export const runtime = 'nodejs';
  * kyc_provider_status=APPROVED. Se PENDING, resta in attesa del webhook
  * provider che chiamera' /api/kyc/webhook.
  */
-export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Autenticazione richiesta' }, { status: 401 });
-
+export const POST = withAuth(async ({ user }): Promise<NextResponse> => {
   const admin = getAdminSupabase();
   const { data: profile } = await admin
     .from('profiles')
@@ -35,24 +34,24 @@ export async function POST(req: NextRequest) {
     .eq('id', user.id)
     .single();
 
-  if (!profile) return NextResponse.json({ error: 'Profilo non trovato' }, { status: 404 });
+  if (!profile) return ApiErrors.notFound('Profilo non trovato');
 
   // Validazioni
   if (!profile.kyc_id_doc_front_url) {
-    return NextResponse.json({ error: 'Carica prima il documento d\'identita\' (fronte).' }, { status: 400 });
+    return ApiErrors.invalidRequest("Carica prima il documento d'identita' (fronte).");
   }
   if (!profile.kyc_selfie_url) {
-    return NextResponse.json({ error: 'Carica prima un selfie per la verifica.' }, { status: 400 });
+    return ApiErrors.invalidRequest('Carica prima un selfie per la verifica.');
   }
   if (!profile.legal_first_name || !profile.legal_last_name) {
-    return NextResponse.json({ error: 'Compila nome e cognome anagrafici.' }, { status: 400 });
+    return ApiErrors.invalidRequest('Compila nome e cognome anagrafici.');
   }
   if (profile.role === 'rider') {
     if (!profile.rider_license_url) {
-      return NextResponse.json({ error: 'Carica la patente (richiesta per scooter/auto).' }, { status: 400 });
+      return ApiErrors.invalidRequest('Carica la patente (richiesta per scooter/auto).');
     }
     if (!profile.rider_insurance_url) {
-      return NextResponse.json({ error: 'Carica polizza RC valida.' }, { status: 400 });
+      return ApiErrors.invalidRequest('Carica polizza RC valida.');
     }
   }
 
@@ -100,4 +99,4 @@ export async function POST(req: NextRequest) {
     .eq('id', user.id);
 
   return NextResponse.json({ status: result.status, providerCheckId: result.providerCheckId, vatCheck }, { status: 200 });
-}
+});

@@ -1,6 +1,8 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser, getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -30,15 +32,12 @@ const Body = z.object({
  * delivery_status PICKED_UP/OUT_FOR_DELIVERY/DELIVERED (controllo
  * server-side).
  */
-export async function POST(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Autenticazione richiesta' }, { status: 401 });
-
+export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());
   } catch (e: any) {
-    return NextResponse.json({ error: 'Dati non validi', details: e?.message }, { status: 400 });
+    return ApiErrors.invalidRequest('Dati non validi', e?.message);
   }
 
   const supa = getServerSupabase();
@@ -48,9 +47,9 @@ export async function POST(req: NextRequest) {
     .eq('id', body.orderId)
     .single();
 
-  if (error || !order) return NextResponse.json({ error: 'Ordine non trovato' }, { status: 404 });
+  if (error || !order) return ApiErrors.notFound('Ordine non trovato');
   if (order.rider_id !== user.id) {
-    return NextResponse.json({ error: 'Non autorizzato (ordine di altro rider)' }, { status: 403 });
+    return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');
   }
   if (order.payment_method !== 'cod') {
     return NextResponse.json({ error: 'Ordine non in cash on delivery' }, { status: 409 });
@@ -75,7 +74,7 @@ export async function POST(req: NextRequest) {
     })
     .eq('id', body.orderId);
 
-  if (updErr) return NextResponse.json({ error: 'Update fallito' }, { status: 500 });
+  if (updErr) return ApiErrors.internal('Update fallito');
 
   // Aggiorna riconciliazione giornaliera
   await upsertReconciliation(admin, user.id, today);
@@ -93,7 +92,7 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, delta }, { status: 200 });
-}
+});
 
 async function upsertReconciliation(admin: any, riderId: string, isoDate: string) {
   // Calcola expected e collected per quel giorno
