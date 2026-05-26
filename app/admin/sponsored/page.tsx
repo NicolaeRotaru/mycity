@@ -6,6 +6,7 @@ import { Megaphone, Pause, Play, Trash2, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Admin: gestione sponsored listings.
@@ -69,7 +70,7 @@ export default function AdminSponsoredPage() {
       toast.success('Aggiornato');
       qc.invalidateQueries({ queryKey: ['admin-sponsored'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const del = useMutation({
@@ -81,7 +82,7 @@ export default function AdminSponsoredPage() {
       toast.success('Eliminato');
       qc.invalidateQueries({ queryKey: ['admin-sponsored'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const STATUS_BADGE: Record<Listing['status'], string> = {

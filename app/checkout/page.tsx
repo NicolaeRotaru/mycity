@@ -15,6 +15,7 @@ import { notify } from '@/lib/notifications';
 import { haversineKm, riderFee } from '@/lib/geo';
 import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackOrderPlaced } from '@/lib/analytics/events';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type AddressForm = {
   fullName: string;
@@ -449,7 +450,7 @@ export default function CheckoutPage() {
   }
 
   if (loadingGroups) {
-    return <div className="container mx-auto p-12 text-center text-ink-500">Caricamento...</div>;
+    return <LoadingState />;
   }
 
   return (

@@ -7,6 +7,7 @@ import { Inbox, Mail, CheckCircle2, AlertOctagon, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
+import { friendlyError } from '@/lib/errors';
 
 type Message = {
   id: string;
@@ -67,7 +68,7 @@ export default function AdminSupportPage() {
       setNotes('');
       toast.success('Stato aggiornato');
     },
-    onError: (err: any) => toast.error(err.message ?? 'Errore'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const detail = messages.find((m) => m.id === openId);

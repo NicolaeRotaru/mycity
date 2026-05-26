@@ -26,6 +26,7 @@ import PriceComparison from '@/components/PriceComparison';
 import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
+import { friendlyError } from '@/lib/errors';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
   const { id } = params;
@@ -118,7 +119,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
       );
     },
     onError: (err: any) => {
-      if (err?.message !== 'REDIRECT') toast.error(err.message ?? 'Errore');
+      if (err?.message !== 'REDIRECT') toast.error(friendlyError(err));
     },
   });
 

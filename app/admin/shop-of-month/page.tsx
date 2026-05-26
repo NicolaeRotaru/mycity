@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Crown, Trophy, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Admin: Negozio del mese.
@@ -102,7 +103,7 @@ export default function AdminShopOfMonthPage() {
       qc.invalidateQueries({ queryKey: ['admin-shop-of-month', firstOfMonth] });
       qc.invalidateQueries({ queryKey: ['shop-of-month-current'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   return (

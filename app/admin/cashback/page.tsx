@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Admin: Cashback Campaigns.
@@ -100,7 +101,7 @@ export default function AdminCashbackPage() {
       setEditing(null);
       qc.invalidateQueries({ queryKey: ['admin-cashback'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const setStatus = useMutation({

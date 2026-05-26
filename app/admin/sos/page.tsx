@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, Check, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Admin: gestione eventi SOS rider.
@@ -63,7 +64,7 @@ export default function AdminSOSPage() {
       toast.success('SOS risolto');
       qc.invalidateQueries({ queryKey: ['admin-sos'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const active = sosList.filter((s) => !s.resolved_at);

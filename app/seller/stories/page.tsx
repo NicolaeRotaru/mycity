@@ -10,6 +10,7 @@ import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Seller: gestione Storie (instagram-like, 24h).
@@ -94,7 +95,7 @@ export default function SellerStoriesPage() {
       qc.invalidateQueries({ queryKey: ['my-seller-stories'] });
       qc.invalidateQueries({ queryKey: ['seller-stories-active'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
     onSettled: () => setUploading(false),
   });
 
@@ -108,7 +109,7 @@ export default function SellerStoriesPage() {
       qc.invalidateQueries({ queryKey: ['my-seller-stories'] });
       qc.invalidateQueries({ queryKey: ['seller-stories-active'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   function hoursLeft(expiresAt: string): number {

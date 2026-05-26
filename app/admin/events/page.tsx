@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Admin: gestione Eventi MyCity.
@@ -97,7 +98,7 @@ export default function AdminEventsPage() {
       setEditing(null);
       qc.invalidateQueries({ queryKey: ['admin-events'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const changeStatus = useMutation({
@@ -109,7 +110,7 @@ export default function AdminEventsPage() {
       toast.success('Stato aggiornato');
       qc.invalidateQueries({ queryKey: ['admin-events'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const del = useMutation({
@@ -121,7 +122,7 @@ export default function AdminEventsPage() {
       toast.success('Evento eliminato');
       qc.invalidateQueries({ queryKey: ['admin-events'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const STATUS_BADGE: Record<EventRow['status'], string> = {

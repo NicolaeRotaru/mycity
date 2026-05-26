@@ -24,6 +24,7 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type OrderRow = {
   id: string;
@@ -161,7 +162,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
       qc.invalidateQueries({ queryKey: ['orders'] });
       toast.success('Ordine annullato');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;
@@ -417,7 +418,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
             <div className="w-12 h-12 rounded-full overflow-hidden bg-cream-100 flex items-center justify-center text-xl">
               {order.seller?.store_logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={order.seller.store_logo} alt="" className="w-full h-full object-cover" />
+                <img src={order.seller.store_logo} alt="" loading="lazy" className="w-full h-full object-cover" />
               ) : '🏪'}
             </div>
             <div className="min-w-0">
@@ -462,7 +463,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
                 <div className="w-14 h-14 rounded bg-cream-100 overflow-hidden flex items-center justify-center shrink-0">
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={img} alt="" className="w-full h-full object-cover" />
+                    <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
                   ) : '📦'}
                 </div>
                 <div className="flex-1 min-w-0">

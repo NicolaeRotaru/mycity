@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Bottone che trasforma un ordine consegnato in abbonamento ricorrente.
@@ -100,7 +101,7 @@ export default function SubscribeFromOrderButton({ orderId, sellerId, items, del
       toast.success(`Abbonamento creato! Riceverai ogni ${frequency === 'weekly' ? 'settimana' : frequency === 'biweekly' ? '2 settimane' : 'mese'}`);
       setOpen(false);
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   return (

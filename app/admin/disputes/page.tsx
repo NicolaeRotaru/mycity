@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { Modal } from '@/components/ui/Modal';
+import { friendlyError } from '@/lib/errors';
 
 type Dispute = {
   id: string;
@@ -90,7 +91,7 @@ export default function AdminDisputesPage() {
       setRefundEur('');
       toast.success('Reclamo aggiornato');
     },
-    onError: (err: any) => toast.error(err.message ?? 'Errore'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const detail = disputes.find((d) => d.id === openId);

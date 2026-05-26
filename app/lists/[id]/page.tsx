@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * /lists/[id] — Detail di una lista.
@@ -112,7 +113,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
       setEditTitle(false);
       qc.invalidateQueries({ queryKey: ['list', params.id] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const toggleVisibility = useMutation({

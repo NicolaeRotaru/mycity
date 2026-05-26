@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { useProfile } from '@/components/hooks/useProfile';
+import { friendlyError } from '@/lib/errors';
 
 type GroupOrder = {
   id: string;
@@ -109,7 +110,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
       toast.success('🎉 Sei nel gruppo! Quando si raggiunge il target verrai contattato.');
     },
     onError: (err: any) => {
-      if (err?.message !== 'REDIRECT') toast.error(err.message);
+      if (err?.message !== 'REDIRECT') toast.error(friendlyError(err));
     },
   });
 

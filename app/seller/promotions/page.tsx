@@ -8,6 +8,7 @@ import { Sparkles, ArrowLeft, Plus, Calendar, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
+import { friendlyError } from '@/lib/errors';
 
 type Promo = {
   id: string;
@@ -94,7 +95,7 @@ export default function SellerPromotionsPage() {
       qc.invalidateQueries({ queryKey: ['seller-promotions'] });
       setShowWizard(false);
     },
-    onError: (err: any) => toast.error(err.message ?? 'Errore'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const cancel = useMutation({

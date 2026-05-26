@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import VendorForm, { VendorFormData } from '@/components/VendorForm';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 export default function SellerProfilePage() {
   const qc = useQueryClient();
@@ -53,7 +54,7 @@ export default function SellerProfilePage() {
       qc.invalidateQueries({ queryKey: ['auth-profile'] });
       toast.success('Profilo aggiornato!');
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

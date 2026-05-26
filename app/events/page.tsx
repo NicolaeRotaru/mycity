@@ -8,6 +8,7 @@ import { Calendar, Users, Clock, Sparkles, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Pagina Eventi MyCity — mercatino virtuale settimanale, flash sale, lancio prodotto.
@@ -105,7 +106,7 @@ export default function EventsPage() {
       toast.success(going ? 'Ci sei! Ti ricorderemo l\'evento.' : 'Cancellazione confermata');
       qc.invalidateQueries({ queryKey: ['events-public'] });
     },
-    onError: (err: any) => toast.error(err.message ?? 'Errore'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const { data: rsvpCounts = {} } = useQuery({

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { friendlyError } from '@/lib/errors';
 
 const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'not_received',      label: 'Non l\'ho ricevuto',          hint: 'L\'ordine risulta consegnato ma non l\'hai ricevuto.' },
@@ -65,7 +66,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
       toast.success('Reclamo aperto. Il nostro team lo prenderà in carico entro 48h.');
       router.push('/orders');
     } catch (err: any) {
-      toast.error(err.message ?? 'Errore');
+      toast.error(friendlyError(err));
     } finally {
       setSubmitting(false);
     }

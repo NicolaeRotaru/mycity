@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
 import { trackSignupCompleted } from '@/lib/analytics/events';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Role = 'buyer' | 'seller' | 'rider';
 
@@ -174,7 +175,7 @@ function SignUpInner() {
 
 const SignUp = () => (
   <div className="min-h-screen flex items-center justify-center bg-cream-50 px-4 py-8">
-    <Suspense fallback={<div className="text-ink-500">Caricamento...</div>}>
+    <Suspense fallback={<LoadingState variant="inline" />}>
       <SignUpInner />
     </Suspense>
   </div>

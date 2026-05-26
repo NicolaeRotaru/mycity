@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, Plus, X, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Pulsante "Aggiungi a lista" sulle product page.
@@ -78,7 +79,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
       qc.invalidateQueries({ queryKey: ['lists-containing', productId] });
       qc.invalidateQueries({ queryKey: ['list-items'] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   const createAndAdd = useMutation({
@@ -103,7 +104,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
       qc.invalidateQueries({ queryKey: ['lists-mine-min'] });
       qc.invalidateQueries({ queryKey: ['lists-containing', productId] });
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   return (

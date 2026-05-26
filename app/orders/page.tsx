@@ -95,7 +95,7 @@ export default function OrdersPage() {
                 <div className="w-12 h-12 rounded-full bg-cream-100 shrink-0 overflow-hidden flex items-center justify-center text-xl">
                   {order.seller?.store_logo ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={order.seller.store_logo} alt="" className="w-full h-full object-cover" />
+                    <img src={order.seller.store_logo} alt="" loading="lazy" className="w-full h-full object-cover" />
                   ) : '🏪'}
                 </div>
                 <div className="min-w-0">

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Bottone "Genera con AI" — sottile, accanto al campo descrizione.
@@ -51,7 +52,7 @@ export default function AIDescriptionButton({ productName, categoryName, current
       onResult(json.description);
       toast.success('Descrizione generata — modifica come preferisci');
     } catch (err: any) {
-      toast.error(err.message);
+      toast.error(friendlyError(err));
     } finally {
       setLoading(false);
     }

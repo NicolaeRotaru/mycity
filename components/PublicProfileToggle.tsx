@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Globe, Lock, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Toggle profilo pubblico buyer opt-in.
@@ -86,7 +87,7 @@ export default function PublicProfileToggle() {
       }
       toast.success(enabled ? 'Profilo pubblico attivato' : 'Profilo pubblico disattivato');
     } catch (err: any) {
-      toast.error(err.message ?? 'Errore');
+      toast.error(friendlyError(err));
     } finally {
       setSaving(false);
     }
