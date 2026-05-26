@@ -14,6 +14,8 @@ import { notify } from '@/lib/notifications';
 import SimpleQR from '@/components/SimpleQR';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import EmptyState from '@/components/EmptyState';
+import { Package } from 'lucide-react';
 
 type OrderRow = {
   id: string;
@@ -125,7 +127,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
   });
 
   if (isLoading) return <LoadingState />;
-  if (!order) return <div className="text-center py-8 text-ink-500">Ordine non trovato.</div>;
+  if (!order) return <EmptyState icon={Package} title="Ordine non trovato" description="L'ordine non esiste o non hai i permessi per vederlo." ctaLabel="Tutti gli ordini" ctaHref="/seller/orders" />;
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
 

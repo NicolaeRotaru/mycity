@@ -18,6 +18,8 @@ import { notify } from '@/lib/notifications';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import EmptyState from '@/components/EmptyState';
+import { Package } from 'lucide-react';
 
 type OrderRow = {
   id: string;
@@ -181,7 +183,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
   useEffect(() => () => stopSharing(), []);
 
   if (isLoading) return <LoadingState />;
-  if (!order) return <div className="text-center py-8 text-ink-500">Ordine non trovato.</div>;
+  if (!order) return <EmptyState icon={Package} title="Ordine non trovato" ctaLabel="Tutti gli ordini" ctaHref="/rider" />;
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
 

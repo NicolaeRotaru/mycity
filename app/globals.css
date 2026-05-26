@@ -3,8 +3,26 @@
 @tailwind utilities;
 
 :root {
-  /* CSS variables per font; sostituite a runtime dal layout.tsx */
+  /* Font */
   --font-serif: 'Fraunces', Georgia, serif;
+
+  /* Semantic color tokens (layer above palette base).
+   * Esperti: Design System Lead: "3-tier token system → dark mode = solo cambio
+   * di questi semantic vars senza toccare component." */
+  --color-cta:                 #A03B25; /* primary-700 */
+  --color-cta-hover:           #7F2F1F; /* primary-800 */
+  --color-surface:             #FFFFFF;
+  --color-surface-elevated:    #FFFFFF;
+  --color-surface-muted:       #FBF7F0; /* cream-100 */
+  --color-text-primary:        #2C2A28; /* ink-800 */
+  --color-text-secondary:      #57534E; /* ink-500 */
+  --color-text-disabled:       #A8A29E; /* ink-300 */
+  --color-border:              #EEDFBA; /* cream-300 */
+  --color-border-strong:       #D9B36F; /* cream-500 */
+  --color-success:             #5A7C42; /* olive-600 */
+  --color-warning:             #E8A33D; /* accent-500 */
+  --color-danger:              #DC2626; /* rose-600 */
+  --color-info:                #A03B25; /* primary-700 */
 }
 
 html {

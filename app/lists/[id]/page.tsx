@@ -5,13 +5,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Eye, EyeOff, Trash2, Share2, ArrowLeft } from 'lucide-react';
+import { Pencil, Eye, EyeOff, Trash2, Share2, ListChecks } from 'lucide-react';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
+import EmptyState from '@/components/EmptyState';
 
 /**
  * /lists/[id] — Detail di una lista.
@@ -170,7 +172,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
   });
 
   if (!list) {
-    return <div className="container mx-auto px-4 py-12 text-center text-ink-500">Lista non trovata.</div>;
+    return <div className="container mx-auto py-12 max-w-2xl"><EmptyState icon={ListChecks} title="Lista non trovata" description="Forse è stata cancellata o non è pubblica." ctaLabel="Tutte le liste" ctaHref="/lists" /></div>;
   }
 
   const share = async () => {
@@ -185,9 +187,11 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl space-y-6">
-      <Link href="/lists" className="inline-flex items-center gap-1 text-sm text-primary-700 hover:text-primary-800">
-        <ArrowLeft size={14} strokeWidth={2.4} /> Tutte le liste
-      </Link>
+      <Breadcrumb items={[
+        { label: 'Home', href: '/' },
+        { label: 'Liste curate', href: '/lists' },
+        { label: list.title },
+      ]} />
 
       <header className="bg-white border border-cream-300 rounded-2xl p-6 flex items-start gap-4">
         <div className="text-5xl flex-shrink-0">{list.cover_emoji ?? '⭐'}</div>

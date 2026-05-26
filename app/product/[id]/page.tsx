@@ -26,6 +26,7 @@ import PriceComparison from '@/components/PriceComparison';
 import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { friendlyError } from '@/lib/errors';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
@@ -217,20 +218,11 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
       />
-      {/* Breadcrumb */}
-      <nav className="text-sm text-ink-500 mb-4">
-        <Link href="/" className="hover:underline">Home</Link>
-        {product.categories && (
-          <>
-            <span className="mx-1">›</span>
-            <Link href={`/category/${product.categories.slug}`} className="hover:underline">
-              {product.categories.name}
-            </Link>
-          </>
-        )}
-        <span className="mx-1">›</span>
-        <span className="text-ink-700">{product.name}</span>
-      </nav>
+      <Breadcrumb className="mb-4" items={[
+        { label: 'Home', href: '/' },
+        ...(product.categories ? [{ label: product.categories.name, href: `/category/${product.categories.slug}` }] : []),
+        { label: product.name },
+      ]} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_1fr_320px] gap-6">
         {/* GALLERIA */}

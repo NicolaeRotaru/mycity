@@ -98,6 +98,22 @@ export default {
           900: '#651C1A',
         },
       },
+      // Z-index hierarchy esplicita per evitare collisioni.
+      // Esperti: SRE: "Stack accidentale è source di bug pesanti.
+      // Ogni layer ha un range, ogni range è documentato."
+      zIndex: {
+        'base':        '0',       // contenuto normale
+        'dropdown':    '10',      // dropdown menu interno
+        'sticky':      '20',      // navbar, sticky header
+        'sidebar':     '25',
+        'mobile-nav':  '30',      // MobileTabBar fisso bottom
+        'banner':      '35',      // PWAInstallBanner, WelcomeCreditBanner
+        'overlay':     '40',      // SOS button, FAB
+        'modal':       '50',      // Modal portal
+        'toast':       '60',      // toast notifications
+        'tour':        '70',      // BuyerOnboardingTour
+        'skip-link':   '100',     // skip link focus
+      },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
         serif: ['var(--font-serif)', 'Georgia', 'serif'],

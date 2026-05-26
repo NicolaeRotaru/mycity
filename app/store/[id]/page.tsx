@@ -7,6 +7,8 @@ import StoreAvatar from '@/components/StoreAvatar';
 import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
 import { formatToday, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 
 const DAYS: { key: keyof StoreHours; label: string }[] = [
   { key: 'mon', label: 'Lunedì' },
@@ -120,6 +122,11 @@ export default function StorePage({ params }: { params: { id: string } }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
       />
+      <Breadcrumb items={[
+        { label: 'Home', href: '/' },
+        { label: 'Negozi', href: '/stores' },
+        { label: store.store_name },
+      ]} />
       {/* Hero card: COVER con media + logo DENTRO la cover (fully visible) */}
       <div className="bg-white border border-cream-300 rounded-2xl overflow-hidden shadow-sm">
         <div className="relative">
@@ -149,8 +156,9 @@ export default function StorePage({ params }: { params: { id: string } }) {
 
         {/* Info principali sotto la cover */}
         <div className="px-6 py-5">
-          <h1 className="text-2xl sm:text-3xl font-bold text-ink-900 truncate">
-            {store.store_name}
+          <h1 className="text-2xl sm:text-3xl font-bold text-ink-900 flex items-center gap-2 flex-wrap">
+            <span className="truncate">{store.store_name}</span>
+            {store.is_approved && <VerifiedBadge size="md" showLabel />}
           </h1>
           {street && <p className="text-ink-500 text-sm mt-1">{street}</p>}
           {store.store_description && (
