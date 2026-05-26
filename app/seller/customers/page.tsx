@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type CustomerRow = {
   userId: string;
@@ -28,7 +29,7 @@ export default function SellerCustomersPage() {
   const [search, setSearch] = useState('');
 
   const { data: customers = [], isLoading } = useQuery({
-    queryKey: ['seller-customers'],
+    queryKey: queryKeys.seller.customers,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');

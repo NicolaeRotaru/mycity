@@ -10,12 +10,13 @@ import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function SellerProductsPage() {
   const qc = useQueryClient();
 
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['seller-products'],
+    queryKey: queryKeys.seller.products,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -35,7 +36,7 @@ export default function SellerProductsPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['seller-products'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.products });
       toast.success('Prodotto eliminato');
     },
     onError: (err: any) => toast.error(friendlyError(err)),
@@ -47,7 +48,7 @@ export default function SellerProductsPage() {
       const { error } = await supabase.from('products').update({ status: newStatus }).eq('id', id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['seller-products'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.seller.products }),
     onError: (err: any) => toast.error(friendlyError(err)),
   });
 

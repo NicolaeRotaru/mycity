@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Carosello "Storie dei negozi" — Instagram-like, scade in 24h.
@@ -44,7 +45,7 @@ export default function StoriesCarousel() {
   const progressRef = useRef<HTMLDivElement | null>(null);
 
   const { data: stories = [] } = useQuery({
-    queryKey: ['seller-stories-active'],
+    queryKey: queryKeys.seller.storiesActive,
     queryFn: async (): Promise<Story[]> => {
       const { data } = await supabase
         .from('seller_stories')

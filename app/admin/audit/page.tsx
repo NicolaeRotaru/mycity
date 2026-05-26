@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Shield, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type AuditRow = {
   id: string;
@@ -48,7 +49,7 @@ export default function AuditLogPage() {
   const [filterAction, setFilterAction] = useState<string>('');
 
   const { data: rows = [], isLoading } = useQuery({
-    queryKey: ['audit-logs', filterAction],
+    queryKey: queryKeys.admin.audit(filterAction),
     queryFn: async (): Promise<AuditRow[]> => {
       let q = supabase
         .from('audit_logs')

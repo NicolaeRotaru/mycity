@@ -7,10 +7,11 @@ import { supabase } from '@/lib/supabase/client';
 import ProductCard from '@/components/ProductCard';
 import EmptyState from '@/components/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function FavoritesPage() {
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['favorites-products'],
+    queryKey: [...queryKeys.favorites.all, 'products'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];

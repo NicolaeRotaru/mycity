@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Conta le notifiche non lette dell'utente corrente.
@@ -20,7 +21,7 @@ export const useNotificationsCount = () => {
   }, []);
 
   const { data: count = 0 } = useQuery({
-    queryKey: ['notifications-unread', userId],
+    queryKey: [...queryKeys.notifications.count, userId],
     enabled: !!userId,
     refetchInterval: 60_000,
     queryFn: async () => {

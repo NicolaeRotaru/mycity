@@ -10,6 +10,7 @@ import { useProfile } from '@/components/hooks/useProfile';
 import SellerApplicationForm, { type SellerApplicationData } from '@/components/SellerApplicationForm';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 const fetchProfile = async () => {
   const { data: { user } } = await supabase.auth.getUser();
@@ -24,7 +25,7 @@ export default function SellPage() {
   const qc = useQueryClient();
   const { isAuthenticated, isLoading: profileLoading, isSeller } = useProfile();
 
-  const { data: profile, isLoading } = useQuery({ queryKey: ['profile'], queryFn: fetchProfile, enabled: isAuthenticated });
+  const { data: profile, isLoading } = useQuery({ queryKey: queryKeys.profile.me, queryFn: fetchProfile, enabled: isAuthenticated });
 
   // Se sei già seller approvato, /sell non ha senso → vai al profilo negozio
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function SellPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['profile'] });
+      qc.invalidateQueries({ queryKey: queryKeys.profile.me });
       qc.invalidateQueries({ queryKey: ['auth-profile'] });
       toast.success('Richiesta inviata! Ti contatteremo entro 48h.');
     },

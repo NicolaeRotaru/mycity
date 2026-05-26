@@ -27,6 +27,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
+import { queryKeys } from '@/lib/queries/keys';
 
 type OrderRow = {
   id: string;
@@ -102,7 +103,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
   const qc = useQueryClient();
 
   const { data: order, isLoading, refetch } = useQuery({
-    queryKey: ['order', id],
+    queryKey: queryKeys.orders.detail(id),
     queryFn: () => fetchOrder(id),
   });
 
@@ -160,8 +161,8 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['order', id] });
-      qc.invalidateQueries({ queryKey: ['orders'] });
+      qc.invalidateQueries({ queryKey: queryKeys.orders.detail(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.orders.all });
       toast.success('Ordine annullato');
     },
     onError: (err: any) => toast.error(friendlyError(err)),

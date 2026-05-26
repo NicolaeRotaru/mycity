@@ -16,6 +16,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
@@ -164,7 +165,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['seller-products'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.products });
       qc.invalidateQueries({ queryKey: ['seller-product', id] });
       qc.invalidateQueries({ queryKey: ['product', id] });
       toast.success('Modifiche salvate');
@@ -183,7 +184,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['seller-products'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.products });
       toast.success('Prodotto eliminato');
       router.push('/seller/products');
     },

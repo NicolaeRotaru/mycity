@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { formatPrice } from '@/lib/format';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 const StatCard = ({ label, value, color, href, icon }: { label: string; value: string | number; color: string; href?: string; icon: string }) => {
   const inner = (
@@ -22,7 +23,7 @@ const StatCard = ({ label, value, color, href, icon }: { label: string; value: s
 
 export default function AdminDashboard() {
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['admin-stats'],
+    queryKey: queryKeys.admin.stats,
     queryFn: async () => {
       const [profilesRes, ordersRes, productsRes] = await Promise.all([
         supabase.from('profiles').select('role'),

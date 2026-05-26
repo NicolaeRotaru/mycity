@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type PeriodKey = 'today' | '7d' | '30d' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -21,7 +22,7 @@ export default function RiderEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('30d');
 
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['rider-earnings'],
+    queryKey: queryKeys.rider.earnings,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');

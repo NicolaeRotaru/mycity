@@ -89,17 +89,31 @@ export const queryKeys = {
   admin: {
     all:                     ['admin'] as const,
     today:                   ['admin', 'today'] as const,
+    stats:                   ['admin', 'stats'] as const,
     funnel:  (period: number)=> ['admin', 'funnel', period] as const,
     users:   (filters: Record<string, unknown> = {}) =>
                               ['admin', 'users', filters] as const,
     sos:                     ['admin', 'sos'] as const,
     disputes:                ['admin', 'disputes'] as const,
+    audit:   (action?: string) => ['admin', 'audit', action ?? 'all'] as const,
+    events:                  ['admin', 'events'] as const,
+    products:                ['admin', 'products'] as const,
+    support: (filter?: string) => ['admin', 'support', filter ?? 'all'] as const,
+    sponsored: (filter?: string) => ['admin', 'sponsored', filter ?? 'all'] as const,
+    shopOfMonth: (month: string) => ['admin', 'shop-of-month', month] as const,
+    shopOfMonthLeaderboard:  ['admin', 'shop-of-month', 'leaderboard'] as const,
+    approvedSellers:         ['admin', 'approved-sellers'] as const,
   },
 
   seller: {
     all:                     ['seller'] as const,
     stats:                   ['seller', 'stats'] as const,
     products:                ['seller', 'products'] as const,
+    orders:                  ['seller', 'orders'] as const,
+    order:   (id: string)    => ['seller', 'order', id] as const,
+    customers:               ['seller', 'customers'] as const,
+    earnings:                ['seller', 'earnings'] as const,
+    storiesActive:           ['seller', 'stories', 'active'] as const,
     onboardingChecklist: (uid: string) =>
                               ['seller', 'onboarding', uid] as const,
     health:  (uid: string)   => ['seller', 'health', uid] as const,
@@ -109,6 +123,8 @@ export const queryKeys = {
     all:                     ['rider'] as const,
     availability:            ['rider', 'availability'] as const,
     earnings:                ['rider', 'earnings'] as const,
+    orders:                  ['rider', 'orders'] as const,
+    activeOrder:             ['rider', 'active-order'] as const,
   },
 
   home: {

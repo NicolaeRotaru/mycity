@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Message = {
   id: string;
@@ -35,7 +36,7 @@ export default function AdminSupportPage() {
   const [notes, setNotes] = useState('');
 
   const { data: messages = [], isLoading } = useQuery({
-    queryKey: ['admin-support', filter],
+    queryKey: queryKeys.admin.support(filter),
     queryFn: async (): Promise<Message[]> => {
       let q = supabase
         .from('contact_messages')
@@ -63,7 +64,7 @@ export default function AdminSupportPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-support'] });
+      qc.invalidateQueries({ queryKey: ['admin', 'support'] });
       setOpenId(null);
       setNotes('');
       toast.success('Stato aggiornato');

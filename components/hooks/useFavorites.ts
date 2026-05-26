@@ -2,12 +2,13 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 export const useFavorites = () => {
   const qc = useQueryClient();
 
   const { data: favorites = new Set<string>() } = useQuery({
-    queryKey: ['favorites'],
+    queryKey: queryKeys.favorites.all,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return new Set<string>();
@@ -31,7 +32,7 @@ export const useFavorites = () => {
         await supabase.from('favorites').insert({ user_id: user.id, product_id: productId });
       }
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['favorites'] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.favorites.all }),
   });
 
   return { favorites, toggle };

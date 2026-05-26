@@ -16,6 +16,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
+import { queryKeys } from '@/lib/queries/keys';
 
 type OrderRow = {
   id: string;
@@ -45,7 +46,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
   const qc = useQueryClient();
 
   const { data: order, isLoading } = useQuery({
-    queryKey: ['seller-order', id],
+    queryKey: queryKeys.seller.order(id),
     queryFn: async () => {
       const { data, error } = await supabase
         .from('orders')
@@ -92,8 +93,8 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       if (!r.ok) throw new Error(r.reason ?? 'Impossibile rifiutare');
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['seller-order', id] });
-      qc.invalidateQueries({ queryKey: ['seller-orders'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
       toast.success('Ordine rifiutato');
     },
     onError: (err: any) => toast.error(friendlyError(err)),
@@ -119,8 +120,8 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['seller-order', id] });
-      qc.invalidateQueries({ queryKey: ['seller-orders'] });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
       toast.success('Stato aggiornato');
     },
     onError: (err: any) => toast.error(friendlyError(err)),

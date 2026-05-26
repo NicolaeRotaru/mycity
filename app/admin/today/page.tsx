@@ -9,6 +9,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Admin "Today" dashboard — 1 colpo d'occhio per tutte le metriche vitali.
@@ -23,7 +24,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function AdminTodayPage() {
   const { data: stats } = useQuery({
-    queryKey: ['admin-today'],
+    queryKey: queryKeys.admin.today,
     refetchInterval: 30_000,
     queryFn: async () => {
       const todayStart = new Date();

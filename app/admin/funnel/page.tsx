@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, Users, ShoppingCart, Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Admin: Funnel signup → first order + Cohort retention.
@@ -32,7 +33,7 @@ export default function AdminFunnelPage() {
   const [periodDays, setPeriodDays] = useState(90);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin-funnel', periodDays],
+    queryKey: queryKeys.admin.funnel(periodDays),
     queryFn: async (): Promise<FunnelData> => {
       const since = new Date(Date.now() - periodDays * 86_400_000).toISOString();
 

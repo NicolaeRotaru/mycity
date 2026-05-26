@@ -8,12 +8,13 @@ import { useProfile } from '@/components/hooks/useProfile';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
 import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function SellerDashboard() {
   const { profile, isSeller } = useProfile();
 
   const { data: stats, isLoading } = useQuery({
-    queryKey: ['seller-stats'],
+    queryKey: queryKeys.seller.stats,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');

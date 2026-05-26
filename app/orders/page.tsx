@@ -11,6 +11,7 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type OrderItem = {
   id: string;
@@ -53,7 +54,7 @@ const fetchOrders = async (): Promise<Order[]> => {
 
 export default function OrdersPage() {
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['orders'],
+    queryKey: queryKeys.orders.all,
     queryFn: fetchOrders,
   });
 

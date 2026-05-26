@@ -5,6 +5,7 @@ import { AlertTriangle, Check, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Admin: gestione eventi SOS rider.
@@ -32,7 +33,7 @@ export default function AdminSOSPage() {
   const qc = useQueryClient();
 
   const { data: sosList = [] } = useQuery({
-    queryKey: ['admin-sos'],
+    queryKey: queryKeys.admin.sos,
     queryFn: async (): Promise<SOS[]> => {
       const { data } = await supabase
         .from('rider_sos_events')
@@ -62,7 +63,7 @@ export default function AdminSOSPage() {
     },
     onSuccess: () => {
       toast.success('SOS risolto');
-      qc.invalidateQueries({ queryKey: ['admin-sos'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.sos });
     },
     onError: (err: any) => toast.error(friendlyError(err)),
   });

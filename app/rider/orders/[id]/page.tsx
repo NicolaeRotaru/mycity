@@ -20,6 +20,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
+import { queryKeys } from '@/lib/queries/keys';
 
 type OrderRow = {
   id: string;
@@ -94,7 +95,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['rider-order', id] });
-      qc.invalidateQueries({ queryKey: ['rider-orders'] });
+      qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('Stato aggiornato');
     },
     onError: (err: any) => toast.error(friendlyError(err)),
@@ -110,7 +111,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     const result = data as { ok: boolean; reason?: string };
     if (result.ok) {
       qc.invalidateQueries({ queryKey: ['rider-order', id] });
-      qc.invalidateQueries({ queryKey: ['rider-orders'] });
+      qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('✓ Ritiro confermato');
       setVerifyOpen(null);
     }
@@ -127,7 +128,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     const result = data as { ok: boolean; reason?: string };
     if (result.ok) {
       qc.invalidateQueries({ queryKey: ['rider-order', id] });
-      qc.invalidateQueries({ queryKey: ['rider-orders'] });
+      qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('✓ Consegna confermata!');
       stopSharing();
       setVerifyOpen(null);

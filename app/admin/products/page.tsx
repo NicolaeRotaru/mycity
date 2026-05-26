@@ -8,6 +8,7 @@ import { formatPrice } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Row = {
   id: string;
@@ -25,7 +26,7 @@ export default function AdminProductsPage() {
   const [search, setSearch] = useState('');
 
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['admin-products'],
+    queryKey: queryKeys.admin.products,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('products')
@@ -46,8 +47,8 @@ export default function AdminProductsPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-products'] });
-      qc.invalidateQueries({ queryKey: ['admin-stats'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.products });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
       toast.success('Prodotto eliminato');
     },
     onError: (err: any) => toast.error(friendlyError(err)),
