@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
 import SimpleQR from '@/components/SimpleQR';
+import ConfettiBurst from '@/components/ConfettiBurst';
+import SubscribeFromOrderButton from '@/components/SubscribeFromOrderButton';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { formatPrice, formatDate } from '@/lib/format';
 import { addToCart, clearCart } from '@/lib/cart';
@@ -98,6 +100,17 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
     queryKey: ['order', id],
     queryFn: () => fetchOrder(id),
   });
+
+  // Behavioral Scientist: gratifica immediata sul primo "ordine fatto".
+  // Sessionstorage flag impostato dal checkout → confetti burst una volta sola.
+  const [showConfetti, setShowConfetti] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (sessionStorage.getItem('mc_just_ordered') === '1') {
+      sessionStorage.removeItem('mc_just_ordered');
+      setShowConfetti(true);
+    }
+  }, []);
 
   // Realtime subscription: aggiornamenti live dell'ordine (stato + posizione rider)
   useEffect(() => {
@@ -191,6 +204,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl space-y-6">
+      <ConfettiBurst trigger={showConfetti} />
       {/* HEADER */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -230,6 +244,20 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
             >
               ↩️ Richiedi reso
             </Link>
+            {order.seller_id && (
+              <SubscribeFromOrderButton
+                orderId={order.id}
+                sellerId={order.seller_id}
+                items={order.order_items}
+                deliveryAddress={{
+                  full_name: order.delivery_full_name,
+                  phone: order.delivery_phone,
+                  address: order.delivery_address,
+                  city: order.delivery_city,
+                  zip: order.delivery_zip,
+                }}
+              />
+            )}
             <Link
               href={`/orders/${id}/dispute`}
               className="bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 px-4 py-2 rounded-lg font-semibold text-sm"

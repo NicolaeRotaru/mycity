@@ -141,6 +141,9 @@ const Footer = () => {
             <li><Link href="/stores" className="hover:text-white transition-colors">Negozi locali</Link></li>
             <li><Link href="/near" className="hover:text-white transition-colors">Vicino a te</Link></li>
             <li><Link href="/groups" className="hover:text-white transition-colors">Gruppi d'acquisto</Link></li>
+            <li><Link href="/shop-of-month" className="hover:text-white transition-colors">Negozio del mese</Link></li>
+            <li><Link href="/events" className="hover:text-white transition-colors">Eventi MyCity</Link></li>
+            <li><Link href="/lists" className="hover:text-white transition-colors">Liste curate</Link></li>
             <li><Link href="/search" className="hover:text-white transition-colors">Tutti i prodotti</Link></li>
           </ul>
         </div>

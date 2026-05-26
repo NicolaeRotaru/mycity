@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import PhotoFillButton, { ExtractedProduct } from '@/components/seller/PhotoFillButton';
 import AttributesFields from '@/components/seller/AttributesFields';
+import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 
 const Schema = z.object({
@@ -173,7 +174,15 @@ export default function NewProductPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Descrizione</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium">Descrizione</label>
+            <AIDescriptionButton
+              productName={watch('name') ?? ''}
+              categoryName={categories.find((c: any) => c.id === selectedCategoryId)?.name}
+              currentText={watch('description') ?? ''}
+              onResult={(text) => setValue('description', text, { shouldValidate: true })}
+            />
+          </div>
           <textarea {...register('description')} rows={4} className="w-full border p-2 rounded" />
           {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description.message}</p>}
         </div>

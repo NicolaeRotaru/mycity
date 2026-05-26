@@ -11,6 +11,7 @@ import CookieBanner from '@/components/CookieBanner';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
 import DailyCheckIn from '@/components/DailyCheckIn';
 import WelcomeCreditBanner from '@/components/WelcomeCreditBanner';
+import CartCrossDeviceSync from '@/components/CartCrossDeviceSync';
 import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -73,6 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Footer />
           <MobileTabBar />
           <DailyCheckIn />
+          <CartCrossDeviceSync />
         </QueryProvider>
         <ToastProvider />
         <ConfirmDialogHost />

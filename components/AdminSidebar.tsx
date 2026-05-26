@@ -4,11 +4,15 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const links = [
-  { href: '/admin',          label: 'Dashboard', icon: '📊' },
-  { href: '/admin/users',    label: 'Utenti',    icon: '👥' },
-  { href: '/admin/orders',   label: 'Ordini',    icon: '📦' },
-  { href: '/admin/products', label: 'Prodotti',  icon: '🛍️' },
-  { href: '/admin/coupons',  label: 'Coupon',    icon: '🎟️' },
+  { href: '/admin',                label: 'Dashboard',      icon: '📊' },
+  { href: '/admin/users',          label: 'Utenti',         icon: '👥' },
+  { href: '/admin/orders',         label: 'Ordini',         icon: '📦' },
+  { href: '/admin/products',       label: 'Prodotti',       icon: '🛍️' },
+  { href: '/admin/coupons',        label: 'Coupon',         icon: '🎟️' },
+  { href: '/admin/shop-of-month',  label: 'Negozio mese',   icon: '👑' },
+  { href: '/admin/events',         label: 'Eventi',         icon: '📅' },
+  { href: '/admin/sponsored',      label: 'Sponsored',      icon: '📣' },
+  { href: '/admin/cashback',       label: 'Cashback',       icon: '🪙' },
 ];
 
 const AdminSidebar = () => {

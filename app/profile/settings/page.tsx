@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
+import PublicProfileToggle from '@/components/PublicProfileToggle';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
 
@@ -418,6 +419,9 @@ export default function SettingsPage() {
                   Esporta dati (JSON)
                 </button>
               </div>
+
+              {/* Profilo pubblico — Community Manager: opt-in stretto, default OFF */}
+              <PublicProfileToggle />
 
               <div className="border rounded-lg p-4">
                 <h3 className="font-bold mb-1">📄 Documenti</h3>
