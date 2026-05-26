@@ -13,6 +13,7 @@ import DailyCheckIn from '@/components/DailyCheckIn';
 import WelcomeCreditBanner from '@/components/WelcomeCreditBanner';
 import CartCrossDeviceSync from '@/components/CartCrossDeviceSync';
 import BuyerOnboardingTour from '@/components/BuyerOnboardingTour';
+import PWAInstallBanner from '@/components/PWAInstallBanner';
 import PostHogProvider from '@/lib/analytics/posthog';
 import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
@@ -62,9 +63,24 @@ const orgSchema = {
   },
 };
 
+// Preconnect ai domini critici per latenza primo paint
+// Esperti: Performance Engineer: "preconnect = -100-300ms LCP"
+const SUPABASE_HOST = (() => {
+  try {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    return url ? new URL(url).origin : '';
+  } catch { return ''; }
+})();
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable}`}>
+      <head>
+        {SUPABASE_HOST && <link rel="preconnect" href={SUPABASE_HOST} crossOrigin="anonymous" />}
+        <link rel="preconnect" href="https://js.stripe.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://api.stripe.com" />
+        <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
+      </head>
       <body className={`${inter.className} bg-cream-100 text-ink-800`}>
         <a
           href="#main-content"
@@ -85,6 +101,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <DailyCheckIn />
           <CartCrossDeviceSync />
           <BuyerOnboardingTour />
+          <PWAInstallBanner />
         </QueryProvider>
         <ToastProvider />
         <ConfirmDialogHost />

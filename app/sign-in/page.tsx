@@ -116,7 +116,7 @@ const SignInForm = () => {
             placeholder="la-tua@email.it"
             autoComplete="email"
             required
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full border p-2 rounded text-base focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
         </div>
         <div>

@@ -1,0 +1,55 @@
+# Render config — Preview deploy su PR + production.
+#
+# Esperti: SRE: "Preview deploy = staging gratis per ogni PR.
+# Catch regression PRIMA di merge."
+#
+# Per applicare: aprire Render dashboard → New → Blueprint → select repo
+# → questo file viene parsato automaticamente.
+
+services:
+  - type: web
+    name: mycity-marketplace
+    runtime: node
+    plan: starter # $7/mese; per traffico reale → $25 standard
+    region: frankfurt # EU per GDPR + latenza Italia
+    branch: main
+    autoDeploy: true
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    previewsEnabled: true # PR preview deploy
+    previewsExpireAfterDays: 7
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Critical vars (devi settare manualmente nel dashboard):
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY
+        sync: false
+      - key: TURNSTILE_SECRET_KEY
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_POSTHOG_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SENTRY_DSN
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://mycity-marketplace.com
+      - key: NEXT_PUBLIC_WHATSAPP_NUMBER
+        sync: false

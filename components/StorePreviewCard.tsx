@@ -5,6 +5,7 @@ import { MapPin, Clock, Package, Trophy, Star } from 'lucide-react';
 import StoreAvatar from './StoreAvatar';
 import StoreMediaCarousel, { type StoreMediaItem } from './StoreMediaCarousel';
 import { formatPrice } from '@/lib/format';
+import { VerifiedBadge } from './ui/VerifiedBadge';
 import { sizedImage } from '@/lib/image-url';
 import {
   DAY_KEYS,
@@ -128,8 +129,9 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
       <div className="px-4 sm:px-5 pt-3 pb-4 sm:pb-5 flex-1 flex flex-col">
         {/* Nome + rating → link al negozio */}
         <Link href={storeHref} className="block mb-2">
-          <h3 className="font-serif font-bold text-base sm:text-lg text-ink-900 group-hover:text-primary-700 transition-colors truncate">
-            {store.store_name}
+          <h3 className="font-serif font-bold text-base sm:text-lg text-ink-900 group-hover:text-primary-700 transition-colors truncate inline-flex items-center gap-1.5">
+            <span className="truncate">{store.store_name}</span>
+            <VerifiedBadge size="sm" />
           </h3>
           {reviews ? <StarsRow avg={reviews.avg} count={reviews.count} /> : <StarsEmpty />}
         </Link>

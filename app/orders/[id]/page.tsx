@@ -25,6 +25,8 @@ import {
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import EmptyState from '@/components/EmptyState';
+import { Package } from 'lucide-react';
 
 type OrderRow = {
   id: string;
@@ -166,7 +168,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
   });
 
   if (isLoading) return <LoadingState />;
-  if (!order || !status) return <div className="container mx-auto p-8 text-center text-ink-500">Ordine non trovato.</div>;
+  if (!order || !status) return <div className="container mx-auto py-12 max-w-2xl"><EmptyState icon={Package} title="Ordine non trovato" description="L'ordine non esiste o non hai i permessi per vederlo." ctaLabel="Tutti gli ordini" ctaHref="/orders" /></div>;
 
   const c = ORDER_STATUS_COLOR[status];
 

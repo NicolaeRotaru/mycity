@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
 import { requireSupabaseService } from '@/lib/env';
+import { withCronAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 /**
  * Cron endpoint per inviare email lifecycle dalla queue.
@@ -56,23 +58,9 @@ function jsonError(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
 }
 
-export async function POST(req: NextRequest) {
-  return handle(req);
-}
-export async function GET(req: NextRequest) {
-  return handle(req);
-}
-
-async function handle(req: NextRequest): Promise<NextResponse> {
-  const expectedSecret = process.env.CRON_SECRET;
-  if (!expectedSecret) return jsonError(503, 'CRON_SECRET non configurato sul server.');
-
-  const authHeader = req.headers.get('authorization');
-  const bearer = authHeader?.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : null;
-  if (bearer !== expectedSecret) return jsonError(401, 'Non autorizzato');
-
+const handler = withCronAuth(async (req): Promise<NextResponse> => {
   let supaCfg;
-  try { supaCfg = requireSupabaseService(); } catch (e: any) { return jsonError(503, e.message); }
+  try { supaCfg = requireSupabaseService(); } catch (e: any) { return ApiErrors.unavailable(e.message); }
   const supa = createClient(supaCfg.url, supaCfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
 
   // 1) Claim batch (atomic UPDATE … RETURNING per evitare double-send)
@@ -92,7 +80,10 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   }
 
   return await processBatch(supa, (batch ?? []) as any[]);
-}
+});
+
+export const GET = handler;
+export const POST = handler;
 
 async function processBatch(supa: any, batch: { id: string; user_id: string; template: string }[]): Promise<NextResponse> {
   let sent = 0, skipped = 0, errors = 0;

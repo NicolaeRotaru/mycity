@@ -50,11 +50,45 @@ export default function AdminOrdersPage() {
 
   if (isLoading) return <LoadingState />;
 
+  // Export CSV — Operations Manager: "indispensabile per commercialista"
+  const exportCSV = () => {
+    const headers = ['ID', 'Data', 'Cliente', 'Città', 'Negozio', 'Rider', 'Stato', 'Totale €'];
+    const rows = filtered.map((o: any) => [
+      o.id,
+      o.created_at,
+      o.delivery_full_name ?? '',
+      o.delivery_city ?? '',
+      o.seller?.store_name ?? '',
+      o.rider?.full_name ?? '',
+      o.delivery_status,
+      String(Number(o.total_price).toFixed(2)),
+    ]);
+    const csv = [headers, ...rows]
+      .map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM per Excel IT
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mycity-ordini-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-900">Ordini</h1>
-        <p className="text-sm text-ink-500">{filtered.length} ordini</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-ink-900">Ordini</h1>
+          <p className="text-sm text-ink-500">{filtered.length} ordini</p>
+        </div>
+        <button
+          onClick={exportCSV}
+          disabled={filtered.length === 0}
+          className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 disabled:opacity-50 text-ink-700 px-4 py-2 rounded-lg font-semibold text-sm"
+        >
+          Esporta CSV
+        </button>
       </div>
 
       <div className="flex gap-2 flex-wrap text-sm">

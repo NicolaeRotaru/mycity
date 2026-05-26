@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import EmptyState from '@/components/EmptyState';
+import { Package } from 'lucide-react';
 
 const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
   <div className="flex gap-1">
@@ -85,7 +87,7 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
   });
 
   if (isLoading) return <LoadingState />;
-  if (!order) return <div className="container mx-auto p-8 text-center text-ink-500">Ordine non trovato.</div>;
+  if (!order) return <div className="container mx-auto py-12 max-w-2xl"><EmptyState icon={Package} title="Ordine non trovato" ctaLabel="Tutti gli ordini" ctaHref="/orders" /></div>;
   if (order.delivery_status !== 'DELIVERED') {
     return (
       <div className="container mx-auto p-8 text-center space-y-3">

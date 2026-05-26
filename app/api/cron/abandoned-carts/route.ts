@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
 import { requireSupabaseService } from '@/lib/env';
+import { withCronAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 /**
  * Cron endpoint per inviare email "Hai dimenticato qualcosa" agli utenti
@@ -20,24 +22,13 @@ import { requireSupabaseService } from '@/lib/env';
 
 export const runtime = 'nodejs';
 
-function jsonError(status: number, message: string) {
-  return NextResponse.json({ error: message }, { status });
-}
-
-async function handle(req: NextRequest): Promise<NextResponse> {
-  const expectedSecret = process.env.CRON_SECRET;
-  if (!expectedSecret) return jsonError(503, 'CRON_SECRET non configurato.');
-
-  const authHeader = req.headers.get('authorization');
-  const bearer = authHeader?.toLowerCase().startsWith('bearer ') ? authHeader.slice(7).trim() : null;
-  if (bearer !== expectedSecret) return jsonError(401, 'Non autorizzato');
-
+const handler = withCronAuth(async (): Promise<NextResponse> => {
   let supaCfg;
-  try { supaCfg = requireSupabaseService(); } catch (e: any) { return jsonError(503, e.message); }
+  try { supaCfg = requireSupabaseService(); } catch (e: any) { return ApiErrors.unavailable(e.message); }
   const supa = createClient(supaCfg.url, supaCfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
 
   const { data, error } = await supa.rpc('list_abandoned_carts_to_recover', { min_hours: 4 });
-  if (error) return jsonError(500, error.message);
+  if (error) return ApiErrors.internal(error.message);
 
   const candidates = (data ?? []) as Array<{ user_id: string; email: string; full_name: string | null; cart_data: any; cart_total: number }>;
   let sent = 0, errors = 0;
@@ -67,7 +58,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   }
 
   return NextResponse.json({ ok: true, sent, errors, candidates: candidates.length });
-}
+});
 
-export const POST = handle;
-export const GET = handle;
+export const POST = handler;
+export const GET = handler;
