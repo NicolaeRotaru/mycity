@@ -53,11 +53,16 @@ export default function SellerProductsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">I tuoi prodotti</h1>
-        <Link href="/seller/products/new" className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">
-          ➕ Nuovo prodotto
-        </Link>
+      <div className="flex justify-between items-center flex-wrap gap-3">
+        <h1 className="text-2xl font-serif font-bold text-ink-900">I tuoi prodotti</h1>
+        <div className="flex gap-2 flex-wrap">
+          <Link href="/seller/products/import" className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm">
+            <span>📥</span> Importa CSV
+          </Link>
+          <Link href="/seller/products/new" className="inline-flex items-center gap-1.5 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm">
+            <span>➕</span> Nuovo prodotto
+          </Link>
+        </div>
       </div>
 
       {products.length === 0 ? (

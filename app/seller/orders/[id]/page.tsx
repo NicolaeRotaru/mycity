@@ -173,15 +173,26 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         </div>
       )}
       {order.delivery_status === 'ACCEPTED' && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-600 mb-3">Quando hai finito di preparare l'ordine:</p>
-          <button
-            onClick={() => transition.mutate({ newStatus: 'READY', timestampField: 'ready_at' })}
-            disabled={transition.isPending}
-            className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
-          >
-            📦 Pronto per il rider
-          </button>
+        <div className="bg-white border border-cream-300 rounded-xl p-5">
+          <p className="text-sm text-ink-600 mb-3">Quando hai finito di preparare l&apos;ordine:</p>
+          <div className="flex gap-2 flex-wrap">
+            <button
+              onClick={() => transition.mutate({ newStatus: 'READY', timestampField: 'ready_at' })}
+              disabled={transition.isPending}
+              className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+            >
+              📦 Pronto per il rider
+            </button>
+            {/* Print thermal label — Operations Manager: 1 click vs scrivere a mano */}
+            <a
+              href={`/api/seller/orders/${order.id}/label`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm"
+            >
+              🖨️ Stampa etichetta
+            </a>
+          </div>
         </div>
       )}
 
