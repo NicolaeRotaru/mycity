@@ -15,6 +15,7 @@ import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 
 const Schema = z.object({
@@ -255,13 +256,9 @@ export default function NewProductPage() {
           )}
         </div>
 
-        <button
-          type="submit"
-          disabled={create.isPending}
-          className="w-full bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white py-3 rounded-lg font-semibold"
-        >
-          {create.isPending ? 'Pubblicazione...' : 'Pubblica prodotto'}
-        </button>
+        <Button type="submit" loading={create.isPending} fullWidth size="lg">
+          Pubblica prodotto
+        </Button>
       </form>
     </div>
   );

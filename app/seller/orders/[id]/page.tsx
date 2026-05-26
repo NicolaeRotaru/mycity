@@ -13,6 +13,7 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import SimpleQR from '@/components/SimpleQR';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
@@ -152,13 +153,12 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         <div className="bg-white border border-cream-300 rounded-xl p-5">
           <p className="text-sm text-ink-600 mb-3">Vuoi accettare questo ordine?</p>
           <div className="flex gap-2 flex-wrap">
-            <button
+            <Button
               onClick={() => transition.mutate({ newStatus: 'ACCEPTED', timestampField: 'accepted_at' })}
-              disabled={transition.isPending}
-              className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+              loading={transition.isPending}
             >
               ✓ Accetta ordine
-            </button>
+            </Button>
             <button
               onClick={() => {
                 const reason = prompt('Motivo del rifiuto (visibile al cliente):');
@@ -176,13 +176,12 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         <div className="bg-white border border-cream-300 rounded-xl p-5">
           <p className="text-sm text-ink-600 mb-3">Quando hai finito di preparare l&apos;ordine:</p>
           <div className="flex gap-2 flex-wrap">
-            <button
+            <Button
               onClick={() => transition.mutate({ newStatus: 'READY', timestampField: 'ready_at' })}
-              disabled={transition.isPending}
-              className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+              loading={transition.isPending}
             >
               📦 Pronto per il rider
-            </button>
+            </Button>
             {/* Print thermal label — Operations Manager: 1 click vs scrivere a mano */}
             <a
               href={`/api/seller/orders/${order.id}/label`}

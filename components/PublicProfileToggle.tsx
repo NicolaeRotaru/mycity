@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
+import { COPY } from '@/lib/copy';
 
 /**
  * Toggle profilo pubblico buyer opt-in.
@@ -158,13 +160,7 @@ export default function PublicProfileToggle() {
         </div>
       )}
 
-      <button
-        onClick={save}
-        disabled={saving}
-        className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-      >
-        {saving ? 'Salvataggio…' : 'Salva'}
-      </button>
+      <Button onClick={save} loading={saving} size="sm">{COPY.actions.save}</Button>
     </div>
   );
 }

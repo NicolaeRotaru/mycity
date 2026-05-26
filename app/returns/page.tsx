@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Button } from '@/components/ui/Button';
 
 export const metadata = {
   title: 'Resi e rimborsi · MyCity',
@@ -80,9 +81,7 @@ export default function ReturnsPage() {
           <p>Se hai dubbi o problemi con un reso, scrivici: il nostro team di supporto media tra te e il venditore
           per risolvere ogni situazione.</p>
           <div className="flex gap-3 flex-wrap mt-3">
-            <Link href="/contact" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold transition-colors">
-              ✉️ Contatta supporto
-            </Link>
+            <Button href="/contact">✉️ Contatta supporto</Button>
             <Link href="/faq" className="inline-block bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold transition-colors">
               📖 Vai alle FAQ
             </Link>

@@ -24,6 +24,7 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
@@ -236,12 +237,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
             >
               ⭐ Lascia recensione
             </Link>
-            <button
-              onClick={handleReorder}
-              className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-            >
-              🔁 Ripeti ordine
-            </button>
+            <Button onClick={handleReorder} size="sm">🔁 Ripeti ordine</Button>
             <Link
               href={`/orders/${id}/return`}
               className="bg-white border border-cream-300 text-ink-700 hover:bg-cream-50 px-4 py-2 rounded-lg font-semibold text-sm"

@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { haversineKm } from '@/lib/geo';
 import { queryKeys } from '@/lib/queries/keys';
+import { Button } from '@/components/ui/Button';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -91,9 +92,7 @@ export default function NearMePage() {
         <p className="text-5xl">📍</p>
         <p className="text-ink-700 font-semibold">{permError}</p>
         <p className="text-ink-500 text-sm">Abilita la geolocalizzazione del browser per vedere i negozi più vicini.</p>
-        <Link href="/stores" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-6 py-2 rounded-lg">
-          Vedi tutti i negozi
-        </Link>
+        <Button href="/stores">Vedi tutti i negozi</Button>
       </div>
     );
   }

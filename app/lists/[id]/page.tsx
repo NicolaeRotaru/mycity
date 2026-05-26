@@ -13,6 +13,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
+import { COPY } from '@/lib/copy';
 import EmptyState from '@/components/EmptyState';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -214,8 +215,8 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
                 className="w-full text-sm bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 resize-none"
               />
               <div className="flex gap-2">
-                <button onClick={() => updateMeta.mutate()} disabled={updateMeta.isPending} className="bg-primary-700 text-white px-3 py-1 rounded-lg text-sm font-bold">Salva</button>
-                <button onClick={() => setEditTitle(false)} className="text-ink-500 px-3 py-1 rounded-lg text-sm">Annulla</button>
+                <button onClick={() => updateMeta.mutate()} disabled={updateMeta.isPending} className="bg-primary-700 text-white px-3 py-1 rounded-lg text-sm font-bold">{COPY.actions.save}</button>
+                <button onClick={() => setEditTitle(false)} className="text-ink-500 px-3 py-1 rounded-lg text-sm">{COPY.actions.cancel}</button>
               </div>
             </div>
           ) : (

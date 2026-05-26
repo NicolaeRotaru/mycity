@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Subscription = {
@@ -90,9 +91,7 @@ export default function SubscriptionsPage() {
           <RefreshCw size={36} className="mx-auto text-ink-300 mb-3" />
           <p className="text-ink-600 font-medium mb-1">Nessun ordine ricorrente</p>
           <p className="text-sm text-ink-400 mb-4">Quando ordini un prodotto puoi attivare la consegna ricorrente.</p>
-          <Link href="/search" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold text-sm">
-            Cerca prodotti
-          </Link>
+          <Button href="/search" size="sm">Cerca prodotti</Button>
         </div>
       ) : (
         <div className="space-y-3">

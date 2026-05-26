@@ -130,12 +130,7 @@ export default function SellerStoriesPage() {
             Foto + 1 frase. Scade in 24h. Modo veloce per restare in cima.
           </p>
         </div>
-        <button
-          onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-1.5 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-bold text-sm"
-        >
-          <Camera size={16} strokeWidth={2.4} /> Nuova storia
-        </button>
+        <Button onClick={() => setOpen(true)} size="sm" icon={Camera}>Nuova storia</Button>
       </header>
 
       {stories.length === 0 ? (

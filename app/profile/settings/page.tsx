@@ -9,6 +9,7 @@ import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import PublicProfileToggle from '@/components/PublicProfileToggle';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { useLocalStorage } from '@/lib/hooks';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
@@ -238,13 +239,11 @@ export default function SettingsPage() {
                     onChange={(e) => setNewEmail(e.target.value)}
                     className="flex-1 border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
                   />
-                  <button
+                  <Button
                     type="submit"
-                    disabled={changingEmail || !newEmail.trim()}
-                    className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold"
-                  >
-                    {changingEmail ? 'Invio...' : 'Cambia email'}
-                  </button>
+                    loading={changingEmail}
+                    disabled={!newEmail.trim()}
+                  >Cambia email</Button>
                 </form>
                 <p className="text-xs text-ink-500 mt-2">
                   Ti invieremo un'email di conferma al nuovo indirizzo.
@@ -315,13 +314,11 @@ export default function SettingsPage() {
                     className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
                   />
                 </div>
-                <button
+                <Button
                   type="submit"
-                  disabled={changingPwd || !newPassword || !confirmPassword}
-                  className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold"
-                >
-                  {changingPwd ? 'Aggiornamento...' : 'Aggiorna password'}
-                </button>
+                  loading={changingPwd}
+                  disabled={!newPassword || !confirmPassword}
+                >Aggiorna password</Button>
               </form>
             </section>
           )}

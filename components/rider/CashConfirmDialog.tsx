@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { COPY } from '@/lib/copy';
 
 type Props = {
   orderId: string;
@@ -131,14 +132,14 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
             disabled={submitting}
             className="flex-1 rounded-lg px-4 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
           >
-            Annulla
+            {COPY.actions.cancel}
           </button>
           <button
             onClick={submit}
             disabled={submitting || !cashPhoto}
             className="flex-1 rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 disabled:opacity-50"
           >
-            {submitting ? 'Invio…' : 'Conferma'}
+            {submitting ? COPY.states.sending : COPY.actions.confirm}
           </button>
         </div>
       </div>

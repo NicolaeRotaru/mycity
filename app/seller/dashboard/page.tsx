@@ -77,12 +77,7 @@ export default function SellerDashboard() {
           <h1 className="text-3xl font-extrabold">Ciao, {profile?.store_name ?? 'venditore'} 👋</h1>
           <p className="text-ink-500 text-sm">Ecco il riepilogo del tuo negozio</p>
         </div>
-        <Link
-          href="/seller/products/new"
-          className="bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-bold shadow-md"
-        >
-          ➕ Pubblica un prodotto
-        </Link>
+        <Button href="/seller/products/new">➕ Pubblica un prodotto</Button>
       </div>
 
       {/* Health Score */}

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
+import { COPY } from '@/lib/copy';
 
 interface Props {
   value: StoreMediaItem[];
@@ -154,7 +155,7 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
           <input {...getInputProps()} />
           <p className="text-sm text-ink-600">
             {uploading
-              ? 'Caricamento…'
+              ? COPY.states.loading
               : 'Trascina foto o video qui, oppure clicca per scegliere'}
           </p>
         </div>
