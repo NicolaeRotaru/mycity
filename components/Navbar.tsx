@@ -284,6 +284,7 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
                 <MenuLink href="/profile/loyalty" icon="✨" label="Punti & Livello" />
                 <MenuLink href="/profile/achievements" icon="🏆" label="Badge" />
                 <MenuLink href="/profile/gift-cards" icon="🎁" label="Gift Card" />
+                <MenuLink href="/lists" icon="📋" label="Liste curate" />
                 <MenuLink href="/profile/referral" icon="📣" label="Invita amici · €5" />
               </>
             )}

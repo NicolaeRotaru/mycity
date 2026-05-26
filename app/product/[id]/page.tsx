@@ -23,6 +23,7 @@ import StickyAddToCart from '@/components/StickyAddToCart';
 import SimilarProducts from '@/components/SimilarProducts';
 import PriceComparison from '@/components/PriceComparison';
 import ActivePromoBadge from '@/components/ActivePromoBadge';
+import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
@@ -295,6 +296,11 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             >
               {isFav ? '♥' : '♡'}
             </button>
+          </div>
+
+          {/* Aggiungi a lista */}
+          <div className="flex">
+            <AddToListButton productId={id} />
           </div>
 
           {/* Rating */}
