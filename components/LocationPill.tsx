@@ -2,29 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { MapPin, ChevronDown } from 'lucide-react';
+import { useLocalStorage } from '@/lib/hooks';
 
 const STORAGE_KEY = 'mc_delivery_location';
 
 type Location = { city: string; zip: string };
 const DEFAULT_LOC: Location = { city: 'Piacenza', zip: '29100' };
-
-function readLocation(): Location {
-  if (typeof window === 'undefined') return DEFAULT_LOC;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return DEFAULT_LOC;
-    const parsed = JSON.parse(raw);
-    return { city: parsed.city ?? DEFAULT_LOC.city, zip: parsed.zip ?? DEFAULT_LOC.zip };
-  } catch {
-    return DEFAULT_LOC;
-  }
-}
-
-function writeLocation(loc: Location) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(loc));
-  window.dispatchEvent(new CustomEvent('mc:location-change', { detail: loc }));
-}
 
 /**
  * Pill "Consegna a Piacenza 29100" cliccabile per cambiare CAP.
@@ -32,22 +15,22 @@ function writeLocation(loc: Location) {
  * componente è pronto per altre città quando espanderemo.
  */
 export default function LocationPill({ compact = false }: { compact?: boolean }) {
-  const [loc, setLoc] = useState<Location>(DEFAULT_LOC);
+  const [loc, setLoc] = useLocalStorage<Location>(STORAGE_KEY, DEFAULT_LOC);
   const [open, setOpen] = useState(false);
-  const [zip, setZip] = useState(DEFAULT_LOC.zip);
+  const [zip, setZip] = useState(loc.zip);
 
   useEffect(() => {
-    const l = readLocation();
-    setLoc(l);
-    setZip(l.zip);
-  }, []);
+    setZip(loc.zip);
+  }, [loc.zip]);
 
   const save = () => {
     const cleaned = zip.replace(/\D/g, '').slice(0, 5);
     if (cleaned.length !== 5) return;
     const newLoc: Location = { city: cleaned.startsWith('291') ? 'Piacenza' : loc.city, zip: cleaned };
-    writeLocation(newLoc);
     setLoc(newLoc);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mc:location-change', { detail: newLoc }));
+    }
     setOpen(false);
   };
 

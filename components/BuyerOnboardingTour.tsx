@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { X, MapPin, ShoppingCart, Gift, ArrowRight } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
+import { useLocalStorage } from '@/lib/hooks';
 
 /**
  * Onboarding tour buyer al primo login.
@@ -43,20 +44,19 @@ const STEPS = [
 
 export default function BuyerOnboardingTour() {
   const { isAuthenticated, isBuyer } = useProfile();
+  const [onboarded, setOnboarded] = useLocalStorage<boolean>(KEY, false);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
 
   useEffect(() => {
-    if (!isAuthenticated || !isBuyer) return;
-    if (typeof window === 'undefined') return;
-    if (localStorage.getItem(KEY) === '1') return;
+    if (!isAuthenticated || !isBuyer || onboarded) return;
     // Defer 1.5s per non sovrapporsi a banner welcome
     const t = setTimeout(() => setOpen(true), 1500);
     return () => clearTimeout(t);
-  }, [isAuthenticated, isBuyer]);
+  }, [isAuthenticated, isBuyer, onboarded]);
 
   const close = () => {
-    localStorage.setItem(KEY, '1');
+    setOnboarded(true);
     setOpen(false);
   };
 

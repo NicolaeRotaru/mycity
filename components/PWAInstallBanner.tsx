@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
+import { useLocalStorage } from '@/lib/hooks';
 
 /**
  * PWA install banner — appare dopo 3 visite per buyer non-installati.
@@ -25,6 +26,8 @@ type BeforeInstallPromptEvent = Event & {
 };
 
 export default function PWAInstallBanner() {
+  const [dismissed, setDismissed] = useLocalStorage<boolean>(DISMISS_KEY, false);
+  const [visits, setVisits] = useLocalStorage<number>(VISITS_KEY, 0);
   const [show, setShow] = useState(false);
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
 
@@ -32,12 +35,11 @@ export default function PWAInstallBanner() {
     if (typeof window === 'undefined') return;
     // Already installed? hide
     if (window.matchMedia('(display-mode: standalone)').matches) return;
-    if (localStorage.getItem(DISMISS_KEY) === '1') return;
+    if (dismissed) return;
 
-    // Count visits
-    const visits = Number(localStorage.getItem(VISITS_KEY) ?? '0') + 1;
-    localStorage.setItem(VISITS_KEY, String(visits));
-    if (visits < MIN_VISITS) return;
+    const nextVisits = visits + 1;
+    setVisits(nextVisits);
+    if (nextVisits < MIN_VISITS) return;
 
     // Listen for beforeinstallprompt
     const handler = (e: Event) => {
@@ -47,10 +49,11 @@ export default function PWAInstallBanner() {
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, '1');
+    setDismissed(true);
     setShow(false);
   };
 

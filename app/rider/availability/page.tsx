@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useLocalStorage } from '@/lib/hooks';
 
 const AVAIL_KEY = 'mycity_rider_availability';
 const ZONES_KEY = 'mycity_rider_zones';
@@ -48,30 +49,17 @@ const SUGGESTED_ZONES = [
 ];
 
 export default function RiderAvailabilityPage() {
-  const [avail, setAvail] = useState<Availability>(DEFAULT_AVAIL);
-  const [zones, setZones] = useState<string[]>([]);
+  const [avail, setAvail] = useLocalStorage<Availability>(AVAIL_KEY, DEFAULT_AVAIL);
+  const [zones, setZones] = useLocalStorage<string[]>(ZONES_KEY, []);
   const [customZone, setCustomZone] = useState('');
-
-  useEffect(() => {
-    try {
-      const a = localStorage.getItem(AVAIL_KEY);
-      if (a) setAvail({ ...DEFAULT_AVAIL, ...JSON.parse(a) });
-    } catch {}
-    try {
-      const z = localStorage.getItem(ZONES_KEY);
-      if (z) setZones(JSON.parse(z));
-    } catch {}
-  }, []);
 
   const save = (next: Availability, silent = false) => {
     setAvail(next);
-    localStorage.setItem(AVAIL_KEY, JSON.stringify(next));
     if (!silent) toast.success('Preferenze salvate');
   };
 
   const saveZones = (next: string[]) => {
     setZones(next);
-    localStorage.setItem(ZONES_KEY, JSON.stringify(next));
   };
 
   const toggleZone = (zone: string) => {
