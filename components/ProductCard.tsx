@@ -49,8 +49,8 @@ const ProductCard = ({
     setHeartBeat(true);
     setTimeout(() => setHeartBeat(false), 600);
     toggle.mutate(id, {
-      onError: (err: any) => {
-        if (err?.message === 'AUTH_REQUIRED') toast.error('Accedi per salvare nei preferiti');
+      onError: (err: unknown) => {
+        if (err instanceof Error && err.message === 'AUTH_REQUIRED') toast.error('Accedi per salvare nei preferiti');
         else toast.error('Errore');
       },
     });

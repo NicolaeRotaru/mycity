@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { X, MapPin, ShoppingCart, Gift, ArrowRight } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import { useLocalStorage } from '@/lib/hooks';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Onboarding tour buyer al primo login.
@@ -114,12 +115,13 @@ export default function BuyerOnboardingTour() {
               {s.cta} <ArrowRight size={16} strokeWidth={2.4} />
             </Link>
           ) : (
-            <button
+            <Button
               onClick={next}
-              className="flex-1 bg-primary-700 hover:bg-primary-800 text-white px-4 py-3 rounded-lg font-bold inline-flex items-center justify-center gap-1.5"
+              fullWidth
+              iconRight={ArrowRight}
             >
-              {s.cta} <ArrowRight size={16} strokeWidth={2.4} />
-            </button>
+              {s.cta}
+            </Button>
           )}
         </div>
       </div>

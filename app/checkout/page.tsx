@@ -361,8 +361,8 @@ export default function CheckoutPage() {
         router.push('/orders');
       }
     },
-    onError: (err: any) => {
-      if (err?.message === 'REDIRECT_TO_SIGNIN') return; // gia' redirezionato
+    onError: (err: unknown) => {
+      if (err instanceof Error && err.message === 'REDIRECT_TO_SIGNIN') return;
       toast.error(friendlyError(err));
     },
   });
@@ -411,8 +411,8 @@ export default function CheckoutPage() {
       // su /orders?stripe=success o /cart?stripe=canceled (vedi /api/stripe/checkout).
       window.location.assign(url);
     },
-    onError: (err: any) => {
-      if (err?.message === 'REDIRECT_TO_SIGNIN') return;
+    onError: (err: unknown) => {
+      if (err instanceof Error && err.message === 'REDIRECT_TO_SIGNIN') return;
       toast.error(friendlyError(err));
     },
   });
@@ -458,12 +458,7 @@ export default function CheckoutPage() {
           <p className="text-sm text-primary-900">
             <strong>🔑 Per completare l'ordine devi accedere</strong> — i tuoi articoli restano nel carrello.
           </p>
-          <Link
-            href="/sign-in?returnTo=/checkout"
-            className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap"
-          >
-            Accedi ora
-          </Link>
+          <Button href="/sign-in?returnTo=/checkout" size="sm">Accedi ora</Button>
         </div>
       )}
 
@@ -609,13 +604,7 @@ export default function CheckoutPage() {
                       placeholder="Codice sconto (es. BENVENUTO10)"
                       className="flex-1 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
                     />
-                    <button
-                      type="button"
-                      onClick={applyCoupon}
-                      className="bg-primary-700 hover:bg-primary-800 text-white px-3 py-2 rounded text-sm font-semibold"
-                    >
-                      Applica
-                    </button>
+                    <Button type="button" onClick={applyCoupon} size="sm">Applica</Button>
                   </div>
                   {couponError && <p className="text-xs text-rose-600">{couponError}</p>}
                 </div>

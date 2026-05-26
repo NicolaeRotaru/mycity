@@ -70,7 +70,7 @@ export default function AdminSponsoredPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Aggiornato');
+      toast.success(COPY.toasts.updated);
       qc.invalidateQueries({ queryKey: queryKeys.admin.sponsored() });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
@@ -82,7 +82,7 @@ export default function AdminSponsoredPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Eliminato');
+      toast.success(COPY.toasts.deleted);
       qc.invalidateQueries({ queryKey: queryKeys.admin.sponsored() });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),

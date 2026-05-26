@@ -83,8 +83,8 @@ export default function ProductQA({ productId, sellerId }: Props) {
       qc.invalidateQueries({ queryKey: queryKeys.qa.product(productId) });
       toast.success('Domanda inviata. Riceverai una notifica quando ti rispondono.');
     },
-    onError: (err: any) => {
-      if (err.message !== 'REDIRECT') toast.error(friendlyError(err));
+    onError: (err: unknown) => {
+      if (err instanceof Error && err.message !== 'REDIRECT') toast.error(friendlyError(err));
     },
   });
 

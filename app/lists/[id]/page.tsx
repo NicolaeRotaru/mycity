@@ -113,7 +113,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Aggiornato');
+      toast.success(COPY.toasts.updated);
       setEditTitle(false);
       qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
     },

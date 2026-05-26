@@ -111,8 +111,8 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
       qc.invalidateQueries({ queryKey: queryKeys.groups.participation(id) });
       toast.success('🎉 Sei nel gruppo! Quando si raggiunge il target verrai contattato.');
     },
-    onError: (err: any) => {
-      if (err?.message !== 'REDIRECT') toast.error(friendlyError(err));
+    onError: (err: unknown) => {
+      if (err instanceof Error && err.message !== 'REDIRECT') toast.error(friendlyError(err));
     },
   });
 

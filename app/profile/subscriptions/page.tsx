@@ -11,6 +11,7 @@ import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
+import { COPY } from '@/lib/copy';
 
 type Subscription = {
   id: string;
@@ -67,7 +68,7 @@ export default function SubscriptionsPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-      toast.success('Aggiornato');
+      toast.success(COPY.toasts.updated);
     },
   });
 
