@@ -3,9 +3,11 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ListChecks, Plus, X, Star } from 'lucide-react';
+import { ListChecks, Plus, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 
 /**
  * /lists — Liste curate (tastemakers).
@@ -214,14 +216,20 @@ export default function ListsPage() {
       </section>
 
       {/* Modal nuova lista */}
-      {showNew && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-warm-lg">
-            <div className="px-5 py-4 border-b border-cream-200 flex items-center justify-between">
-              <h2 className="font-bold">Nuova lista</h2>
-              <button onClick={() => setShowNew(false)} aria-label="Chiudi"><X size={20} /></button>
-            </div>
-            <div className="p-5 space-y-4">
+      <Modal
+        open={showNew}
+        onClose={() => setShowNew(false)}
+        title="Nuova lista"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowNew(false)}>Annulla</Button>
+            <Button onClick={() => create.mutate()} disabled={create.isPending || !newTitle.trim()} loading={create.isPending}>
+              Crea lista
+            </Button>
+          </>
+        }
+      >
+            <div className="space-y-4">
               <div className="grid grid-cols-[80px_1fr] gap-3">
                 <div>
                   <label className="block text-sm font-semibold mb-1">Emoji</label>
@@ -254,15 +262,7 @@ export default function ListsPage() {
                 />
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-cream-200 flex justify-end gap-2">
-              <button type="button" onClick={() => setShowNew(false)} className="px-4 py-2 rounded-lg text-ink-700 hover:bg-cream-100 font-semibold text-sm">Annulla</button>
-              <button onClick={() => create.mutate()} disabled={create.isPending || !newTitle.trim()} className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-bold text-sm">
-                Crea lista
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

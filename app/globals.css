@@ -72,6 +72,16 @@ h1, h2, h3, .font-serif-display {
   body { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0)); }
 }
 
+/* A11y: reduced motion override per utenti con vestibolare disorders */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Card hover lift universale */
 .card-hover {
   transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 200ms ease-out;

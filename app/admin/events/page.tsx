@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Plus, Pencil, Trash2, Pause, Play, X } from 'lucide-react';
+import { CalendarDays, Plus, Pencil, Trash2, Pause, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Admin: gestione Eventi MyCity.
@@ -205,19 +207,24 @@ export default function AdminEventsPage() {
         </table>
       </div>
 
-      {editing && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-warm-lg">
-            <div className="px-6 py-4 border-b border-cream-200 flex items-center justify-between">
-              <h2 className="font-bold text-lg">{editing.id ? 'Modifica evento' : 'Nuovo evento'}</h2>
-              <button onClick={() => setEditing(null)} aria-label="Chiudi" className="text-ink-500 hover:text-ink-700">
-                <X size={20} />
-              </button>
-            </div>
-            <form
-              onSubmit={(e) => { e.preventDefault(); save.mutate(editing); }}
-              className="p-6 space-y-4"
-            >
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={editing?.id ? 'Modifica evento' : 'Nuovo evento'}
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditing(null)}>Annulla</Button>
+            <Button type="submit" form="event-form" loading={save.isPending}>Salva</Button>
+          </>
+        }
+      >
+        {editing && (
+          <form
+            id="event-form"
+            onSubmit={(e) => { e.preventDefault(); save.mutate(editing); }}
+            className="space-y-4"
+          >
               <div>
                 <label className="block text-sm font-semibold mb-1">Titolo</label>
                 <input value={editing.title ?? ''} onChange={(e) => setEditing({ ...editing, title: e.target.value })} className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" required />
@@ -254,16 +261,9 @@ export default function AdminEventsPage() {
                 <label className="block text-sm font-semibold mb-1">CTA URL (link evento)</label>
                 <input value={editing.cta_url ?? ''} onChange={(e) => setEditing({ ...editing, cta_url: e.target.value })} type="url" className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" placeholder="/search?event=…" />
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-cream-200">
-                <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 rounded-lg text-ink-700 hover:bg-cream-100 font-semibold text-sm">Annulla</button>
-                <button type="submit" disabled={save.isPending} className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-bold text-sm">
-                  {save.isPending ? 'Salvataggio…' : 'Salva'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

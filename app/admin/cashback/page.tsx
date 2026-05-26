@@ -2,10 +2,12 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Coins, Plus, Pause, Play, Trash2, X } from 'lucide-react';
+import { Coins, Plus, Pause, Play, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Admin: Cashback Campaigns.
@@ -197,14 +199,20 @@ export default function AdminCashbackPage() {
         </table>
       </div>
 
-      {editing && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-warm-lg">
-            <div className="px-6 py-4 border-b border-cream-200 flex items-center justify-between">
-              <h2 className="font-bold">{editing.id ? 'Modifica campagna' : 'Nuova campagna'}</h2>
-              <button onClick={() => setEditing(null)} aria-label="Chiudi" className="text-ink-500"><X size={20} /></button>
-            </div>
-            <form onSubmit={(e) => { e.preventDefault(); save.mutate(editing); }} className="p-6 space-y-4">
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={editing?.id ? 'Modifica campagna' : 'Nuova campagna'}
+        size="lg"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setEditing(null)}>Annulla</Button>
+            <Button type="submit" form="cashback-form" loading={save.isPending}>Salva</Button>
+          </>
+        }
+      >
+        {editing && (
+          <form id="cashback-form" onSubmit={(e) => { e.preventDefault(); save.mutate(editing); }} className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Nome interno</label>
                 <input value={editing.name ?? ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" required />
@@ -245,16 +253,9 @@ export default function AdminCashbackPage() {
                   <input type="datetime-local" value={editing.ends_at as string ?? ''} onChange={(e) => setEditing({ ...editing, ends_at: e.target.value })} className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" />
                 </div>
               </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-cream-200">
-                <button type="button" onClick={() => setEditing(null)} className="px-4 py-2 rounded-lg text-ink-700 hover:bg-cream-100 font-semibold text-sm">Annulla</button>
-                <button type="submit" disabled={save.isPending} className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-bold text-sm">
-                  {save.isPending ? 'Salvataggio…' : 'Salva'}
-                </button>
-              </div>
             </form>
-          </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

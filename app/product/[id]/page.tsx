@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Heart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -288,13 +289,14 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                 });
               }}
               aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
-              className={`shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center text-2xl transition-transform hover:scale-110 ${
+              aria-pressed={isFav}
+              className={`shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 ${
                 isFav
                   ? 'bg-rose-500 border-rose-500 text-white'
-                  : 'bg-white border-gray-200 text-gray-300 hover:text-rose-400 hover:border-rose-200'
+                  : 'bg-white border-cream-300 text-ink-300 hover:text-rose-400 hover:border-rose-200'
               }`}
             >
-              {isFav ? '♥' : '♡'}
+              <Heart size={20} strokeWidth={2.4} fill={isFav ? 'currentColor' : 'none'} aria-hidden />
             </button>
           </div>
 
