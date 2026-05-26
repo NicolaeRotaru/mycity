@@ -165,21 +165,50 @@ CREATE POLICY sponsored_listings_owner_rw ON public.sponsored_listings
 -- =============================================================================
 -- REFERRAL TRACKING + LEADERBOARD
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS public.referrals (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    referrer_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-    referred_id uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
-    referred_email text,
-    code text NOT NULL,
-    status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','signed_up','first_order','rewarded')),
-    bonus_awarded boolean NOT NULL DEFAULT false,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    converted_at timestamptz
-);
+-- ATTENZIONE: tabella referrals esiste già dalla migration 015 con schema
+-- minimal (id, referrer_id, referred_id, reward_amount, rewarded, ecc.).
+-- Aggiungiamo via ALTER TABLE le colonne che servono per il nuovo flusso
+-- tracking + leaderboard.
+
+ALTER TABLE public.referrals
+    ADD COLUMN IF NOT EXISTS code text,
+    ADD COLUMN IF NOT EXISTS referred_email text,
+    ADD COLUMN IF NOT EXISTS status text DEFAULT 'pending',
+    ADD COLUMN IF NOT EXISTS bonus_awarded boolean DEFAULT false,
+    ADD COLUMN IF NOT EXISTS converted_at timestamptz;
+
+-- Status check non posso usare ADD CONSTRAINT IF NOT EXISTS → DO block
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'referrals_status_check'
+      AND conrelid = 'public.referrals'::regclass
+  ) THEN
+    ALTER TABLE public.referrals
+      ADD CONSTRAINT referrals_status_check
+      CHECK (status IN ('pending','signed_up','first_order','rewarded'));
+  END IF;
+END$$;
+
+-- referred_id già NOT NULL in 015 ma il nuovo flusso permette anche solo
+-- l'email (pre-signup), quindi lo rendiamo nullable in modo idempotente.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'referrals'
+      AND column_name = 'referred_id' AND is_nullable = 'NO'
+  ) THEN
+    ALTER TABLE public.referrals ALTER COLUMN referred_id DROP NOT NULL;
+  END IF;
+END$$;
+
 CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON public.referrals(referrer_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS referrals_code_idx ON public.referrals(code);
+CREATE INDEX IF NOT EXISTS referrals_code_idx ON public.referrals(code) WHERE code IS NOT NULL;
 
 ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
+-- Le policy della migration 015 sono già OK; aggiungiamo solo se mancano
 DROP POLICY IF EXISTS referrals_referrer_read ON public.referrals;
 CREATE POLICY referrals_referrer_read ON public.referrals FOR SELECT USING (auth.uid() = referrer_id);
 
