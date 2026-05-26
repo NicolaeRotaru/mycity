@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { supabase, auth } from '@/lib/supabase/client';
+import { COPY } from '@/lib/copy';
 
 export default function VerifyEmailPage() {
   const [email, setEmail] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export default function VerifyEmailPage() {
               disabled={resending || !email}
               className="w-full rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800 disabled:opacity-50"
             >
-              {resending ? 'Invio…' : 'Reinvia email di verifica'}
+              {resending ? COPY.states.sending : 'Reinvia email di verifica'}
             </button>
             {resent === 'ok' && (
               <p className="text-center text-sm text-olive-700">

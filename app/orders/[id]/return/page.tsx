@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { COPY } from '@/lib/copy';
 
 const REASONS = [
   { value: 'DAMAGED',           label: '📦 Prodotto danneggiato' },
@@ -148,7 +149,7 @@ export default function NewReturnPage() {
           disabled={submitting}
           className="mt-6 w-full rounded-lg bg-primary-700 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
         >
-          {submitting ? 'Invio…' : 'Invia richiesta di reso'}
+          {submitting ? COPY.states.sending : 'Invia richiesta di reso'}
         </button>
       </div>
     </div>

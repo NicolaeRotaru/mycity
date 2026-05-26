@@ -2,6 +2,7 @@
 
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '@/components/ui/Button';
 
 // Centro Italia (Roma) come fallback iniziale prima che il seller imposti la propria posizione
 const DEFAULT_MAP_CENTER = { lat: 41.9028, lng: 12.4964 };
@@ -195,14 +196,12 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
             placeholder="Es. Via Roma 1, Milano"
             className="w-full sm:flex-1 min-w-0 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
-          <button
+          <Button
             type="button"
             onClick={searchAddress}
-            disabled={searching}
-            className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded disabled:opacity-50 whitespace-nowrap font-semibold shrink-0"
-          >
-            {searching ? 'Cerco...' : '🔍 Cerca'}
-          </button>
+            loading={searching}
+            size="sm"
+          >🔍 Cerca</Button>
         </div>
       </div>
 

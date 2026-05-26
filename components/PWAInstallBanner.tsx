@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Download, X } from 'lucide-react';
 import { useLocalStorage } from '@/lib/hooks';
+import { Button } from '@/components/ui/Button';
 
 /**
  * PWA install banner — appare dopo 3 visite per buyer non-installati.
@@ -80,12 +81,7 @@ export default function PWAInstallBanner() {
             Accesso veloce + notifiche ordini. Niente app store.
           </p>
           <div className="flex gap-2 mt-3">
-            <button
-              onClick={install}
-              className="bg-primary-700 hover:bg-primary-800 text-white px-3 py-1.5 rounded-lg font-bold text-xs"
-            >
-              Installa
-            </button>
+            <Button onClick={install} size="sm">Installa</Button>
             <button
               onClick={dismiss}
               className="text-ink-500 hover:text-ink-700 px-3 py-1.5 text-xs"
