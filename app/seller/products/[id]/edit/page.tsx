@@ -11,6 +11,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import AttributesFields from '@/components/seller/AttributesFields';
+import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 
@@ -232,7 +233,15 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         </div>
 
         <div>
-          <label className="block text-sm font-medium mb-1">Descrizione</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium">Descrizione</label>
+            <AIDescriptionButton
+              productName={watch('name') ?? ''}
+              categoryName={categories.find((c: any) => c.id === selectedCategoryId)?.name}
+              currentText={watch('description') ?? ''}
+              onResult={(text) => setValue('description', text, { shouldValidate: true, shouldDirty: true })}
+            />
+          </div>
           <textarea {...register('description')} rows={4} className="w-full border p-2 rounded" />
           {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description.message}</p>}
         </div>

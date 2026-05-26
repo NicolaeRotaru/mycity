@@ -12,6 +12,7 @@ const links = [
   { href: '/admin/shop-of-month',  label: 'Negozio mese',   icon: '👑' },
   { href: '/admin/events',         label: 'Eventi',         icon: '📅' },
   { href: '/admin/sponsored',      label: 'Sponsored',      icon: '📣' },
+  { href: '/admin/cashback',       label: 'Cashback',       icon: '🪙' },
 ];
 
 const AdminSidebar = () => {
