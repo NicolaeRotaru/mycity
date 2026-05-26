@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid from '@/components/ProductGrid';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function CategoryPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
@@ -36,7 +37,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
     enabled: !!category,
   });
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
   if (!category) return <div className="container mx-auto p-8 text-center">Categoria non trovata.</div>;
 
   return (

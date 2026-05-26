@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Profile = {
   id: string;
@@ -237,7 +238,7 @@ function AdminUsersPageInner() {
 
   const detail = detailId ? profiles.find((p) => p.id === detailId) : null;
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   if (error) {
     return (
@@ -529,7 +530,7 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
 
 export default function AdminUsersPage() {
   return (
-    <Suspense fallback={<div className="text-center py-8 text-ink-500">Caricamento...</div>}>
+    <Suspense fallback={<LoadingState />}>
       <AdminUsersPageInner />
     </Suspense>
   );

@@ -13,7 +13,14 @@ import { captureError } from '@/lib/analytics/sentry';
  *   logger.error(err, { context: 'checkout-submit', userId });
  */
 
-type LogContext = Record<string, unknown>;
+type LogContext = Record<string, unknown> | unknown;
+
+function toCtx(ctx: unknown): Record<string, unknown> | undefined {
+  if (ctx === undefined || ctx === null) return undefined;
+  if (typeof ctx === 'string') return { detail: ctx };
+  if (typeof ctx === 'object') return ctx as Record<string, unknown>;
+  return { value: ctx };
+}
 
 export const logger = {
   info: (msg: string, ctx?: LogContext) => {
@@ -23,7 +30,6 @@ export const logger = {
   },
 
   warn: (msg: string, ctx?: LogContext) => {
-    // Sempre logged (warn potrebbe diventare error)
     if (typeof window !== 'undefined' || process.env.NODE_ENV !== 'production') {
       console.warn(`[warn] ${msg}`, ctx ?? '');
     }
@@ -33,7 +39,6 @@ export const logger = {
     if (process.env.NODE_ENV !== 'production') {
       console.error('[error]', err, ctx ?? '');
     }
-    // Sempre capture in Sentry
-    captureError(err, ctx);
+    captureError(err, toCtx(ctx));
   },
 };

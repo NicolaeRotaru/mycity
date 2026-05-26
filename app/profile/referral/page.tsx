@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
@@ -45,7 +46,7 @@ export default function ReferralPage() {
     },
   });
 
-  if (isLoading || !profile) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+  if (isLoading || !profile) return <LoadingState />;
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://mycity.it';
   const inviteLink = `${baseUrl}/sign-up?ref=${profile.referral_code}`;

@@ -23,6 +23,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type OrderRow = {
   id: string;
@@ -163,7 +164,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
   if (!order || !status) return <div className="container mx-auto p-8 text-center text-ink-500">Ordine non trovato.</div>;
 
   const c = ORDER_STATUS_COLOR[status];

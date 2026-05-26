@@ -10,6 +10,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Row = {
   id: string;
@@ -47,7 +48,7 @@ export default function AdminOrdersPage() {
 
   const filtered = filter === 'all' ? orders : orders.filter((o) => o.delivery_status === filter);
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-5">

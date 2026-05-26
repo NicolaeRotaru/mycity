@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProfile } from '@/components/hooks/useProfile';
 import SOSButton from '@/components/rider/SOSButton';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function RiderLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function RiderLayout({ children }: { children: React.ReactNode })
   }, [isAuthenticated, allowed, isLoading, router]);
 
   if (isLoading || !isAuthenticated) {
-    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+    return <LoadingState />;
   }
 
   if (!allowed) {

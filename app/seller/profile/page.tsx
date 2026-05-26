@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import VendorForm, { VendorFormData } from '@/components/VendorForm';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerProfilePage() {
   const qc = useQueryClient();
@@ -55,7 +56,7 @@ export default function SellerProfilePage() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="text-center py-8 text-ink-400">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="max-w-xl space-y-6">

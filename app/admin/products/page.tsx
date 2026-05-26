@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Row = {
   id: string;
@@ -57,7 +58,7 @@ export default function AdminProductsPage() {
     return p.name.toLowerCase().includes(s) || p.seller?.store_name?.toLowerCase().includes(s);
   });
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-5">

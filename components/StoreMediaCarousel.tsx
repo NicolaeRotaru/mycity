@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Image from 'next/image';
+import { sizedImage } from '@/lib/image-url';
 
 export type StoreMediaItem = {
   type: 'image' | 'video';
@@ -62,8 +64,14 @@ const StoreMediaCarousel = ({
         {media.map((m, i) => (
           <div key={i} className="snap-center shrink-0 w-full h-full relative">
             {m.type === 'image' ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={m.url} alt="" className="w-full h-full object-cover" />
+              <Image
+                src={sizedImage(m.url, 'hero')}
+                alt=""
+                fill
+                sizes="(max-width: 768px) 100vw, 1024px"
+                className="object-cover"
+                priority={i === 0}
+              />
             ) : (
               <video
                 src={m.url}

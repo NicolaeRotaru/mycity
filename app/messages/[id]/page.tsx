@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Message = {
   id: string;
@@ -164,7 +165,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
     sendMutation.mutate(trimmed);
   };
 
-  if (!userId) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+  if (!userId) return <LoadingState />;
   if (!conversation) {
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">

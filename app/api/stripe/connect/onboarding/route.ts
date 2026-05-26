@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser, getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { createConnectOnboardingLink, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -62,7 +63,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url }, { status: 200 });
   } catch (err: any) {
-    console.error('[stripe] connect onboarding failed', err);
+    logger.error('[stripe] connect onboarding failed', err);
     return NextResponse.json({ error: 'Errore Stripe' }, { status: 500 });
   }
 }

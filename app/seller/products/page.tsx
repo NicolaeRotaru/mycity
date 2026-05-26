@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerProductsPage() {
   const qc = useQueryClient();
@@ -49,7 +50,7 @@ export default function SellerProductsPage() {
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="text-center py-8">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">

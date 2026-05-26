@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getCurrentUser, getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
     .from('kyc-docs')
     .upload(path, bytes, { contentType: file.type, upsert: false });
   if (upErr) {
-    console.error('[kyc] upload failed', upErr);
+    logger.error('[kyc] upload failed', upErr);
     return NextResponse.json({ error: 'Upload fallito (bucket "kyc-docs" esiste?)' }, { status: 500 });
   }
 

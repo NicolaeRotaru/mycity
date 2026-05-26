@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Addr = {
   id: string;
@@ -104,7 +105,7 @@ export default function AddressesPage() {
     setShowForm(true);
   };
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">

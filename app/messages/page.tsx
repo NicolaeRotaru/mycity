@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Counterpart = {
   id: string;
@@ -91,7 +92,7 @@ export default function MessagesListPage() {
   }, [userId]);
 
   if (!userId || isLoading) {
-    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+    return <LoadingState />;
   }
 
   return (

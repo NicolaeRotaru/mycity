@@ -12,6 +12,7 @@ import {
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import SimpleQR from '@/components/SimpleQR';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type OrderRow = {
   id: string;
@@ -122,7 +123,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
   if (!order) return <div className="text-center py-8 text-ink-500">Ordine non trovato.</div>;
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);

@@ -7,6 +7,7 @@ import { AlertCircle, Check, X, Clock, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
+import { Modal } from '@/components/ui/Modal';
 
 type Dispute = {
   id: string;
@@ -196,15 +197,13 @@ export default function AdminDisputesPage() {
       )}
 
       {/* Modal decisione */}
-      {openId && detail && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-warm-xl animate-popIn space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-serif font-bold text-ink-900">Risolvi reclamo</h3>
-              <button onClick={() => setOpenId(null)} className="text-ink-500 hover:text-ink-800">
-                <X size={20} />
-              </button>
-            </div>
+      <Modal
+        open={!!openId && !!detail}
+        onClose={() => setOpenId(null)}
+        title="Risolvi reclamo"
+      >
+        {openId && detail && (
+          <div className="space-y-4">
 
             <textarea
               value={resolution}
@@ -264,8 +263,8 @@ export default function AdminDisputesPage() {
             </div>
             <p className="text-xs text-ink-400 text-center">Min 10 caratteri di motivazione richiesti.</p>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }

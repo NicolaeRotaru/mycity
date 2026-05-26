@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getCurrentUser, getServerSupabase } from '@/lib/supabase/server';
 import { createCheckoutSession, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ id: session.id, url: session.url }, { status: 200 });
   } catch (e: any) {
-    console.error('[stripe] checkout creation failed', e);
+    logger.error('[stripe] checkout creation failed', e);
     return NextResponse.json({ error: 'Errore nella creazione del pagamento.' }, { status: 500 });
   }
 }

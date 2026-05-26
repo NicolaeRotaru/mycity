@@ -7,6 +7,7 @@ import { formatPrice } from '@/lib/format';
 import { useProfile } from '@/components/hooks/useProfile';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
 import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerDashboard() {
   const { profile, isSeller } = useProfile();
@@ -64,7 +65,7 @@ export default function SellerDashboard() {
     enabled: isSeller,
   });
 
-  if (isLoading || !stats) return <div className="text-center py-8 text-ink-400">Caricamento...</div>;
+  if (isLoading || !stats) return <LoadingState />;
 
   return (
     <div className="space-y-6">

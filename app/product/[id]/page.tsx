@@ -551,9 +551,15 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                 {Array.isArray(r.photo_urls) && r.photo_urls.length > 0 && (
                   <div className="grid grid-cols-4 gap-1.5 mt-2">
                     {r.photo_urls.slice(0, 4).map((url: string, i: number) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block aspect-square rounded-lg overflow-hidden bg-cream-100 hover:opacity-80">
-                        <img src={url} alt="Foto recensione" className="w-full h-full object-cover" loading="lazy" />
+                      <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square rounded-lg overflow-hidden bg-cream-100 hover:opacity-80">
+                        <Image
+                          src={sizedImage(url, 'card')}
+                          alt="Foto recensione"
+                          fill
+                          sizes="(max-width: 768px) 25vw, 200px"
+                          className="object-cover"
+                          loading="lazy"
+                        />
                       </a>
                     ))}
                   </div>

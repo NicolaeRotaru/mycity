@@ -8,6 +8,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Order = {
   id: string;
@@ -47,7 +48,7 @@ export default function SellerOrdersPage() {
     refetchInterval: 30_000,
   });
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   const grouped = STATUS_FILTERS.slice(0, 3).map((f) => ({
     label: f.label,

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Coupon = {
   id: string;
@@ -94,7 +95,7 @@ export default function AdminCouponsPage() {
     },
   });
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">

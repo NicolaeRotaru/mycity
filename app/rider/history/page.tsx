@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { formatPrice, formatDate } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function RiderHistoryPage() {
   const { data: orders = [], isLoading } = useQuery({
@@ -22,7 +23,7 @@ export default function RiderHistoryPage() {
     },
   });
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   const totalEarned = orders.reduce((s: number, o: any) => s + Number(o.shipping_cost || 0), 0);
 

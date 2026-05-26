@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
   <div className="flex gap-1">
@@ -82,7 +83,7 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
   if (!order) return <div className="container mx-auto p-8 text-center text-ink-500">Ordine non trovato.</div>;
   if (order.delivery_status !== 'DELIVERED') {
     return (

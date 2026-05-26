@@ -4,6 +4,7 @@ import { getCurrentUser, getServerSupabase, getAdminSupabase } from '@/lib/supab
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         refundedAt = new Date().toISOString();
         newStatus = 'REFUNDED';
       } catch (err: any) {
-        console.error('[returns] refund failed', err);
+        logger.error('[returns] refund failed', err);
         return NextResponse.json({ error: 'Refund Stripe fallito: ' + err.message }, { status: 502 });
       }
     }

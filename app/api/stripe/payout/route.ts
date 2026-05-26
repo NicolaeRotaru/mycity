@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -93,7 +94,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true, transferId: transfer.id }, { status: 200 });
   } catch (err: any) {
-    console.error('[stripe] transfer failed', err);
+    logger.error('[stripe] transfer failed', err);
     await admin
       .from('orders')
       .update({ payout_status: 'FAILED' })

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function RiderProfilePage() {
   const qc = useQueryClient();
@@ -55,7 +56,7 @@ export default function RiderProfilePage() {
     router.refresh();
   };
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="max-w-xl space-y-6">

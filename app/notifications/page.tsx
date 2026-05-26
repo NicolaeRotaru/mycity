@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Notification = {
   id: string;
@@ -70,7 +71,7 @@ export default function NotificationsPage() {
   }, [data]);
 
   if (isLoading) {
-    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+    return <LoadingState />;
   }
 
   if (error) {

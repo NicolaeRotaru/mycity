@@ -11,6 +11,7 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type AvailableOrder = {
   id: string;
@@ -99,7 +100,7 @@ export default function RiderDashboardPage() {
     onError: (err: any) => toast.error(err.message || 'Errore'),
   });
 
-  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-8">

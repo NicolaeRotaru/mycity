@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useProfile } from '@/components/hooks/useProfile';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -28,7 +29,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading || !isAuthenticated) {
-    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
+    return <LoadingState />;
   }
 
   // Buyer o rider che ha cliccato /seller per sbaglio (o ha digitato la URL)
