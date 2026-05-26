@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Admin: Negozio del mese.
@@ -194,13 +195,9 @@ export default function AdminShopOfMonthPage() {
           </div>
         </div>
 
-        <button
-          type="submit"
-          disabled={save.isPending}
-          className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-bold"
-        >
-          {save.isPending ? 'Salvataggio…' : existing ? 'Aggiorna pick' : 'Imposta pick del mese'}
-        </button>
+        <Button type="submit" loading={save.isPending}>
+          {existing ? 'Aggiorna pick' : 'Imposta pick del mese'}
+        </Button>
       </form>
 
       {/* Leaderboard voti */}

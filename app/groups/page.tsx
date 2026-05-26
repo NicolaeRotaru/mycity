@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type GroupOrder = {
   id: string;
@@ -31,7 +32,7 @@ function timeLeft(deadline: string): string {
 
 export default function GroupsPage() {
   const { data: groups = [], isLoading } = useQuery({
-    queryKey: ['group-orders'],
+    queryKey: queryKeys.groups.orders,
     queryFn: async () => {
       const { data } = await supabase
         .from('group_orders')

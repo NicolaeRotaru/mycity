@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { BookOpen, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Story = {
   id: string;
@@ -25,7 +26,7 @@ type Story = {
 export default function StoryOfDay() {
   const today = new Date().toISOString().slice(0, 10);
   const { data: story, isLoading } = useQuery({
-    queryKey: ['daily-story', today],
+    queryKey: queryKeys.home.dailyStory(today),
     queryFn: async (): Promise<Story | null> => {
       const { data } = await supabase
         .from('daily_stories')

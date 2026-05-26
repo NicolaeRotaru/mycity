@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { Button } from '@/components/ui/Button';
 
 type Question = {
   id: string;
@@ -149,14 +150,13 @@ export default function ProductQA({ productId, sellerId }: Props) {
               maxLength={500}
               className="flex-1 bg-white border border-cream-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
-            <button
+            <Button
               type="submit"
-              disabled={askMutation.isPending || text.trim().length < 5}
-              className="inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold text-sm shrink-0 transition-colors"
-            >
-              <Send size={16} />
-              {askMutation.isPending ? 'Invio…' : 'Invia'}
-            </button>
+              loading={askMutation.isPending}
+              disabled={text.trim().length < 5}
+              size="sm"
+              icon={Send}
+            >Invia</Button>
           </form>
         )}
       </div>

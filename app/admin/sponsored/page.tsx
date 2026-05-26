@@ -71,7 +71,7 @@ export default function AdminSponsoredPage() {
     },
     onSuccess: () => {
       toast.success('Aggiornato');
-      qc.invalidateQueries({ queryKey: ['admin', 'sponsored'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.sponsored() });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -83,7 +83,7 @@ export default function AdminSponsoredPage() {
     },
     onSuccess: () => {
       toast.success('Eliminato');
-      qc.invalidateQueries({ queryKey: ['admin', 'sponsored'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.sponsored() });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Badge "Promo attiva -X%" sul prodotto.
@@ -26,7 +27,7 @@ type Props = {
 
 export default function ActivePromoBadge({ productId, basePrice }: Props) {
   const { data: discount } = useQuery({
-    queryKey: ['product-active-discount', productId],
+    queryKey: queryKeys.products.activeDiscount(productId),
     queryFn: async (): Promise<number> => {
       const { data, error } = await supabase.rpc('product_active_discount', { p_product: productId });
       if (error) return 0;

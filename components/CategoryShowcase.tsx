@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   abbigliamento:  Shirt,
@@ -29,7 +30,7 @@ function iconFor(slug: string): LucideIcon {
 
 const CategoryShowcase = () => {
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
+    queryKey: queryKeys.categories.showcase,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('categories')

@@ -60,7 +60,7 @@ export default function ListsPage() {
   });
 
   const { data: publicLists = [] } = useQuery({
-    queryKey: ['lists-public'],
+    queryKey: queryKeys.lists.publicV2,
     queryFn: async (): Promise<List[]> => {
       const { data } = await supabase
         .from('product_lists')

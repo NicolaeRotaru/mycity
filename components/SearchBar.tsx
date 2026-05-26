@@ -9,6 +9,7 @@ import { Search, X, Store, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Suggestion =
   | { kind: 'product'; id: string; name: string; price: number; image: string | null; store: string | null }
@@ -43,7 +44,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
   }, [q]);
 
   const { data: suggestions = [] } = useQuery({
-    queryKey: ['search-suggest', debounced],
+    queryKey: queryKeys.search.suggest(debounced),
     enabled: debounced.length >= 2,
     queryFn: async (): Promise<Suggestion[]> => {
       const term = debounced;

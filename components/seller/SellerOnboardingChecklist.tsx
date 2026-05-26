@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, Circle, ArrowRight, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Checklist onboarding seller — guida visuale ai primi step concreti.
@@ -36,7 +37,7 @@ export default function SellerOnboardingChecklist() {
   const { profile } = useProfile();
 
   const { data: items = [] } = useQuery({
-    queryKey: ['seller-onboarding-checklist', profile?.id],
+    queryKey: queryKeys.seller.onboardingChecklistV2(profile?.id ?? ''),
     enabled: !!profile?.id,
     queryFn: async (): Promise<ChecklistItem[]> => {
       const { data: { user } } = await supabase.auth.getUser();

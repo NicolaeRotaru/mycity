@@ -7,6 +7,7 @@ import { Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Props = {
   placement: 'home_top' | 'search_top' | 'category_top';
@@ -34,7 +35,7 @@ type SponsoredItem = {
  */
 export default function SponsoredCarousel({ placement, categorySlug }: Props) {
   const { data: items = [] } = useQuery({
-    queryKey: ['sponsored', placement, categorySlug],
+    queryKey: queryKeys.sponsored.placement(placement, categorySlug),
     queryFn: async (): Promise<SponsoredItem[]> => {
       const today = new Date().toISOString().slice(0, 10);
       let q = supabase

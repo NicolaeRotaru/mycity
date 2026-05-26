@@ -27,6 +27,7 @@ import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -502,13 +503,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                   onUploaded={setReviewPhotos}
                 />
               )}
-              <button
-                type="submit"
-                disabled={submitReview.isPending}
-                className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-semibold text-sm"
-              >
-                {submitReview.isPending ? 'Invio…' : 'Pubblica recensione'}
-              </button>
+              <Button type="submit" loading={submitReview.isPending} size="sm">Pubblica recensione</Button>
             </form>
           )}
         </div>

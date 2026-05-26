@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Activity = {
   id: string;
@@ -37,7 +38,7 @@ const LiveActivityFeed = () => {
   const [pulse, setPulse] = useState(false);
 
   const { data: activities = [], refetch } = useQuery({
-    queryKey: ['live-feed'],
+    queryKey: queryKeys.home.liveFeed,
     queryFn: async () => {
       const { data } = await supabase
         .from('orders')

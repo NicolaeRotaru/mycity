@@ -18,6 +18,7 @@ import { trackCheckoutStarted, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type AddressForm = {
   fullName: string;
@@ -62,7 +63,7 @@ export default function CheckoutPage() {
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
   // (formato nuovo). Per gli item vecchi senza sellerId, fa un lookup sui products.
   const { data: cartData, isLoading: loadingGroups } = useQuery({
-    queryKey: ['checkout-groups', cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')],
+    queryKey: queryKeys.checkout.groups(cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')),
     enabled: cart.length > 0,
     queryFn: async () => {
       const itemsMissingSeller = cart.filter((c) => !c.sellerId);
@@ -143,14 +144,14 @@ export default function CheckoutPage() {
 
   // Check stato auth all'avvio
   const { data: authUser } = useQuery({
-    queryKey: ['auth-user'],
+    queryKey: queryKeys.checkout.authUser,
     queryFn: async () => (await supabase.auth.getUser()).data.user,
     staleTime: 60_000,
   });
 
   // Indirizzi salvati
   const { data: savedAddresses = [] } = useQuery({
-    queryKey: ['user-addresses', authUser?.id],
+    queryKey: queryKeys.checkout.userAddresses(authUser?.id ?? ''),
     enabled: !!authUser?.id,
     queryFn: async () => {
       const { data } = await supabase

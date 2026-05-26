@@ -35,10 +35,15 @@ export const queryKeys = {
     lists:                   () => [...queryKeys.products.all, 'list'] as const,
     list:    (filters: Record<string, unknown> = {}) =>
                               [...queryKeys.products.lists(), filters] as const,
+    grid:    (filters: Record<string, unknown>) =>
+                              [...queryKeys.products.all, filters] as const,
+    ratings: (ids: string)   => ['products-ratings', ids] as const,
     detail:  (id: string)    => [...queryKeys.products.all, 'detail', id] as const,
     search:  (q: string, filters: Record<string, unknown> = {}) =>
                               [...queryKeys.products.all, 'search', q, filters] as const,
-    similar: (id: string)    => [...queryKeys.products.all, 'similar', id] as const,
+    similar: (id: string, categoryId?: string | null, sellerId?: string | null) =>
+                              [...queryKeys.products.all, 'similar', id, categoryId ?? null, sellerId ?? null] as const,
+    activeDiscount: (id: string) => ['product-active-discount', id] as const,
   },
 
   stores: {
@@ -67,6 +72,7 @@ export const queryKeys = {
     mine:                    ['profile', 'mine'] as const,
     byId:    (id: string)    => ['profile', 'detail', id] as const,
     auth:                    ['profile', 'auth'] as const,
+    authByUser: (uid: string) => ['auth-profile', uid] as const,
   },
 
   notifications: {
@@ -78,7 +84,11 @@ export const queryKeys = {
   messages: {
     all:                     ['messages'] as const,
     unread:                  ['messages', 'unread'] as const,
+    unreadByUser: (uid: string) => ['messages-unread', uid] as const,
     conversation: (id: string) => ['messages', 'conversation', id] as const,
+    conversationByParam: (id: string) => ['conversation', id] as const,
+    conversations:           ['conversations'] as const,
+    conversationsByUser: (uid: string) => ['conversations', uid] as const,
     byParam: (id: string)    => ['messages', id] as const,
   },
 
@@ -144,7 +154,10 @@ export const queryKeys = {
     storiesActive:           ['seller', 'stories', 'active'] as const,
     onboardingChecklist: (uid: string) =>
                               ['seller', 'onboarding', uid] as const,
+    onboardingChecklistV2: (uid: string) =>
+                              ['seller-onboarding-checklist', uid] as const,
     health:  (uid: string)   => ['seller', 'health', uid] as const,
+    healthV2: (uid: string)  => ['seller-health', uid] as const,
   },
 
   rider: {
@@ -155,6 +168,8 @@ export const queryKeys = {
     activeOrder:             ['rider', 'active-order'] as const,
     order:   (id: string)    => ['rider', 'order', id] as const,
     profile:                 ['rider', 'profile'] as const,
+    history:                 ['rider', 'history'] as const,
+    reviews:                 ['rider', 'reviews'] as const,
   },
 
   groups: {
@@ -162,6 +177,7 @@ export const queryKeys = {
     detail:  (id: string)    => ['groups', 'detail', id] as const,
     participation: (id: string) => ['groups', 'participation', id] as const,
     order:   (id: string)    => ['groups', 'order', id] as const,
+    orders:                  ['group-orders'] as const,
   },
 
   qa: {
@@ -194,11 +210,28 @@ export const queryKeys = {
 
   categories: {
     all:                     ['categories'] as const,
+    showcase:                ['categories'] as const,
     allList:                 ['all-categories'] as const,
     top:                     ['categories', 'top'] as const,
     sub:     (id: string)    => ['categories', 'sub', id] as const,
     form:                    ['categories', 'form'] as const,
     bySlug:  (slug: string)  => ['category', slug] as const,
+    avgPrice: (id: string)   => ['category-avg-price', id] as const,
+  },
+
+  search: {
+    suggest: (q: string)     => ['search-suggest', q] as const,
+  },
+
+  checkout: {
+    groups:  (key: string)   => ['checkout-groups', key] as const,
+    authUser:                ['auth-user'] as const,
+    userAddresses: (uid: string) => ['user-addresses', uid] as const,
+  },
+
+  sponsored: {
+    placement: (placement: string, categorySlug?: string | null) =>
+                              ['sponsored', placement, categorySlug ?? null] as const,
   },
 
   subscriptions: {
@@ -219,6 +252,10 @@ export const queryKeys = {
     shopOfMonth:             ['home', 'shop-of-month'] as const,
     drop:                    ['home', 'drop'] as const,
     storyOfDay: (date: string)=> ['home', 'story-of-day', date] as const,
+    dailyStory: (date: string) => ['daily-story', date] as const,
+    dailyDrop:  (date: string) => ['daily-drop', date] as const,
+    liveFeed:                ['live-feed'] as const,
+    recentlyViewed: (uid: string) => ['recently-viewed', uid] as const,
     trending:                ['home', 'trending'] as const,
     trendingNow:             ['home', 'trending-now'] as const,
     sponsored: (placement: string, categorySlug?: string) =>
@@ -228,6 +265,7 @@ export const queryKeys = {
   lists: {
     all:                     ['lists'] as const,
     public:                  ['lists', 'public'] as const,
+    publicV2:                ['lists-public'] as const,
     featured:                ['lists', 'featured'] as const,
     featuredV2:              ['lists-featured'] as const,
     mine:                    ['lists', 'mine'] as const,

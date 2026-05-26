@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { identify, resetUser } from '@/lib/analytics/posthog';
 import { setSentryUser } from '@/lib/analytics/sentry';
+import { queryKeys } from '@/lib/queries/keys';
 
 export type Role = 'buyer' | 'seller' | 'rider' | 'admin' | 'pending_approval';
 
@@ -44,7 +45,7 @@ export const useProfile = () => {
   }, []);
 
   const query = useQuery({
-    queryKey: ['auth-profile', userId],
+    queryKey: queryKeys.profile.authByUser(userId ?? ''),
     queryFn: async (): Promise<Profile | null> => {
       if (!userId) return null;
       const { data, error } = await supabase

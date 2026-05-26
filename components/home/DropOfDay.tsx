@@ -8,6 +8,7 @@ import { Flame, Clock, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Drop = {
   id: string;
@@ -52,7 +53,7 @@ function endOfTodayIso() {
 export default function DropOfDay() {
   const today = new Date().toISOString().slice(0, 10);
   const { data: drop, isLoading } = useQuery({
-    queryKey: ['daily-drop', today],
+    queryKey: queryKeys.home.dailyDrop(today),
     queryFn: async (): Promise<Drop | null> => {
       const { data } = await supabase
         .from('daily_drops')

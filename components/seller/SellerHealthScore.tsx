@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Sparkles, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Check = {
   id: string;
@@ -27,7 +28,7 @@ export default function SellerHealthScore() {
   }, []);
 
   const { data: checks = [], isLoading } = useQuery({
-    queryKey: ['seller-health', userId],
+    queryKey: queryKeys.seller.healthV2(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<Check[]> => {
       const { data: profile } = await supabase

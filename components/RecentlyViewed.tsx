@@ -8,6 +8,7 @@ import { Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Item = {
   viewed_at: string;
@@ -39,7 +40,7 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
   }, []);
 
   const { data: items = [] } = useQuery({
-    queryKey: ['recently-viewed', userId],
+    queryKey: queryKeys.home.recentlyViewed(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<Item[]> => {
       const { data } = await supabase
