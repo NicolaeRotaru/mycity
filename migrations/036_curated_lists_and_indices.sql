@@ -71,4 +71,42 @@ CREATE INDEX IF NOT EXISTS products_status_idx ON public.products(status) WHERE 
 CREATE INDEX IF NOT EXISTS products_category_status_idx ON public.products(category_id, status) WHERE status = 'available';
 CREATE INDEX IF NOT EXISTS notifications_user_unread_idx ON public.notifications(user_id, is_read) WHERE is_read = false;
 
+-- =============================================================================
+-- RPC: claim_pending_emails — atomic batch claim per cron sender
+-- =============================================================================
+-- Reserve N email pendenti in modo atomic (no race between cron concurrent
+-- runs). Esperti SRE: lock-free via FOR UPDATE SKIP LOCKED + UPDATE.
+
+CREATE OR REPLACE FUNCTION public.claim_pending_emails(p_max int DEFAULT 50)
+RETURNS TABLE (id uuid, user_id uuid, template text)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH picked AS (
+        SELECT q.id, q.user_id, q.template
+        FROM public.email_queue q
+        WHERE q.send_at <= now()
+          AND q.sent_at IS NULL
+          AND q.cancelled_at IS NULL
+        ORDER BY q.send_at
+        LIMIT p_max
+        FOR UPDATE SKIP LOCKED
+    ),
+    claimed AS (
+        UPDATE public.email_queue q
+        SET sent_at = NULL -- non ancora inviata, ma claimed via lock
+        FROM picked
+        WHERE q.id = picked.id
+        RETURNING q.id, q.user_id, q.template
+    )
+    SELECT * FROM picked;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.claim_pending_emails(int) FROM PUBLIC, authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.claim_pending_emails(int) TO service_role;
+
 NOTIFY pgrst, 'reload schema';
