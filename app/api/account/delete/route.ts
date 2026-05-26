@@ -1,6 +1,8 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -61,34 +63,10 @@ const KYC_FIELDS = {
   approval_status: 'rejected',
 };
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async ({ user }): Promise<NextResponse> => {
   const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnon    = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const supabaseService = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseAnon || !supabaseService) {
-    return NextResponse.json(
-      { error: 'Servizio non configurato. Contatta il supporto.' },
-      { status: 503 },
-    );
-  }
-
-  const authHeader = req.headers.get('authorization');
-  const bearer = authHeader?.toLowerCase().startsWith('bearer ')
-    ? authHeader.slice(7).trim()
-    : null;
-  if (!bearer) {
-    return NextResponse.json({ error: 'Autenticazione richiesta.' }, { status: 401 });
-  }
-
-  const supaUser = createClient(supabaseUrl, supabaseAnon, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: userResp, error: userErr } = await supaUser.auth.getUser(bearer);
-  const user = userResp?.user;
-  if (userErr || !user) {
-    return NextResponse.json({ error: 'Sessione non valida.' }, { status: 401 });
-  }
+  if (!supabaseUrl || !supabaseService) return ApiErrors.unavailable();
 
   const admin = createClient(supabaseUrl, supabaseService, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -119,4 +97,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true }, { status: 200 });
-}
+});

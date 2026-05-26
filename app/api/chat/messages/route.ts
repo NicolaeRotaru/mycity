@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerSupabase, getCurrentUser } from '@/lib/supabase/server';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -17,26 +19,15 @@ const SendSchema = z.object({
  *
  * Rate limit dedicato anti-flood: max 30 msg/min per utente (per IP qui).
  */
-export async function POST(req: Request) {
+export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   const ip = getClientIp(req);
   const rl = rateLimit({ key: `chat:msg:${ip}`, max: 30, windowMs: 60_000 });
-  if (!rl.allowed) {
-    return NextResponse.json({ error: 'Stai scrivendo troppo veloce, rallenta' }, { status: 429 });
-  }
-
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 });
+  if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;
-  try {
-    json = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 });
-  }
+  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = SendSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'Input non valido' }, { status: 400 });
-  }
+  if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
   const { conversationId, body } = parsed.data;
 
   const supa = getServerSupabase();
@@ -46,11 +37,7 @@ export async function POST(req: Request) {
     .select('id, created_at')
     .single();
 
-  if (error || !data) {
-    // L'RLS impedisce di scrivere se non sei partecipante: errore generico
-    // per non rivelare se la conv esiste.
-    return NextResponse.json({ error: 'Impossibile inviare il messaggio' }, { status: 403 });
-  }
+  if (error || !data) return ApiErrors.forbidden('Impossibile inviare il messaggio');
 
   return NextResponse.json({ id: data.id, createdAt: data.created_at }, { status: 200 });
-}
+});

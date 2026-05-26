@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerSupabase, getCurrentUser } from '@/lib/supabase/server';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -18,31 +20,18 @@ const StartSchema = z.object({
  *
  * Risponde con { conversationId } pronto per navigare a /messages/[id].
  */
-export async function POST(req: Request) {
+export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   const ip = getClientIp(req);
   const rl = rateLimit({ key: `chat:start:${ip}`, max: 20, windowMs: 60_000 });
-  if (!rl.allowed) {
-    return NextResponse.json({ error: 'Troppe richieste, riprova tra poco' }, { status: 429 });
-  }
-
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 });
+  if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;
-  try {
-    json = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 });
-  }
+  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = StartSchema.safeParse(json);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'Input non valido' }, { status: 400 });
-  }
+  if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
   const { sellerId, firstMessage } = parsed.data;
 
-  if (sellerId === user.id) {
-    return NextResponse.json({ error: 'Non puoi scriverti da solo' }, { status: 400 });
-  }
+  if (sellerId === user.id) return ApiErrors.invalidRequest('Non puoi scriverti da solo');
 
   const supa = getServerSupabase();
 
@@ -54,7 +43,7 @@ export async function POST(req: Request) {
     .eq('id', sellerId)
     .single();
   if (!sellerProfile || sellerProfile.role !== 'seller' || !sellerProfile.is_approved) {
-    return NextResponse.json({ error: 'Venditore non disponibile' }, { status: 404 });
+    return ApiErrors.notFound('Venditore non disponibile');
   }
 
   // Upsert idempotente: se esiste già, restituisce l'id.
@@ -72,9 +61,7 @@ export async function POST(req: Request) {
       .insert({ buyer_id: user.id, seller_id: sellerId })
       .select('id')
       .single();
-    if (error || !created) {
-      return NextResponse.json({ error: 'Impossibile aprire la conversazione' }, { status: 500 });
-    }
+    if (error || !created) return ApiErrors.internal('Impossibile aprire la conversazione');
     conversationId = created.id;
   }
 
@@ -87,4 +74,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ conversationId }, { status: 200 });
-}
+});
