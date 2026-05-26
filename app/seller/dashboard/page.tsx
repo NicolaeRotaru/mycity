@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { useProfile } from '@/components/hooks/useProfile';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
+import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
 
 export default function SellerDashboard() {
   const { profile, isSeller } = useProfile();
@@ -67,6 +68,7 @@ export default function SellerDashboard() {
 
   return (
     <div className="space-y-6">
+      <SellerOnboardingChecklist />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-3xl font-extrabold">Ciao, {profile?.store_name ?? 'venditore'} 👋</h1>
