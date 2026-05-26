@@ -22,6 +22,7 @@ import RecentlyViewed from '@/components/RecentlyViewed';
 import StickyAddToCart from '@/components/StickyAddToCart';
 import SimilarProducts from '@/components/SimilarProducts';
 import PriceComparison from '@/components/PriceComparison';
+import ActivePromoBadge from '@/components/ActivePromoBadge';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 
 export default function ProductPage({ params }: { params: { id: string } }) {
@@ -318,7 +319,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               <span className="text-sm text-gray-400">IVA inclusa</span>
             </div>
             {/* Trust signal forte: confronto vs media categoria (Behavioral Scientist) */}
-            <div className="mb-2">
+            <div className="mb-2 space-y-2">
+              <ActivePromoBadge productId={id} basePrice={price} />
               <PriceComparison productId={id} categoryId={product.category_id ?? null} currentPrice={price} />
             </div>
             {freeShipping ? (

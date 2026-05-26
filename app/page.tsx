@@ -11,6 +11,7 @@ import StoryOfDay from '@/components/home/StoryOfDay';
 import TrendingNow from '@/components/home/TrendingNow';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import ShopOfMonthHero from '@/components/home/ShopOfMonthHero';
+import StoriesCarousel from '@/components/home/StoriesCarousel';
 
 /**
  * Homepage MyCity — "Mediterranean Modern" + edit del giorno.
@@ -149,6 +150,11 @@ export default function Home() {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* STORIES NEGOZI (instagram-like, scadono 24h) */}
+      <section className="container mx-auto px-4 sm:px-6 pt-6">
+        <StoriesCarousel />
       </section>
 
       {/* NEGOZIO DEL MESE */}

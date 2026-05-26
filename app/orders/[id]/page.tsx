@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
 import SimpleQR from '@/components/SimpleQR';
 import ConfettiBurst from '@/components/ConfettiBurst';
+import SubscribeFromOrderButton from '@/components/SubscribeFromOrderButton';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { formatPrice, formatDate } from '@/lib/format';
 import { addToCart, clearCart } from '@/lib/cart';
@@ -243,6 +244,20 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
             >
               ↩️ Richiedi reso
             </Link>
+            {order.seller_id && (
+              <SubscribeFromOrderButton
+                orderId={order.id}
+                sellerId={order.seller_id}
+                items={order.order_items}
+                deliveryAddress={{
+                  full_name: order.delivery_full_name,
+                  phone: order.delivery_phone,
+                  address: order.delivery_address,
+                  city: order.delivery_city,
+                  zip: order.delivery_zip,
+                }}
+              />
+            )}
             <Link
               href={`/orders/${id}/dispute`}
               className="bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 px-4 py-2 rounded-lg font-semibold text-sm"

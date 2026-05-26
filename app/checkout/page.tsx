@@ -190,6 +190,12 @@ export default function CheckoutPage() {
   // Ritiro in negozio (-10%, no spedizione)
   const [pickupInStore, setPickupInStore] = useState(false);
 
+  // B2B: ordinare per la mia azienda → fattura elettronica
+  // Esperti: Finance Manager + Trust&Safety: P.IVA + SDI obbligatori se attivo.
+  // SDI o PEC per fatturazione elettronica italiana.
+  const [b2bActive, setB2bActive] = useState(false);
+  const [b2bForm, setB2bForm] = useState({ company_name: '', vat_number: '', sdi_code: '', pec: '' });
+
   // Pagamento: 'cod' = contanti alla consegna (sempre disponibile);
   // 'card' = Stripe Checkout, disponibile solo se la sitewide publishable
   // key e' configurata su Render (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
@@ -303,6 +309,23 @@ export default function CheckoutPage() {
         }));
         const { error: itemsError } = await supabase.from('order_items').insert(items);
         if (itemsError) throw itemsError;
+
+        // B2B: salva dettagli fatturazione elettronica per questo ordine
+        if (b2bActive && b2bForm.company_name && b2bForm.vat_number) {
+          const { error: bErr } = await supabase.from('business_orders').insert({
+            order_id: order.id,
+            company_name: b2bForm.company_name.trim(),
+            vat_number: b2bForm.vat_number.trim().toUpperCase(),
+            sdi_code: b2bForm.sdi_code.trim().toUpperCase() || null,
+            pec: b2bForm.pec.trim().toLowerCase() || null,
+            invoice_required: true,
+          });
+          // Non bloccare l'ordine se la migration 035 non è applicata
+          if (bErr && !bErr.message.includes('does not exist')) {
+            // Log ma non interrompere — l'ordine è già creato
+            console.warn('business_orders insert failed:', bErr.message);
+          }
+        }
 
         // Notifica il seller
         notify({
@@ -540,6 +563,75 @@ export default function CheckoutPage() {
               )}
             </div>
           </label>
+
+          {/* B2B — fattura elettronica per aziende */}
+          <div className="bg-white border rounded-xl p-6">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={b2bActive}
+                onChange={(e) => setB2bActive(e.target.checked)}
+                className="mt-1 w-4 h-4 accent-primary-600"
+              />
+              <div className="flex-1">
+                <p className="font-bold text-gray-900">🏢 Sto comprando per la mia azienda — voglio la fattura elettronica</p>
+                <p className="text-sm text-gray-600 mt-0.5">
+                  Inviata via SDI/PEC entro 12 giorni. Detraibilità completa.
+                </p>
+              </div>
+            </label>
+            {b2bActive && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-cream-200">
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-ink-700 mb-1">Ragione sociale *</label>
+                  <input
+                    type="text"
+                    value={b2bForm.company_name}
+                    onChange={(e) => setB2bForm({ ...b2bForm, company_name: e.target.value })}
+                    placeholder="Acme S.r.l."
+                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm"
+                    required={b2bActive}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink-700 mb-1">Partita IVA *</label>
+                  <input
+                    type="text"
+                    value={b2bForm.vat_number}
+                    onChange={(e) => setB2bForm({ ...b2bForm, vat_number: e.target.value.toUpperCase() })}
+                    placeholder="IT12345678901"
+                    pattern="^(IT)?[0-9]{11}$"
+                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm font-mono"
+                    required={b2bActive}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-ink-700 mb-1">Codice SDI (7 caratteri)</label>
+                  <input
+                    type="text"
+                    value={b2bForm.sdi_code}
+                    onChange={(e) => setB2bForm({ ...b2bForm, sdi_code: e.target.value.toUpperCase() })}
+                    placeholder="0000000"
+                    maxLength={7}
+                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm font-mono"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-semibold text-ink-700 mb-1">PEC (alternativa a SDI)</label>
+                  <input
+                    type="email"
+                    value={b2bForm.pec}
+                    onChange={(e) => setB2bForm({ ...b2bForm, pec: e.target.value })}
+                    placeholder="azienda@pec.it"
+                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <p className="sm:col-span-2 text-xs text-ink-500">
+                  Compila SDI <strong>o</strong> PEC. Se nessuno, la fattura va al sistema di interscambio centrale.
+                </p>
+              </div>
+            )}
+          </div>
 
           {/* PAGAMENTO */}
           <div className="bg-white border rounded-xl p-6">

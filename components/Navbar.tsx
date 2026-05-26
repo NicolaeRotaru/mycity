@@ -294,6 +294,7 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
                 <MenuLink href="/seller/products" icon="📦" label="I miei prodotti" />
                 <MenuLink href="/seller/orders" icon="🛒" label="Ordini ricevuti" />
                 <MenuLink href="/seller/promotions" icon="✨" label="Promozioni" />
+                <MenuLink href="/seller/stories" icon="📸" label="Storie" />
                 <MenuLink href="/seller/earnings" icon="💶" label="Guadagni" />
               </>
             )}
