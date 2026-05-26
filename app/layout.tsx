@@ -12,6 +12,9 @@ import GoogleAnalytics from '@/components/GoogleAnalytics';
 import DailyCheckIn from '@/components/DailyCheckIn';
 import WelcomeCreditBanner from '@/components/WelcomeCreditBanner';
 import CartCrossDeviceSync from '@/components/CartCrossDeviceSync';
+import BuyerOnboardingTour from '@/components/BuyerOnboardingTour';
+import PostHogProvider from '@/lib/analytics/posthog';
+import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -63,6 +66,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="it" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable}`}>
       <body className={`${inter.className} bg-cream-100 text-ink-800`}>
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary-700 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"
+        >
+          Vai al contenuto principale
+        </a>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
@@ -70,11 +79,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <QueryProvider>
           <Navbar />
           <WelcomeCreditBanner />
-          <main className="min-h-screen">{children}</main>
+          <main id="main-content" className="min-h-screen">{children}</main>
           <Footer />
           <MobileTabBar />
           <DailyCheckIn />
           <CartCrossDeviceSync />
+          <BuyerOnboardingTour />
         </QueryProvider>
         <ToastProvider />
         <ConfirmDialogHost />
@@ -82,6 +92,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}>
           <GoogleAnalytics />
         </Suspense>
+        <Suspense fallback={null}>
+          <PostHogProvider />
+        </Suspense>
+        <SentryProvider />
       </body>
     </html>
   );

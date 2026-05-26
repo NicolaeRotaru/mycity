@@ -1,8 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
+import EmptyState from '@/components/EmptyState';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   ORDER_STATUS_LABEL,
@@ -62,11 +64,16 @@ export default function OrdersPage() {
 
   if (orders.length === 0) {
     return (
-      <div className="container mx-auto p-8 text-center space-y-4">
-        <p className="text-gray-500 text-lg">Non hai ancora nessun ordine.</p>
-        <Link href="/" className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg">
-          Scopri i prodotti
-        </Link>
+      <div className="container mx-auto py-12 max-w-2xl">
+        <EmptyState
+          icon={Package}
+          title="Non hai ancora ordini"
+          description="Quando ordini qualcosa, lo vedrai qui con il tracking in tempo reale."
+          ctaLabel="Inizia ad esplorare"
+          ctaHref="/search"
+          secondaryLabel="€5 di benvenuto"
+          secondaryHref="/profile/loyalty"
+        />
       </div>
     );
   }

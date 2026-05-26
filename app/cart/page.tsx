@@ -8,6 +8,8 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import ShareCartButton from '@/components/ShareCartButton';
+import EmptyState from '@/components/EmptyState';
+import { ShoppingCart } from 'lucide-react';
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -29,16 +31,16 @@ export default function CartPage() {
 
   if (items.length === 0) {
     return (
-      <div className="container mx-auto p-12 text-center space-y-4 max-w-md">
-        <p className="text-7xl">🛒</p>
-        <h1 className="text-2xl font-bold">Il tuo carrello è vuoto</h1>
-        <p className="text-gray-500">Scopri i prodotti dei negozi locali della tua città</p>
-        <Link
-          href="/"
-          className="inline-block bg-yellow-400 hover:bg-yellow-500 text-gray-900 px-8 py-3 rounded-lg font-bold shadow-md"
-        >
-          Inizia ad acquistare
-        </Link>
+      <div className="container mx-auto py-12 max-w-2xl">
+        <EmptyState
+          icon={ShoppingCart}
+          title="Il tuo carrello è vuoto"
+          description="Scopri i prodotti dei negozi della tua città. Spedizione gratis sopra €30."
+          ctaLabel="Esplora i prodotti"
+          ctaHref="/search"
+          secondaryLabel="Vedi i negozi"
+          secondaryHref="/stores"
+        />
       </div>
     );
   }

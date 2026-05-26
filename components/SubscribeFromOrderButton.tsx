@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { Repeat, X, Calendar } from 'lucide-react';
+import { Repeat, Calendar } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Bottone che trasforma un ordine consegnato in abbonamento ricorrente.
@@ -103,27 +105,28 @@ export default function SubscribeFromOrderButton({ orderId, sellerId, items, del
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 bg-olive-100 hover:bg-olive-200 text-olive-800 border border-olive-300 px-4 py-2 rounded-lg font-semibold text-sm"
-      >
-        <Repeat size={14} strokeWidth={2.4} />
+      <Button onClick={() => setOpen(true)} variant="success" icon={Repeat} size="md">
         Trasforma in abbonamento
-      </button>
+      </Button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-warm-lg">
-            <div className="px-5 py-4 border-b border-cream-200 flex items-center justify-between">
-              <h2 className="font-bold flex items-center gap-2">
-                <Repeat size={18} className="text-olive-700" strokeWidth={2.2} />
-                Ricevi questo ordine in automatico
-              </h2>
-              <button onClick={() => setOpen(false)} aria-label="Chiudi" className="text-ink-500 hover:text-ink-700">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-5 space-y-4 text-sm">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Ricevi questo ordine in automatico"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>Annulla</Button>
+            <Button
+              onClick={() => subscribe.mutate()}
+              disabled={subscribe.isPending || validItems.length === 0}
+              loading={subscribe.isPending}
+            >
+              Attiva abbonamento
+            </Button>
+          </>
+        }
+      >
+            <div className="space-y-4 text-sm">
               <div className="bg-cream-50 rounded-lg p-3 text-ink-700">
                 <p className="font-semibold mb-1">{validItems.length} prodotti, stesso indirizzo</p>
                 <ul className="text-xs space-y-0.5 text-ink-600">
@@ -185,25 +188,7 @@ export default function SubscribeFromOrderButton({ orderId, sellerId, items, del
                 </p>
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-cream-200 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="px-4 py-2 rounded-lg text-ink-700 hover:bg-cream-100 font-semibold text-sm"
-              >
-                Annulla
-              </button>
-              <button
-                onClick={() => subscribe.mutate()}
-                disabled={subscribe.isPending || validItems.length === 0}
-                className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-bold text-sm"
-              >
-                {subscribe.isPending ? 'Attivazione…' : 'Attiva abbonamento'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </>
   );
 }

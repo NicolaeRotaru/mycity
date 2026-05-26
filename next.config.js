@@ -18,12 +18,12 @@ const supabaseHost = (() => {
 //    stringere ulteriormente passando alla nonce-based CSP.
 const cspDirectives = [
   "default-src 'self'",
-  // script-src include Cloudflare Turnstile (CAPTCHA), Stripe.js, Google Analytics 4
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com",
+  // script-src include Cloudflare Turnstile (CAPTCHA), Stripe.js, GA4, PostHog, Sentry
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io",
   "style-src 'self' 'unsafe-inline' https://unpkg.com",
-  `img-src 'self' data: blob: https://${supabaseHost} https://placehold.co https://api.dicebear.com https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://unpkg.com https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com`,
+  `img-src 'self' data: blob: https://${supabaseHost} https://placehold.co https://api.dicebear.com https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://unpkg.com https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,
   "font-src 'self' data:",
-  `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://nominatim.openstreetmap.org https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com`,
+  `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://nominatim.openstreetmap.org https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`,
   // frame-src per il widget Turnstile e Stripe (3D Secure, Connect onboarding)
   "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://connect.stripe.com",
   "frame-ancestors 'none'",

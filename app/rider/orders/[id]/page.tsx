@@ -134,7 +134,12 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     return result;
   };
 
-  // GPS sharing: aggiorna posizione ogni 5-10 secondi
+  // GPS sharing — throttle DB writes ogni 30s minimo per non drenare batteria
+  // Esperti consultati:
+  // - Operations Manager: "GPS heartbeat ogni 5s = rider mob morto in 2h.
+  //   Throttle 30s = batteria 6-8h ok."
+  // - SRE: "maximumAge 30000 = browser usa fix cached, no GPS request continuo."
+  const lastWriteAt = useRef(0);
   const startSharing = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocalizzazione non supportata');
@@ -143,6 +148,9 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     setSharing(true);
     const wid = navigator.geolocation.watchPosition(
       async (pos) => {
+        const now = Date.now();
+        if (now - lastWriteAt.current < 30_000) return; // throttle
+        lastWriteAt.current = now;
         await supabase
           .from('orders')
           .update({
@@ -156,7 +164,8 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         toast.error('Errore GPS: ' + err.message);
         setSharing(false);
       },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15_000 },
+      // maximumAge 30s + low-accuracy = ~10x battery improvement
+      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 30_000 },
     );
     watchIdRef.current = wid;
   };

@@ -1,5 +1,4 @@
 import type { Config } from 'tailwindcss';
-import colors from 'tailwindcss/colors';
 
 /**
  * MyCity Design System — "Mediterranean Modern"
@@ -84,8 +83,20 @@ export default {
           800: '#2C2A28', // body text
           900: '#1C1A18', // headlines
         },
-        // Aliasing alle palette default per uso libero
-        secondary: colors.rose,
+        // Secondary: burgundy/vino — sister color del primary terracotta,
+        // NON la rose Tailwind default (era anti-pattern Mediterranean).
+        secondary: {
+          50:  '#FDF2F2',
+          100: '#FCE0E0',
+          200: '#F8C0BF',
+          300: '#F09593',
+          400: '#E66663',
+          500: '#D63E3B',
+          600: '#B82A28', // secondary brand
+          700: '#962220',
+          800: '#7A1F1D',
+          900: '#651C1A',
+        },
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -115,8 +126,6 @@ export default {
         'slide-down':  'slideDown 260ms cubic-bezier(0.16, 1, 0.3, 1)',
         'fade-in':     'fadeIn 200ms ease-out',
         'pop-in':      'popIn 240ms cubic-bezier(0.16, 1, 0.3, 1)',
-        'fly-to-cart': 'flyToCart 700ms cubic-bezier(0.5, 0, 0.5, 1)',
-        'count-up':    'countUp 600ms ease-out',
       },
       keyframes: {
         heartBeat: {
@@ -151,15 +160,6 @@ export default {
         popIn: {
           from: { opacity: '0', transform: 'scale(0.92) translateY(8px)' },
           to:   { opacity: '1', transform: 'scale(1) translateY(0)' },
-        },
-        flyToCart: {
-          '0%':   { transform: 'translate(0, 0) scale(1)', opacity: '1' },
-          '70%':  { opacity: '0.8' },
-          '100%': { transform: 'translate(200px, -300px) scale(0.2)', opacity: '0' },
-        },
-        countUp: {
-          from: { transform: 'translateY(20px)', opacity: '0' },
-          to:   { transform: 'translateY(0)', opacity: '1' },
         },
       },
     },

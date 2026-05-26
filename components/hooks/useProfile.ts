@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { identify, resetUser } from '@/lib/analytics/posthog';
+import { setSentryUser } from '@/lib/analytics/sentry';
 
 export type Role = 'buyer' | 'seller' | 'rider' | 'admin' | 'pending_approval';
 
@@ -22,14 +24,21 @@ export const useProfile = () => {
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      setUserId(data.user?.id ?? null);
-      setUserEmail(data.user?.email ?? null);
+      const uid = data.user?.id ?? null;
+      const em = data.user?.email ?? null;
+      setUserId(uid);
+      setUserEmail(em);
       setAuthChecked(true);
+      if (uid) { identify(uid, { email: em }); setSentryUser(uid, em ?? undefined); }
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
-      setUserId(session?.user?.id ?? null);
-      setUserEmail(session?.user?.email ?? null);
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      const uid = session?.user?.id ?? null;
+      const em = session?.user?.email ?? null;
+      setUserId(uid);
+      setUserEmail(em);
       setAuthChecked(true);
+      if (event === 'SIGNED_IN' && uid) { identify(uid, { email: em }); setSentryUser(uid, em ?? undefined); }
+      if (event === 'SIGNED_OUT') { resetUser(); }
     });
     return () => sub.subscription.unsubscribe();
   }, []);

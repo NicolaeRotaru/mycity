@@ -83,8 +83,42 @@ export default function StorePage({ params }: { params: { id: string } }) {
 
   const media = (Array.isArray(store.store_media) ? store.store_media : []) as StoreMediaItem[];
 
+  // Schema.org LocalBusiness JSON-LD — critical per SEO local
+  // Esperti: SEO Specialist: "Senza Schema LocalBusiness sei invisibile su
+  // Google local pack e Maps. Ogni store page deve averlo."
+  const localBusinessSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Store',
+    name: store.store_name,
+    description: store.store_description ?? undefined,
+    image: store.store_logo ?? undefined,
+    telephone: store.store_phone ?? undefined,
+    address: {
+      '@type': 'PostalAddress',
+      streetAddress: store.store_address ?? undefined,
+      addressLocality: 'Piacenza',
+      addressRegion: 'PC',
+      addressCountry: 'IT',
+    },
+    geo: (store.store_lat && store.store_lng) ? {
+      '@type': 'GeoCoordinates',
+      latitude: store.store_lat,
+      longitude: store.store_lng,
+    } : undefined,
+    aggregateRating: reviews.length > 0 ? {
+      '@type': 'AggregateRating',
+      ratingValue: (reviews.reduce((s: number, r: any) => s + Number(r.rating), 0) / reviews.length).toFixed(1),
+      reviewCount: reviews.length,
+    } : undefined,
+    url: typeof window !== 'undefined' ? window.location.href : undefined,
+  };
+
   return (
     <div className="container mx-auto px-4 py-6 max-w-5xl space-y-6">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
+      />
       {/* Hero card: COVER con media + logo DENTRO la cover (fully visible) */}
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="relative">

@@ -17,8 +17,12 @@ const STATIC_PATHS: Array<{ path: string; priority: number; changeFrequency: 'da
   { path: '/help',      priority: 0.4, changeFrequency: 'monthly' },
   { path: '/contact',   priority: 0.4, changeFrequency: 'monthly' },
   { path: '/shipping',  priority: 0.3, changeFrequency: 'monthly' },
-  { path: '/privacy',   priority: 0.3, changeFrequency: 'monthly' },
-  { path: '/cookies',   priority: 0.3, changeFrequency: 'monthly' },
+  { path: '/privacy',       priority: 0.3, changeFrequency: 'monthly' },
+  { path: '/cookies',       priority: 0.3, changeFrequency: 'monthly' },
+  { path: '/accessibility', priority: 0.3, changeFrequency: 'monthly' },
+  { path: '/events',        priority: 0.6, changeFrequency: 'weekly'  },
+  { path: '/shop-of-month', priority: 0.6, changeFrequency: 'monthly' },
+  { path: '/lists',         priority: 0.5, changeFrequency: 'weekly'  },
 ];
 
 /**

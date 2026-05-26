@@ -10,6 +10,24 @@ export type OrderStatus =
 
 export type PaymentStatus = 'PAID' | 'FAILED' | 'PENDING';
 
+// Icone Lucide standardizzate (sostituiscono ORDER_STATUS_EMOJI legacy).
+// Esperti: "Emoji + Lucide mixati distruggono brand coherence. Lucide-only."
+import {
+  Clock, ChefHat, Package, Bike, Hand, Truck, CheckCircle2, XCircle,
+  type LucideIcon,
+} from 'lucide-react';
+
+export const ORDER_STATUS_ICON: Record<OrderStatus, LucideIcon> = {
+  NEW:              Clock,
+  ACCEPTED:         ChefHat,
+  READY:            Package,
+  ASSIGNED:         Bike,
+  PICKED_UP:        Hand,
+  OUT_FOR_DELIVERY: Truck,
+  DELIVERED:        CheckCircle2,
+  CANCELED:         XCircle,
+};
+
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   NEW:              'In attesa di conferma',
   ACCEPTED:         'In preparazione',

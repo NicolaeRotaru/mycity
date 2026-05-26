@@ -12,6 +12,7 @@ import TrendingNow from '@/components/home/TrendingNow';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import ShopOfMonthHero from '@/components/home/ShopOfMonthHero';
 import StoriesCarousel from '@/components/home/StoriesCarousel';
+import MaybeSection from '@/components/home/MaybeSection';
 
 /**
  * Homepage MyCity — "Mediterranean Modern" + edit del giorno.
@@ -153,34 +154,34 @@ export default function Home() {
       </section>
 
       {/* STORIES NEGOZI (instagram-like, scadono 24h) */}
-      <section className="container mx-auto px-4 sm:px-6 pt-6">
+      <MaybeSection className="container mx-auto px-4 sm:px-6 pt-6">
         <StoriesCarousel />
-      </section>
+      </MaybeSection>
 
       {/* NEGOZIO DEL MESE */}
-      <section className="container mx-auto px-4 sm:px-6 py-6">
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
         <ShopOfMonthHero />
-      </section>
+      </MaybeSection>
 
       {/* DROP DEL GIORNO */}
-      <section className="container mx-auto px-4 sm:px-6 py-10">
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
         <DropOfDay />
-      </section>
+      </MaybeSection>
 
       {/* STORIA DI OGGI */}
-      <section className="container mx-auto px-4 sm:px-6 py-10">
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
         <StoryOfDay />
-      </section>
+      </MaybeSection>
 
       {/* SPONSORED — solo se ci sono listing attivi */}
-      <section className="container mx-auto px-4 sm:px-6 py-6">
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
         <SponsoredCarousel placement="home_top" />
-      </section>
+      </MaybeSection>
 
       {/* TRENDING NOW */}
-      <section className="container mx-auto px-4 sm:px-6 py-10">
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
         <TrendingNow />
-      </section>
+      </MaybeSection>
 
       {/* CATEGORIE */}
       <section className="container mx-auto px-4 sm:px-6 py-12">

@@ -3,11 +3,13 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Image from 'next/image';
-import { Camera, Eye, Trash2, X, Upload, Clock } from 'lucide-react';
+import { Camera, Eye, Trash2, Upload, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
+import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Seller: gestione Storie (instagram-like, 24h).
@@ -179,16 +181,20 @@ export default function SellerStoriesPage() {
         </ul>
       )}
 
-      {open && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-warm-lg">
-            <div className="px-5 py-4 border-b border-cream-200 flex items-center justify-between">
-              <h2 className="font-bold">Nuova storia</h2>
-              <button onClick={() => setOpen(false)} aria-label="Chiudi" className="text-ink-500 hover:text-ink-700">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-5 space-y-4">
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Nuova storia"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>Annulla</Button>
+            <Button onClick={() => create.mutate()} disabled={uploading || !image} icon={Upload}>
+              {uploading ? 'Upload…' : 'Pubblica (24h)'}
+            </Button>
+          </>
+        }
+      >
+          <div className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold mb-1">Foto (verticale 3:4 consigliata)</label>
                 <input
@@ -223,23 +229,8 @@ export default function SellerStoriesPage() {
                   className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm"
                 />
               </div>
-            </div>
-            <div className="px-5 py-4 border-t border-cream-200 flex justify-end gap-2">
-              <button type="button" onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg text-ink-700 hover:bg-cream-100 font-semibold text-sm">
-                Annulla
-              </button>
-              <button
-                onClick={() => create.mutate()}
-                disabled={uploading || !image}
-                className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-bold text-sm inline-flex items-center gap-1.5"
-              >
-                <Upload size={14} strokeWidth={2.4} />
-                {uploading ? 'Upload…' : 'Pubblica (24h)'}
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

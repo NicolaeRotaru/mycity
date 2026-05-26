@@ -14,6 +14,7 @@ import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { notify } from '@/lib/notifications';
 import { haversineKm, riderFee } from '@/lib/geo';
 import { validateCoupon, type Coupon } from '@/lib/coupons';
+import { trackCheckoutStarted, trackOrderPlaced } from '@/lib/analytics/events';
 
 type AddressForm = {
   fullName: string;
@@ -46,7 +47,14 @@ const SHIPPING_COST_FOR = (subtotal: number) => (subtotal >= FREE_SHIPPING_THRES
 export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
-  useEffect(() => setCart(getCart()), []);
+  useEffect(() => {
+    const c = getCart();
+    setCart(c);
+    if (c.length > 0) {
+      const totalCents = Math.round(c.reduce((s, i) => s + i.price * i.quantity, 0) * 100);
+      trackCheckoutStarted(totalCents, c.reduce((s, i) => s + i.quantity, 0));
+    }
+  }, []);
 
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
   // (formato nuovo). Per gli item vecchi senza sellerId, fa un lookup sui products.
@@ -335,6 +343,7 @@ export default function CheckoutPage() {
           link: `/seller/orders/${order.id}`,
         });
 
+        trackOrderPlaced(order.id, Math.round(total * 100), 'cod', g.sellerId);
         createdOrders.push(order.id);
       }
 

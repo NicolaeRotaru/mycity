@@ -38,7 +38,7 @@ export async function generateMetadata(
     (product.description ?? `${product.name} su MyCity. Acquisto da ${storeName}, consegna locale 24-48h.`).slice(0, 160);
 
   return {
-    title: `${product.name} · ${storeName} · MyCity`,
+    title: `${product.name} — ${storeName} a Piacenza · MyCity`,
     description: desc,
     openGraph: {
       title: product.name,

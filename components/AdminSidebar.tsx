@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const links = [
+  { href: '/admin/today',          label: 'Today',          icon: '🏠' },
+  { href: '/admin/funnel',         label: 'Funnel & Cohort',icon: '📈' },
   { href: '/admin',                label: 'Dashboard',      icon: '📊' },
   { href: '/admin/users',          label: 'Utenti',         icon: '👥' },
   { href: '/admin/orders',         label: 'Ordini',         icon: '📦' },
@@ -13,6 +15,7 @@ const links = [
   { href: '/admin/events',         label: 'Eventi',         icon: '📅' },
   { href: '/admin/sponsored',      label: 'Sponsored',      icon: '📣' },
   { href: '/admin/cashback',       label: 'Cashback',       icon: '🪙' },
+  { href: '/admin/sos',            label: 'SOS Rider',      icon: '🆘' },
 ];
 
 const AdminSidebar = () => {
