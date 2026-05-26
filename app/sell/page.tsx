@@ -90,15 +90,15 @@ export default function SellPage() {
   });
 
   if (profileLoading || isLoading) {
-    return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento…</div>;
+    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
   }
 
   if (!isAuthenticated) {
     return (
       <div className="container mx-auto p-8 max-w-md text-center bg-white rounded-2xl mt-8">
         <h1 className="text-2xl font-bold mb-2">Diventa venditore</h1>
-        <p className="text-gray-600 mb-6">Serve un account per inviare la richiesta.</p>
-        <Link href="/sign-in?returnTo=/sell" className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-lg font-bold">
+        <p className="text-ink-600 mb-6">Serve un account per inviare la richiesta.</p>
+        <Link href="/sign-in?returnTo=/sell" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-lg font-bold">
           Accedi o registrati
         </Link>
       </div>
@@ -166,26 +166,26 @@ export default function SellPage() {
 
 function PendingNotice({ requestedAt }: { requestedAt: string | null }) {
   return (
-    <div className="bg-white border-2 border-amber-200 rounded-2xl p-8 text-center">
-      <div className="w-20 h-20 mx-auto rounded-2xl bg-amber-100 flex items-center justify-center text-4xl mb-4">
+    <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
+      <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center text-4xl mb-4">
         ⏳
       </div>
-      <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Richiesta in valutazione</h1>
-      <p className="text-gray-600 mb-4 max-w-md mx-auto">
+      <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Richiesta in valutazione</h1>
+      <p className="text-ink-600 mb-4 max-w-md mx-auto">
         Abbiamo ricevuto la tua candidatura come venditore. Il nostro team la sta valutando.
         {requestedAt && (
           <> Inviata il <strong>{new Date(requestedAt).toLocaleDateString('it', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.</>
         )}
       </p>
-      <p className="text-sm text-gray-500 mb-6">
+      <p className="text-sm text-ink-500 mb-6">
         Ti contatteremo entro <strong>48 ore lavorative</strong> via email e con una notifica in piattaforma.
         Nel frattempo puoi continuare a comprare normalmente.
       </p>
       <div className="flex flex-wrap gap-2 justify-center text-sm">
-        <Link href="/?as=buyer" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+        <Link href="/?as=buyer" className="bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold">
           🏠 Continua a comprare
         </Link>
-        <Link href="/contact" className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold">
+        <Link href="/contact" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
           ✉️ Contatta il supporto
         </Link>
       </div>

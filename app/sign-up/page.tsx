@@ -17,9 +17,9 @@ const ROLES: { value: Role; emoji: string; title: string; subtitle: string; colo
 ];
 
 const colorClasses: Record<string, { border: string; bg: string; btn: string }> = {
-  indigo: { border: 'border-indigo-500 bg-indigo-50', bg: 'bg-indigo-50 border-indigo-200 text-indigo-800', btn: 'bg-indigo-600 hover:bg-indigo-700' },
-  pink:   { border: 'border-pink-500 bg-pink-50',     bg: 'bg-pink-50 border-pink-200 text-pink-800',     btn: 'bg-pink-500 hover:bg-pink-600' },
-  amber:  { border: 'border-amber-500 bg-amber-50',   bg: 'bg-amber-50 border-amber-200 text-amber-800',   btn: 'bg-amber-500 hover:bg-amber-600' },
+  indigo: { border: 'border-indigo-500 bg-primary-50', bg: 'bg-primary-50 border-primary-200 text-primary-800', btn: 'bg-primary-700 hover:bg-primary-800' },
+  pink:   { border: 'border-pink-500 bg-secondary-50',     bg: 'bg-secondary-50 border-secondary-200 text-secondary-800',     btn: 'bg-pink-500 hover:bg-pink-600' },
+  amber:  { border: 'border-accent-500 bg-accent-50',   bg: 'bg-accent-50 border-accent-200 text-accent-800',   btn: 'bg-accent-500 hover:bg-accent-600' },
 };
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
@@ -93,10 +93,10 @@ function SignUpInner() {
 
   return (
     <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md space-y-6">
-      <h2 className="text-2xl font-bold text-gray-800">Crea il tuo account</h2>
+      <h2 className="text-2xl font-bold text-ink-800">Crea il tuo account</h2>
 
       {refCode && (
-        <div className="bg-emerald-50 border-2 border-emerald-200 rounded-lg p-3 text-sm text-emerald-900">
+        <div className="bg-olive-50 border-2 border-olive-200 rounded-lg p-3 text-sm text-olive-900">
           🎁 <strong>Sei stato invitato!</strong> Codice <span className="font-mono font-bold">{refCode}</span> applicato. Hai <strong>€5 di sconto</strong> sul primo ordine.
         </div>
       )}
@@ -108,41 +108,41 @@ function SignUpInner() {
             type="button"
             onClick={() => setRole(r.value)}
             className={`p-3 rounded-lg border-2 text-left transition-all ${
-              role === r.value ? colorClasses[r.color].border : 'border-gray-200 hover:border-gray-300'
+              role === r.value ? colorClasses[r.color].border : 'border-cream-300 hover:border-cream-300'
             }`}
           >
             <div className="text-2xl mb-1">{r.emoji}</div>
             <div className="font-bold text-sm">{r.title}</div>
-            <div className="text-xs text-gray-500 leading-tight">{r.subtitle}</div>
+            <div className="text-xs text-ink-500 leading-tight">{r.subtitle}</div>
           </button>
         ))}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1">Email</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             placeholder="la-tua@email.it" required autoComplete="email"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400" />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1">Password</label>
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
             placeholder="Almeno 8 caratteri" required minLength={8} autoComplete="new-password"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400" />
         </div>
 
-        <label className="flex items-start gap-2 text-sm text-gray-700">
+        <label className="flex items-start gap-2 text-sm text-ink-700">
           <input
             type="checkbox"
             checked={acceptTos}
             onChange={(e) => setAcceptTos(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600"
+            className="mt-0.5 h-4 w-4 rounded border-cream-300 text-primary-700"
           />
           <span>
             Ho letto e accetto i{' '}
-            <Link href="/terms" target="_blank" className="text-indigo-600 underline">Termini di servizio</Link>{' '}e l&apos;
-            <Link href="/privacy" target="_blank" className="text-indigo-600 underline">Informativa sulla privacy</Link>.
+            <Link href="/terms" target="_blank" className="text-primary-700 underline">Termini di servizio</Link>{' '}e l&apos;
+            <Link href="/privacy" target="_blank" className="text-primary-700 underline">Informativa sulla privacy</Link>.
           </span>
         </label>
 
@@ -165,16 +165,16 @@ function SignUpInner() {
         </button>
       </form>
 
-      <p className="text-center text-sm text-gray-600">
-        Hai già un account? <Link href="/sign-in" className="text-indigo-600 hover:underline">Accedi</Link>
+      <p className="text-center text-sm text-ink-600">
+        Hai già un account? <Link href="/sign-in" className="text-primary-700 hover:underline">Accedi</Link>
       </p>
     </div>
   );
 }
 
 const SignUp = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-8">
-    <Suspense fallback={<div className="text-gray-500">Caricamento...</div>}>
+  <div className="min-h-screen flex items-center justify-center bg-cream-50 px-4 py-8">
+    <Suspense fallback={<div className="text-ink-500">Caricamento...</div>}>
       <SignUpInner />
     </Suspense>
   </div>

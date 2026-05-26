@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Bell, MessageCircle, ShoppingCart, Heart, Bike, Shield, Store, LogOut,
-  Sparkles, Package, ChevronDown,
+  Sparkles, Package, ChevronDown, User, MapPin, Award, Gift, ListChecks,
+  Megaphone, LayoutDashboard, TrendingUp, Camera, Euro, Wallet, CircleDot,
+  Settings, HelpCircle,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -275,39 +277,39 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
             <p className="font-semibold text-ink-900 truncate">{displayName}</p>
           </div>
           <ul className="py-1 text-ink-700">
-            <MenuLink href={profileHref} icon="👤" label="Il mio profilo" />
+            <MenuLink href={profileHref} icon={User} label="Il mio profilo" />
             {role === 'buyer' && (
               <>
-                <MenuLink href="/orders" icon="📦" label="I miei ordini" />
-                <MenuLink href="/favorites" icon="♥" label="Preferiti" />
-                <MenuLink href="/profile/addresses" icon="📌" label="Indirizzi" />
-                <MenuLink href="/profile/loyalty" icon="✨" label="Punti & Livello" />
-                <MenuLink href="/profile/achievements" icon="🏆" label="Badge" />
-                <MenuLink href="/profile/gift-cards" icon="🎁" label="Gift Card" />
-                <MenuLink href="/lists" icon="📋" label="Liste curate" />
-                <MenuLink href="/profile/referral" icon="📣" label="Invita amici · €5" />
+                <MenuLink href="/orders" icon={Package} label="I miei ordini" />
+                <MenuLink href="/favorites" icon={Heart} label="Preferiti" />
+                <MenuLink href="/profile/addresses" icon={MapPin} label="Indirizzi" />
+                <MenuLink href="/profile/loyalty" icon={Sparkles} label="Punti & Livello" />
+                <MenuLink href="/profile/achievements" icon={Award} label="Badge" />
+                <MenuLink href="/profile/gift-cards" icon={Gift} label="Gift Card" />
+                <MenuLink href="/lists" icon={ListChecks} label="Liste curate" />
+                <MenuLink href="/profile/referral" icon={Megaphone} label="Invita amici · €5" />
               </>
             )}
             {isSeller && (
               <>
-                <MenuLink href="/seller/dashboard" icon="📊" label="Dashboard" />
-                <MenuLink href="/seller/analytics" icon="📈" label="Analytics" />
-                <MenuLink href="/seller/products" icon="📦" label="I miei prodotti" />
-                <MenuLink href="/seller/orders" icon="🛒" label="Ordini ricevuti" />
-                <MenuLink href="/seller/promotions" icon="✨" label="Promozioni" />
-                <MenuLink href="/seller/stories" icon="📸" label="Storie" />
-                <MenuLink href="/seller/earnings" icon="💶" label="Guadagni" />
+                <MenuLink href="/seller/dashboard" icon={LayoutDashboard} label="Dashboard" />
+                <MenuLink href="/seller/analytics" icon={TrendingUp} label="Analytics" />
+                <MenuLink href="/seller/products" icon={Package} label="I miei prodotti" />
+                <MenuLink href="/seller/orders" icon={ShoppingCart} label="Ordini ricevuti" />
+                <MenuLink href="/seller/promotions" icon={Sparkles} label="Promozioni" />
+                <MenuLink href="/seller/stories" icon={Camera} label="Storie" />
+                <MenuLink href="/seller/earnings" icon={Euro} label="Guadagni" />
               </>
             )}
             {isRider && (
               <>
-                <MenuLink href="/rider" icon="🛵" label="Dashboard" />
-                <MenuLink href="/rider/availability" icon="🟢" label="Disponibilità" />
-                <MenuLink href="/rider/earnings" icon="💶" label="Guadagni" />
+                <MenuLink href="/rider" icon={Bike} label="Dashboard" />
+                <MenuLink href="/rider/availability" icon={CircleDot} label="Disponibilità" />
+                <MenuLink href="/rider/earnings" icon={Euro} label="Guadagni" />
               </>
             )}
-            <MenuLink href="/profile/settings" icon="⚙️" label="Impostazioni" />
-            <MenuLink href="/faq" icon="❓" label="FAQ" />
+            <MenuLink href="/profile/settings" icon={Settings} label="Impostazioni" />
+            <MenuLink href="/faq" icon={HelpCircle} label="FAQ" />
             <li><div className="border-t border-ink-100 my-1" /></li>
             <li>
               <button
@@ -326,10 +328,10 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
   );
 };
 
-const MenuLink = ({ href, icon, label }: { href: string; icon: string; label: string }) => (
+const MenuLink = ({ href, icon: Icon, label }: { href: string; icon: typeof Bell; label: string }) => (
   <li>
     <Link href={href} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-cream-100">
-      <span className="text-base w-5 text-center">{icon}</span>
+      <Icon size={16} strokeWidth={2.2} className="text-ink-500 shrink-0" aria-hidden />
       <span className="font-medium">{label}</span>
     </Link>
   </li>

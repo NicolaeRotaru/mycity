@@ -88,13 +88,13 @@ export default function SellerEarningsPage() {
     return next;
   }, []);
 
-  if (isLoading) return <div className="text-center py-8 text-gray-400">Caricamento guadagni…</div>;
+  if (isLoading) return <div className="text-center py-8 text-ink-400">Caricamento guadagni…</div>;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-gray-900">💶 Guadagni</h1>
-        <p className="text-sm text-gray-500">Tutto quello che hai incassato e quanto ti spetta.</p>
+        <h1 className="text-3xl font-extrabold text-ink-900">💶 Guadagni</h1>
+        <p className="text-sm text-ink-500">Tutto quello che hai incassato e quanto ti spetta.</p>
       </div>
 
       {/* Period switcher */}
@@ -106,8 +106,8 @@ export default function SellerEarningsPage() {
             onClick={() => setPeriod(p.key)}
             className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
               period === p.key
-                ? 'bg-indigo-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                ? 'bg-primary-700 text-white'
+                : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
             }`}
           >
             {p.label}
@@ -140,7 +140,7 @@ export default function SellerEarningsPage() {
 
       {/* Daily chart */}
       <section className="bg-white border rounded-xl p-5">
-        <h2 className="font-bold text-gray-900 mb-4">Andamento ultimi 7 giorni</h2>
+        <h2 className="font-bold text-ink-900 mb-4">Andamento ultimi 7 giorni</h2>
         <div className="flex items-end gap-2 h-32">
           {daily.map(([day, val]) => {
             const pct = (val / maxDaily) * 100;
@@ -148,12 +148,12 @@ export default function SellerEarningsPage() {
               <div key={day} className="flex-1 flex flex-col items-center gap-1">
                 <div className="flex-1 w-full flex items-end">
                   <div
-                    className="w-full bg-gradient-to-t from-indigo-500 to-purple-500 rounded-t"
+                    className="w-full bg-gradient-to-t from-primary-500 to-purple-500 rounded-t"
                     style={{ height: `${Math.max(pct, 4)}%` }}
                     title={formatPrice(val)}
                   />
                 </div>
-                <span className="text-[10px] text-gray-500">
+                <span className="text-[10px] text-ink-500">
                   {new Date(day).toLocaleDateString('it', { weekday: 'short' })}
                 </span>
               </div>
@@ -163,23 +163,23 @@ export default function SellerEarningsPage() {
       </section>
 
       {/* Payout schedule */}
-      <section className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl p-5">
+      <section className="bg-gradient-to-br from-olive-50 to-teal-50 border border-olive-200 rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="font-bold text-emerald-900 mb-1 flex items-center gap-2">
+            <h2 className="font-bold text-olive-900 mb-1 flex items-center gap-2">
               🏦 Prossimo bonifico
             </h2>
-            <p className="text-sm text-emerald-800">
+            <p className="text-sm text-olive-800">
               Riceverai i guadagni del periodo entro il{' '}
               <strong>{nextPayout.toLocaleDateString('it', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
             </p>
-            <p className="text-xs text-emerald-700 mt-1">
+            <p className="text-xs text-olive-700 mt-1">
               I bonifici partono il giorno 5 di ogni mese verso l'IBAN registrato.
             </p>
           </div>
           <Link
             href="/profile/settings"
-            className="bg-white hover:bg-emerald-50 border border-emerald-300 text-emerald-800 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"
+            className="bg-white hover:bg-olive-50 border border-olive-300 text-olive-800 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"
           >
             ⚙️ Configura IBAN
           </Link>
@@ -189,14 +189,14 @@ export default function SellerEarningsPage() {
       {/* Storico mensile */}
       <section className="bg-white border rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b">
-          <h2 className="font-bold text-gray-900">Storico mensile</h2>
-          <p className="text-xs text-gray-500">Importi netti già pagati o in attesa di liquidazione</p>
+          <h2 className="font-bold text-ink-900">Storico mensile</h2>
+          <p className="text-xs text-ink-500">Importi netti già pagati o in attesa di liquidazione</p>
         </div>
         {payouts.length === 0 ? (
-          <div className="p-8 text-center text-gray-400 text-sm">Ancora nessun guadagno nel periodo selezionato.</div>
+          <div className="p-8 text-center text-ink-400 text-sm">Ancora nessun guadagno nel periodo selezionato.</div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+            <thead className="bg-cream-50 text-xs uppercase text-ink-500">
               <tr>
                 <th className="text-left p-3">Mese</th>
                 <th className="text-right p-3">Netto</th>
@@ -209,14 +209,14 @@ export default function SellerEarningsPage() {
                   <td className="p-3 font-medium">
                     {new Date(month + '-01').toLocaleDateString('it', { month: 'long', year: 'numeric' })}
                   </td>
-                  <td className="p-3 text-right font-bold text-emerald-700">{formatPrice(amount)}</td>
+                  <td className="p-3 text-right font-bold text-olive-700">{formatPrice(amount)}</td>
                   <td className="p-3 text-right">
                     {i === 0 ? (
-                      <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                      <span className="bg-accent-100 text-accent-700 text-xs font-semibold px-2 py-0.5 rounded-full">
                         In attesa
                       </span>
                     ) : (
-                      <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+                      <span className="bg-olive-100 text-olive-700 text-xs font-semibold px-2 py-0.5 rounded-full">
                         ✓ Pagato
                       </span>
                     )}
@@ -229,11 +229,11 @@ export default function SellerEarningsPage() {
       </section>
 
       {/* Info commissioni */}
-      <details className="bg-gray-50 border rounded-xl">
-        <summary className="cursor-pointer p-4 font-semibold text-gray-700">
+      <details className="bg-cream-50 border rounded-xl">
+        <summary className="cursor-pointer p-4 font-semibold text-ink-700">
           ℹ️ Come funziona la commissione?
         </summary>
-        <div className="px-4 pb-4 text-sm text-gray-600 space-y-2">
+        <div className="px-4 pb-4 text-sm text-ink-600 space-y-2">
           <p>
             Su MyCity paghi <strong>solo l'{COMMISSION_PCT}% del venduto</strong> realmente concluso (non rimborsi, non ordini annullati).
             Nessuna commissione mensile, nessun costo di iscrizione.
@@ -258,15 +258,15 @@ function Stat({
   highlight?: boolean;
 }) {
   const palette = {
-    indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-900',  border: 'border-indigo-200'  },
+    indigo:  { bg: 'bg-primary-50',  text: 'text-primary-900',  border: 'border-primary-200'  },
     rose:    { bg: 'bg-rose-50',    text: 'text-rose-900',    border: 'border-rose-200'    },
-    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-900', border: 'border-emerald-200' },
+    emerald: { bg: 'bg-olive-50', text: 'text-olive-900', border: 'border-olive-200' },
   }[color];
   return (
-    <div className={`${palette.bg} ${palette.border} border-2 ${highlight ? 'ring-2 ring-offset-2 ring-emerald-300' : ''} rounded-xl p-5`}>
-      <p className="text-xs uppercase tracking-wide font-bold text-gray-500">{label}</p>
+    <div className={`${palette.bg} ${palette.border} border-2 ${highlight ? 'ring-2 ring-offset-2 ring-olive-300' : ''} rounded-xl p-5`}>
+      <p className="text-xs uppercase tracking-wide font-bold text-ink-500">{label}</p>
       <p className={`text-3xl font-extrabold ${palette.text} mt-2`}>{value}</p>
-      {hint && <p className="text-xs text-gray-500 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-ink-500 mt-1">{hint}</p>}
     </div>
   );
 }

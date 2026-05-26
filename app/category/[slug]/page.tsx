@@ -45,7 +45,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
         <span className="text-5xl">{category.icon}</span>
         <div>
           <h1 className="text-3xl font-bold">{category.name}</h1>
-          <p className="text-gray-500">Esplora i prodotti della categoria</p>
+          <p className="text-ink-500">Esplora i prodotti della categoria</p>
         </div>
       </header>
 
@@ -57,7 +57,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
               <Link
                 key={s.id}
                 href={`/category/${s.slug}`}
-                className="bg-white border rounded-full px-4 py-2 hover:bg-indigo-50 hover:border-indigo-400 text-sm font-medium"
+                className="bg-white border rounded-full px-4 py-2 hover:bg-primary-50 hover:border-primary-400 text-sm font-medium"
               >
                 {s.name}
               </Link>

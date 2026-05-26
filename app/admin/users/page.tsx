@@ -33,15 +33,15 @@ type Profile = {
 };
 
 const ROLE_LABELS: Record<string, { label: string; color: string; emoji: string }> = {
-  buyer:  { label: 'Acquirente', color: 'bg-indigo-100 text-indigo-700', emoji: '🛒' },
-  seller: { label: 'Venditore',  color: 'bg-pink-100 text-pink-700',     emoji: '🏪' },
-  rider:  { label: 'Rider',      color: 'bg-amber-100 text-amber-700',   emoji: '🛵' },
+  buyer:  { label: 'Acquirente', color: 'bg-primary-100 text-primary-800', emoji: '🛒' },
+  seller: { label: 'Venditore',  color: 'bg-secondary-100 text-secondary-700',     emoji: '🏪' },
+  rider:  { label: 'Rider',      color: 'bg-accent-100 text-accent-700',   emoji: '🛵' },
   admin:  { label: 'Admin',      color: 'bg-rose-100 text-rose-700',     emoji: '🛡️' },
 };
 
 const APPROVAL_LABELS: Record<string, { label: string; color: string }> = {
-  pending:   { label: 'In attesa',  color: 'bg-yellow-100 text-yellow-800' },
-  approved:  { label: 'Approvato',  color: 'bg-emerald-100 text-emerald-800' },
+  pending:   { label: 'In attesa',  color: 'bg-accent-100 text-accent-800' },
+  approved:  { label: 'Approvato',  color: 'bg-olive-100 text-olive-800' },
   rejected:  { label: 'Rifiutato',  color: 'bg-rose-100 text-rose-800' },
   suspended: { label: 'Sospeso',    color: 'bg-orange-100 text-orange-800' },
 };
@@ -237,7 +237,7 @@ function AdminUsersPageInner() {
 
   const detail = detailId ? profiles.find((p) => p.id === detailId) : null;
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
+  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
 
   if (error) {
     return (
@@ -256,13 +256,13 @@ function AdminUsersPageInner() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Utenti</h1>
-          <p className="text-sm text-gray-500">{filtered.length} risultati</p>
+          <h1 className="text-2xl font-bold text-ink-900">Utenti</h1>
+          <p className="text-sm text-ink-500">{filtered.length} risultati</p>
         </div>
         {pendingCount > 0 && filter !== 'pending' && (
           <button
             onClick={() => setFilter('pending')}
-            className="bg-yellow-100 hover:bg-yellow-200 text-yellow-900 px-4 py-2 rounded-lg font-semibold text-sm"
+            className="bg-accent-100 hover:bg-accent-200 text-accent-900 px-4 py-2 rounded-lg font-semibold text-sm"
           >
             ⏳ {pendingCount} richieste in attesa
           </button>
@@ -282,7 +282,7 @@ function AdminUsersPageInner() {
             key={opt.key}
             onClick={() => setFilter(opt.key)}
             className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-              filter === opt.key ? 'bg-rose-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              filter === opt.key ? 'bg-rose-600 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
           >
             {opt.label}
@@ -299,7 +299,7 @@ function AdminUsersPageInner() {
 
       <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
-          <thead className="bg-gray-50 border-b text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-cream-50 border-b text-xs uppercase tracking-wide text-ink-500">
             <tr>
               <th className="p-3 text-left">Utente</th>
               <th className="p-3 text-left">Ruolo</th>
@@ -311,7 +311,7 @@ function AdminUsersPageInner() {
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={5} className="p-8 text-center text-gray-400">
+                <td colSpan={5} className="p-8 text-center text-ink-400">
                   {profiles.length === 0
                     ? 'Nessun utente registrato sulla piattaforma.'
                     : search
@@ -329,12 +329,12 @@ function AdminUsersPageInner() {
               const isApproved  = isSeller && p.approval_status === 'approved' && p.is_approved;
               const isSuspended = isSeller && p.approval_status === 'suspended';
               return (
-                <tr key={p.id} className="border-t hover:bg-gray-50">
+                <tr key={p.id} className="border-t hover:bg-cream-50">
                   <td className="p-3">
-                    <p className="font-semibold text-gray-900">
+                    <p className="font-semibold text-ink-900">
                       {p.store_name ?? p.business_legal_name ?? p.full_name ?? '—'}
                     </p>
-                    <p className="text-xs text-gray-400 font-mono">{p.id.slice(0, 8)}…</p>
+                    <p className="text-xs text-ink-400 font-mono">{p.id.slice(0, 8)}…</p>
                   </td>
                   <td className="p-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}`}>
@@ -348,13 +348,13 @@ function AdminUsersPageInner() {
                       </span>
                     )}
                   </td>
-                  <td className="p-3 text-gray-500 whitespace-nowrap text-xs">{formatDate(p.created_at)}</td>
+                  <td className="p-3 text-ink-500 whitespace-nowrap text-xs">{formatDate(p.created_at)}</td>
                   <td className="p-3">
                     <div className="flex gap-1 flex-wrap">
                       {isPending && (
                         <button
                           onClick={() => setDetailId(p.id)}
-                          className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded font-semibold"
+                          className="text-xs bg-primary-700 hover:bg-primary-800 text-white px-3 py-1 rounded font-semibold"
                         >
                           Esamina
                         </button>
@@ -389,7 +389,7 @@ function AdminUsersPageInner() {
                             });
                             if (ok) reactivate.mutate(p.id);
                           }}
-                          className="text-xs bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-2 py-1 rounded font-semibold"
+                          className="text-xs bg-olive-100 hover:bg-olive-200 text-olive-800 px-2 py-1 rounded font-semibold"
                         >
                           Riattiva
                         </button>
@@ -456,11 +456,11 @@ function DetailPanel({
         <div className="sticky top-0 bg-white border-b px-5 py-4 flex items-center justify-between z-10">
           <div>
             <h2 className="font-bold text-lg">Richiesta venditore</h2>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-ink-500">
               {profile.approval_requested_at && `Inviata il ${formatDate(profile.approval_requested_at)}`}
             </p>
           </div>
-          <button onClick={onClose} className="text-2xl text-gray-400 hover:text-gray-700 px-2">×</button>
+          <button onClick={onClose} className="text-2xl text-ink-400 hover:text-ink-700 px-2">×</button>
         </div>
 
         <div className="p-5 space-y-5 text-sm">
@@ -499,7 +499,7 @@ function DetailPanel({
           </button>
           <button
             onClick={onApprove}
-            className="flex-1 px-4 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md"
+            className="flex-1 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md"
           >
             ✅ Approva
           </button>
@@ -512,8 +512,8 @@ function DetailPanel({
 function DetailGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="font-bold text-gray-900 mb-2">{title}</h3>
-      <div className="bg-gray-50 rounded-lg divide-y">{children}</div>
+      <h3 className="font-bold text-ink-900 mb-2">{title}</h3>
+      <div className="bg-cream-50 rounded-lg divide-y">{children}</div>
     </div>
   );
 }
@@ -521,15 +521,15 @@ function DetailGroup({ title, children }: { title: string; children: React.React
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="px-3 py-2 flex items-baseline gap-3">
-      <span className="text-xs text-gray-500 w-32 shrink-0">{label}</span>
-      <span className="text-gray-900">{children}</span>
+      <span className="text-xs text-ink-500 w-32 shrink-0">{label}</span>
+      <span className="text-ink-900">{children}</span>
     </div>
   );
 }
 
 export default function AdminUsersPage() {
   return (
-    <Suspense fallback={<div className="text-center py-8 text-gray-500">Caricamento...</div>}>
+    <Suspense fallback={<div className="text-center py-8 text-ink-500">Caricamento...</div>}>
       <AdminUsersPageInner />
     </Suspense>
   );

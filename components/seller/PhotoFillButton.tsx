@@ -94,13 +94,13 @@ const PhotoFillButton = ({ onFilled }: Props) => {
   const busy = state === 'analyzing';
 
   return (
-    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+    <div className="bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
       <div className="flex-1">
         <p className="font-bold text-base sm:text-lg flex items-center gap-2">
           <span>📷</span>
           <span>Compila con una foto</span>
         </p>
-        <p className="text-sm text-indigo-100">
+        <p className="text-sm text-primary-100">
           Scatta una foto del prodotto e l&apos;AI compila nome, descrizione, categoria e prezzo per te.
         </p>
       </div>
@@ -108,7 +108,7 @@ const PhotoFillButton = ({ onFilled }: Props) => {
         type="button"
         onClick={handleClick}
         disabled={busy}
-        className="bg-white text-indigo-700 hover:bg-indigo-50 disabled:opacity-60 px-5 py-2.5 rounded-md font-semibold whitespace-nowrap shadow-md flex items-center gap-2"
+        className="bg-white text-primary-800 hover:bg-primary-50 disabled:opacity-60 px-5 py-2.5 rounded-md font-semibold whitespace-nowrap shadow-md flex items-center gap-2"
       >
         {busy ? (
           <>

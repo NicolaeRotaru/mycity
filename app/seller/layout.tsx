@@ -28,36 +28,36 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   }, [isAuthenticated, isLoading, router]);
 
   if (isLoading || !isAuthenticated) {
-    return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
+    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
   }
 
   // Buyer o rider che ha cliccato /seller per sbaglio (o ha digitato la URL)
   if (wrongRole) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
-        <div className="bg-white border-2 border-indigo-200 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-indigo-100 flex items-center justify-center text-4xl mb-4">
+        <div className="bg-white border-2 border-primary-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-primary-100 flex items-center justify-center text-4xl mb-4">
             🏪
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Quest'area è per i venditori</h1>
-          <p className="text-gray-600 mb-1">
+          <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Quest'area è per i venditori</h1>
+          <p className="text-ink-600 mb-1">
             Il tuo account è {isBuyer ? 'un acquirente' : isRider ? 'un rider' : 'di altro tipo'},
             quindi non vedi la dashboard venditori.
           </p>
-          <p className="text-sm text-gray-500 mb-6 max-w-md mx-auto">
+          <p className="text-sm text-ink-500 mb-6 max-w-md mx-auto">
             Se hai un'attività e vuoi vendere su MyCity puoi inviare la richiesta. Approvazione entro 48h,
             poi avrai una vetrina dedicata, abbonamento mensile, niente commissioni sulle vendite.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm">
             <Link
               href="/sell"
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white px-5 py-2.5 rounded-lg font-bold shadow"
+              className="bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 text-white px-5 py-2.5 rounded-lg font-bold shadow"
             >
               🏪 Diventa venditore
             </Link>
             <Link
               href={isRider ? '/rider' : '/?as=buyer'}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold"
+              className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold"
             >
               ← Torna alla mia area
             </Link>
@@ -74,8 +74,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           <div className="w-20 h-20 mx-auto rounded-2xl bg-orange-100 flex items-center justify-center text-4xl mb-4">
             ⏸️
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Negozio temporaneamente sospeso</h1>
-          <p className="text-gray-600 mb-4 max-w-md mx-auto">
+          <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Negozio temporaneamente sospeso</h1>
+          <p className="text-ink-600 mb-4 max-w-md mx-auto">
             Un amministratore ha sospeso il tuo negozio. La vendita è bloccata fino a quando non verrà riattivato.
             Contatta il supporto per chiarimenti.
           </p>
@@ -83,7 +83,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             <Link href="/contact" className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-bold shadow">
               ✉️ Contatta il supporto
             </Link>
-            <Link href="/?as=buyer" className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold">
+            <Link href="/?as=buyer" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
               🏠 Vai al marketplace
             </Link>
           </div>
@@ -99,20 +99,20 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           <div className="w-20 h-20 mx-auto rounded-2xl bg-rose-100 flex items-center justify-center text-4xl mb-4">
             ❌
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Richiesta non approvata</h1>
+          <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Richiesta non approvata</h1>
           {(profile as any)?.rejection_reason && (
             <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 max-w-md mx-auto mb-3">
               <strong>Motivo:</strong> {(profile as any).rejection_reason}
             </p>
           )}
-          <p className="text-gray-600 mb-4 max-w-md mx-auto">
+          <p className="text-ink-600 mb-4 max-w-md mx-auto">
             La tua candidatura come venditore non è stata approvata. Puoi correggere i dati e ripresentare la richiesta.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Link href="/sell" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-bold shadow">
+            <Link href="/sell" className="bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-bold shadow">
               ✏️ Ripresenta la richiesta
             </Link>
-            <Link href="/?as=buyer" className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold">
+            <Link href="/?as=buyer" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
               🏠 Vai al marketplace
             </Link>
           </div>
@@ -124,23 +124,23 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   if (isPending || pending) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
-        <div className="bg-white border-2 border-amber-200 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-amber-100 flex items-center justify-center text-4xl mb-4">
+        <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center text-4xl mb-4">
             ⏳
           </div>
-          <h1 className="text-2xl font-extrabold text-gray-900 mb-2">Negozio in attesa di approvazione</h1>
-          <p className="text-gray-600 mb-4 max-w-md mx-auto">
+          <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Negozio in attesa di approvazione</h1>
+          <p className="text-ink-600 mb-4 max-w-md mx-auto">
             Stiamo verificando i dati della tua attività. La dashboard sarà disponibile non appena
             il nostro team avrà approvato la richiesta (entro 48 ore lavorative).
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Link href="/sell" className="bg-gray-100 hover:bg-gray-200 text-gray-900 px-5 py-2.5 rounded-lg font-semibold">
+            <Link href="/sell" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
               ✏️ Modifica richiesta
             </Link>
-            <Link href="/?as=buyer" className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+            <Link href="/?as=buyer" className="bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold">
               🏠 Vai al marketplace
             </Link>
-            <Link href="/contact" className="bg-white border-2 hover:border-indigo-400 px-5 py-2.5 rounded-lg font-semibold">
+            <Link href="/contact" className="bg-white border-2 hover:border-primary-400 px-5 py-2.5 rounded-lg font-semibold">
               ✉️ Contatti
             </Link>
           </div>
@@ -152,8 +152,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   if (!allowed) {
     return (
       <div className="container mx-auto p-8 text-center">
-        <p className="text-gray-500 text-lg">Accesso riservato ai venditori approvati.</p>
-        <Link href="/sell" className="mt-4 inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+        <p className="text-ink-500 text-lg">Accesso riservato ai venditori approvati.</p>
+        <Link href="/sell" className="mt-4 inline-block bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold">
           Invia richiesta
         </Link>
       </div>

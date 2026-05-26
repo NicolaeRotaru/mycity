@@ -55,44 +55,44 @@ export default function RiderProfilePage() {
     router.refresh();
   };
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
+  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
 
   return (
     <div className="max-w-xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Profilo rider</h1>
-        <p className="text-sm text-gray-500">I tuoi dati di contatto, visibili al cliente.</p>
+        <h1 className="text-2xl font-bold text-ink-900">Profilo rider</h1>
+        <p className="text-sm text-ink-500">I tuoi dati di contatto, visibili al cliente.</p>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-amber-800 text-sm">
+      <div className="bg-accent-50 border border-accent-200 rounded-lg p-4 text-accent-800 text-sm">
         🛵 Account rider attivo · {profile?.email}
       </div>
 
       <div className="bg-white border rounded-lg p-6 space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Nome e cognome</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1">Nome e cognome</label>
           <input
             type="text"
             defaultValue={profile?.full_name ?? ''}
             onChange={(e) => setFullName(e.target.value)}
             placeholder="Mario Rossi"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-accent-400"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Telefono</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1">Telefono</label>
           <input
             type="tel"
             defaultValue={profile?.phone ?? ''}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="3331234567"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-accent-400"
           />
         </div>
         <button
           onClick={() => update.mutate()}
           disabled={update.isPending}
-          className="bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white px-6 py-2.5 rounded font-semibold"
+          className="bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white px-6 py-2.5 rounded font-semibold"
         >
           {update.isPending ? 'Salvataggio...' : 'Salva'}
         </button>

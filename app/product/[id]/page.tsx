@@ -126,13 +126,13 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     return (
       <div className="container mx-auto px-6 py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-pulse">
-          <div className="bg-gray-200 h-96 rounded-xl" />
+          <div className="bg-cream-200 h-96 rounded-xl" />
           <div className="space-y-3">
-            <div className="h-6 bg-gray-200 rounded w-3/4" />
-            <div className="h-4 bg-gray-100 rounded w-1/2" />
-            <div className="h-10 bg-gray-200 rounded w-1/3" />
-            <div className="h-24 bg-gray-100 rounded" />
-            <div className="h-12 bg-gray-200 rounded" />
+            <div className="h-6 bg-cream-200 rounded w-3/4" />
+            <div className="h-4 bg-cream-100 rounded w-1/2" />
+            <div className="h-10 bg-cream-200 rounded w-1/3" />
+            <div className="h-24 bg-cream-100 rounded" />
+            <div className="h-12 bg-cream-200 rounded" />
           </div>
         </div>
       </div>
@@ -146,11 +146,11 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
         <div className="text-5xl mb-3">🚫</div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Prodotto non disponibile</h1>
-        <p className="text-sm text-gray-600 mb-5">
+        <h1 className="text-xl font-bold text-ink-900 mb-2">Prodotto non disponibile</h1>
+        <p className="text-sm text-ink-600 mb-5">
           Questo prodotto non è al momento acquistabile perché il negozio non è operativo.
         </p>
-        <a href="/" className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-semibold">
+        <a href="/" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold">
           ← Torna al marketplace
         </a>
       </div>
@@ -217,7 +217,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
       />
       {/* Breadcrumb */}
-      <nav className="text-sm text-gray-500 mb-4">
+      <nav className="text-sm text-ink-500 mb-4">
         <Link href="/" className="hover:underline">Home</Link>
         {product.categories && (
           <>
@@ -228,7 +228,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           </>
         )}
         <span className="mx-1">›</span>
-        <span className="text-gray-700">{product.name}</span>
+        <span className="text-ink-700">{product.name}</span>
       </nav>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_1fr_320px] gap-6">
@@ -237,7 +237,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           <div className="relative w-full aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl overflow-hidden border">
             <Image src={sizedImage(images[activeImg], 'detail')} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-contain p-4" />
             {isOutOfStock && (
-              <div className="absolute top-4 left-4 bg-gray-900 text-white text-xs font-bold px-3 py-1.5 rounded-full">
+              <div className="absolute top-4 left-4 bg-ink-900 text-white text-xs font-bold px-3 py-1.5 rounded-full">
                 ESAURITO
               </div>
             )}
@@ -253,8 +253,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                 <button
                   key={i}
                   onClick={() => setActiveImg(i)}
-                  className={`relative aspect-square bg-gray-100 rounded-lg overflow-hidden border-2 transition ${
-                    activeImg === i ? 'border-indigo-500' : 'border-transparent hover:border-gray-300'
+                  className={`relative aspect-square bg-cream-100 rounded-lg overflow-hidden border-2 transition ${
+                    activeImg === i ? 'border-indigo-500' : 'border-transparent hover:border-cream-300'
                   }`}
                 >
                   <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-cover" />
@@ -269,14 +269,14 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           {product.profiles && (
             <Link
               href={`/store/${product.profiles.id}`}
-              className="inline-flex items-center gap-2 text-sm text-indigo-600 hover:underline bg-indigo-50 px-3 py-1.5 rounded-full"
+              className="inline-flex items-center gap-2 text-sm text-primary-700 hover:underline bg-primary-50 px-3 py-1.5 rounded-full"
             >
               🏪 {product.profiles.store_name}
             </Link>
           )}
 
           <div className="flex items-start justify-between gap-3">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex-1">{product.name}</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold text-ink-900 flex-1">{product.name}</h1>
             <button
               type="button"
               onClick={() => {
@@ -309,22 +309,22 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           <div className="flex items-center gap-3 flex-wrap">
             {reviews.length > 0 ? (
               <>
-                <span className="text-yellow-500 text-lg">
+                <span className="text-accent-500 text-lg">
                   {'★'.repeat(Math.round(avgRating))}{'☆'.repeat(5 - Math.round(avgRating))}
                 </span>
-                <span className="text-sm text-gray-600 underline cursor-pointer">
+                <span className="text-sm text-ink-600 underline cursor-pointer">
                   {reviews.length} recensioni
                 </span>
               </>
             ) : (
-              <span className="text-sm text-gray-400">Sii il primo a recensire questo prodotto</span>
+              <span className="text-sm text-ink-400">Sii il primo a recensire questo prodotto</span>
             )}
           </div>
 
           <div className="border-y py-4">
             <div className="flex items-baseline gap-3 mb-1">
-              <span className="text-4xl font-extrabold text-gray-900">{formatPrice(price)}</span>
-              <span className="text-sm text-gray-400">IVA inclusa</span>
+              <span className="text-4xl font-extrabold text-ink-900">{formatPrice(price)}</span>
+              <span className="text-sm text-ink-400">IVA inclusa</span>
             </div>
             {/* Trust signal forte: confronto vs media categoria (Behavioral Scientist) */}
             <div className="mb-2 space-y-2">
@@ -332,19 +332,19 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               <PriceComparison productId={id} categoryId={product.category_id ?? null} currentPrice={price} />
             </div>
             {freeShipping ? (
-              <p className="text-emerald-600 font-semibold text-sm">
+              <p className="text-olive-600 font-semibold text-sm">
                 ✓ <strong>Spedizione GRATUITA</strong> · Consegna in 24-48h
               </p>
             ) : (
-              <p className="text-gray-600 text-sm">
+              <p className="text-ink-600 text-sm">
                 Aggiungi <strong>{formatPrice(FREE_SHIPPING_THRESHOLD - price)}</strong> per la spedizione gratuita
               </p>
             )}
           </div>
 
           <div>
-            <h3 className="font-bold text-sm uppercase tracking-wide text-gray-500 mb-2">Descrizione</h3>
-            <p className="text-gray-700 leading-relaxed whitespace-pre-line">{product.description}</p>
+            <h3 className="font-bold text-sm uppercase tracking-wide text-ink-500 mb-2">Descrizione</h3>
+            <p className="text-ink-700 leading-relaxed whitespace-pre-line">{product.description}</p>
           </div>
 
           {/* Caratteristiche */}
@@ -352,7 +352,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             typeof product.attributes === 'object' &&
             Object.keys(product.attributes).length > 0 && (
               <div>
-                <h3 className="font-bold text-sm uppercase tracking-wide text-gray-500 mb-2">
+                <h3 className="font-bold text-sm uppercase tracking-wide text-ink-500 mb-2">
                   Caratteristiche
                 </h3>
                 <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
@@ -360,10 +360,10 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                     ([key, value]) => (
                       <div
                         key={key}
-                        className="flex justify-between items-baseline gap-3 py-1.5 border-b border-gray-100"
+                        className="flex justify-between items-baseline gap-3 py-1.5 border-b border-cream-200"
                       >
-                        <dt className="text-sm text-gray-500">{findLabelForKey(key)}</dt>
-                        <dd className="text-sm text-gray-800 font-medium text-right">
+                        <dt className="text-sm text-ink-500">{findLabelForKey(key)}</dt>
+                        <dd className="text-sm text-ink-800 font-medium text-right">
                           {formatAttributeValue(value)}
                         </dd>
                       </div>
@@ -381,7 +381,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               { icon: '↩️', label: 'Reso entro 14 giorni' },
               { icon: '🏘️', label: 'Venditore locale' },
             ].map((t) => (
-              <div key={t.label} className="flex items-center gap-2 text-xs text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+              <div key={t.label} className="flex items-center gap-2 text-xs text-ink-700 bg-cream-50 rounded-lg px-3 py-2">
                 <span className="text-lg">{t.icon}</span>
                 <span className="font-medium">{t.label}</span>
               </div>
@@ -391,10 +391,10 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
         {/* CTA STICKY */}
         <div className="lg:sticky lg:top-32 h-fit">
-          <div className="bg-white border-2 border-yellow-300 rounded-xl p-5 shadow-lg space-y-3">
-            <div className="text-2xl font-extrabold text-gray-900">{formatPrice(price)}</div>
+          <div className="bg-white border-2 border-accent-300 rounded-xl p-5 shadow-lg space-y-3">
+            <div className="text-2xl font-extrabold text-ink-900">{formatPrice(price)}</div>
             {freeShipping && (
-              <p className="text-emerald-600 text-xs font-bold">SPEDIZIONE GRATUITA</p>
+              <p className="text-olive-600 text-xs font-bold">SPEDIZIONE GRATUITA</p>
             )}
             <p className="text-xs">
               {isOutOfStock ? (
@@ -402,7 +402,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               ) : isLowStock ? (
                 <span className="text-red-600 font-bold">🔥 Solo {stock} disponibili — affrettati!</span>
               ) : (
-                <span className="text-emerald-600 font-bold">✓ Disponibile · pronto per la spedizione</span>
+                <span className="text-olive-600 font-bold">✓ Disponibile · pronto per la spedizione</span>
               )}
             </p>
 
@@ -411,12 +411,12 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               <div className="flex items-center border rounded-lg">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-9 h-9 hover:bg-gray-50 rounded-l-lg"
+                  className="w-9 h-9 hover:bg-cream-50 rounded-l-lg"
                 >−</button>
                 <span className="w-10 text-center font-semibold">{quantity}</span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="w-9 h-9 hover:bg-gray-50 rounded-r-lg"
+                  className="w-9 h-9 hover:bg-cream-50 rounded-r-lg"
                 >+</button>
               </div>
             </div>
@@ -424,14 +424,14 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             <button
               onClick={handleAdd}
               disabled={isOutOfStock}
-              className="w-full bg-yellow-400 hover:bg-yellow-500 disabled:bg-gray-300 disabled:cursor-not-allowed text-gray-900 py-3 rounded-lg font-bold shadow-md hover:shadow-lg transition-all"
+              className="w-full bg-accent-400 hover:bg-accent-500 disabled:bg-cream-300 disabled:cursor-not-allowed text-ink-900 py-3 rounded-lg font-bold shadow-md hover:shadow-lg transition-all"
             >
               {isOutOfStock ? 'Non disponibile' : '🛒 Aggiungi al carrello'}
             </button>
 
             <Link
               href="/cart"
-              className="block w-full text-center bg-gray-900 hover:bg-gray-800 text-white py-3 rounded-lg font-bold"
+              className="block w-full text-center bg-ink-900 hover:bg-ink-800 text-white py-3 rounded-lg font-bold"
             >
               Acquista ora
             </Link>
@@ -444,8 +444,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               />
             )}
 
-            <div className="pt-3 border-t space-y-1.5 text-xs text-gray-500">
-              <p>📦 Venduto e spedito da <strong className="text-gray-700">{product.profiles?.store_name}</strong></p>
+            <div className="pt-3 border-t space-y-1.5 text-xs text-ink-500">
+              <p>📦 Venduto e spedito da <strong className="text-ink-700">{product.profiles?.store_name}</strong></p>
               <p>🔒 Acquisto protetto al 100%</p>
             </div>
           </div>
@@ -458,19 +458,19 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           <h2 className="text-2xl font-extrabold">
             Recensioni
             {reviews.length > 0 && (
-              <span className="ml-3 text-base font-normal text-gray-500">
-                <span className="text-amber-400">★</span> {avgRating.toFixed(1)} ({reviews.length})
+              <span className="ml-3 text-base font-normal text-ink-500">
+                <span className="text-accent-400">★</span> {avgRating.toFixed(1)} ({reviews.length})
               </span>
             )}
           </h2>
         </div>
 
         {/* Form nuova recensione */}
-        <div className="bg-white border-2 border-indigo-100 rounded-xl p-5">
-          <h3 className="font-bold text-gray-900 mb-3">Lascia la tua recensione</h3>
+        <div className="bg-white border-2 border-primary-100 rounded-xl p-5">
+          <h3 className="font-bold text-ink-900 mb-3">Lascia la tua recensione</h3>
           {!isAuthenticated ? (
-            <p className="text-sm text-gray-600">
-              <Link href={`/sign-in?returnTo=/product/${id}`} className="text-indigo-600 font-semibold hover:underline">
+            <p className="text-sm text-ink-600">
+              <Link href={`/sign-in?returnTo=/product/${id}`} className="text-primary-700 font-semibold hover:underline">
                 Accedi
               </Link>{' '}
               per recensire questo prodotto.
@@ -489,7 +489,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                     className="text-3xl hover:scale-110 transition-transform"
                     aria-label={`${n} stelle`}
                   >
-                    <span className={n <= reviewRating ? 'text-amber-400' : 'text-gray-300'}>★</span>
+                    <span className={n <= reviewRating ? 'text-accent-400' : 'text-ink-300'}>★</span>
                   </button>
                 ))}
               </div>
@@ -523,8 +523,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         {reviews.length === 0 ? (
           <div className="bg-white border rounded-xl p-8 text-center">
             <p className="text-4xl mb-2">⭐</p>
-            <p className="text-gray-600 font-medium">Nessuna recensione ancora</p>
-            <p className="text-sm text-gray-400">Sii il primo a condividere la tua esperienza</p>
+            <p className="text-ink-600 font-medium">Nessuna recensione ancora</p>
+            <p className="text-sm text-ink-400">Sii il primo a condividere la tua esperienza</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

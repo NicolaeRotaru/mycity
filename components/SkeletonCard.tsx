@@ -1,13 +1,13 @@
 const SkeletonCard = () => (
   <div className="bg-white border rounded-lg overflow-hidden animate-pulse">
-    <div className="w-full h-48 bg-gray-200" />
+    <div className="w-full h-48 bg-cream-200" />
     <div className="p-3 space-y-2">
-      <div className="h-4 bg-gray-200 rounded w-3/4" />
-      <div className="h-3 bg-gray-100 rounded w-1/2" />
-      <div className="h-3 bg-gray-100 rounded w-2/3" />
+      <div className="h-4 bg-cream-200 rounded w-3/4" />
+      <div className="h-3 bg-cream-100 rounded w-1/2" />
+      <div className="h-3 bg-cream-100 rounded w-2/3" />
       <div className="flex justify-between items-center pt-3">
-        <div className="h-5 bg-gray-200 rounded w-16" />
-        <div className="h-7 bg-gray-200 rounded-full w-20" />
+        <div className="h-5 bg-cream-200 rounded w-16" />
+        <div className="h-7 bg-cream-200 rounded-full w-20" />
       </div>
     </div>
   </div>

@@ -64,7 +64,7 @@ const StoreShowcase = () => {
   const reviewsByStore = data?.reviewsByStore ?? {};
 
   if (stores.length === 0) {
-    return <p className="text-gray-500 text-sm">Nessun negozio approvato ancora.</p>;
+    return <p className="text-ink-500 text-sm">Nessun negozio approvato ancora.</p>;
   }
 
   return (

@@ -59,7 +59,7 @@ export default function ContactSellerButton({ sellerId, className = '', label = 
       type="button"
       onClick={handleClick}
       disabled={loading}
-      className={`inline-flex items-center justify-center gap-2 border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 disabled:opacity-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors ${className}`}
+      className={`inline-flex items-center justify-center gap-2 border border-primary-200 bg-white hover:bg-primary-50 text-primary-800 disabled:opacity-50 px-4 py-2.5 rounded-lg font-semibold text-sm transition-colors ${className}`}
     >
       <MessageCircle size={16} />
       {loading ? 'Apertura…' : label}

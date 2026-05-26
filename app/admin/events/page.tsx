@@ -125,10 +125,10 @@ export default function AdminEventsPage() {
   });
 
   const STATUS_BADGE: Record<EventRow['status'], string> = {
-    scheduled: 'bg-blue-100 text-blue-800',
+    scheduled: 'bg-primary-100 text-primary-900',
     live: 'bg-rose-100 text-rose-800',
-    ended: 'bg-gray-100 text-gray-600',
-    cancelled: 'bg-amber-100 text-amber-800',
+    ended: 'bg-cream-100 text-ink-600',
+    cancelled: 'bg-accent-100 text-accent-800',
   };
 
   return (
@@ -175,7 +175,7 @@ export default function AdminEventsPage() {
                     </button>
                   )}
                   {ev.status === 'live' && (
-                    <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'ended' })} className="text-gray-700 hover:text-gray-900 text-xs font-semibold inline-flex items-center gap-1">
+                    <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'ended' })} className="text-ink-700 hover:text-ink-900 text-xs font-semibold inline-flex items-center gap-1">
                       <Pause size={12} strokeWidth={2.4} /> Termina
                     </button>
                   )}

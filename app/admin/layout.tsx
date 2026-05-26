@@ -20,13 +20,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }, [isAuthenticated, isAdmin, isLoading, router]);
 
   if (isLoading || !isAuthenticated) {
-    return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento...</div>;
+    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento...</div>;
   }
 
   if (!isAdmin) {
     return (
       <div className="container mx-auto p-8 text-center">
-        <p className="text-gray-500 text-lg">Accesso riservato agli amministratori.</p>
+        <p className="text-ink-500 text-lg">Accesso riservato agli amministratori.</p>
       </div>
     );
   }

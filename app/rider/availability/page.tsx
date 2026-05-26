@@ -98,27 +98,27 @@ export default function RiderAvailabilityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-gray-900">🟢 Disponibilità</h1>
-        <p className="text-sm text-gray-500">Imposta quando e dove vuoi ricevere consegne.</p>
+        <h1 className="text-3xl font-extrabold text-ink-900">🟢 Disponibilità</h1>
+        <p className="text-sm text-ink-500">Imposta quando e dove vuoi ricevere consegne.</p>
       </div>
 
       {/* Online toggle */}
       <section className={`border-2 rounded-2xl p-6 transition-colors ${
         avail.online
-          ? 'bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-300'
-          : 'bg-gray-50 border-gray-200'
+          ? 'bg-gradient-to-br from-olive-50 to-teal-50 border-olive-300'
+          : 'bg-cream-50 border-cream-300'
       }`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <span className={`relative inline-flex h-3 w-3 ${avail.online ? '' : 'opacity-30'}`}>
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${avail.online ? 'bg-emerald-400' : 'bg-gray-300'} opacity-75`} />
-              <span className={`relative inline-flex rounded-full h-3 w-3 ${avail.online ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${avail.online ? 'bg-olive-400' : 'bg-cream-300'} opacity-75`} />
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${avail.online ? 'bg-olive-500' : 'bg-gray-400'}`} />
             </span>
             <div>
-              <p className="text-xl font-extrabold text-gray-900">
+              <p className="text-xl font-extrabold text-ink-900">
                 {avail.online ? 'Sei online' : 'Sei offline'}
               </p>
-              <p className="text-xs text-gray-600">
+              <p className="text-xs text-ink-600">
                 {avail.online
                   ? 'Stai ricevendo proposte di consegna'
                   : 'Non riceverai proposte fino a quando non ti metterai online'}
@@ -131,7 +131,7 @@ export default function RiderAvailabilityPage() {
             className={`px-6 py-3 rounded-xl font-bold text-white text-base shadow transition-all ${
               avail.online
                 ? 'bg-rose-500 hover:bg-rose-600'
-                : 'bg-emerald-500 hover:bg-emerald-600 hover:scale-105'
+                : 'bg-olive-500 hover:bg-olive-600 hover:scale-105'
             }`}
           >
             {avail.online ? '⏸ Vai offline' : '▶ Vai online'}
@@ -141,15 +141,15 @@ export default function RiderAvailabilityPage() {
 
       {/* Settimanale */}
       <section className="bg-white border rounded-xl p-5">
-        <h2 className="font-bold text-gray-900 mb-4">📅 Orari preferiti</h2>
-        <p className="text-xs text-gray-500 mb-4">
+        <h2 className="font-bold text-ink-900 mb-4">📅 Orari preferiti</h2>
+        <p className="text-xs text-ink-500 mb-4">
           Indica quando preferisci lavorare. Riceverai notifiche solo in quegli orari (anche se sei offline manuale).
         </p>
         <div className="space-y-2">
           {DAYS.map((d) => {
             const cfg = avail.schedule[d.key];
             return (
-              <div key={d.key} className={`flex items-center gap-3 p-3 rounded-lg border ${cfg.enabled ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100 opacity-60'}`}>
+              <div key={d.key} className={`flex items-center gap-3 p-3 rounded-lg border ${cfg.enabled ? 'bg-white border-cream-300' : 'bg-cream-50 border-cream-200 opacity-60'}`}>
                 <label className="flex items-center gap-2 w-32 shrink-0 cursor-pointer">
                   <input
                     type="checkbox"
@@ -158,7 +158,7 @@ export default function RiderAvailabilityPage() {
                       ...avail,
                       schedule: { ...avail.schedule, [d.key]: { ...cfg, enabled: e.target.checked } },
                     }, true)}
-                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500"
+                    className="w-4 h-4 rounded text-accent-500 focus:ring-accent-500"
                   />
                   <span className="font-semibold text-sm">{d.label}</span>
                 </label>
@@ -171,9 +171,9 @@ export default function RiderAvailabilityPage() {
                       ...avail,
                       schedule: { ...avail.schedule, [d.key]: { ...cfg, from: e.target.value } },
                     }, true)}
-                    className="border rounded px-2 py-1 text-sm disabled:bg-gray-100"
+                    className="border rounded px-2 py-1 text-sm disabled:bg-cream-100"
                   />
-                  <span className="text-gray-400 text-sm">→</span>
+                  <span className="text-ink-400 text-sm">→</span>
                   <input
                     type="time"
                     value={cfg.to}
@@ -182,7 +182,7 @@ export default function RiderAvailabilityPage() {
                       ...avail,
                       schedule: { ...avail.schedule, [d.key]: { ...cfg, to: e.target.value } },
                     }, true)}
-                    className="border rounded px-2 py-1 text-sm disabled:bg-gray-100"
+                    className="border rounded px-2 py-1 text-sm disabled:bg-cream-100"
                   />
                 </div>
               </div>
@@ -193,8 +193,8 @@ export default function RiderAvailabilityPage() {
 
       {/* Zone preferite */}
       <section className="bg-white border rounded-xl p-5">
-        <h2 className="font-bold text-gray-900 mb-2">📍 Zone preferite</h2>
-        <p className="text-xs text-gray-500 mb-4">
+        <h2 className="font-bold text-ink-900 mb-2">📍 Zone preferite</h2>
+        <p className="text-xs text-ink-500 mb-4">
           Riceverai prima le consegne in queste zone. Max 6. Lascia vuoto per ricevere ovunque.
         </p>
 
@@ -208,8 +208,8 @@ export default function RiderAvailabilityPage() {
                 onClick={() => toggleZone(z)}
                 className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
                   active
-                    ? 'bg-amber-500 text-white border-amber-500'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-amber-400'
+                    ? 'bg-accent-500 text-white border-accent-500'
+                    : 'bg-white text-ink-700 border-cream-300 hover:border-accent-400'
                 }`}
               >
                 {active ? '✓ ' : '+ '}{z}
@@ -226,26 +226,26 @@ export default function RiderAvailabilityPage() {
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomZone(); } }}
             placeholder="Aggiungi una zona personalizzata…"
             maxLength={40}
-            className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
           />
           <button
             type="button"
             onClick={addCustomZone}
             disabled={!customZone.trim()}
-            className="bg-amber-500 hover:bg-amber-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+            className="bg-accent-500 hover:bg-accent-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-semibold"
           >
             Aggiungi
           </button>
         </div>
 
         {zones.length > 0 && (
-          <div className="mt-3 text-xs text-gray-500">
+          <div className="mt-3 text-xs text-ink-500">
             Selezionate: {zones.length}/6
           </div>
         )}
       </section>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+      <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900">
         💡 Le preferenze sono salvate localmente. Per sincronizzarle tra dispositivi, completa il tuo{' '}
         <Link href="/rider/profile" className="font-bold underline">profilo rider</Link>.
       </div>

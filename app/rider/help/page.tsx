@@ -69,42 +69,42 @@ export default function RiderHelpPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-gray-900">💡 Centro rider</h1>
-        <p className="text-sm text-gray-500">Guide pratiche per consegnare al meglio.</p>
+        <h1 className="text-3xl font-extrabold text-ink-900">💡 Centro rider</h1>
+        <p className="text-sm text-ink-500">Guide pratiche per consegnare al meglio.</p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-3">
-        <Link href="/contact" className="bg-gradient-to-br from-amber-500 to-orange-500 text-white rounded-xl p-5 hover:shadow-lg transition-all">
+        <Link href="/contact" className="bg-gradient-to-br from-accent-500 to-orange-500 text-white rounded-xl p-5 hover:shadow-lg transition-all">
           <div className="text-2xl mb-2">✉️</div>
           <p className="font-bold">Contatta il supporto</p>
-          <p className="text-xs text-amber-100 mt-1">Risposta entro 24h</p>
+          <p className="text-xs text-accent-100 mt-1">Risposta entro 24h</p>
         </Link>
         <a href="tel:+390523000000" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-rose-300 transition-all">
           <div className="text-2xl mb-2">📞</div>
-          <p className="font-bold text-gray-900">Emergenza</p>
-          <p className="text-xs text-gray-500 mt-1">+39 0523 000000 · 24/7</p>
+          <p className="font-bold text-ink-900">Emergenza</p>
+          <p className="text-xs text-ink-500 mt-1">+39 0523 000000 · 24/7</p>
         </a>
         <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
           <div className="text-2xl mb-2">💬</div>
-          <p className="font-bold text-gray-900">WhatsApp rider</p>
-          <p className="text-xs text-gray-500 mt-1">Lun-Dom 7-23</p>
+          <p className="font-bold text-ink-900">WhatsApp rider</p>
+          <p className="text-xs text-ink-500 mt-1">Lun-Dom 7-23</p>
         </a>
       </div>
 
       <div className="space-y-6">
         {TOPICS.map((topic) => (
           <section key={topic.title} className="bg-white border rounded-xl p-5">
-            <h2 className="font-bold text-gray-900 mb-3 flex items-center gap-2 text-lg">
+            <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2 text-lg">
               <span className="text-2xl">{topic.icon}</span> {topic.title}
             </h2>
             <div className="space-y-3">
               {topic.items.map((it) => (
                 <details key={it.q} className="group">
-                  <summary className="cursor-pointer font-semibold text-gray-800 hover:text-amber-600 list-none flex items-start justify-between gap-2">
+                  <summary className="cursor-pointer font-semibold text-ink-800 hover:text-accent-600 list-none flex items-start justify-between gap-2">
                     <span>{it.q}</span>
-                    <span className="text-gray-400 group-open:rotate-45 transition-transform text-xl leading-none">+</span>
+                    <span className="text-ink-400 group-open:rotate-45 transition-transform text-xl leading-none">+</span>
                   </summary>
-                  <p className="text-sm text-gray-600 mt-2 leading-relaxed pl-1">{it.a}</p>
+                  <p className="text-sm text-ink-600 mt-2 leading-relaxed pl-1">{it.a}</p>
                 </details>
               ))}
             </div>

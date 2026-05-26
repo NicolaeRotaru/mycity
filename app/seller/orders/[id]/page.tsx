@@ -7,10 +7,9 @@ import { toast } from 'sonner';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   ORDER_STATUS_LABEL,
-  ORDER_STATUS_EMOJI,
-  ORDER_STATUS_COLOR,
   type OrderStatus,
 } from '@/lib/order-status';
+import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import SimpleQR from '@/components/SimpleQR';
 
@@ -109,7 +108,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
       if (order.user_id) {
         notify({
           userId: order.user_id,
-          title: `${ORDER_STATUS_EMOJI[params.newStatus]} ${ORDER_STATUS_LABEL[params.newStatus]}`,
+          title: ORDER_STATUS_LABEL[params.newStatus],
           body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`,
           link: `/orders/${order.id}`,
         });
@@ -123,10 +122,9 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
     onError: (err: any) => toast.error(err.message),
   });
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
-  if (!order) return <div className="text-center py-8 text-gray-500">Ordine non trovato.</div>;
+  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
+  if (!order) return <div className="text-center py-8 text-ink-500">Ordine non trovato.</div>;
 
-  const c = ORDER_STATUS_COLOR[order.delivery_status];
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
 
   const showPickupCode = ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status) && pickupCode?.code;
@@ -135,27 +133,24 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <Link href="/seller/orders" className="text-sm text-indigo-600 hover:underline">← Tutti gli ordini</Link>
-          <h1 className="text-2xl font-bold text-gray-900 mt-1">
+          <Link href="/seller/orders" className="text-sm text-primary-700 hover:underline">← Tutti gli ordini</Link>
+          <h1 className="text-2xl font-bold text-ink-900 mt-1">
             Ordine #{order.id.slice(0, 6).toUpperCase()}
           </h1>
-          <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
+          <p className="text-sm text-ink-500">{formatDate(order.created_at)}</p>
         </div>
-        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ring-1 ${c.bg} ${c.text} ${c.ring}`}>
-          <span>{ORDER_STATUS_EMOJI[order.delivery_status]}</span>
-          {ORDER_STATUS_LABEL[order.delivery_status]}
-        </span>
+        <OrderStatusBadge status={order.delivery_status} />
       </div>
 
       {/* AZIONI */}
       {order.delivery_status === 'NEW' && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-sm text-gray-600 mb-3">Vuoi accettare questo ordine?</p>
+        <div className="bg-white border border-cream-300 rounded-xl p-5">
+          <p className="text-sm text-ink-600 mb-3">Vuoi accettare questo ordine?</p>
           <div className="flex gap-2 flex-wrap">
             <button
               onClick={() => transition.mutate({ newStatus: 'ACCEPTED', timestampField: 'accepted_at' })}
               disabled={transition.isPending}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+              className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
             >
               ✓ Accetta ordine
             </button>
@@ -224,53 +219,53 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         </div>
       )}
       {order.rider_id && order.delivery_status !== 'DELIVERED' && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800">
+        <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-800">
           🛵 Rider <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.
         </div>
       )}
 
       {/* CLIENTE + INDIRIZZO */}
-      <div className="bg-white border border-gray-200 rounded-xl p-6">
-        <h2 className="font-semibold text-gray-900 mb-3">Cliente</h2>
-        <div className="text-sm space-y-1 text-gray-700">
-          <p className="font-medium text-gray-900">{order.delivery_full_name}</p>
-          <p>📞 <a href={`tel:${order.delivery_phone}`} className="text-indigo-600 hover:underline">{order.delivery_phone}</a></p>
+      <div className="bg-white border border-cream-300 rounded-xl p-6">
+        <h2 className="font-semibold text-ink-900 mb-3">Cliente</h2>
+        <div className="text-sm space-y-1 text-ink-700">
+          <p className="font-medium text-ink-900">{order.delivery_full_name}</p>
+          <p>📞 <a href={`tel:${order.delivery_phone}`} className="text-primary-700 hover:underline">{order.delivery_phone}</a></p>
           <p>📍 {order.delivery_address}, {order.delivery_zip} {order.delivery_city}</p>
-          {order.delivery_notes && <p className="text-gray-500 italic mt-2">Note: {order.delivery_notes}</p>}
+          {order.delivery_notes && <p className="text-ink-500 italic mt-2">Note: {order.delivery_notes}</p>}
         </div>
       </div>
 
       {/* PRODOTTI */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="font-semibold text-gray-900">Da preparare</h2>
+      <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-cream-200">
+          <h2 className="font-semibold text-ink-900">Da preparare</h2>
         </div>
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-cream-100">
           {order.order_items.map((it) => {
             const img = it.products?.images?.[0];
             return (
               <div key={it.id} className="px-6 py-3 flex items-center gap-4">
-                <div className="w-14 h-14 rounded bg-gray-100 overflow-hidden flex items-center justify-center shrink-0">
+                <div className="w-14 h-14 rounded bg-cream-100 overflow-hidden flex items-center justify-center shrink-0">
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={img} alt="" className="w-full h-full object-cover" />
                   ) : '📦'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">{it.products?.name ?? 'Prodotto'}</p>
+                  <p className="font-medium text-ink-900 truncate">{it.products?.name ?? 'Prodotto'}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-bold text-lg text-gray-900">×{it.quantity}</p>
-                  <p className="text-xs text-gray-500">{formatPrice(Number(it.unit_price) * it.quantity)}</p>
+                  <p className="font-bold text-lg text-ink-900">×{it.quantity}</p>
+                  <p className="text-xs text-ink-500">{formatPrice(Number(it.unit_price) * it.quantity)}</p>
                 </div>
               </div>
             );
           })}
         </div>
-        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 text-sm space-y-1">
-          <div className="flex justify-between"><span className="text-gray-600">Subtotale</span><span>{formatPrice(subtotal)}</span></div>
-          <div className="flex justify-between"><span className="text-gray-600">Spedizione</span><span>{order.shipping_cost > 0 ? formatPrice(order.shipping_cost) : 'GRATUITA'}</span></div>
-          <div className="flex justify-between font-bold text-base pt-1 border-t border-gray-200"><span>Totale</span><span className="text-indigo-700">{formatPrice(order.total_price)}</span></div>
+        <div className="px-6 py-4 border-t border-cream-200 bg-cream-50 text-sm space-y-1">
+          <div className="flex justify-between"><span className="text-ink-600">Subtotale</span><span>{formatPrice(subtotal)}</span></div>
+          <div className="flex justify-between"><span className="text-ink-600">Spedizione</span><span>{order.shipping_cost > 0 ? formatPrice(order.shipping_cost) : 'GRATUITA'}</span></div>
+          <div className="flex justify-between font-bold text-base pt-1 border-t border-cream-300"><span>Totale</span><span className="text-primary-800">{formatPrice(order.total_price)}</span></div>
         </div>
       </div>
     </div>

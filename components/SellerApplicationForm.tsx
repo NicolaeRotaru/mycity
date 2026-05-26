@@ -85,12 +85,12 @@ const Section = ({
 }: { step: number; title: string; subtitle?: string; children: React.ReactNode }) => (
   <section className="bg-white border rounded-2xl p-6 space-y-4">
     <header className="flex items-start gap-3 -mt-1">
-      <span className="w-8 h-8 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center font-bold shrink-0">
+      <span className="w-8 h-8 bg-primary-100 text-primary-800 rounded-full flex items-center justify-center font-bold shrink-0">
         {step}
       </span>
       <div>
-        <h2 className="font-extrabold text-lg text-gray-900">{title}</h2>
-        {subtitle && <p className="text-sm text-gray-500">{subtitle}</p>}
+        <h2 className="font-extrabold text-lg text-ink-900">{title}</h2>
+        {subtitle && <p className="text-sm text-ink-500">{subtitle}</p>}
       </div>
     </header>
     <div className="space-y-4">{children}</div>
@@ -101,16 +101,16 @@ const Field = ({
   label, required, error, children, hint,
 }: { label: string; required?: boolean; error?: string; hint?: string; children: React.ReactNode }) => (
   <div>
-    <label className="block text-sm font-semibold text-gray-700 mb-1">
+    <label className="block text-sm font-semibold text-ink-700 mb-1">
       {label} {required && <span className="text-rose-500">*</span>}
     </label>
     {children}
-    {hint && !error && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+    {hint && !error && <p className="text-xs text-ink-400 mt-1">{hint}</p>}
     {error && <p className="text-xs text-rose-600 mt-1">{error}</p>}
   </div>
 );
 
-const inputCls = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400';
+const inputCls = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400';
 
 const BUSINESS_FORMS: { value: SchemaData['businessForm']; label: string }[] = [
   { value: 'ditta_individuale', label: 'Ditta individuale / Libero professionista' },
@@ -212,13 +212,13 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-5">
       {/* INFO HEADER */}
-      <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white rounded-2xl p-6">
+      <div className="bg-gradient-to-r from-primary-600 via-purple-600 to-pink-600 text-white rounded-2xl p-6">
         <h1 className="text-2xl md:text-3xl font-extrabold mb-1">🏪 Diventa venditore business</h1>
-        <p className="text-indigo-100 text-sm leading-relaxed">
+        <p className="text-primary-100 text-sm leading-relaxed">
           Vetrina dedicata, prodotti illimitati, niente commissioni per vendita.
           <strong className="text-white"> Abbonamento €50/mese</strong>, attivo solo dopo approvazione del nostro team.
         </p>
-        <ul className="text-xs text-indigo-100 mt-3 space-y-1">
+        <ul className="text-xs text-primary-100 mt-3 space-y-1">
           <li>✓ Vetrina pubblica con logo, copertina, descrizione</li>
           <li>✓ Pubblica prodotti illimitati e gestisci ordini da dashboard</li>
           <li>✓ Pagamento mensile, niente commissioni sulle vendite</li>
@@ -308,16 +308,16 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
             <div
               {...getRootProps()}
               className={`flex-1 border-2 border-dashed rounded-lg p-4 cursor-pointer transition-colors text-sm ${
-                isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-gray-400'
+                isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
               } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <input {...getInputProps()} />
-              {uploadingLogo ? <p className="text-gray-500">Caricamento…</p>
-                : logoUrl ? <p className="text-gray-600"><span className="font-medium">Sostituisci</span> · trascina o clicca</p>
-                : <p className="text-gray-500"><span className="font-medium text-indigo-600">Carica</span> immagine quadrata (max 3MB)</p>}
+              {uploadingLogo ? <p className="text-ink-500">Caricamento…</p>
+                : logoUrl ? <p className="text-ink-600"><span className="font-medium">Sostituisci</span> · trascina o clicca</p>
+                : <p className="text-ink-500"><span className="font-medium text-primary-700">Carica</span> immagine quadrata (max 3MB)</p>}
             </div>
             {logoUrl && (
-              <button type="button" onClick={() => setLogoUrl(null)} className="text-sm text-gray-500 hover:text-rose-600 underline">
+              <button type="button" onClick={() => setLogoUrl(null)} className="text-sm text-ink-500 hover:text-rose-600 underline">
                 Rimuovi
               </button>
             )}
@@ -365,7 +365,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           <input className={inputCls + ' uppercase font-mono text-xs'} placeholder="IT60X0542811101000000123456" {...register('billingIban')} />
         </Field>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-900">
+        <div className="bg-accent-50 border border-accent-200 rounded-lg p-4 text-sm text-accent-900">
           <p className="font-semibold mb-1">💳 Carta di credito per abbonamento</p>
           <p>
             L'abbonamento (€50/mese) viene addebitato <strong>solo dopo che l'admin avrà approvato la richiesta</strong>.
@@ -378,12 +378,12 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       {/* STEP 6: Consensi */}
       <Section step={6} title="Consensi legali" subtitle="Obbligatori per attivare il negozio">
         <Consent
-          label={<>Ho letto e accetto i <Link href="/terms" target="_blank" className="text-indigo-600 underline">Termini di servizio</Link> per venditori</>}
+          label={<>Ho letto e accetto i <Link href="/terms" target="_blank" className="text-primary-700 underline">Termini di servizio</Link> per venditori</>}
           register={register('acceptTos')}
           error={errors.acceptTos?.message as string | undefined}
         />
         <Consent
-          label={<>Ho letto e accetto la <Link href="/privacy" target="_blank" className="text-indigo-600 underline">Privacy policy</Link> (GDPR)</>}
+          label={<>Ho letto e accetto la <Link href="/privacy" target="_blank" className="text-primary-700 underline">Privacy policy</Link> (GDPR)</>}
           register={register('acceptPrivacy')}
           error={errors.acceptPrivacy?.message as string | undefined}
         />
@@ -402,11 +402,11 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       <button
         type="submit"
         disabled={isLoading || uploadingLogo}
-        className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-base shadow-lg transition-all"
+        className="w-full bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-base shadow-lg transition-all"
       >
         {isLoading ? 'Invio in corso…' : '📨 Invia richiesta'}
       </button>
-      <p className="text-center text-xs text-gray-500">
+      <p className="text-center text-xs text-ink-500">
         Risposta entro 48 ore lavorative. Sarai notificato via email e dentro la piattaforma.
       </p>
     </form>
@@ -418,9 +418,9 @@ function Consent({
 }: { label: React.ReactNode; register: any; error?: string }) {
   return (
     <div>
-      <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-gray-50 transition-colors">
-        <input type="checkbox" className="mt-0.5 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500" {...register} />
-        <span className="text-sm text-gray-700">{label}</span>
+      <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-cream-50 transition-colors">
+        <input type="checkbox" className="mt-0.5 w-4 h-4 rounded text-primary-700 focus:ring-primary-500" {...register} />
+        <span className="text-sm text-ink-700">{label}</span>
       </label>
       {error && <p className="text-xs text-rose-600 mt-1 ml-3">{error}</p>}
     </div>

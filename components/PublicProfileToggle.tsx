@@ -92,7 +92,7 @@ export default function PublicProfileToggle() {
     }
   };
 
-  if (loading) return <div className="border rounded-lg p-4 text-sm text-gray-500">Caricamento…</div>;
+  if (loading) return <div className="border rounded-lg p-4 text-sm text-ink-500">Caricamento…</div>;
 
   const publicUrl = handle ? `${appUrl}/u/${handle}` : '';
 
@@ -102,7 +102,7 @@ export default function PublicProfileToggle() {
         {enabled ? <Globe size={16} className="text-olive-600" /> : <Lock size={16} className="text-ink-500" />}
         Profilo pubblico
       </h3>
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-ink-600">
         Crea un profilo pubblico con un handle univoco. Altri utenti possono vedere i tuoi badge e bio.
         Default: <strong>disattivato</strong>. Nessun dato personale è esposto senza tuo consenso.
       </p>

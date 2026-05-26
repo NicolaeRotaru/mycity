@@ -82,29 +82,29 @@ export default function SellerCustomersPage() {
     ? customers.reduce((s, c) => s + c.totalSpent / c.ordersCount, 0) / customers.length
     : 0;
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento…</div>;
+  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento…</div>;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">I tuoi clienti</h1>
-        <p className="text-sm text-gray-500">{customers.length} clienti totali · {formatPrice(totalRevenue)} di ricavi</p>
+        <h1 className="text-2xl font-bold text-ink-900">I tuoi clienti</h1>
+        <p className="text-sm text-ink-500">{customers.length} clienti totali · {formatPrice(totalRevenue)} di ricavi</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-indigo-600">{customers.length}</p>
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Totali</p>
+          <p className="text-2xl font-bold text-primary-700">{customers.length}</p>
+          <p className="text-xs text-ink-500 uppercase tracking-wide">Totali</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-amber-600">
+          <p className="text-2xl font-bold text-accent-600">
             {customers.filter((c) => c.ordersCount >= 5).length}
           </p>
-          <p className="text-xs text-gray-500 uppercase tracking-wide">VIP</p>
+          <p className="text-xs text-ink-500 uppercase tracking-wide">VIP</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-emerald-600">{formatPrice(avgOrderValue)}</p>
-          <p className="text-xs text-gray-500 uppercase tracking-wide">Ordine medio</p>
+          <p className="text-2xl font-bold text-olive-600">{formatPrice(avgOrderValue)}</p>
+          <p className="text-xs text-ink-500 uppercase tracking-wide">Ordine medio</p>
         </div>
       </div>
 
@@ -114,7 +114,7 @@ export default function SellerCustomersPage() {
             key={f.key}
             onClick={() => setFilter(f.key)}
             className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
-              filter === f.key ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              filter === f.key ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
           >
             {f.label}
@@ -131,7 +131,7 @@ export default function SellerCustomersPage() {
 
       <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
-          <thead className="bg-gray-50 border-b text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-cream-50 border-b text-xs uppercase tracking-wide text-ink-500">
             <tr>
               <th className="p-3 text-left">Cliente</th>
               <th className="p-3 text-right">Ordini</th>
@@ -142,29 +142,29 @@ export default function SellerCustomersPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={5} className="p-8 text-center text-gray-400">Nessun cliente</td></tr>
+              <tr><td colSpan={5} className="p-8 text-center text-ink-400">Nessun cliente</td></tr>
             ) : (
               filtered.map((c) => {
                 const daysAgo = Math.floor((Date.now() - new Date(c.lastOrderAt).getTime()) / 86400000);
                 const isVip = c.ordersCount >= 5;
                 const isInactive = daysAgo > 30;
                 return (
-                  <tr key={c.userId} className="border-t hover:bg-gray-50">
+                  <tr key={c.userId} className="border-t hover:bg-cream-50">
                     <td className="p-3">
-                      <p className="font-semibold text-gray-900">{c.fullName ?? 'Cliente'}</p>
-                      <p className="text-xs text-gray-400">ID: {c.userId.slice(0, 8)}…</p>
+                      <p className="font-semibold text-ink-900">{c.fullName ?? 'Cliente'}</p>
+                      <p className="text-xs text-ink-400">ID: {c.userId.slice(0, 8)}…</p>
                     </td>
                     <td className="p-3 text-right font-bold">{c.ordersCount}</td>
-                    <td className="p-3 text-right font-semibold text-emerald-700">{formatPrice(c.totalSpent)}</td>
-                    <td className="p-3 text-gray-600 whitespace-nowrap">
+                    <td className="p-3 text-right font-semibold text-olive-700">{formatPrice(c.totalSpent)}</td>
+                    <td className="p-3 text-ink-600 whitespace-nowrap">
                       {formatDate(c.lastOrderAt)}
-                      <p className="text-xs text-gray-400">{daysAgo} giorni fa</p>
+                      <p className="text-xs text-ink-400">{daysAgo} giorni fa</p>
                     </td>
                     <td className="p-3">
                       <div className="flex flex-wrap gap-1">
-                        {isVip && <span className="bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5 rounded-full">⭐ VIP</span>}
+                        {isVip && <span className="bg-accent-100 text-accent-700 text-xs font-semibold px-2 py-0.5 rounded-full">⭐ VIP</span>}
                         {isInactive && <span className="bg-rose-100 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full">😴 Inattivo</span>}
-                        {!isInactive && !isVip && <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-0.5 rounded-full">Attivo</span>}
+                        {!isInactive && !isVip && <span className="bg-olive-100 text-olive-700 text-xs font-semibold px-2 py-0.5 rounded-full">Attivo</span>}
                       </div>
                     </td>
                   </tr>
@@ -175,7 +175,7 @@ export default function SellerCustomersPage() {
         </table>
       </div>
 
-      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-900">
+      <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-900">
         💡 <strong>Suggerimento</strong>: i clienti VIP valgono in media 4× di più. Considera di mandare loro un'offerta esclusiva.
       </div>
     </div>

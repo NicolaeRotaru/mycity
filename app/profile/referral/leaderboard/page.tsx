@@ -52,7 +52,7 @@ export default function ReferralLeaderboardPage() {
         {[
           { rank: 1, prize: '€100', emoji: '🥇', color: 'from-accent-300 to-accent-100', text: 'text-accent-800' },
           { rank: 2, prize: '€50',  emoji: '🥈', color: 'from-ink-200 to-ink-100',       text: 'text-ink-700' },
-          { rank: 3, prize: '€25',  emoji: '🥉', color: 'from-amber-200 to-amber-100',   text: 'text-amber-800' },
+          { rank: 3, prize: '€25',  emoji: '🥉', color: 'from-accent-200 to-accent-100',   text: 'text-accent-800' },
         ].map((p) => (
           <div key={p.rank} className={`bg-gradient-to-br ${p.color} rounded-2xl p-4 text-center shadow-warm`}>
             <div className="text-3xl">{p.emoji}</div>
@@ -80,7 +80,7 @@ export default function ReferralLeaderboardPage() {
                 <span className={`w-10 h-10 rounded-full flex items-center justify-center font-serif font-bold shrink-0 ${
                   rank === 1 ? 'bg-accent-500 text-ink-900' :
                   rank === 2 ? 'bg-ink-200 text-ink-800' :
-                  rank === 3 ? 'bg-amber-300 text-amber-900' :
+                  rank === 3 ? 'bg-accent-300 text-accent-900' :
                                'bg-cream-100 text-ink-600'
                 }`}>
                   {rank <= 3 ? <Crown size={18} /> : rank}

@@ -82,7 +82,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full rounded-lg bg-amber-500 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-600"
+        className="w-full rounded-lg bg-accent-500 px-4 py-3 text-sm font-semibold text-white hover:bg-accent-600"
       >
         💶 Conferma incasso contanti
       </button>
@@ -92,21 +92,21 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-3">
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <h2 className="text-lg font-semibold text-slate-900">Conferma incasso contanti</h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <h2 className="text-lg font-semibold text-ink-900">Conferma incasso contanti</h2>
+        <p className="mt-1 text-xs text-ink-500">
           Inserisci l&apos;importo ricevuto, una foto dei contanti o dello scontrino, e una foto
           della consegna.
         </p>
 
-        <label className="mt-4 block text-sm font-medium text-slate-700">Importo incassato (€)</label>
+        <label className="mt-4 block text-sm font-medium text-ink-700">Importo incassato (€)</label>
         <input
           type="number"
           step="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
-          className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-lg font-mono"
+          className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-lg font-mono"
         />
-        <p className="mt-1 text-xs text-slate-500">Importo previsto: €{(expectedCents / 100).toFixed(2)}</p>
+        <p className="mt-1 text-xs text-ink-500">Importo previsto: €{(expectedCents / 100).toFixed(2)}</p>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <PhotoSlot
@@ -129,14 +129,14 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
           <button
             onClick={() => setOpen(false)}
             disabled={submitting}
-            className="flex-1 rounded-lg px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"
+            className="flex-1 rounded-lg px-4 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
           >
             Annulla
           </button>
           <button
             onClick={submit}
             disabled={submitting || !cashPhoto}
-            className="flex-1 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 disabled:opacity-50"
           >
             {submitting ? 'Invio…' : 'Conferma'}
           </button>
@@ -157,14 +157,14 @@ function PhotoSlot({
 }) {
   return (
     <label className="cursor-pointer">
-      <div className="text-xs font-medium text-slate-700">
+      <div className="text-xs font-medium text-ink-700">
         {label} {required && <span className="text-rose-600">*</span>}
       </div>
-      <div className="mt-1 flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 bg-slate-50">
+      <div className="mt-1 flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-cream-300 bg-cream-50">
         {url ? (
           <img src={url} alt="" className="h-full w-full rounded-lg object-cover" />
         ) : (
-          <span className="text-xl text-slate-400">{uploading ? '…' : '📷'}</span>
+          <span className="text-xl text-ink-400">{uploading ? '…' : '📷'}</span>
         )}
       </div>
       <input

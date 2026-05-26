@@ -130,7 +130,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
     },
   });
 
-  if (isLoading || !group) return <div className="container mx-auto p-8 text-center text-gray-500">Caricamento…</div>;
+  if (isLoading || !group) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
 
   const progress = Math.min(100, (group.current_quantity / group.target_quantity) * 100);
   const missing = Math.max(0, group.target_quantity - group.current_quantity);
@@ -139,18 +139,18 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-3xl space-y-6">
-      <Link href="/groups" className="text-sm text-indigo-600 hover:underline">← Tutti i gruppi</Link>
+      <Link href="/groups" className="text-sm text-primary-700 hover:underline">← Tutti i gruppi</Link>
 
-      <div className="bg-white border-2 border-amber-200 rounded-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-amber-500 to-rose-500 text-white p-6">
+      <div className="bg-white border-2 border-accent-200 rounded-2xl overflow-hidden">
+        <div className="bg-gradient-to-r from-accent-500 to-rose-500 text-white p-6">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-amber-50 text-sm font-semibold uppercase tracking-wide">Gruppo d'acquisto</p>
+            <p className="text-accent-50 text-sm font-semibold uppercase tracking-wide">Gruppo d'acquisto</p>
             <span className="bg-white text-rose-600 font-extrabold px-3 py-1 rounded-full">
               -{group.discount_percent}%
             </span>
           </div>
           <h1 className="text-2xl font-extrabold mt-2">{group.product?.name}</h1>
-          <p className="text-amber-100 text-sm mt-1">🏪 {group.seller?.store_name}</p>
+          <p className="text-accent-100 text-sm mt-1">🏪 {group.seller?.store_name}</p>
         </div>
 
         <div className="p-6 space-y-5">
@@ -161,48 +161,48 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
 
           <div className="flex items-baseline gap-3">
             <span className="text-3xl font-extrabold text-rose-600">{formatPrice(group.discounted_price)}</span>
-            <span className="text-gray-400 line-through">{formatPrice(group.unit_price)}</span>
-            <span className="text-emerald-600 text-sm font-semibold">
+            <span className="text-ink-400 line-through">{formatPrice(group.unit_price)}</span>
+            <span className="text-olive-600 text-sm font-semibold">
               Risparmi {formatPrice(group.unit_price - group.discounted_price)}
             </span>
           </div>
 
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <span className="font-bold text-gray-900">
+              <span className="font-bold text-ink-900">
                 {group.current_quantity} / {group.target_quantity} partecipanti
               </span>
-              <span className="text-amber-600 font-semibold">⏱ {timeLeft(group.deadline)}</span>
+              <span className="text-accent-600 font-semibold">⏱ {timeLeft(group.deadline)}</span>
             </div>
-            <div className="bg-gray-200 rounded-full h-3 overflow-hidden">
+            <div className="bg-cream-200 rounded-full h-3 overflow-hidden">
               <div
-                className="bg-gradient-to-r from-amber-400 to-rose-500 h-full transition-all"
+                className="bg-gradient-to-r from-accent-400 to-rose-500 h-full transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
             {missing > 0 ? (
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-ink-500 mt-2">
                 Mancano <strong className="text-rose-600">{missing}</strong> persone per sbloccare lo sconto.
               </p>
             ) : (
-              <p className="text-xs text-emerald-700 mt-2 font-semibold">
+              <p className="text-xs text-olive-700 mt-2 font-semibold">
                 ✅ Target raggiunto! L'offerta è confermata.
               </p>
             )}
           </div>
 
           {closed ? (
-            <div className="bg-gray-100 text-gray-600 p-4 rounded-lg text-sm text-center">
+            <div className="bg-cream-100 text-ink-600 p-4 rounded-lg text-sm text-center">
               Questo gruppo è chiuso.
             </div>
           ) : myParticipation ? (
             <div className="space-y-2">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 text-sm text-emerald-800">
+              <div className="bg-olive-50 border border-olive-200 rounded-lg p-3 text-sm text-olive-800">
                 ✅ <strong>Sei nel gruppo</strong>. Verrai avvisato quando si raggiunge il target.
               </div>
               <button
                 onClick={() => leave.mutate()}
-                className="w-full text-sm text-gray-500 hover:text-rose-600 underline"
+                className="w-full text-sm text-ink-500 hover:text-rose-600 underline"
               >
                 Abbandona il gruppo
               </button>
@@ -217,7 +217,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
             </button>
           )}
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-ink-400 text-center">
             Pagamento solo quando il gruppo è confermato. Annulla quando vuoi prima della scadenza.
           </p>
         </div>
@@ -225,8 +225,8 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
 
       {group.product?.description && (
         <div className="bg-white border rounded-xl p-5">
-          <h2 className="font-bold text-gray-900 mb-2">Dettagli prodotto</h2>
-          <p className="text-sm text-gray-700">{group.product.description}</p>
+          <h2 className="font-bold text-ink-900 mb-2">Dettagli prodotto</h2>
+          <p className="text-sm text-ink-700">{group.product.description}</p>
         </div>
       )}
     </div>

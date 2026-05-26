@@ -11,7 +11,7 @@ const messages = [
 ];
 
 const TrustBar = () => (
-  <div className="bg-gray-950 text-gray-200 text-xs sm:text-sm border-b border-gray-800">
+  <div className="bg-gray-950 text-ink-200 text-xs sm:text-sm border-b border-gray-800">
     <div className="container mx-auto px-4 py-2 flex items-center justify-start sm:justify-center gap-6 overflow-x-auto scrollbar-hide whitespace-nowrap">
       {messages.map(({ Icon, text }, i) => (
         <span key={i} className="flex items-center gap-1.5 shrink-0">

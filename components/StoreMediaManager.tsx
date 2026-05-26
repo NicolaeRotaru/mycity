@@ -86,8 +86,8 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Copertina negozio</label>
-        <p className="text-xs text-gray-500">
+        <label className="block text-sm font-medium text-ink-700 mb-1">Copertina negozio</label>
+        <p className="text-xs text-ink-500">
           Aggiungi fino a {MAX_IMAGES} immagini e 1 video. Trascina per riordinare.
           Attualmente: {imageCount}/{MAX_IMAGES} foto · {videoCount}/{MAX_VIDEOS} video.
         </p>
@@ -96,7 +96,7 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
       {value.length > 0 && (
         <ul className="space-y-2">
           {value.map((m, i) => (
-            <li key={i} className="flex items-center gap-3 border rounded-lg p-2 bg-gray-50">
+            <li key={i} className="flex items-center gap-3 border rounded-lg p-2 bg-cream-50">
               <div className="w-20 h-16 rounded overflow-hidden bg-black shrink-0">
                 {m.type === 'image' ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -106,10 +106,10 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-gray-700">
+                <p className="text-sm font-semibold text-ink-700">
                   {m.type === 'image' ? '🖼️ Immagine' : '🎬 Video'} · posizione {i + 1}
                 </p>
-                <p className="text-xs text-gray-400 truncate">{m.url.split('/').pop()}</p>
+                <p className="text-xs text-ink-400 truncate">{m.url.split('/').pop()}</p>
               </div>
               <div className="flex flex-col gap-1 shrink-0">
                 <button
@@ -147,11 +147,11 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
         <div
           {...getRootProps()}
           className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
-            isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-gray-400'
+            isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
           } ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <input {...getInputProps()} />
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-ink-600">
             {uploading
               ? 'Caricamento…'
               : 'Trascina foto o video qui, oppure clicca per scegliere'}

@@ -224,13 +224,13 @@ export default function NewProductPage() {
           <div
             {...getRootProps()}
             className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-              isDragActive ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-indigo-400'
+              isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-primary-400'
             }`}
           >
             <input {...getInputProps()} />
             {uploading
-              ? <p className="text-gray-500">Caricamento...</p>
-              : <p className="text-gray-500">Trascina qui le foto o clicca per selezionarle</p>
+              ? <p className="text-ink-500">Caricamento...</p>
+              : <p className="text-ink-500">Trascina qui le foto o clicca per selezionarle</p>
             }
           </div>
           {imageUrls.length > 0 && (
@@ -255,7 +255,7 @@ export default function NewProductPage() {
         <button
           type="submit"
           disabled={create.isPending}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white py-3 rounded-lg font-semibold"
+          className="w-full bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white py-3 rounded-lg font-semibold"
         >
           {create.isPending ? 'Pubblicazione...' : 'Pubblica prodotto'}
         </button>

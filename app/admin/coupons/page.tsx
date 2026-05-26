@@ -94,14 +94,14 @@ export default function AdminCouponsPage() {
     },
   });
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
+  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Coupon</h1>
-          <p className="text-sm text-gray-500">{coupons.length} codici</p>
+          <h1 className="text-2xl font-bold text-ink-900">Coupon</h1>
+          <p className="text-sm text-ink-500">{coupons.length} codici</p>
         </div>
         {!showForm && (
           <button
@@ -120,7 +120,7 @@ export default function AdminCouponsPage() {
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="text-sm font-medium text-gray-700">Codice</label>
+              <label className="text-sm font-medium text-ink-700">Codice</label>
               <input
                 value={form.code}
                 onChange={(e) => setForm({ ...form, code: e.target.value })}
@@ -130,7 +130,7 @@ export default function AdminCouponsPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700">Tipo</label>
+              <label className="text-sm font-medium text-ink-700">Tipo</label>
               <select
                 value={form.type}
                 onChange={(e) => setForm({ ...form, type: e.target.value as any })}
@@ -143,7 +143,7 @@ export default function AdminCouponsPage() {
             </div>
             {form.type !== 'FREE_SHIPPING' && (
               <div>
-                <label className="text-sm font-medium text-gray-700">Valore</label>
+                <label className="text-sm font-medium text-ink-700">Valore</label>
                 <input
                   type="number"
                   value={form.value}
@@ -155,7 +155,7 @@ export default function AdminCouponsPage() {
               </div>
             )}
             <div>
-              <label className="text-sm font-medium text-gray-700">Spesa minima (€)</label>
+              <label className="text-sm font-medium text-ink-700">Spesa minima (€)</label>
               <input
                 type="number"
                 value={form.min_subtotal}
@@ -165,7 +165,7 @@ export default function AdminCouponsPage() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700">Usi max (vuoto = illimitato)</label>
+              <label className="text-sm font-medium text-ink-700">Usi max (vuoto = illimitato)</label>
               <input
                 type="number"
                 value={form.max_uses ?? ''}
@@ -175,7 +175,7 @@ export default function AdminCouponsPage() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-sm font-medium text-gray-700">Descrizione (opzionale)</label>
+              <label className="text-sm font-medium text-ink-700">Descrizione (opzionale)</label>
               <input
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -191,7 +191,7 @@ export default function AdminCouponsPage() {
             <button type="submit" disabled={create.isPending} className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white px-5 py-2 rounded font-semibold">
               {create.isPending ? 'Creazione…' : 'Crea coupon'}
             </button>
-            <button type="button" onClick={() => setShowForm(false)} className="text-gray-600 hover:text-gray-900 px-3">
+            <button type="button" onClick={() => setShowForm(false)} className="text-ink-600 hover:text-ink-900 px-3">
               Annulla
             </button>
           </div>
@@ -200,7 +200,7 @@ export default function AdminCouponsPage() {
 
       <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
-          <thead className="bg-gray-50 border-b text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-cream-50 border-b text-xs uppercase tracking-wide text-ink-500">
             <tr>
               <th className="p-3 text-left">Codice</th>
               <th className="p-3 text-left">Tipo</th>
@@ -213,24 +213,24 @@ export default function AdminCouponsPage() {
           </thead>
           <tbody>
             {coupons.map((c) => (
-              <tr key={c.id} className="border-t hover:bg-gray-50">
-                <td className="p-3 font-mono font-bold text-gray-900">{c.code}</td>
-                <td className="p-3 text-gray-700">
+              <tr key={c.id} className="border-t hover:bg-cream-50">
+                <td className="p-3 font-mono font-bold text-ink-900">{c.code}</td>
+                <td className="p-3 text-ink-700">
                   {c.type === 'PERCENT' ? 'Sconto %' : c.type === 'FIXED' ? 'Sconto €' : 'Spedizione gratis'}
-                  {c.first_order_only && <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">1° ordine</span>}
+                  {c.first_order_only && <span className="ml-2 text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded">1° ordine</span>}
                 </td>
                 <td className="p-3 text-right font-semibold">
                   {c.type === 'PERCENT' ? `${c.value}%` : c.type === 'FIXED' ? `€${Number(c.value).toFixed(2)}` : '—'}
                 </td>
-                <td className="p-3 text-right text-gray-600">€{Number(c.min_subtotal).toFixed(2)}</td>
-                <td className="p-3 text-right text-gray-600">
+                <td className="p-3 text-right text-ink-600">€{Number(c.min_subtotal).toFixed(2)}</td>
+                <td className="p-3 text-right text-ink-600">
                   {c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ''}
                 </td>
                 <td className="p-3">
                   <button
                     onClick={() => toggle.mutate(c)}
                     className={`text-xs px-2 py-1 rounded font-semibold ${
-                      c.active ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+                      c.active ? 'bg-olive-100 text-olive-700' : 'bg-cream-100 text-ink-500'
                     }`}
                   >
                     {c.active ? 'Attivo' : 'Disattivato'}

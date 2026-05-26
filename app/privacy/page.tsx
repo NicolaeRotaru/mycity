@@ -12,27 +12,27 @@ export default function PrivacyPage() {
   return (
     <div className="container mx-auto px-6 py-10 max-w-3xl">
       <div className="mb-8">
-        <Link href="/" className="text-sm text-indigo-600 hover:underline">← Home</Link>
-        <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mt-2 mb-2">Informativa sulla privacy</h1>
-        <p className="text-sm text-gray-500">Versione {VERSION} — in vigore dal {EFFECTIVE_DATE}</p>
-        <p className="text-sm text-gray-500">Ai sensi degli artt. 13-14 Reg. UE 2016/679 (GDPR)</p>
+        <Link href="/" className="text-sm text-primary-700 hover:underline">← Home</Link>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mt-2 mb-2">Informativa sulla privacy</h1>
+        <p className="text-sm text-ink-500">Versione {VERSION} — in vigore dal {EFFECTIVE_DATE}</p>
+        <p className="text-sm text-ink-500">Ai sensi degli artt. 13-14 Reg. UE 2016/679 (GDPR)</p>
       </div>
 
-      <div className="prose prose-gray max-w-none space-y-6 text-gray-700 leading-relaxed">
+      <div className="prose prose-gray max-w-none space-y-6 text-ink-700 leading-relaxed">
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">1. Titolare del trattamento</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">1. Titolare del trattamento</h2>
           <p>
             Il titolare del trattamento è <strong>MyCity S.r.l.</strong>, con sede in
             Via Roma 1, 29121 Piacenza (PC), P.IVA IT00000000000.
           </p>
           <p>
-            <strong>Contatti del Titolare:</strong> <a href="mailto:privacy@mycity.it" className="text-indigo-600 underline">privacy@mycity.it</a><br />
-            <strong>Responsabile della protezione dei dati (DPO):</strong> <a href="mailto:dpo@mycity.it" className="text-indigo-600 underline">dpo@mycity.it</a>
+            <strong>Contatti del Titolare:</strong> <a href="mailto:privacy@mycity.it" className="text-primary-700 underline">privacy@mycity.it</a><br />
+            <strong>Responsabile della protezione dei dati (DPO):</strong> <a href="mailto:dpo@mycity.it" className="text-primary-700 underline">dpo@mycity.it</a>
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">2. Categorie di dati trattati</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">2. Categorie di dati trattati</h2>
           <ul className="list-disc list-inside space-y-1">
             <li><strong>Dati anagrafici e di contatto:</strong> nome, cognome, email, telefono, indirizzo di consegna e di residenza.</li>
             <li><strong>Dati di account:</strong> credenziali (password hashata), data di registrazione, preferenze, log di accesso, indirizzo IP, user-agent.</li>
@@ -46,10 +46,10 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">3. Finalità, basi giuridiche e periodi di conservazione</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">3. Finalità, basi giuridiche e periodi di conservazione</h2>
           <div className="overflow-x-auto">
-            <table className="min-w-full border border-gray-200 text-sm">
-              <thead className="bg-gray-50">
+            <table className="min-w-full border border-cream-300 text-sm">
+              <thead className="bg-cream-50">
                 <tr>
                   <th className="border px-3 py-2 text-left">Finalità</th>
                   <th className="border px-3 py-2 text-left">Base giuridica</th>
@@ -71,7 +71,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">4. Destinatari dei dati (sub-responsabili)</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">4. Destinatari dei dati (sub-responsabili)</h2>
           <p>
             I tuoi dati sono trattati da fornitori esterni che operano come Responsabili del
             trattamento ex art. 28 GDPR, vincolati da accordo DPA:
@@ -93,7 +93,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">5. Diritti dell&apos;interessato (artt. 15-22 GDPR)</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">5. Diritti dell&apos;interessato (artt. 15-22 GDPR)</h2>
           <p>Hai diritto di:</p>
           <ul className="list-disc list-inside space-y-1">
             <li><strong>Accedere</strong> ai tuoi dati e ricevere una copia (art. 15);</li>
@@ -106,14 +106,14 @@ export default function PrivacyPage() {
           </ul>
           <p>
             Puoi esercitare questi diritti dalla pagina{' '}
-            <Link href="/profile/settings" className="text-indigo-600 underline">Impostazioni → Privacy</Link>{' '}
+            <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Privacy</Link>{' '}
             (dove trovi i pulsanti &quot;Scarica i miei dati&quot; e &quot;Cancella account&quot;) oppure
             scrivendo a{' '}
-            <a href="mailto:dpo@mycity.it" className="text-indigo-600 underline">dpo@mycity.it</a>.
+            <a href="mailto:dpo@mycity.it" className="text-primary-700 underline">dpo@mycity.it</a>.
           </p>
           <p>
             Hai diritto di presentare reclamo al{' '}
-            <a href="https://www.garanteprivacy.it/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 underline">
+            <a href="https://www.garanteprivacy.it/" target="_blank" rel="noopener noreferrer" className="text-primary-700 underline">
               Garante per la protezione dei dati personali
             </a>{' '}
             (Piazza Venezia 11, 00187 Roma).
@@ -121,7 +121,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">6. Misure di sicurezza</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">6. Misure di sicurezza</h2>
           <p>
             Adottiamo misure tecniche e organizzative idonee a proteggere i dati: trasmissione
             crittografata (TLS 1.3), password hashate con bcrypt, accesso ai dati su base
@@ -131,7 +131,7 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">7. Data breach</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">7. Data breach</h2>
           <p>
             In caso di violazione di dati personali che comporti un rischio elevato per i tuoi
             diritti, ti informeremo senza ingiustificato ritardo e notificheremo l&apos;evento al
@@ -140,24 +140,24 @@ export default function PrivacyPage() {
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">8. Cookie</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">8. Cookie</h2>
           <p>
             Per i dettagli sui cookie usati e su come gestire le preferenze, consulta la nostra{' '}
-            <Link href="/cookies" className="text-indigo-600 underline">Cookie policy</Link>.
+            <Link href="/cookies" className="text-primary-700 underline">Cookie policy</Link>.
           </p>
         </section>
 
         <section>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">9. Modifiche all&apos;informativa</h2>
+          <h2 className="text-xl font-bold text-ink-900 mb-2">9. Modifiche all&apos;informativa</h2>
           <p>
             Possiamo aggiornare questa informativa per riflettere modifiche normative o operative.
             Le versioni precedenti restano consultabili su richiesta scrivendo a{' '}
-            <a href="mailto:dpo@mycity.it" className="text-indigo-600 underline">dpo@mycity.it</a>.
+            <a href="mailto:dpo@mycity.it" className="text-primary-700 underline">dpo@mycity.it</a>.
           </p>
         </section>
       </div>
 
-      <div className="mt-10 p-4 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+      <div className="mt-10 p-4 bg-accent-50 border border-accent-200 rounded-lg text-xs text-accent-900">
         <strong>Avviso legale:</strong> questo documento è ispirato al GDPR e alle linee guida del
         Garante italiano. Va validato da un DPO/avvocato prima dell&apos;uso in produzione,
         verificando che i sub-responsabili effettivamente integrati corrispondano a quelli elencati.

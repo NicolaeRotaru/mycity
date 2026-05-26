@@ -112,7 +112,7 @@ const Footer = () => {
           <h3 className="font-serif font-bold text-white mb-3 flex items-center gap-2 text-lg">
             <span className="text-accent-400 text-xl">●</span> <span><span className="text-accent-400">My</span>City</span>
           </h3>
-          <p className="text-sm text-gray-400 mb-4 leading-relaxed">
+          <p className="text-sm text-ink-400 mb-4 leading-relaxed">
             Il marketplace dei negozi di Piacenza. Compra dai commercianti locali, ricevi a casa in 24-48h.
           </p>
           {/* Social icons */}
@@ -215,7 +215,7 @@ const Footer = () => {
 
       {/* Trust strip + contatti compatti */}
       <div className="border-t border-gray-800">
-        <div className="container mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-400">
+        <div className="container mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-ink-400">
           <div className="flex items-center gap-5 flex-wrap justify-center">
             <span className="flex items-center gap-1.5">
               <Banknote size={14} strokeWidth={2} /> Pagamento alla consegna
@@ -230,8 +230,8 @@ const Footer = () => {
               <RotateCcw size={14} strokeWidth={2} /> Reso entro 14 giorni
             </span>
           </div>
-          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-gray-500 justify-center">
-            <a href="mailto:info@mycity.it" className="inline-flex items-center gap-1.5 hover:text-gray-300 transition-colors">
+          <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-ink-500 justify-center">
+            <a href="mailto:info@mycity.it" className="inline-flex items-center gap-1.5 hover:text-ink-300 transition-colors">
               <Mail size={13} strokeWidth={2} /> info@mycity.it
             </a>
             <span className="inline-flex items-center gap-1.5">
@@ -245,18 +245,18 @@ const Footer = () => {
       </div>
 
       {/* Dati legali azienda */}
-      <div className="border-t border-gray-800 py-5 text-center text-xs text-gray-500 space-y-1 px-4">
+      <div className="border-t border-gray-800 py-5 text-center text-xs text-ink-500 space-y-1 px-4">
         <div>
-          © {new Date().getFullYear()} <span className="font-semibold text-gray-400">MyCity S.r.l.</span> · Il mercato locale della tua città
+          © {new Date().getFullYear()} <span className="font-semibold text-ink-400">MyCity S.r.l.</span> · Il mercato locale della tua città
         </div>
         <div>
           Sede legale: Via Roma 1, 29121 Piacenza (PC), Italia · P.IVA / C.F. IT00000000000 · REA PC-000000
         </div>
         <div>
           Capitale sociale € 10.000 i.v. · PEC: mycity@pec.it ·{' '}
-          <Link href="/terms" className="underline hover:text-gray-300">Termini</Link> ·{' '}
-          <Link href="/privacy" className="underline hover:text-gray-300">Privacy</Link> ·{' '}
-          <Link href="/cookies" className="underline hover:text-gray-300">Cookie</Link>
+          <Link href="/terms" className="underline hover:text-ink-300">Termini</Link> ·{' '}
+          <Link href="/privacy" className="underline hover:text-ink-300">Privacy</Link> ·{' '}
+          <Link href="/cookies" className="underline hover:text-ink-300">Cookie</Link>
         </div>
       </div>
     </footer>

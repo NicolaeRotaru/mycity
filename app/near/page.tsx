@@ -88,9 +88,9 @@ export default function NearMePage() {
     return (
       <div className="container mx-auto p-8 text-center space-y-4 max-w-md">
         <p className="text-5xl">📍</p>
-        <p className="text-gray-700 font-semibold">{permError}</p>
-        <p className="text-gray-500 text-sm">Abilita la geolocalizzazione del browser per vedere i negozi più vicini.</p>
-        <Link href="/stores" className="inline-block bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg">
+        <p className="text-ink-700 font-semibold">{permError}</p>
+        <p className="text-ink-500 text-sm">Abilita la geolocalizzazione del browser per vedere i negozi più vicini.</p>
+        <Link href="/stores" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-6 py-2 rounded-lg">
           Vedi tutti i negozi
         </Link>
       </div>
@@ -98,7 +98,7 @@ export default function NearMePage() {
   }
 
   if (!pos || isLoading) {
-    return <div className="container mx-auto p-8 text-center text-gray-500">📡 Calcolo distanze…</div>;
+    return <div className="container mx-auto p-8 text-center text-ink-500">📡 Calcolo distanze…</div>;
   }
 
   const ranked = stores
@@ -114,8 +114,8 @@ export default function NearMePage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="mb-6">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900">Vicino a te</h1>
-        <p className="text-gray-500 mt-1">{ranked.length} negozi ordinati per distanza</p>
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-ink-900">Vicino a te</h1>
+        <p className="text-ink-500 mt-1">{ranked.length} negozi ordinati per distanza</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

@@ -102,12 +102,12 @@ const SignInForm = () => {
   return (
     <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md space-y-6">
       <div>
-        <h2 className="text-2xl font-bold text-gray-800">Accedi</h2>
-        <p className="text-sm text-gray-500 mt-1">Bentornato su MyCity</p>
+        <h2 className="text-2xl font-bold text-ink-800">Accedi</h2>
+        <p className="text-sm text-ink-500 mt-1">Bentornato su MyCity</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+          <label className="block text-sm font-medium text-ink-700 mb-1">Email</label>
           <input
             type="email"
             value={email}
@@ -115,17 +115,17 @@ const SignInForm = () => {
             placeholder="la-tua@email.it"
             autoComplete="email"
             required
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-gray-700">Password</label>
+            <label className="block text-sm font-medium text-ink-700">Password</label>
             <button
               type="button"
               onClick={handleResetPassword}
               disabled={sendingReset}
-              className="text-xs text-indigo-600 hover:underline disabled:opacity-50"
+              className="text-xs text-primary-700 hover:underline disabled:opacity-50"
             >
               {sendingReset ? 'Invio…' : 'Password dimenticata?'}
             </button>
@@ -138,13 +138,13 @@ const SignInForm = () => {
               placeholder="••••••••"
               autoComplete="current-password"
               required
-              className="w-full border p-2 pr-12 rounded focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border p-2 pr-12 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
             <button
               type="button"
               onClick={() => setShowPwd((v) => !v)}
               aria-label={showPwd ? 'Nascondi password' : 'Mostra password'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-ink-500 hover:text-ink-700 px-2 py-1"
             >
               {showPwd ? '🙈' : '👁'}
             </button>
@@ -162,14 +162,14 @@ const SignInForm = () => {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors font-semibold"
+          className="w-full bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors font-semibold"
         >
           {isLoading ? 'Accesso in corso...' : 'Accedi'}
         </button>
       </form>
-      <p className="text-center text-sm text-gray-600">
+      <p className="text-center text-sm text-ink-600">
         Non hai un account?{' '}
-        <Link href="/sign-up" className="text-indigo-600 hover:underline font-semibold">
+        <Link href="/sign-up" className="text-primary-700 hover:underline font-semibold">
           Registrati
         </Link>
       </p>
@@ -178,8 +178,8 @@ const SignInForm = () => {
 };
 
 const SignIn = () => (
-  <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-    <Suspense fallback={<div className="text-gray-500">Caricamento...</div>}>
+  <div className="min-h-screen flex items-center justify-center bg-cream-50 p-4">
+    <Suspense fallback={<div className="text-ink-500">Caricamento...</div>}>
       <SignInForm />
     </Suspense>
   </div>

@@ -7,10 +7,9 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   ORDER_STATUS_LABEL,
-  ORDER_STATUS_EMOJI,
-  ORDER_STATUS_COLOR,
   type OrderStatus,
 } from '@/lib/order-status';
+import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 
 type Row = {
   id: string;
@@ -48,13 +47,13 @@ export default function AdminOrdersPage() {
 
   const filtered = filter === 'all' ? orders : orders.filter((o) => o.delivery_status === filter);
 
-  if (isLoading) return <div className="text-center py-8 text-gray-500">Caricamento...</div>;
+  if (isLoading) return <div className="text-center py-8 text-ink-500">Caricamento...</div>;
 
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Ordini</h1>
-        <p className="text-sm text-gray-500">{filtered.length} ordini</p>
+        <h1 className="text-2xl font-bold text-ink-900">Ordini</h1>
+        <p className="text-sm text-ink-500">{filtered.length} ordini</p>
       </div>
 
       <div className="flex gap-2 flex-wrap text-sm">
@@ -63,17 +62,17 @@ export default function AdminOrdersPage() {
             key={f}
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
-              filter === f ? 'bg-rose-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              filter === f ? 'bg-rose-600 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
           >
-            {f === 'all' ? 'Tutti' : `${ORDER_STATUS_EMOJI[f as OrderStatus]} ${ORDER_STATUS_LABEL[f as OrderStatus]}`}
+            {f === 'all' ? 'Tutti' : ORDER_STATUS_LABEL[f as OrderStatus]}
           </button>
         ))}
       </div>
 
       <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[800px]">
-          <thead className="bg-gray-50 border-b text-xs uppercase tracking-wide text-gray-500">
+          <thead className="bg-cream-50 border-b text-xs uppercase tracking-wide text-ink-500">
             <tr>
               <th className="p-3 text-left">Ordine</th>
               <th className="p-3 text-left">Data</th>
@@ -86,23 +85,19 @@ export default function AdminOrdersPage() {
           </thead>
           <tbody>
             {filtered.map((o) => {
-              const c = ORDER_STATUS_COLOR[o.delivery_status];
               return (
-                <tr key={o.id} className="border-t hover:bg-gray-50">
-                  <td className="p-3 font-mono text-xs text-gray-500">
+                <tr key={o.id} className="border-t hover:bg-cream-50">
+                  <td className="p-3 font-mono text-xs text-ink-500">
                     <Link href={`/admin/orders/${o.id}`} className="hover:underline">
                       #{o.id.slice(0, 6).toUpperCase()}
                     </Link>
                   </td>
-                  <td className="p-3 text-gray-600 whitespace-nowrap">{formatDate(o.created_at)}</td>
-                  <td className="p-3 text-gray-700">{o.seller?.store_name ?? '—'}</td>
-                  <td className="p-3 text-gray-700">{o.delivery_full_name ?? '—'} <span className="text-gray-400">{o.delivery_city}</span></td>
-                  <td className="p-3 text-gray-700">{o.rider?.full_name ?? <span className="text-gray-400">—</span>}</td>
+                  <td className="p-3 text-ink-600 whitespace-nowrap">{formatDate(o.created_at)}</td>
+                  <td className="p-3 text-ink-700">{o.seller?.store_name ?? '—'}</td>
+                  <td className="p-3 text-ink-700">{o.delivery_full_name ?? '—'} <span className="text-ink-400">{o.delivery_city}</span></td>
+                  <td className="p-3 text-ink-700">{o.rider?.full_name ?? <span className="text-ink-400">—</span>}</td>
                   <td className="p-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${c.bg} ${c.text} ${c.ring}`}>
-                      <span>{ORDER_STATUS_EMOJI[o.delivery_status]}</span>
-                      {ORDER_STATUS_LABEL[o.delivery_status]}
-                    </span>
+                    <OrderStatusBadge status={o.delivery_status} size="sm" />
                   </td>
                   <td className="p-3 text-right font-bold">{formatPrice(o.total_price)}</td>
                 </tr>
@@ -110,7 +105,7 @@ export default function AdminOrdersPage() {
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-gray-400">Nessun ordine</td>
+                <td colSpan={7} className="p-8 text-center text-ink-400">Nessun ordine</td>
               </tr>
             )}
           </tbody>

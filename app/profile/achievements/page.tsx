@@ -19,14 +19,14 @@ type Achievement = {
 };
 
 const TIER_BG: Record<string, string> = {
-  bronze:   'from-amber-100 to-amber-50 border-amber-300',
+  bronze:   'from-accent-100 to-accent-50 border-accent-300',
   silver:   'from-ink-100 to-ink-50 border-ink-300',
   gold:     'from-accent-200 to-accent-100 border-accent-400',
   platinum: 'from-primary-200 to-primary-100 border-primary-400',
 };
 
 const TIER_TEXT: Record<string, string> = {
-  bronze:   'text-amber-800',
+  bronze:   'text-accent-800',
   silver:   'text-ink-700',
   gold:     'text-accent-800',
   platinum: 'text-primary-800',
