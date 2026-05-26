@@ -9,6 +9,7 @@ import NewsletterForm from '@/components/NewsletterForm';
 import DropOfDay from '@/components/home/DropOfDay';
 import StoryOfDay from '@/components/home/StoryOfDay';
 import TrendingNow from '@/components/home/TrendingNow';
+import SponsoredCarousel from '@/components/SponsoredCarousel';
 
 /**
  * Homepage MyCity — "Mediterranean Modern" + edit del giorno.
@@ -157,6 +158,11 @@ export default function Home() {
       {/* STORIA DI OGGI */}
       <section className="container mx-auto px-4 sm:px-6 py-10">
         <StoryOfDay />
+      </section>
+
+      {/* SPONSORED — solo se ci sono listing attivi */}
+      <section className="container mx-auto px-4 sm:px-6 py-6">
+        <SponsoredCarousel placement="home_top" />
       </section>
 
       {/* TRENDING NOW */}

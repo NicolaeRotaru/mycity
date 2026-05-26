@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, TrendingUp } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
+import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 
@@ -186,8 +187,9 @@ function SearchInner() {
         </div>
       </aside>
 
-      <main className="md:col-span-3">
-        <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
+      <main className="md:col-span-3 space-y-6">
+        <SponsoredCarousel placement="search_top" />
+        <div className="flex items-end justify-between gap-4 flex-wrap">
           <h1 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">
             {q ? <>Risultati per &laquo;<span className="text-primary-700">{q}</span>&raquo;</> : 'Tutti i prodotti'}
           </h1>
