@@ -15,7 +15,7 @@ type Story = {
   image_url: string | null;
   cta_label: string | null;
   cta_url: string | null;
-  seller: { id: string; store_name: string | null; store_logo_url: string | null } | null;
+  seller: { id: string; store_name: string | null; store_logo: string | null } | null;
 };
 
 /**
@@ -32,7 +32,7 @@ export default function StoryOfDay() {
         .from('daily_stories')
         .select(`
           id, feature_date, title, body, image_url, cta_label, cta_url,
-          seller:profiles!daily_stories_seller_id_fkey ( id, store_name, store_logo_url )
+          seller:profiles!daily_stories_seller_id_fkey ( id, store_name, store_logo )
         `)
         .eq('feature_date', today)
         .maybeSingle();
@@ -65,8 +65,8 @@ export default function StoryOfDay() {
           )}
           {story.seller?.store_name && (
             <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur rounded-full px-3 py-1.5 flex items-center gap-2 shadow-warm">
-              {story.seller.store_logo_url ? (
-                <Image src={story.seller.store_logo_url} alt="" width={24} height={24} className="rounded-full object-cover" unoptimized />
+              {story.seller.store_logo ? (
+                <Image src={story.seller.store_logo} alt="" width={24} height={24} className="rounded-full object-cover" unoptimized />
               ) : (
                 <div className="w-6 h-6 rounded-full bg-primary-100 flex items-center justify-center text-xs font-bold text-primary-700">
                   {story.seller.store_name[0]}

@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Heart, ShoppingCart, Truck } from 'lucide-react';
@@ -56,9 +56,14 @@ const ProductCard = ({
     });
   };
 
-  const isNew = createdAt
-    ? (Date.now() - new Date(createdAt).getTime()) / 86400000 < NEW_PRODUCT_DAYS
-    : false;
+  // isNew calcolato post-hydration: Date.now() differisce server/client e
+  // su prodotti creati vicino al limite NEW_PRODUCT_DAYS causa mismatch.
+  const [isNew, setIsNew] = useState(false);
+  useEffect(() => {
+    if (!createdAt) return;
+    const age = (Date.now() - new Date(createdAt).getTime()) / 86400000;
+    setIsNew(age < NEW_PRODUCT_DAYS);
+  }, [createdAt]);
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
   const isOutOfStock = stock === 0;
   const freeShipping = price >= FREE_SHIPPING_THRESHOLD;

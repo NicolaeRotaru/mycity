@@ -34,7 +34,7 @@ export default function SellerHealthScore() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(`
-          store_name, store_description, store_logo_url, store_city,
+          store_name, store_description, store_logo, store_city,
           store_lat, store_lng, contact_phone, contact_email,
           billing_iban, business_pec, store_address
         `)
@@ -62,7 +62,7 @@ export default function SellerHealthScore() {
           id: 'store-logo',
           label: 'Logo del negozio caricato',
           points: 10,
-          passed: !!profile?.store_logo_url,
+          passed: !!profile?.store_logo,
           fix: { href: '/seller/profile', label: 'Carica logo' },
         },
         {

@@ -56,7 +56,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         supabase.rpc('search_products_smart', { q: term, lim: 6 }),
         supabase
           .from('profiles')
-          .select('id, store_name, store_logo_url')
+          .select('id, store_name, store_logo')
           .eq('role', 'seller')
           .eq('is_approved', true)
           .ilike('store_name', pattern)
@@ -80,7 +80,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         kind: 'store' as const,
         id: s.id,
         name: s.store_name ?? 'Negozio',
-        logo: s.store_logo_url ?? null,
+        logo: s.store_logo ?? null,
       }));
       const cats: Suggestion[] = (categoriesRes.data ?? []).map((c: any) => ({
         kind: 'category' as const,

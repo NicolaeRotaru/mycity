@@ -27,16 +27,20 @@ type Drop = {
 };
 
 function useCountdown(targetIso: string) {
-  const [now, setNow] = useState(() => Date.now());
+  // null durante SSR per evitare hydration mismatch: Date.now() differisce
+  // tra server e client. Il countdown parte solo dopo il primo useEffect.
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
+    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+  if (now === null) return { h: 0, m: 0, s: 0, done: false, hydrated: false };
   const diff = Math.max(0, new Date(targetIso).getTime() - now);
   const h = Math.floor(diff / 3_600_000);
   const m = Math.floor((diff % 3_600_000) / 60_000);
   const s = Math.floor((diff % 60_000) / 1000);
-  return { h, m, s, done: diff === 0 };
+  return { h, m, s, done: diff === 0, hydrated: true };
 }
 
 function endOfTodayIso() {
@@ -70,7 +74,7 @@ export default function DropOfDay() {
     },
   });
 
-  const { h, m, s, done } = useCountdown(endOfTodayIso());
+  const { h, m, s, done, hydrated } = useCountdown(endOfTodayIso());
 
   if (isLoading) {
     return <div className="h-72 rounded-2xl skeleton" aria-hidden />;
@@ -124,7 +128,7 @@ export default function DropOfDay() {
             Risparmi <strong>{formatPrice(savings)}</strong>{drop.product.profiles?.store_name && ` · da ${drop.product.profiles.store_name}`}
           </p>
 
-          {!done && (
+          {hydrated && !done && (
             <div className="flex items-center gap-3 pt-3">
               <Clock size={20} className="text-accent-300" />
               <div className="flex items-center gap-1.5 text-xl font-bold font-mono">
