@@ -7,6 +7,7 @@ import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating';
 
@@ -216,7 +217,7 @@ function SearchInner() {
 
 export default function SearchPage() {
   return (
-    <Suspense fallback={<div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>}>
+    <Suspense fallback={<LoadingState />}>
       <SearchInner />
     </Suspense>
   );

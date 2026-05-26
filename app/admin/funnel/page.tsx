@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, Users, ShoppingCart, Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 /**
  * Admin: Funnel signup → first order + Cohort retention.
@@ -119,7 +120,7 @@ export default function AdminFunnelPage() {
     },
   });
 
-  if (isLoading || !data) return <div className="text-center py-12 text-ink-500">Caricamento metriche…</div>;
+  if (isLoading || !data) return <LoadingState />;
 
   const activation7d = data.signups > 0 ? (data.firstOrderWithin7d / data.signups) * 100 : 0;
   const activationEver = data.signups > 0 ? (data.firstOrderEver / data.signups) * 100 : 0;

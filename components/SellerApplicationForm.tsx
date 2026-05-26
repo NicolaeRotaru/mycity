@@ -12,6 +12,7 @@ import StoreAvatar from './StoreAvatar';
 import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
+import { friendlyError } from '@/lib/errors';
 
 /**
  * Form completo per la richiesta di diventare venditore business su MyCity.
@@ -187,7 +188,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         setLogoUrl(data.publicUrl);
         toast.success('Logo caricato');
       } catch (err: any) {
-        toast.error(err.message || 'Errore nel caricamento');
+        toast.error(friendlyError(err));
       } finally {
         setUploadingLogo(false);
       }

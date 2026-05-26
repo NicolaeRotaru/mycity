@@ -5,6 +5,7 @@ import { Globe, Lock, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 /**
  * Toggle profilo pubblico buyer opt-in.
@@ -93,7 +94,7 @@ export default function PublicProfileToggle() {
     }
   };
 
-  if (loading) return <div className="border rounded-lg p-4 text-sm text-ink-500">Caricamento…</div>;
+  if (loading) return <LoadingState />;
 
   const publicUrl = handle ? `${appUrl}/u/${handle}` : '';
 

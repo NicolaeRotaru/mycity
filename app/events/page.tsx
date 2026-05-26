@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 /**
  * Pagina Eventi MyCity — mercatino virtuale settimanale, flash sale, lancio prodotto.
@@ -136,7 +137,7 @@ export default function EventsPage() {
       </header>
 
       {isLoading ? (
-        <div className="text-center text-ink-500 py-12">Caricamento eventi…</div>
+        <LoadingState />
       ) : events.length === 0 ? (
         <div className="text-center text-ink-500 py-12">
           <CalendarDays size={48} className="mx-auto mb-3 text-ink-300" strokeWidth={1.5} />

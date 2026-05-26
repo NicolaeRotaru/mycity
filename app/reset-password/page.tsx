@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 /**
  * Pagina di reset password.
@@ -274,7 +275,7 @@ function PasswordStrength({ value }: { value: string }) {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<Card><p className="text-center text-ink-500">Caricamento…</p></Card>}>
+    <Suspense fallback={<Card><LoadingState variant="inline" /></Card>}>
       <ResetPasswordInner />
     </Suspense>
   );

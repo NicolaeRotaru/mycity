@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { formatPrice } from '@/lib/format';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const StatCard = ({ label, value, color, href, icon }: { label: string; value: string | number; color: string; href?: string; icon: string }) => {
   const inner = (
@@ -70,7 +71,7 @@ export default function AdminDashboard() {
   });
 
   if (isLoading || !stats) {
-    return <div className="text-center py-8 text-ink-500">Caricamento statistiche...</div>;
+    return <LoadingState />;
   }
 
   return (

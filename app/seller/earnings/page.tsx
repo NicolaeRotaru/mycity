@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 // Commissione marketplace e schedule payout (per ora hardcoded, in futuro
 // configurabile per seller).
@@ -88,7 +89,7 @@ export default function SellerEarningsPage() {
     return next;
   }, []);
 
-  if (isLoading) return <div className="text-center py-8 text-ink-400">Caricamento guadagni…</div>;
+  if (isLoading) return <LoadingState />;
 
   return (
     <div className="space-y-6">

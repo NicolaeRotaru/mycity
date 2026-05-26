@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 /**
  * Admin: gestione sponsored listings.

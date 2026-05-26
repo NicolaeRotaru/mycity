@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Trophy, Lock, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type Achievement = {
   id: string;
@@ -67,7 +68,7 @@ export default function AchievementsPage() {
     },
   });
 
-  if (!userId) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+  if (!userId) return <LoadingState />;
 
   const unlockedCount = unlocked.size;
   const totalCount = achievements.length;

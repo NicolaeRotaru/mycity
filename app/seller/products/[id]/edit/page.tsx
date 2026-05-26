@@ -15,6 +15,7 @@ import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 import { friendlyError } from '@/lib/errors';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
@@ -189,7 +190,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     onError: (err: any) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading) return <div className="text-center py-10 text-ink-500">Caricamento prodotto…</div>;
+  if (isLoading) return <LoadingState />;
   if (error) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
@@ -289,7 +290,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
           >
             <input {...getInputProps()} />
             {uploading
-              ? <p className="text-ink-500">Caricamento…</p>
+              ? <LoadingState variant="inline" />
               : <p className="text-ink-500">Trascina nuove foto o clicca per selezionarle</p>}
           </div>
           {imageUrls.length > 0 && (

@@ -10,6 +10,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type OrderItem = {
   id: string;
@@ -57,7 +58,7 @@ export default function OrdersPage() {
   });
 
   if (isLoading) {
-    return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento ordini...</div>;
+    return <LoadingState />;
   }
 
   if (orders.length === 0) {

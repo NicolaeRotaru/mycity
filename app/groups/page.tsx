@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 type GroupOrder = {
   id: string;
@@ -59,7 +60,7 @@ export default function GroupsPage() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-ink-500">Caricamento…</div>
+        <LoadingState />
       ) : groups.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
           <p className="text-5xl mb-3">🤝</p>

@@ -12,6 +12,7 @@ import {
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { friendlyError } from '@/lib/errors';
 
 type AvailableOrder = {
   id: string;
@@ -97,7 +98,7 @@ export default function RiderDashboardPage() {
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },
-    onError: (err: any) => toast.error(err.message || 'Errore'),
+    onError: (err: any) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;

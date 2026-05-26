@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Sparkles, Flame, Trophy, Gift, ChevronRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { LoadingState } from '@/components/ui/LoadingState';
 import {
   fetchLoyaltyAccount,
   TIER_META,
@@ -62,7 +63,7 @@ export default function LoyaltyPage() {
     },
   });
 
-  if (!userId) return <div className="container mx-auto p-8 text-center text-ink-500">Caricamento…</div>;
+  if (!userId) return <LoadingState />;
 
   const points = account?.points_balance ?? 0;
   const lifetime = account?.lifetime_earned ?? 0;

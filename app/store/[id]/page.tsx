@@ -6,6 +6,7 @@ import ProductGrid from '@/components/ProductGrid';
 import StoreAvatar from '@/components/StoreAvatar';
 import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
 import { formatToday, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 const DAYS: { key: keyof StoreHours; label: string }[] = [
   { key: 'mon', label: 'Lunedì' },
@@ -54,8 +55,8 @@ export default function StorePage({ params }: { params: { id: string } }) {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-16 text-center text-ink-500">
-        Caricamento...
+      <div className="container mx-auto px-4 py-16">
+        <LoadingState />
       </div>
     );
   }
