@@ -8,6 +8,8 @@ import ProductCard from './ProductCard';
 import { SkeletonGrid } from './SkeletonCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 
+export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating';
+
 interface Props {
   categoryId?: string;
   sellerId?: string;
@@ -16,11 +18,13 @@ interface Props {
   maxPrice?: number;
   minPrice?: number;
   onlyOpenStores?: boolean;
+  minRating?: number;
+  sort?: SortOption;
 }
 
-const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores }: Props) => {
+const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance' }: Props) => {
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products', { categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores }],
+    queryKey: ['products', { categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort }],
     queryFn: async () => {
       let q = supabase
         .from('products')
@@ -29,14 +33,18 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
           profiles!products_seller_id_fkey!inner ( store_name, store_hours, is_approved )
         `)
         .eq('status', 'available')
-        // Filtra i prodotti dei negozi sospesi/rifiutati/non approvati.
-        // !inner sopra rende l'eq sul campo profili effettivo.
-        .eq('profiles.is_approved', true)
-        .order('created_at', { ascending: false });
+        .eq('profiles.is_approved', true);
+
+      // Ordinamento dinamico (default: created_at desc)
+      switch (sort) {
+        case 'price_asc':  q = q.order('price', { ascending: true }); break;
+        case 'price_desc': q = q.order('price', { ascending: false }); break;
+        case 'newest':     q = q.order('created_at', { ascending: false }); break;
+        default:           q = q.order('created_at', { ascending: false });
+      }
+
       if (categoryId) q = q.eq('category_id', categoryId);
       if (sellerId)   q = q.eq('seller_id', sellerId);
-      // ilike: scappa i wildcard SQL nel termine di ricerca per evitare DoS
-      // con pattern tipo "%%%%" su tabelle grandi.
       if (search) {
         const safe = search.replace(/[%_]/g, '\\$&').slice(0, 100);
         q = q.ilike('name', `%${safe}%`);
@@ -50,15 +58,49 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
     },
   });
 
-  // Memoizza il filtro client-side per non rifiltrare a ogni render del parent.
+  // Carica rating aggregato per i prodotti visibili (per filtro/ordinamento per rating)
+  const { data: ratings = {} } = useQuery({
+    queryKey: ['products-ratings', products.map((p: any) => p.id).sort().join(',')],
+    enabled: (minRating !== undefined && minRating > 0) || sort === 'rating',
+    queryFn: async () => {
+      if (products.length === 0) return {};
+      const ids = products.map((p: any) => p.id);
+      const { data } = await supabase
+        .from('reviews')
+        .select('product_id, rating')
+        .in('product_id', ids);
+      const map: Record<string, { avg: number; count: number }> = {};
+      for (const r of (data ?? []) as any[]) {
+        const ex = map[r.product_id];
+        if (ex) { ex.avg = (ex.avg * ex.count + r.rating) / (ex.count + 1); ex.count += 1; }
+        else map[r.product_id] = { avg: r.rating, count: 1 };
+      }
+      return map;
+    },
+  });
+
+  // Filtro client-side: orari aperti, rating minimo, ordinamento per rating
   const filtered = useMemo(() => {
-    if (!onlyOpenStores) return products;
-    const todayKey = DAY_KEYS[new Date().getDay()];
-    return products.filter((p: any) => {
-      const hours = (p.profiles?.store_hours ?? {}) as StoreHours;
-      return isOpenNow(hours[todayKey]);
-    });
-  }, [products, onlyOpenStores]);
+    let arr = products as any[];
+    if (onlyOpenStores) {
+      const todayKey = DAY_KEYS[new Date().getDay()];
+      arr = arr.filter((p) => {
+        const hours = (p.profiles?.store_hours ?? {}) as StoreHours;
+        return isOpenNow(hours[todayKey]);
+      });
+    }
+    if (minRating !== undefined && minRating > 0) {
+      arr = arr.filter((p) => (ratings as any)[p.id]?.avg >= minRating);
+    }
+    if (sort === 'rating') {
+      arr = [...arr].sort((a, b) => {
+        const ra = (ratings as any)[a.id]?.avg ?? 0;
+        const rb = (ratings as any)[b.id]?.avg ?? 0;
+        return rb - ra;
+      });
+    }
+    return arr;
+  }, [products, onlyOpenStores, minRating, ratings, sort]);
 
   if (isLoading) return <SkeletonGrid count={limit ?? 8} />;
 

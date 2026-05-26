@@ -282,14 +282,18 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
                 <MenuLink href="/favorites" icon="♥" label="Preferiti" />
                 <MenuLink href="/profile/addresses" icon="📌" label="Indirizzi" />
                 <MenuLink href="/profile/loyalty" icon="✨" label="Punti & Livello" />
-                <MenuLink href="/profile/referral" icon="🎁" label="Invita amici · €5" />
+                <MenuLink href="/profile/achievements" icon="🏆" label="Badge" />
+                <MenuLink href="/profile/gift-cards" icon="🎁" label="Gift Card" />
+                <MenuLink href="/profile/referral" icon="📣" label="Invita amici · €5" />
               </>
             )}
             {isSeller && (
               <>
                 <MenuLink href="/seller/dashboard" icon="📊" label="Dashboard" />
+                <MenuLink href="/seller/analytics" icon="📈" label="Analytics" />
                 <MenuLink href="/seller/products" icon="📦" label="I miei prodotti" />
                 <MenuLink href="/seller/orders" icon="🛒" label="Ordini ricevuti" />
+                <MenuLink href="/seller/promotions" icon="✨" label="Promozioni" />
                 <MenuLink href="/seller/earnings" icon="💶" label="Guadagni" />
               </>
             )}

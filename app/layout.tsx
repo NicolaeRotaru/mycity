@@ -10,6 +10,7 @@ import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import CookieBanner from '@/components/CookieBanner';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
 import DailyCheckIn from '@/components/DailyCheckIn';
+import WelcomeCreditBanner from '@/components/WelcomeCreditBanner';
 import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
@@ -67,6 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
         <QueryProvider>
           <Navbar />
+          <WelcomeCreditBanner />
           <main className="min-h-screen">{children}</main>
           <Footer />
           <MobileTabBar />
