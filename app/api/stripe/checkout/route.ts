@@ -1,9 +1,11 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getCurrentUser, getServerSupabase } from '@/lib/supabase/server';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { createCheckoutSession, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -17,27 +19,20 @@ const Body = z.object({
   metadata: z.record(z.string()).optional(),
 });
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!isStripeConfigured()) {
-    return NextResponse.json(
-      { error: 'Pagamenti elettronici non disponibili. Usa pagamento alla consegna.' },
-      { status: 503 },
-    );
+    return ApiErrors.unavailable('Pagamenti elettronici non disponibili. Usa pagamento alla consegna.');
   }
-
-  const user = await getCurrentUser();
-  if (!user?.email) {
-    return NextResponse.json({ error: 'Autenticazione richiesta.' }, { status: 401 });
-  }
+  if (!user.email) return ApiErrors.unauthorized();
   if (!user.email_confirmed_at) {
-    return NextResponse.json({ error: 'Conferma la tua email prima di pagare.' }, { status: 403 });
+    return ApiErrors.forbidden('Conferma la tua email prima di pagare.');
   }
 
   let body;
   try {
     body = Body.parse(await req.json());
   } catch (e: any) {
-    return NextResponse.json({ error: 'Dati ordine non validi', details: e?.message }, { status: 400 });
+    return ApiErrors.invalidRequest('Dati ordine non validi', e?.message);
   }
 
   const supa = getServerSupabase();
@@ -50,16 +45,16 @@ export async function POST(req: NextRequest) {
     .in('id', productIds);
 
   if (prodErr || !products || products.length === 0) {
-    return NextResponse.json({ error: 'Prodotti non trovati.' }, { status: 404 });
+    return ApiErrors.notFound('Prodotti non trovati.');
   }
 
   // Validazioni
   for (const p of products) {
     if (p.seller_id !== body.sellerId) {
-      return NextResponse.json({ error: `Prodotto ${p.id} non appartiene al venditore indicato.` }, { status: 400 });
+      return ApiErrors.invalidRequest(`Prodotto ${p.id} non appartiene al venditore indicato.`);
     }
     if (!p.is_approved || p.status !== 'available') {
-      return NextResponse.json({ error: `Prodotto ${p.name} non disponibile.` }, { status: 400 });
+      return ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`);
     }
     const requested = body.items.find((i) => i.productId === p.id)?.quantity ?? 0;
     if (typeof p.stock === 'number' && p.stock < requested) {
@@ -83,7 +78,7 @@ export async function POST(req: NextRequest) {
   const totalCents = subtotalCents + body.shippingCents;
 
   if (totalCents <= 0) {
-    return NextResponse.json({ error: 'Importo non valido.' }, { status: 400 });
+    return ApiErrors.invalidRequest('Importo non valido.');
   }
 
   const successUrl = `${env.appUrl()}/orders?stripe=success&session_id={CHECKOUT_SESSION_ID}`;
@@ -107,6 +102,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ id: session.id, url: session.url }, { status: 200 });
   } catch (e: any) {
     logger.error('[stripe] checkout creation failed', e);
-    return NextResponse.json({ error: 'Errore nella creazione del pagamento.' }, { status: 500 });
+    return ApiErrors.internal('Errore nella creazione del pagamento.');
   }
-}
+});

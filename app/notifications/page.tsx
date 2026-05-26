@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Notification = {
   id: string;
@@ -31,7 +32,7 @@ export default function NotificationsPage() {
   const qc = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['notifications'],
+    queryKey: queryKeys.notifications.list,
     queryFn: async (): Promise<Notification[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -58,8 +59,8 @@ export default function NotificationsPage() {
         .eq('is_read', false);
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['notifications-unread'] });
-      qc.invalidateQueries({ queryKey: ['notifications'] });
+      qc.invalidateQueries({ queryKey: queryKeys.notifications.count });
+      qc.invalidateQueries({ queryKey: queryKeys.notifications.list });
     },
   });
 

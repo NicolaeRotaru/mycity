@@ -6,6 +6,7 @@ import { Crown, Trophy, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Admin: Negozio del mese.
@@ -36,7 +37,7 @@ export default function AdminShopOfMonthPage() {
   const [discountPct, setDiscountPct] = useState<number | ''>('');
 
   const { data: existing } = useQuery({
-    queryKey: ['admin-shop-of-month', firstOfMonth],
+    queryKey: queryKeys.admin.shopOfMonth(firstOfMonth),
     queryFn: async () => {
       const { data } = await supabase
         .from('shop_of_month')
@@ -59,7 +60,7 @@ export default function AdminShopOfMonthPage() {
   }, [existing]);
 
   const { data: sellers = [] } = useQuery({
-    queryKey: ['admin-approved-sellers'],
+    queryKey: queryKeys.admin.approvedSellers,
     queryFn: async (): Promise<Seller[]> => {
       const { data } = await supabase
         .from('profiles')
@@ -72,7 +73,7 @@ export default function AdminShopOfMonthPage() {
   });
 
   const { data: leaderboard = [] } = useQuery({
-    queryKey: ['admin-shop-of-month-leaderboard'],
+    queryKey: queryKeys.admin.shopOfMonthLeaderboard,
     queryFn: async (): Promise<LB[]> => {
       const { data } = await supabase.from('shop_of_month_leaderboard').select('*');
       return (data ?? []) as LB[];
@@ -100,7 +101,7 @@ export default function AdminShopOfMonthPage() {
     },
     onSuccess: () => {
       toast.success('Negozio del mese aggiornato');
-      qc.invalidateQueries({ queryKey: ['admin-shop-of-month', firstOfMonth] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.shopOfMonth(firstOfMonth) });
       qc.invalidateQueries({ queryKey: ['shop-of-month-current'] });
     },
     onError: (err: any) => toast.error(friendlyError(err)),

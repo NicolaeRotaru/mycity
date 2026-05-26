@@ -6,6 +6,7 @@ import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 // Commissione marketplace e schedule payout (per ora hardcoded, in futuro
 // configurabile per seller).
@@ -25,7 +26,7 @@ export default function SellerEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('30d');
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['seller-earnings'],
+    queryKey: queryKeys.seller.earnings,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');

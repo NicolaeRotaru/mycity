@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Gift, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
+import { useLocalStorage } from '@/lib/hooks';
 
 const DISMISS_KEY = 'mc_welcome_dismissed';
 
@@ -23,14 +24,13 @@ const WELCOME_VALID_DAYS = 7;
 
 export default function WelcomeCreditBanner() {
   const { isAuthenticated, isBuyer, profile } = useProfile();
+  const [dismissed, setDismissed] = useLocalStorage<boolean>(DISMISS_KEY, false);
   const [show, setShow] = useState(false);
   const [points, setPoints] = useState(0);
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || !isBuyer || !profile?.id) return;
-    if (typeof window === 'undefined') return;
-    if (localStorage.getItem(DISMISS_KEY) === '1') return;
+    if (!isAuthenticated || !isBuyer || !profile?.id || dismissed) return;
 
     (async () => {
       // Controlla che abbia il signup_bonus
@@ -66,10 +66,10 @@ export default function WelcomeCreditBanner() {
       setPoints(account?.points_balance ?? bonus.delta);
       setShow(true);
     })().catch(() => { /* noop */ });
-  }, [isAuthenticated, isBuyer, profile?.id]);
+  }, [isAuthenticated, isBuyer, profile?.id, dismissed]);
 
   const dismiss = () => {
-    localStorage.setItem(DISMISS_KEY, '1');
+    setDismissed(true);
     setShow(false);
   };
 

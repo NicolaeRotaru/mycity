@@ -9,6 +9,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Admin: gestione Eventi MyCity.
@@ -59,7 +60,7 @@ export default function AdminEventsPage() {
   const [editing, setEditing] = useState<Partial<EventRow> | null>(null);
 
   const { data: events = [] } = useQuery({
-    queryKey: ['admin-events'],
+    queryKey: queryKeys.admin.events,
     queryFn: async (): Promise<EventRow[]> => {
       const { data } = await supabase
         .from('marketplace_events')
@@ -96,7 +97,7 @@ export default function AdminEventsPage() {
     onSuccess: () => {
       toast.success('Evento salvato');
       setEditing(null);
-      qc.invalidateQueries({ queryKey: ['admin-events'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.events });
     },
     onError: (err: any) => toast.error(friendlyError(err)),
   });
@@ -108,7 +109,7 @@ export default function AdminEventsPage() {
     },
     onSuccess: () => {
       toast.success('Stato aggiornato');
-      qc.invalidateQueries({ queryKey: ['admin-events'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.events });
     },
     onError: (err: any) => toast.error(friendlyError(err)),
   });
@@ -120,7 +121,7 @@ export default function AdminEventsPage() {
     },
     onSuccess: () => {
       toast.success('Evento eliminato');
-      qc.invalidateQueries({ queryKey: ['admin-events'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.events });
     },
     onError: (err: any) => toast.error(friendlyError(err)),
   });

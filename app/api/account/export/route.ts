@@ -1,7 +1,7 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireSupabasePublic } from '@/lib/env';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -23,37 +23,15 @@ export const runtime = 'nodejs';
  *
  * Sicurezza: richiede Bearer token; userId derivato dal token.
  */
-export async function GET(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const bearer = authHeader?.toLowerCase().startsWith('bearer ')
-    ? authHeader.slice(7).trim()
-    : null;
-  if (!bearer) {
-    return NextResponse.json({ error: 'Autenticazione richiesta.' }, { status: 401 });
-  }
-
-  let userId: string;
-  let userEmail: string | null = null;
-  try {
-    const { url, key } = requireSupabasePublic();
-    const supaUser = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await supaUser.auth.getUser(bearer);
-    if (error || !data?.user) {
-      return NextResponse.json({ error: 'Sessione non valida.' }, { status: 401 });
-    }
-    userId = data.user.id;
-    userEmail = data.user.email ?? null;
-  } catch {
-    return NextResponse.json({ error: 'Configurazione non disponibile.' }, { status: 503 });
-  }
+export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
+  const userId = user.id;
+  const userEmail = user.email ?? null;
 
   let admin;
   try {
     admin = getAdminSupabase();
   } catch {
-    return NextResponse.json({ error: 'Servizio non configurato.' }, { status: 503 });
+    return ApiErrors.unavailable('Servizio non configurato.');
   }
 
   // Query parallele
@@ -128,4 +106,4 @@ export async function GET(req: NextRequest) {
       'cache-control': 'no-store',
     },
   });
-}
+});

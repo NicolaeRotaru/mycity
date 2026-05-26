@@ -5,6 +5,7 @@ import { Flame, Trophy } from 'lucide-react';
 import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
 import { touchLoyaltyStreak } from '@/lib/loyalty';
+import { useLocalStorage } from '@/lib/hooks';
 
 const LAST_CHECKIN_KEY = 'mc_last_checkin';
 
@@ -18,15 +19,14 @@ const LAST_CHECKIN_KEY = 'mc_last_checkin';
  */
 export default function DailyCheckIn() {
   const { isAuthenticated, isLoading } = useProfile();
+  const [lastCheckin, setLastCheckin] = useLocalStorage<string | null>(LAST_CHECKIN_KEY, null);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated || isLoading || done) return;
-    if (typeof window === 'undefined') return;
 
     const today = new Date().toISOString().slice(0, 10);
-    const last = localStorage.getItem(LAST_CHECKIN_KEY);
-    if (last === today) {
+    if (lastCheckin === today) {
       setDone(true);
       return;
     }
@@ -35,7 +35,7 @@ export default function DailyCheckIn() {
     const id = setTimeout(async () => {
       const result = await touchLoyaltyStreak();
       if (!result) return;
-      localStorage.setItem(LAST_CHECKIN_KEY, today);
+      setLastCheckin(today);
       setDone(true);
 
       // Toast solo se è un nuovo giorno (no rumore al refresh)
@@ -71,7 +71,7 @@ export default function DailyCheckIn() {
     }, 1500);
 
     return () => clearTimeout(id);
-  }, [isAuthenticated, isLoading, done]);
+  }, [isAuthenticated, isLoading, done, lastCheckin, setLastCheckin]);
 
   return null;
 }

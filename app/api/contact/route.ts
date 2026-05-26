@@ -4,6 +4,7 @@ import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { getAdminSupabase, getCurrentUser } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -19,15 +20,13 @@ const Schema = z.object({
 export async function POST(req: Request) {
   const ip = getClientIp(req);
   const rl = rateLimit({ key: `contact:${ip}`, max: 3, windowMs: 10 * 60_000 });
-  if (!rl.allowed) {
-    return NextResponse.json({ error: 'Troppe richieste, riprova tra 10 min' }, { status: 429 });
-  }
+  if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;
-  try { json = await req.json(); } catch { return NextResponse.json({ error: 'Body non valido' }, { status: 400 }); }
+  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body non valido'); }
   const parsed = Schema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.errors[0]?.message ?? 'Input non valido' }, { status: 400 });
+    return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
   }
   const { company, ...payload } = parsed.data;
   if (company) {
@@ -45,7 +44,7 @@ export async function POST(req: Request) {
   });
   if (error) {
     logger.error('[contact] insert failed:', error);
-    return NextResponse.json({ error: 'Errore interno' }, { status: 500 });
+    return ApiErrors.internal('Errore interno');
   }
 
   // Best-effort email al support (skip se RESEND_API_KEY non configurato)

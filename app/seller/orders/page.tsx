@@ -9,6 +9,7 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Order = {
   id: string;
@@ -29,7 +30,7 @@ const STATUS_FILTERS: { label: string; statuses: OrderStatus[] | null }[] = [
 
 export default function SellerOrdersPage() {
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['seller-orders'],
+    queryKey: queryKeys.seller.orders,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');

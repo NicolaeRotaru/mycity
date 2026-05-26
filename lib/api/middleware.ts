@@ -29,18 +29,32 @@ async function authenticate(req: NextRequest): Promise<
   | { ok: true; user: User; profile: Profile }
   | { ok: false; response: NextResponse }
 > {
-  const supa = getSupabaseAuthClient();
-  if (!supa) return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
-
+  // Tentativo 1: Bearer token nell'Authorization header (client fetch)
   const authHeader = req.headers.get('authorization');
   const bearer = authHeader?.toLowerCase().startsWith('bearer ')
     ? authHeader.slice(7).trim()
     : null;
-  if (!bearer) return { ok: false, response: ApiErrors.unauthorized() };
 
-  const { data: { user }, error: userErr } = await supa.auth.getUser(bearer);
-  if (userErr || !user) return { ok: false, response: ApiErrors.unauthorized('Sessione non valida') };
+  let user: User | null = null;
 
+  if (bearer) {
+    const supa = getSupabaseAuthClient();
+    if (!supa) return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+    const { data, error } = await supa.auth.getUser(bearer);
+    if (!error && data?.user) user = data.user;
+  } else {
+    // Tentativo 2: cookie session (server-side)
+    try {
+      const { getCurrentUser } = await import('@/lib/supabase/server');
+      user = await getCurrentUser();
+    } catch { /* server module non disponibile in alcuni contesti */ }
+  }
+
+  if (!user) return { ok: false, response: ApiErrors.unauthorized() };
+
+  // Fetch profile (sempre via admin per evitare RLS recursion)
+  const supa = getSupabaseAuthClient();
+  if (!supa) return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
   const { data: profile } = await supa
     .from('profiles')
     .select('id, role, is_approved')
@@ -103,6 +117,22 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
       ? authHeader.slice(7).trim()
       : null;
     if (bearer !== expected) return ApiErrors.unauthorized();
+    return handler(req);
+  };
+}
+
+/**
+ * Wrapper: richiede x-internal-secret = SUPABASE_SERVICE_ROLE_KEY.
+ * Per endpoint server-to-server (trigger DB, cron interni, edge functions).
+ * Non esponi mai a client browser.
+ */
+export function withInternalAuth(handler: (req: NextRequest) => Promise<NextResponse>) {
+  return async (req: NextRequest): Promise<NextResponse> => {
+    const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const provided = req.headers.get('x-internal-secret');
+    if (!expected || !provided || provided !== expected) {
+      return ApiErrors.forbidden();
+    }
     return handler(req);
   };
 }

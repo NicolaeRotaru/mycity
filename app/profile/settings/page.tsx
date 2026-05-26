@@ -9,6 +9,7 @@ import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import PublicProfileToggle from '@/components/PublicProfileToggle';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { useLocalStorage } from '@/lib/hooks';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
 
@@ -42,22 +43,6 @@ const DEFAULT_PREFS: Prefs = {
   language: 'it',
 };
 
-function loadPrefs(): Prefs {
-  if (typeof window === 'undefined') return DEFAULT_PREFS;
-  try {
-    const raw = localStorage.getItem(PREFS_KEY);
-    if (!raw) return DEFAULT_PREFS;
-    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-
-function savePrefs(p: Prefs) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(PREFS_KEY, JSON.stringify(p));
-}
-
 export default function SettingsPage() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>('account');
@@ -76,14 +61,13 @@ export default function SettingsPage() {
   const [changingEmail, setChangingEmail] = useState(false);
 
   // Prefs
-  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  const [prefs, setPrefs] = useLocalStorage<Prefs>(PREFS_KEY, DEFAULT_PREFS);
 
   // Delete account
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    setPrefs(loadPrefs());
     supabase.auth.getUser().then(({ data }) => {
       if (!data.user) {
         router.push('/sign-in?returnTo=/profile/settings');
@@ -96,9 +80,7 @@ export default function SettingsPage() {
   }, [router]);
 
   const updatePref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
-    const next = { ...prefs, [key]: value };
-    setPrefs(next);
-    savePrefs(next);
+    setPrefs((prev) => ({ ...prev, [key]: value }));
     toast.success('Preferenza salvata');
   };
 

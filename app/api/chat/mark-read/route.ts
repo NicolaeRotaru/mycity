@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getServerSupabase, getCurrentUser } from '@/lib/supabase/server';
+import { getServerSupabase } from '@/lib/supabase/server';
+import { withAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -11,14 +13,11 @@ const Schema = z.object({ conversationId: z.string().uuid() });
  * Azzera il counter unread del lato chiamante e marca i messaggi non letti
  * dell'altro lato come letti (read_at = now()). Idempotente.
  */
-export async function POST(req: Request) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 });
-
+export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   let json: unknown;
-  try { json = await req.json(); } catch { return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 }); }
+  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = Schema.safeParse(json);
-  if (!parsed.success) return NextResponse.json({ error: 'Input non valido' }, { status: 400 });
+  if (!parsed.success) return ApiErrors.invalidRequest('Input non valido');
 
   const supa = getServerSupabase();
   const { data: conv } = await supa
@@ -27,11 +26,11 @@ export async function POST(req: Request) {
     .eq('id', parsed.data.conversationId)
     .maybeSingle();
 
-  if (!conv) return NextResponse.json({ error: 'Conversazione non trovata' }, { status: 404 });
+  if (!conv) return ApiErrors.notFound('Conversazione non trovata');
 
   const isBuyer = conv.buyer_id === user.id;
   const isSeller = conv.seller_id === user.id;
-  if (!isBuyer && !isSeller) return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 });
+  if (!isBuyer && !isSeller) return ApiErrors.forbidden();
 
   const counterField = isBuyer ? 'buyer_unread_count' : 'seller_unread_count';
 
@@ -48,4 +47,4 @@ export async function POST(req: Request) {
     .neq('sender_id', user.id);
 
   return NextResponse.json({ ok: true });
-}
+});

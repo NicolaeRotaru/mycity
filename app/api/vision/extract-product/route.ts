@@ -1,8 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@supabase/supabase-js';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
+import { withSellerAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 // Eseguito sempre lato server, mai bundled nel client.
 export const runtime = 'nodejs';
@@ -68,99 +70,43 @@ Linee guida:
 - Il prezzo suggerito deve essere realistico per il mercato italiano al dettaglio.
 - Descrizione in italiano, in tono neutro e informativo.`;
 
-function jsonError(status: number, message: string) {
-  return NextResponse.json({ error: message }, { status });
-}
-
 // Validazione base64 (solo charset, no padding strict)
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
-export async function POST(req: NextRequest) {
+export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return jsonError(503, 'Servizio AI non configurato sul server.');
-  }
+  if (!apiKey) return ApiErrors.unavailable('Servizio AI non configurato sul server.');
 
-  // 1) Richiede autenticazione: solo seller (o admin) possono usare l'AI
-  //    per non far esplodere i costi Anthropic e bloccare DoS economico.
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnon) {
-    return jsonError(503, 'Servizio non configurato.');
-  }
-
-  const authHeader = req.headers.get('authorization');
-  const bearer = authHeader?.toLowerCase().startsWith('bearer ')
-    ? authHeader.slice(7).trim()
-    : null;
-  if (!bearer) {
-    return jsonError(401, 'Autenticazione richiesta.');
-  }
-
-  const supaAuth = createClient(supabaseUrl, supabaseAnon, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data: userResp, error: userErr } = await supaAuth.auth.getUser(bearer);
-  const user = userResp?.user;
-  if (userErr || !user) {
-    return jsonError(401, 'Sessione non valida.');
-  }
-
-  const { data: profile } = await supaAuth
-    .from('profiles')
-    .select('role, is_approved')
-    .eq('id', user.id)
-    .single();
-
-  const role = profile?.role as string | undefined;
-  if (!profile?.is_approved || (role !== 'seller' && role !== 'admin')) {
-    return jsonError(403, 'Solo i venditori possono usare l\'AI di estrazione.');
-  }
-
-  // 2) Rate limit: 10 chiamate / 5 min per utente (Anthropic costa)
+  // Rate limit: 10 chiamate / 5 min per utente (Anthropic costa)
   const rl = rateLimit({
     key: `vision:${user.id}`,
     max: 10,
     windowMs: 5 * 60_000,
   });
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: `Troppe richieste. Riprova tra ${rl.retryAfterSec}s.` },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(rl.retryAfterSec),
-          'X-RateLimit-Limit': String(rl.limit),
-          'X-RateLimit-Remaining': '0',
-        },
-      },
-    );
-  }
+  if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
-  // 3) Parsing + validazione body
+  // Parsing + validazione body
   let body: { image_base64?: string; media_type?: string };
   try {
     body = await req.json();
   } catch {
-    return jsonError(400, 'Body JSON non valido.');
+    return ApiErrors.invalidRequest('Body JSON non valido.');
   }
 
   const { image_base64, media_type } = body;
   if (!image_base64 || typeof image_base64 !== 'string') {
-    return jsonError(400, 'Campo image_base64 mancante.');
+    return ApiErrors.invalidRequest('Campo image_base64 mancante.');
   }
   if (!media_type || !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(media_type)) {
-    return jsonError(400, 'media_type deve essere image/jpeg, image/png, image/webp o image/gif.');
+    return ApiErrors.invalidRequest('media_type deve essere image/jpeg, image/png, image/webp o image/gif.');
   }
   if (!BASE64_RE.test(image_base64.slice(0, 4096))) {
-    // controllo solo del prefisso: validazione completa costa CPU
-    return jsonError(400, 'image_base64 non è un valore base64 valido.');
+    return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
   }
 
-  // Stima il peso decodificato per evitare di mandare a Claude immagini enormi.
   // base64 ~= 4/3 byte raw, accettiamo fino a ~5 MB raw = ~7 MB base64.
   if (image_base64.length > 7_500_000) {
-    return jsonError(413, 'Immagine troppo grande. Massimo 5 MB.');
+    return NextResponse.json({ error: 'Immagine troppo grande. Massimo 5 MB.' }, { status: 413 });
   }
 
   const anthropic = new Anthropic({ apiKey });
@@ -193,22 +139,23 @@ export async function POST(req: NextRequest) {
     const toolBlock = response.content.find((b) => b.type === 'tool_use');
     if (!toolBlock || toolBlock.type !== 'tool_use') {
       logger.error('Anthropic non ha restituito un tool_use');
-      return jsonError(502, 'Risposta AI inattesa. Riprova.');
+      return NextResponse.json({ error: 'Risposta AI inattesa. Riprova.' }, { status: 502 });
     }
     toolInput = toolBlock.input as ExtractInput;
   } catch (err: any) {
     // Log solo lo status code, mai il messaggio raw (potrebbe contenere
     // frammenti della API key o dell'input).
     logger.error('Errore chiamata Anthropic, status:', err?.status);
-    if (err?.status === 401) return jsonError(503, 'API key Anthropic non valida.');
-    if (err?.status === 429) return jsonError(429, 'Limite richieste raggiunto. Riprova tra qualche minuto.');
-    return jsonError(502, 'Errore nel servizio AI. Riprova.');
+    if (err?.status === 401) return ApiErrors.unavailable('API key Anthropic non valida.');
+    if (err?.status === 429) return ApiErrors.rateLimited(60);
+    return NextResponse.json({ error: 'Errore nel servizio AI. Riprova.' }, { status: 502 });
   }
 
-  // Lookup category_id da slug (riusa il client Supabase già creato in alto)
+  // Lookup category_id da slug
   let categoryId: string | null = null;
   try {
-    const { data } = await supaAuth
+    const supa = getServerSupabase();
+    const { data } = await supa
       .from('categories')
       .select('id')
       .eq('slug', toolInput.category_slug)
@@ -226,4 +173,4 @@ export async function POST(req: NextRequest) {
     category_slug: toolInput.category_slug,
     suggested_price: toolInput.suggested_price_eur,
   });
-}
+});

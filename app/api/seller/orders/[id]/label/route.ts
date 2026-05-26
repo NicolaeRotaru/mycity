@@ -1,6 +1,8 @@
-import { NextResponse } from 'next/server';
-import { getServerSupabase, getCurrentUser } from '@/lib/supabase/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { buildShippingLabel } from '@/lib/shipping/label';
+import { withSellerAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -9,10 +11,7 @@ export const runtime = 'nodejs';
  * Genera PDF label 4×6 thermal-ready per stampa.
  * Auth: solo il seller proprietario dell'ordine.
  */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const user = await getCurrentUser();
-  if (!user) return NextResponse.json({ error: 'Non autenticato' }, { status: 401 });
-
+async function handler(_req: NextRequest, user: { id: string }, params: { id: string }) {
   const supa = getServerSupabase();
   const { data: order, error } = await supa
     .from('orders')
@@ -25,10 +24,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     .eq('id', params.id)
     .single();
 
-  if (error || !order) return NextResponse.json({ error: 'Ordine non trovato' }, { status: 404 });
-  if (order.seller_id !== user.id) {
-    return NextResponse.json({ error: 'Non autorizzato' }, { status: 403 });
-  }
+  if (error || !order) return ApiErrors.notFound('Ordine non trovato');
+  if (order.seller_id !== user.id) return ApiErrors.forbidden();
 
   const sellerName = (order.profiles as any)?.store_name ?? 'MyCity Seller';
   const isCod = order.payment_method === 'cod' || order.payment_method === null;
@@ -55,3 +52,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     },
   });
 }
+
+export const GET = (req: NextRequest, ctx: { params: { id: string } }) =>
+  withSellerAuth(async ({ user }) => handler(req, user, ctx.params))(req);

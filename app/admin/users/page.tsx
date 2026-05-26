@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Profile = {
   id: string;
@@ -57,7 +58,7 @@ function AdminUsersPageInner() {
   const [detailId, setDetailId] = useState<string | null>(null);
 
   const { data: profiles = [], isLoading, error } = useQuery({
-    queryKey: ['admin-users'],
+    queryKey: queryKeys.admin.users(),
     queryFn: async () => {
       // Prima provo la query completa con i campi della migration 021.
       // Se fallisce (es. migration non ancora applicata) faccio fallback
@@ -117,8 +118,8 @@ function AdminUsersPageInner() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
-      qc.invalidateQueries({ queryKey: ['admin-stats'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
       toast.success('Venditore approvato e notificato');
     },
     onError: (err: any) => toast.error(friendlyError(err)),
@@ -141,7 +142,7 @@ function AdminUsersPageInner() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       toast.success('Richiesta rifiutata e notificata');
     },
     onError: (err: any) => toast.error(friendlyError(err)),
@@ -165,8 +166,8 @@ function AdminUsersPageInner() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
-      qc.invalidateQueries({ queryKey: ['admin-stats'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
       toast.success('Negozio riattivato');
     },
     onError: (err: any) => toast.error(friendlyError(err)),
@@ -186,8 +187,8 @@ function AdminUsersPageInner() {
       return body;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
-      qc.invalidateQueries({ queryKey: ['admin-stats'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
       toast.success('Account eliminato definitivamente');
     },
     onError: (err: any) => toast.error(friendlyError(err)),
@@ -210,7 +211,7 @@ function AdminUsersPageInner() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       toast.success('Negozio sospeso');
     },
     onError: (err: any) => toast.error(friendlyError(err)),

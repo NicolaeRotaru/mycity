@@ -1,10 +1,12 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { getInvoiceProvider } from '@/lib/invoicing/providers';
 import { renderInvoicePdf } from '@/lib/invoicing/pdf';
 import type { InvoiceDoc } from '@/lib/invoicing/types';
 import { logger } from '@/lib/logger';
+import { withInternalAuth } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -20,17 +22,12 @@ const Body = z.object({ orderId: z.string().uuid() });
  *
  * Solo service_role (chiamata da cron o trigger su DELIVERED).
  */
-export async function POST(req: NextRequest) {
-  const internalKey = req.headers.get('x-internal-secret');
-  if (!internalKey || internalKey !== process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
-
+export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());
   } catch (e: any) {
-    return NextResponse.json({ error: 'Bad request', details: e?.message }, { status: 400 });
+    return ApiErrors.invalidRequest('Bad request', e?.message);
   }
 
   const admin = getAdminSupabase();
@@ -46,7 +43,7 @@ export async function POST(req: NextRequest) {
     .eq('id', body.orderId)
     .single();
 
-  if (oErr || !order) return NextResponse.json({ error: 'Ordine non trovato' }, { status: 404 });
+  if (oErr || !order) return ApiErrors.notFound('Ordine non trovato');
   if (order.delivery_status !== 'DELIVERED') {
     return NextResponse.json({ error: 'Ordine non consegnato' }, { status: 409 });
   }
@@ -74,7 +71,7 @@ export async function POST(req: NextRequest) {
     .rpc('next_invoice_number', { p_seller: order.seller_id, p_year: year });
   if (numErr) {
     logger.error('[invoice] number allocation failed', numErr);
-    return NextResponse.json({ error: 'Numero fattura non allocato' }, { status: 500 });
+    return ApiErrors.internal('Numero fattura non allocato');
   }
   const invoiceNumber = numberData as string;
 
@@ -118,7 +115,7 @@ export async function POST(req: NextRequest) {
     pdfBytes = await renderInvoicePdf(doc);
   } catch (e: any) {
     logger.error('[invoice] pdf render failed', e);
-    return NextResponse.json({ error: 'Errore generazione PDF' }, { status: 500 });
+    return ApiErrors.internal('Errore generazione PDF');
   }
 
   // Upload PDF in bucket privato "invoices"
@@ -158,4 +155,4 @@ export async function POST(req: NextRequest) {
     pdf_url: pdfUrl,
     sdi: sdiResult,
   }, { status: 200 });
-}
+});

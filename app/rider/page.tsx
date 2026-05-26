@@ -13,6 +13,7 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type AvailableOrder = {
   id: string;
@@ -36,7 +37,7 @@ export default function RiderDashboardPage() {
 
   // Ordini ACCEPTED/READY senza rider + i miei ordini attivi
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['rider-orders'],
+    queryKey: queryKeys.rider.orders,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -94,7 +95,7 @@ export default function RiderDashboardPage() {
       return data;
     },
     onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ['rider-orders'] });
+      qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
     },

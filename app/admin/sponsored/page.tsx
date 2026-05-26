@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Admin: gestione sponsored listings.
@@ -44,7 +45,7 @@ export default function AdminSponsoredPage() {
   const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'ended'>('all');
 
   const { data: listings = [], isLoading } = useQuery({
-    queryKey: ['admin-sponsored', filter],
+    queryKey: queryKeys.admin.sponsored(filter),
     queryFn: async (): Promise<Listing[]> => {
       let q = supabase
         .from('sponsored_listings')
