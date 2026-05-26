@@ -70,6 +70,9 @@ const nextConfig = {
     minimumCacheTTL: 60,
   },
   experimental: {
+    // instrumentationHook attiva il caricamento di instrumentation.ts
+    // (Sentry server + edge config). In Next 15+ e' default.
+    instrumentationHook: true,
     optimizePackageImports: ['lucide-react', 'sonner', '@tanstack/react-query'],
     // pdfkit + fontkit + restructure hanno dipendenze native (iconv-lite,
     // brotli, ecc.) che webpack non riesce a bundlare lato server. Le
@@ -87,4 +90,30 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+// Sentry wrapper: attivo solo se NEXT_PUBLIC_SENTRY_DSN e' configurato.
+// Upload source maps in build CI se SENTRY_AUTH_TOKEN e' settato.
+const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN;
+
+if (SENTRY_DSN) {
+  try {
+    const { withSentryConfig } = require('@sentry/nextjs');
+    module.exports = withSentryConfig(nextConfig, {
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      silent: !process.env.CI,
+      // Source maps upload (richiede SENTRY_AUTH_TOKEN in CI env)
+      widenClientFileUpload: true,
+      // Tunnel route per bypassare ad-blockers (opzionale)
+      tunnelRoute: '/monitoring',
+      // Hide source maps dal client bundle finale
+      hideSourceMaps: true,
+      // Disabilita Sentry CLI logging in dev
+      disableLogger: true,
+    });
+  } catch {
+    // @sentry/nextjs non installato: fallback al config base
+    module.exports = nextConfig;
+  }
+} else {
+  module.exports = nextConfig;
+}

@@ -8,9 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "verify": "npm run typecheck && npm run lint"
+    "verify": "npm run typecheck && npm run lint && npm run test"
   },
   "engines": {
     "node": ">=20.0.0",
@@ -48,10 +51,12 @@
     "@types/pdfkit": "^0.13.0",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@vitest/ui": "^4.1.7",
     "autoprefixer": "^10.4.13",
     "eslint": "^8.57.1",
     "eslint-config-next": "^14.2.0",
     "postcss": "^8.4.21",
-    "tailwind-scrollbar-hide": "^1.0.5"
+    "tailwind-scrollbar-hide": "^1.0.5",
+    "vitest": "^4.1.7"
   }
 }
