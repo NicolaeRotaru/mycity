@@ -254,6 +254,28 @@ function AdminUsersPageInner() {
     );
   }
 
+  const exportCSV = () => {
+    const headers = ['ID', 'Email', 'Nome', 'Ruolo', 'Approvato', 'Creato il'];
+    const rows = filtered.map((u: any) => [
+      u.id,
+      u.email ?? '',
+      u.full_name ?? u.store_name ?? '',
+      u.role ?? '',
+      u.is_approved ? 'sì' : 'no',
+      u.created_at ?? '',
+    ]);
+    const csv = [headers, ...rows]
+      .map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mycity-utenti-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -261,6 +283,14 @@ function AdminUsersPageInner() {
           <h1 className="text-2xl font-bold text-ink-900">Utenti</h1>
           <p className="text-sm text-ink-500">{filtered.length} risultati</p>
         </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={exportCSV}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 disabled:opacity-50 text-ink-700 px-4 py-2 rounded-lg font-semibold text-sm"
+          >
+            Esporta CSV
+          </button>
         {pendingCount > 0 && filter !== 'pending' && (
           <button
             onClick={() => setFilter('pending')}
@@ -269,6 +299,7 @@ function AdminUsersPageInner() {
             ⏳ {pendingCount} richieste in attesa
           </button>
         )}
+        </div>
       </div>
 
       <div className="flex gap-2 flex-wrap">
