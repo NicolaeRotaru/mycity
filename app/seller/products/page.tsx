@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -62,9 +63,7 @@ export default function SellerProductsPage() {
           <Link href="/seller/products/import" className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm">
             <span>📥</span> Importa CSV
           </Link>
-          <Link href="/seller/products/new" className="inline-flex items-center gap-1.5 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm">
-            <span>➕</span> Nuovo prodotto
-          </Link>
+          <Button href="/seller/products/new" size="sm">➕ Nuovo prodotto</Button>
         </div>
       </div>
 

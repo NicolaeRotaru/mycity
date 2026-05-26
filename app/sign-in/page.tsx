@@ -8,6 +8,7 @@ import { safeInternalPath } from '@/lib/safe-redirect';
 import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
@@ -160,13 +161,9 @@ const SignInForm = () => {
             />
           </div>
         )}
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="w-full bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-4 py-2 rounded transition-colors font-semibold"
-        >
+        <Button type="submit" loading={isLoading} fullWidth>
           {isLoading ? 'Accesso in corso...' : 'Accedi'}
-        </button>
+        </Button>
       </form>
       <p className="text-center text-sm text-ink-600">
         Non hai un account?{' '}

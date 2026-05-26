@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Button } from '@/components/ui/Button';
 
 export default function NotFound() {
   return (
@@ -14,15 +15,9 @@ export default function NotFound() {
       </p>
 
       <div className="flex items-center justify-center gap-3 flex-wrap mb-10">
-        <Link href="/" className="bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-lg font-bold transition-colors">
-          🏠 Torna alla home
-        </Link>
-        <Link href="/search" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-6 py-3 rounded-lg font-bold transition-colors">
-          🔍 Cerca prodotti
-        </Link>
-        <Link href="/stores" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-6 py-3 rounded-lg font-bold transition-colors">
-          🏪 Tutti i negozi
-        </Link>
+        <Button href="/" size="lg">🏠 Torna alla home</Button>
+        <Button href="/search" variant="secondary" size="lg">🔍 Cerca prodotti</Button>
+        <Button href="/stores" variant="secondary" size="lg">🏪 Tutti i negozi</Button>
       </div>
 
       <div className="bg-white border border-cream-300 rounded-2xl p-6 text-left">

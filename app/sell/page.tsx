@@ -10,6 +10,7 @@ import { useProfile } from '@/components/hooks/useProfile';
 import SellerApplicationForm, { type SellerApplicationData } from '@/components/SellerApplicationForm';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 
 const fetchProfile = async () => {
@@ -101,9 +102,7 @@ export default function SellPage() {
       <div className="container mx-auto p-8 max-w-md text-center bg-white rounded-2xl mt-8">
         <h1 className="text-2xl font-bold mb-2">Diventa venditore</h1>
         <p className="text-ink-600 mb-6">Serve un account per inviare la richiesta.</p>
-        <Link href="/sign-in?returnTo=/sell" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-lg font-bold">
-          Accedi o registrati
-        </Link>
+        <Button href="/sign-in?returnTo=/sell" size="lg">Accedi o registrati</Button>
       </div>
     );
   }
@@ -185,9 +184,7 @@ function PendingNotice({ requestedAt }: { requestedAt: string | null }) {
         Nel frattempo puoi continuare a comprare normalmente.
       </p>
       <div className="flex flex-wrap gap-2 justify-center text-sm">
-        <Link href="/?as=buyer" className="bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold">
-          🏠 Continua a comprare
-        </Link>
+        <Button href="/?as=buyer">🏠 Continua a comprare</Button>
         <Link href="/contact" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
           ✉️ Contatta il supporto
         </Link>
