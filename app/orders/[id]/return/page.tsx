@@ -48,8 +48,8 @@ export default function NewReturnPage() {
       if (upErr) throw upErr;
       const { data: pub } = supabase.storage.from('products').getPublicUrl(path);
       setPhotos((p) => [...p, pub.publicUrl]);
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Upload fallito');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload fallito');
     } finally {
       setUploading(false);
     }
@@ -72,8 +72,8 @@ export default function NewReturnPage() {
       if (!r.ok) throw new Error(data?.error ?? 'Errore');
       toast.success('Richiesta di reso inviata');
       router.push(`/orders/${params.id}`);
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Errore');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Errore');
     } finally {
       setSubmitting(false);
     }

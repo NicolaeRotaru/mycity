@@ -26,8 +26,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let body;
   try {
     body = Body.parse(await req.json());
-  } catch (e: any) {
-    return ApiErrors.invalidRequest('Dati non validi', e?.message);
+  } catch (e) {
+    return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
   const supa = getServerSupabase();

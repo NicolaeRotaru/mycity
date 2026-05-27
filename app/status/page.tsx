@@ -31,7 +31,7 @@ const SERVICES: Service[] = [
   { id: 'push', name: 'Push notifications', description: 'Web Push API', icon: Bell, status: 'operational', uptime7d: 99.90 },
 ];
 
-const STATUS_META: Record<Service['status'], { label: string; color: string; bg: string; icon: any }> = {
+const STATUS_META: Record<Service['status'], { label: string; color: string; bg: string; icon: LucideIcon }> = {
   operational: { label: 'Operativo',         color: 'text-olive-700',    bg: 'bg-olive-50 border-olive-300',     icon: CheckCircle2 },
   degraded:    { label: 'Prestazioni ridotte', color: 'text-accent-700', bg: 'bg-accent-50 border-accent-300',   icon: AlertCircle },
   outage:      { label: 'Fuori servizio',    color: 'text-secondary-700', bg: 'bg-secondary-50 border-secondary-300', icon: AlertCircle },

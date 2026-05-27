@@ -23,7 +23,14 @@ import { usePathname, useSearchParams } from 'next/navigation';
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com';
 
-let posthogInstance: any = null;
+type PostHogLike = {
+  capture: (event: string, props?: Record<string, unknown>) => void;
+  identify: (userId: string, traits?: Record<string, unknown>) => void;
+  reset: () => void;
+  opt_out_capturing: () => void;
+};
+
+let posthogInstance: PostHogLike | null = null;
 
 async function getPosthog() {
   if (posthogInstance) return posthogInstance;
@@ -44,7 +51,7 @@ async function getPosthog() {
     autocapture: {
       dom_event_allowlist: ['click', 'submit'],
     },
-    loaded: (ph: any) => {
+    loaded: (ph: PostHogLike) => {
       // Rispetta cookie consent: opt_out se utente non ha accettato
       try {
         const consent = localStorage.getItem('mc_cookie_consent');
@@ -60,7 +67,7 @@ async function getPosthog() {
  * Track event arbitrario. Es:
  *   track('product_viewed', { product_id, price, category });
  */
-export async function track(event: string, properties?: Record<string, any>) {
+export async function track(event: string, properties?: Record<string, unknown>) {
   const ph = await getPosthog();
   if (!ph) return;
   ph.capture(event, properties);
@@ -70,7 +77,7 @@ export async function track(event: string, properties?: Record<string, any>) {
  * Identifica un utente (al signup/signin). Linka tutti gli eventi anonimi
  * precedenti al user_id.
  */
-export async function identify(userId: string, traits?: Record<string, any>) {
+export async function identify(userId: string, traits?: Record<string, unknown>) {
   const ph = await getPosthog();
   if (!ph) return;
   ph.identify(userId, traits);

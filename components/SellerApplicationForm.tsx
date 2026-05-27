@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type UseFormRegisterReturn } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useDropzone } from 'react-dropzone';
@@ -417,7 +417,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
 function Consent({
   label, register, error,
-}: { label: React.ReactNode; register: any; error?: string }) {
+}: { label: React.ReactNode; register: UseFormRegisterReturn; error?: string }) {
   return (
     <div>
       <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-cream-50 transition-colors">

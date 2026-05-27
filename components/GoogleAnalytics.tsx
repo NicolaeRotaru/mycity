@@ -9,8 +9,8 @@ const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
 
 declare global {
   interface Window {
-    dataLayer?: any[];
-    gtag?: (...args: any[]) => void;
+    dataLayer?: unknown[];
+    gtag?: (...args: unknown[]) => void;
   }
 }
 
@@ -109,7 +109,7 @@ export default function GoogleAnalytics() {
  * "Aggiungi al carrello", checkout, completed purchase). Se l'utente non ha
  * dato consenso, è no-op.
  */
-export function trackEvent(name: string, params: Record<string, any> = {}) {
+export function trackEvent(name: string, params: Record<string, unknown> = {}) {
   if (typeof window === 'undefined' || !window.gtag) return;
   try {
     window.gtag('event', name, params);

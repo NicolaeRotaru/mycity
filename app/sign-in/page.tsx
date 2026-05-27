@@ -74,8 +74,8 @@ const SignInForm = () => {
       toast.success('Accesso effettuato!');
       router.push(returnTo);
       router.refresh();
-    } catch (error: any) {
-      toast.error(translateAuthError(error?.message ?? ''));
+    } catch (error) {
+      toast.error(translateAuthError(error instanceof Error ? error.message : ''));
     } finally {
       setIsLoading(false);
     }
@@ -94,8 +94,8 @@ const SignInForm = () => {
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
       if (error) throw error;
       toast.success('Ti abbiamo inviato un\'email per reimpostare la password');
-    } catch (err: any) {
-      toast.error(translateAuthError(err?.message ?? ''));
+    } catch (err) {
+      toast.error(translateAuthError(err instanceof Error ? err.message : ''));
     } finally {
       setSendingReset(false);
     }

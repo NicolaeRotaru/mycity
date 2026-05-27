@@ -36,8 +36,8 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
       if (error) throw error;
       const { data } = supabase.storage.from('products').getPublicUrl(path);
       return data.publicUrl;
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Upload fallito');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Upload fallito');
       return null;
     } finally {
       setUploading(null);
@@ -71,8 +71,8 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
       toast.success('Incasso confermato');
       setOpen(false);
       onConfirmed?.();
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Errore');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Errore');
     } finally {
       setSubmitting(false);
     }

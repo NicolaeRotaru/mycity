@@ -7,10 +7,20 @@ import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 
+type RiderOrderRow = {
+  id: string;
+  total_price: number | null;
+  shipping_cost: number | null;
+  delivery_status: string;
+  delivered_at: string | null;
+  delivery_city: string | null;
+  delivery_address: string | null;
+};
+
 export default function RiderHistoryPage() {
   const { data: orders = [], isLoading } = useQuery({
     queryKey: queryKeys.rider.history,
-    queryFn: async () => {
+    queryFn: async (): Promise<RiderOrderRow[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
@@ -20,13 +30,13 @@ export default function RiderHistoryPage() {
         .eq('delivery_status', 'DELIVERED')
         .order('delivered_at', { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as RiderOrderRow[];
     },
   });
 
   if (isLoading) return <LoadingState />;
 
-  const totalEarned = orders.reduce((s: number, o: any) => s + Number(o.shipping_cost || 0), 0);
+  const totalEarned = orders.reduce((s: number, o) => s + Number(o.shipping_cost || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -41,7 +51,7 @@ export default function RiderHistoryPage() {
         </div>
       ) : (
         <div className="space-y-2">
-          {orders.map((o: any) => (
+          {orders.map((o) => (
             <Link
               key={o.id}
               href={`/rider/orders/${o.id}`}

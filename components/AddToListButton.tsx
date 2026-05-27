@@ -50,9 +50,9 @@ export default function AddToListButton({ productId }: { productId: string }) {
       const { data } = await supabase
         .from('product_list_items')
         .select('list_id')
-        .in('list_id', myLists.map((l: any) => l.id))
+        .in('list_id', myLists.map((l: { id: string }) => l.id))
         .eq('product_id', productId);
-      return ((data ?? []) as any[]).map((r) => r.list_id);
+      return ((data ?? []) as Array<{ list_id: string }>).map((r) => r.list_id);
     },
   });
 

@@ -148,16 +148,17 @@ export default function CheckoutPage() {
   });
 
   // Indirizzi salvati
+  type SavedAddress = { id: string; full_name: string; address: string; city: string; zip: string; phone: string; notes: string | null; lat: number | null; lng: number | null; is_default: boolean };
   const { data: savedAddresses = [] } = useQuery({
     queryKey: queryKeys.checkout.userAddresses(authUser?.id ?? ''),
     enabled: !!authUser?.id,
-    queryFn: async () => {
+    queryFn: async (): Promise<SavedAddress[]> => {
       const { data } = await supabase
         .from('user_addresses')
         .select('*')
         .eq('user_id', authUser!.id)
         .order('is_default', { ascending: false });
-      return data ?? [];
+      return (data ?? []) as SavedAddress[];
     },
   });
 
@@ -171,7 +172,7 @@ export default function CheckoutPage() {
   // Quando arrivano gli indirizzi salvati, pre-seleziona il default
   useEffect(() => {
     if (savedAddresses.length > 0 && !form.fullName) {
-      const def = savedAddresses.find((a: any) => a.is_default) ?? savedAddresses[0];
+      const def = savedAddresses.find((a) => a.is_default) ?? savedAddresses[0];
       setForm({
         fullName: def.full_name, address: def.address, city: def.city,
         zip: def.zip, phone: def.phone, notes: def.notes ?? '',
@@ -183,7 +184,7 @@ export default function CheckoutPage() {
 
   const applySavedAddress = (id: string) => {
     if (!id) return;
-    const a = savedAddresses.find((x: any) => x.id === id);
+    const a = savedAddresses.find((x) => x.id === id);
     if (!a) return;
     setForm({
       fullName: a.full_name, address: a.address, city: a.city,

@@ -16,7 +16,7 @@ export const useFavorites = () => {
         .from('favorites')
         .select('product_id')
         .eq('user_id', user.id);
-      return new Set<string>((data ?? []).map((f: any) => f.product_id));
+      return new Set<string>((data ?? []).map((f: { product_id: string }) => f.product_id));
     },
     staleTime: 30_000,
   });

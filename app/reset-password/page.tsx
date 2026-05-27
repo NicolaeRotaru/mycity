@@ -106,8 +106,8 @@ function ResetPasswordInner() {
       toast.success('Password aggiornata con successo');
       await supabase.auth.signOut();
       setTimeout(() => router.push('/sign-in'), 1200);
-    } catch (err: any) {
-      toast.error(translateError(err?.message ?? ''));
+    } catch (err) {
+      toast.error(translateError(err instanceof Error ? err.message : ''));
     } finally {
       setSubmitting(false);
     }

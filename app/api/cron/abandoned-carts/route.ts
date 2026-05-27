@@ -24,13 +24,13 @@ export const runtime = 'nodejs';
 
 const handler = withCronAuth(async (): Promise<NextResponse> => {
   let supaCfg;
-  try { supaCfg = requireSupabaseService(); } catch (e: any) { return ApiErrors.unavailable(e.message); }
+  try { supaCfg = requireSupabaseService(); } catch (e) { return ApiErrors.unavailable(e instanceof Error ? e.message : 'service unavailable'); }
   const supa = createClient(supaCfg.url, supaCfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
 
   const { data, error } = await supa.rpc('list_abandoned_carts_to_recover', { min_hours: 4 });
   if (error) return ApiErrors.internal(error.message);
 
-  const candidates = (data ?? []) as Array<{ user_id: string; email: string; full_name: string | null; cart_data: any; cart_total: number }>;
+  const candidates = (data ?? []) as Array<{ user_id: string; email: string; full_name: string | null; cart_data: unknown; cart_total: number }>;
   let sent = 0, errors = 0;
 
   for (const c of candidates) {

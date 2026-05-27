@@ -23,9 +23,10 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
     },
   });
 
+  type SubcatRow = { id: string; slug: string; name: string; icon: string | null };
   const { data: subcategories = [] } = useQuery({
     queryKey: [...queryKeys.categories.all, 'sub', category?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<SubcatRow[]> => {
       if (!category) return [];
       const { data, error } = await supabase
         .from('categories')
@@ -33,7 +34,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
         .eq('parent_id', category.id)
         .order('name');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as SubcatRow[];
     },
     enabled: !!category,
   });
@@ -55,7 +56,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
         <section>
           <h2 className="text-xl font-bold mb-3">Sottocategorie</h2>
           <div className="flex flex-wrap gap-3">
-            {subcategories.map((s: any) => (
+            {subcategories.map((s) => (
               <Link
                 key={s.id}
                 href={`/category/${s.slug}`}

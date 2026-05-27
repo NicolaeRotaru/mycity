@@ -30,8 +30,8 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());
-  } catch (e: any) {
-    return ApiErrors.invalidRequest('Dati non validi', e?.message);
+  } catch (e) {
+    return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
   const supa = getServerSupabase();

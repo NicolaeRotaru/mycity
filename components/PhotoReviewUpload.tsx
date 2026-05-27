@@ -65,8 +65,8 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
       setFiles(next);
       onUploaded(next.map((f) => f.url));
       if (newUrls.length > 0) toast.success(`${newUrls.length} foto caricat${newUrls.length === 1 ? 'a' : 'e'}`);
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Upload fallito');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload fallito');
     } finally {
       setUploading(false);
       // reset input

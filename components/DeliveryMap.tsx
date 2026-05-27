@@ -80,7 +80,7 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
       markersRef.current = [];
 
       // Aggiungi i nuovi
-      const latlngs: any[] = [];
+      const latlngs: Array<[number, number]> = [];
       points.forEach((p) => {
         if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return;
         const color = COLOR_HEX[p.color ?? 'indigo'];
