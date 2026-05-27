@@ -22,8 +22,10 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      # Storybook 8.x dichiara peer deps su React 18 + ecc, ma il monorepo usa
+      # react-dom 18.3 risolto via Next 14; senza --legacy-peer-deps fallisce.
       - name: Install deps
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Lint
         run: npm run lint --if-present
