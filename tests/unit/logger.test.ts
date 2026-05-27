@@ -9,9 +9,12 @@ import { logger } from '@/lib/logger';
 import { captureError } from '@/lib/analytics/sentry';
 const captureMock = vi.mocked(captureError);
 
+function setNodeEnv(value: string) {
+  vi.stubEnv('NODE_ENV', value);
+}
+
 describe('logger', () => {
   let consoleSpy: { log: ReturnType<typeof vi.spyOn>; warn: ReturnType<typeof vi.spyOn>; error: ReturnType<typeof vi.spyOn> };
-  let originalEnv: string | undefined;
 
   beforeEach(() => {
     consoleSpy = {
@@ -19,7 +22,6 @@ describe('logger', () => {
       warn: vi.spyOn(console, 'warn').mockImplementation(() => {}),
       error: vi.spyOn(console, 'error').mockImplementation(() => {}),
     };
-    originalEnv = process.env.NODE_ENV;
     vi.clearAllMocks();
   });
 
@@ -27,18 +29,18 @@ describe('logger', () => {
     consoleSpy.log.mockRestore();
     consoleSpy.warn.mockRestore();
     consoleSpy.error.mockRestore();
-    process.env.NODE_ENV = originalEnv;
+    vi.unstubAllEnvs();
   });
 
   describe('info', () => {
     it('logs to console in non-production', () => {
-      process.env.NODE_ENV = 'development';
+      setNodeEnv('development');
       logger.info('msg', { foo: 1 });
       expect(consoleSpy.log).toHaveBeenCalledWith('[info] msg', { foo: 1 });
     });
 
     it('is silent in production', () => {
-      process.env.NODE_ENV = 'production';
+      setNodeEnv('production');
       logger.info('msg');
       expect(consoleSpy.log).not.toHaveBeenCalled();
     });
@@ -46,7 +48,7 @@ describe('logger', () => {
 
   describe('warn', () => {
     it('warns in development', () => {
-      process.env.NODE_ENV = 'development';
+      setNodeEnv('development');
       logger.warn('careful', { reason: 'slow' });
       expect(consoleSpy.warn).toHaveBeenCalledWith('[warn] careful', { reason: 'slow' });
     });
@@ -54,14 +56,14 @@ describe('logger', () => {
 
   describe('error', () => {
     it('captures error to Sentry always', () => {
-      process.env.NODE_ENV = 'production';
+      setNodeEnv('production');
       const err = new Error('boom');
       logger.error(err, { userId: 'u1' });
       expect(captureMock).toHaveBeenCalledWith(err, { userId: 'u1' });
     });
 
     it('also logs to console in dev', () => {
-      process.env.NODE_ENV = 'development';
+      setNodeEnv('development');
       const err = new Error('boom');
       logger.error(err);
       expect(consoleSpy.error).toHaveBeenCalled();

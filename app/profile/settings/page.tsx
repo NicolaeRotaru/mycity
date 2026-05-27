@@ -141,7 +141,7 @@ export default function SettingsPage() {
     if (!userId) return;
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
     const { data: orders } = await supabase.from('orders').select('*').eq('buyer_id', userId);
-    const { data: addresses } = await supabase.from('addresses').select('*').eq('user_id', userId);
+    const { data: addresses } = await supabase.from('user_addresses').select('*').eq('user_id', userId);
     const payload = {
       exported_at: new Date().toISOString(),
       account: { email, user_id: userId },
