@@ -74,8 +74,8 @@ class OnfidoProvider implements KycProvider {
         return { ok: false, error: check?.error?.message ?? `HTTP ${checkRes.status}` };
       }
       return { ok: true, status: 'PENDING', providerCheckId: check.id };
-    } catch (err: any) {
-      return { ok: false, error: err?.message ?? 'network' };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'network' };
     }
   }
 

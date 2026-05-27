@@ -3,6 +3,7 @@
 import { AlertCircle, RotateCcw, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from './Button';
+import { COPY } from '@/lib/copy';
 
 /**
  * Error state riusabile — copia per Next error boundaries, mutation errors,
@@ -26,7 +27,7 @@ export function ErrorState({
   description = 'Abbiamo registrato il problema. Prova a ricaricare la pagina.',
   retry,
   backHref,
-  backLabel = 'Torna indietro',
+  backLabel = COPY.actions.back,
 }: Props) {
   return (
     <div className="py-12 px-4 text-center" role="alert">
@@ -37,7 +38,7 @@ export function ErrorState({
       <p className="text-sm text-ink-500 mt-1 max-w-md mx-auto">{description}</p>
       <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
         {retry && (
-          <Button onClick={retry} icon={RotateCcw} variant="primary">Riprova</Button>
+          <Button onClick={retry} icon={RotateCcw} variant="primary">{COPY.actions.retry}</Button>
         )}
         {backHref && (
           <Link

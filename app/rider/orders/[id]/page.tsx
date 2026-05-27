@@ -17,6 +17,7 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { notify } from '@/lib/notifications';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
@@ -313,14 +314,13 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
 
       {/* NAVIGA */}
       {navTarget.lat && navTarget.lng && order.delivery_status !== 'DELIVERED' && (
-        <a
+        <Button
           href={`https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="block w-full bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-xl font-semibold text-center"
-        >
-          🧭 Naviga su Google Maps
-        </a>
+          fullWidth
+          size="lg"
+        >🧭 Naviga su Google Maps</Button>
       )}
 
       {/* NEGOZIO */}

@@ -7,6 +7,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
@@ -138,13 +139,14 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
         </div>
       )}
 
-      <button
+      <Button
         onClick={() => submit.mutate()}
-        disabled={submit.isPending}
-        className="w-full bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white py-3 rounded-xl font-bold"
+        loading={submit.isPending}
+        fullWidth
+        size="lg"
       >
-        {submit.isPending ? 'Invio…' : 'Invia recensione'}
-      </button>
+        Invia recensione
+      </Button>
     </div>
   );
 }

@@ -27,6 +27,7 @@ import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -120,8 +121,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           : 'Grazie per la recensione!'
       );
     },
-    onError: (err: any) => {
-      if (err?.message !== 'REDIRECT') toast.error(friendlyError(err));
+    onError: (err: unknown) => {
+      if (err instanceof Error && err.message !== 'REDIRECT') toast.error(friendlyError(err));
     },
   });
 
@@ -153,9 +154,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
         <p className="text-sm text-ink-600 mb-5">
           Questo prodotto non è al momento acquistabile perché il negozio non è operativo.
         </p>
-        <a href="/" className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold">
-          ← Torna al marketplace
-        </a>
+        <Button href="/">← Torna al marketplace</Button>
       </div>
     );
   }
@@ -275,8 +274,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               type="button"
               onClick={() => {
                 toggleFav.mutate(id, {
-                  onError: (err: any) => {
-                    if (err?.message === 'AUTH_REQUIRED') {
+                  onError: (err: unknown) => {
+                    if (err instanceof Error && err.message === 'AUTH_REQUIRED') {
                       toast.error('Accedi per salvare nei preferiti');
                     }
                   },
@@ -502,13 +501,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                   onUploaded={setReviewPhotos}
                 />
               )}
-              <button
-                type="submit"
-                disabled={submitReview.isPending}
-                className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-2 rounded-lg font-semibold text-sm"
-              >
-                {submitReview.isPending ? 'Invio…' : 'Pubblica recensione'}
-              </button>
+              <Button type="submit" loading={submitReview.isPending} size="sm">Pubblica recensione</Button>
             </form>
           )}
         </div>

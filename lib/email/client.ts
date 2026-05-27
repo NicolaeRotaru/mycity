@@ -58,8 +58,8 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       return { ok: false, error: error.message ?? 'resend error' };
     }
     return { ok: true, id: data?.id ?? '' };
-  } catch (err: any) {
+  } catch (err) {
     console.error('[email] exception:', err);
-    return { ok: false, error: err?.message ?? 'unknown' };
+    return { ok: false, error: err instanceof Error ? err.message : 'unknown' };
   }
 }

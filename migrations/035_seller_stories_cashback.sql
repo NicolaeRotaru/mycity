@@ -25,8 +25,11 @@ CREATE TABLE IF NOT EXISTS public.seller_stories (
     view_count int NOT NULL DEFAULT 0,
     created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS seller_stories_active_idx ON public.seller_stories(seller_id, expires_at DESC) WHERE expires_at > now();
-CREATE INDEX IF NOT EXISTS seller_stories_global_active_idx ON public.seller_stories(expires_at DESC) WHERE expires_at > now();
+-- Postgres rifiuta WHERE expires_at > now() in indici parziali perche'
+-- now() e' STABLE non IMMUTABLE. Indice full ordinato e' comunque
+-- efficiente: query con `expires_at > now()` usa range scan sull'indice.
+CREATE INDEX IF NOT EXISTS seller_stories_active_idx ON public.seller_stories(seller_id, expires_at DESC);
+CREATE INDEX IF NOT EXISTS seller_stories_global_active_idx ON public.seller_stories(expires_at DESC);
 
 ALTER TABLE public.seller_stories ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS seller_stories_public_read ON public.seller_stories;

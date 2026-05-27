@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Activity = {
   id: string;
@@ -22,8 +23,8 @@ function anonName(name: string | null | undefined): string {
   return `${parts[0]} ${parts[parts.length - 1][0]}.`;
 }
 
-function timeAgo(date: string): string {
-  const diff = Date.now() - new Date(date).getTime();
+function timeAgo(date: string, now: number): string {
+  const diff = now - new Date(date).getTime();
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'ora';
   if (mins < 60) return `${mins} min fa`;
@@ -35,9 +36,18 @@ function timeAgo(date: string): string {
 
 const LiveActivityFeed = () => {
   const [pulse, setPulse] = useState(false);
+  // null durante SSR per evitare hydration mismatch: Date.now() differisce
+  // tra server e client. timeAgo renderizzato solo dopo hydration.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    // Refresh "X min fa" ogni minuto
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   const { data: activities = [], refetch } = useQuery({
-    queryKey: ['live-feed'],
+    queryKey: queryKeys.home.liveFeed,
     queryFn: async () => {
       const { data } = await supabase
         .from('orders')
@@ -110,7 +120,7 @@ const LiveActivityFeed = () => {
                   )}
                 </p>
               </div>
-              <span className="text-xs text-ink-400 shrink-0">{timeAgo(a.created_at)}</span>
+              <span className="text-xs text-ink-400 shrink-0">{now !== null ? timeAgo(a.created_at, now) : ''}</span>
             </li>
           );
         })}

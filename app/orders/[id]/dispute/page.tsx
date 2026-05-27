@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { COPY } from '@/lib/copy';
 
 const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'not_received',      label: 'Non l\'ho ricevuto',          hint: 'L\'ordine risulta consegnato ma non l\'hai ricevuto.' },
@@ -151,7 +152,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
           disabled={submitting || !reason || description.trim().length < 20}
           className="w-full bg-secondary-600 hover:bg-secondary-700 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-bold transition-colors"
         >
-          {submitting ? 'Invio…' : 'Apri reclamo'}
+          {submitting ? COPY.states.sending : 'Apri reclamo'}
         </button>
       </form>
     </div>

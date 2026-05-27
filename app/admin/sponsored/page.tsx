@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { COPY } from '@/lib/copy';
 
 /**
  * Admin: gestione sponsored listings.
@@ -69,8 +70,8 @@ export default function AdminSponsoredPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Aggiornato');
-      qc.invalidateQueries({ queryKey: ['admin', 'sponsored'] });
+      toast.success(COPY.toasts.updated);
+      qc.invalidateQueries({ queryKey: queryKeys.admin.sponsored() });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -81,8 +82,8 @@ export default function AdminSponsoredPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success('Eliminato');
-      qc.invalidateQueries({ queryKey: ['admin', 'sponsored'] });
+      toast.success(COPY.toasts.deleted);
+      qc.invalidateQueries({ queryKey: queryKeys.admin.sponsored() });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -162,7 +163,7 @@ export default function AdminSponsoredPage() {
           </thead>
           <tbody className="divide-y divide-cream-100">
             {isLoading ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-500">Caricamento…</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-500">{COPY.states.loading}</td></tr>
             ) : listings.length === 0 ? (
               <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-500">Nessuna campagna.</td></tr>
             ) : listings.map((l) => {

@@ -17,7 +17,12 @@ import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { StepIndicator } from '@/components/checkout/StepIndicator';
+import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
+import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
+import { B2BInvoiceForm } from '@/components/checkout/B2BInvoiceForm';
 import { friendlyError } from '@/lib/errors';
+import { queryKeys } from '@/lib/queries/keys';
 
 type AddressForm = {
   fullName: string;
@@ -28,20 +33,11 @@ type AddressForm = {
   notes: string;
 };
 
-const Step = ({ num, label, active, done }: { num: number; label: string; active?: boolean; done?: boolean }) => (
-  <div className="flex items-center gap-2">
-    <div
-      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-        done ? 'bg-olive-500 text-white' : active ? 'bg-primary-700 text-white' : 'bg-cream-200 text-ink-500'
-      }`}
-    >
-      {done ? '✓' : num}
-    </div>
-    <span className={`text-sm font-semibold ${active ? 'text-primary-800' : done ? 'text-olive-700' : 'text-ink-400'}`}>
-      {label}
-    </span>
-  </div>
-);
+const CHECKOUT_STEPS = [
+  { num: 1, label: 'Carrello' },
+  { num: 2, label: 'Indirizzo' },
+  { num: 3, label: 'Conferma' },
+] as const;
 
 const SHIPPING_PER_ORDER = 4.9;
 
@@ -62,7 +58,7 @@ export default function CheckoutPage() {
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
   // (formato nuovo). Per gli item vecchi senza sellerId, fa un lookup sui products.
   const { data: cartData, isLoading: loadingGroups } = useQuery({
-    queryKey: ['checkout-groups', cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')],
+    queryKey: queryKeys.checkout.groups(cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')),
     enabled: cart.length > 0,
     queryFn: async () => {
       const itemsMissingSeller = cart.filter((c) => !c.sellerId);
@@ -143,14 +139,14 @@ export default function CheckoutPage() {
 
   // Check stato auth all'avvio
   const { data: authUser } = useQuery({
-    queryKey: ['auth-user'],
+    queryKey: queryKeys.checkout.authUser,
     queryFn: async () => (await supabase.auth.getUser()).data.user,
     staleTime: 60_000,
   });
 
   // Indirizzi salvati
   const { data: savedAddresses = [] } = useQuery({
-    queryKey: ['user-addresses', authUser?.id],
+    queryKey: queryKeys.checkout.userAddresses(authUser?.id ?? ''),
     enabled: !!authUser?.id,
     queryFn: async () => {
       const { data } = await supabase
@@ -365,8 +361,8 @@ export default function CheckoutPage() {
         router.push('/orders');
       }
     },
-    onError: (err: any) => {
-      if (err?.message === 'REDIRECT_TO_SIGNIN') return; // gia' redirezionato
+    onError: (err: unknown) => {
+      if (err instanceof Error && err.message === 'REDIRECT_TO_SIGNIN') return;
       toast.error(friendlyError(err));
     },
   });
@@ -415,8 +411,8 @@ export default function CheckoutPage() {
       // su /orders?stripe=success o /cart?stripe=canceled (vedi /api/stripe/checkout).
       window.location.assign(url);
     },
-    onError: (err: any) => {
-      if (err?.message === 'REDIRECT_TO_SIGNIN') return;
+    onError: (err: unknown) => {
+      if (err instanceof Error && err.message === 'REDIRECT_TO_SIGNIN') return;
       toast.error(friendlyError(err));
     },
   });
@@ -455,99 +451,26 @@ export default function CheckoutPage() {
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl">
-      <div className="flex items-center justify-center gap-4 sm:gap-8 mb-8 flex-wrap">
-        <Step num={1} label="Carrello" done />
-        <div className="w-8 sm:w-16 h-px bg-cream-300" />
-        <Step num={2} label="Indirizzo" active />
-        <div className="w-8 sm:w-16 h-px bg-cream-300" />
-        <Step num={3} label="Conferma" />
-      </div>
+      <StepIndicator steps={CHECKOUT_STEPS as unknown as { num: number; label: string }[]} currentStep={2} />
 
       {!authUser && (
         <div className="bg-primary-50 border-2 border-primary-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-primary-900">
             <strong>🔑 Per completare l'ordine devi accedere</strong> — i tuoi articoli restano nel carrello.
           </p>
-          <Link
-            href="/sign-in?returnTo=/checkout"
-            className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap"
-          >
-            Accedi ora
-          </Link>
+          <Button href="/sign-in?returnTo=/checkout" size="sm">Accedi ora</Button>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* INDIRIZZO */}
-          <div className="bg-white border rounded-xl p-6 space-y-4">
-            <h2 className="text-xl font-bold flex items-center gap-2">📍 Indirizzo di consegna</h2>
-
-            {savedAddresses.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-ink-700 mb-1">
-                  Indirizzo salvato
-                </label>
-                <select
-                  onChange={(e) => applySavedAddress(e.target.value)}
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400"
-                >
-                  {savedAddresses.map((a: any) => (
-                    <option key={a.id} value={a.id}>
-                      📍 {a.label} — {a.address}, {a.city}
-                      {a.is_default ? ' (predefinito)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-ink-400 mt-1">
-                  Oppure modifica i campi sotto. <Link href="/profile/addresses" className="text-primary-700 hover:underline">Gestisci indirizzi</Link>
-                </p>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4" id="checkout-form">
-              <div>
-                <label className="block text-sm font-medium text-ink-700 mb-1">Nome e cognome</label>
-                <input type="text" name="fullName" value={form.fullName} onChange={handleChange}
-                  placeholder="Mario Rossi"
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-ink-700 mb-1">Indirizzo</label>
-                <input type="text" name="address" value={form.address} onChange={handleChange}
-                  placeholder="Via Roma 1"
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-ink-700 mb-1">Città</label>
-                  <input type="text" name="city" value={form.city} onChange={handleChange}
-                    className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-ink-700 mb-1">CAP</label>
-                  <input type="text" name="zip" value={form.zip} onChange={handleChange}
-                    className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-ink-700 mb-1">Telefono</label>
-                <input type="tel" name="phone" value={form.phone} onChange={handleChange}
-                  placeholder="3331234567"
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-                <p className="text-xs text-ink-400 mt-1">Il rider ti chiamerà se serve per la consegna</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-ink-700 mb-1">
-                  Note per il rider <span className="text-ink-400 font-normal">(opzionale)</span>
-                </label>
-                <textarea name="notes" value={form.notes} onChange={handleChange}
-                  rows={2}
-                  placeholder="Es. citofono Rossi, suonare al 2° piano…"
-                  className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none" />
-              </div>
-            </form>
-          </div>
+          <ShippingAddressForm
+            form={form}
+            savedAddresses={savedAddresses as any}
+            onChange={handleChange}
+            onSubmit={handleSubmit}
+            onApplySavedAddress={applySavedAddress}
+          />
 
           {/* RITIRO IN NEGOZIO */}
           <label className={`block border-2 rounded-xl p-4 cursor-pointer transition-all ${
@@ -574,132 +497,19 @@ export default function CheckoutPage() {
             </div>
           </label>
 
-          {/* B2B — fattura elettronica per aziende */}
-          <div className="bg-white border rounded-xl p-6">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={b2bActive}
-                onChange={(e) => setB2bActive(e.target.checked)}
-                className="mt-1 w-4 h-4 accent-primary-600"
-              />
-              <div className="flex-1">
-                <p className="font-bold text-ink-900">🏢 Sto comprando per la mia azienda — voglio la fattura elettronica</p>
-                <p className="text-sm text-ink-600 mt-0.5">
-                  Inviata via SDI/PEC entro 12 giorni. Detraibilità completa.
-                </p>
-              </div>
-            </label>
-            {b2bActive && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-cream-200">
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-ink-700 mb-1">Ragione sociale *</label>
-                  <input
-                    type="text"
-                    value={b2bForm.company_name}
-                    onChange={(e) => setB2bForm({ ...b2bForm, company_name: e.target.value })}
-                    placeholder="Acme S.r.l."
-                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm"
-                    required={b2bActive}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-ink-700 mb-1">Partita IVA *</label>
-                  <input
-                    type="text"
-                    value={b2bForm.vat_number}
-                    onChange={(e) => setB2bForm({ ...b2bForm, vat_number: e.target.value.toUpperCase() })}
-                    placeholder="IT12345678901"
-                    pattern="^(IT)?[0-9]{11}$"
-                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm font-mono"
-                    required={b2bActive}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-ink-700 mb-1">Codice SDI (7 caratteri)</label>
-                  <input
-                    type="text"
-                    value={b2bForm.sdi_code}
-                    onChange={(e) => setB2bForm({ ...b2bForm, sdi_code: e.target.value.toUpperCase() })}
-                    placeholder="0000000"
-                    maxLength={7}
-                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm font-mono"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-ink-700 mb-1">PEC (alternativa a SDI)</label>
-                  <input
-                    type="email"
-                    value={b2bForm.pec}
-                    onChange={(e) => setB2bForm({ ...b2bForm, pec: e.target.value })}
-                    placeholder="azienda@pec.it"
-                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm"
-                  />
-                </div>
-                <p className="sm:col-span-2 text-xs text-ink-500">
-                  Compila SDI <strong>o</strong> PEC. Se nessuno, la fattura va al sistema di interscambio centrale.
-                </p>
-              </div>
-            )}
-          </div>
+          <B2BInvoiceForm
+            active={b2bActive}
+            onToggle={setB2bActive}
+            form={b2bForm}
+            onChange={setB2bForm}
+          />
 
-          {/* PAGAMENTO */}
-          <div className="bg-white border rounded-xl p-6">
-            <h2 className="text-xl font-bold flex items-center gap-2 mb-4">💳 Metodo di pagamento</h2>
-            <div className="space-y-3">
-              {stripeAvailable && (
-                <label
-                  className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
-                    paymentMethod === 'card'
-                      ? 'border-primary-400 bg-primary-50'
-                      : 'border-cream-300 bg-white hover:border-primary-200'
-                  } ${groups.length > 1 ? 'opacity-60 cursor-not-allowed' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="paymentMethod"
-                    value="card"
-                    checked={paymentMethod === 'card'}
-                    disabled={groups.length > 1}
-                    onChange={() => setPaymentMethod('card')}
-                    className="mt-1"
-                  />
-                  <div className="flex-1">
-                    <p className="font-bold text-ink-900">💳 Carta di credito / debito</p>
-                    <p className="text-sm text-ink-600">
-                      Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
-                    </p>
-                    {groups.length > 1 && (
-                      <p className="text-xs text-accent-700 mt-1">
-                        ⚠ Il pagamento con carta richiede ordini da un solo negozio per volta.
-                      </p>
-                    )}
-                  </div>
-                </label>
-              )}
-
-              <label
-                className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
-                  paymentMethod === 'cod'
-                    ? 'border-accent-400 bg-accent-50'
-                    : 'border-cream-300 bg-white hover:border-accent-200'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="paymentMethod"
-                  value="cod"
-                  checked={paymentMethod === 'cod'}
-                  onChange={() => setPaymentMethod('cod')}
-                  className="mt-1"
-                />
-                <div className="flex-1">
-                  <p className="font-bold text-ink-900">💵 Contanti alla consegna</p>
-                  <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
-                </div>
-              </label>
-            </div>
-          </div>
+          <PaymentMethodSelector
+            value={paymentMethod}
+            onChange={setPaymentMethod}
+            stripeAvailable={stripeAvailable}
+            multiSeller={groups.length > 1}
+          />
 
           {/* RIEPILOGO PER NEGOZIO */}
           {groups.length > 1 && (
@@ -794,13 +604,7 @@ export default function CheckoutPage() {
                       placeholder="Codice sconto (es. BENVENUTO10)"
                       className="flex-1 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
                     />
-                    <button
-                      type="button"
-                      onClick={applyCoupon}
-                      className="bg-primary-700 hover:bg-primary-800 text-white px-3 py-2 rounded text-sm font-semibold"
-                    >
-                      Applica
-                    </button>
+                    <Button type="button" onClick={applyCoupon} size="sm">Applica</Button>
                   </div>
                   {couponError && <p className="text-xs text-rose-600">{couponError}</p>}
                 </div>

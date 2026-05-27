@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 /**
  * Somma dei messaggi non letti su tutte le conversazioni dell'utente.
@@ -25,7 +26,7 @@ export const useMessagesUnread = () => {
   }, []);
 
   const { data: unread = 0, refetch } = useQuery({
-    queryKey: ['messages-unread', userId],
+    queryKey: queryKeys.messages.unreadByUser(userId ?? ''),
     enabled: !!userId,
     refetchInterval: 60_000,
     queryFn: async () => {

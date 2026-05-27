@@ -9,6 +9,7 @@ import { Search, X, Store, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Suggestion =
   | { kind: 'product'; id: string; name: string; price: number; image: string | null; store: string | null }
@@ -43,7 +44,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
   }, [q]);
 
   const { data: suggestions = [] } = useQuery({
-    queryKey: ['search-suggest', debounced],
+    queryKey: queryKeys.search.suggest(debounced),
     enabled: debounced.length >= 2,
     queryFn: async (): Promise<Suggestion[]> => {
       const term = debounced;
@@ -55,7 +56,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         supabase.rpc('search_products_smart', { q: term, lim: 6 }),
         supabase
           .from('profiles')
-          .select('id, store_name, store_logo_url')
+          .select('id, store_name, store_logo')
           .eq('role', 'seller')
           .eq('is_approved', true)
           .ilike('store_name', pattern)
@@ -79,7 +80,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         kind: 'store' as const,
         id: s.id,
         name: s.store_name ?? 'Negozio',
-        logo: s.store_logo_url ?? null,
+        logo: s.store_logo ?? null,
       }));
       const cats: Suggestion[] = (categoriesRes.data ?? []).map((c: any) => ({
         kind: 'category' as const,

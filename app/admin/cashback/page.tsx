@@ -133,12 +133,7 @@ export default function AdminCashbackPage() {
           <Coins size={22} className="text-accent-500" strokeWidth={2.2} />
           Campagne Cashback
         </h1>
-        <button
-          onClick={() => setEditing(emptyForm())}
-          className="inline-flex items-center gap-1.5 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-bold text-sm"
-        >
-          <Plus size={16} strokeWidth={2.4} /> Nuova campagna
-        </button>
+        <Button onClick={() => setEditing(emptyForm())} size="sm" icon={Plus}>Nuova campagna</Button>
       </div>
 
       <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">

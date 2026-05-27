@@ -60,7 +60,7 @@ export default function ListsPage() {
   });
 
   const { data: publicLists = [] } = useQuery({
-    queryKey: ['lists-public'],
+    queryKey: queryKeys.lists.publicV2,
     queryFn: async (): Promise<List[]> => {
       const { data } = await supabase
         .from('product_lists')
@@ -183,12 +183,7 @@ export default function ListsPage() {
         <section className="bg-cream-50 border border-cream-300 rounded-2xl p-8 text-center">
           <ListChecks size={32} className="mx-auto text-ink-300 mb-3" strokeWidth={1.5} />
           <p className="text-ink-700 mb-3">Non hai ancora liste. Inizia a crearne una.</p>
-          <button
-            onClick={() => setShowNew(true)}
-            className="inline-flex items-center gap-1.5 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-bold text-sm"
-          >
-            <Plus size={14} strokeWidth={2.4} /> Crea la prima lista
-          </button>
+          <Button onClick={() => setShowNew(true)} size="sm" icon={Plus}>Crea la prima lista</Button>
         </section>
       )}
 

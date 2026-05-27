@@ -5,10 +5,11 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { queryKeys } from '@/lib/queries/keys';
 
 export default function RiderHistoryPage() {
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: ['rider-history'],
+    queryKey: queryKeys.rider.history,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Review = {
@@ -211,14 +212,13 @@ function ReviewCard({ review }: { review: Review }) {
             >
               Annulla
             </button>
-            <button
+            <Button
               type="button"
               onClick={sendReply}
-              disabled={sending || !reply.trim()}
-              className="px-4 py-1.5 rounded text-sm bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white font-semibold"
-            >
-              {sending ? 'Invio…' : 'Pubblica risposta'}
-            </button>
+              loading={sending}
+              disabled={!reply.trim()}
+              size="sm"
+            >Pubblica risposta</Button>
           </div>
         </div>
       )}

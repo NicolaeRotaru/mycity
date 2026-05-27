@@ -78,7 +78,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
     onSuccess: (added) => {
       toast.success(added ? 'Aggiunto alla lista' : 'Rimosso dalla lista');
       qc.invalidateQueries({ queryKey: queryKeys.lists.containing(productId) });
-      qc.invalidateQueries({ queryKey: ['list-items'] });
+      qc.invalidateQueries({ queryKey: [...queryKeys.lists.all, 'items'] });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });

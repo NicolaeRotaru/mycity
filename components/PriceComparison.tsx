@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { TrendingDown, TrendingUp, Minus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Props = {
   productId: string;
@@ -18,7 +19,7 @@ type Props = {
  */
 export default function PriceComparison({ productId, categoryId, currentPrice }: Props) {
   const { data: avg } = useQuery({
-    queryKey: ['category-avg-price', categoryId],
+    queryKey: queryKeys.categories.avgPrice(categoryId ?? ''),
     enabled: !!categoryId,
     queryFn: async () => {
       if (!categoryId) return null;

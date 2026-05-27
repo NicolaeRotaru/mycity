@@ -2,6 +2,7 @@
 
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { COPY } from '@/lib/copy';
 
 /**
  * Loading state riusabile — skeleton/spinner/inline.
@@ -21,7 +22,7 @@ type Props = {
   className?: string;
 };
 
-export function LoadingState({ variant = 'spinner', message = 'Caricamento…', rows = 3, className }: Props) {
+export function LoadingState({ variant = 'spinner', message = COPY.states.loading, rows = 3, className }: Props) {
   if (variant === 'inline') {
     return (
       <span role="status" aria-live="polite" className={cn('inline-flex items-center gap-2 text-sm text-ink-500', className)}>

@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
+import { queryKeys } from '@/lib/queries/keys';
 import { SkeletonGrid } from './SkeletonCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 
@@ -24,7 +25,7 @@ interface Props {
 
 const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance' }: Props) => {
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ['products', { categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort }],
+    queryKey: queryKeys.products.grid({ categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort }),
     queryFn: async () => {
       let q = supabase
         .from('products')
@@ -60,7 +61,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
 
   // Carica rating aggregato per i prodotti visibili (per filtro/ordinamento per rating)
   const { data: ratings = {} } = useQuery({
-    queryKey: ['products-ratings', products.map((p: any) => p.id).sort().join(',')],
+    queryKey: queryKeys.products.ratings(products.map((p: any) => p.id).sort().join(',')),
     enabled: (minRating !== undefined && minRating > 0) || sort === 'rating',
     queryFn: async () => {
       if (products.length === 0) return {};

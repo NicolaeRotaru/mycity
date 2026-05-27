@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Sparkles, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Check = {
   id: string;
@@ -27,13 +28,13 @@ export default function SellerHealthScore() {
   }, []);
 
   const { data: checks = [], isLoading } = useQuery({
-    queryKey: ['seller-health', userId],
+    queryKey: queryKeys.seller.healthV2(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<Check[]> => {
       const { data: profile } = await supabase
         .from('profiles')
         .select(`
-          store_name, store_description, store_logo_url, store_city,
+          store_name, store_description, store_logo, store_city,
           store_lat, store_lng, contact_phone, contact_email,
           billing_iban, business_pec, store_address
         `)
@@ -61,7 +62,7 @@ export default function SellerHealthScore() {
           id: 'store-logo',
           label: 'Logo del negozio caricato',
           points: 10,
-          passed: !!profile?.store_logo_url,
+          passed: !!profile?.store_logo,
           fix: { href: '/seller/profile', label: 'Carica logo' },
         },
         {

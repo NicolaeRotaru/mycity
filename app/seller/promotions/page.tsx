@@ -8,6 +8,7 @@ import { Sparkles, ArrowLeft, Plus, Calendar, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -129,13 +130,7 @@ export default function SellerPromotionsPage() {
           </h1>
           <p className="text-sm text-ink-500 mt-1">Crea sconti che spingono le vendite. Si attivano automaticamente.</p>
         </div>
-        <button
-          onClick={() => setShowWizard(true)}
-          className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold transition-colors shadow-warm"
-        >
-          <Plus size={18} />
-          Nuova promo (30 sec)
-        </button>
+        <Button onClick={() => setShowWizard(true)} icon={Plus}>Nuova promo (30 sec)</Button>
       </div>
 
       {/* Promo attive */}
@@ -271,13 +266,14 @@ export default function SellerPromotionsPage() {
               <p>«{title || `Sconto ${percent}%`}» — sconto del <strong>{percent}%</strong> su {scope === 'store' ? 'tutti i tuoi prodotti' : 'la categoria selezionata'} fino al {endDateFor(duration).toLocaleDateString('it-IT')}.</p>
             </div>
 
-            <button
+            <Button
               onClick={() => create.mutate()}
-              disabled={create.isPending}
-              className="w-full bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-bold transition-colors"
+              loading={create.isPending}
+              fullWidth
+              size="lg"
             >
-              {create.isPending ? 'Creazione…' : 'Crea promo'}
-            </button>
+              Crea promo
+            </Button>
         </div>
       </Modal>
     </div>

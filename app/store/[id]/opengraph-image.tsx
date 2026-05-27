@@ -14,7 +14,7 @@ async function fetchStore(id: string) {
     const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data } = await supabase
       .from('profiles')
-      .select('store_name, store_description, store_logo_url, store_city')
+      .select('store_name, store_description, store_logo, store_city')
       .eq('id', id)
       .eq('role', 'seller')
       .single();
@@ -29,7 +29,7 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
   const name = s?.store_name ?? 'Negozio su MyCity';
   const city = s?.store_city ?? 'Piacenza';
   const desc = s?.store_description ?? 'Acquista direttamente dal negozio della tua città.';
-  const logo = s?.store_logo_url ?? null;
+  const logo = s?.store_logo ?? null;
 
   return new ImageResponse(
     (

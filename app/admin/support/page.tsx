@@ -7,6 +7,7 @@ import { Inbox, Mail, CheckCircle2, AlertOctagon, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -64,7 +65,7 @@ export default function AdminSupportPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'support'] });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.support() });
       setOpenId(null);
       setNotes('');
       toast.success('Stato aggiornato');
@@ -144,12 +145,10 @@ export default function AdminSupportPage() {
                 )}
 
                 <div className="mt-3 flex gap-2 flex-wrap">
-                  <button
+                  <Button
                     onClick={() => { setOpenId(m.id); setNotes(m.admin_notes ?? ''); }}
-                    className="bg-primary-700 hover:bg-primary-800 text-white text-xs font-semibold px-3 py-2 rounded-lg"
-                  >
-                    Gestisci
-                  </button>
+                    size="sm"
+                  >Gestisci</Button>
                   <a
                     href={`mailto:${m.email}?subject=Re: ${encodeURIComponent(m.subject)}`}
                     className="text-xs font-semibold text-primary-700 hover:underline py-2"

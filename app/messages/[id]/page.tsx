@@ -64,7 +64,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
   }, [params.id, router]);
 
   const { data: conversation } = useQuery({
-    queryKey: ['conversation', params.id],
+    queryKey: queryKeys.messages.conversationByParam(params.id),
     enabled: !!userId,
     queryFn: async (): Promise<Conversation | null> => {
       const { data, error } = await supabase
@@ -134,7 +134,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ conversationId: params.id }),
     }).then(() => {
-      qc.invalidateQueries({ queryKey: ['conversations'] });
+      qc.invalidateQueries({ queryKey: queryKeys.messages.conversations });
     }).catch(() => { /* noop */ });
   }, [userId, messages.length, params.id, qc]);
 

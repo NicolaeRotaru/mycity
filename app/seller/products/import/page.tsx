@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 
 type ParsedRow = {
   name: string;
@@ -260,13 +261,15 @@ export default function BulkImportProductsPage() {
             </table>
           </div>
 
-          <button
-            onClick={importAll}
-            disabled={importing || validCount === 0}
-            className="w-full mt-4 bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-bold transition-colors"
-          >
-            {importing ? 'Importazione…' : `Importa ${validCount} prodotti`}
-          </button>
+          <div className="mt-4">
+            <Button
+              onClick={importAll}
+              loading={importing}
+              disabled={validCount === 0}
+              fullWidth
+              size="lg"
+            >Importa {validCount} prodotti</Button>
+          </div>
         </section>
       )}
     </div>

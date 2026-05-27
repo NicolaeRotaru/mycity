@@ -140,12 +140,7 @@ export default function AdminEventsPage() {
           <CalendarDays size={22} className="text-secondary-600" strokeWidth={2.2} />
           Eventi MyCity
         </h1>
-        <button
-          onClick={() => setEditing(emptyForm())}
-          className="inline-flex items-center gap-1.5 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-        >
-          <Plus size={16} strokeWidth={2.4} /> Nuovo evento
-        </button>
+        <Button onClick={() => setEditing(emptyForm())} size="sm" icon={Plus}>Nuovo evento</Button>
       </div>
 
       <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">

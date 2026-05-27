@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { formatDate } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -386,12 +387,7 @@ function AdminUsersPageInner() {
                   <td className="p-3">
                     <div className="flex gap-1 flex-wrap">
                       {isPending && (
-                        <button
-                          onClick={() => setDetailId(p.id)}
-                          className="text-xs bg-primary-700 hover:bg-primary-800 text-white px-3 py-1 rounded font-semibold"
-                        >
-                          Esamina
-                        </button>
+                        <Button onClick={() => setDetailId(p.id)} size="sm">Esamina</Button>
                       )}
                       {isApproved && (
                         <button

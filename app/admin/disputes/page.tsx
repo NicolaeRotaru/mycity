@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { Modal } from '@/components/ui/Modal';
+import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -178,12 +179,10 @@ export default function AdminDisputesPage() {
 
                 {(d.status === 'open' || d.status === 'under_review') && (
                   <div className="mt-3 flex gap-2">
-                    <button
+                    <Button
                       onClick={() => { setOpenId(d.id); setResolution(''); setRefundEur(''); }}
-                      className="bg-primary-700 hover:bg-primary-800 text-white text-xs font-semibold px-3 py-2 rounded-lg"
-                    >
-                      Decidi
-                    </button>
+                      size="sm"
+                    >Decidi</Button>
                     <Link
                       href={`/messages`}
                       className="text-xs font-semibold text-primary-700 hover:underline py-2"
@@ -240,17 +239,17 @@ export default function AdminDisputesPage() {
               >
                 <Check size={14} /> A favore buyer
               </button>
-              <button
+              <Button
                 onClick={() => decide.mutate({
                   id: openId,
                   status: 'resolved_seller',
                   notes: resolution.trim(),
                 })}
-                disabled={decide.isPending || resolution.trim().length < 10}
-                className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white text-sm font-semibold px-3 py-2 rounded-lg flex items-center justify-center gap-1"
-              >
-                <Check size={14} /> A favore seller
-              </button>
+                loading={decide.isPending}
+                disabled={resolution.trim().length < 10}
+                size="sm"
+                icon={Check}
+              >A favore seller</Button>
               <button
                 onClick={() => decide.mutate({
                   id: openId,

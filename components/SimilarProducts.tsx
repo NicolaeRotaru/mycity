@@ -7,6 +7,7 @@ import { Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { queryKeys } from '@/lib/queries/keys';
 
 type Item = {
   id: string;
@@ -32,7 +33,7 @@ type Props = {
  */
 export default function SimilarProducts({ productId, categoryId, sellerId }: Props) {
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['similar-products', productId, categoryId, sellerId],
+    queryKey: queryKeys.products.similar(productId, categoryId, sellerId),
     queryFn: async (): Promise<Item[]> => {
       const collected = new Map<string, Item>();
 

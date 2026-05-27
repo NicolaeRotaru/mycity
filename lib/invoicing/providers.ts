@@ -67,8 +67,8 @@ class FattureInCloudProvider implements InvoiceProvider {
         return { ok: false, error: data?.error?.message ?? `HTTP ${r.status}` };
       }
       return { ok: true, sdiId: String(data?.data?.id ?? ''), status: 'SENT' };
-    } catch (err: any) {
-      return { ok: false, error: err?.message ?? 'network' };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'network' };
     }
   }
 }

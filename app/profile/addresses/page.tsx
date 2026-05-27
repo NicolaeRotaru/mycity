@@ -9,6 +9,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { COPY } from '@/lib/copy';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Addr = {
@@ -118,12 +119,10 @@ export default function AddressesPage() {
           <h1 className="text-2xl font-bold text-ink-900 mt-1">I tuoi indirizzi</h1>
         </div>
         {!showForm && (
-          <button
+          <Button
             onClick={() => { setEditing(null); setForm(empty); setShowForm(true); }}
-            className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-          >
-            + Nuovo
-          </button>
+            size="sm"
+          >+ Nuovo</Button>
         )}
       </div>
 
@@ -201,7 +200,7 @@ export default function AddressesPage() {
                 {a.notes && <p className="text-xs text-ink-400 italic mt-1">{a.notes}</p>}
               </div>
               <div className="flex flex-col gap-1 shrink-0">
-                <button onClick={() => startEdit(a)} className="text-xs text-primary-700 hover:underline">Modifica</button>
+                <button onClick={() => startEdit(a)} className="text-xs text-primary-700 hover:underline">{COPY.actions.edit}</button>
                 <button
                   onClick={async () => {
                     const ok = await confirmDialog({

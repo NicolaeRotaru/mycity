@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
 
 /**
@@ -135,12 +136,7 @@ function ResetPasswordInner() {
             Il link di reset password potrebbe essere stato usato o essere scaduto.
             Richiedine uno nuovo dalla pagina di accesso.
           </p>
-          <Link
-            href="/sign-in"
-            className="inline-block bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-lg font-semibold"
-          >
-            Vai al login
-          </Link>
+          <Button href="/sign-in">Vai al login</Button>
         </div>
       </Card>
     );
