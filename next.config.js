@@ -1,37 +1,11 @@
 /** @type {import('next').NextConfig} */
 
-const supabaseHost = (() => {
-  try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    return url ? new URL(url).host : '*.supabase.co';
-  } catch {
-    return '*.supabase.co';
-  }
-})();
-
-// CSP impostata in modalità "permissiva ma sicura". Permettiamo:
-//  - immagini da Supabase storage, placeholder, avatar
-//  - tile OpenStreetMap (Leaflet)
-//  - connessione a Supabase REST + Realtime + Nominatim (geocoding)
-//  - 'unsafe-inline' su style perché Tailwind + react-hook-form ne hanno bisogno
-//  - script: 'self' + 'unsafe-inline' per Next runtime; in produzione si può
-//    stringere ulteriormente passando alla nonce-based CSP.
-const cspDirectives = [
-  "default-src 'self'",
-  // script-src include Cloudflare Turnstile (CAPTCHA), Stripe.js, GA4, PostHog, Sentry
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io",
-  "style-src 'self' 'unsafe-inline' https://unpkg.com",
-  `img-src 'self' data: blob: https://${supabaseHost} https://placehold.co https://api.dicebear.com https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://unpkg.com https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,
-  "font-src 'self' data:",
-  `connect-src 'self' https://${supabaseHost} wss://${supabaseHost} https://nominatim.openstreetmap.org https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`,
-  // frame-src per il widget Turnstile e Stripe (3D Secure, Connect onboarding)
-  "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://connect.stripe.com",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-  "upgrade-insecure-requests",
-].join('; ');
+// CSP NON e' qui — viene generata nel middleware con nonce-per-request
+// (vedi middleware.ts buildCsp + generateNonce). Permette di passare da
+// 'unsafe-inline' su script-src a nonce + 'strict-dynamic', annullando
+// la superficie XSS di injection di script inline non firmati.
+//
+// Restano qui solo i security header statici (non variano per request).
 
 const securityHeaders = [
   { key: 'X-Frame-Options', value: 'DENY' },
@@ -46,7 +20,6 @@ const securityHeaders = [
     key: 'Strict-Transport-Security',
     value: 'max-age=63072000; includeSubDomains; preload',
   },
-  { key: 'Content-Security-Policy', value: cspDirectives },
 ];
 
 const nextConfig = {
