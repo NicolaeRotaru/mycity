@@ -86,6 +86,8 @@ function SharedCartInner() {
       setProducts((data ?? []) as unknown as Product[]);
       setLoading(false);
     })();
+    // parsed e' derivato da cartParam — re-parsing in deps userebbe nuovo ref ogni render
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cartParam]);
 
   if (loading) return <LoadingState message="Carico la lista..." />;
