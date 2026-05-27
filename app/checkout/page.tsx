@@ -373,9 +373,9 @@ export default function CheckoutPage() {
   });
 
   // Mutation: pagamento con carta via Stripe Checkout.
-  // Limitazione MVP: supporta solo carrelli single-seller. Multi-seller
-  // con carta richiederebbe creare N sessioni Stripe e gestire il flusso
-  // a step. Per ora multi-seller forza COD (radio "Carta" disabilitata).
+  // Multi-seller supportato via /api/stripe/checkout che insert un
+  // pending_checkouts + crea una sola charge sul marketplace; il webhook
+  // crea N ordini (uno per seller) con stessa transfer_group.
   const payWithStripe = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -383,26 +383,45 @@ export default function CheckoutPage() {
         router.push('/sign-in?returnTo=/checkout');
         throw new Error('REDIRECT_TO_SIGNIN');
       }
-      if (groups.length !== 1) {
-        throw new Error('Il pagamento con carta supporta un solo negozio per volta. Rimuovi gli articoli degli altri negozi o usa contanti.');
+      if (groups.length === 0) {
+        throw new Error('Il carrello è vuoto');
       }
-      const g = groups[0];
-      const shipping = appliedCoupon?.freeShipping ? 0 : shippingFor(g);
+
+      // Costruisci payload groups con shipping per gruppo (pre-coupon).
+      const apiGroups = groups.map((g) => ({
+        sellerId: g.sellerId,
+        items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity })),
+        shippingCents: appliedCoupon?.freeShipping ? 0 : Math.round(shippingFor(g) * 100),
+      }));
+
+      const couponDiscountCents = Math.round((appliedCoupon?.discount ?? 0) * 100);
+      const pickupDiscountCents = Math.round(pickupDiscount * 100);
 
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          sellerId: g.sellerId,
-          items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity })),
-          shippingCents: Math.round(shipping * 100),
-          metadata: {
-            delivery_address: form.address,
-            delivery_city: form.city,
-            delivery_zip: form.zip,
-            delivery_phone: form.phone,
-            delivery_notes: form.notes ?? '',
+          groups: apiGroups,
+          delivery: {
+            fullName: form.fullName,
+            address: form.address,
+            city: form.city,
+            zip: form.zip,
+            phone: form.phone,
+            notes: form.notes || null,
+            lat: form.lat,
+            lng: form.lng,
           },
+          couponCode: appliedCoupon?.coupon.code ?? null,
+          couponDiscountCents,
+          pickupDiscountCents,
+          pickupInStore,
+          b2b: b2bActive && b2bForm.company_name && b2bForm.vat_number ? {
+            company_name: b2bForm.company_name.trim(),
+            vat_number: b2bForm.vat_number.trim().toUpperCase(),
+            sdi_code: b2bForm.sdi_code.trim().toUpperCase() || null,
+            pec: b2bForm.pec.trim().toLowerCase() || null,
+          } : null,
         }),
       });
       const data = await res.json();
@@ -519,7 +538,10 @@ export default function CheckoutPage() {
           {/* RIEPILOGO PER NEGOZIO */}
           {groups.length > 1 && (
             <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-800">
-              <strong>Il tuo carrello include prodotti da {groups.length} negozi diversi.</strong> Verranno creati {groups.length} ordini separati, uno per ciascun negozio. Ogni rider consegna il proprio ordine.
+              <strong>Il tuo carrello include prodotti da {groups.length} negozi diversi.</strong>{' '}
+              {paymentMethod === 'card'
+                ? `Un unico pagamento, ${groups.length} ordini separati: ogni negozio prepara e fa consegnare il proprio.`
+                : `Verranno creati ${groups.length} ordini separati, uno per ciascun negozio. Ogni rider consegna il proprio ordine.`}
             </div>
           )}
 

@@ -35,7 +35,7 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, seller_id, payout_status, seller_payout_cents, stripe_payment_intent, delivery_status')
+    .select('id, seller_id, payout_status, seller_payout_cents, stripe_payment_intent, stripe_charge_id, stripe_transfer_group, delivery_status')
     .eq('id', body.orderId)
     .single();
 
@@ -43,7 +43,7 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   if (order.delivery_status !== 'DELIVERED') {
     return ApiErrors.conflict('Ordine non ancora consegnato');
   }
-  if (order.payout_status !== 'HELD') {
+  if (order.payout_status !== 'HELD' && order.payout_status !== 'PENDING_SELLER_ONBOARDING') {
     return ApiErrors.conflict(`Payout in stato ${order.payout_status}, no-op`);
   }
   if (!order.seller_payout_cents || order.seller_payout_cents <= 0) {
@@ -57,16 +57,27 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
     .single();
 
   if (!seller?.stripe_account_id || !seller.stripe_payouts_enabled) {
+    // Seller paid ma Connect non completato: trattieni i fondi sulla
+    // piattaforma e marca lo stato così un cron può riprovare al
+    // prossimo account.updated webhook.
+    await admin
+      .from('orders')
+      .update({ payout_status: 'PENDING_SELLER_ONBOARDING' })
+      .eq('id', order.id);
     return ApiErrors.conflict("Seller non ha completato l'onboarding Stripe Connect");
   }
 
   try {
     const stripe = getStripe();
+    // source_transaction = charge_id: garantisce che il transfer sia
+    // finanziato da quella specifica charge (cruciale per SCT multi-seller
+    // e per evitare failure quando il balance piattaforma è basso).
     const transfer = await stripe.transfers.create({
       amount: order.seller_payout_cents,
       currency: 'eur',
       destination: seller.stripe_account_id,
-      transfer_group: `order_${order.id}`,
+      ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
+      transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
       metadata: {
         order_id: order.id,
         seller_id: order.seller_id,
