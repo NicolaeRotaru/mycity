@@ -171,7 +171,7 @@ export default function SellerHealthScore() {
         />
       </div>
 
-      {/* TODO actions */}
+      {/* Top 3 azioni da fare per alzare lo score (sorted by impact) */}
       {todo.length > 0 && (
         <div>
           <p className="text-sm font-semibold text-ink-900 mb-2">

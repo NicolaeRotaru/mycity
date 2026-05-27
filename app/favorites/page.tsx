@@ -26,11 +26,21 @@ export default function FavoritesPage() {
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+      type FavRow = {
+        product_id: string;
+        products: {
+          id: string; name: string; description: string | null;
+          price: string | number; images: string[] | null; stock: number | null;
+          created_at: string; seller_id: string; status: string;
+          profiles: { store_name: string | null; is_approved: boolean } | null;
+        } | null;
+      };
       // Filtra i preferiti il cui negozio è sospeso/non approvato o il
       // prodotto è stato venduto/disabilitato.
-      return (data ?? [])
-        .map((f: any) => f.products)
-        .filter((p: any) => p && p.profiles?.is_approved && p.status === 'available');
+      return ((data ?? []) as unknown as FavRow[])
+        .map((f) => f.products)
+        .filter((p): p is NonNullable<FavRow['products']> =>
+          !!p && !!p.profiles?.is_approved && p.status === 'available');
     },
   });
 
@@ -56,7 +66,7 @@ export default function FavoritesPage() {
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <h1 className="text-2xl font-bold text-ink-900 mb-6">I tuoi preferiti ({products.length})</h1>
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-        {products.map((p: any) => (
+        {products.map((p) => (
           <ProductCard
             key={p.id}
             id={p.id}
@@ -64,7 +74,7 @@ export default function FavoritesPage() {
             description={p.description ?? ''}
             price={Number(p.price)}
             images={Array.isArray(p.images) ? p.images : []}
-            stock={p.stock}
+            stock={p.stock ?? undefined}
             createdAt={p.created_at}
             storeName={p.profiles?.store_name ?? undefined}
             sellerId={p.seller_id ?? undefined}

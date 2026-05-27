@@ -68,7 +68,11 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
           .limit(3),
       ]);
 
-      const products: Suggestion[] = (productsRes.data ?? []).map((p: any) => ({
+      type ProdSuggest = { id: string; name: string; price: number | string; images: string[] | null; store_name: string | null };
+      type StoreSuggest = { id: string; store_name: string | null; store_logo: string | null };
+      type CatSuggest = { slug: string; name: string };
+
+      const products: Suggestion[] = ((productsRes.data ?? []) as ProdSuggest[]).map((p) => ({
         kind: 'product' as const,
         id: p.id,
         name: p.name,
@@ -76,13 +80,13 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         image: Array.isArray(p.images) && p.images[0] ? p.images[0] : null,
         store: p.store_name ?? null,
       }));
-      const stores: Suggestion[] = (storesRes.data ?? []).map((s: any) => ({
+      const stores: Suggestion[] = ((storesRes.data ?? []) as StoreSuggest[]).map((s) => ({
         kind: 'store' as const,
         id: s.id,
         name: s.store_name ?? 'Negozio',
         logo: s.store_logo ?? null,
       }));
-      const cats: Suggestion[] = (categoriesRes.data ?? []).map((c: any) => ({
+      const cats: Suggestion[] = ((categoriesRes.data ?? []) as CatSuggest[]).map((c) => ({
         kind: 'category' as const,
         slug: c.slug,
         name: c.name,
