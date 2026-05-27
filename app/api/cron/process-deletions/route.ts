@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
@@ -71,7 +72,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   const { data: expired, error: rpcErr } = await admin.rpc('process_expired_deletions');
   if (rpcErr) {
     logger.error('[cron-deletions] RPC failed', rpcErr);
-    return NextResponse.json({ error: rpcErr.message }, { status: 500 });
+    return ApiErrors.internal(rpcErr.message);
   }
 
   const userIds: string[] = (expired ?? []).map((r: { user_id: string }) => r.user_id);

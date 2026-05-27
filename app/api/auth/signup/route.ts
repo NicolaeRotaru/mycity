@@ -3,6 +3,7 @@ import { auth } from '@/lib/supabase/client';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { env } from '@/lib/env';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -13,17 +14,14 @@ export async function POST(request: Request) {
   const ip = getClientIp(request);
   const rl = rateLimit({ key: `signup:${ip}`, max: 5, windowMs: 60 * 60_000 });
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: 'Troppe registrazioni da questo indirizzo. Riprova più tardi.' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
-    );
+    return ApiErrors.rateLimited(rl.retryAfterSec, 'Troppe registrazioni da questo indirizzo. Riprova più tardi.');
   }
 
   let body: { email?: unknown; password?: unknown; captchaToken?: unknown };
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 });
+    return ApiErrors.invalidRequest('Body JSON non valido');
   }
 
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -31,19 +29,16 @@ export async function POST(request: Request) {
   const captchaToken = typeof body.captchaToken === 'string' ? body.captchaToken : '';
 
   if (!EMAIL_RE.test(email) || email.length > 254) {
-    return NextResponse.json({ error: 'Email non valida' }, { status: 400 });
+    return ApiErrors.invalidRequest('Email non valida');
   }
   if (password.length < 8 || password.length > 200) {
-    return NextResponse.json(
-      { error: 'La password deve avere almeno 8 caratteri' },
-      { status: 400 },
-    );
+    return ApiErrors.invalidRequest('La password deve avere almeno 8 caratteri');
   }
 
   // CAPTCHA: se la chiave non è configurata la verifica è skipped (dev).
   const cap = await verifyTurnstileToken(captchaToken, ip);
   if (!cap.ok) {
-    return NextResponse.json({ error: cap.reason }, { status: 400 });
+    return ApiErrors.invalidRequest(cap.reason);
   }
 
   try {
@@ -53,13 +48,10 @@ export async function POST(request: Request) {
       emailRedirectTo,
     });
     if (error) {
-      return NextResponse.json(
-        { error: 'Registrazione non riuscita. Controlla i dati e riprova.' },
-        { status: 400 },
-      );
+      return ApiErrors.invalidRequest('Registrazione non riuscita. Controlla i dati e riprova.');
     }
     return NextResponse.json(data, { status: 201 });
   } catch {
-    return NextResponse.json({ error: 'Errore durante la registrazione' }, { status: 500 });
+    return ApiErrors.internal('Errore durante la registrazione');
   }
 }

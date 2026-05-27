@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/supabase/client';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { verifyTurnstileToken } from '@/lib/captcha';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -12,17 +13,14 @@ export async function POST(request: Request) {
   const ip = getClientIp(request);
   const rl = rateLimit({ key: `signin:${ip}`, max: 10, windowMs: 5 * 60_000 });
   if (!rl.allowed) {
-    return NextResponse.json(
-      { error: 'Troppi tentativi di accesso. Riprova tra qualche minuto.' },
-      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } },
-    );
+    return ApiErrors.rateLimited(rl.retryAfterSec, 'Troppi tentativi di accesso. Riprova tra qualche minuto.');
   }
 
   let body: { email?: unknown; password?: unknown; captchaToken?: unknown };
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: 'Body JSON non valido' }, { status: 400 });
+    return ApiErrors.invalidRequest('Body JSON non valido');
   }
 
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
@@ -30,21 +28,21 @@ export async function POST(request: Request) {
   const captchaToken = typeof body.captchaToken === 'string' ? body.captchaToken : '';
 
   if (!EMAIL_RE.test(email) || email.length > 254) {
-    return NextResponse.json({ error: 'Email non valida' }, { status: 400 });
+    return ApiErrors.invalidRequest('Email non valida');
   }
   if (password.length < 6 || password.length > 200) {
-    return NextResponse.json({ error: 'Password non valida' }, { status: 400 });
+    return ApiErrors.invalidRequest('Password non valida');
   }
 
   const cap = await verifyTurnstileToken(captchaToken, ip);
   if (!cap.ok) {
-    return NextResponse.json({ error: cap.reason }, { status: 400 });
+    return ApiErrors.invalidRequest(cap.reason);
   }
 
   try {
     const { data, error } = await auth.signIn(email, password, { captchaToken });
     if (error) {
-      return NextResponse.json({ error: 'Email o password non corretti' }, { status: 401 });
+      return ApiErrors.unauthorized('Email o password non corretti');
     }
 
     // Gate verifica email: blocca login se non confermata
@@ -52,13 +50,13 @@ export async function POST(request: Request) {
       // Logout pulito per non lasciare cookie semi-validi
       try { await auth.signOut(); } catch { /* noop */ }
       return NextResponse.json(
-        { error: 'Devi confermare la tua email prima di accedere. Controlla la posta.', code: 'EMAIL_NOT_VERIFIED' },
+        { ok: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Devi confermare la tua email prima di accedere. Controlla la posta.' } },
         { status: 403 },
       );
     }
 
     return NextResponse.json(data, { status: 200 });
   } catch {
-    return NextResponse.json({ error: 'Errore durante il login' }, { status: 500 });
+    return ApiErrors.internal('Errore durante il login');
   }
 }
