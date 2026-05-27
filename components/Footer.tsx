@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Store, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import NewsletterForm from './NewsletterForm';
+import LocaleSwitcher from './LocaleSwitcher';
 
 const SOCIALS = [
   {
@@ -257,6 +258,9 @@ const Footer = () => {
           <Link href="/terms" className="underline hover:text-ink-300">Termini</Link> ·{' '}
           <Link href="/privacy" className="underline hover:text-ink-300">Privacy</Link> ·{' '}
           <Link href="/cookies" className="underline hover:text-ink-300">Cookie</Link>
+        </div>
+        <div className="pt-2">
+          <LocaleSwitcher className="inline-flex items-center gap-1.5 text-xs text-ink-500 hover:text-ink-300" />
         </div>
       </div>
     </footer>

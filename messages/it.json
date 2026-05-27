@@ -1,0 +1,77 @@
+{
+  "actions": {
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "cancel": "Annulla",
+    "confirm": "Conferma",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "back": "Indietro",
+    "next": "Avanti",
+    "close": "Chiudi",
+    "retry": "Riprova",
+    "submit": "Invia",
+    "search": "Cerca",
+    "add": "Aggiungi",
+    "remove": "Rimuovi"
+  },
+  "states": {
+    "loading": "Caricamento…",
+    "saving": "Salvataggio…",
+    "sending": "Invio…",
+    "processing": "Elaborazione…",
+    "noResults": "Nessun risultato",
+    "notFound": "Non trovato"
+  },
+  "errors": {
+    "generic": "Qualcosa non ha funzionato. Riprova tra un momento.",
+    "network": "Problema di connessione. Controlla la rete.",
+    "unauthorized": "Devi accedere per continuare.",
+    "forbidden": "Non hai i permessi per questa azione.",
+    "rateLimit": "Troppe richieste. Aspetta qualche secondo.",
+    "sessionExpired": "La sessione è scaduta. Accedi di nuovo.",
+    "required": "Campo obbligatorio",
+    "invalidEmail": "Email non valida",
+    "invalidPhone": "Numero di telefono non valido",
+    "passwordShort": "Almeno 8 caratteri"
+  },
+  "toasts": {
+    "saved": "Salvato.",
+    "deleted": "Eliminato.",
+    "sent": "Inviato.",
+    "copied": "Copiato negli appunti.",
+    "updated": "Aggiornato."
+  },
+  "nav": {
+    "home": "Home",
+    "search": "Cerca",
+    "cart": "Carrello",
+    "orders": "Ordini",
+    "profile": "Profilo",
+    "signIn": "Accedi",
+    "signUp": "Registrati",
+    "signOut": "Esci",
+    "stores": "Negozi",
+    "messages": "Chat",
+    "me": "Tu",
+    "admin": "Admin",
+    "users": "Utenti",
+    "products": "Prodotti",
+    "history": "Storico",
+    "availability": "Online"
+  },
+  "checkout": {
+    "title": "Checkout",
+    "addressTitle": "Indirizzo di consegna",
+    "paymentTitle": "Metodo di pagamento",
+    "summaryTitle": "Riepilogo ordine",
+    "payNow": "Paga ora",
+    "totalLabel": "Totale"
+  },
+  "marketing": {
+    "tagline": "Il marketplace dei negozi di Piacenza",
+    "subTagline": "Compra dai negozi sotto casa, ricevi a domicilio.",
+    "becomeSeller": "Diventa venditore",
+    "explore": "Esplora i negozi"
+  }
+}

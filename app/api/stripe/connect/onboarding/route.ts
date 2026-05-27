@@ -3,7 +3,7 @@ import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { createConnectOnboardingLink, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { withSellerAuth } from '@/lib/api/middleware';
+import { withSellerAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -16,7 +16,8 @@ export const runtime = 'nodejs';
  * Da chiamare DOPO che il seller ha completato il KYC su MyCity
  * (approval_status = 'approved').
  */
-export const POST = withSellerAuth(async ({ user }): Promise<NextResponse> => {
+// Rate limit: 10 / ora per seller (anti-abuse Stripe onboarding)
+export const POST = withSellerAuthRateLimit({ name: 'stripe-onboarding', max: 10, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
   if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
   if (!user.email) return ApiErrors.unauthorized();
 

@@ -1,7 +1,10 @@
 # CSP Nonce-Based Migration Plan
 
-> Piano implementativo per passare da CSP `unsafe-inline` a nonce-per-request.
-> **NON applicato ora** — richiede test estensivo. Questo file documenta i passi.
+> **STATO: APPLICATO** in `middleware.ts` (funzioni `generateNonce` e `buildCsp`).
+> In produzione: `script-src 'self' 'nonce-XYZ' 'strict-dynamic' ...`
+> In development: `'unsafe-eval' 'unsafe-inline'` mantenuti per webpack HMR.
+>
+> Questo documento descrive il piano originale e le scelte fatte.
 
 ## Stato attuale (rischio)
 

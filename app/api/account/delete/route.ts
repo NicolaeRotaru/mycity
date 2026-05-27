@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuth, withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -23,7 +23,8 @@ export const runtime = 'nodejs';
  * Hard delete: handled by /api/cron/process-deletions (richiede CRON_SECRET)
  */
 
-export const POST = withAuth(async ({ user }): Promise<NextResponse> => {
+// Rate limit destructive: 3 richieste / ora — anti-abuse + protezione (GDPR)
+export const POST = withAuthRateLimit({ name: 'account-delete', max: 3, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
   let admin;
   try {
     admin = getAdminSupabase();

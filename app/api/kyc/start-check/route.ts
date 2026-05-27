@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { getKycProvider, viesVatLookup } from '@/lib/kyc/providers';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -20,7 +20,8 @@ export const runtime = 'nodejs';
  * kyc_provider_status=APPROVED. Se PENDING, resta in attesa del webhook
  * provider che chiamera' /api/kyc/webhook.
  */
-export const POST = withAuth(async ({ user }): Promise<NextResponse> => {
+// Rate limit: 5 check / ora — costo Onfido ~€1.5 a check, anti-abuse
+export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
   const admin = getAdminSupabase();
   const { data: profile } = await admin
     .from('profiles')

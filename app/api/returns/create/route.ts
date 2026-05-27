@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -26,7 +26,8 @@ const Body = z.object({
  * Lo stato iniziale e' REQUESTED. Il seller ricevera' notifica e
  * potra' approvare/rifiutare via /api/returns/[id]/decide.
  */
-export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
+// Rate limit: 10 reso / ora per utente (anti-spam reso fraudolento)
+export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowMs: 60 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -13,7 +13,8 @@ const Schema = z.object({ conversationId: z.string().uuid() });
  * Azzera il counter unread del lato chiamante e marca i messaggi non letti
  * dell'altro lato come letti (read_at = now()). Idempotente.
  */
-export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
+// Rate limit alto (operazione frequente in UI chat): 300 / 5 min
+export const POST = withAuthRateLimit({ name: 'chat-mark-read', max: 300, windowMs: 5 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
   let json: unknown;
   try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = Schema.safeParse(json);

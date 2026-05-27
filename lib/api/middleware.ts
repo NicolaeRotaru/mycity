@@ -1,6 +1,7 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import { createClient, type User } from '@supabase/supabase-js';
 import { ApiErrors } from './responses';
+import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 /**
  * Middleware riusabili per API routes.
@@ -78,6 +79,35 @@ export function withAuth(handler: GenericHandler) {
 }
 
 /**
+ * Wrapper: richiede auth + rate limit per-user.
+ *
+ * Esempio:
+ *   export const POST = withAuthRateLimit(
+ *     { name: 'returns-create', max: 10, windowMs: 60_000 },
+ *     async ({ user }) => {...}
+ *   );
+ *
+ * Il rate limit usa user.id come chiave (piu' robusto di IP per utenti
+ * autenticati: condivisione IP in NAT/CGNAT non penalizza). Risponde 429
+ * con Retry-After se superato.
+ */
+export type AuthRateLimitOpts = {
+  name: string;
+  max: number;
+  windowMs: number;
+};
+
+export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
+  return async (req: NextRequest): Promise<NextResponse> => {
+    const auth = await authenticate(req);
+    if (!auth.ok) return auth.response;
+    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+    return handler({ user: auth.user, profile: auth.profile, req });
+  };
+}
+
+/**
  * Wrapper: richiede auth + role 'seller' approvato (o admin).
  */
 export function withSellerAuth(handler: GenericHandler) {
@@ -93,6 +123,23 @@ export function withSellerAuth(handler: GenericHandler) {
 }
 
 /**
+ * Wrapper: richiede auth + role 'seller' approvato (o admin) + rate limit.
+ */
+export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
+  return async (req: NextRequest): Promise<NextResponse> => {
+    const auth = await authenticate(req);
+    if (!auth.ok) return auth.response;
+    const { profile } = auth;
+    if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
+      return ApiErrors.forbidden('Solo seller approvati o admin');
+    }
+    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+    return handler({ user: auth.user, profile: auth.profile, req });
+  };
+}
+
+/**
  * Wrapper: richiede auth + role 'admin'.
  */
 export function withAdminAuth(handler: GenericHandler) {
@@ -100,6 +147,20 @@ export function withAdminAuth(handler: GenericHandler) {
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
+    return handler({ user: auth.user, profile: auth.profile, req });
+  };
+}
+
+/**
+ * Wrapper: richiede auth + role 'admin' + rate limit per-user.
+ */
+export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
+  return async (req: NextRequest): Promise<NextResponse> => {
+    const auth = await authenticate(req);
+    if (!auth.ok) return auth.response;
+    if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
+    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
     return handler({ user: auth.user, profile: auth.profile, req });
   };
 }

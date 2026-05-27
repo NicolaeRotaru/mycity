@@ -1,0 +1,77 @@
+{
+  "actions": {
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "next": "Next",
+    "close": "Close",
+    "retry": "Retry",
+    "submit": "Submit",
+    "search": "Search",
+    "add": "Add",
+    "remove": "Remove"
+  },
+  "states": {
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "sending": "Sending…",
+    "processing": "Processing…",
+    "noResults": "No results",
+    "notFound": "Not found"
+  },
+  "errors": {
+    "generic": "Something went wrong. Please try again in a moment.",
+    "network": "Connection problem. Check your network.",
+    "unauthorized": "You need to sign in to continue.",
+    "forbidden": "You don't have permission for this action.",
+    "rateLimit": "Too many requests. Please wait a few seconds.",
+    "sessionExpired": "Your session has expired. Please sign in again.",
+    "required": "Required field",
+    "invalidEmail": "Invalid email",
+    "invalidPhone": "Invalid phone number",
+    "passwordShort": "At least 8 characters"
+  },
+  "toasts": {
+    "saved": "Saved.",
+    "deleted": "Deleted.",
+    "sent": "Sent.",
+    "copied": "Copied to clipboard.",
+    "updated": "Updated."
+  },
+  "nav": {
+    "home": "Home",
+    "search": "Search",
+    "cart": "Cart",
+    "orders": "Orders",
+    "profile": "Profile",
+    "signIn": "Sign in",
+    "signUp": "Sign up",
+    "signOut": "Sign out",
+    "stores": "Shops",
+    "messages": "Chat",
+    "me": "You",
+    "admin": "Admin",
+    "users": "Users",
+    "products": "Products",
+    "history": "History",
+    "availability": "Online"
+  },
+  "checkout": {
+    "title": "Checkout",
+    "addressTitle": "Delivery address",
+    "paymentTitle": "Payment method",
+    "summaryTitle": "Order summary",
+    "payNow": "Pay now",
+    "totalLabel": "Total"
+  },
+  "marketing": {
+    "tagline": "The marketplace of local shops in Piacenza",
+    "subTagline": "Buy from shops nearby, get delivery to your door.",
+    "becomeSeller": "Become a seller",
+    "explore": "Browse shops"
+  }
+}

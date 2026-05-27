@@ -17,6 +17,8 @@ import PWAInstallBanner from '@/components/PWAInstallBanner';
 import PostHogProvider from '@/lib/analytics/posthog';
 import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 const fraunces = Fraunces({
@@ -72,9 +74,13 @@ const SUPABASE_HOST = (() => {
   } catch { return ''; }
 })();
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  // i18n: locale rilevato da cookie NEXT_LOCALE + Accept-Language (vedi i18n.ts)
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="it" suppressHydrationWarning className={`${inter.variable} ${fraunces.variable}`}>
+    <html lang={locale} suppressHydrationWarning className={`${inter.variable} ${fraunces.variable}`}>
       <head>
         {SUPABASE_HOST && <link rel="preconnect" href={SUPABASE_HOST} crossOrigin="anonymous" />}
         <link rel="preconnect" href="https://js.stripe.com" crossOrigin="anonymous" />
@@ -92,20 +98,22 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
         />
-        <QueryProvider>
-          <Navbar />
-          <WelcomeCreditBanner />
-          <main id="main-content" className="min-h-screen">{children}</main>
-          <Footer />
-          <MobileTabBar />
-          <DailyCheckIn />
-          <CartCrossDeviceSync />
-          <BuyerOnboardingTour />
-          <PWAInstallBanner />
-        </QueryProvider>
-        <ToastProvider />
-        <ConfirmDialogHost />
-        <CookieBanner />
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <QueryProvider>
+            <Navbar />
+            <WelcomeCreditBanner />
+            <main id="main-content" className="min-h-screen">{children}</main>
+            <Footer />
+            <MobileTabBar />
+            <DailyCheckIn />
+            <CartCrossDeviceSync />
+            <BuyerOnboardingTour />
+            <PWAInstallBanner />
+          </QueryProvider>
+          <ToastProvider />
+          <ConfirmDialogHost />
+          <CookieBanner />
+        </NextIntlClientProvider>
         <Suspense fallback={null}>
           <GoogleAnalytics />
         </Suspense>

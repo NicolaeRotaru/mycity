@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -26,7 +26,8 @@ const ALLOWED_KINDS = new Set([
  * kyc_selfie_url, rider_license_url, rider_insurance_url,
  * rider_haccp_url.
  */
-export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
+// Rate limit: 20 upload / 10 min per utente (anti-abuse + protezione storage)
+export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 10 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
   const form = await req.formData();
   const file = form.get('file');
   const kindRaw = form.get('kind');
