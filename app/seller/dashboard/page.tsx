@@ -30,23 +30,29 @@ export default function SellerDashboard() {
         supabase.from('store_reviews').select('rating').eq('store_id', user.id),
       ]);
 
-      const itemsArr = items ?? [];
-      const revenue = itemsArr.reduce((s: number, it: any) => s + Number(it.unit_price) * it.quantity, 0);
+      type OrderItem = {
+        unit_price: number | string;
+        quantity: number;
+        orders?: { created_at: string | null } | null;
+      };
+      const itemsArr = (items ?? []) as unknown as OrderItem[];
+      const revenue = itemsArr.reduce((s, it) => s + Number(it.unit_price) * it.quantity, 0);
 
       const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
       const startOf7d = new Date(Date.now() - 7 * 86400000);
       const startOf30d = new Date(Date.now() - 30 * 86400000);
 
-      const inRange = (it: any, from: Date) => new Date(it.orders?.created_at ?? 0) >= from;
-      const sum = (arr: any[]) => arr.reduce((s, it) => s + Number(it.unit_price) * it.quantity, 0);
+      const inRange = (it: OrderItem, from: Date) => new Date(it.orders?.created_at ?? 0) >= from;
+      const sum = (arr: OrderItem[]) => arr.reduce((s, it) => s + Number(it.unit_price) * it.quantity, 0);
 
-      const today = itemsArr.filter((it: any) => inRange(it, startOfToday));
-      const last7 = itemsArr.filter((it: any) => inRange(it, startOf7d));
-      const last30 = itemsArr.filter((it: any) => inRange(it, startOf30d));
+      const today = itemsArr.filter((it) => inRange(it, startOfToday));
+      const last7 = itemsArr.filter((it) => inRange(it, startOf7d));
+      const last30 = itemsArr.filter((it) => inRange(it, startOf30d));
 
-      const reviews = storeReviews ?? [];
+      type Review = { rating: number };
+      const reviews = (storeReviews ?? []) as Review[];
       const avgRating = reviews.length > 0
-        ? reviews.reduce((s, r: any) => s + r.rating, 0) / reviews.length
+        ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
         : 0;
 
       return {
