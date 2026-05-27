@@ -48,7 +48,7 @@ export default function ContactSellerButton({ sellerId, className = '', label = 
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? 'Errore');
       router.push(`/messages/${json.conversationId}`);
-    } catch (err: any) {
+    } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setLoading(false);

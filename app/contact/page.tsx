@@ -36,7 +36,7 @@ export default function ContactPage() {
       }
       toast.success('Messaggio inviato! Ti risponderemo entro 24h lavorative.');
       setForm({ name: '', email: '', subject: 'Domanda generale', message: '' });
-    } catch (err: any) {
+    } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setSending(false);

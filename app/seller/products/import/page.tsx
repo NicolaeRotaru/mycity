@@ -148,7 +148,7 @@ export default function BulkImportProductsPage() {
       if (error) throw error;
       toast.success(`${valid.length} prodotti importati 🎉`);
       router.push('/seller/products');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setImporting(false);

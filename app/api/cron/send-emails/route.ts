@@ -21,7 +21,8 @@ import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
-const TEMPLATES: Record<string, { subject: string; html: (data: any) => string; text: (data: any) => string }> = {
+type EmailTemplateData = { name?: string | null; total?: number; [k: string]: unknown };
+const TEMPLATES: Record<string, { subject: string; html: (data: EmailTemplateData) => string; text: (data: EmailTemplateData) => string }> = {
   welcome: {
     subject: 'Benvenuto su MyCity Piacenza 🎉',
     html: (d) => `<p>Ciao ${d.name ?? ''},</p><p>Grazie per esserti iscritto a MyCity. Il marketplace dei negozi di Piacenza ti aspetta.</p><p><a href="https://mycity-marketplace.com">Inizia ad esplorare →</a></p>`,
@@ -60,7 +61,9 @@ function jsonError(status: number, message: string) {
 
 const handler = withCronAuth(async (req): Promise<NextResponse> => {
   let supaCfg;
-  try { supaCfg = requireSupabaseService(); } catch (e: any) { return ApiErrors.unavailable(e.message); }
+  try { supaCfg = requireSupabaseService(); } catch (e) {
+    return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');
+  }
   const supa = createClient(supaCfg.url, supaCfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
 
   // 1) Claim batch (atomic UPDATE … RETURNING per evitare double-send)
@@ -85,6 +88,11 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
 export const GET = handler;
 export const POST = handler;
 
+// SupabaseClient<any> per evitare generic mismatch tra createClient (any-default)
+// e Database type (mai generato). Sicuro perche' processBatch fa solo query
+// validate al runtime.
+// Acceptable any: tipo Supabase troppo restrittivo senza Database type.
+// eslint-disable-next-line
 async function processBatch(supa: any, batch: { id: string; user_id: string; template: string }[]): Promise<NextResponse> {
   let sent = 0, skipped = 0, errors = 0;
   for (const row of batch) {

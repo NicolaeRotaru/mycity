@@ -181,7 +181,7 @@ export default function SettingsPage() {
       await supabase.auth.signOut();
       toast.success('Account eliminato. Ci dispiace vederti andare.');
       router.push('/');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setDeleting(false);

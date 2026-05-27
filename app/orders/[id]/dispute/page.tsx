@@ -67,7 +67,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
       if (error) throw error;
       toast.success('Reclamo aperto. Il nostro team lo prenderà in carico entro 48h.');
       router.push('/orders');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setSubmitting(false);

@@ -83,7 +83,7 @@ function SignUpInner() {
       if (data.user?.id) trackSignupCompleted(data.user.id, role as any);
       toast.success('Registrazione completata! Controlla la tua email per confermare.');
       router.push('/auth/verify-email');
-    } catch (error: any) {
+    } catch (error) {
       toast.error(friendlyError(error));
     } finally {
       setIsLoading(false);
