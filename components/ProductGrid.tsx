@@ -109,7 +109,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
       });
     }
     return arr;
-  }, [products, onlyOpenStores, minRating, ratings, sort]);
+  }, [prods, onlyOpenStores, minRating, ratings, sort]);
 
   if (isLoading) return <SkeletonGrid count={limit ?? 8} />;
 
