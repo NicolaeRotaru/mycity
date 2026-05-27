@@ -13,7 +13,7 @@ import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 /**
  * Form completo per la richiesta di diventare venditore business su MyCity.
@@ -125,6 +125,7 @@ const BUSINESS_FORMS: { value: SchemaData['businessForm']; label: string }[] = [
 ];
 
 export default function SellerApplicationForm({ defaultValues, onSubmit, isLoading = false }: Props) {
+  const tStates = useTranslations('states');
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(SellerSchema),
     defaultValues: {
@@ -314,7 +315,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
               } ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <input {...getInputProps()} />
-              {uploadingLogo ? <p className="text-ink-500">{COPY.states.loading}</p>
+              {uploadingLogo ? <p className="text-ink-500">{tStates('loading')}</p>
                 : logoUrl ? <p className="text-ink-600"><span className="font-medium">Sostituisci</span> · trascina o clicca</p>
                 : <p className="text-ink-500"><span className="font-medium text-primary-700">Carica</span> immagine quadrata (max 3MB)</p>}
             </div>

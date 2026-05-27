@@ -11,7 +11,7 @@ import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 type Subscription = {
   id: string;
@@ -39,6 +39,7 @@ const FREQUENCY_LABEL: Record<string, string> = {
 export default function SubscriptionsPage() {
   const router = useRouter();
   const qc = useQueryClient();
+  const tToasts = useTranslations('toasts');
   const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,7 +69,7 @@ export default function SubscriptionsPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-      toast.success(COPY.toasts.updated);
+      toast.success(tToasts('updated'));
     },
   });
 

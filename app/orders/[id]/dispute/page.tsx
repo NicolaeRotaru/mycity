@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'not_received',      label: 'Non l\'ho ricevuto',          hint: 'L\'ordine risulta consegnato ma non l\'hai ricevuto.' },
@@ -21,7 +21,8 @@ const REASONS: Array<{ value: string; label: string; hint: string }> = [
 
 export default function OpenDisputePage({ params }: { params: { id: string } }) {
   const router = useRouter();
-  const [order, setOrder] = useState<any>(null);
+  const tStates = useTranslations('states');
+  const [order, setOrder] = useState<{ id: string; total_cents: number; delivery_status: string; seller_id: string; created_at: string; profiles?: { store_name?: string | null } | null } | null>(null);
   const [reason, setReason] = useState<string>('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -43,7 +44,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
         router.push('/orders');
         return;
       }
-      setOrder(data);
+      setOrder(data as unknown as typeof order);
     })();
   }, [params.id, router]);
 
@@ -60,7 +61,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
       const { error } = await supabase.from('disputes').insert({
         order_id: params.id,
         opener_id: user.id,
-        against_id: order.seller_id,
+        against_id: order?.seller_id ?? null,
         reason,
         description: description.trim(),
       });
@@ -152,7 +153,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
           disabled={submitting || !reason || description.trim().length < 20}
           className="w-full bg-secondary-600 hover:bg-secondary-700 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-bold transition-colors"
         >
-          {submitting ? COPY.states.sending : 'Apri reclamo'}
+          {submitting ? tStates('sending') : 'Apri reclamo'}
         </button>
       </form>
     </div>

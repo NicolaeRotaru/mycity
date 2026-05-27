@@ -8,11 +8,13 @@ import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 export default function RiderProfilePage() {
   const qc = useQueryClient();
   const router = useRouter();
+  const tStates = useTranslations('states');
+  const tActions = useTranslations('actions');
   const [signingOut, setSigningOut] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
@@ -98,7 +100,7 @@ export default function RiderProfilePage() {
           disabled={update.isPending}
           className="bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white px-6 py-2.5 rounded font-semibold"
         >
-          {update.isPending ? COPY.states.saving : COPY.actions.save}
+          {update.isPending ? tStates('saving') : tActions('save')}
         </button>
       </div>
 

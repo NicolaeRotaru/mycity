@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useSyncExternalStore } from 'react';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 /**
  * Dialog di conferma globale con API imperativa, sostituto di window.confirm().
@@ -56,6 +56,7 @@ function closeWith(ok: boolean) {
 }
 
 export function ConfirmDialogHost() {
+  const tActions = useTranslations('actions');
   const state = useSyncExternalStore(
     subscribe,
     () => current,
@@ -138,7 +139,7 @@ export function ConfirmDialogHost() {
             onClick={() => closeWith(false)}
             className="px-4 py-3 rounded-xl font-semibold text-ink-700 bg-white border-2 border-cream-300 hover:border-cream-300 hover:bg-cream-50 active:scale-[0.98] transition-all"
           >
-            {state.cancelLabel ?? COPY.actions.cancel}
+            {state.cancelLabel ?? tActions('cancel')}
           </button>
           <button
             type="button"
@@ -150,7 +151,7 @@ export function ConfirmDialogHost() {
                 : 'bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 shadow-indigo-200'
             }`}
           >
-            {state.confirmLabel ?? COPY.actions.confirm}
+            {state.confirmLabel ?? tActions('confirm')}
           </button>
         </div>
       </div>
