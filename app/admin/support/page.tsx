@@ -23,7 +23,7 @@ type Message = {
   created_at: string;
 };
 
-const STATUS_META: Record<Message['status'], { label: string; color: string; icon: any }> = {
+const STATUS_META: Record<Message['status'], { label: string; color: string; icon: typeof Mail }> = {
   new:         { label: 'Nuovo',         color: 'accent',    icon: Mail },
   in_progress: { label: 'In gestione',   color: 'primary',   icon: Clock },
   resolved:    { label: 'Risolto',       color: 'olive',     icon: CheckCircle2 },

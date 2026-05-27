@@ -54,7 +54,7 @@ export default function AdminOrdersPage() {
   // Export CSV — Operations Manager: "indispensabile per commercialista"
   const exportCSV = () => {
     const headers = ['ID', 'Data', 'Cliente', 'Città', 'Negozio', 'Rider', 'Stato', 'Totale €'];
-    const rows = filtered.map((o: any) => [
+    const rows = filtered.map((o) => [
       o.id,
       o.created_at,
       o.delivery_full_name ?? '',

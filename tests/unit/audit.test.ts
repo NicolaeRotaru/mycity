@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock supabase server - factory self-contained
-const insertMock = vi.fn(() => Promise.resolve({ data: null, error: null }));
+const insertMock = vi.fn<(arg: Record<string, unknown>) => Promise<{ data: null; error: null | { message: string } }>>(() =>
+  Promise.resolve({ data: null, error: null })
+);
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: vi.fn(() => ({
     from: vi.fn(() => ({
