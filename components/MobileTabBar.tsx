@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Search, MessageCircle, ShoppingCart, User, Package, Bike, Shield } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { Home, Search, MessageCircle, ShoppingCart, User, Package, Bike, Shield, type LucideIcon } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
 import { useMessagesUnread } from './hooks/useMessagesUnread';
 
-type Tab = { href: string; icon: React.ComponentType<any>; label: string; badge?: number };
+type Tab = { href: string; icon: LucideIcon; label: string; badge?: number };
 
 /**
  * Bottom tab bar mobile — feel "app nativa" (Glovo, Deliveroo, Just Eat).
@@ -21,6 +22,7 @@ export default function MobileTabBar() {
   const { isAuthenticated, isSeller, isRider, isAdmin } = useProfile();
   const cartCount = useCartCount();
   const msgUnread = useMessagesUnread();
+  const t = useTranslations('nav');
 
   // Hide in auth flow + thread chat
   if (
@@ -35,43 +37,43 @@ export default function MobileTabBar() {
 
   if (isAdmin) {
     tabs = [
-      { href: '/admin',          icon: Shield,        label: 'Admin' },
-      { href: '/admin/users',    icon: User,          label: 'Utenti' },
-      { href: '/admin/orders',   icon: Package,       label: 'Ordini' },
-      { href: '/messages',       icon: MessageCircle, label: 'Chat', badge: msgUnread },
-      { href: '/profile',        icon: User,          label: 'Tu' },
+      { href: '/admin',          icon: Shield,        label: t('admin') },
+      { href: '/admin/users',    icon: User,          label: t('users') },
+      { href: '/admin/orders',   icon: Package,       label: t('orders') },
+      { href: '/messages',       icon: MessageCircle, label: t('messages'), badge: msgUnread },
+      { href: '/profile',        icon: User,          label: t('me') },
     ];
   } else if (isSeller) {
     tabs = [
-      { href: '/seller/dashboard', icon: Home,          label: 'Home' },
-      { href: '/seller/products',  icon: Package,       label: 'Prodotti' },
-      { href: '/seller/orders',    icon: ShoppingCart,  label: 'Ordini' },
-      { href: '/messages',         icon: MessageCircle, label: 'Chat', badge: msgUnread },
-      { href: '/seller/profile',   icon: User,          label: 'Tu' },
+      { href: '/seller/dashboard', icon: Home,          label: t('home') },
+      { href: '/seller/products',  icon: Package,       label: t('products') },
+      { href: '/seller/orders',    icon: ShoppingCart,  label: t('orders') },
+      { href: '/messages',         icon: MessageCircle, label: t('messages'), badge: msgUnread },
+      { href: '/seller/profile',   icon: User,          label: t('me') },
     ];
   } else if (isRider) {
     tabs = [
-      { href: '/rider',              icon: Home,          label: 'Home' },
-      { href: '/rider/history',      icon: Package,       label: 'Storico' },
-      { href: '/rider/availability', icon: Bike,          label: 'Online' },
-      { href: '/messages',           icon: MessageCircle, label: 'Chat', badge: msgUnread },
-      { href: '/rider/profile',      icon: User,          label: 'Tu' },
+      { href: '/rider',              icon: Home,          label: t('home') },
+      { href: '/rider/history',      icon: Package,       label: t('history') },
+      { href: '/rider/availability', icon: Bike,          label: t('availability') },
+      { href: '/messages',           icon: MessageCircle, label: t('messages'), badge: msgUnread },
+      { href: '/rider/profile',      icon: User,          label: t('me') },
     ];
   } else if (isAuthenticated) {
     tabs = [
-      { href: '/',          icon: Home,          label: 'Home' },
-      { href: '/search',    icon: Search,        label: 'Cerca' },
-      { href: '/cart',      icon: ShoppingCart,  label: 'Carrello', badge: cartCount },
-      { href: '/messages',  icon: MessageCircle, label: 'Chat', badge: msgUnread },
-      { href: '/profile',   icon: User,          label: 'Tu' },
+      { href: '/',          icon: Home,          label: t('home') },
+      { href: '/search',    icon: Search,        label: t('search') },
+      { href: '/cart',      icon: ShoppingCart,  label: t('cart'), badge: cartCount },
+      { href: '/messages',  icon: MessageCircle, label: t('messages'), badge: msgUnread },
+      { href: '/profile',   icon: User,          label: t('me') },
     ];
   } else {
     tabs = [
-      { href: '/',         icon: Home,         label: 'Home' },
-      { href: '/search',   icon: Search,       label: 'Cerca' },
-      { href: '/stores',   icon: Package,      label: 'Negozi' },
-      { href: '/cart',     icon: ShoppingCart, label: 'Carrello', badge: cartCount },
-      { href: '/sign-in',  icon: User,         label: 'Accedi' },
+      { href: '/',         icon: Home,         label: t('home') },
+      { href: '/search',   icon: Search,       label: t('search') },
+      { href: '/stores',   icon: Package,      label: t('stores') },
+      { href: '/cart',     icon: ShoppingCart, label: t('cart'), badge: cartCount },
+      { href: '/sign-in',  icon: User,         label: t('signIn') },
     ];
   }
 

@@ -50,7 +50,15 @@
     "profile": "Profile",
     "signIn": "Sign in",
     "signUp": "Sign up",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "stores": "Shops",
+    "messages": "Chat",
+    "me": "You",
+    "admin": "Admin",
+    "users": "Users",
+    "products": "Products",
+    "history": "History",
+    "availability": "Online"
   },
   "checkout": {
     "title": "Checkout",

@@ -50,7 +50,15 @@
     "profile": "Profilo",
     "signIn": "Accedi",
     "signUp": "Registrati",
-    "signOut": "Esci"
+    "signOut": "Esci",
+    "stores": "Negozi",
+    "messages": "Chat",
+    "me": "Tu",
+    "admin": "Admin",
+    "users": "Utenti",
+    "products": "Prodotti",
+    "history": "Storico",
+    "availability": "Online"
   },
   "checkout": {
     "title": "Checkout",
