@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -32,7 +32,8 @@ const Body = z.object({
  * delivery_status PICKED_UP/OUT_FOR_DELIVERY/DELIVERED (controllo
  * server-side).
  */
-export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
+// Rate limit: 60 conferme / ora per rider (anti-abuse, ma rider attivi ~30/giorno)
+export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, windowMs: 60 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());

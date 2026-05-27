@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
-import { withAdminAuth } from '@/lib/api/middleware';
+import { withAdminAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -110,5 +110,6 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
   });
 }
 
+// Rate limit destructive: 20 cancellazioni / ora per admin (anti-abuse + audit trail)
 export const DELETE = (req: NextRequest, ctx: { params: { id: string } }) =>
-  withAdminAuth(async ({ user }) => handler(req, user, ctx))(req);
+  withAdminAuthRateLimit({ name: 'admin-delete-user', max: 20, windowMs: 60 * 60_000 }, async ({ user }) => handler(req, user, ctx))(req);

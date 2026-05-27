@@ -5,7 +5,7 @@ import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { logger } from '@/lib/logger';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -119,5 +119,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   return NextResponse.json({ ok: true, status: newStatus, refundId }, { status: 200 });
 }
 
+// Rate limit: 30 decisioni / 10 min per seller (anti-abuse refund Stripe)
 export const POST = (req: NextRequest, ctx: { params: { id: string } }) =>
-  withAuth(async ({ user }) => handler(req, user, ctx.params))(req);
+  withAuthRateLimit({ name: 'returns-decide', max: 30, windowMs: 10 * 60_000 }, async ({ user }) => handler(req, user, ctx.params))(req);

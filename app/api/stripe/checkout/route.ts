@@ -4,7 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { createCheckoutSession, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -19,7 +19,8 @@ const Body = z.object({
   metadata: z.record(z.string()).optional(),
 });
 
-export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
+// Rate limit: 30 checkout / 10 min per utente (anti-abuse, DoS economico Stripe)
+export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
   if (!isStripeConfigured()) {
     return ApiErrors.unavailable('Pagamenti elettronici non disponibili. Usa pagamento alla consegna.');
   }
