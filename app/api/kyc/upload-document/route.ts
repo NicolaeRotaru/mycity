@@ -48,14 +48,14 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
     .upload(path, bytes, { contentType: file.type, upsert: false });
   if (upErr) {
     logger.error('[kyc] upload failed', upErr);
-    return NextResponse.json({ error: 'Upload fallito (bucket "kyc-docs" esiste?)' }, { status: 500 });
+    return ApiErrors.internal('Upload fallito (bucket "kyc-docs" esiste?)');
   }
 
   const { data: signed } = await admin.storage
     .from('kyc-docs')
     .createSignedUrl(path, 60 * 60 * 24 * 30);
   const url = signed?.signedUrl ?? null;
-  if (!url) return NextResponse.json({ error: 'Signed URL non disponibile' }, { status: 500 });
+  if (!url) return ApiErrors.internal('Signed URL non disponibile');
 
   // Mappa kind -> colonna profile
   const column: Record<string, string> = {

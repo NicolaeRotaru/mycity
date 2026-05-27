@@ -45,10 +45,10 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
 
   if (oErr || !order) return ApiErrors.notFound('Ordine non trovato');
   if (order.delivery_status !== 'DELIVERED') {
-    return NextResponse.json({ error: 'Ordine non consegnato' }, { status: 409 });
+    return ApiErrors.conflict('Ordine non consegnato');
   }
   if (order.invoice_number) {
-    return NextResponse.json({ error: 'Fattura gia\' esistente', invoice_number: order.invoice_number }, { status: 409 });
+    return ApiErrors.conflict(`Fattura gia' esistente: ${order.invoice_number}`);
   }
 
   const { data: items } = await admin
