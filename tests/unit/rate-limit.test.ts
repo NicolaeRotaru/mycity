@@ -10,7 +10,11 @@ import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 describe('rateLimit - basic allow/deny', () => {
   beforeEach(() => {
-    // Pulisce buckets in-memory: chiave random per test isolation
+    // Test isolation: ogni test usa una chiave random univoca (vedi `Math.random()`
+    // sotto) per evitare pollution tra test indipendente dal'ordine vitest.
+    // Il GC interno di buckets (MAX_KEYS = 50_000) gestisce la cleanup
+    // automaticamente, ma per evitare interferenze con run --watch ripetuti,
+    // le chiavi sono uniche per chiamata.
   });
 
   it('allows requests under limit', () => {

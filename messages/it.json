@@ -85,5 +85,19 @@
     "submitting": "Invio verifica…",
     "continue": "Continua",
     "step3Label": "Conferma"
+  },
+  "confirm": {
+    "yesSuspend": "Sì, sospendi",
+    "yesReactivate": "Sì, riattiva",
+    "yesDelete": "Sì, elimina",
+    "yesApprove": "Sì, approva",
+    "yesReject": "Sì, rifiuta"
+  },
+  "admin": {
+    "sellerApproved": "Venditore approvato e notificato",
+    "requestRejected": "Richiesta rifiutata e notificata",
+    "storeReactivated": "Negozio riattivato",
+    "accountDeleted": "Account eliminato definitivamente",
+    "storeSuspended": "Negozio sospeso"
   }
 }

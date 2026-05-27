@@ -9,6 +9,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { useTranslations } from 'next-intl';
 
 type Row = {
   id: string;
@@ -23,6 +24,7 @@ type Row = {
 
 export default function AdminProductsPage() {
   const qc = useQueryClient();
+  const tConfirm = useTranslations('confirm');
   const [search, setSearch] = useState('');
 
   const { data: products = [], isLoading } = useQuery({
@@ -126,7 +128,7 @@ export default function AdminProductsPage() {
                         const ok = await confirmDialog({
                           title: 'Eliminare il prodotto?',
                           message: `"${p.name}" verrà rimosso definitivamente.`,
-                          confirmLabel: 'Sì, elimina',
+                          confirmLabel: tConfirm('yesDelete'),
                           danger: true,
                           icon: '🗑️',
                         });

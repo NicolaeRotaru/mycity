@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
+import { useTranslations } from 'next-intl';
 
 type Profile = {
   id: string;
@@ -54,6 +55,9 @@ const APPROVAL_LABELS: Record<string, { label: string; color: string }> = {
 function AdminUsersPageInner() {
   const qc = useQueryClient();
   const searchParams = useSearchParams();
+  const tActions = useTranslations('actions');
+  const tConfirm = useTranslations('confirm');
+  const tAdmin = useTranslations('admin');
   const initialFilter = searchParams.get('role') ?? 'all';
   const [filter, setFilter] = useState<string>(initialFilter);
   const [search, setSearch] = useState('');
@@ -122,7 +126,7 @@ function AdminUsersPageInner() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
-      toast.success('Venditore approvato e notificato');
+      toast.success(tAdmin('sellerApproved'));
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -145,7 +149,7 @@ function AdminUsersPageInner() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
-      toast.success('Richiesta rifiutata e notificata');
+      toast.success(tAdmin('requestRejected'));
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -170,7 +174,7 @@ function AdminUsersPageInner() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
-      toast.success('Negozio riattivato');
+      toast.success(tAdmin('storeReactivated'));
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -191,7 +195,7 @@ function AdminUsersPageInner() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
-      toast.success('Account eliminato definitivamente');
+      toast.success(tAdmin('accountDeleted'));
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -214,7 +218,7 @@ function AdminUsersPageInner() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
-      toast.success('Negozio sospeso');
+      toast.success(tAdmin('storeSuspended'));
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -396,8 +400,8 @@ function AdminUsersPageInner() {
                             const ok = await confirmDialog({
                               title: 'Sospendere il negozio?',
                               message: `${p.store_name ?? 'Il venditore'} non potrà più operare finché non lo riattiverai. È diverso dal rifiuto: la richiesta resta valida e basta cliccare "Riattiva" per farlo tornare online.`,
-                              confirmLabel: 'Sì, sospendi',
-                              cancelLabel: 'Annulla',
+                              confirmLabel: tConfirm('yesSuspend'),
+                              cancelLabel: tActions('cancel'),
                               danger: true,
                               icon: '⏸️',
                             });
@@ -414,8 +418,8 @@ function AdminUsersPageInner() {
                             const ok = await confirmDialog({
                               title: 'Riattivare il negozio?',
                               message: `${p.store_name ?? 'Il venditore'} tornerà operativo immediatamente e riceverà una notifica.`,
-                              confirmLabel: 'Sì, riattiva',
-                              cancelLabel: 'Annulla',
+                              confirmLabel: tConfirm('yesReactivate'),
+                              cancelLabel: tActions('cancel'),
                               icon: '▶️',
                             });
                             if (ok) reactivate.mutate(p.id);
@@ -432,7 +436,7 @@ function AdminUsersPageInner() {
                             const ok = await confirmDialog({
                               title: 'Eliminare definitivamente?',
                               message: `${name} verrà rimosso da auth.users e il profilo anonimizzato. L'utente non potrà più accedere. Gli ordini storici restano per obblighi fiscali. Azione irreversibile.`,
-                              confirmLabel: 'Sì, elimina',
+                              confirmLabel: tConfirm('yesDelete'),
                               danger: true,
                               icon: '🗑️',
                             });
