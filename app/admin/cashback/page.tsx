@@ -220,7 +220,7 @@ export default function AdminCashbackPage() {
               </div>
               <div>
                 <label className="block text-sm font-semibold mb-1">Trigger evento</label>
-                <select value={editing.trigger_event ?? 'cart_abandoned'} onChange={(e) => setEditing({ ...editing, trigger_event: e.target.value as any })} className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm">
+                <select value={editing.trigger_event ?? 'cart_abandoned'} onChange={(e) => setEditing({ ...editing, trigger_event: e.target.value as Campaign['trigger_event'] })} className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm">
                   {(Object.keys(TRIGGER_LABEL) as Array<keyof typeof TRIGGER_LABEL>).map((k) => (
                     <option key={k} value={k}>{TRIGGER_LABEL[k]}</option>
                   ))}

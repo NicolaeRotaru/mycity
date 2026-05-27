@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
+import { logger } from '@/lib/logger';
 
 /**
  * Somma dei messaggi non letti su tutte le conversazioni dell'utente.
@@ -69,7 +70,7 @@ export const useMessagesUnread = () => {
         })
         .subscribe();
     } catch (err) {
-      console.warn('[useMessagesUnread] realtime subscribe failed:', err);
+      logger.warn('[useMessagesUnread] realtime subscribe failed', err);
     }
     return () => { if (ch) { try { supabase.removeChannel(ch); } catch { /* noop */ } } };
   }, [userId]); // solo userId — refetch via ref

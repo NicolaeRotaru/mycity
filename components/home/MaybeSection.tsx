@@ -18,7 +18,7 @@ type Props = {
 };
 
 export default function MaybeSection({ children, className }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement | null>(null);
   const [empty, setEmpty] = useState(true);
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function MaybeSection({ children, className }: Props) {
   });
 
   return (
-    <section className={empty ? 'hidden' : className} ref={ref as any}>
+    <section className={empty ? 'hidden' : className} ref={ref}>
       {children}
     </section>
   );

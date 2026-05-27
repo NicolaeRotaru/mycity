@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { logger } from '@/lib/logger';
 
 /**
  * Pagina di reset password.
@@ -99,7 +100,8 @@ function ResetPasswordInner() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
         // Log completo in console per debug
-        console.error('updateUser failed:', { status: (error as any).status, message: error.message, name: (error as any).name });
+        const errObj = error as { status?: number; message: string; name?: string };
+        logger.error(error, { status: errObj.status, message: errObj.message, name: errObj.name });
         throw error;
       }
       setDone(true);

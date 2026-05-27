@@ -8,6 +8,7 @@ import { MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { logger } from '@/lib/logger';
 
 type Counterpart = {
   id: string;
@@ -87,7 +88,7 @@ export default function MessagesListPage() {
         })
         .subscribe();
     } catch (err) {
-      console.warn('[messages-list] realtime subscribe failed:', err);
+      logger.warn('[messages-list] realtime subscribe failed', err);
     }
     return () => { if (channel) { try { supabase.removeChannel(channel); } catch { /* noop */ } } };
   }, [userId]);

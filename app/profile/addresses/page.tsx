@@ -9,7 +9,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Addr = {
@@ -34,6 +34,7 @@ const empty: Omit<Addr, 'id' | 'is_default'> & { is_default: boolean } = {
 
 export default function AddressesPage() {
   const qc = useQueryClient();
+  const tActions = useTranslations('actions');
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<typeof empty>(empty);
   const [showForm, setShowForm] = useState(false);
@@ -200,7 +201,7 @@ export default function AddressesPage() {
                 {a.notes && <p className="text-xs text-ink-400 italic mt-1">{a.notes}</p>}
               </div>
               <div className="flex flex-col gap-1 shrink-0">
-                <button onClick={() => startEdit(a)} className="text-xs text-primary-700 hover:underline">{COPY.actions.edit}</button>
+                <button onClick={() => startEdit(a)} className="text-xs text-primary-700 hover:underline">{tActions('edit')}</button>
                 <button
                   onClick={async () => {
                     const ok = await confirmDialog({

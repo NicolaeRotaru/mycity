@@ -54,7 +54,7 @@ export default function AdminFunnelPage() {
             .select('user_id, created_at, delivery_status')
             .in('user_id', userIds)
             .neq('delivery_status', 'CANCELED')
-        : { data: [] as any[] };
+        : { data: [] as Array<{ user_id: string; created_at: string; delivery_status: string }> };
 
       const orderMap = new Map<string, Date[]>();
       for (const o of (orders ?? [])) {

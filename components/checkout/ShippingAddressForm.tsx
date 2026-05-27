@@ -19,12 +19,19 @@ export type AddressForm = {
   notes: string;
 };
 
-type SavedAddress = {
+export type SavedAddress = {
   id: string;
-  label: string;
+  label?: string;
   address: string;
   city: string;
   is_default: boolean;
+  // Campi opzionali (presenti quando l'address arriva da user_addresses)
+  full_name?: string;
+  zip?: string;
+  phone?: string;
+  notes?: string | null;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 type Props = {

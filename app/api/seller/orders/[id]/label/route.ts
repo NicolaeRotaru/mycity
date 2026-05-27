@@ -27,7 +27,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   if (error || !order) return ApiErrors.notFound('Ordine non trovato');
   if (order.seller_id !== user.id) return ApiErrors.forbidden();
 
-  const sellerName = (order.profiles as any)?.store_name ?? 'MyCity Seller';
+  const sellerName = (order.profiles as { store_name?: string | null } | null)?.store_name ?? 'MyCity Seller';
   const isCod = order.payment_method === 'cod' || order.payment_method === null;
 
   const pdf = await buildShippingLabel({

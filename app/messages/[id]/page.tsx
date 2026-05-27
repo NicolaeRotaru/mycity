@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { logger } from '@/lib/logger';
 
 type Message = {
   id: string;
@@ -116,7 +117,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
         )
         .subscribe();
     } catch (err) {
-      console.warn('[messages-thread] realtime subscribe failed:', err);
+      logger.warn('[messages-thread] realtime subscribe failed', err);
     }
     return () => { if (channel) { try { supabase.removeChannel(channel); } catch { /* noop */ } } };
   }, [userId, params.id, qc]);

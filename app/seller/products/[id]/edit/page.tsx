@@ -55,15 +55,16 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     },
   });
 
+  type CategoryRow = { id: string; name: string; slug: string; parent_id: string | null };
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.form,
-    queryFn: async () => {
+    queryFn: async (): Promise<CategoryRow[]> => {
       const { data, error } = await supabase
         .from('categories')
         .select('id, name, slug, parent_id')
         .order('name');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as CategoryRow[];
     },
   });
 
@@ -87,7 +88,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
 
   const selectedCategoryId = watch('category_id');
   const { fields: attrFields, topSlug } = getAttributesForCategory(
-    categories as any,
+    categories,
     selectedCategoryId,
   );
   const topCategoryLabel = topSlug
@@ -196,7 +197,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
         <p className="font-bold mb-1">⚠️ Errore</p>
-        <p className="text-sm mb-3">{(error as any).message}</p>
+        <p className="text-sm mb-3">{error instanceof Error ? error.message : 'Errore sconosciuto'}</p>
         <Link href="/seller/products" className="text-sm font-semibold text-rose-700 hover:underline">
           ← Torna ai miei prodotti
         </Link>

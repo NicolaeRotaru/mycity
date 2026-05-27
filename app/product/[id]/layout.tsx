@@ -3,7 +3,17 @@ import { createClient } from '@supabase/supabase-js';
 
 export const revalidate = 300; // 5 min ISR sui metadata
 
-async function fetchProduct(id: string) {
+type ProductMeta = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  images: string[] | null;
+  status: string;
+  profiles: { store_name: string | null; is_approved: boolean } | null;
+};
+
+async function fetchProduct(id: string): Promise<ProductMeta | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
@@ -19,7 +29,7 @@ async function fetchProduct(id: string) {
       `)
       .eq('id', id)
       .single();
-    return data as any;
+    return (data as unknown as ProductMeta) ?? null;
   } catch {
     return null;
   }

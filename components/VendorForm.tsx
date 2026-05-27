@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useDropzone } from 'react-dropzone';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import StoreLocationPicker, { StoreLocation } from './StoreLocationPickerLazy';
 import StoreAvatar from './StoreAvatar';
@@ -38,6 +38,7 @@ interface Props {
 }
 
 const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
+  const tStates = useTranslations('states');
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(VendorSchema),
     defaultValues: {
@@ -203,7 +204,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
         disabled={isLoading || uploadingLogo}
         className="bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white px-6 py-3 rounded font-semibold transition-colors"
       >
-        {isLoading ? COPY.states.saving : 'Salva negozio'}
+        {isLoading ? tStates('saving') : 'Salva negozio'}
       </button>
     </form>
   );

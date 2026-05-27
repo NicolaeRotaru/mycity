@@ -14,7 +14,9 @@ const CATEGORY_LONG_DESC: Record<string, string> = {
   sport: 'Sport, fitness e tempo libero dai negozi di Piacenza.',
 };
 
-async function fetchCategory(slug: string) {
+type CategoryMeta = { slug: string; name: string };
+
+async function fetchCategory(slug: string): Promise<CategoryMeta | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
@@ -27,7 +29,7 @@ async function fetchCategory(slug: string) {
       .select('slug, name')
       .eq('slug', slug)
       .single();
-    return data as any;
+    return (data as CategoryMeta) ?? null;
   } catch {
     return null;
   }
@@ -40,7 +42,7 @@ export async function generateMetadata(
   if (!cat) {
     return { title: 'Categoria non trovata · MyCity', robots: { index: false } };
   }
-  const name = cat.name as string;
+  const name = cat.name;
   const desc = CATEGORY_LONG_DESC[params.slug] ?? `Acquista ${name.toLowerCase()} dai negozi di Piacenza su MyCity. Consegna 24-48h.`;
   return {
     title: `${name} a Piacenza — Compra online dai negozi locali · MyCity`,

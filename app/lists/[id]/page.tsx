@@ -13,7 +13,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 import EmptyState from '@/components/EmptyState';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -56,6 +56,8 @@ type Item = {
 export default function ListDetailPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const tActions = useTranslations('actions');
+  const tToasts = useTranslations('toasts');
   const [userId, setUserId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState(false);
   const [titleVal, setTitleVal] = useState('');
@@ -113,7 +115,7 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(COPY.toasts.updated);
+      toast.success(tToasts('updated'));
       setEditTitle(false);
       qc.invalidateQueries({ queryKey: queryKeys.lists.detail(params.id) });
     },
@@ -215,8 +217,8 @@ export default function ListDetailPage({ params }: { params: { id: string } }) {
                 className="w-full text-sm bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 resize-none"
               />
               <div className="flex gap-2">
-                <button onClick={() => updateMeta.mutate()} disabled={updateMeta.isPending} className="bg-primary-700 text-white px-3 py-1 rounded-lg text-sm font-bold">{COPY.actions.save}</button>
-                <button onClick={() => setEditTitle(false)} className="text-ink-500 px-3 py-1 rounded-lg text-sm">{COPY.actions.cancel}</button>
+                <button onClick={() => updateMeta.mutate()} disabled={updateMeta.isPending} className="bg-primary-700 text-white px-3 py-1 rounded-lg text-sm font-bold">{tActions('save')}</button>
+                <button onClick={() => setEditTitle(false)} className="text-ink-500 px-3 py-1 rounded-lg text-sm">{tActions('cancel')}</button>
               </div>
             </div>
           ) : (

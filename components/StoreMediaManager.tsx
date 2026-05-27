@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 interface Props {
   value: StoreMediaItem[];
@@ -17,6 +17,7 @@ const MAX_IMAGES = 3;
 const MAX_VIDEOS = 1;
 
 const StoreMediaManager = ({ value, onChange }: Props) => {
+  const tStates = useTranslations('states');
   const [uploading, setUploading] = useState(false);
 
   const imageCount = value.filter((m) => m.type === 'image').length;
@@ -155,7 +156,7 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
           <input {...getInputProps()} />
           <p className="text-sm text-ink-600">
             {uploading
-              ? COPY.states.loading
+              ? tStates('loading')
               : 'Trascina foto o video qui, oppure clicca per scegliere'}
           </p>
         </div>

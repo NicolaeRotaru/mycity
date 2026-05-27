@@ -9,7 +9,7 @@ import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 /**
  * Admin: gestione sponsored listings.
@@ -43,6 +43,8 @@ type Listing = {
 
 export default function AdminSponsoredPage() {
   const qc = useQueryClient();
+  const tStates = useTranslations('states');
+  const tToasts = useTranslations('toasts');
   const [filter, setFilter] = useState<'all' | 'active' | 'paused' | 'ended'>('all');
 
   const { data: listings = [], isLoading } = useQuery({
@@ -70,7 +72,7 @@ export default function AdminSponsoredPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(COPY.toasts.updated);
+      toast.success(tToasts('updated'));
       qc.invalidateQueries({ queryKey: queryKeys.admin.sponsored() });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
@@ -82,7 +84,7 @@ export default function AdminSponsoredPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success(COPY.toasts.deleted);
+      toast.success(tToasts('deleted'));
       qc.invalidateQueries({ queryKey: queryKeys.admin.sponsored() });
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
@@ -163,7 +165,7 @@ export default function AdminSponsoredPage() {
           </thead>
           <tbody className="divide-y divide-cream-100">
             {isLoading ? (
-              <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-500">{COPY.states.loading}</td></tr>
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-500">{tStates('loading')}</td></tr>
             ) : listings.length === 0 ? (
               <tr><td colSpan={9} className="px-4 py-8 text-center text-ink-500">Nessuna campagna.</td></tr>
             ) : listings.map((l) => {

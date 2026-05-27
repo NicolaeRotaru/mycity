@@ -70,7 +70,7 @@ export default function DropOfDay() {
         `)
         .eq('drop_date', today)
         .maybeSingle();
-      return (data as any) ?? null;
+      return (data as unknown as Drop) ?? null;
     },
   });
 

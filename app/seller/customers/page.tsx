@@ -44,7 +44,8 @@ export default function SellerCustomersPage() {
         .order('created_at', { ascending: false });
 
       const byUser = new Map<string, CustomerRow>();
-      for (const o of (orders ?? []) as any[]) {
+      type OrderRow = { id: string; user_id: string | null; total_price: number; created_at: string; buyer: { full_name: string | null } | null };
+      for (const o of (orders ?? []) as unknown as OrderRow[]) {
         if (!o.user_id) continue;
         const existing = byUser.get(o.user_id);
         if (existing) {

@@ -35,7 +35,13 @@ export default function SellerEarningsPage() {
         .select('quantity, unit_price, orders(id, created_at, delivery_status), products!inner(seller_id, name)')
         .eq('products.seller_id', user.id);
       if (error) throw error;
-      return (data ?? []) as any[];
+      type EarningRow = {
+        quantity: number;
+        unit_price: number;
+        orders: { id: string; created_at: string; delivery_status: string } | null;
+        products: { seller_id: string; name: string } | null;
+      };
+      return (data ?? []) as unknown as EarningRow[];
     },
   });
 

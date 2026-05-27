@@ -11,6 +11,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { logger } from '@/lib/logger';
 
 type Profile = {
   id: string;
@@ -79,7 +80,7 @@ function AdminUsersPageInner() {
         .order('created_at', { ascending: false });
       if (!tryFull.error) return (tryFull.data ?? []) as Profile[];
 
-      console.warn('admin/users: full select failed, fallback to minimal', tryFull.error.code);
+      logger.warn('admin/users: full select failed, fallback to minimal', { code: tryFull.error.code });
       const min = await supabase
         .from('profiles')
         .select(minimalSelect)
@@ -247,7 +248,7 @@ function AdminUsersPageInner() {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-sm text-rose-900">
         <p className="font-bold mb-1">⚠️ Errore nel caricamento utenti</p>
-        <p className="mb-2">{(error as any)?.message ?? 'Errore sconosciuto'}</p>
+        <p className="mb-2">{error instanceof Error ? error.message : 'Errore sconosciuto'}</p>
         <p className="text-xs">
           Se non l'hai ancora fatto, verifica di avere applicato le migration più recenti su Supabase
           (in particolare <code>021_seller_kyc_and_approval.sql</code>).

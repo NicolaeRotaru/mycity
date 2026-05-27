@@ -62,13 +62,16 @@ export async function fetchLoyaltyAccount(): Promise<LoyaltyAccount | null> {
  * Idempotente: chiamabile più volte nello stesso giorno (l'RPC restituisce
  * `already_today: true` senza modificare nulla).
  */
+type LoyaltyStreakRpc = { streak?: number; bonus?: number; already_today?: boolean };
+
 export async function touchLoyaltyStreak(): Promise<{ streak: number; bonus: number; alreadyToday: boolean } | null> {
   const { data, error } = await supabase.rpc('touch_loyalty_streak');
   if (error || !data) return null;
+  const d = data as LoyaltyStreakRpc;
   return {
-    streak: (data as any).streak ?? 0,
-    bonus: (data as any).bonus ?? 0,
-    alreadyToday: !!(data as any).already_today,
+    streak: d.streak ?? 0,
+    bonus: d.bonus ?? 0,
+    alreadyToday: !!d.already_today,
   };
 }
 

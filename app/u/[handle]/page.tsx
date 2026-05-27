@@ -44,7 +44,12 @@ async function fetchAchievements(userId: string) {
       .eq('user_id', userId)
       .order('unlocked_at', { ascending: false })
       .limit(12);
-    return (data ?? []) as any[];
+    type UserAchievementRow = {
+      achievement_id: string;
+      unlocked_at: string;
+      achievement: { title: string; icon: string | null; tier: string | null } | null;
+    };
+    return (data ?? []) as unknown as UserAchievementRow[];
   } catch {
     return [];
   }

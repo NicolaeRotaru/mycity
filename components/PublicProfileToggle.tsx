@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 /**
  * Toggle profilo pubblico buyer opt-in.
@@ -32,6 +32,8 @@ function validateHandle(h: string): string | null {
 }
 
 export default function PublicProfileToggle() {
+  const tActions = useTranslations('actions');
+  const tToasts = useTranslations('toasts');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [enabled, setEnabled] = useState(false);
@@ -140,7 +142,7 @@ export default function PublicProfileToggle() {
               <p className="text-xs text-ink-500 mt-1 inline-flex items-center gap-1">
                 <span>URL:</span>
                 <code className="bg-cream-100 px-1 rounded">{publicUrl}</code>
-                <button onClick={() => { navigator.clipboard.writeText(publicUrl); toast.success(COPY.toasts.copied); }} className="text-primary-700 hover:text-primary-800" aria-label="Copia">
+                <button onClick={() => { navigator.clipboard.writeText(publicUrl); toast.success(tToasts('copied')); }} className="text-primary-700 hover:text-primary-800" aria-label="Copia">
                   <Copy size={11} />
                 </button>
               </p>
@@ -160,7 +162,7 @@ export default function PublicProfileToggle() {
         </div>
       )}
 
-      <Button onClick={save} loading={saving} size="sm">{COPY.actions.save}</Button>
+      <Button onClick={save} loading={saving} size="sm">{tActions('save')}</Button>
     </div>
   );
 }

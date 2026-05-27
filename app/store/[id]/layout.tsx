@@ -3,7 +3,17 @@ import { createClient } from '@supabase/supabase-js';
 
 export const revalidate = 300;
 
-async function fetchStore(id: string) {
+type StoreMeta = {
+  id: string;
+  store_name: string | null;
+  store_description: string | null;
+  store_logo: string | null;
+  store_address: string | null;
+  is_approved: boolean;
+  role: string | null;
+};
+
+async function fetchStore(id: string): Promise<StoreMeta | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
@@ -16,7 +26,7 @@ async function fetchStore(id: string) {
       .select('id, store_name, store_description, store_logo, store_address, is_approved, role')
       .eq('id', id)
       .single();
-    return data as any;
+    return (data as unknown as StoreMeta) ?? null;
   } catch {
     return null;
   }

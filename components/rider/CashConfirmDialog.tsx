@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { COPY } from '@/lib/copy';
+import { useTranslations } from 'next-intl';
 
 type Props = {
   orderId: string;
@@ -21,6 +21,8 @@ type Props = {
  * (rider proprietario, stato ordine, payment_method=cod, non duplicato).
  */
 export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed }: Props) {
+  const tStates = useTranslations('states');
+  const tActions = useTranslations('actions');
   const [open, setOpen] = useState(false);
   const [amount, setAmount] = useState((expectedCents / 100).toFixed(2));
   const [cashPhoto, setCashPhoto] = useState<string | null>(null);
@@ -132,14 +134,14 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
             disabled={submitting}
             className="flex-1 rounded-lg px-4 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
           >
-            {COPY.actions.cancel}
+            {tActions('cancel')}
           </button>
           <button
             onClick={submit}
             disabled={submitting || !cashPhoto}
             className="flex-1 rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 disabled:opacity-50"
           >
-            {submitting ? COPY.states.sending : COPY.actions.confirm}
+            {submitting ? tStates('sending') : tActions('confirm')}
           </button>
         </div>
       </div>

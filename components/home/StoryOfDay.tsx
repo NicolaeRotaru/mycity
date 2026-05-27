@@ -36,7 +36,7 @@ export default function StoryOfDay() {
         `)
         .eq('feature_date', today)
         .maybeSingle();
-      return (data as any) ?? null;
+      return (data as unknown as Story) ?? null;
     },
   });
 

@@ -6,7 +6,9 @@ export const alt = 'Negozio su MyCity';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-async function fetchStore(id: string) {
+type StoreOGData = { store_name: string | null; store_description: string | null; store_logo: string | null; store_city: string | null };
+
+async function fetchStore(id: string): Promise<StoreOGData | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) return null;
@@ -18,7 +20,7 @@ async function fetchStore(id: string) {
       .eq('id', id)
       .eq('role', 'seller')
       .single();
-    return data as any;
+    return (data as unknown as StoreOGData) ?? null;
   } catch {
     return null;
   }
