@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+const withNextIntl = require('next-intl/plugin')('./i18n.ts');
+
 
 // CSP NON e' qui — viene generata nel middleware con nonce-per-request
 // (vedi middleware.ts buildCsp + generateNonce). Permette di passare da
@@ -63,14 +65,17 @@ const nextConfig = {
   },
 };
 
+// next-intl plugin: leggi i18n config + bundle messages a build time
+const nextConfigWithIntl = withNextIntl(nextConfig);
+
 // Bundle analyzer: attivo solo con ANALYZE=true npm run build.
 // https://www.npmjs.com/package/@next/bundle-analyzer
-let configWithAnalyzer = nextConfig;
+let configWithAnalyzer = nextConfigWithIntl;
 try {
   const withBundleAnalyzer = require('@next/bundle-analyzer')({
     enabled: process.env.ANALYZE === 'true',
   });
-  configWithAnalyzer = withBundleAnalyzer(nextConfig);
+  configWithAnalyzer = withBundleAnalyzer(nextConfigWithIntl);
 } catch { /* @next/bundle-analyzer non installato in prod, ok */ }
 
 // Sentry wrapper: attivo solo se NEXT_PUBLIC_SENTRY_DSN e' configurato.

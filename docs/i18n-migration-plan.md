@@ -1,7 +1,23 @@
 # i18n Migration Plan — next-intl integration
 
-> Documento di pianificazione. NON applicare in cieco — richiede coordinamento
-> con marketing per le traduzioni e test approfondito di routing.
+> **STATO: SETUP BASE APPLICATO** (cookie-based locale, no URL prefix).
+>
+> Infrastruttura pronta:
+> - `i18n.ts` (root): getRequestConfig + resolveLocale (cookie > Accept-Lang > default)
+> - `messages/it.json`, `messages/en.json` con namespaces (actions, states,
+>   errors, toasts, nav, checkout, marketing)
+> - `app/layout.tsx`: NextIntlClientProvider wrap + html lang dinamico
+> - `next.config.js`: withNextIntl plugin
+> - `app/api/locale/route.ts`: POST setter cookie NEXT_LOCALE
+> - `components/LocaleSwitcher.tsx`: toggle UI (Globe icon)
+>
+> **NON migrate**: le ~50+ stringhe sparse nel codice (richiede grep+sostituzione
+> ad ampio raggio). Il `lib/copy.ts` resta come fallback compat per ora.
+>
+> Resta da fare:
+> 1. Migrare gradualmente le stringhe da hardcoded a `useTranslations()`
+> 2. Aggiungere altre lingue se richiesto (de, fr, ecc)
+> 3. Aggiungere LocaleSwitcher in Footer o Header
 
 ## Stato attuale
 - Tutte le stringhe UI in italiano hardcoded
