@@ -73,5 +73,17 @@
     "subTagline": "Compra dai negozi sotto casa, ricevi a domicilio.",
     "becomeSeller": "Diventa venditore",
     "explore": "Esplora i negozi"
+  },
+  "forms": {
+    "uploadLogo": "Carica logo",
+    "uploadPhoto": "Carica",
+    "replacePhoto": "Sostituisci",
+    "uploading": "Caricamento…",
+    "openDispute": "Apri reclamo",
+    "saveStore": "Salva negozio",
+    "saveAndStart": "Salva e avvia verifica",
+    "submitting": "Invio verifica…",
+    "continue": "Continua",
+    "step3Label": "Conferma"
   }
 }

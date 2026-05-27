@@ -73,5 +73,17 @@
     "subTagline": "Buy from shops nearby, get delivery to your door.",
     "becomeSeller": "Become a seller",
     "explore": "Browse shops"
+  },
+  "forms": {
+    "uploadLogo": "Upload logo",
+    "uploadPhoto": "Upload",
+    "replacePhoto": "Replace",
+    "uploading": "Uploading…",
+    "openDispute": "Open dispute",
+    "saveStore": "Save shop",
+    "saveAndStart": "Save and start verification",
+    "submitting": "Sending for review…",
+    "continue": "Continue",
+    "step3Label": "Confirm"
   }
 }
