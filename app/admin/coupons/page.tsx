@@ -8,6 +8,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { useTranslations } from 'next-intl';
 
 type Coupon = {
   id: string;
@@ -41,6 +42,7 @@ const empty: {
 
 export default function AdminCouponsPage() {
   const qc = useQueryClient();
+  const tConfirm = useTranslations('confirm');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
 
@@ -245,7 +247,7 @@ export default function AdminCouponsPage() {
                       const ok = await confirmDialog({
                         title: 'Eliminare il coupon?',
                         message: `Il codice ${c.code} non sarà più utilizzabile dai clienti.`,
-                        confirmLabel: 'Sì, elimina',
+                        confirmLabel: tConfirm('yesDelete'),
                         danger: true,
                         icon: '🎟️',
                       });

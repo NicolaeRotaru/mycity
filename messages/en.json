@@ -85,5 +85,19 @@
     "submitting": "Sending for review…",
     "continue": "Continue",
     "step3Label": "Confirm"
+  },
+  "confirm": {
+    "yesSuspend": "Yes, suspend",
+    "yesReactivate": "Yes, reactivate",
+    "yesDelete": "Yes, delete",
+    "yesApprove": "Yes, approve",
+    "yesReject": "Yes, reject"
+  },
+  "admin": {
+    "sellerApproved": "Seller approved and notified",
+    "requestRejected": "Request rejected and notified",
+    "storeReactivated": "Shop reactivated",
+    "accountDeleted": "Account permanently deleted",
+    "storeSuspended": "Shop suspended"
   }
 }
