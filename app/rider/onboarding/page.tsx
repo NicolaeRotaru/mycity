@@ -23,7 +23,15 @@ export default function RiderOnboardingPage() {
   const router = useRouter();
   const [uploading, setUploading] = useState<DocKind | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
+  type RiderProfile = {
+    rider_license_url?: string | null;
+    rider_insurance_url?: string | null;
+    kyc_id_doc_front_url?: string | null;
+    kyc_id_doc_back_url?: string | null;
+    kyc_selfie_url?: string | null;
+    [k: string]: unknown;
+  };
+  const [profile, setProfile] = useState<RiderProfile | null>(null);
   const [form, setForm] = useState({
     legal_first_name: '',
     legal_last_name: '',
@@ -79,9 +87,9 @@ export default function RiderOnboardingPage() {
       const data = await r.json();
       if (!r.ok) throw new Error(data?.error ?? 'Upload fallito');
       toast.success(`${kind} caricato`);
-      setProfile((p: any) => ({ ...p, [columnForKind(kind)]: data.url }));
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Errore upload');
+      setProfile((p) => ({ ...(p ?? {}), [columnForKind(kind)]: data.url }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Errore upload');
     } finally {
       setUploading(null);
     }
@@ -110,8 +118,8 @@ export default function RiderOnboardingPage() {
       if (!r.ok) throw new Error(data?.error ?? 'KYC fallito');
       toast.success(data.status === 'APPROVED' ? 'KYC approvato!' : 'KYC inviato, verifica in corso');
       router.push('/rider');
-    } catch (e: any) {
-      toast.error(e?.message ?? 'Errore');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Errore');
     } finally {
       setSubmitting(false);
     }

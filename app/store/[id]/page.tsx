@@ -39,21 +39,23 @@ export default function StorePage({ params }: { params: { id: string } }) {
     },
   });
 
+  type StoreReview = { id: string; rating: number; comment: string | null; created_at: string };
+
   const { data: reviews = [] } = useQuery({
     queryKey: queryKeys.reviews.store(id),
-    queryFn: async () => {
+    queryFn: async (): Promise<StoreReview[]> => {
       const { data } = await supabase
         .from('store_reviews')
         .select('id, rating, comment, created_at')
         .eq('store_id', id)
         .order('created_at', { ascending: false })
         .limit(20);
-      return data ?? [];
+      return (data ?? []) as StoreReview[];
     },
   });
 
   const avgRating = reviews.length > 0
-    ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviews.length
+    ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
     : 0;
 
   if (isLoading) {
@@ -111,7 +113,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
     } : undefined,
     aggregateRating: reviews.length > 0 ? {
       '@type': 'AggregateRating',
-      ratingValue: (reviews.reduce((s: number, r: any) => s + Number(r.rating), 0) / reviews.length).toFixed(1),
+      ratingValue: (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1),
       reviewCount: reviews.length,
     } : undefined,
     url: typeof window !== 'undefined' ? window.location.href : undefined,
@@ -268,7 +270,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
             </div>
           </div>
           <ul className="space-y-3">
-            {reviews.slice(0, 5).map((r: any) => (
+            {reviews.slice(0, 5).map((r) => (
               <li key={r.id} className="border-b border-cream-200 last:border-0 pb-3 last:pb-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-accent-400 text-sm">

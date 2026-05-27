@@ -53,8 +53,8 @@ const VerifyCodeDialog = ({
       if (!result.ok) {
         setError(ERROR_LABELS[result.reason ?? ''] ?? 'Verifica fallita');
       }
-    } catch (err: any) {
-      setError(err.message ?? 'Errore');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Errore');
     } finally {
       setSubmitting(false);
     }

@@ -20,7 +20,7 @@ export type StoreCardData = {
   store_name: string;
   store_address: string | null;
   store_logo: string | null;
-  store_hours: any;
+  store_hours: StoreHours | null;
   store_media?: StoreMediaItem[] | null;
 };
 

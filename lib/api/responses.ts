@@ -36,9 +36,9 @@ export const ApiErrors = {
   forbidden:       (message = 'Non hai i permessi per questa azione') => apiError(403, message, 'FORBIDDEN'),
   notFound:        (message = 'Non trovato') => apiError(404, message, 'NOT_FOUND'),
   invalidRequest:  (message: string, details?: unknown) => apiError(400, message, 'INVALID_REQUEST', details),
-  rateLimited:     (retryAfterSec: number) =>
+  rateLimited:     (retryAfterSec: number, message?: string) =>
     NextResponse.json(
-      { ok: false, error: { code: 'RATE_LIMITED', message: `Troppe richieste. Riprova tra ${retryAfterSec}s.` } },
+      { ok: false, error: { code: 'RATE_LIMITED', message: message ?? `Troppe richieste. Riprova tra ${retryAfterSec}s.` } },
       { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
     ),
   conflict:        (message: string) => apiError(409, message, 'CONFLICT'),

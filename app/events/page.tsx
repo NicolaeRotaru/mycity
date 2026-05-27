@@ -67,7 +67,7 @@ export default function EventsPage() {
       if (!user) return;
       setUserId(user.id);
       const { data } = await supabase.from('event_rsvps').select('event_id').eq('user_id', user.id);
-      setMyRsvps(new Set((data ?? []).map((r: any) => r.event_id)));
+      setMyRsvps(new Set((data ?? []).map((r: { event_id: string }) => r.event_id)));
     })();
   }, []);
 

@@ -28,8 +28,8 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());
-  } catch (e: any) {
-    return ApiErrors.invalidRequest('Bad request', e?.message);
+  } catch (e) {
+    return ApiErrors.invalidRequest('Bad request', e instanceof Error ? e.message : undefined);
   }
 
   const admin = getAdminSupabase();
@@ -83,7 +83,7 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
       .eq('id', order.id);
 
     return NextResponse.json({ ok: true, transferId: transfer.id }, { status: 200 });
-  } catch (err: any) {
+  } catch (err) {
     logger.error('[stripe] transfer failed', err);
     await admin
       .from('orders')

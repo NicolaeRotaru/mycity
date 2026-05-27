@@ -36,8 +36,8 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());
-  } catch (e: any) {
-    return ApiErrors.invalidRequest('Dati non validi', e?.message);
+  } catch (e) {
+    return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
   const supa = getServerSupabase();
@@ -94,7 +94,10 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   return NextResponse.json({ ok: true, delta }, { status: 200 });
 });
 
-async function upsertReconciliation(admin: any, riderId: string, isoDate: string) {
+type AdminSupabase = ReturnType<typeof import('@/lib/supabase/server').getAdminSupabase>;
+type ReconciliationRow = { total_price: number | string | null; cash_collected_cents: number | null };
+
+async function upsertReconciliation(admin: AdminSupabase, riderId: string, isoDate: string) {
   // Calcola expected e collected per quel giorno
   const start = `${isoDate}T00:00:00Z`;
   const end = `${isoDate}T23:59:59Z`;
@@ -108,11 +111,12 @@ async function upsertReconciliation(admin: any, riderId: string, isoDate: string
     .gte('cash_confirmed_at', start)
     .lte('cash_confirmed_at', end);
 
-  const expected = (rows ?? []).reduce(
-    (s: number, r: any) => s + Math.round(Number(r.total_price) * 100), 0,
+  const rowsTyped = (rows ?? []) as unknown as ReconciliationRow[];
+  const expected = rowsTyped.reduce(
+    (s, r) => s + Math.round(Number(r.total_price) * 100), 0,
   );
-  const collected = (rows ?? []).reduce(
-    (s: number, r: any) => s + Number(r.cash_collected_cents ?? 0), 0,
+  const collected = rowsTyped.reduce(
+    (s, r) => s + Number(r.cash_collected_cents ?? 0), 0,
   );
 
   const status = expected === collected ? 'OK' : 'MISMATCH';

@@ -31,7 +31,7 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
       if (error && error.code !== '23505') throw error;
       setSubscribed(true);
       toast.success('Iscritto! Riceverai la newsletter ogni venerdì.');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setLoading(false);

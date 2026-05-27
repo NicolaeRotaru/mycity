@@ -78,7 +78,7 @@ Rispondi SOLO con la descrizione, niente preambolo, niente virgolette.`;
       .trim();
     if (!text) return ApiErrors.internal('Nessuna risposta dal modello.');
     return NextResponse.json({ description: text });
-  } catch (err: any) {
-    return ApiErrors.internal(`Errore AI: ${err?.message ?? 'sconosciuto'}`);
+  } catch (err) {
+    return ApiErrors.internal(`Errore AI: ${err instanceof Error ? err.message : 'sconosciuto'}`);
   }
 });

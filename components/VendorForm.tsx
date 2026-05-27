@@ -79,9 +79,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
         const { data } = supabase.storage.from('products').getPublicUrl(path);
         setLogoUrl(data.publicUrl);
         toast.success('Logo caricato');
-      } catch (err: any) {
-        toast.error(friendlyError(err));
-      } finally {
+      } catch (err) {
+      toast.error(friendlyError(err));
+    } finally {
         setUploadingLogo(false);
       }
     },

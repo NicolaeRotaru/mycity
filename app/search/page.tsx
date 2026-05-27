@@ -25,13 +25,13 @@ function SearchInner() {
 
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.allList,
-    queryFn: async () => {
+    queryFn: async (): Promise<Array<{ id: string; slug: string; name: string }>> => {
       const { data, error } = await supabase
         .from('categories')
         .select('id, slug, name')
         .order('name');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as Array<{ id: string; slug: string; name: string }>;
     },
   });
 
@@ -101,7 +101,7 @@ function SearchInner() {
             className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
           >
             <option value="">Tutte le categorie</option>
-            {categories.map((c: any) => (
+            {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>

@@ -65,7 +65,7 @@ export default function AchievementsPage() {
         .from('user_achievements')
         .select('achievement_id')
         .eq('user_id', userId!);
-      return new Set((data ?? []).map((r: any) => r.achievement_id));
+      return new Set((data ?? []).map((r: { achievement_id: string }) => r.achievement_id));
     },
   });
 

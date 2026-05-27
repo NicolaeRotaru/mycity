@@ -28,23 +28,25 @@ function iconFor(slug: string): LucideIcon {
   return ICON_MAP[slug] ?? Tag;
 }
 
+type CategoryRow = { id: string; slug: string; name: string; icon: string | null };
+
 const CategoryShowcase = () => {
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.showcase,
-    queryFn: async () => {
+    queryFn: async (): Promise<CategoryRow[]> => {
       const { data, error } = await supabase
         .from('categories')
         .select('id, slug, name, icon')
         .is('parent_id', null)
         .order('name');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as CategoryRow[];
     },
   });
 
   return (
     <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-3 gap-3 sm:gap-4">
-      {categories.slice(0, 9).map((c: any) => {
+      {categories.slice(0, 9).map((c) => {
         const Icon = iconFor(c.slug);
         return (
           <Link

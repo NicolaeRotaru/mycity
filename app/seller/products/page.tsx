@@ -16,9 +16,19 @@ import { queryKeys } from '@/lib/queries/keys';
 export default function SellerProductsPage() {
   const qc = useQueryClient();
 
+  type SellerProductRow = {
+    id: string;
+    name: string;
+    price: number | string;
+    status: 'available' | 'sold' | string;
+    images: string[] | null;
+    stock: number | null;
+    categories: { name: string | null } | null;
+  };
+
   const { data: products = [], isLoading } = useQuery({
     queryKey: queryKeys.seller.products,
-    queryFn: async () => {
+    queryFn: async (): Promise<SellerProductRow[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
@@ -27,7 +37,7 @@ export default function SellerProductsPage() {
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as unknown as SellerProductRow[];
     },
   });
 
@@ -85,7 +95,7 @@ export default function SellerProductsPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map((p: any) => (
+              {products.map((p) => (
                 <tr key={p.id} className="border-t hover:bg-cream-50">
                   <td className="p-3">
                     <div className="flex items-center gap-3">

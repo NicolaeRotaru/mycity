@@ -13,7 +13,7 @@ type AuditRow = {
   action: string;
   target_table: string | null;
   target_id: string | null;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
   ip: string | null;
   created_at: string;
   actor: { full_name: string | null; email: string | null } | null;

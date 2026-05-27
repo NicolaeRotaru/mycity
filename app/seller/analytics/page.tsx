@@ -64,9 +64,9 @@ export default function SellerAnalyticsPage() {
           .in('product_id', productIds),
       ]);
 
-      const views = (viewsRes.data ?? []) as any[];
-      const orders = (ordersRes.data ?? []) as any[];
-      const reviews = (reviewsRes.data ?? []) as any[];
+      const views = (viewsRes.data ?? []) as Array<{ product_id: string; viewed_at: string }>;
+      const orders = (ordersRes.data ?? []) as Array<{ id: string; total_cents: number; status: string; created_at: string }>;
+      const reviews = (reviewsRes.data ?? []) as Array<{ product_id: string; rating: number }>;
 
       const views30 = views.length;
       const views7 = views.filter((v) => v.viewed_at >= since7).length;
@@ -173,7 +173,7 @@ export default function SellerAnalyticsPage() {
             <p className="text-sm text-ink-500">Nessuna view ancora.</p>
           ) : (
             <div className="space-y-2">
-              {analytics.topProducts.map((p: any, i: number) => (
+              {analytics.topProducts.map((p, i: number) => (
                 <Link key={p.id} href={`/product/${p.id}`} className="flex items-center gap-3 p-2 hover:bg-cream-50 rounded-lg">
                   <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
                     i === 0 ? 'bg-accent-500 text-ink-900' : 'bg-cream-200 text-ink-700'
@@ -201,7 +201,7 @@ export default function SellerAnalyticsPage() {
             <p className="text-sm text-ink-500">Niente da segnalare. Bel lavoro!</p>
           ) : (
             <div className="space-y-2">
-              {analytics.slowProducts.map((p: any) => (
+              {analytics.slowProducts.map((p) => (
                 <div key={p.id} className="p-3 bg-secondary-50 border border-secondary-200 rounded-lg">
                   <p className="text-sm font-semibold text-ink-900 truncate">{p.name}</p>
                   <p className="text-xs text-ink-600 mt-1">

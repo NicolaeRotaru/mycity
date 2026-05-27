@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   let event: Stripe.Event;
   try {
     event = getStripe().webhooks.constructEvent(raw, sig, secret);
-  } catch (err: any) {
+  } catch (err) {
     logger.error(err, { context: 'stripe-webhook-signature' });
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
         logger.info('Unhandled Stripe event', { type: event.type });
     }
     return NextResponse.json({ received: true }, { status: 200 });
-  } catch (err: any) {
+  } catch (err) {
     logger.error(err, { context: 'stripe-webhook-handler' });
     return NextResponse.json({ error: 'Handler error' }, { status: 500 });
   }

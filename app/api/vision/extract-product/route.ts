@@ -142,12 +142,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       return ApiErrors.badGateway('Risposta AI inattesa. Riprova.');
     }
     toolInput = toolBlock.input as ExtractInput;
-  } catch (err: any) {
+  } catch (err) {
     // Log solo lo status code, mai il messaggio raw (potrebbe contenere
     // frammenti della API key o dell'input).
-    logger.error('Errore chiamata Anthropic, status:', err?.status);
-    if (err?.status === 401) return ApiErrors.unavailable('API key Anthropic non valida.');
-    if (err?.status === 429) return ApiErrors.rateLimited(60);
+    const status = (err as { status?: number } | null)?.status;
+    logger.error('Errore chiamata Anthropic, status:', status);
+    if (status === 401) return ApiErrors.unavailable('API key Anthropic non valida.');
+    if (status === 429) return ApiErrors.rateLimited(60);
     return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
   }
 

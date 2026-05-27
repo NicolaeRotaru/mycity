@@ -26,8 +26,8 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());
-  } catch (e: any) {
-    return ApiErrors.invalidRequest('Bad request', e?.message);
+  } catch (e) {
+    return ApiErrors.invalidRequest('Bad request', e instanceof Error ? e.message : undefined);
   }
 
   const admin = getAdminSupabase();
@@ -45,10 +45,10 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
 
   if (oErr || !order) return ApiErrors.notFound('Ordine non trovato');
   if (order.delivery_status !== 'DELIVERED') {
-    return NextResponse.json({ error: 'Ordine non consegnato' }, { status: 409 });
+    return ApiErrors.conflict('Ordine non consegnato');
   }
   if (order.invoice_number) {
-    return NextResponse.json({ error: 'Fattura gia\' esistente', invoice_number: order.invoice_number }, { status: 409 });
+    return ApiErrors.conflict(`Fattura gia' esistente: ${order.invoice_number}`);
   }
 
   const { data: items } = await admin
@@ -100,7 +100,7 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
       sdiCode: '0000000', // privato
       email: buyerEmail,
     },
-    lines: (items ?? []).map((it: any) => ({
+    lines: ((items ?? []) as Array<{ quantity: number; unit_price: number | string; products?: { name?: string } | null }>).map((it) => ({
       description: it.products?.name ?? 'Prodotto',
       quantity: it.quantity,
       unitPrice: Number(it.unit_price),
@@ -113,7 +113,7 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   let pdfBytes: Buffer;
   try {
     pdfBytes = await renderInvoicePdf(doc);
-  } catch (e: any) {
+  } catch (e) {
     logger.error('[invoice] pdf render failed', e);
     return ApiErrors.internal('Errore generazione PDF');
   }

@@ -17,7 +17,7 @@ type Subscription = {
   id: string;
   user_id: string;
   seller_id: string;
-  items: any[];
+  items: Array<{ name: string; quantity: number; price_cents?: number; product_id?: string }>;
   total_cents: number;
   frequency: 'weekly' | 'biweekly' | 'monthly';
   weekday: number | null;
@@ -122,7 +122,7 @@ export default function SubscriptionsPage() {
               <div className="bg-cream-50 rounded-lg p-3">
                 <p className="text-xs text-ink-500 mb-1">Articoli ({s.items.length}):</p>
                 <ul className="text-sm text-ink-700 space-y-0.5">
-                  {s.items.slice(0, 3).map((it: any, i: number) => (
+                  {s.items.slice(0, 3).map((it, i: number) => (
                     <li key={i}>· {it.name} × {it.quantity}</li>
                   ))}
                   {s.items.length > 3 && <li className="text-xs text-ink-500">+ altri {s.items.length - 3}</li>}

@@ -60,18 +60,26 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
   });
 
   // Carica rating aggregato per i prodotti visibili (per filtro/ordinamento per rating)
+  type Prod = {
+    id: string; name: string; description: string | null; price: string | number;
+    images: string[] | null; stock: number | null; created_at: string;
+    seller_id: string | null;
+    profiles?: { store_name: string | null; is_approved?: boolean; store_hours?: unknown } | null;
+  };
+  const prods = products as unknown as Prod[];
   const { data: ratings = {} } = useQuery({
-    queryKey: queryKeys.products.ratings(products.map((p: any) => p.id).sort().join(',')),
+    queryKey: queryKeys.products.ratings(prods.map((p) => p.id).sort().join(',')),
     enabled: (minRating !== undefined && minRating > 0) || sort === 'rating',
     queryFn: async () => {
-      if (products.length === 0) return {};
-      const ids = products.map((p: any) => p.id);
+      if (prods.length === 0) return {};
+      const ids = prods.map((p) => p.id);
       const { data } = await supabase
         .from('reviews')
         .select('product_id, rating')
         .in('product_id', ids);
       const map: Record<string, { avg: number; count: number }> = {};
-      for (const r of (data ?? []) as any[]) {
+      type ReviewRow = { product_id: string; rating: number };
+      for (const r of (data ?? []) as ReviewRow[]) {
         const ex = map[r.product_id];
         if (ex) { ex.avg = (ex.avg * ex.count + r.rating) / (ex.count + 1); ex.count += 1; }
         else map[r.product_id] = { avg: r.rating, count: 1 };
@@ -82,7 +90,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
 
   // Filtro client-side: orari aperti, rating minimo, ordinamento per rating
   const filtered = useMemo(() => {
-    let arr = products as any[];
+    let arr = prods;
     if (onlyOpenStores) {
       const todayKey = DAY_KEYS[new Date().getDay()];
       arr = arr.filter((p) => {
@@ -101,7 +109,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
       });
     }
     return arr;
-  }, [products, onlyOpenStores, minRating, ratings, sort]);
+  }, [prods, onlyOpenStores, minRating, ratings, sort]);
 
   if (isLoading) return <SkeletonGrid count={limit ?? 8} />;
 
@@ -117,7 +125,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-      {filtered.map((p: any) => (
+      {filtered.map((p) => (
         <ProductCard
           key={p.id}
           id={p.id}
@@ -125,7 +133,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
           description={p.description ?? ''}
           price={Number(p.price)}
           images={Array.isArray(p.images) ? p.images : []}
-          stock={p.stock}
+          stock={p.stock ?? undefined}
           createdAt={p.created_at}
           storeName={p.profiles?.store_name ?? undefined}
           sellerId={p.seller_id ?? undefined}

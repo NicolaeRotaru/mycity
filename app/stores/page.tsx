@@ -97,11 +97,14 @@ export default function StoresPage() {
     gcTime: 10 * 60_000,
   });
 
-  const stores = data?.stores ?? [];
-  const productsByStore = data?.productsByStore ?? {};
-  const reviewsByStore = data?.reviewsByStore ?? {};
-  const countByStore = data?.countByStore ?? {};
-  const categoriesByStore = data?.categoriesByStore ?? {};
+  // useMemo per stabilizzare reference: fallback `?? []` / `?? {}` produce
+  // un nuovo oggetto ad ogni render senza memo, che fa schizzare le deps
+  // dei useMemo dipendenti (lint warning react-hooks/exhaustive-deps).
+  const stores = useMemo(() => data?.stores ?? [], [data?.stores]);
+  const productsByStore = useMemo(() => data?.productsByStore ?? {}, [data?.productsByStore]);
+  const reviewsByStore = useMemo(() => data?.reviewsByStore ?? {}, [data?.reviewsByStore]);
+  const countByStore = useMemo(() => data?.countByStore ?? {}, [data?.countByStore]);
+  const categoriesByStore = useMemo(() => data?.categoriesByStore ?? {}, [data?.categoriesByStore]);
   const categories = data?.categories ?? [];
 
   const filtered = useMemo(() => {

@@ -63,9 +63,9 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
         }
         onChange(next);
         toast.success('Media caricato');
-      } catch (err: any) {
-        toast.error(friendlyError(err));
-      } finally {
+      } catch (err) {
+      toast.error(friendlyError(err));
+    } finally {
         setUploading(false);
       }
     },

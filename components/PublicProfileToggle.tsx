@@ -89,7 +89,7 @@ export default function PublicProfileToggle() {
         return;
       }
       toast.success(enabled ? 'Profilo pubblico attivato' : 'Profilo pubblico disattivato');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setSaving(false);

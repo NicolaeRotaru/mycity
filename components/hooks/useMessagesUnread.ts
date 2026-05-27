@@ -38,7 +38,8 @@ export const useMessagesUnread = () => {
       // Tabella conversations creata dalla migration 026. Se non applicata
       // su Supabase, ritorniamo 0 silenziosamente invece di rompere la UI.
       if (error) return 0;
-      return (data ?? []).reduce((sum, c: any) => {
+      type ConvRow = { buyer_id: string; seller_id: string; buyer_unread_count: number | null; seller_unread_count: number | null };
+      return (data ?? []).reduce((sum: number, c: ConvRow) => {
         if (c.buyer_id === userId) return sum + (c.buyer_unread_count ?? 0);
         if (c.seller_id === userId) return sum + (c.seller_unread_count ?? 0);
         return sum;

@@ -46,9 +46,11 @@ export default function SellerHealthScore() {
         .select('id, name, description, images, price')
         .eq('seller_id', userId!);
 
-      const totalProducts = products?.length ?? 0;
-      const productsWithPhotos = (products ?? []).filter((p: any) => Array.isArray(p.images) && p.images.length > 0).length;
-      const productsWithDescription = (products ?? []).filter((p: any) => p.description && p.description.length > 30).length;
+      type ProductRow = { id: string; name: string; description: string | null; images: string[] | null; price: number };
+      const productsTyped = (products ?? []) as ProductRow[];
+      const totalProducts = productsTyped.length;
+      const productsWithPhotos = productsTyped.filter((p) => Array.isArray(p.images) && p.images.length > 0).length;
+      const productsWithDescription = productsTyped.filter((p) => p.description && p.description.length > 30).length;
 
       const out: Check[] = [
         {
@@ -171,7 +173,7 @@ export default function SellerHealthScore() {
         />
       </div>
 
-      {/* TODO actions */}
+      {/* Top 3 azioni da fare per alzare lo score (sorted by impact) */}
       {todo.length > 0 && (
         <div>
           <p className="text-sm font-semibold text-ink-900 mb-2">

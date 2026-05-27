@@ -26,8 +26,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let body;
   try {
     body = Body.parse(await req.json());
-  } catch (e: any) {
-    return ApiErrors.invalidRequest('Dati non validi', e?.message);
+  } catch (e) {
+    return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
   const supa = getServerSupabase();
@@ -72,9 +72,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         refundId = refund.id;
         refundedAt = new Date().toISOString();
         newStatus = 'REFUNDED';
-      } catch (err: any) {
+      } catch (err) {
         logger.error('[returns] refund failed', err);
-        return ApiErrors.badGateway('Refund Stripe fallito: ' + err.message);
+        return ApiErrors.badGateway('Refund Stripe fallito: ' + (err instanceof Error ? err.message : 'unknown'));
       }
     }
   }

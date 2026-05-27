@@ -86,7 +86,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         updatePos(p.lat, p.lng);
       });
 
-      map.on('click', (e: any) => {
+      map.on('click', (e: { latlng: { lat: number; lng: number } }) => {
         marker.setLatLng(e.latlng);
         updatePos(e.latlng.lat, e.latlng.lng);
       });

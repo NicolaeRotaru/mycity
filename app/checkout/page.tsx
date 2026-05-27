@@ -22,6 +22,8 @@ import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
 import { B2BInvoiceForm } from '@/components/checkout/B2BInvoiceForm';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
+import { CartGroupsList } from '@/components/checkout/CartGroupsList';
+import { CouponInput } from '@/components/checkout/CouponInput';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -146,16 +148,17 @@ export default function CheckoutPage() {
   });
 
   // Indirizzi salvati
+  type SavedAddress = { id: string; full_name: string; address: string; city: string; zip: string; phone: string; notes: string | null; lat: number | null; lng: number | null; is_default: boolean };
   const { data: savedAddresses = [] } = useQuery({
     queryKey: queryKeys.checkout.userAddresses(authUser?.id ?? ''),
     enabled: !!authUser?.id,
-    queryFn: async () => {
+    queryFn: async (): Promise<SavedAddress[]> => {
       const { data } = await supabase
         .from('user_addresses')
         .select('*')
         .eq('user_id', authUser!.id)
         .order('is_default', { ascending: false });
-      return data ?? [];
+      return (data ?? []) as SavedAddress[];
     },
   });
 
@@ -169,7 +172,7 @@ export default function CheckoutPage() {
   // Quando arrivano gli indirizzi salvati, pre-seleziona il default
   useEffect(() => {
     if (savedAddresses.length > 0 && !form.fullName) {
-      const def = savedAddresses.find((a: any) => a.is_default) ?? savedAddresses[0];
+      const def = savedAddresses.find((a) => a.is_default) ?? savedAddresses[0];
       setForm({
         fullName: def.full_name, address: def.address, city: def.city,
         zip: def.zip, phone: def.phone, notes: def.notes ?? '',
@@ -181,7 +184,7 @@ export default function CheckoutPage() {
 
   const applySavedAddress = (id: string) => {
     if (!id) return;
-    const a = savedAddresses.find((x: any) => x.id === id);
+    const a = savedAddresses.find((x) => x.id === id);
     if (!a) return;
     setForm({
       fullName: a.full_name, address: a.address, city: a.city,
@@ -553,64 +556,17 @@ export default function CheckoutPage() {
               <span className="text-xs text-ink-400">{cart.length} articoli</span>
             </div>
 
-            <div className="divide-y max-h-72 overflow-y-auto">
-              {groups.map((g) => (
-                <div key={g.sellerId} className="px-5 py-3">
-                  <p className="text-xs font-semibold text-primary-800 mb-2">🏪 {g.storeName}</p>
-                  {g.items.map((item) => (
-                    <div key={item.id} className="flex gap-3 items-center pl-2 py-1">
-                      <div className="relative w-10 h-10 bg-cream-100 rounded shrink-0 overflow-hidden">
-                        <Image
-                          src={sizedImage(item.image ?? 'https://placehold.co/100x100/eef2ff/6366f1?text=?', 'thumb')}
-                          alt={item.name}
-                          fill
-                          sizes="40px"
-                          unoptimized
-                          className="object-cover"
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-ink-800 text-sm truncate">{item.name}</p>
-                        <p className="text-xs text-ink-400">×{item.quantity}</p>
-                      </div>
-                      <span className="font-semibold text-ink-800 text-sm">{formatPrice(item.price * item.quantity)}</span>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
+            <CartGroupsList groups={groups} />
 
             {/* Coupon input */}
-            <div className="px-5 py-3 border-t bg-cream-50/50">
-              {appliedCoupon ? (
-                <div className="flex items-center justify-between bg-olive-50 border border-olive-200 rounded px-3 py-2 text-sm">
-                  <span className="text-olive-800">
-                    ✓ <strong>{appliedCoupon.coupon.code}</strong> applicato (−{formatPrice(appliedCoupon.discount)})
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => { setAppliedCoupon(null); setCouponCode(''); }}
-                    className="text-rose-600 hover:underline text-xs"
-                  >
-                    Rimuovi
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={couponCode}
-                      onChange={(e) => { setCouponCode(e.target.value); setCouponError(null); }}
-                      placeholder="Codice sconto (es. BENVENUTO10)"
-                      className="flex-1 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-                    />
-                    <Button type="button" onClick={applyCoupon} size="sm">Applica</Button>
-                  </div>
-                  {couponError && <p className="text-xs text-rose-600">{couponError}</p>}
-                </div>
-              )}
-            </div>
+            <CouponInput
+              couponCode={couponCode}
+              appliedCoupon={appliedCoupon}
+              couponError={couponError}
+              onCodeChange={(c) => { setCouponCode(c); setCouponError(null); }}
+              onApply={applyCoupon}
+              onRemove={() => { setAppliedCoupon(null); setCouponCode(''); }}
+            />
 
             <OrderSummary
               subtotal={grandSubtotal}

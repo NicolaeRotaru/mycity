@@ -51,7 +51,7 @@ export default function AIDescriptionButton({ productName, categoryName, current
       if (!res.ok) throw new Error(json.error ?? 'Errore');
       onResult(json.description);
       toast.success('Descrizione generata — modifica come preferisci');
-    } catch (err: any) {
+    } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setLoading(false);

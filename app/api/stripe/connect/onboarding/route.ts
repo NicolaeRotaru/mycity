@@ -49,7 +49,7 @@ export const POST = withSellerAuth(async ({ user }): Promise<NextResponse> => {
     }
 
     return NextResponse.json({ url }, { status: 200 });
-  } catch (err: any) {
+  } catch (err) {
     logger.error('[stripe] connect onboarding failed', err);
     return ApiErrors.internal('Errore Stripe');
   }

@@ -84,8 +84,8 @@ const PhotoFillButton = ({ onFilled }: Props) => {
       } else {
         toast.success('Campi compilati. Controlla e modifica se serve.');
       }
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Estrazione fallita. Riprova.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Estrazione fallita. Riprova.');
     } finally {
       setState('idle');
     }

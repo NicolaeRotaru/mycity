@@ -31,8 +31,8 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   let body;
   try {
     body = Body.parse(await req.json());
-  } catch (e: any) {
-    return ApiErrors.invalidRequest('Dati ordine non validi', e?.message);
+  } catch (e) {
+    return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
   }
 
   const supa = getServerSupabase();
@@ -100,7 +100,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
       },
     });
     return NextResponse.json({ id: session.id, url: session.url }, { status: 200 });
-  } catch (e: any) {
+  } catch (e) {
     logger.error('[stripe] checkout creation failed', e);
     return ApiErrors.internal('Errore nella creazione del pagamento.');
   }

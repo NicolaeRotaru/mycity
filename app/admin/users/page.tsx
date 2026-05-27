@@ -86,7 +86,7 @@ function AdminUsersPageInner() {
         .order('created_at', { ascending: false });
       if (min.error) throw min.error;
       // Riempi i campi mancanti con null per non rompere la tipizzazione
-      return (min.data ?? []).map((p: any) => ({
+      return (min.data ?? []).map((p: Record<string, unknown>) => ({
         ...p,
         approval_status: null,
         approval_requested_at: null,
@@ -258,9 +258,9 @@ function AdminUsersPageInner() {
 
   const exportCSV = () => {
     const headers = ['ID', 'Email', 'Nome', 'Ruolo', 'Approvato', 'Creato il'];
-    const rows = filtered.map((u: any) => [
+    const rows = filtered.map((u) => [
       u.id,
-      u.email ?? '',
+      (u as Profile & { email?: string }).email ?? '',
       u.full_name ?? u.store_name ?? '',
       u.role ?? '',
       u.is_approved ? 'sì' : 'no',

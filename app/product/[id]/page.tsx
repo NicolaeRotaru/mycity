@@ -57,15 +57,24 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     },
   });
 
+  type ReviewRow = {
+    id: string;
+    rating: number;
+    comment: string | null;
+    created_at: string;
+    user_id: string;
+    photo_urls: string[] | null;
+    verified_purchase: boolean;
+  };
   const { data: reviews = [] } = useQuery({
     queryKey: queryKeys.reviews.detail(id),
-    queryFn: async () => {
+    queryFn: async (): Promise<ReviewRow[]> => {
       const { data, error } = await supabase.from('reviews')
         .select('id, rating, comment, created_at, user_id, photo_urls, verified_purchase').eq('product_id', id)
         .order('verified_purchase', { ascending: false })
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as ReviewRow[];
     },
   });
 
@@ -164,7 +173,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
     : ['https://placehold.co/600x600/eef2ff/6366f1?text=Foto+prodotto'];
 
   const avgRating = reviews.length
-    ? reviews.reduce((s: number, r: any) => s + Number(r.rating), 0) / reviews.length
+    ? reviews.reduce((s: number, r) => s + Number(r.rating), 0) / reviews.length
     : 0;
 
   const price = Number(product.price);
@@ -515,7 +524,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {reviews.map((r: any) => (
+            {reviews.map((r) => (
               <div key={r.id} className="bg-white border border-cream-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2">

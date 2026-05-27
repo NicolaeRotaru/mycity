@@ -94,8 +94,8 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
 
       setStatus('subscribed');
       toast.success('Notifiche attivate!');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Impossibile attivare');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Impossibile attivare');
     } finally {
       setWorking(false);
     }
@@ -115,8 +115,8 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
       }
       setStatus('unsubscribed');
       toast.success('Notifiche disattivate');
-    } catch (err: any) {
-      toast.error(err?.message ?? 'Errore');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Errore');
     } finally {
       setWorking(false);
     }
