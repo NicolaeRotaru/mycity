@@ -86,7 +86,7 @@ export const POST = withAuth(async ({ user }): Promise<NextResponse> => {
   );
 
   if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 502 });
+    return ApiErrors.badGateway(result.error ?? 'KYC provider error');
   }
 
   await admin

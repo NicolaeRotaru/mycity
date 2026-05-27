@@ -10,14 +10,11 @@ type Props = {
 };
 
 /**
- * "Condividi carrello" — genera un link WhatsApp/Email/copy che apre il
- * marketplace con la lista prodotti precompilata.
+ * "Condividi carrello" — genera un link WhatsApp/Email/copy che apre la
+ * pagina /shared-cart con la lista prodotti precompilata.
  *
  * Tecnica: encoda gli ID dei prodotti in querystring (?cart=id1:qty1,id2:qty2)
- * e una pagina di destinazione (TODO: /shared-cart) li ricarica nel carrello
- * locale del destinatario.
- *
- * Per ora apre direttamente il dominio + testo formattato con lista articoli.
+ * e /shared-cart parsea + carica nel carrello locale del destinatario.
  */
 export default function ShareCartButton({ items }: Props) {
   const [open, setOpen] = useState(false);
@@ -29,7 +26,7 @@ export default function ShareCartButton({ items }: Props) {
     : (process.env.NEXT_PUBLIC_APP_URL ?? 'https://mycity-marketplace.com');
 
   const cartParam = items.map((i) => `${i.id}:${i.quantity}`).join(',');
-  const shareUrl = `${baseUrl}/?cart=${encodeURIComponent(cartParam)}`;
+  const shareUrl = `${baseUrl}/shared-cart?cart=${encodeURIComponent(cartParam)}`;
 
   const total = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const itemList = items.slice(0, 8).map((i) => `· ${i.name} × ${i.quantity}`).join('\n');

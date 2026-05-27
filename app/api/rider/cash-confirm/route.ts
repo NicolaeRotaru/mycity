@@ -52,10 +52,10 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
     return ApiErrors.forbidden('Non autorizzato (ordine di altro rider)');
   }
   if (order.payment_method !== 'cod') {
-    return NextResponse.json({ error: 'Ordine non in cash on delivery' }, { status: 409 });
+    return ApiErrors.conflict('Ordine non in cash on delivery');
   }
   if (order.cash_confirmed_at) {
-    return NextResponse.json({ error: 'Incasso gia\' confermato' }, { status: 409 });
+    return ApiErrors.conflict("Incasso gia' confermato");
   }
 
   const admin = getAdminSupabase();
