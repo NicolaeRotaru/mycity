@@ -26,6 +26,7 @@ import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { logger } from '@/lib/logger';
 
 type AddressForm = {
   fullName: string;
@@ -334,7 +335,7 @@ export default function CheckoutPage() {
           // Non bloccare l'ordine se la migration 035 non è applicata
           if (bErr && !bErr.message.includes('does not exist')) {
             // Log ma non interrompere — l'ordine è già creato
-            console.warn('business_orders insert failed:', bErr.message);
+            logger.warn('business_orders insert failed', { message: bErr.message });
           }
         }
 
@@ -470,7 +471,7 @@ export default function CheckoutPage() {
         <div className="lg:col-span-2 space-y-6">
           <ShippingAddressForm
             form={form}
-            savedAddresses={savedAddresses as any}
+            savedAddresses={savedAddresses}
             onChange={handleChange}
             onSubmit={handleSubmit}
             onApplySavedAddress={applySavedAddress}

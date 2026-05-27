@@ -53,9 +53,10 @@ function btn(href: string, label: string): string {
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({
+  const map: Record<string, string> = {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  } as any)[c]);
+  };
+  return s.replace(/[&<>"']/g, (c) => map[c] ?? c);
 }
 
 // ---------- Template specifici ----------

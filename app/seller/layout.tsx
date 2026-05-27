@@ -12,7 +12,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   const { profile, isAuthenticated, isLoading, isSeller, isAdmin, isBuyer, isRider } = useProfile();
   const isApproved = !!profile?.is_approved;
   const allowed = (isSeller && isApproved) || isAdmin;
-  const approvalStatus = (profile as any)?.approval_status as string | undefined;
+  type SellerProfileExt = { approval_status?: string | null; rejection_reason?: string | null };
+  const profileExt = profile as (typeof profile & SellerProfileExt) | null;
+  const approvalStatus = profileExt?.approval_status ?? undefined;
   const isPending   = isSeller && approvalStatus === 'pending';
   const isSuspended = isSeller && approvalStatus === 'suspended';
   const isRejected  = isSeller && approvalStatus === 'rejected';
@@ -102,9 +104,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             ❌
           </div>
           <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Richiesta non approvata</h1>
-          {(profile as any)?.rejection_reason && (
+          {profileExt?.rejection_reason && (
             <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 max-w-md mx-auto mb-3">
-              <strong>Motivo:</strong> {(profile as any).rejection_reason}
+              <strong>Motivo:</strong> {profileExt?.rejection_reason}
             </p>
           )}
           <p className="text-ink-600 mb-4 max-w-md mx-auto">

@@ -136,7 +136,7 @@ export default function AdminCouponsPage() {
               <label className="text-sm font-medium text-ink-700">Tipo</label>
               <select
                 value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value as any })}
+                onChange={(e) => setForm({ ...form, type: e.target.value as 'PERCENT' | 'FIXED' | 'FREE_SHIPPING' })}
                 className="w-full border p-2 rounded mt-1"
               >
                 <option value="PERCENT">Percentuale (%)</option>

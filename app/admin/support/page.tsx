@@ -89,7 +89,7 @@ export default function AdminSupportPage() {
         {(['new', 'in_progress', 'resolved', 'spam', 'all'] as const).map((f) => (
           <button
             key={f}
-            onClick={() => setFilter(f as any)}
+            onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold ${
               filter === f
                 ? 'bg-primary-700 text-white'

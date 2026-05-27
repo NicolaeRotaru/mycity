@@ -23,9 +23,19 @@ import { queryKeys } from '@/lib/queries/keys';
  * Pattern: non renderizziamo nulla se non c'è un pick attivo (zero rumore visivo).
  */
 export default function ShopOfMonthHero() {
-  const { data: pick, isLoading } = useQuery({
+  type Pick = {
+    id: string;
+    cover_image_url: string | null;
+    headline: string | null;
+    story: string | null;
+    discount_code: string | null;
+    discount_percent: number | null;
+    month: string;
+    seller: { id: string; store_name: string | null; store_logo: string | null } | null;
+  };
+  const { data: pick, isLoading } = useQuery<Pick | null>({
     queryKey: queryKeys.shopOfMonth.current,
-    queryFn: async () => {
+    queryFn: async (): Promise<Pick | null> => {
       const firstOfMonth = new Date();
       firstOfMonth.setDate(1);
       firstOfMonth.setHours(0, 0, 0, 0);
@@ -39,13 +49,13 @@ export default function ShopOfMonthHero() {
         `)
         .eq('month', monthIso)
         .maybeSingle();
-      return data;
+      return (data as unknown as Pick) ?? null;
     },
     staleTime: 60 * 60 * 1000, // 1h, il pick non cambia spesso
   });
 
   if (isLoading || !pick) return null;
-  const seller = (pick as any).seller as { id: string; store_name: string | null; store_logo: string | null } | null;
+  const seller = pick.seller;
   if (!seller) return null;
 
   return (

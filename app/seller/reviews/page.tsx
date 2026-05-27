@@ -42,7 +42,8 @@ export default function SellerReviewsPage() {
         .eq('store_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as any;
+      type StoreReviewRow = { id: string; rating: number; comment: string | null; created_at: string; order_id: string; reviewer: { full_name: string | null } | null };
+      return (data ?? []) as unknown as StoreReviewRow[];
     },
   });
 

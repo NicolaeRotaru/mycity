@@ -20,9 +20,9 @@ function getClient(): SupabaseClient {
 
 // Proxy lazy: API identica a prima — supabase.from(...), supabase.auth, ...
 export const supabase = new Proxy({} as SupabaseClient, {
-  get(_, prop) {
-    const client = getClient();
-    return (client as any)[prop];
+  get(_, prop: keyof SupabaseClient) {
+    const client = getClient() as unknown as Record<PropertyKey, unknown>;
+    return client[prop];
   },
 });
 

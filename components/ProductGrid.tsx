@@ -67,10 +67,11 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
     profiles?: { store_name: string | null; is_approved?: boolean; store_hours?: unknown } | null;
   };
   const prods = products as unknown as Prod[];
-  const { data: ratings = {} } = useQuery({
+  type RatingMap = Record<string, { avg: number; count: number }>;
+  const { data: ratings = {} as RatingMap } = useQuery<RatingMap>({
     queryKey: queryKeys.products.ratings(prods.map((p) => p.id).sort().join(',')),
     enabled: (minRating !== undefined && minRating > 0) || sort === 'rating',
-    queryFn: async () => {
+    queryFn: async (): Promise<RatingMap> => {
       if (prods.length === 0) return {};
       const ids = prods.map((p) => p.id);
       const { data } = await supabase
@@ -99,12 +100,12 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
       });
     }
     if (minRating !== undefined && minRating > 0) {
-      arr = arr.filter((p) => (ratings as any)[p.id]?.avg >= minRating);
+      arr = arr.filter((p) => (ratings[p.id]?.avg ?? 0) >= minRating);
     }
     if (sort === 'rating') {
       arr = [...arr].sort((a, b) => {
-        const ra = (ratings as any)[a.id]?.avg ?? 0;
-        const rb = (ratings as any)[b.id]?.avg ?? 0;
+        const ra = ratings[a.id]?.avg ?? 0;
+        const rb = ratings[b.id]?.avg ?? 0;
         return rb - ra;
       });
     }

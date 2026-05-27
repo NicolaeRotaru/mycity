@@ -33,7 +33,8 @@ export default function RiderEarningsPage() {
         .eq('delivery_status', 'DELIVERED')
         .order('delivered_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as any[];
+      type EarningOrder = { id: string; shipping_cost: number | null; delivered_at: string | null };
+      return (data ?? []) as EarningOrder[];
     },
   });
 

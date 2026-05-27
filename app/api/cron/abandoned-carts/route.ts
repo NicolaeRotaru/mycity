@@ -35,7 +35,7 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
 
   for (const c of candidates) {
     const itemsList = Array.isArray(c.cart_data)
-      ? (c.cart_data as any[]).slice(0, 5).map((i) => `<li>${i.quantity ?? 1}× ${i.name ?? 'Prodotto'}</li>`).join('')
+      ? (c.cart_data as Array<{ quantity?: number; name?: string }>).slice(0, 5).map((i) => `<li>${i.quantity ?? 1}× ${i.name ?? 'Prodotto'}</li>`).join('')
       : '';
     const first = c.full_name?.split(' ')[0] ?? '';
     const res = await sendEmail({

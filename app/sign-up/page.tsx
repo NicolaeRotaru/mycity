@@ -80,7 +80,7 @@ function SignUpInner() {
         });
       }
 
-      if (data.user?.id) trackSignupCompleted(data.user.id, role as any);
+      if (data.user?.id) trackSignupCompleted(data.user.id, role);
       toast.success('Registrazione completata! Controlla la tua email per confermare.');
       router.push('/auth/verify-email');
     } catch (error) {

@@ -49,7 +49,7 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro
           .eq('status', 'available')
           .neq('id', productId)
           .limit(6);
-        for (const p of (data ?? []) as any[]) {
+        for (const p of (data ?? []) as unknown as Item[]) {
           if (p.profiles?.is_approved) collected.set(p.id, p as Item);
         }
       }
@@ -66,7 +66,7 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro
           .eq('status', 'available')
           .neq('id', productId)
           .limit(12);
-        for (const p of (data ?? []) as any[]) {
+        for (const p of (data ?? []) as unknown as Item[]) {
           if (collected.size >= 6) break;
           if (collected.has(p.id)) continue;
           if (!p.profiles?.is_approved) continue;

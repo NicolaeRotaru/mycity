@@ -53,7 +53,7 @@ export default function NewProductPage() {
 
   const selectedCategoryId = watch('category_id');
   const { fields: attrFields, topSlug } = getAttributesForCategory(
-    categories as any,
+    categories,
     selectedCategoryId,
   );
   const topCategoryLabel = topSlug

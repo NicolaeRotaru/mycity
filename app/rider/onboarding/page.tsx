@@ -37,7 +37,7 @@ export default function RiderOnboardingPage() {
     legal_last_name: '',
     legal_fiscal_code: '',
     legal_birth_date: '',
-    rider_vehicle_type: 'BIKE' as const,
+    rider_vehicle_type: 'BIKE' as 'BIKE' | 'EBIKE' | 'SCOOTER' | 'CAR',
     rider_vehicle_plate: '',
     rider_license_expires_on: '',
     rider_insurance_expires_on: '',
@@ -152,7 +152,7 @@ export default function RiderOnboardingPage() {
             <span className="block font-medium text-ink-700">Tipo</span>
             <select
               value={form.rider_vehicle_type}
-              onChange={(e) => setForm((f) => ({ ...f, rider_vehicle_type: e.target.value as any }))}
+              onChange={(e) => setForm((f) => ({ ...f, rider_vehicle_type: e.target.value as 'BIKE' | 'EBIKE' | 'SCOOTER' | 'CAR' }))}
               className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2"
             >
               <option value="BIKE">Bici</option>

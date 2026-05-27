@@ -39,7 +39,8 @@ export default function RiderReviewsPage() {
         .eq('rider_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return (data ?? []) as any;
+      type RiderReviewRow = { id: string; rating: number; comment: string | null; created_at: string; reviewer: { full_name: string | null } | null };
+      return (data ?? []) as unknown as RiderReviewRow[];
     },
   });
 

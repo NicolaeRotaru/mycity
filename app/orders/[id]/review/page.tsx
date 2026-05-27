@@ -37,9 +37,17 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
   const [riderRating, setRiderRating] = useState(5);
   const [riderComment, setRiderComment] = useState('');
 
+  type OrderForReview = {
+    id: string;
+    delivery_status: string;
+    seller_id: string;
+    rider_id: string | null;
+    seller: { store_name: string | null } | null;
+    rider: { full_name: string | null } | null;
+  };
   const { data: order, isLoading } = useQuery({
     queryKey: queryKeys.orders.forReview(id),
-    queryFn: async () => {
+    queryFn: async (): Promise<OrderForReview> => {
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -50,7 +58,7 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
         .eq('id', id)
         .single();
       if (error) throw error;
-      return data as any;
+      return data as unknown as OrderForReview;
     },
   });
 

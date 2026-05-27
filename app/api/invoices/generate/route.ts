@@ -106,7 +106,7 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
       unitPrice: Number(it.unit_price),
       vatRate: 22, // semplificazione MVP: aliquota standard IT
     })),
-    paymentMethod: (order.payment_method as any) ?? 'card',
+    paymentMethod: (order.payment_method as 'card' | 'cod' | 'wire' | null) ?? 'card',
   };
 
   // 4) PDF
