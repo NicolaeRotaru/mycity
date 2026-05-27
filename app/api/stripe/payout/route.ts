@@ -41,10 +41,10 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
 
   if (error || !order) return ApiErrors.notFound('Ordine non trovato');
   if (order.delivery_status !== 'DELIVERED') {
-    return NextResponse.json({ error: 'Ordine non ancora consegnato' }, { status: 409 });
+    return ApiErrors.conflict('Ordine non ancora consegnato');
   }
   if (order.payout_status !== 'HELD') {
-    return NextResponse.json({ error: `Payout in stato ${order.payout_status}, no-op` }, { status: 409 });
+    return ApiErrors.conflict(`Payout in stato ${order.payout_status}, no-op`);
   }
   if (!order.seller_payout_cents || order.seller_payout_cents <= 0) {
     return ApiErrors.invalidRequest('Importo payout non valido');
@@ -57,10 +57,7 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
     .single();
 
   if (!seller?.stripe_account_id || !seller.stripe_payouts_enabled) {
-    return NextResponse.json(
-      { error: "Seller non ha completato l'onboarding Stripe Connect" },
-      { status: 409 },
-    );
+    return ApiErrors.conflict("Seller non ha completato l'onboarding Stripe Connect");
   }
 
   try {

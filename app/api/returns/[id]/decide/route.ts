@@ -44,7 +44,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     if (prof?.role !== 'admin') return ApiErrors.forbidden();
   }
   if (ret.status !== 'REQUESTED') {
-    return NextResponse.json({ error: `Reso gia' in stato ${ret.status}` }, { status: 409 });
+    return ApiErrors.conflict(`Reso gia' in stato ${ret.status}`);
   }
 
   const admin = getAdminSupabase();
@@ -74,7 +74,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         newStatus = 'REFUNDED';
       } catch (err: any) {
         logger.error('[returns] refund failed', err);
-        return NextResponse.json({ error: 'Refund Stripe fallito: ' + err.message }, { status: 502 });
+        return ApiErrors.badGateway('Refund Stripe fallito: ' + err.message);
       }
     }
   }

@@ -106,7 +106,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   // base64 ~= 4/3 byte raw, accettiamo fino a ~5 MB raw = ~7 MB base64.
   if (image_base64.length > 7_500_000) {
-    return NextResponse.json({ error: 'Immagine troppo grande. Massimo 5 MB.' }, { status: 413 });
+    return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
   }
 
   const anthropic = new Anthropic({ apiKey });
@@ -139,7 +139,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     const toolBlock = response.content.find((b) => b.type === 'tool_use');
     if (!toolBlock || toolBlock.type !== 'tool_use') {
       logger.error('Anthropic non ha restituito un tool_use');
-      return NextResponse.json({ error: 'Risposta AI inattesa. Riprova.' }, { status: 502 });
+      return ApiErrors.badGateway('Risposta AI inattesa. Riprova.');
     }
     toolInput = toolBlock.input as ExtractInput;
   } catch (err: any) {
@@ -148,7 +148,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     logger.error('Errore chiamata Anthropic, status:', err?.status);
     if (err?.status === 401) return ApiErrors.unavailable('API key Anthropic non valida.');
     if (err?.status === 429) return ApiErrors.rateLimited(60);
-    return NextResponse.json({ error: 'Errore nel servizio AI. Riprova.' }, { status: 502 });
+    return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
   }
 
   // Lookup category_id da slug

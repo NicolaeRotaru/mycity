@@ -50,9 +50,13 @@ export default function TrendingNow() {
           .eq('status', 'available')
           .order('created_at', { ascending: false })
           .limit(8);
-        return (data ?? [])
-          .filter((p: any) => p.profiles?.is_approved)
-          .map((p: any) => ({
+        type ProdRow = {
+          id: string; name: string; price: string | number; images: string[] | null;
+          profiles: { store_name: string | null; is_approved: boolean } | null;
+        };
+        return ((data ?? []) as unknown as ProdRow[])
+          .filter((p) => p.profiles?.is_approved)
+          .map((p) => ({
             product_id: p.id,
             view_count: 0,
             product: { id: p.id, name: p.name, price: Number(p.price), images: p.images, profiles: p.profiles },
@@ -80,9 +84,13 @@ export default function TrendingNow() {
         .in('id', topIds)
         .eq('status', 'available');
 
-      return (products ?? [])
-        .filter((p: any) => p.profiles?.is_approved)
-        .map((p: any) => ({
+      type ProdRow2 = {
+        id: string; name: string; price: string | number; images: string[] | null;
+        profiles: { store_name: string | null; is_approved: boolean } | null;
+      };
+      return ((products ?? []) as unknown as ProdRow2[])
+        .filter((p) => p.profiles?.is_approved)
+        .map((p) => ({
           product_id: p.id,
           view_count: counts.get(p.id) ?? 0,
           product: { id: p.id, name: p.name, price: Number(p.price), images: p.images, profiles: p.profiles },

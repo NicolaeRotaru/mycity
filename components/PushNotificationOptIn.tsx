@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/Button';
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 
@@ -153,14 +154,13 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
   }
 
   return (
-    <button
+    <Button
       type="button"
       onClick={subscribe}
-      disabled={working || status === 'checking'}
-      className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50"
-    >
-      <Bell size={16} />
-      {working ? 'Attivazione…' : 'Attiva notifiche'}
-    </button>
+      loading={working || status === 'checking'}
+      size="sm"
+      shape="pill"
+      icon={Bell}
+    >Attiva notifiche</Button>
   );
 }

@@ -90,14 +90,23 @@ const nextConfig = {
   },
 };
 
+// Bundle analyzer: attivo solo con ANALYZE=true npm run build.
+// https://www.npmjs.com/package/@next/bundle-analyzer
+let configWithAnalyzer = nextConfig;
+try {
+  const withBundleAnalyzer = require('@next/bundle-analyzer')({
+    enabled: process.env.ANALYZE === 'true',
+  });
+  configWithAnalyzer = withBundleAnalyzer(nextConfig);
+} catch { /* @next/bundle-analyzer non installato in prod, ok */ }
+
 // Sentry wrapper: attivo solo se NEXT_PUBLIC_SENTRY_DSN e' configurato.
-// Upload source maps in build CI se SENTRY_AUTH_TOKEN e' settato.
 const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN;
 
 if (SENTRY_DSN) {
   try {
     const { withSentryConfig } = require('@sentry/nextjs');
-    module.exports = withSentryConfig(nextConfig, {
+    module.exports = withSentryConfig(configWithAnalyzer, {
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
       silent: !process.env.CI,
@@ -111,9 +120,9 @@ if (SENTRY_DSN) {
       disableLogger: true,
     });
   } catch {
-    // @sentry/nextjs non installato: fallback al config base
-    module.exports = nextConfig;
+    // @sentry/nextjs non installato: fallback al config con analyzer
+    module.exports = configWithAnalyzer;
   }
 } else {
-  module.exports = nextConfig;
+  module.exports = configWithAnalyzer;
 }

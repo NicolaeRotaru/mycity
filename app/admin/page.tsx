@@ -41,12 +41,15 @@ export default function AdminDashboard() {
       const byStatus: Record<string, number> = {};
       for (const o of orders) byStatus[o.delivery_status] = (byStatus[o.delivery_status] ?? 0) + 1;
 
-      const totalRevenue = orders
-        .filter((o: any) => o.delivery_status === 'DELIVERED')
-        .reduce((s: number, o: any) => s + Number(o.total_price), 0);
+      type Order = { delivery_status: string; total_price: string | number; created_at: string };
+      type Product = { status: string };
+
+      const totalRevenue = (orders as Order[])
+        .filter((o) => o.delivery_status === 'DELIVERED')
+        .reduce((s, o) => s + Number(o.total_price), 0);
 
       const sevenDaysAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const recent = orders.filter((o: any) => o.created_at >= sevenDaysAgo).length;
+      const recent = (orders as Order[]).filter((o) => o.created_at >= sevenDaysAgo).length;
 
       return {
         users: {
@@ -64,7 +67,7 @@ export default function AdminDashboard() {
         },
         products: {
           total: products.length,
-          available: products.filter((p: any) => p.status === 'available').length,
+          available: (products as Product[]).filter((p) => p.status === 'available').length,
         },
       };
     },

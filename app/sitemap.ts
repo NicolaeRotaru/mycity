@@ -68,23 +68,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .limit(200),
   ]);
 
-  const productEntries: MetadataRoute.Sitemap = (products.data ?? [])
-    .filter((p: any) => p.profiles?.is_approved)
-    .map((p: any) => ({
+  type ProductSlug = { id: string; updated_at?: string | null; profiles?: { is_approved?: boolean } | null };
+  type StoreSlug = { id: string; updated_at?: string | null };
+  type CategorySlug = { slug: string };
+
+  const productEntries: MetadataRoute.Sitemap = ((products.data ?? []) as unknown as ProductSlug[])
+    .filter((p) => p.profiles?.is_approved)
+    .map((p) => ({
       url: `${APP_URL}/product/${p.id}`,
       lastModified: p.updated_at ? new Date(p.updated_at) : now,
       priority: 0.7,
       changeFrequency: 'weekly' as const,
     }));
 
-  const storeEntries: MetadataRoute.Sitemap = (stores.data ?? []).map((s: any) => ({
+  const storeEntries: MetadataRoute.Sitemap = ((stores.data ?? []) as StoreSlug[]).map((s) => ({
     url: `${APP_URL}/store/${s.id}`,
     lastModified: s.updated_at ? new Date(s.updated_at) : now,
     priority: 0.8,
     changeFrequency: 'weekly' as const,
   }));
 
-  const categoryEntries: MetadataRoute.Sitemap = (categories.data ?? []).map((c: any) => ({
+  const categoryEntries: MetadataRoute.Sitemap = ((categories.data ?? []) as CategorySlug[]).map((c) => ({
     url: `${APP_URL}/category/${c.slug}`,
     lastModified: now,
     priority: 0.6,

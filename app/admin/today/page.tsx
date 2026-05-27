@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
   ShoppingBag, TrendingUp, AlertTriangle, UserCheck, Euro,
   Clock, Package, AlertCircle, CheckCircle2,
+  type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
@@ -50,11 +51,16 @@ export default function AdminTodayPage() {
         supabase.from('orders').select('id, total_price, delivery_status, created_at, delivery_full_name').order('created_at', { ascending: false }).limit(10),
       ]);
 
-      const todayOrders = ordersToday.data ?? [];
+      type TodayOrder = {
+        id: string; total_price: number | string | null;
+        delivery_status: string; created_at: string;
+        delivery_full_name: string | null;
+      };
+      const todayOrders = (ordersToday.data ?? []) as TodayOrder[];
       const todayGmv = todayOrders
-        .filter((o: any) => o.delivery_status !== 'CANCELED')
-        .reduce((s: number, o: any) => s + Number(o.total_price ?? 0), 0);
-      const todayDelivered = todayOrders.filter((o: any) => o.delivery_status === 'DELIVERED').length;
+        .filter((o) => o.delivery_status !== 'CANCELED')
+        .reduce((s, o) => s + Number(o.total_price ?? 0), 0);
+      const todayDelivered = todayOrders.filter((o) => o.delivery_status === 'DELIVERED').length;
 
       return {
         ordersTodayCount: todayOrders.length,
@@ -75,7 +81,15 @@ export default function AdminTodayPage() {
     return <LoadingState />;
   }
 
-  const KpiCard = ({ icon: Icon, label, value, href, color = 'primary', alert }: any) => {
+  type KpiCardProps = {
+    icon: LucideIcon;
+    label: string;
+    value: string | number;
+    href?: string;
+    color?: 'primary' | 'olive' | 'rose' | 'accent';
+    alert?: boolean;
+  };
+  const KpiCard = ({ icon: Icon, label, value, href, color = 'primary', alert }: KpiCardProps) => {
     const colorMap: Record<string, string> = {
       primary: 'bg-primary-50 text-primary-700 border-primary-200',
       olive: 'bg-olive-50 text-olive-700 border-olive-200',
@@ -89,7 +103,7 @@ export default function AdminTodayPage() {
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorMap[color]}`}>
             <Icon size={20} strokeWidth={2.2} />
           </div>
-          {alert && value > 0 && <AlertCircle size={16} className="text-rose-600" />}
+          {alert && Number(value) > 0 && <AlertCircle size={16} className="text-rose-600" />}
         </div>
         <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">{label}</p>
         <p className="text-2xl font-bold text-ink-900 mt-1">{value}</p>
@@ -178,7 +192,11 @@ export default function AdminTodayPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-cream-100">
-                {stats.recentOrders.map((o: any) => (
+                {(stats.recentOrders as Array<{
+                  id: string; total_price: number | string | null;
+                  delivery_status: string; created_at: string;
+                  delivery_full_name: string | null;
+                }>).map((o) => (
                   <tr key={o.id} className="hover:bg-cream-50">
                     <td className="px-4 py-3">
                       <Link href={`/admin/orders/${o.id}`} className="font-mono text-xs text-primary-700 hover:underline">

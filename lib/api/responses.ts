@@ -41,6 +41,9 @@ export const ApiErrors = {
       { ok: false, error: { code: 'RATE_LIMITED', message: `Troppe richieste. Riprova tra ${retryAfterSec}s.` } },
       { status: 429, headers: { 'Retry-After': String(retryAfterSec) } },
     ),
+  conflict:        (message: string) => apiError(409, message, 'CONFLICT'),
+  payloadTooLarge: (message: string) => apiError(413, message, 'PAYLOAD_TOO_LARGE'),
+  badGateway:      (message: string) => apiError(502, message, 'BAD_GATEWAY'),
   internal:        (message = 'Errore interno') => apiError(500, message, 'INTERNAL'),
   unavailable:     (message = 'Servizio non configurato') => apiError(503, message, 'SERVICE_UNAVAILABLE'),
 };
