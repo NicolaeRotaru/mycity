@@ -39,6 +39,7 @@ interface Props {
 
 const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
   const tStates = useTranslations('states');
+  const tForms = useTranslations('forms');
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
     resolver: zodResolver(VendorSchema),
     defaultValues: {
@@ -204,7 +205,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
         disabled={isLoading || uploadingLogo}
         className="bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white px-6 py-3 rounded font-semibold transition-colors"
       >
-        {isLoading ? tStates('saving') : 'Salva negozio'}
+        {isLoading ? tStates('saving') : tForms('saveStore')}
       </button>
     </form>
   );

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -21,6 +22,7 @@ const DOCS: DocDef[] = [
 
 export default function RiderOnboardingPage() {
   const router = useRouter();
+  const tForms = useTranslations('forms');
   const [uploading, setUploading] = useState<DocKind | null>(null);
   const [submitting, setSubmitting] = useState(false);
   type RiderProfile = {
@@ -183,7 +185,7 @@ export default function RiderOnboardingPage() {
                     {uploaded && <div className="mt-1 text-xs text-olive-700">✓ Caricato</div>}
                   </div>
                   <label className="inline-flex cursor-pointer items-center rounded-lg bg-cream-100 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-cream-200">
-                    {uploading === d.kind ? 'Caricamento…' : (uploaded ? 'Sostituisci' : 'Carica')}
+                    {uploading === d.kind ? tForms('uploading') : (uploaded ? tForms('replacePhoto') : tForms('uploadPhoto'))}
                     <input
                       type="file"
                       accept="image/jpeg,image/png,image/webp,application/pdf"
@@ -207,7 +209,7 @@ export default function RiderOnboardingPage() {
           disabled={submitting || !allRequiredUploaded}
           className="rounded-lg bg-primary-700 px-6 py-3 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-50"
         >
-          {submitting ? 'Invio verifica…' : 'Salva e avvia verifica'}
+          {submitting ? tForms('submitting') : tForms('saveAndStart')}
         </button>
       </div>
     </div>
