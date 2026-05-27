@@ -72,9 +72,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         refundId = refund.id;
         refundedAt = new Date().toISOString();
         newStatus = 'REFUNDED';
-      } catch (err: any) {
+      } catch (err) {
         logger.error('[returns] refund failed', err);
-        return ApiErrors.badGateway('Refund Stripe fallito: ' + err.message);
+        return ApiErrors.badGateway('Refund Stripe fallito: ' + (err instanceof Error ? err.message : 'unknown'));
       }
     }
   }

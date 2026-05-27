@@ -100,7 +100,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
       },
     });
     return NextResponse.json({ id: session.id, url: session.url }, { status: 200 });
-  } catch (e: any) {
+  } catch (e) {
     logger.error('[stripe] checkout creation failed', e);
     return ApiErrors.internal('Errore nella creazione del pagamento.');
   }
