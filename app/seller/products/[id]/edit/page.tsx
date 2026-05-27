@@ -91,7 +91,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
     selectedCategoryId,
   );
   const topCategoryLabel = topSlug
-    ? (categories.find((c: any) => c.slug === topSlug)?.name as string | undefined)
+    ? (categories.find((c: { slug: string; name: string }) => c.slug === topSlug)?.name)
     : undefined;
 
   const setAttribute = (key: string, value: unknown) => {
@@ -141,7 +141,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
         }
         setImageUrls((prev) => [...prev, ...uploaded]);
         toast.success('Immagini caricate');
-      } catch (err: any) {
+      } catch (err) {
         toast.error(friendlyError(err));
       } finally {
         setUploading(false);
@@ -240,7 +240,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
             <label className="block text-sm font-medium">Descrizione</label>
             <AIDescriptionButton
               productName={watch('name') ?? ''}
-              categoryName={categories.find((c: any) => c.id === selectedCategoryId)?.name}
+              categoryName={categories.find((c: { id: string; name: string }) => c.id === selectedCategoryId)?.name}
               currentText={watch('description') ?? ''}
               onResult={(text) => setValue('description', text, { shouldValidate: true, shouldDirty: true })}
             />
@@ -265,7 +265,7 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
           <label className="block text-sm font-medium mb-1">Categoria</label>
           <select {...register('category_id')} className="w-full border p-2 rounded">
             <option value="">Seleziona...</option>
-            {categories.map((c: any) => (
+            {categories.map((c: { id: string; name: string }) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>

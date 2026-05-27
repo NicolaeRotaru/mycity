@@ -34,15 +34,16 @@ export default function NewProductPage() {
   const [uploading, setUploading] = useState(false);
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
 
+  type Category = { id: string; name: string; slug: string; parent_id: string | null };
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.form,
-    queryFn: async () => {
+    queryFn: async (): Promise<Category[]> => {
       const { data, error } = await supabase
         .from('categories')
         .select('id, name, slug, parent_id')
         .order('name');
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as Category[];
     },
   });
 
@@ -56,7 +57,7 @@ export default function NewProductPage() {
     selectedCategoryId,
   );
   const topCategoryLabel = topSlug
-    ? (categories.find((c: any) => c.slug === topSlug)?.name as string | undefined)
+    ? categories.find((c) => c.slug === topSlug)?.name
     : undefined;
 
   const setAttribute = (key: string, value: unknown) => {
@@ -132,7 +133,7 @@ export default function NewProductPage() {
         }
         setImageUrls((prev) => [...prev, ...uploaded]);
         toast.success('Immagini caricate');
-      } catch (err: any) {
+      } catch (err) {
         toast.error(friendlyError(err));
       } finally {
         setUploading(false);
@@ -182,7 +183,7 @@ export default function NewProductPage() {
             <label className="block text-sm font-medium">Descrizione</label>
             <AIDescriptionButton
               productName={watch('name') ?? ''}
-              categoryName={categories.find((c: any) => c.id === selectedCategoryId)?.name}
+              categoryName={categories.find((c) => c.id === selectedCategoryId)?.name}
               currentText={watch('description') ?? ''}
               onResult={(text) => setValue('description', text, { shouldValidate: true })}
             />
@@ -207,7 +208,7 @@ export default function NewProductPage() {
           <label className="block text-sm font-medium mb-1">Categoria</label>
           <select {...register('category_id')} className="w-full border p-2 rounded">
             <option value="">Seleziona...</option>
-            {categories.map((c: any) => (
+            {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>

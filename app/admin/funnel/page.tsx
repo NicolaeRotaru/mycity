@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, Users, ShoppingCart, Package } from 'lucide-react';
+import { TrendingUp, Users, ShoppingCart, Package, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -44,7 +44,8 @@ export default function AdminFunnelPage() {
         .eq('role', 'buyer')
         .gte('created_at', since);
 
-      const userIds = (signupsList ?? []).map((u: any) => u.id);
+      type Signup = { id: string; created_at: string };
+      const userIds = ((signupsList ?? []) as Signup[]).map((u) => u.id);
 
       // Orders di questi utenti
       const { data: orders } = userIds.length > 0
@@ -81,7 +82,7 @@ export default function AdminFunnelPage() {
       for (let i = 3; i >= 0; i--) {
         const cohortStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const cohortEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-        const cohort = (signupsList ?? []).filter((u: any) => {
+        const cohort = ((signupsList ?? []) as Signup[]).filter((u) => {
           const t = new Date(u.created_at);
           return t >= cohortStart && t < cohortEnd;
         });
@@ -127,7 +128,13 @@ export default function AdminFunnelPage() {
   const activationEver = data.signups > 0 ? (data.firstOrderEver / data.signups) * 100 : 0;
   const repeatBuyer = data.firstOrderEver > 0 ? (data.multipleOrders / data.firstOrderEver) * 100 : 0;
 
-  const FunnelRow = ({ icon: Icon, label, value, total, color }: any) => {
+  const FunnelRow = ({ icon: Icon, label, value, total, color }: {
+    icon: LucideIcon;
+    label: string;
+    value: number;
+    total: number;
+    color: string;
+  }) => {
     const pct = total > 0 ? (value / total) * 100 : 0;
     return (
       <div>
