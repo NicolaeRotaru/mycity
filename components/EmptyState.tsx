@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { LucideIcon } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Empty state riusabile con CTA.
@@ -49,12 +50,7 @@ export default function EmptyState({
       {(ctaLabel || secondaryLabel) && (
         <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
           {ctaLabel && ctaHref && (
-            <Link
-              href={ctaHref}
-              className="inline-flex items-center gap-1.5 bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-full font-semibold text-sm"
-            >
-              {ctaLabel}
-            </Link>
+            <Button href={ctaHref} size="sm" shape="pill">{ctaLabel}</Button>
           )}
           {secondaryLabel && secondaryHref && (
             <Link

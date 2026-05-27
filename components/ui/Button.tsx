@@ -18,6 +18,7 @@ import { cn } from '@/lib/cn';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success';
 type Size = 'sm' | 'md' | 'lg';
+type Shape = 'rounded' | 'pill';
 
 const VARIANTS: Record<Variant, string> = {
   primary:   'bg-primary-700 hover:bg-primary-800 text-white shadow-warm-sm',
@@ -33,11 +34,17 @@ const SIZES: Record<Size, string> = {
   lg: 'px-5 py-3 text-base gap-2 min-h-[48px]',
 };
 
-const BASE = 'inline-flex items-center justify-center rounded-lg font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+const BASE = 'inline-flex items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+
+const SHAPES: Record<Shape, string> = {
+  rounded: 'rounded-lg',
+  pill: 'rounded-full',
+};
 
 type CommonProps = {
   variant?: Variant;
   size?: Size;
+  shape?: Shape;
   loading?: boolean;
   icon?: LucideIcon;
   iconRight?: LucideIcon;
@@ -58,10 +65,10 @@ type ButtonAsLink   = CommonProps & {
 export type ButtonProps = ButtonAsButton | ButtonAsLink;
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'primary', size = 'md', loading = false, icon: Icon, iconRight: IconRight, fullWidth = false, className, children, ...rest },
+  { variant = 'primary', size = 'md', shape = 'rounded', loading = false, icon: Icon, iconRight: IconRight, fullWidth = false, className, children, ...rest },
   ref,
 ) {
-  const classes = cn(BASE, VARIANTS[variant], SIZES[size], fullWidth && 'w-full', className);
+  const classes = cn(BASE, VARIANTS[variant], SIZES[size], SHAPES[shape], fullWidth && 'w-full', className);
   const iconSize = size === 'sm' ? 12 : size === 'lg' ? 18 : 14;
   const content = (
     <>

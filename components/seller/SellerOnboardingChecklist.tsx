@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Check, Circle, ArrowRight, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
+import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 
 /**
@@ -158,12 +159,9 @@ export default function SellerOnboardingChecklist() {
       </ul>
 
       {nextStep && (
-        <Link
-          href={nextStep.href}
-          className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 rounded-full font-bold text-sm"
-        >
-          Continua: {nextStep.label} <ArrowRight size={14} strokeWidth={2.4} />
-        </Link>
+        <Button href={nextStep.href} size="sm" shape="pill" iconRight={ArrowRight}>
+          Continua: {nextStep.label}
+        </Button>
       )}
     </div>
   );

@@ -21,6 +21,7 @@ import { StepIndicator } from '@/components/checkout/StepIndicator';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
 import { B2BInvoiceForm } from '@/components/checkout/B2BInvoiceForm';
+import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -611,51 +612,15 @@ export default function CheckoutPage() {
               )}
             </div>
 
-            <div className="px-5 py-4 space-y-2 border-t bg-cream-50/50 text-sm">
-              <div className="flex justify-between">
-                <span className="text-ink-600">Subtotale</span>
-                <span className="font-semibold">{formatPrice(grandSubtotal)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-ink-600">Spedizione</span>
-                <span className={`font-semibold ${grandShipping === 0 ? 'text-olive-600' : ''}`}>
-                  {grandShipping === 0 ? 'GRATUITA' : formatPrice(grandShipping)}
-                </span>
-              </div>
-              {pickupDiscount > 0 && (
-                <div className="flex justify-between text-olive-700">
-                  <span>Sconto ritiro in negozio</span>
-                  <span className="font-semibold">−{formatPrice(pickupDiscount)}</span>
-                </div>
-              )}
-              {discount > 0 && (
-                <div className="flex justify-between text-olive-700">
-                  <span>Sconto codice</span>
-                  <span className="font-semibold">−{formatPrice(discount)}</span>
-                </div>
-              )}
-              <div className="flex justify-between pt-2 border-t font-bold text-lg">
-                <span>Totale</span>
-                <span className="text-primary-800">{formatPrice(grandTotal)}</span>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              form="checkout-form"
-              disabled={isCheckingOut}
-              className={`w-full disabled:opacity-50 py-4 font-extrabold text-base transition-colors shadow-lg ${
-                paymentMethod === 'card'
-                  ? 'bg-primary-700 hover:bg-primary-800 text-white'
-                  : 'bg-accent-400 hover:bg-accent-500 text-ink-900'
-              }`}
-            >
-              {isCheckingOut
-                ? (paymentMethod === 'card' ? 'Apertura pagamento sicuro…' : 'Elaborazione…')
-                : (paymentMethod === 'card'
-                    ? `🔒 Paga con carta · ${formatPrice(grandTotal)}`
-                    : `✓ Conferma ordine · ${formatPrice(grandTotal)}`)}
-            </button>
+            <OrderSummary
+              subtotal={grandSubtotal}
+              shipping={grandShipping}
+              pickupDiscount={pickupDiscount}
+              couponDiscount={discount}
+              total={grandTotal}
+              isCheckingOut={isCheckingOut}
+              paymentMethod={paymentMethod}
+            />
           </div>
         </div>
       </div>
