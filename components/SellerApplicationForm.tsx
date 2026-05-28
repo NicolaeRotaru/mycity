@@ -60,10 +60,12 @@ const SellerSchema = z.object({
   billingIban: z.string().regex(/^[A-Z0-9]{15,34}$/i, 'IBAN non valido').optional().or(z.literal('')),
 
   // Consensi legali
-  acceptTos: z.literal(true, { errorMap: () => ({ message: 'Devi accettare i Termini di servizio' }) }),
-  acceptPrivacy: z.literal(true, { errorMap: () => ({ message: 'Devi accettare la Privacy policy' }) }),
-  acceptAccuracy: z.literal(true, { errorMap: () => ({ message: 'Devi confermare i dati' }) }),
-  acceptBilling: z.literal(true, { errorMap: () => ({ message: "Devi accettare l'addebito" }) }),
+  // boolean + refine (non literal(true)): permette default false nel form
+  // ma valida che sia true al submit. Evita il cast `false as unknown as true`.
+  acceptTos: z.boolean().refine((v) => v === true, { message: 'Devi accettare i Termini di servizio' }),
+  acceptPrivacy: z.boolean().refine((v) => v === true, { message: 'Devi accettare la Privacy policy' }),
+  acceptAccuracy: z.boolean().refine((v) => v === true, { message: 'Devi confermare i dati' }),
+  acceptBilling: z.boolean().refine((v) => v === true, { message: "Devi accettare l'addebito" }),
 });
 
 type SchemaData = z.infer<typeof SellerSchema>;
@@ -149,10 +151,10 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       storeName:         defaultValues?.storeName         ?? '',
       storeDescription:  defaultValues?.storeDescription  ?? '',
       billingIban:       defaultValues?.billingIban       ?? '',
-      acceptTos:         false as unknown as true,
-      acceptPrivacy:     false as unknown as true,
-      acceptAccuracy:    false as unknown as true,
-      acceptBilling:     false as unknown as true,
+      acceptTos:         false,
+      acceptPrivacy:     false,
+      acceptAccuracy:    false,
+      acceptBilling:     false,
     },
   });
 

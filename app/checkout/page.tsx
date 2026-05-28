@@ -37,11 +37,11 @@ type AddressForm = {
   notes: string;
 };
 
-const CHECKOUT_STEPS = [
+const CHECKOUT_STEPS: { num: number; label: string }[] = [
   { num: 1, label: 'Carrello' },
   { num: 2, label: 'Indirizzo' },
   { num: 3, label: 'Conferma' },
-] as const;
+];
 
 const SHIPPING_PER_ORDER = 4.9;
 
@@ -456,7 +456,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl">
-      <StepIndicator steps={CHECKOUT_STEPS as unknown as { num: number; label: string }[]} currentStep={2} />
+      <StepIndicator steps={CHECKOUT_STEPS} currentStep={2} />
 
       {!authUser && (
         <div className="bg-primary-50 border-2 border-primary-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">

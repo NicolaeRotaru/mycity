@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { rateLimit, getClientIp, __resetRateLimitBuckets } from '@/lib/rate-limit';
 
 /**
  * Unit test per lib/rate-limit (in-memory sliding window).
@@ -10,11 +10,9 @@ import { rateLimit, getClientIp } from '@/lib/rate-limit';
 
 describe('rateLimit - basic allow/deny', () => {
   beforeEach(() => {
-    // Test isolation: ogni test usa una chiave random univoca (vedi `Math.random()`
-    // sotto) per evitare pollution tra test indipendente dal'ordine vitest.
-    // Il GC interno di buckets (MAX_KEYS = 50_000) gestisce la cleanup
-    // automaticamente, ma per evitare interferenze con run --watch ripetuti,
-    // le chiavi sono uniche per chiamata.
+    // Test isolation: pulisce i bucket in-memory tra ogni test per evitare
+    // pollution indipendente dall'ordine vitest (incluso --watch mode).
+    __resetRateLimitBuckets();
   });
 
   it('allows requests under limit', () => {

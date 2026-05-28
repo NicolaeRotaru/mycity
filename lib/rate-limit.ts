@@ -74,6 +74,15 @@ export function rateLimit({ key, max, windowMs }: RateLimitOptions): RateLimitRe
   };
 }
 
+/**
+ * Reset dei bucket in-memory. SOLO per test isolation (vitest beforeEach).
+ * In produzione non va mai chiamato: il GC interno (MAX_KEYS) gestisce
+ * la cleanup automatica.
+ */
+export function __resetRateLimitBuckets(): void {
+  buckets.clear();
+}
+
 // =============================================================================
 // UPSTASH REDIS ADAPTER (production multi-instance)
 // =============================================================================

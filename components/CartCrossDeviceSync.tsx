@@ -76,7 +76,7 @@ export default function CartCrossDeviceSync() {
         await supabase
           .from('user_carts')
           .upsert(
-            { user_id: uid, items: items as unknown as any, updated_at: new Date(now).toISOString() },
+            { user_id: uid, items: items as unknown as Record<string, unknown>[], updated_at: new Date(now).toISOString() },
             { onConflict: 'user_id' },
           );
         setLocalUpdatedAt(now);
