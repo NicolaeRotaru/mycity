@@ -1,12 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import { formatPrice, formatDate } from '@/lib/format';
+import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import StripeConnectButton from '@/components/seller/StripeConnectButton';
 
 // Commissione marketplace e schedule payout (per ora hardcoded, in futuro
 // configurabile per seller).
@@ -182,15 +182,10 @@ export default function SellerEarningsPage() {
               <strong>{nextPayout.toLocaleDateString('it', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
             </p>
             <p className="text-xs text-olive-700 mt-1">
-              I bonifici partono il giorno 5 di ogni mese verso l'IBAN registrato.
+              I bonifici partono il giorno 5 di ogni mese verso l'IBAN registrato su Stripe.
             </p>
           </div>
-          <Link
-            href="/profile/settings"
-            className="bg-white hover:bg-olive-50 border border-olive-300 text-olive-800 px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"
-          >
-            ⚙️ Configura IBAN
-          </Link>
+          <StripeConnectButton />
         </div>
       </section>
 

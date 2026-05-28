@@ -1,6 +1,9 @@
 'use client';
 
+import { useEffect, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Package } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -52,6 +55,23 @@ const fetchOrders = async (): Promise<Order[]> => {
   return (data ?? []) as unknown as Order[];
 };
 
+/**
+ * Mostra feedback al rientro da Stripe Checkout (?stripe=success).
+ * In Suspense perché useSearchParams lo richiede in Next 14.
+ */
+function StripeReturnHandler() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  useEffect(() => {
+    if (searchParams.get('stripe') === 'success') {
+      toast.success('Pagamento completato! Il tuo ordine è confermato.');
+      // Pulisce il param dall'URL senza ricaricare
+      router.replace('/orders');
+    }
+  }, [searchParams, router]);
+  return null;
+}
+
 export default function OrdersPage() {
   const { data: orders = [], isLoading } = useQuery({
     queryKey: queryKeys.orders.all,
@@ -65,6 +85,7 @@ export default function OrdersPage() {
   if (orders.length === 0) {
     return (
       <div className="container mx-auto py-12 max-w-2xl">
+        <Suspense fallback={null}><StripeReturnHandler /></Suspense>
         <EmptyState
           icon={Package}
           title="Non hai ancora ordini"
@@ -80,6 +101,7 @@ export default function OrdersPage() {
 
   return (
     <div className="container mx-auto p-4 sm:p-8 max-w-4xl space-y-4">
+      <Suspense fallback={null}><StripeReturnHandler /></Suspense>
       <h1 className="text-2xl font-bold text-ink-900">I tuoi ordini</h1>
 
       {orders.map((order) => {

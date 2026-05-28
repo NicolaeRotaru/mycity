@@ -144,6 +144,7 @@ export const queryKeys = {
     order:   (id: string)    => ['seller', 'order', id] as const,
     customers:               ['seller', 'customers'] as const,
     earnings:                ['seller', 'earnings'] as const,
+    stripeStatus:            ['seller', 'stripe-status'] as const,
     profile:                 ['seller', 'profile'] as const,
     promotions:              ['seller', 'promotions'] as const,
     promotionsByUser: (uid: string) => ['seller', 'promotions', uid] as const,

@@ -1,7 +1,9 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { useProfile } from '@/components/hooks/useProfile';
@@ -13,6 +15,19 @@ import { queryKeys } from '@/lib/queries/keys';
 
 export default function SellerDashboard() {
   const { profile, isSeller } = useProfile();
+
+  // Feedback al rientro da Stripe Connect onboarding
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const s = params.get('stripe');
+    if (s === 'connected') {
+      toast.success('Configurazione pagamenti completata! A breve potrai ricevere i bonifici.');
+      window.history.replaceState({}, '', '/seller/dashboard');
+    } else if (s === 'refresh') {
+      toast('Configurazione interrotta. Riprova quando vuoi dalla pagina Guadagni.', { icon: '🏦' });
+      window.history.replaceState({}, '', '/seller/dashboard');
+    }
+  }, []);
 
   const { data: stats, isLoading } = useQuery({
     queryKey: queryKeys.seller.stats,
