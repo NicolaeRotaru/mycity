@@ -24,7 +24,7 @@ import { B2BInvoiceForm } from '@/components/checkout/B2BInvoiceForm';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
 
@@ -407,7 +407,7 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!res.ok || !data?.url) {
-        throw new Error(data?.error ?? 'Errore creazione pagamento');
+        throw new Error(apiErrorMessage(data, 'Errore creazione pagamento'));
       }
       return data.url as string;
     },

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { apiErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 
 const REASONS = [
@@ -70,7 +71,7 @@ export default function NewReturnPage() {
         }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data?.error ?? 'Errore');
+      if (!r.ok) throw new Error(apiErrorMessage(data, 'Errore'));
       toast.success('Richiesta di reso inviata');
       router.push(`/orders/${params.id}`);
     } catch (e) {

@@ -8,7 +8,7 @@ import { ArrowLeft, Send } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
 
@@ -148,7 +148,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Invio non riuscito');
+        throw new Error(apiErrorMessage(err, 'Invio non riuscito'));
       }
       return res.json();
     },

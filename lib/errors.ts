@@ -79,3 +79,25 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
   if (typeof err === 'string') return err;
   return GENERIC_FALLBACK;
 }
+
+/**
+ * Estrae il messaggio d'errore dal body JSON di una API route, gestendo
+ * SIA il formato ApiErrors `{ ok: false, error: { code, message } }` SIA
+ * il formato legacy `{ error: "stringa" }`.
+ *
+ * Necessario perché molti endpoint usano ApiErrors (error = oggetto): fare
+ * `new Error(body.error)` darebbe "[object Object]". Usare sempre questo.
+ *
+ *   const body = await res.json().catch(() => ({}));
+ *   if (!res.ok) throw new Error(apiErrorMessage(body, 'Operazione fallita'));
+ */
+export function apiErrorMessage(body: unknown, fallback = 'Operazione non riuscita'): string {
+  if (!body || typeof body !== 'object') return fallback;
+  const e = (body as { error?: unknown }).error;
+  if (typeof e === 'string' && e.trim()) return e;
+  if (e && typeof e === 'object' && 'message' in e) {
+    const m = (e as { message?: unknown }).message;
+    if (typeof m === 'string' && m.trim()) return m;
+  }
+  return fallback;
+}
