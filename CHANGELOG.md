@@ -9,6 +9,29 @@ maggiore resta a `0.x` finche' non c'e' PMF.
 ## [Unreleased]
 
 ### Added
+- **Stripe multi-seller checkout** — il pagamento con carta supporta ora
+  carrelli con prodotti da più negozi (era bloccato → forzava COD).
+  - Migration 042: tabella `pending_checkouts` (record-of-intent),
+    colonna `orders.stripe_transfer_group`, stato payout
+    `PENDING_SELLER_ONBOARDING`, unique index `(stripe_session_id, seller_id)`.
+  - Pattern: SCT (Separate Charges and Transfers) — 1 charge sulla
+    piattaforma → N transfer ai seller post-DELIVERED via
+    `source_transaction=charge_id` + `transfer_group=mc_<pendingId>`.
+  - `lib/stripe/client.ts`: nuovo `createMultiSellerCheckoutSession` con
+    Stripe Coupon ad-hoc per coupon+pickup discount, `client_reference_id`
+    + `transfer_group` nel PaymentIntent.
+  - Webhook `checkout.session.completed`: legge `pending_checkouts`, crea
+    N ordini con quote pro-rata di shipping/coupon/pickup, fetch
+    `latest_charge` dal PI per `stripe_charge_id`.
+  - Webhook `charge.refunded`: aggiorna TUTTI gli ordini legati alla
+    stessa charge (multi-seller condivide PaymentIntent).
+  - `/api/stripe/payout`: usa `source_transaction` (lega liquidità alla
+    charge) + nuovo stato `PENDING_SELLER_ONBOARDING` quando il seller
+    non ha completato Connect.
+  - Nuovo cron `/api/cron/expire-checkouts` (consigliato 30 min) per
+    marcare EXPIRED i pending_checkouts non pagati entro 2 h.
+  - UI `PaymentMethodSelector`: rimosso `disabled` su multi-seller,
+    sostituito con banner informativo "Un solo pagamento, N ordini".
 - Migration 039: bucket Supabase `reviews` mancante (bug fix bucket-not-found
   in upload foto recensioni)
 - Endpoint `/api/health` per uptime monitor esterni (UptimeRobot/BetterStack)

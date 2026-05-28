@@ -122,13 +122,15 @@ npx tsc --noEmit # type check (no emit)
 
 ## Cron jobs esterni
 
-Due endpoint cron sono pronti ma devono essere triggerati da fuori (es.
+Gli endpoint cron sono pronti ma devono essere triggerati da fuori (es.
 [cron-job.org](https://cron-job.org) free):
 
 | Endpoint | Frequenza | Cosa fa |
 |---|---|---|
 | `POST /api/cron/send-emails` | ogni 10 min | Processa `email_queue` (welcome, tutorial, re-engagement, win-back) |
 | `POST /api/cron/abandoned-carts` | ogni 1 h | Email "Hai dimenticato qualcosa" a 4h+ |
+| `POST /api/cron/expire-checkouts` | ogni 30 min | Marca EXPIRED i `pending_checkouts` Stripe non pagati entro 2 h |
+| `POST /api/cron/process-deletions` | ogni 24 h | Hard-delete account dopo 7gg cooldown |
 
 Header richiesto: `Authorization: Bearer $CRON_SECRET`
 

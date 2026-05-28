@@ -14,15 +14,18 @@ export const dynamic = 'force-dynamic';
 /**
  * Webhook Stripe. Eventi gestiti:
  *
- *  - checkout.session.completed  → crea l'ordine in DB con
- *                                  payment_status PAID, payout_status HELD
- *  - charge.refunded             → annulla l'ordine, marca refund
+ *  - checkout.session.completed  → legge il pending_checkout linkato
+ *                                  e crea N ordini DB (uno per seller)
+ *                                  con payment_status PAID, payout_status HELD
+ *  - charge.refunded             → annulla TUTTI gli ordini legati a quella
+ *                                  charge (multi-seller: stesso PI condiviso)
  *  - account.updated             → aggiorna stato Connect del seller
  *
  * Sicurezza:
  *  - Verifica firma con STRIPE_WEBHOOK_SECRET (constructEvent).
- *  - Idempotenza: l'event.id viene salvato in stripe_event_log
- *    (best-effort: se la insert fallisce per duplicate, abort).
+ *  - Idempotenza event-level via stripe_event_log (event.id unique).
+ *  - Idempotenza order-level via unique index (stripe_session_id, seller_id).
+ *  - Idempotenza checkout-level via pending_checkouts.status='COMPLETED'.
  */
 export async function POST(req: NextRequest) {
   const sig = req.headers.get('stripe-signature');
@@ -77,103 +80,211 @@ export async function POST(req: NextRequest) {
   }
 }
 
+type PendingGroup = {
+  sellerId: string;
+  storeName: string;
+  items: Array<{ productId: string; name: string; quantity: number; unitAmountCents: number; imageUrl?: string }>;
+  subtotalCents: number;
+  shippingCents: number;
+  couponPortionCents: number;
+  pickupPortionCents: number;
+  totalCents: number;
+};
+
+type PendingDelivery = {
+  full_name: string;
+  address: string;
+  city: string;
+  zip: string;
+  phone: string;
+  notes: string | null;
+  lat: number | null;
+  lng: number | null;
+};
+
+type PendingB2B = {
+  company_name: string;
+  vat_number: string;
+  sdi_code: string | null;
+  pec: string | null;
+} | null;
+
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const admin = getAdminSupabase();
-  const meta = session.metadata ?? {};
-  const buyerId = meta.buyer_user_id;
-  const sellerId = meta.seller_id;
-  if (!buyerId || !sellerId || !session.amount_total) return;
-
-  // Items dal metadata (snapshot al checkout)
-  let items: Array<{ productId: string; quantity: number }> = [];
-  try {
-    items = JSON.parse(meta.items ?? '[]');
-  } catch { /* tolerate */ }
-
-  const totalCents = session.amount_total;
-  const feeCents = computeApplicationFeeCents(totalCents);
-  const payoutCents = totalCents - feeCents;
-
-  // Crea ordine
-  const { data: order, error: orderErr } = await admin
-    .from('orders')
-    .insert({
-      user_id: buyerId,
-      seller_id: sellerId,
-      total_price: totalCents / 100,
-      payment_status: 'PAID',
-      payment_method: 'card',
-      delivery_status: 'NEW',
-      stripe_session_id: session.id,
-      stripe_payment_intent: typeof session.payment_intent === 'string' ? session.payment_intent : null,
-      application_fee_cents: feeCents,
-      seller_payout_cents: payoutCents,
-      payout_status: 'HELD',
-      delivery_full_name: session.customer_details?.name ?? null,
-      delivery_phone: session.customer_details?.phone ?? null,
-      delivery_address: session.shipping_details?.address?.line1 ?? session.customer_details?.address?.line1 ?? null,
-      delivery_city: session.shipping_details?.address?.city ?? session.customer_details?.address?.city ?? null,
-      delivery_zip: session.shipping_details?.address?.postal_code ?? session.customer_details?.address?.postal_code ?? null,
-    })
-    .select('id')
-    .single();
-
-  if (orderErr || !order) {
-    logger.error(orderErr, { context: 'stripe-order-insert' });
+  const stripe = getStripe();
+  const pendingCheckoutId = session.client_reference_id ?? session.metadata?.pending_checkout_id;
+  if (!pendingCheckoutId) {
+    logger.warn('[stripe] checkout.session.completed senza pending_checkout_id', { sessionId: session.id });
     return;
   }
 
-  // Salva order_items
-  if (items.length > 0) {
-    const productIds = items.map((i) => i.productId);
-    const { data: products } = await admin
-      .from('products')
-      .select('id, name, price')
-      .in('id', productIds);
-
-    const rows = items.map((i) => {
-      const p = products?.find((x) => x.id === i.productId);
-      return {
-        order_id: order.id,
-        product_id: i.productId,
-        quantity: i.quantity,
-        unit_price: p?.price ?? 0,
-      };
-    });
-    await admin.from('order_items').insert(rows);
-  }
-
-  // Email buyer + seller (best-effort)
-  const buyerEmail = session.customer_details?.email ?? session.customer_email;
-  if (buyerEmail) {
-    const { data: store } = await admin
-      .from('profiles')
-      .select('store_name, full_name, id')
-      .eq('id', sellerId)
-      .single();
-    const t = orderConfirmedBuyerTemplate({
-      name: session.customer_details?.name ?? null,
-      orderId: order.id,
-      total: totalCents / 100,
-      storeName: store?.store_name ?? store?.full_name ?? 'venditore',
-    });
-    await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
-  }
-
-  const { data: seller } = await admin
-    .from('profiles')
-    .select('id')
-    .eq('id', sellerId)
+  // Carica il record-of-intent
+  const { data: pending, error: pendErr } = await admin
+    .from('pending_checkouts')
+    .select('id, buyer_id, status, groups, coupon_code, b2b, delivery, pickup_in_store, total_cents, stripe_session_id')
+    .eq('id', pendingCheckoutId)
     .single();
-  if (seller) {
-    const { data: sellerAuth } = await admin.auth.admin.getUserById(seller.id);
+
+  if (pendErr || !pending) {
+    logger.error('[stripe] pending_checkout non trovato', { pendingCheckoutId, err: pendErr });
+    return;
+  }
+
+  // Idempotenza checkout-level: se già processato, no-op.
+  if (pending.status === 'COMPLETED') {
+    logger.info('[stripe] pending_checkout già COMPLETED, skip', { pendingCheckoutId });
+    return;
+  }
+
+  const groups = pending.groups as PendingGroup[];
+  const delivery = pending.delivery as PendingDelivery;
+  const b2b = pending.b2b as PendingB2B;
+  const pickupInStore = !!pending.pickup_in_store;
+  const buyerId = pending.buyer_id as string;
+  const couponCode = (pending.coupon_code as string | null) ?? null;
+
+  if (!Array.isArray(groups) || groups.length === 0) {
+    logger.error('[stripe] pending_checkout senza groups', { pendingCheckoutId });
+    return;
+  }
+
+  const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+  const transferGroup = `mc_${pendingCheckoutId}`;
+
+  // Recupera la latest_charge dal PaymentIntent per popolare stripe_charge_id
+  // (serve a /api/stripe/payout per usare source_transaction).
+  let stripeChargeId: string | null = null;
+  if (paymentIntent) {
+    try {
+      const pi = await stripe.paymentIntents.retrieve(paymentIntent, { expand: ['latest_charge'] });
+      const lc = pi.latest_charge;
+      stripeChargeId = typeof lc === 'string' ? lc : (lc?.id ?? null);
+    } catch (e) {
+      logger.warn('[stripe] retrieve PI per charge_id fallita', e);
+    }
+  }
+
+  const buyerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+  const buyerName = session.customer_details?.name ?? delivery.full_name;
+  const createdOrderIds: Array<{ orderId: string; sellerId: string; totalCents: number; itemsCount: number }> = [];
+
+  // Crea N ordini, uno per gruppo
+  for (const g of groups) {
+    const feeCents = computeApplicationFeeCents(g.totalCents);
+    const payoutCents = g.totalCents - feeCents;
+
+    const { data: order, error: orderErr } = await admin
+      .from('orders')
+      .insert({
+        user_id: buyerId,
+        seller_id: g.sellerId,
+        total_price: g.totalCents / 100,
+        shipping_cost: g.shippingCents / 100,
+        discount_amount: (g.couponPortionCents + g.pickupPortionCents) / 100,
+        coupon_code: couponCode,
+        pickup_in_store: pickupInStore,
+        payment_status: 'PAID',
+        payment_method: 'card',
+        delivery_status: 'NEW',
+        stripe_session_id: session.id,
+        stripe_payment_intent: paymentIntent,
+        stripe_charge_id: stripeChargeId,
+        stripe_transfer_group: transferGroup,
+        application_fee_cents: feeCents,
+        seller_payout_cents: payoutCents,
+        payout_status: 'HELD',
+        delivery_full_name: delivery.full_name,
+        delivery_phone: delivery.phone,
+        delivery_address: delivery.address,
+        delivery_city: delivery.city,
+        delivery_zip: delivery.zip,
+        delivery_notes: delivery.notes,
+        delivery_lat: delivery.lat,
+        delivery_lng: delivery.lng,
+      })
+      .select('id')
+      .single();
+
+    // Idempotenza order-level: unique (stripe_session_id, seller_id).
+    // Se la riga esiste già (es. webhook ri-eseguito), skip silenzioso.
+    if (orderErr) {
+      if (orderErr.code === '23505') {
+        logger.info('[stripe] order già presente per (session, seller), skip', { sessionId: session.id, sellerId: g.sellerId });
+        continue;
+      }
+      logger.error(orderErr, { context: 'stripe-order-insert', sellerId: g.sellerId });
+      continue;
+    }
+    if (!order) continue;
+
+    // order_items
+    const orderItemsRows = g.items.map((it) => ({
+      order_id: order.id,
+      product_id: it.productId,
+      quantity: it.quantity,
+      unit_price: it.unitAmountCents / 100,
+    }));
+    const { error: itemsErr } = await admin.from('order_items').insert(orderItemsRows);
+    if (itemsErr) {
+      logger.error(itemsErr, { context: 'stripe-order-items-insert', orderId: order.id });
+    }
+
+    // B2B: dettaglio fattura elettronica (se attivato)
+    if (b2b && b2b.company_name && b2b.vat_number) {
+      const { error: bErr } = await admin.from('business_orders').insert({
+        order_id: order.id,
+        company_name: b2b.company_name,
+        vat_number: b2b.vat_number,
+        sdi_code: b2b.sdi_code,
+        pec: b2b.pec,
+        invoice_required: true,
+      });
+      if (bErr && !bErr.message.includes('does not exist')) {
+        logger.warn('business_orders insert failed', { message: bErr.message });
+      }
+    }
+
+    createdOrderIds.push({
+      orderId: order.id,
+      sellerId: g.sellerId,
+      totalCents: g.totalCents,
+      itemsCount: g.items.reduce((s, it) => s + it.quantity, 0),
+    });
+  }
+
+  // Marca pending_checkout come COMPLETED (idempotenza guard per re-delivery webhook)
+  await admin
+    .from('pending_checkouts')
+    .update({
+      status: 'COMPLETED',
+      stripe_payment_intent: paymentIntent,
+      processed_at: new Date().toISOString(),
+    })
+    .eq('id', pendingCheckoutId);
+
+  // Email buyer + seller (best-effort, per ogni ordine creato)
+  for (const created of createdOrderIds) {
+    const groupForOrder = groups.find((x) => x.sellerId === created.sellerId);
+    const storeName = groupForOrder?.storeName ?? 'venditore';
+
+    if (buyerEmail) {
+      const t = orderConfirmedBuyerTemplate({
+        name: buyerName,
+        orderId: created.orderId,
+        total: created.totalCents / 100,
+        storeName,
+      });
+      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
+    }
+
+    const { data: sellerAuth } = await admin.auth.admin.getUserById(created.sellerId);
     const sellerEmail = sellerAuth?.user?.email;
     if (sellerEmail) {
       const t = newOrderSellerTemplate({
         sellerName: null,
-        orderId: order.id,
-        total: totalCents / 100,
-        itemsCount: items.reduce((s, i) => s + i.quantity, 0),
+        orderId: created.orderId,
+        total: created.totalCents / 100,
+        itemsCount: created.itemsCount,
       });
       await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
     }
@@ -182,36 +293,42 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
 async function handleChargeRefunded(charge: Stripe.Charge) {
   const admin = getAdminSupabase();
-  // Trova ordine via payment_intent
   const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : null;
   if (!pi) return;
-  const { data: order } = await admin
+
+  // Multi-seller: una charge può avere N ordini (uno per seller).
+  // Annulliamo TUTTI gli ordini legati a quel PaymentIntent.
+  const { data: orders } = await admin
     .from('orders')
-    .select('id, user_id, total_price')
-    .eq('stripe_payment_intent', pi)
-    .single();
-  if (!order) return;
+    .select('id, user_id, total_price, seller_id')
+    .eq('stripe_payment_intent', pi);
+
+  if (!orders || orders.length === 0) return;
 
   const refundAmount = (charge.amount_refunded ?? 0) / 100;
+  const refundReason = charge.refunds?.data?.[0]?.reason ?? null;
+  const refundId = charge.refunds?.data?.[0]?.id ?? null;
+
   await admin
     .from('orders')
     .update({
       payment_status: 'FAILED',
       delivery_status: 'CANCELED',
       payout_status: 'REFUNDED',
-      stripe_refund_id: charge.refunds?.data?.[0]?.id ?? null,
+      stripe_refund_id: refundId,
       canceled_at: new Date().toISOString(),
     })
-    .eq('id', order.id);
+    .in('id', orders.map((o) => o.id));
 
-  // Email buyer
-  const { data: ua } = await admin.auth.admin.getUserById(order.user_id);
+  // Email buyer (una sola email anche se sono N ordini — è la stessa charge)
+  const firstOrder = orders[0];
+  const { data: ua } = await admin.auth.admin.getUserById(firstOrder.user_id);
   const buyerEmail = ua?.user?.email;
   if (buyerEmail) {
     const t = refundIssuedTemplate({
-      orderId: order.id,
+      orderId: firstOrder.id,
       amount: refundAmount,
-      reason: charge.refunds?.data?.[0]?.reason ?? null,
+      reason: refundReason,
     });
     await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
   }

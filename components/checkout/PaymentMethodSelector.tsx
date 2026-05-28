@@ -3,8 +3,12 @@
 /**
  * Selettore metodo di pagamento per checkout: card o COD.
  *
+ * Multi-seller è supportato per entrambi i metodi:
+ *  - CARD: una sola charge sulla piattaforma, N ordini creati dal webhook
+ *    (Separate Charges and Transfers, vedi lib/stripe/client.ts).
+ *  - COD: N ordini creati direttamente lato client.
+ *
  * Estratto da app/checkout/page.tsx per ridurre il monolite.
- * Disabilita la carta se l'ordine include più di un seller (multi-merchant Stripe limit).
  */
 
 type PaymentMethod = 'cod' | 'card';
@@ -13,6 +17,7 @@ type Props = {
   value: PaymentMethod;
   onChange: (method: PaymentMethod) => void;
   stripeAvailable: boolean;
+  /** Informativo: mostra al buyer che con card sarà 1 charge / N ordini. */
   multiSeller: boolean;
 };
 
@@ -27,14 +32,13 @@ export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiS
               value === 'card'
                 ? 'border-primary-400 bg-primary-50'
                 : 'border-cream-300 bg-white hover:border-primary-200'
-            } ${multiSeller ? 'opacity-60 cursor-not-allowed' : ''}`}
+            }`}
           >
             <input
               type="radio"
               name="paymentMethod"
               value="card"
               checked={value === 'card'}
-              disabled={multiSeller}
               onChange={() => onChange('card')}
               className="mt-1"
             />
@@ -44,8 +48,8 @@ export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiS
                 Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
               </p>
               {multiSeller && (
-                <p className="text-xs text-accent-700 mt-1">
-                  ⚠ Il pagamento con carta richiede ordini da un solo negozio per volta.
+                <p className="text-xs text-primary-700 mt-1">
+                  ℹ Un solo pagamento per tutto il carrello, anche con più negozi.
                 </p>
               )}
             </div>
