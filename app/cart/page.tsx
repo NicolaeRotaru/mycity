@@ -10,6 +10,7 @@ import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
 import { ShoppingCart } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -19,6 +20,15 @@ export default function CartPage() {
     refresh();
     window.addEventListener('cart:updated', refresh);
     return () => window.removeEventListener('cart:updated', refresh);
+  }, []);
+
+  // Feedback al rientro da Stripe Checkout annullato (?stripe=canceled)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('stripe') === 'canceled') {
+      toast('Pagamento annullato. Il carrello è ancora qui quando vuoi.', { icon: '🛒' });
+      window.history.replaceState({}, '', '/cart');
+    }
   }, []);
 
   const total = cartTotal(items);

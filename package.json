@@ -16,6 +16,7 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "analyze": "ANALYZE=true next build",
+    "db:types": "node scripts/gen-db-types.mjs",
     "verify": "npm run typecheck && npm run lint && npm run test"
   },
   "engines": {
