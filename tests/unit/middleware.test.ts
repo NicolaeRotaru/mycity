@@ -36,6 +36,7 @@ import {
   withSellerAuth,
   withCronAuth,
 } from '@/lib/api/middleware';
+import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 
 function makeReq(headers: Record<string, string> = {}, path = 'http://localhost/api/test'): NextRequest {
   const h = new Headers(headers);
@@ -57,6 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockAuthGetUser.mockReset();
   mockProfileSingle.mockReset();
+  __resetRateLimitBuckets();
 });
 
 describe('withAuth', () => {
