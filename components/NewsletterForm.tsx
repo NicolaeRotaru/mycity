@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Honeypot from './Honeypot';
@@ -12,6 +13,7 @@ type Props = {
 };
 
 const NewsletterForm = ({ variant = 'dark' }: Props) => {
+  const t = useTranslations('newsletter');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
@@ -30,7 +32,7 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
         .insert({ email: email.trim().toLowerCase() });
       if (error && error.code !== '23505') throw error;
       setSubscribed(true);
-      toast.success('Iscritto! Riceverai la newsletter ogni venerdì.');
+      toast.success(t('subscribed'));
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
@@ -47,7 +49,7 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
           ? 'bg-olive-50 border border-olive-200 text-olive-700 rounded-lg p-4 text-sm font-medium'
           : 'bg-olive-500/20 border border-olive-400/40 text-emerald-200 rounded-lg p-3 text-sm'
       }>
-        ✅ Sei iscritto. Riceverai presto le ricette di Piacenza nella tua mail.
+        ✅ {t('subscribedBox')}
       </div>
     );
   }
@@ -56,14 +58,14 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
     <form onSubmit={submit} className={isLight ? 'space-y-3' : 'space-y-2'}>
       <Honeypot value={honeypotRef.current} onChange={(v) => (honeypotRef.current = v)} name="company" />
       <p className={`text-xs ${isLight ? 'text-ink-500' : 'text-ink-400'}`}>
-        📬 <strong>Cosa c'è nel piatto a Piacenza</strong> — ricetta + storia di un negoziante + 3 offerte. Ogni venerdì.
+        📬 {t('blurb')}
       </p>
       <div className="flex gap-2">
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="la-tua@email.it"
+          placeholder={t('placeholder')}
           required
           className={`flex-1 min-w-0 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 ${
             isLight
@@ -80,7 +82,7 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
               : 'bg-primary-600 hover:bg-primary-700 text-white'
           }`}
         >
-          {loading ? '…' : 'Iscriviti · €5'}
+          {loading ? '…' : t('subscribe')}
         </button>
       </div>
     </form>
