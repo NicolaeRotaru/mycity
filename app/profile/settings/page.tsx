@@ -64,18 +64,34 @@ export default function SettingsPage() {
   // Prefs
   const [prefs, setPrefs] = useLocalStorage<Prefs>(PREFS_KEY, DEFAULT_PREFS);
 
-  // Delete account
+  // Delete account (cooldown 7gg)
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [pendingDeletion, setPendingDeletion] = useState<{ effectiveAt: string; daysRemaining: number } | null>(null);
+  const [cancelingDeletion, setCancelingDeletion] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) {
         router.push('/sign-in?returnTo=/profile/settings');
         return;
       }
       setEmail(data.user.email ?? '');
       setUserId(data.user.id);
+      // Verifica se c'è una richiesta di eliminazione pendente (cooldown 7gg)
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (token) {
+          const res = await fetch('/api/account/delete', { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) {
+            const body = await res.json();
+            if (body?.pending) {
+              setPendingDeletion({ effectiveAt: body.effectiveAt, daysRemaining: body.daysRemaining });
+            }
+          }
+        }
+      } catch { /* stato non bloccante */ }
       setLoading(false);
     });
   }, [router]);
@@ -160,6 +176,15 @@ export default function SettingsPage() {
     toast.success('Esportazione dati scaricata');
   };
 
+  // Estrae il messaggio d'errore sia dal formato ApiErrors { error: { message } }
+  // sia dal formato legacy { error: string }.
+  const extractError = (body: unknown, fallback: string): string => {
+    const e = (body as { error?: unknown })?.error;
+    if (typeof e === 'string') return e;
+    if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message);
+    return fallback;
+  };
+
   const handleDeleteAccount = async () => {
     if (deleteConfirm !== 'ELIMINA') {
       toast.error('Scrivi ELIMINA per confermare');
@@ -176,15 +201,42 @@ export default function SettingsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || 'Eliminazione non riuscita');
+      if (!res.ok) throw new Error(extractError(body, 'Richiesta non riuscita'));
 
-      await supabase.auth.signOut();
-      toast.success('Account eliminato. Ci dispiace vederti andare.');
-      router.push('/');
+      // L'account NON viene eliminato subito: c'è un cooldown di 7 giorni
+      // durante il quale l'utente può annullare. NON facciamo signOut così
+      // l'utente può vedere lo stato e cambiare idea.
+      const days = body?.effectiveAt
+        ? Math.max(0, Math.ceil((new Date(body.effectiveAt).getTime() - Date.now()) / 86_400_000))
+        : 7;
+      setPendingDeletion({ effectiveAt: body?.effectiveAt ?? '', daysRemaining: days });
+      setDeleteConfirm('');
+      toast.success(`Richiesta registrata. L'account sarà eliminato tra ${days} giorni. Puoi annullare quando vuoi.`);
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleCancelDeletion = async () => {
+    setCancelingDeletion(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Sessione scaduta, esegui di nuovo il login.');
+      const res = await fetch('/api/account/delete', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(extractError(body, 'Annullamento non riuscito'));
+      setPendingDeletion(null);
+      toast.success('Eliminazione annullata. Il tuo account resta attivo.');
+    } catch (err) {
+      toast.error(friendlyError(err));
+    } finally {
+      setCancelingDeletion(false);
     }
   };
 
@@ -428,30 +480,56 @@ export default function SettingsPage() {
               <h2 className="text-lg font-bold text-red-700 mb-1">⚠️ Zona pericolosa</h2>
               <p className="text-sm text-ink-600 mb-5">Azioni irreversibili. Procedi con cautela.</p>
 
-              <div className="bg-red-50 border border-red-200 rounded-lg p-5">
-                <h3 className="font-bold text-red-900 mb-2">Elimina il tuo account</h3>
-                <p className="text-sm text-red-800 mb-3 leading-relaxed">
-                  Verranno rimossi profilo, indirizzi e preferenze. Gli ordini già evasi resteranno anonimizzati
-                  per obblighi fiscali. <strong>L'azione è permanente.</strong>
-                </p>
-                <label className="block text-sm font-medium text-red-900 mb-1">
-                  Scrivi <span className="font-mono bg-white px-1.5 py-0.5 rounded">ELIMINA</span> per confermare:
-                </label>
-                <input
-                  type="text"
-                  value={deleteConfirm}
-                  onChange={(e) => setDeleteConfirm(e.target.value)}
-                  className="w-full border border-red-300 rounded-lg p-2.5 mb-3 focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={handleDeleteAccount}
-                  disabled={deleting || deleteConfirm !== 'ELIMINA'}
-                  className="bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
-                >
-                  {deleting ? 'Eliminazione...' : '🗑️ Elimina definitivamente'}
-                </button>
-              </div>
+              {pendingDeletion ? (
+                /* Stato: eliminazione già richiesta — mostra countdown + annulla */
+                <div className="bg-accent-50 border border-accent-300 rounded-lg p-5">
+                  <h3 className="font-bold text-accent-900 mb-2">⏳ Eliminazione programmata</h3>
+                  <p className="text-sm text-accent-800 mb-1 leading-relaxed">
+                    Il tuo account sarà eliminato definitivamente tra{' '}
+                    <strong>{pendingDeletion.daysRemaining} {pendingDeletion.daysRemaining === 1 ? 'giorno' : 'giorni'}</strong>
+                    {pendingDeletion.effectiveAt && (
+                      <> (il {new Date(pendingDeletion.effectiveAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })})</>
+                    )}.
+                  </p>
+                  <p className="text-sm text-accent-700 mb-4">
+                    Puoi annullare in qualsiasi momento entro questa data. Dopo, i dati saranno rimossi in modo irreversibile.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleCancelDeletion}
+                    disabled={cancelingDeletion}
+                    className="bg-olive-600 hover:bg-olive-700 disabled:opacity-40 text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
+                  >
+                    {cancelingDeletion ? 'Annullamento...' : '↩️ Annulla eliminazione'}
+                  </button>
+                </div>
+              ) : (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-5">
+                  <h3 className="font-bold text-red-900 mb-2">Elimina il tuo account</h3>
+                  <p className="text-sm text-red-800 mb-3 leading-relaxed">
+                    Verranno rimossi profilo, indirizzi e preferenze. Gli ordini già evasi resteranno anonimizzati
+                    per obblighi fiscali. C'è un periodo di ripensamento di <strong>7 giorni</strong> durante il
+                    quale puoi annullare; dopo, <strong>l'azione è permanente.</strong>
+                  </p>
+                  <label className="block text-sm font-medium text-red-900 mb-1">
+                    Scrivi <span className="font-mono bg-white px-1.5 py-0.5 rounded">ELIMINA</span> per confermare:
+                  </label>
+                  <input
+                    type="text"
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    className="w-full border border-red-300 rounded-lg p-2.5 mb-3 focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    disabled={deleting || deleteConfirm !== 'ELIMINA'}
+                    className="bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
+                  >
+                    {deleting ? 'Invio richiesta...' : '🗑️ Richiedi eliminazione'}
+                  </button>
+                </div>
+              )}
             </section>
           )}
         </div>

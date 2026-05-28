@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 
 type Props = {
@@ -69,7 +70,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
         }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data?.error ?? 'Errore');
+      if (!r.ok) throw new Error(apiErrorMessage(data, 'Errore'));
       toast.success('Incasso confermato');
       setOpen(false);
       onConfirmed?.();

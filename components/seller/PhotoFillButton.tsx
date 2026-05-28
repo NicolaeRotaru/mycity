@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { apiErrorMessage } from '@/lib/errors';
 
 export type ExtractedProduct = {
   name: string;
@@ -76,7 +77,7 @@ const PhotoFillButton = ({ onFilled }: Props) => {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error ?? 'Errore sconosciuto');
+        throw new Error(apiErrorMessage(data, 'Errore sconosciuto'));
       }
       onFilled(data as ExtractedProduct);
       if (!data.category_id) {

@@ -9,7 +9,7 @@ import { formatDate } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
 import { useTranslations } from 'next-intl';
@@ -189,7 +189,7 @@ function AdminUsersPageInner() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error || 'Eliminazione fallita');
+      if (!res.ok) throw new Error(apiErrorMessage(body, 'Eliminazione fallita'));
       return body;
     },
     onSuccess: () => {

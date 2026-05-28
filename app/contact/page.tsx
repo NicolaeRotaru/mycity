@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import Honeypot from '@/components/Honeypot';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 
 export default function ContactPage() {
@@ -32,7 +32,7 @@ export default function ContactPage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? 'Invio non riuscito');
+        throw new Error(apiErrorMessage(err, 'Invio non riuscito'));
       }
       toast.success('Messaggio inviato! Ti risponderemo entro 24h lavorative.');
       setForm({ name: '', email: '', subject: 'Domanda generale', message: '' });

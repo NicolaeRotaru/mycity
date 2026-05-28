@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError, apiErrorMessage } from '@/lib/errors';
 
 type Props = {
   sellerId: string;
@@ -46,7 +46,7 @@ export default function ContactSellerButton({ sellerId, className = '', label = 
         body: JSON.stringify({ sellerId }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? 'Errore');
+      if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
       router.push(`/messages/${json.conversationId}`);
     } catch (err) {
       toast.error(friendlyError(err));

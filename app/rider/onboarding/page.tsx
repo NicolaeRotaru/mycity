@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { apiErrorMessage } from '@/lib/errors';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
@@ -87,7 +88,7 @@ export default function RiderOnboardingPage() {
         body: fd,
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data?.error ?? 'Upload fallito');
+      if (!r.ok) throw new Error(apiErrorMessage(data, 'Upload fallito'));
       toast.success(`${kind} caricato`);
       setProfile((p) => ({ ...(p ?? {}), [columnForKind(kind)]: data.url }));
     } catch (e) {
@@ -117,7 +118,7 @@ export default function RiderOnboardingPage() {
         headers: { 'Authorization': `Bearer ${session?.access_token ?? ''}` },
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(data?.error ?? 'KYC fallito');
+      if (!r.ok) throw new Error(apiErrorMessage(data, 'KYC fallito'));
       toast.success(data.status === 'APPROVED' ? 'KYC approvato!' : 'KYC inviato, verifica in corso');
       router.push('/rider');
     } catch (e) {
