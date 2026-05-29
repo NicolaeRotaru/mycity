@@ -3,6 +3,15 @@ import Link from 'next/link';
 export const metadata = {
   title: 'Spedizioni e consegne · MyCity',
   description: 'Tempi, costi e modalità di consegna su MyCity.',
+  alternates: { canonical: '/shipping' },
+  openGraph: {
+    title: 'Spedizioni e consegne · MyCity',
+    description: 'Tempi, costi e modalità di consegna dei negozi di Piacenza su MyCity.',
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/shipping',
+  },
 };
 
 export default function ShippingPage() {

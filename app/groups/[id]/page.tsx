@@ -159,7 +159,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
         <div className="p-6 space-y-5">
           {img && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={img} alt="" className="w-full h-48 object-cover rounded-lg" />
+            <img src={img} alt="" loading="lazy" decoding="async" className="w-full h-48 object-cover rounded-lg" />
           )}
 
           <div className="flex items-baseline gap-3">

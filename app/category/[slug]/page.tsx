@@ -42,8 +42,22 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
   if (isLoading) return <LoadingState />;
   if (!category) return <div className="container mx-auto p-8 text-center">Categoria non trovata.</div>;
 
+  // Schema.org BreadcrumbList JSON-LD (Home > Categoria) per rich results Google.
+  const breadcrumbSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: '/' },
+      { '@type': 'ListItem', position: 2, name: category.name, item: `/category/${slug}` },
+    ],
+  };
+
   return (
     <div className="container mx-auto px-6 py-8 space-y-8">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
       <header className="flex items-center gap-4">
         <span className="text-5xl">{category.icon}</span>
         <div>

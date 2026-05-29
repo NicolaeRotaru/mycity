@@ -3,6 +3,15 @@ import Link from 'next/link';
 export const metadata = {
   title: 'Chi siamo · MyCity',
   description: 'MyCity è il marketplace dei negozi locali. Compra dai commercianti della tua città, ricevi a casa in 24-48h.',
+  alternates: { canonical: '/about' },
+  openGraph: {
+    title: 'Chi siamo · MyCity',
+    description: 'Il marketplace dei negozi locali di Piacenza. Compra dai commercianti della tua città.',
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/about',
+  },
 };
 
 export default function AboutPage() {

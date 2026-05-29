@@ -3,6 +3,15 @@ import Link from 'next/link';
 export const metadata = {
   title: 'Informativa sulla privacy · MyCity',
   description: 'Come trattiamo i tuoi dati personali ai sensi del Regolamento UE 2016/679 (GDPR).',
+  alternates: { canonical: '/privacy' },
+  openGraph: {
+    title: 'Informativa sulla privacy · MyCity',
+    description: 'Come trattiamo i tuoi dati personali ai sensi del GDPR.',
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/privacy',
+  },
 };
 
 const VERSION = '2.0';

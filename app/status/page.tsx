@@ -4,6 +4,15 @@ import { CheckCircle2, AlertCircle, Activity, Database, Mail, CreditCard, Messag
 export const metadata = {
   title: 'Stato servizi · MyCity',
   description: 'Stato in tempo reale dei servizi MyCity: marketplace, pagamenti, notifiche, email.',
+  alternates: { canonical: '/status' },
+  openGraph: {
+    title: 'Stato servizi · MyCity',
+    description: 'Stato in tempo reale dei servizi MyCity: marketplace, pagamenti, notifiche, email.',
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/status',
+  },
 };
 
 export const revalidate = 60;

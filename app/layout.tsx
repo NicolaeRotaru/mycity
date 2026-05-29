@@ -28,7 +28,12 @@ const fraunces = Fraunces({
   weight: ['400', '500', '600', '700', '800'],
 });
 
+// metadataBase: rende assoluti i canonical/openGraph relativi delle pagine
+// (es. /product/[id], /category/[slug]). Stessa fonte di robots.ts e sitemap.ts.
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
 export const metadata: Metadata = {
+  metadataBase: new URL(APP_URL),
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
   description:
     'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 24-48h, pagamento alla consegna.',
@@ -37,11 +42,19 @@ export const metadata: Metadata = {
     icon: '/icon-192.svg',
     apple: '/icon-192.svg',
   },
+  alternates: { canonical: '/' },
   openGraph: {
-    title: 'MyCity Piacenza',
+    title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
     description: 'Compra dai negozi della tua città. Consegna rapida, pagamento alla consegna.',
     type: 'website',
     locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'MyCity Piacenza',
+    description: 'Compra dai negozi della tua città. Consegna rapida, pagamento alla consegna.',
   },
 };
 

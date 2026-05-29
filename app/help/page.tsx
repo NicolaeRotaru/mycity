@@ -3,6 +3,15 @@ import Link from 'next/link';
 export const metadata = {
   title: 'Centro assistenza · MyCity',
   description: 'Trova risposte, guide e contatti per ogni tua esigenza su MyCity.',
+  alternates: { canonical: '/help' },
+  openGraph: {
+    title: 'Centro assistenza · MyCity',
+    description: 'Risposte, guide e contatti per ogni tua esigenza su MyCity.',
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/help',
+  },
 };
 
 const TOPICS = [
