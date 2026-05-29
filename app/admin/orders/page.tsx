@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   ORDER_STATUS_LABEL,
@@ -45,6 +47,27 @@ export default function AdminOrdersPage() {
       return (data ?? []) as unknown as Row[];
     },
     refetchInterval: 30_000,
+  });
+
+  const qc = useQueryClient();
+  const cancelOrder = useMutation({
+    mutationFn: async (orderId: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/admin/orders/${orderId}/cancel`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ reason: 'Ordine annullato dall’amministrazione' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Annullamento fallito');
+      return data as { refundId: string | null };
+    },
+    onSuccess: (data) => {
+      toast.success(data?.refundId ? 'Ordine annullato e rimborsato' : 'Ordine annullato');
+      qc.invalidateQueries({ queryKey: queryKeys.admin.orders });
+    },
+    onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
   const filtered = filter === 'all' ? orders : orders.filter((o) => o.delivery_status === filter);
@@ -117,6 +140,7 @@ export default function AdminOrdersPage() {
               <th className="p-3 text-left">Rider</th>
               <th className="p-3 text-left">Stato</th>
               <th className="p-3 text-right">Totale</th>
+              <th className="p-3 text-right">Azioni</th>
             </tr>
           </thead>
           <tbody>
@@ -136,12 +160,30 @@ export default function AdminOrdersPage() {
                     <OrderStatusBadge status={o.delivery_status} size="sm" />
                   </td>
                   <td className="p-3 text-right font-bold">{formatPrice(o.total_price)}</td>
+                  <td className="p-3 text-right">
+                    {o.delivery_status !== 'CANCELED' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (window.confirm('Annullare questo ordine? Se pagato con carta verrà rimborsato al cliente.')) {
+                            cancelOrder.mutate(o.id);
+                          }
+                        }}
+                        disabled={cancelOrder.isPending}
+                        className="text-xs font-semibold text-rose-700 hover:text-rose-900 hover:underline disabled:opacity-50"
+                      >
+                        Annulla
+                      </button>
+                    ) : (
+                      <span className="text-xs text-ink-400">—</span>
+                    )}
+                  </td>
                 </tr>
               );
             })}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-ink-400">Nessun ordine</td>
+                <td colSpan={8} className="p-8 text-center text-ink-400">Nessun ordine</td>
               </tr>
             )}
           </tbody>
