@@ -993,6 +993,7 @@ export interface Database {
           stripe_reversal_id: string | null;
           dispute_status: string | null;
           disputed_at: string | null;
+          rider_payout_status: string | null;
         };
         Insert: {
           id?: string;
@@ -1009,6 +1010,7 @@ export interface Database {
           stripe_reversal_id?: string | null;
           dispute_status?: string | null;
           disputed_at?: string | null;
+          rider_payout_status?: string | null;
         };
         Update: {
           id?: string;
@@ -1025,6 +1027,7 @@ export interface Database {
           stripe_reversal_id?: string | null;
           dispute_status?: string | null;
           disputed_at?: string | null;
+          rider_payout_status?: string | null;
         };
         Relationships: [];
       };
@@ -1769,6 +1772,8 @@ export interface Database {
           rating: number;
           comment: string | null;
           created_at: string | null;
+          seller_reply: string | null;
+          seller_reply_at: string | null;
         };
         Insert: {
           id?: string;
@@ -1778,6 +1783,8 @@ export interface Database {
           rating: number;
           comment?: string | null;
           created_at?: string | null;
+          seller_reply?: string | null;
+          seller_reply_at?: string | null;
         };
         Update: {
           id?: string;
@@ -1787,6 +1794,8 @@ export interface Database {
           rating?: number;
           comment?: string | null;
           created_at?: string | null;
+          seller_reply?: string | null;
+          seller_reply_at?: string | null;
         };
         Relationships: [];
       };

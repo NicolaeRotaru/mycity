@@ -16,6 +16,8 @@ type Review = {
   created_at: string;
   reviewer: { full_name: string | null } | null;
   order_id: string | null;
+  seller_reply: string | null;
+  seller_reply_at: string | null;
 };
 
 const Stars = ({ rating }: { rating: number }) => (
@@ -36,13 +38,13 @@ export default function SellerReviewsPage() {
       const { data, error } = await supabase
         .from('store_reviews')
         .select(`
-          id, rating, comment, created_at, order_id,
+          id, rating, comment, created_at, order_id, seller_reply, seller_reply_at,
           reviewer:profiles!store_reviews_reviewer_id_fkey ( full_name )
         `)
         .eq('store_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      type StoreReviewRow = { id: string; rating: number; comment: string | null; created_at: string; order_id: string; reviewer: { full_name: string | null } | null };
+      type StoreReviewRow = { id: string; rating: number; comment: string | null; created_at: string; order_id: string; seller_reply: string | null; seller_reply_at: string | null; reviewer: { full_name: string | null } | null };
       return (data ?? []) as unknown as StoreReviewRow[];
     },
   });
@@ -145,18 +147,30 @@ export default function SellerReviewsPage() {
 
 function ReviewCard({ review }: { review: Review }) {
   const [showReply, setShowReply] = useState(false);
-  const [reply, setReply] = useState('');
+  const [reply, setReply] = useState(review.seller_reply ?? '');
+  const [savedReply, setSavedReply] = useState<string | null>(review.seller_reply);
   const [sending, setSending] = useState(false);
 
   const sendReply = async () => {
-    if (!reply.trim()) return;
+    const text = reply.trim();
+    if (!text) return;
     setSending(true);
-    // Mock: in produzione qui salveremmo la risposta in store_review_replies
-    await new Promise((r) => setTimeout(r, 500));
-    setSending(false);
-    setShowReply(false);
-    setReply('');
-    toast.success('Risposta pubblicata (mock)');
+    try {
+      const res = await fetch(`/api/seller/reviews/${review.id}/reply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reply: text }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json?.error?.message ?? 'Errore durante il salvataggio');
+      setSavedReply(text);
+      setShowReply(false);
+      toast.success('Risposta pubblicata');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Impossibile pubblicare la risposta');
+    } finally {
+      setSending(false);
+    }
   };
 
   const initial = review.reviewer?.full_name?.[0]?.toUpperCase() ?? '?';
@@ -180,14 +194,21 @@ function ReviewCard({ review }: { review: Review }) {
         <p className="text-sm text-ink-700 leading-relaxed mt-2">{review.comment}</p>
       )}
 
+      {savedReply && !showReply && (
+        <div className="mt-3 ml-3 pl-3 border-l-2 border-primary-200 bg-cream-50 rounded-r-lg py-2 pr-2">
+          <p className="text-xs font-semibold text-primary-700 mb-0.5">La tua risposta</p>
+          <p className="text-sm text-ink-700 whitespace-pre-wrap">{savedReply}</p>
+        </div>
+      )}
+
       <div className="mt-3 pt-3 border-t border-cream-200 flex items-center justify-between gap-2">
         {!showReply ? (
           <button
             type="button"
-            onClick={() => setShowReply(true)}
+            onClick={() => { setReply(savedReply ?? ''); setShowReply(true); }}
             className="text-sm text-primary-700 hover:underline font-semibold"
           >
-            💬 Rispondi
+            💬 {savedReply ? 'Modifica risposta' : 'Rispondi'}
           </button>
         ) : null}
         {review.order_id && (
@@ -208,7 +229,7 @@ function ReviewCard({ review }: { review: Review }) {
           <div className="flex justify-end gap-2 mt-2">
             <button
               type="button"
-              onClick={() => { setShowReply(false); setReply(''); }}
+              onClick={() => { setShowReply(false); setReply(savedReply ?? ''); }}
               className="px-3 py-1.5 rounded text-sm text-ink-600 hover:bg-cream-100"
             >
               Annulla
