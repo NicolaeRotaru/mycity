@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Banknote, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Banknote, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
@@ -20,6 +20,8 @@ import { queryKeys } from '@/lib/queries/keys';
  */
 export default function StripeConnectButton() {
   const [redirecting, setRedirecting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: status, isLoading } = useQuery({
     queryKey: queryKeys.seller.stripeStatus,
@@ -60,6 +62,34 @@ export default function StripeConnectButton() {
     }
   };
 
+  // Fallback se il webhook account.updated non ha aggiornato i flag:
+  // rilegge lo stato da Stripe lato server e ricarica la query.
+  const refreshStatus = async () => {
+    setRefreshing(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch('/api/stripe/connect/refresh-status', {
+        method: 'POST',
+        headers: token ? { authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Errore aggiornamento stato');
+      await queryClient.invalidateQueries({ queryKey: queryKeys.seller.stripeStatus });
+      if (data?.charges_enabled && data?.payouts_enabled) {
+        toast.success('Pagamenti attivati!');
+      } else if (Array.isArray(data?.currently_due) && data.currently_due.length > 0) {
+        toast('Mancano ancora verifiche su Stripe: completa l\'onboarding.', { icon: '⚠️' });
+      } else {
+        toast('Stato aggiornato. Se risulta ancora in attesa, riprova tra poco.', { icon: '🔄' });
+      }
+    } catch (err) {
+      toast.error(friendlyError(err));
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="inline-flex items-center gap-2 text-sm text-ink-500">
@@ -91,14 +121,28 @@ export default function StripeConnectButton() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={startOnboarding}
-      disabled={redirecting}
-      className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-bold whitespace-nowrap transition-colors"
-    >
-      {redirecting ? <Loader2 size={16} className="animate-spin" /> : <Banknote size={16} />}
-      {isPendingVerification ? 'Completa configurazione pagamenti' : 'Collega conto per ricevere pagamenti'}
-    </button>
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={startOnboarding}
+        disabled={redirecting}
+        className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white px-4 py-2.5 rounded-lg text-sm font-bold whitespace-nowrap transition-colors"
+      >
+        {redirecting ? <Loader2 size={16} className="animate-spin" /> : <Banknote size={16} />}
+        {isPendingVerification ? 'Completa configurazione pagamenti' : 'Collega conto per ricevere pagamenti'}
+      </button>
+      {isPendingVerification && (
+        <button
+          type="button"
+          onClick={refreshStatus}
+          disabled={refreshing}
+          title="Hai già completato l'onboarding su Stripe? Rileggi lo stato."
+          className="inline-flex items-center gap-2 border border-primary-300 text-primary-700 hover:bg-primary-50 disabled:opacity-50 px-3 py-2.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors"
+        >
+          {refreshing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+          Aggiorna stato
+        </button>
+      )}
+    </div>
   );
 }

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type Stripe from 'stripe';
 import { getStripe, computeApplicationFeeCents } from '@/lib/stripe/client';
-import { reverseOrderTransfer } from '@/lib/stripe/payout';
+import { reverseOrderTransfer, applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
@@ -377,15 +377,8 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
 }
 
 async function handleAccountUpdated(acct: Stripe.Account) {
-  const admin = getAdminSupabase();
-  await admin
-    .from('profiles')
-    .update({
-      stripe_charges_enabled: !!acct.charges_enabled,
-      stripe_payouts_enabled: !!acct.payouts_enabled,
-      stripe_details_submitted: !!acct.details_submitted,
-    })
-    .eq('stripe_account_id', acct.id);
+  // Logica condivisa con POST /api/stripe/connect/refresh-status.
+  await applyConnectAccountStatus(acct);
 }
 
 type DisputeOrderRow = {

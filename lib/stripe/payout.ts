@@ -1,3 +1,4 @@
+import type Stripe from 'stripe';
 import { getStripe } from './client';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -18,6 +19,24 @@ import { refundIssuedTemplate } from '@/lib/email/templates';
  * Tutte le funzioni ritornano oggetti-risultato (mai NextResponse), così le
  * route HTTP e i cron possono consumarle in modo diverso.
  */
+
+/**
+ * Riflette su `profiles` i flag di stato di un Connect account leggendoli da
+ * un oggetto Stripe.Account. Fonte di verità unica usata sia dal webhook
+ * `account.updated` sia dalla route di refresh manuale, così lo stato resta
+ * corretto anche se il webhook non viene consegnato.
+ */
+export async function applyConnectAccountStatus(acct: Stripe.Account): Promise<void> {
+  const admin = getAdminSupabase();
+  await admin
+    .from('profiles')
+    .update({
+      stripe_charges_enabled: !!acct.charges_enabled,
+      stripe_payouts_enabled: !!acct.payouts_enabled,
+      stripe_details_submitted: !!acct.details_submitted,
+    })
+    .eq('stripe_account_id', acct.id);
+}
 
 export type PayoutResult =
   | { ok: true; transferId: string }
