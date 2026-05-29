@@ -102,9 +102,9 @@ export default function TrendingNow() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        {[...Array(8)].map((_, i) => (
-          <div key={i} className="h-64 rounded-xl skeleton" aria-hidden />
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        {[...Array(12)].map((_, i) => (
+          <div key={i} className="h-44 rounded-xl skeleton" aria-hidden />
         ))}
       </div>
     );
@@ -129,7 +129,7 @@ export default function TrendingNow() {
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
         {items.map((it, i) => {
           const p = it.product;
           const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
@@ -145,7 +145,7 @@ export default function TrendingNow() {
                     src={sizedImage(img, 'card')}
                     alt={p.name}
                     fill
-                    sizes="(min-width: 1024px) 240px, 50vw"
+                    sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"
                     unoptimized
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
@@ -169,10 +169,10 @@ export default function TrendingNow() {
                   </div>
                 )}
               </div>
-              <div className="p-3 space-y-1">
-                <p className="text-xs text-ink-500 truncate">{p.profiles?.store_name}</p>
-                <p className="text-sm font-semibold text-ink-900 line-clamp-2 min-h-[2.5rem]">{p.name}</p>
-                <p className="text-lg font-bold text-primary-700">{formatPrice(p.price)}</p>
+              <div className="p-2.5 space-y-0.5">
+                <p className="text-[11px] text-ink-500 truncate">{p.profiles?.store_name}</p>
+                <p className="text-xs font-semibold text-ink-900 line-clamp-2 min-h-[2rem] leading-snug">{p.name}</p>
+                <p className="text-sm font-bold text-primary-700">{formatPrice(p.price)}</p>
               </div>
             </Link>
           );

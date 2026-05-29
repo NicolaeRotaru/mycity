@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  Package, Heart, MapPin, Settings, Users, HelpCircle, LifeBuoy, Mail, ChevronRight, LogOut,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -19,6 +22,17 @@ type ProfileForm = {
   city: string;
   zip: string;
 };
+
+const ACCOUNT_LINKS = [
+  { href: '/orders',            icon: Package,    label: 'I tuoi ordini',   sub: 'Traccia e ripeti' },
+  { href: '/favorites',         icon: Heart,      label: 'Preferiti',       sub: 'Prodotti salvati' },
+  { href: '/profile/addresses', icon: MapPin,     label: 'Indirizzi',       sub: 'Casa, ufficio…' },
+  { href: '/profile/settings',  icon: Settings,   label: 'Impostazioni',    sub: 'Password, notifiche, privacy' },
+  { href: '/groups',            icon: Users,      label: 'Gruppi acquisto', sub: 'Unisciti e risparmia' },
+  { href: '/faq',               icon: HelpCircle, label: 'FAQ',             sub: 'Domande frequenti' },
+  { href: '/help',              icon: LifeBuoy,   label: 'Assistenza',      sub: 'Centro di aiuto' },
+  { href: '/contact',           icon: Mail,       label: 'Contattaci',      sub: 'Parla con noi' },
+];
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -82,118 +96,95 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="container mx-auto px-6 py-8 max-w-3xl">
+    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-5xl">
       <h1 className="text-2xl font-bold mb-6">Il tuo account</h1>
 
-      {/* BANNER INVITA AMICI */}
-      <Link
-        href="/profile/referral"
-        className="block bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-xl p-5 mb-6 hover:shadow-lg transition-all"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-extrabold text-lg">🎁 Invita un amico, prendete €5 entrambi</p>
-            <p className="text-primary-100 text-sm">Condividi il tuo codice referral</p>
+      <div className="grid gap-8 lg:grid-cols-[260px_1fr]">
+        {/* SINISTRA — menu account */}
+        <aside className="h-fit lg:sticky lg:top-24">
+          <nav className="divide-y divide-cream-100 overflow-hidden rounded-2xl border border-cream-300 bg-white">
+            {ACCOUNT_LINKS.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className="group flex items-center gap-3 px-4 py-3 transition-colors hover:bg-cream-50"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-100 text-primary-700 transition-colors group-hover:bg-primary-600 group-hover:text-white">
+                  <l.icon size={18} strokeWidth={2} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold text-ink-900">{l.label}</span>
+                  <span className="block truncate text-xs text-ink-500">{l.sub}</span>
+                </span>
+                <ChevronRight size={16} className="shrink-0 text-ink-300 transition-colors group-hover:text-primary-600" />
+              </Link>
+            ))}
+          </nav>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 font-semibold text-rose-600 transition-colors hover:bg-rose-50 hover:text-rose-700 disabled:opacity-50"
+          >
+            <LogOut size={16} />
+            {signingOut ? 'Disconnessione…' : 'Esci dal tuo account'}
+          </button>
+        </aside>
+
+        {/* DESTRA — referral + dati personali */}
+        <div className="space-y-6">
+          <Link
+            href="/profile/referral"
+            className="block rounded-2xl bg-gradient-to-r from-primary-600 to-purple-600 p-5 text-white transition-all hover:shadow-lg"
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-lg font-extrabold">🎁 Invita un amico, prendete €5 entrambi</p>
+                <p className="text-sm text-primary-100">Condividi il tuo codice referral</p>
+              </div>
+              <span className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-sm font-bold text-primary-800">
+                Scopri →
+              </span>
+            </div>
+          </Link>
+
+          <div className="rounded-2xl border border-cream-300 bg-white p-6">
+            <h2 className="mb-4 text-lg font-bold">Dati personali</h2>
+            <p className="mb-4 text-sm text-ink-500">
+              Email: <span className="font-mono">{profile.email}</span>
+            </p>
+            <form
+              onSubmit={handleSubmit((d) => update.mutate(d))}
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+            >
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium">Nome e cognome</label>
+                <input {...register('full_name')} className="w-full rounded border p-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Telefono</label>
+                <input {...register('phone')} className="w-full rounded border p-2" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">CAP</label>
+                <input {...register('zip')} className="w-full rounded border p-2" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium">Indirizzo</label>
+                <input {...register('address')} className="w-full rounded border p-2" />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="mb-1 block text-sm font-medium">Città</label>
+                <input {...register('city')} className="w-full rounded border p-2" />
+              </div>
+              <div className="sm:col-span-2">
+                <Button type="submit" loading={update.isPending} fullWidth>
+                  Salva modifiche
+                </Button>
+              </div>
+            </form>
           </div>
-          <span className="bg-white text-primary-800 px-3 py-1.5 rounded-lg font-bold text-sm shrink-0">
-            Scopri →
-          </span>
         </div>
-      </Link>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <Link href="/orders" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">📦</div>
-          <h3 className="font-bold">I tuoi ordini</h3>
-          <p className="text-sm text-ink-500 hidden sm:block">Traccia e ripeti</p>
-        </Link>
-        <Link href="/favorites" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">♥</div>
-          <h3 className="font-bold">Preferiti</h3>
-          <p className="text-sm text-ink-500 hidden sm:block">I tuoi prodotti salvati</p>
-        </Link>
-        <Link href="/profile/addresses" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">📍</div>
-          <h3 className="font-bold">Indirizzi</h3>
-          <p className="text-sm text-ink-500 hidden sm:block">Casa, ufficio…</p>
-        </Link>
-        <Link href="/profile/settings" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">⚙️</div>
-          <h3 className="font-bold">Impostazioni</h3>
-          <p className="text-sm text-ink-500 hidden sm:block">Password, notifiche, privacy</p>
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <Link href="/groups" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">🤝</div>
-          <h3 className="font-bold">Gruppi acquisto</h3>
-          <p className="text-sm text-ink-500 hidden sm:block">Unisciti e risparmia</p>
-        </Link>
-        <Link href="/faq" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">❓</div>
-          <h3 className="font-bold">FAQ</h3>
-          <p className="text-sm text-ink-500 hidden sm:block">Domande frequenti</p>
-        </Link>
-        <Link href="/help" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">💡</div>
-          <h3 className="font-bold">Assistenza</h3>
-          <p className="text-sm text-ink-500 hidden sm:block">Centro di aiuto</p>
-        </Link>
-        <Link href="/contact" className="bg-white border rounded-lg p-5 hover:shadow-md transition-shadow">
-          <div className="text-3xl mb-2">✉️</div>
-          <h3 className="font-bold">Contattaci</h3>
-          <p className="text-sm text-ink-500 hidden sm:block">Parla con noi</p>
-        </Link>
-      </div>
-
-      <div className="bg-white border rounded-lg p-6">
-        <h2 className="text-lg font-bold mb-4">Dati personali</h2>
-        <p className="text-sm text-ink-500 mb-4">
-          Email: <span className="font-mono">{profile.email}</span>
-        </p>
-        <form
-          onSubmit={handleSubmit((d) => update.mutate(d))}
-          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-        >
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium mb-1">Nome e cognome</label>
-            <input {...register('full_name')} className="w-full border p-2 rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Telefono</label>
-            <input {...register('phone')} className="w-full border p-2 rounded" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">CAP</label>
-            <input {...register('zip')} className="w-full border p-2 rounded" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium mb-1">Indirizzo</label>
-            <input {...register('address')} className="w-full border p-2 rounded" />
-          </div>
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium mb-1">Città</label>
-            <input {...register('city')} className="w-full border p-2 rounded" />
-          </div>
-          <div className="sm:col-span-2">
-            <Button type="submit" loading={update.isPending} fullWidth>
-              Salva modifiche
-            </Button>
-          </div>
-        </form>
-      </div>
-
-      <div className="mt-8 flex justify-end">
-        <button
-          type="button"
-          onClick={handleSignOut}
-          disabled={signingOut}
-          className="text-red-600 hover:text-red-700 font-semibold disabled:opacity-50 flex items-center gap-2"
-        >
-          <span>↪</span>
-          <span>{signingOut ? 'Disconnessione...' : 'Esci dal tuo account'}</span>
-        </button>
       </div>
     </div>
   );
