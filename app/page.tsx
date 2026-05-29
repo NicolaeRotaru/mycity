@@ -16,6 +16,10 @@ import HeroStoreCard from '@/components/home/HeroStoreCard';
 import HomeEvents from '@/components/home/HomeEvents';
 import MaybeSection from '@/components/home/MaybeSection';
 
+// ISR: la home è un server component con figli client (useQuery). Rigeneriamo lo
+// shell ogni 60s invece di fare SSR ad ogni richiesta → meno carico, freschezza ok.
+export const revalidate = 60;
+
 /**
  * Homepage MyCity — "Mediterranean Modern" + edit del giorno.
  *
