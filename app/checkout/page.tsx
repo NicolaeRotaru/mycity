@@ -536,6 +536,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl">
+      <h1 className="sr-only">Completa il tuo ordine</h1>
       <StepIndicator steps={CHECKOUT_STEPS} currentStep={2} />
 
       {!authUser && (

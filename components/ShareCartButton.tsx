@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Share2, Copy, MessageCircle, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { Modal } from '@/components/ui/Modal';
 import type { CartItem } from '@/lib/cart';
 
 type Props = {
@@ -15,6 +16,7 @@ type Props = {
  *
  * Tecnica: encoda gli ID dei prodotti in querystring (?cart=id1:qty1,id2:qty2)
  * e /shared-cart parsea + carica nel carrello locale del destinatario.
+ * Usa la primitiva Modal (focus-trap + Esc + return-focus + scroll-lock).
  */
 export default function ShareCartButton({ items }: Props) {
   const [open, setOpen] = useState(false);
@@ -56,47 +58,37 @@ export default function ShareCartButton({ items }: Props) {
         Condividi la lista
       </button>
 
-      {open && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 animate-fadeIn" onClick={() => setOpen(false)}>
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-warm-xl animate-popIn space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-serif font-bold text-ink-900">Condividi la lista della spesa</h3>
-            <p className="text-sm text-ink-600">
-              Manda la lista al partner o a un amico per concordare la spesa. Apriranno il marketplace già con tutti gli articoli pronti.
-            </p>
-
-            <div className="space-y-2">
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full inline-flex items-center gap-3 bg-[#25D366] hover:bg-[#1FAD53] text-white px-4 py-3 rounded-lg font-semibold transition-colors"
-              >
-                <MessageCircle size={18} />
-                Condividi su WhatsApp
-              </a>
-              <a
-                href={emailUrl}
-                className="w-full inline-flex items-center gap-3 bg-primary-700 hover:bg-primary-800 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
-              >
-                <Mail size={18} />
-                Invia via email
-              </a>
-              <button
-                type="button"
-                onClick={copy}
-                className="w-full inline-flex items-center gap-3 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-3 rounded-lg font-semibold transition-colors"
-              >
-                <Copy size={18} aria-hidden />
-                Copia testo
-              </button>
-            </div>
-
-            <button type="button" onClick={() => setOpen(false)} className="w-full text-xs text-ink-500 hover:text-ink-800">
-              Chiudi
-            </button>
-          </div>
+      <Modal open={open} onClose={() => setOpen(false)} title="Condividi la lista della spesa" size="sm">
+        <p className="text-sm text-ink-600 mb-4">
+          Manda la lista al partner o a un amico per concordare la spesa. Apriranno il marketplace già con tutti gli articoli pronti.
+        </p>
+        <div className="space-y-2">
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full inline-flex items-center gap-3 bg-[#25D366] hover:bg-[#1FAD53] text-white px-4 py-3 rounded-lg font-semibold transition-colors"
+          >
+            <MessageCircle size={18} />
+            Condividi su WhatsApp
+          </a>
+          <a
+            href={emailUrl}
+            className="w-full inline-flex items-center gap-3 bg-primary-700 hover:bg-primary-800 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
+          >
+            <Mail size={18} />
+            Invia via email
+          </a>
+          <button
+            type="button"
+            onClick={copy}
+            className="w-full inline-flex items-center gap-3 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-3 rounded-lg font-semibold transition-colors"
+          >
+            <Copy size={18} aria-hidden />
+            Copia testo
+          </button>
         </div>
-      )}
+      </Modal>
     </>
   );
 }
