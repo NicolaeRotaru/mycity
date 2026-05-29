@@ -382,11 +382,10 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         && !order.cash_confirmed_at && (
           <div className="bg-accent-50 border-2 border-accent-300 rounded-xl p-4 space-y-3">
             <div>
-              <p className="font-bold text-accent-900">⚠ Conferma incasso obbligatoria</p>
+              <p className="font-bold text-accent-900">💶 Conferma incasso</p>
               <p className="text-sm text-accent-800">
-                Devi confermare l&apos;importo ricevuto, con una foto del pagamento. Senza
-                conferma l&apos;ordine non viene chiuso e potresti non ricevere il rimborso del
-                tuo compenso.
+                Conferma l&apos;importo ricevuto in contanti per chiudere l&apos;ordine. La foto è
+                facoltativa.
               </p>
             </div>
             <CashConfirmDialog

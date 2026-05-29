@@ -7,21 +7,21 @@ import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
-const HOLD_DAYS = 3;
+const HOLD_DAYS = 1;
 const BATCH_LIMIT = 200;
 const OPEN_RETURN_STATUSES = ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'];
 const OPEN_DISPUTE_STATUSES = ['open', 'under_review'];
 
 /**
  * Cron: rilascia automaticamente i payout SCT ai venditori per gli ordini
- * consegnati da almeno HOLD_DAYS giorni. Policy: consegna +3gg, con claw-back
+ * consegnati da almeno HOLD_DAYS giorno. Policy: consegna +24h, con claw-back
  * via reversal per rimborsi/recessi tardivi (vedi lib/stripe/payout.ts).
  *
  * Eleggibilità (filtri SQL, coperti da orders_payout_release_idx):
  *   payout_status IN ('HELD','PENDING_SELLER_ONBOARDING')
  *   AND payment_method = 'card'        (i COD non passano da Stripe)
  *   AND delivery_status = 'DELIVERED'
- *   AND delivered_at <= now() - 3gg
+ *   AND delivered_at <= now() - 24h
  *   AND dispute_status IS NULL         (nessun chargeback Stripe aperto)
  * Esclusioni applicative: ordini con un reso aperto o una dispute interna
  * aperta vengono saltati (i fondi restano HELD).

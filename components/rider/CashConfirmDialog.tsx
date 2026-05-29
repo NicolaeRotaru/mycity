@@ -15,8 +15,8 @@ type Props = {
 /**
  * Dialog conferma cash on delivery:
  *  - Importo incassato (pre-popolato col totale)
- *  - Foto contanti/scontrino (obbligatoria)
- *  - Foto consegna pacco (raccomandata)
+ *  - Foto contanti/scontrino (opzionale)
+ *  - Foto consegna pacco (opzionale)
  *
  * Alla conferma chiama /api/rider/cash-confirm che valida lato server
  * (rider proprietario, stato ordine, payment_method=cod, non duplicato).
@@ -48,10 +48,6 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
   }
 
   async function submit() {
-    if (!cashPhoto) {
-      toast.error('Carica la foto dei contanti / scontrino');
-      return;
-    }
     const cents = Math.round(parseFloat(amount) * 100);
     if (Number.isNaN(cents) || cents < 0) {
       toast.error('Importo non valido');
@@ -98,8 +94,8 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
       <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
         <h2 className="text-lg font-semibold text-ink-900">Conferma incasso contanti</h2>
         <p className="mt-1 text-xs text-ink-500">
-          Inserisci l&apos;importo ricevuto, una foto dei contanti o dello scontrino, e una foto
-          della consegna.
+          Inserisci l&apos;importo ricevuto. Le foto (contanti/scontrino e consegna) sono
+          facoltative.
         </p>
 
         <label className="mt-4 block text-sm font-medium text-ink-700">Importo incassato (€)</label>
@@ -115,7 +111,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <PhotoSlot
             label="Foto contanti / scontrino"
-            required
+            required={false}
             url={cashPhoto}
             uploading={uploading === 'cash'}
             onChange={async (f) => setCashPhoto(await upload(f, 'cash'))}
@@ -139,7 +135,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
           </button>
           <button
             onClick={submit}
-            disabled={submitting || !cashPhoto}
+            disabled={submitting}
             className="flex-1 rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 disabled:opacity-50"
           >
             {submitting ? tStates('sending') : tActions('confirm')}

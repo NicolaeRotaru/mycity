@@ -182,7 +182,7 @@ export default function SellerEarningsPage() {
               <strong>{formatPrice(heldCents / 100)}</strong> in attesa di liquidazione.
             </p>
             <p className="text-xs text-olive-700 mt-1">
-              Pagamento automatico 3 giorni dopo la consegna, verso l&apos;IBAN registrato su Stripe.
+              Pagamento automatico ~24 ore dopo la consegna, verso l&apos;IBAN registrato su Stripe.
               Per saldo e bonifici reali apri la dashboard Stripe.
             </p>
           </div>
@@ -240,7 +240,7 @@ export default function SellerEarningsPage() {
             Nessuna commissione mensile, nessun costo di iscrizione.
           </p>
           <p>
-            Il bonifico parte <strong>in automatico 3 giorni dopo la consegna</strong>. In caso di reso o contestazione la
+            Il bonifico parte <strong>in automatico ~24 ore dopo la consegna</strong>. In caso di reso o contestazione la
             quota corrispondente viene trattenuta o recuperata.
           </p>
         </div>
