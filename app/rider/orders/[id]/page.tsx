@@ -110,9 +110,11 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     });
     if (error) return { ok: false, reason: error.message };
     const result = data as { ok: boolean; reason?: string };
+    // Rileggi SEMPRE lo stato (anche su fallimento): se un tentativo precedente
+    // ha già cambiato lo stato dell'ordine, l'UI resta coerente.
+    qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
+    qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
     if (result.ok) {
-      qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('✓ Ritiro confermato');
       setVerifyOpen(null);
     }
@@ -127,9 +129,10 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
     });
     if (error) return { ok: false, reason: error.message };
     const result = data as { ok: boolean; reason?: string };
+    // Rileggi SEMPRE lo stato (anche su fallimento) per coerenza UI.
+    qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
+    qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
     if (result.ok) {
-      qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
-      qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('✓ Consegna confermata!');
       stopSharing();
       setVerifyOpen(null);

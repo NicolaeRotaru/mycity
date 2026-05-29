@@ -72,7 +72,25 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
       type StoreSuggest = { id: string; store_name: string | null; store_logo: string | null };
       type CatSuggest = { slug: string; name: string };
 
-      const products: Suggestion[] = ((productsRes.data ?? []) as ProdSuggest[]).map((p) => ({
+      // La RPC usa FTS italiano: per termini PARZIALI (es. "pomo") può non
+      // matchare "Pomodori". Fallback ILIKE su name (stessa logica di /search)
+      // così il suggest resta coerente con la pagina dei risultati.
+      let prodRows = (productsRes.data ?? []) as ProdSuggest[];
+      if (prodRows.length === 0) {
+        const { data: ilikeData } = await supabase
+          .from('products')
+          .select('id, name, price, images, profiles!products_seller_id_fkey!inner ( store_name, is_approved )')
+          .eq('status', 'available')
+          .eq('profiles.is_approved', true)
+          .ilike('name', pattern)
+          .limit(6);
+        type IlikeRow = { id: string; name: string; price: number | string; images: string[] | null; profiles?: { store_name: string | null } | null };
+        prodRows = ((ilikeData ?? []) as unknown as IlikeRow[]).map((p) => ({
+          id: p.id, name: p.name, price: p.price, images: p.images, store_name: p.profiles?.store_name ?? null,
+        }));
+      }
+
+      const products: Suggestion[] = prodRows.map((p) => ({
         kind: 'product' as const,
         id: p.id,
         name: p.name,
