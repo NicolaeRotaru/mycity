@@ -72,7 +72,21 @@ const SignInForm = () => {
       }
 
       toast.success('Accesso effettuato!');
-      router.push(returnTo);
+      // Atterra sulla home del ruolo (seller/rider/admin) così, dopo un cambio
+      // account, non resti sulla pagina del ruolo precedente. I buyer rispettano
+      // l'eventuale returnTo (es. checkout).
+      let dest = returnTo;
+      if (data?.user?.id) {
+        try {
+          const { data: prof } = await supabase
+            .from('profiles').select('role').eq('id', data.user.id).single();
+          const r = prof?.role;
+          if (r === 'admin') dest = '/admin';
+          else if (r === 'seller') dest = '/seller/dashboard';
+          else if (r === 'rider') dest = '/rider';
+        } catch { /* fallback: returnTo */ }
+      }
+      router.push(dest);
       router.refresh();
     } catch (error) {
       toast.error(translateAuthError(error instanceof Error ? error.message : ''));

@@ -14,6 +14,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
+import OrderTimeline from '@/components/OrderTimeline';
 import { notify } from '@/lib/notifications';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -30,6 +31,12 @@ type OrderRow = {
   total_price: number;
   shipping_cost: number;
   delivery_status: OrderStatus;
+  created_at: string;
+  accepted_at: string | null;
+  ready_at: string | null;
+  picked_up_at: string | null;
+  delivered_at: string | null;
+  canceled_at: string | null;
   payment_method: 'cod' | 'card' | null;
   cash_confirmed_at: string | null;
   delivery_full_name: string | null;
@@ -70,6 +77,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         .from('orders')
         .select(`
           id, user_id, seller_id, total_price, shipping_cost, delivery_status,
+          created_at, accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           payment_method, cash_confirmed_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           delivery_lat, delivery_lng,
@@ -217,7 +225,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       : { lat: order.seller?.store_lat, lng: order.seller?.store_lng, label: order.seller?.store_address };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <Link href="/rider" className="text-sm text-accent-600 hover:underline">← Dashboard</Link>
@@ -227,6 +235,16 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         </div>
         <OrderStatusBadge status={order.delivery_status} />
       </div>
+
+      <OrderTimeline
+        status={order.delivery_status}
+        createdAt={order.created_at}
+        acceptedAt={order.accepted_at}
+        readyAt={order.ready_at}
+        pickedUpAt={order.picked_up_at}
+        deliveredAt={order.delivered_at}
+        canceledAt={order.canceled_at}
+      />
 
       {/* MAPPA */}
       {points.length > 0 && (
@@ -382,11 +400,10 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         && !order.cash_confirmed_at && (
           <div className="bg-accent-50 border-2 border-accent-300 rounded-xl p-4 space-y-3">
             <div>
-              <p className="font-bold text-accent-900">⚠ Conferma incasso obbligatoria</p>
+              <p className="font-bold text-accent-900">💶 Conferma incasso</p>
               <p className="text-sm text-accent-800">
-                Devi confermare l&apos;importo ricevuto, con una foto del pagamento. Senza
-                conferma l&apos;ordine non viene chiuso e potresti non ricevere il rimborso del
-                tuo compenso.
+                Conferma l&apos;importo ricevuto in contanti per chiudere l&apos;ordine. La foto è
+                facoltativa.
               </p>
             </div>
             <CashConfirmDialog

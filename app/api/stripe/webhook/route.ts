@@ -301,6 +301,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       });
       await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
     }
+
+    // Notifica in-app al venditore (campanella) — nuovo ordine ricevuto
+    await admin.from('notifications').insert({
+      user_id: created.sellerId,
+      title: '📦 Nuovo ordine ricevuto',
+      body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
+      link: `/seller/orders/${created.orderId}`,
+    });
   }
 }
 

@@ -10,6 +10,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
+import OrderTimeline from '@/components/OrderTimeline';
 import { notify } from '@/lib/notifications';
 import SimpleQR from '@/components/SimpleQR';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -26,6 +27,11 @@ type OrderRow = {
   shipping_cost: number;
   delivery_status: OrderStatus;
   created_at: string;
+  accepted_at: string | null;
+  ready_at: string | null;
+  picked_up_at: string | null;
+  delivered_at: string | null;
+  canceled_at: string | null;
   delivery_full_name: string | null;
   delivery_phone: string | null;
   delivery_address: string | null;
@@ -53,6 +59,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         .from('orders')
         .select(`
           id, user_id, total_price, shipping_cost, delivery_status, created_at,
+          accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           rider_id,
           rider:profiles!orders_rider_id_fkey ( full_name ),
@@ -147,6 +154,16 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         </div>
         <OrderStatusBadge status={order.delivery_status} />
       </div>
+
+      <OrderTimeline
+        status={order.delivery_status}
+        createdAt={order.created_at}
+        acceptedAt={order.accepted_at}
+        readyAt={order.ready_at}
+        pickedUpAt={order.picked_up_at}
+        deliveredAt={order.delivered_at}
+        canceledAt={order.canceled_at}
+      />
 
       {/* AZIONI */}
       {order.delivery_status === 'NEW' && (
