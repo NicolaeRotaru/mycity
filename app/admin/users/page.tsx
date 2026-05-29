@@ -117,7 +117,6 @@ function AdminUsersPageInner() {
       if (error) throw error;
       await supabase.from('notifications').insert({
         user_id: id,
-        type: 'seller_approved',
         title: '✅ Negozio approvato',
         body: 'Il tuo negozio è stato approvato! Ora puoi accedere alla dashboard e pubblicare prodotti.',
         link: '/seller/dashboard',
@@ -141,7 +140,6 @@ function AdminUsersPageInner() {
       if (error) throw error;
       await supabase.from('notifications').insert({
         user_id: id,
-        type: 'seller_rejected',
         title: '❌ Richiesta non approvata',
         body: `La tua richiesta non è stata approvata. Motivo: ${reason}`,
         link: '/sell',
@@ -165,7 +163,6 @@ function AdminUsersPageInner() {
       if (error) throw error;
       await supabase.from('notifications').insert({
         user_id: id,
-        type: 'seller_reactivated',
         title: '✅ Negozio riattivato',
         body: 'Il tuo negozio è di nuovo operativo. Puoi tornare a vendere su MyCity.',
         link: '/seller/dashboard',
@@ -210,7 +207,6 @@ function AdminUsersPageInner() {
       if (error) throw error;
       await supabase.from('notifications').insert({
         user_id: id,
-        type: 'seller_suspended',
         title: '⏸️ Negozio sospeso',
         body: 'Il tuo negozio è stato temporaneamente sospeso da un amministratore. Contatta il supporto per chiarimenti.',
         link: '/contact',
