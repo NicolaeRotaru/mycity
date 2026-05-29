@@ -198,6 +198,29 @@ export default function SellerDashboard() {
             <p className="font-bold text-primary-800 mb-1">✍️ Descrizioni complete</p>
             <p className="text-ink-600">Includi peso, materiali, provenienza.</p>
           </div>
+          <div className="bg-white rounded-lg p-4 border border-primary-100">
+            <p className="font-bold text-primary-800 mb-1">📸 Crea una storia</p>
+            <p className="text-ink-600">Le storie (24h) portano i clienti dentro al tuo negozio.</p>
+            <Link href="/seller/stories" className="text-primary-700 hover:underline text-xs font-semibold mt-2 inline-block">
+              Crea storia →
+            </Link>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-primary-100">
+            <p className="font-bold text-primary-800 mb-1">🏷️ Lancia una promo</p>
+            <p className="text-ink-600">Uno sconto a tempo crea urgenza e fa salire le vendite.</p>
+            <Link href="/seller/promotions" className="text-primary-700 hover:underline text-xs font-semibold mt-2 inline-block">
+              Crea promo →
+            </Link>
+          </div>
+          {profile && (
+            <div className="bg-white rounded-lg p-4 border border-primary-100">
+              <p className="font-bold text-primary-800 mb-1">📣 Condividi il negozio</p>
+              <p className="text-ink-600">Manda il link della tua vetrina a clienti e amici.</p>
+              <Link href={`/store/${profile.id}`} className="text-primary-700 hover:underline text-xs font-semibold mt-2 inline-block">
+                Apri vetrina →
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -208,12 +231,6 @@ export default function SellerDashboard() {
           <Button href="/seller/products/new">➕ Aggiungi prodotto</Button>
           <Link href="/seller/orders" className="bg-white border-2 hover:border-primary-400 px-4 py-2.5 rounded-lg font-semibold">
             📦 Gestisci ordini
-          </Link>
-          <Link href="/seller/products" className="bg-white border-2 hover:border-primary-400 px-4 py-2.5 rounded-lg font-semibold">
-            🗂️ I miei prodotti
-          </Link>
-          <Link href="/seller/profile" className="bg-white border-2 hover:border-primary-400 px-4 py-2.5 rounded-lg font-semibold">
-            🏪 Modifica negozio
           </Link>
           {profile && (
             <Link href={`/store/${profile.id}`} className="bg-white border-2 hover:border-primary-400 px-4 py-2.5 rounded-lg font-semibold">

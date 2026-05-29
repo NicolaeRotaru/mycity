@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Store, Shirt, Apple, Sparkles, Home as HomeIcon, Smartphone,
-  Leaf, Gamepad2, BookOpen, Trophy, ChevronRight, Tag,
+  Leaf, Gamepad2, BookOpen, Trophy, ChevronRight, Tag, Percent,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -73,6 +73,17 @@ const CategoryBar = () => {
         >
           <Store size={14} strokeWidth={2.2} />
           Tutti i negozi
+        </Link>
+        <Link
+          href="/promozioni"
+          className={`inline-flex items-center gap-1.5 whitespace-nowrap font-semibold px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+            isActive('/promozioni')
+              ? 'bg-accent-500 text-ink-900 shadow-sm'
+              : 'bg-white/10 text-accent-200 hover:bg-white/20'
+          }`}
+        >
+          <Percent size={14} strokeWidth={2.2} />
+          Promozioni
         </Link>
         <span aria-hidden className="w-px h-5 bg-white/20 mx-0.5 shrink-0" />
         {categories.map((c) => {

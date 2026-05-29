@@ -36,7 +36,8 @@ export default function SellerHealthScore() {
         .select(`
           store_name, store_description, store_logo,
           store_lat, store_lng, store_phone,
-          billing_iban, business_pec, store_address
+          billing_iban, business_pec, store_address,
+          stripe_payouts_enabled, stripe_charges_enabled
         `)
         .eq('id', userId!)
         .single();
@@ -90,10 +91,11 @@ export default function SellerHealthScore() {
         },
         {
           id: 'billing-iban',
-          label: 'IBAN per ricevere i pagamenti',
+          label: 'Pagamenti attivi (IBAN su Stripe)',
           points: 10,
-          passed: !!profile?.billing_iban,
-          fix: { href: '/seller/profile', label: 'Imposta IBAN' },
+          // Fonte di verità: Stripe Connect (payouts_enabled), non il vecchio campo billing_iban.
+          passed: !!profile?.stripe_payouts_enabled || !!profile?.billing_iban,
+          fix: { href: '/seller/earnings', label: 'Attiva pagamenti' },
         },
         {
           id: 'min-3-products',

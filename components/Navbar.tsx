@@ -1,12 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Bell, MessageCircle, ShoppingCart, Heart, Bike, Shield, Store, LogOut,
-  Sparkles, Package, ChevronDown, User, MapPin, Award, Gift, ListChecks,
-  Megaphone, LayoutDashboard, TrendingUp, Camera, Euro, Wallet, CircleDot,
-  Settings, HelpCircle,
+  Package, ChevronDown,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
@@ -19,6 +18,7 @@ import LocationPill from './LocationPill';
 import PromoTicker from './PromoTicker';
 import SearchBar from './SearchBar';
 import CategoryBar from './CategoryBar';
+import { getAccountMenuItems } from '@/lib/account-menu';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
 
@@ -77,8 +77,6 @@ export default function Navbar() {
     profile?.email?.split('@')[0] ??
     userEmail?.split('@')[0] ??
     'utente';
-
-  const profileHref = isSeller ? '/seller/profile' : isRider ? '/rider/profile' : '/profile';
 
   // CategoryBar mostrata solo per buyer/guest in aree pubbliche (no /seller, /rider, /admin)
   const isProArea =
@@ -151,8 +149,8 @@ export default function Navbar() {
                     )}
                     <UserMenu
                       displayName={displayName}
+                      storeLogo={profile?.store_logo ?? null}
                       role={role}
-                      profileHref={profileHref}
                       isSeller={isSeller}
                       isRider={isRider}
                       isAdmin={isAdmin}
@@ -239,10 +237,10 @@ const CartButton = ({ count }: { count: number }) => (
   </Link>
 );
 
-const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, onSignOut }: {
+const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, onSignOut }: {
   displayName: string;
+  storeLogo?: string | null;
   role: Role;
-  profileHref: string;
   isSeller: boolean;
   isRider: boolean;
   isAdmin: boolean;
@@ -273,14 +271,20 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className={`w-9 h-9 rounded-full ring-2 ring-white/20 flex items-center justify-center text-sm font-bold uppercase ${
-          isSeller ? 'bg-accent-500 text-ink-900' :
-          isRider  ? 'bg-olive-500 text-white' :
-          isAdmin  ? 'bg-secondary-500 text-white' :
-                     'bg-cream-200 text-primary-700'
-        }`}>
-          {isSeller ? <Store size={16} /> : isRider ? <Bike size={16} /> : initial}
-        </span>
+        {isSeller && storeLogo ? (
+          <span className="w-9 h-9 rounded-full ring-2 ring-white/20 overflow-hidden bg-white relative shrink-0">
+            <Image src={storeLogo} alt={displayName} fill sizes="36px" className="object-cover" />
+          </span>
+        ) : (
+          <span className={`w-9 h-9 rounded-full ring-2 ring-white/20 flex items-center justify-center text-sm font-bold uppercase ${
+            isSeller ? 'bg-accent-500 text-ink-900' :
+            isRider  ? 'bg-olive-500 text-white' :
+            isAdmin  ? 'bg-secondary-500 text-white' :
+                       'bg-cream-200 text-primary-700'
+          }`}>
+            {isSeller ? <Store size={16} /> : isRider ? <Bike size={16} /> : initial}
+          </span>
+        )}
         <span className="hidden xl:flex flex-col leading-tight text-left">
           <span className="text-[10px] uppercase tracking-wide opacity-70">
             {isSeller ? 'Negozio' : isRider ? 'Rider' : isAdmin ? 'Admin' : 'Ciao'}
@@ -292,44 +296,32 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
 
       {open && (
         <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-warm-lg ring-1 ring-ink-100 overflow-hidden z-50">
-          <div className="px-4 py-3 border-b border-ink-100 bg-cream-100">
-            <p className="text-xs text-ink-500 uppercase tracking-wide">Ciao</p>
-            <p className="font-semibold text-ink-900 truncate">{displayName}</p>
+          <div className="px-4 py-3 border-b border-ink-100 bg-cream-100 flex items-center gap-3">
+            {isSeller && storeLogo ? (
+              <span className="w-11 h-11 rounded-full overflow-hidden bg-white ring-1 ring-ink-100 relative shrink-0">
+                <Image src={storeLogo} alt={displayName} fill sizes="44px" className="object-cover" />
+              </span>
+            ) : (
+              <span className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold uppercase shrink-0 ${
+                isSeller ? 'bg-accent-500 text-ink-900' :
+                isRider  ? 'bg-olive-500 text-white' :
+                isAdmin  ? 'bg-secondary-500 text-white' :
+                           'bg-primary-100 text-primary-700'
+              }`}>
+                {isSeller ? <Store size={20} /> : isRider ? <Bike size={20} /> : (displayName?.[0]?.toUpperCase() ?? '?')}
+              </span>
+            )}
+            <div className="min-w-0">
+              <p className="text-xs text-ink-500 uppercase tracking-wide">
+                {isSeller ? 'Negozio' : isRider ? 'Rider' : isAdmin ? 'Admin' : 'Ciao'}
+              </p>
+              <p className="font-semibold text-ink-900 truncate">{displayName}</p>
+            </div>
           </div>
           <ul className="py-1 text-ink-700">
-            <MenuLink href={profileHref} icon={User} label="Il mio profilo" />
-            {role === 'buyer' && (
-              <>
-                <MenuLink href="/orders" icon={Package} label="I miei ordini" />
-                <MenuLink href="/favorites" icon={Heart} label="Preferiti" />
-                <MenuLink href="/profile/addresses" icon={MapPin} label="Indirizzi" />
-                <MenuLink href="/profile/loyalty" icon={Sparkles} label="Punti & Livello" />
-                <MenuLink href="/profile/achievements" icon={Award} label="Badge" />
-                <MenuLink href="/profile/gift-cards" icon={Gift} label="Gift Card" />
-                <MenuLink href="/lists" icon={ListChecks} label="Liste curate" />
-                <MenuLink href="/profile/referral" icon={Megaphone} label="Invita amici · €5" />
-              </>
-            )}
-            {isSeller && (
-              <>
-                <MenuLink href="/seller/dashboard" icon={LayoutDashboard} label="Dashboard" />
-                <MenuLink href="/seller/analytics" icon={TrendingUp} label="Analytics" />
-                <MenuLink href="/seller/products" icon={Package} label="I miei prodotti" />
-                <MenuLink href="/seller/orders" icon={ShoppingCart} label="Ordini ricevuti" />
-                <MenuLink href="/seller/promotions" icon={Sparkles} label="Promozioni" />
-                <MenuLink href="/seller/stories" icon={Camera} label="Storie" />
-                <MenuLink href="/seller/earnings" icon={Euro} label="Guadagni" />
-              </>
-            )}
-            {isRider && (
-              <>
-                <MenuLink href="/rider" icon={Bike} label="Dashboard" />
-                <MenuLink href="/rider/availability" icon={CircleDot} label="Disponibilità" />
-                <MenuLink href="/rider/earnings" icon={Euro} label="Guadagni" />
-              </>
-            )}
-            <MenuLink href="/profile/settings" icon={Settings} label="Impostazioni" />
-            <MenuLink href="/faq" icon={HelpCircle} label="FAQ" />
+            {getAccountMenuItems(role).map((it) => (
+              <MenuLink key={it.href} href={it.href} icon={it.icon} label={it.label} />
+            ))}
             <li><div className="border-t border-ink-100 my-1" /></li>
             <li>
               <button

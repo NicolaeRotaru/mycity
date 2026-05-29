@@ -9,6 +9,7 @@ import NewsletterForm from '@/components/NewsletterForm';
 import DropOfDay from '@/components/home/DropOfDay';
 import StoryOfDay from '@/components/home/StoryOfDay';
 import TrendingNow from '@/components/home/TrendingNow';
+import PromoDeals from '@/components/home/PromoDeals';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import ShopOfMonthHero from '@/components/home/ShopOfMonthHero';
 import StoriesCarousel from '@/components/home/StoriesCarousel';
@@ -137,6 +138,11 @@ export default function Home() {
       {/* TRENDING NOW */}
       <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
         <TrendingNow />
+      </MaybeSection>
+
+      {/* PROMOZIONI — sconti attivi dei negozi */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
+        <PromoDeals />
       </MaybeSection>
 
       {/* CATEGORIE */}
