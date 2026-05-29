@@ -213,6 +213,27 @@ export async function createConnectOnboardingLink(args: {
 }
 
 /**
+ * Genera un login link monouso verso la Dashboard Express ospitata da
+ * Stripe per un Connect account già onboarded. Il seller la usa per
+ * gestire saldo, payout reali, IBAN, documenti d'identità (KYC) e dati
+ * fiscali — tutto mantenuto da Stripe.
+ *
+ * Il link è single-use e a breve scadenza: va generato on-demand a ogni
+ * click, mai persistito.
+ *
+ * Lancia se l'account non ha completato l'onboarding (nessuna dashboard
+ * da aprire): il chiamante dovrebbe esporre il bottone solo quando
+ * charges/payouts sono abilitati.
+ *
+ * https://stripe.com/docs/connect/express-dashboard
+ */
+export async function createConnectLoginLink(accountId: string): Promise<{ url: string }> {
+  const stripe = getStripe();
+  const link = await stripe.accounts.createLoginLink(accountId);
+  return { url: link.url };
+}
+
+/**
  * Calcola la commissione marketplace (8% del totale, IVA esclusa
  * — semplificazione MVP). Da raffinare quando lo schema commissioni
  * diventa configurabile per seller/categoria.
