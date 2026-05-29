@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -65,19 +65,22 @@ export default function CheckoutPage() {
     queryKey: queryKeys.checkout.groups(cart.map((c) => `${c.id}:${c.sellerId ?? ''}`).join(',')),
     enabled: cart.length > 0,
     queryFn: async () => {
-      const itemsMissingSeller = cart.filter((c) => !c.sellerId);
+      // Valida TUTTI gli item del carrello contro il DB (non solo i legacy
+      // senza sellerId): l'RLS (migrations/023) ritorna solo prodotti
+      // `available` di venditori approvati, quindi un id non presente qui è
+      // stale/non-disponibile (re-seed, prodotto rimosso, venditore sospeso)
+      // e verrà rimosso dal carrello a valle.
+      const lookupMap = new Map<string, string>(); // productId → seller_id (fonte: DB)
+      const validIds = new Set<string>();
 
-      // Lookup solo per gli item legacy senza sellerId
-      const lookupMap = new Map<string, string>(); // productId → sellerId
-      const sellerNames = new Map<string, string>(); // sellerId → store_name
-
-      if (itemsMissingSeller.length > 0) {
+      if (cart.length > 0) {
         const { data: products, error: pErr } = await supabase
           .from('products')
           .select('id, seller_id')
-          .in('id', itemsMissingSeller.map((c) => c.id));
+          .in('id', cart.map((c) => c.id));
         if (pErr) throw pErr;
         for (const p of products ?? []) {
+          validIds.add(p.id);
           if (p.seller_id) lookupMap.set(p.id, p.seller_id);
         }
       }
@@ -113,7 +116,13 @@ export default function CheckoutPage() {
       const orphanItems: CartItem[] = [];
 
       for (const item of cart) {
-        const sellerId = item.sellerId ?? lookupMap.get(item.id);
+        // Item con id non più valido nel DB → "non più disponibile".
+        if (!validIds.has(item.id)) {
+          orphanItems.push(item);
+          continue;
+        }
+        // Per gli item validi il seller_id del DB è la fonte di verità.
+        const sellerId = lookupMap.get(item.id) ?? item.sellerId;
         if (!sellerId) {
           orphanItems.push(item);
           continue;
@@ -136,7 +145,27 @@ export default function CheckoutPage() {
   });
 
   const groups = cartData?.groups ?? [];
-  const orphans = cartData?.orphans ?? [];
+  const orphans = useMemo(() => cartData?.orphans ?? [], [cartData]);
+
+  // Auto-rimozione degli articoli non più disponibili (id stale dopo re-seed,
+  // prodotto rimosso/non-disponibile, venditore sospeso): li togliamo dal
+  // carrello e avvisiamo una sola volta per set di id (evita doppio toast in
+  // StrictMode / sui refetch). Senza questo l'ordine fallirebbe solo lato API
+  // con un "Prodotti non trovati" criptico.
+  const notifiedOrphansRef = useRef<string>('');
+  useEffect(() => {
+    if (orphans.length === 0) return;
+    const key = orphans.map((o) => o.id).sort().join(',');
+    if (notifiedOrphansRef.current === key) return;
+    notifiedOrphansRef.current = key;
+    orphans.forEach((o) => removeFromCart(o.id));
+    setCart(getCart());
+    toast.error(
+      `Alcuni articoli non sono più disponibili e sono stati rimossi dal carrello: ${orphans
+        .map((o) => o.name)
+        .join(', ')}`,
+    );
+  }, [orphans]);
 
   const groupSubtotal = (g: { items: CartItem[] }) =>
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
