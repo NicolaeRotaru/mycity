@@ -303,18 +303,6 @@ export default function StorePage({ params }: { params: { id: string } }) {
             </div>
           </a>
         )}
-
-        <div className="bg-white border border-cream-300 rounded-2xl p-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-50 text-accent-600 flex items-center justify-center">
-              <Clock size={18} aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs text-ink-500 font-medium">Oggi</div>
-              <div className="text-ink-900 font-medium truncate">{todayLabel}</div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Full hours — collassati di default per non occupare troppo spazio */}
