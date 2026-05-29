@@ -1,19 +1,17 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { useLocalStorage } from '@/lib/hooks';
+import { supabase } from '@/lib/supabase/client';
+import { LoadingState } from '@/components/ui/LoadingState';
 
-const AVAIL_KEY = 'mycity_rider_availability';
-const ZONES_KEY = 'mycity_rider_zones';
+type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
 type Availability = {
   online: boolean;
   schedule: Record<DayKey, { enabled: boolean; from: string; to: string }>;
 };
 
-type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 const DAYS: { key: DayKey; label: string }[] = [
   { key: 'mon', label: 'Lunedì' },
   { key: 'tue', label: 'Martedì' },
@@ -24,18 +22,17 @@ const DAYS: { key: DayKey; label: string }[] = [
   { key: 'sun', label: 'Domenica' },
 ];
 
-const DEFAULT_AVAIL: Availability = {
-  online: false,
-  schedule: {
-    mon: { enabled: true, from: '12:00', to: '14:00' },
-    tue: { enabled: true, from: '12:00', to: '14:00' },
-    wed: { enabled: true, from: '12:00', to: '14:00' },
-    thu: { enabled: true, from: '12:00', to: '14:00' },
-    fri: { enabled: true, from: '12:00', to: '14:00' },
-    sat: { enabled: false, from: '12:00', to: '14:00' },
-    sun: { enabled: false, from: '12:00', to: '14:00' },
-  },
+const DEFAULT_SCHEDULE: Availability['schedule'] = {
+  mon: { enabled: true, from: '12:00', to: '14:00' },
+  tue: { enabled: true, from: '12:00', to: '14:00' },
+  wed: { enabled: true, from: '12:00', to: '14:00' },
+  thu: { enabled: true, from: '12:00', to: '14:00' },
+  fri: { enabled: true, from: '12:00', to: '14:00' },
+  sat: { enabled: false, from: '12:00', to: '14:00' },
+  sun: { enabled: false, from: '12:00', to: '14:00' },
 };
+
+const DEFAULT_AVAIL: Availability = { online: false, schedule: DEFAULT_SCHEDULE };
 
 const SUGGESTED_ZONES = [
   'Centro storico',
@@ -49,17 +46,49 @@ const SUGGESTED_ZONES = [
 ];
 
 export default function RiderAvailabilityPage() {
-  const [avail, setAvail] = useLocalStorage<Availability>(AVAIL_KEY, DEFAULT_AVAIL);
-  const [zones, setZones] = useLocalStorage<string[]>(ZONES_KEY, []);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [avail, setAvail] = useState<Availability>(DEFAULT_AVAIL);
+  const [zones, setZones] = useState<string[]>([]);
   const [customZone, setCustomZone] = useState('');
+
+  // Carica la disponibilità persistita dal profilo del rider.
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoading(false); return; }
+      setUserId(user.id);
+      const { data } = await supabase
+        .from('profiles')
+        .select('rider_is_online, rider_schedule, rider_zones')
+        .eq('id', user.id)
+        .single();
+      if (data) {
+        setAvail({
+          online: !!data.rider_is_online,
+          schedule: (data.rider_schedule as Availability['schedule'] | null) ?? DEFAULT_SCHEDULE,
+        });
+        setZones((data.rider_zones as string[] | null) ?? []);
+      }
+      setLoading(false);
+    })();
+  }, []);
+
+  const persist = async (patch: Record<string, unknown>) => {
+    if (!userId) return;
+    const { error } = await supabase.from('profiles').update(patch).eq('id', userId);
+    if (error) toast.error('Errore nel salvataggio. Riprova.');
+  };
 
   const save = (next: Availability, silent = false) => {
     setAvail(next);
+    void persist({ rider_is_online: next.online, rider_schedule: next.schedule });
     if (!silent) toast.success('Preferenze salvate');
   };
 
   const saveZones = (next: string[]) => {
     setZones(next);
+    void persist({ rider_zones: next });
   };
 
   const toggleZone = (zone: string) => {
@@ -82,6 +111,8 @@ export default function RiderAvailabilityPage() {
     saveZones([...zones, z]);
     setCustomZone('');
   };
+
+  if (loading) return <LoadingState />;
 
   return (
     <div className="space-y-6">
@@ -233,9 +264,8 @@ export default function RiderAvailabilityPage() {
         )}
       </section>
 
-      <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900">
-        💡 Le preferenze sono salvate localmente. Per sincronizzarle tra dispositivi, completa il tuo{' '}
-        <Link href="/rider/profile" className="font-bold underline">profilo rider</Link>.
+      <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 text-sm text-olive-900">
+        💾 Le preferenze sono salvate sul tuo profilo e sincronizzate su tutti i dispositivi.
       </div>
     </div>
   );

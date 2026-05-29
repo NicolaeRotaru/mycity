@@ -105,8 +105,15 @@ async function processBatch(supa: any, batch: { id: string; user_id: string; tem
       await supa.from('email_queue').update({ cancelled_at: new Date().toISOString() }).eq('id', row.id);
       continue;
     }
-    // Lookup utente email
-    const { data: userProfile } = await supa.from('profiles').select('id, full_name').eq('id', row.user_id).single();
+    // Lookup utente email + preferenza marketing
+    const { data: userProfile } = await supa.from('profiles').select('id, full_name, email_marketing').eq('id', row.user_id).single();
+    // Opt-out marketing (GDPR): i template in coda sono lifecycle/marketing →
+    // inviamo solo a chi ha dato consenso, altrimenti annulliamo dalla coda.
+    if (!userProfile?.email_marketing) {
+      skipped++;
+      await supa.from('email_queue').update({ cancelled_at: new Date().toISOString() }).eq('id', row.id);
+      continue;
+    }
     const { data: authUser } = await supa.auth.admin.getUserById(row.user_id).catch(() => ({ data: null as any }));
     const email = authUser?.user?.email;
     if (!email) {
