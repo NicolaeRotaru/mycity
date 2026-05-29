@@ -23,7 +23,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
   const router = useRouter();
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');
-  const [order, setOrder] = useState<{ id: string; total_cents: number; delivery_status: string; seller_id: string; created_at: string; profiles?: { store_name?: string | null } | null } | null>(null);
+  const [order, setOrder] = useState<{ id: string; total_price: number; delivery_status: string; seller_id: string; created_at: string; profiles?: { store_name?: string | null } | null } | null>(null);
   const [reason, setReason] = useState<string>('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -37,7 +37,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
       }
       const { data } = await supabase
         .from('orders')
-        .select('id, total_cents, delivery_status, seller_id, created_at, profiles!orders_seller_id_fkey ( store_name )')
+        .select('id, total_price, delivery_status, seller_id, created_at, profiles!orders_seller_id_fkey ( store_name )')
         .eq('id', params.id)
         .single();
       if (!data) {

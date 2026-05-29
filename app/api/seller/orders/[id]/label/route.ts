@@ -16,7 +16,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   const { data: order, error } = await supa
     .from('orders')
     .select(`
-      id, seller_id, total_cents, payment_method,
+      id, seller_id, total_price, payment_method,
       delivery_full_name, delivery_address, delivery_zip, delivery_city,
       delivery_phone, delivery_notes,
       profiles!orders_seller_id_fkey ( store_name )
@@ -39,7 +39,7 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     phone: order.delivery_phone ?? '',
     notes: order.delivery_notes ?? undefined,
     sellerName,
-    totalCents: order.total_cents ?? 0,
+    totalCents: Math.round(Number(order.total_price ?? 0) * 100),
     isCod,
   });
 
