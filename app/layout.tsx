@@ -14,6 +14,7 @@ import WelcomeCreditBanner from '@/components/WelcomeCreditBanner';
 import CartCrossDeviceSync from '@/components/CartCrossDeviceSync';
 import BuyerOnboardingTour from '@/components/BuyerOnboardingTour';
 import PWAInstallBanner from '@/components/PWAInstallBanner';
+import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import PostHogProvider from '@/lib/analytics/posthog';
 import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
@@ -134,6 +135,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <PostHogProvider />
         </Suspense>
         <SentryProvider />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
