@@ -23,11 +23,13 @@ interface ProductCardProps {
   createdAt?: string;
   storeName?: string;
   sellerId?: string;
+  /** true per le prime immagini above-the-fold (LCP): eager + fetchPriority alta. */
+  priority?: boolean;
 }
 
 const ProductCard = ({
   id, name, description, price, images, rating, reviewCount = 0,
-  stock, createdAt, storeName, sellerId,
+  stock, createdAt, storeName, sellerId, priority,
 }: ProductCardProps) => {
   const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
   const img = sizedImage(rawImg, 'card');
@@ -99,7 +101,8 @@ const ProductCard = ({
           alt={name}
           fill
           sizes="(min-width: 1024px) 240px, (min-width: 640px) 33vw, 50vw"
-          loading="lazy"
+          priority={priority}
+          loading={priority ? undefined : 'lazy'}
           unoptimized
           className="object-cover group-hover:scale-110 transition-transform duration-300"
         />

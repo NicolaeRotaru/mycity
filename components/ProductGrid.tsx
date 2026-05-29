@@ -74,16 +74,13 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
     queryFn: async (): Promise<RatingMap> => {
       if (prods.length === 0) return {};
       const ids = prods.map((p) => p.id);
-      const { data } = await supabase
-        .from('reviews')
-        .select('product_id, rating')
-        .in('product_id', ids);
-      const map: Record<string, { avg: number; count: number }> = {};
-      type ReviewRow = { product_id: string; rating: number };
-      for (const r of (data ?? []) as ReviewRow[]) {
-        const ex = map[r.product_id];
-        if (ex) { ex.avg = (ex.avg * ex.count + r.rating) / (ex.count + 1); ex.count += 1; }
-        else map[r.product_id] = { avg: r.rating, count: 1 };
+      // Aggregazione media/conteggio lato DB (RPC 052) invece di scaricare ogni
+      // recensione e mediare in loop nel browser.
+      const { data } = await supabase.rpc('product_rating_stats', { p_product_ids: ids });
+      const map: RatingMap = {};
+      type StatRow = { product_id: string; avg: number | string; count: number };
+      for (const r of (data ?? []) as StatRow[]) {
+        map[r.product_id] = { avg: Number(r.avg), count: Number(r.count) };
       }
       return map;
     },
@@ -126,7 +123,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-      {filtered.map((p) => (
+      {filtered.map((p, i) => (
         <ProductCard
           key={p.id}
           id={p.id}
@@ -138,6 +135,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
           createdAt={p.created_at}
           storeName={p.profiles?.store_name ?? undefined}
           sellerId={p.seller_id ?? undefined}
+          priority={i < 4}
         />
       ))}
     </div>
