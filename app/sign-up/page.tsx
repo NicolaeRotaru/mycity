@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
 import { trackSignupCompleted } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Input } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 
 type Role = 'buyer' | 'seller' | 'rider';
@@ -121,18 +122,28 @@ function SignUpInner() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="signup-email" className="block text-sm font-medium text-ink-700 mb-1">Email</label>
-          <input id="signup-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-            placeholder="la-tua@email.it" required autoComplete="email"
-            className="w-full border p-2 rounded text-base focus:outline-none focus:ring-2 focus:ring-primary-400" />
-        </div>
-        <div>
-          <label htmlFor="signup-password" className="block text-sm font-medium text-ink-700 mb-1">Password</label>
-          <input id="signup-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-            placeholder="Almeno 8 caratteri" required minLength={8} autoComplete="new-password"
-            className="w-full border p-2 rounded text-base focus:outline-none focus:ring-2 focus:ring-primary-400" />
-        </div>
+        <Input
+          id="signup-email"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="la-tua@email.it"
+          required
+          autoComplete="email"
+          inputMode="email"
+        />
+        <Input
+          id="signup-password"
+          label="Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Almeno 8 caratteri"
+          required
+          minLength={8}
+          autoComplete="new-password"
+        />
 
         <label className="flex items-start gap-2 text-sm text-ink-700">
           <input
