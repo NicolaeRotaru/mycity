@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useDropzone } from 'react-dropzone';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { Palette, Share2, Clock, Store } from 'lucide-react';
 import StoreLocationPicker, { StoreLocation } from './StoreLocationPickerLazy';
 import StoreAvatar from './StoreAvatar';
 import StoreMediaManager from './StoreMediaManager';
@@ -14,6 +15,16 @@ import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
+import type { StoreHours } from '@/lib/store-hours';
+import { storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import CustomizationSection from './seller/CustomizationSection';
+import AccentPicker from './seller/AccentPicker';
+import CoverPicker from './seller/CoverPicker';
+import SocialLinksFields from './seller/SocialLinksFields';
+import AnnouncementEditor from './seller/AnnouncementEditor';
+import BadgePicker from './seller/BadgePicker';
+import StoreHoursEditor from './seller/StoreHoursEditor';
+import FeaturedProductsPicker from './seller/FeaturedProductsPicker';
 
 const VendorSchema = z.object({
   storeName:  z.string().min(3, 'Il nome deve essere di almeno 3 caratteri'),
@@ -29,6 +40,8 @@ export type VendorFormData = SchemaData & {
   storeLogo: string | null;
   storeDescription: string;
   storeMedia: StoreMediaItem[];
+  storeHours: StoreHours;
+  storeCustomization: StoreCustomization;
 };
 
 interface Props {
@@ -58,6 +71,9 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [media, setMedia] = useState<StoreMediaItem[]>(defaultValues?.storeMedia ?? []);
   const [description, setDescription] = useState<string>(defaultValues?.storeDescription ?? '');
+  const [hours, setHours] = useState<StoreHours>(defaultValues?.storeHours ?? {});
+  const [custom, setCustom] = useState<StoreCustomization>(defaultValues?.storeCustomization ?? {});
+  const [customError, setCustomError] = useState<string | null>(null);
 
   const storeName = watch('storeName');
 
@@ -102,6 +118,12 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
       setLocationError('Coordinate non valide. Cerca un indirizzo, usa la tua posizione, o sposta il pin sulla mappa.');
       return;
     }
+    const parsed = storeCustomizationSchema.safeParse(custom);
+    if (!parsed.success) {
+      setCustomError(parsed.error.issues[0]?.message ?? 'Personalizzazione non valida');
+      return;
+    }
+    setCustomError(null);
     onSubmit({
       ...data,
       storeAddress: location.address,
@@ -110,6 +132,8 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
       storeLogo: logoUrl,
       storeMedia: media,
       storeDescription: description.trim(),
+      storeHours: hours,
+      storeCustomization: parsed.data,
     });
   };
 
@@ -200,10 +224,73 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
       />
       {locationError && <p className="text-red-500 text-sm">{locationError}</p>}
 
+      {/* ===== Personalizzazione vetrina ===== */}
+      <div className="space-y-3 pt-2">
+        <h3 className="text-sm font-semibold text-ink-900">Personalizza la tua vetrina</h3>
+
+        <CustomizationSection
+          title="Aspetto della vetrina"
+          description="Colore, sfondo cover e slogan"
+          icon={<Palette size={18} />}
+          defaultOpen
+        >
+          <AccentPicker
+            value={custom.theme?.accent}
+            onChange={(hex) => setCustom({ ...custom, theme: { ...custom.theme, accent: hex } })}
+          />
+          <CoverPicker
+            value={custom.theme?.coverStyle}
+            onChange={(key) => setCustom({ ...custom, theme: { ...custom.theme, coverStyle: key } })}
+          />
+          <div>
+            <label className="block text-sm font-medium text-ink-700 mb-1">Slogan (opzionale)</label>
+            <input
+              type="text"
+              value={custom.tagline ?? ''}
+              maxLength={80}
+              onChange={(e) => setCustom({ ...custom, tagline: e.target.value })}
+              placeholder="Es. Pane fresco tutti i giorni dal 1962"
+              className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 text-sm"
+            />
+          </div>
+        </CustomizationSection>
+
+        <CustomizationSection
+          title="Social e contatti"
+          description="Instagram, Facebook, TikTok, WhatsApp, sito"
+          icon={<Share2 size={18} />}
+        >
+          <SocialLinksFields value={custom.socials} onChange={(next) => setCustom({ ...custom, socials: next })} />
+        </CustomizationSection>
+
+        <CustomizationSection title="Orari di apertura" description="Quando i clienti ti trovano aperto" icon={<Clock size={18} />}>
+          <StoreHoursEditor value={hours} onChange={setHours} />
+        </CustomizationSection>
+
+        <CustomizationSection title="Vetrina prodotti" description="Prodotti in evidenza, annuncio e badge" icon={<Store size={18} />}>
+          <div>
+            <label className="block text-sm font-medium text-ink-700 mb-2">Prodotti in evidenza</label>
+            <FeaturedProductsPicker
+              value={custom.featuredProductIds}
+              onChange={(next) => setCustom({ ...custom, featuredProductIds: next })}
+            />
+          </div>
+          <div className="border-t border-cream-200 pt-4">
+            <label className="block text-sm font-medium text-ink-700 mb-2">Banner annuncio</label>
+            <AnnouncementEditor value={custom.announcement} onChange={(next) => setCustom({ ...custom, announcement: next })} />
+          </div>
+          <div className="border-t border-cream-200 pt-4">
+            <BadgePicker value={custom.badges} onChange={(next) => setCustom({ ...custom, badges: next })} />
+          </div>
+        </CustomizationSection>
+
+        {customError && <p className="text-red-500 text-sm">{customError}</p>}
+      </div>
+
       <button
         type="submit"
         disabled={isLoading || uploadingLogo}
-        className="bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white px-6 py-3 rounded font-semibold transition-colors"
+        className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold transition-colors shadow-warm-sm"
       >
         {isLoading ? tStates('saving') : tForms('saveStore')}
       </button>
