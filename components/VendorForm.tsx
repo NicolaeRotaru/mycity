@@ -17,6 +17,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import type { StoreHours } from '@/lib/store-hours';
 import { storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
+import { zodFieldErrors } from '@/lib/zod-field-errors';
 import CustomizationSection from './seller/CustomizationSection';
 import AccentPicker from './seller/AccentPicker';
 import CoverPicker from './seller/CoverPicker';
@@ -73,7 +74,29 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
   const [description, setDescription] = useState<string>(defaultValues?.storeDescription ?? '');
   const [hours, setHours] = useState<StoreHours>(defaultValues?.storeHours ?? {});
   const [custom, setCustom] = useState<StoreCustomization>(defaultValues?.storeCustomization ?? {});
-  const [customError, setCustomError] = useState<string | null>(null);
+  const [customErrors, setCustomErrors] = useState<Record<string, string>>({});
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ aspetto: true });
+
+  // Mappa un path di errore zod alla sezione dell'editor che lo contiene.
+  const sectionOf = (p: string): 'aspetto' | 'social' | 'vetrina' =>
+    p.startsWith('socials')
+      ? 'social'
+      : p.startsWith('announcement') || p.startsWith('featuredProductIds') || p.startsWith('badges')
+        ? 'vetrina'
+        : 'aspetto';
+  const sectionHasError = (sec: string) => Object.keys(customErrors).some((p) => sectionOf(p) === sec);
+  const setSection = (key: string, open: boolean) =>
+    setOpenSections((s) => (s[key] === open ? s : { ...s, [key]: open }));
+  const clearErrors = (prefix: string) =>
+    setCustomErrors((e) => {
+      const next: Record<string, string> = {};
+      let changed = false;
+      for (const [k, v] of Object.entries(e)) {
+        if (k === prefix || k.startsWith(`${prefix}.`)) changed = true;
+        else next[k] = v;
+      }
+      return changed ? next : e;
+    });
 
   const storeName = watch('storeName');
 
@@ -120,10 +143,25 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
     }
     const parsed = storeCustomizationSchema.safeParse(custom);
     if (!parsed.success) {
-      setCustomError(parsed.error.issues[0]?.message ?? 'Personalizzazione non valida');
+      const map = zodFieldErrors(parsed.error);
+      setCustomErrors(map);
+      // Apri le sezioni con errori e porta l'utente al primo errore.
+      const secs = Array.from(new Set(Object.keys(map).map(sectionOf)));
+      setOpenSections((s) => {
+        const next = { ...s };
+        secs.forEach((k) => { next[k] = true; });
+        return next;
+      });
+      if (secs[0]) {
+        setTimeout(() => {
+          document
+            .getElementById(`vetrina-sec-${secs[0]}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 60);
+      }
       return;
     }
-    setCustomError(null);
+    setCustomErrors({});
     onSubmit({
       ...data,
       storeAddress: location.address,
@@ -229,10 +267,13 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
         <h3 className="text-sm font-semibold text-ink-900">Personalizza la tua vetrina</h3>
 
         <CustomizationSection
+          id="vetrina-sec-aspetto"
           title="Aspetto della vetrina"
           description="Colore, sfondo cover e slogan"
           icon={<Palette size={18} />}
-          defaultOpen
+          open={openSections.aspetto ?? false}
+          onToggle={(o) => setSection('aspetto', o)}
+          hasError={sectionHasError('aspetto')}
         >
           <AccentPicker
             value={custom.theme?.accent}
@@ -248,26 +289,59 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
               type="text"
               value={custom.tagline ?? ''}
               maxLength={80}
-              onChange={(e) => setCustom({ ...custom, tagline: e.target.value })}
+              onChange={(e) => { setCustom({ ...custom, tagline: e.target.value }); clearErrors('tagline'); }}
               placeholder="Es. Pane fresco tutti i giorni dal 1962"
-              className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 text-sm"
+              aria-invalid={customErrors['tagline'] ? true : undefined}
+              className={`w-full border p-2 rounded focus:outline-none focus:ring-2 text-sm ${
+                customErrors['tagline'] ? 'border-red-400 focus:ring-red-300' : 'focus:ring-primary-400'
+              }`}
             />
+            {customErrors['tagline'] && <p className="text-red-500 text-xs mt-1">Slogan: {customErrors['tagline']}</p>}
           </div>
         </CustomizationSection>
 
         <CustomizationSection
+          id="vetrina-sec-social"
           title="Social e contatti"
           description="Instagram, Facebook, TikTok, WhatsApp, sito"
           icon={<Share2 size={18} />}
+          open={openSections.social ?? false}
+          onToggle={(o) => setSection('social', o)}
+          hasError={sectionHasError('social')}
         >
-          <SocialLinksFields value={custom.socials} onChange={(next) => setCustom({ ...custom, socials: next })} />
+          <SocialLinksFields
+            value={custom.socials}
+            onChange={(next) => { setCustom({ ...custom, socials: next }); clearErrors('socials'); }}
+            errors={{
+              instagram: customErrors['socials.instagram'],
+              facebook: customErrors['socials.facebook'],
+              tiktok: customErrors['socials.tiktok'],
+              whatsapp: customErrors['socials.whatsapp'],
+              website: customErrors['socials.website'],
+            }}
+          />
         </CustomizationSection>
 
-        <CustomizationSection title="Orari di apertura" description="Quando i clienti ti trovano aperto" icon={<Clock size={18} />}>
+        <CustomizationSection
+          id="vetrina-sec-orari"
+          title="Orari di apertura"
+          description="Quando i clienti ti trovano aperto"
+          icon={<Clock size={18} />}
+          open={openSections.orari ?? false}
+          onToggle={(o) => setSection('orari', o)}
+        >
           <StoreHoursEditor value={hours} onChange={setHours} />
         </CustomizationSection>
 
-        <CustomizationSection title="Vetrina prodotti" description="Prodotti in evidenza, annuncio e badge" icon={<Store size={18} />}>
+        <CustomizationSection
+          id="vetrina-sec-vetrina"
+          title="Vetrina prodotti"
+          description="Prodotti in evidenza, annuncio e badge"
+          icon={<Store size={18} />}
+          open={openSections.vetrina ?? false}
+          onToggle={(o) => setSection('vetrina', o)}
+          hasError={sectionHasError('vetrina')}
+        >
           <div>
             <label className="block text-sm font-medium text-ink-700 mb-2">Prodotti in evidenza</label>
             <FeaturedProductsPicker
@@ -277,14 +351,24 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
           </div>
           <div className="border-t border-cream-200 pt-4">
             <label className="block text-sm font-medium text-ink-700 mb-2">Banner annuncio</label>
-            <AnnouncementEditor value={custom.announcement} onChange={(next) => setCustom({ ...custom, announcement: next })} />
+            <AnnouncementEditor
+              value={custom.announcement}
+              onChange={(next) => { setCustom({ ...custom, announcement: next }); clearErrors('announcement'); }}
+            />
+            {(customErrors['announcement.text'] || customErrors['announcement.until']) && (
+              <p className="text-red-500 text-xs mt-1">
+                Annuncio: {customErrors['announcement.text'] || customErrors['announcement.until']}
+              </p>
+            )}
           </div>
           <div className="border-t border-cream-200 pt-4">
             <BadgePicker value={custom.badges} onChange={(next) => setCustom({ ...custom, badges: next })} />
           </div>
         </CustomizationSection>
 
-        {customError && <p className="text-red-500 text-sm">{customError}</p>}
+        {Object.keys(customErrors).length > 0 && (
+          <p className="text-red-500 text-sm">Controlla i campi evidenziati in rosso qui sopra e salva di nuovo.</p>
+        )}
       </div>
 
       <button

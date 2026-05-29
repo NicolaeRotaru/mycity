@@ -6,6 +6,7 @@ import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { zodFirstFieldMessage } from '@/lib/zod-field-errors';
 
 export const runtime = 'nodejs';
 
@@ -22,12 +23,15 @@ const Body = z.object({
  * (transizione RECEIVED -> REFUNDED via altro endpoint).
  */
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
-  let body;
-  try {
-    body = Body.parse(await req.json());
-  } catch (e) {
-    return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
+  let json: unknown;
+  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body non valido'); }
+  const parsed = Body.safeParse(json);
+  if (!parsed.success) {
+    return ApiErrors.invalidRequest(
+      zodFirstFieldMessage(parsed.error, { decision: 'Decisione', notes: 'Note', refundAmountCents: 'Importo rimborso' }),
+    );
   }
+  const body = parsed.data;
 
   const supa = getServerSupabase();
   const { data: ret, error } = await supa

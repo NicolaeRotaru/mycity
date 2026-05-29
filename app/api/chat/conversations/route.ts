@@ -4,6 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { zodFirstFieldMessage } from '@/lib/zod-field-errors';
 
 export const runtime = 'nodejs';
 
@@ -28,7 +29,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   let json: unknown;
   try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = StartSchema.safeParse(json);
-  if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
+  if (!parsed.success) return ApiErrors.invalidRequest(zodFirstFieldMessage(parsed.error, { sellerId: 'Venditore', firstMessage: 'Messaggio' }));
   const { sellerId, firstMessage } = parsed.data;
 
   if (sellerId === user.id) return ApiErrors.invalidRequest('Non puoi scriverti da solo');

@@ -27,6 +27,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
   const [reason, setReason] = useState<string>('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [errs, setErrs] = useState<{ reason?: string; description?: string }>({});
 
   useEffect(() => {
     (async () => {
@@ -51,8 +52,13 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reason) { toast.error('Seleziona un motivo'); return; }
-    if (description.trim().length < 20) { toast.error('Descrivi meglio (min 20 caratteri)'); return; }
+    const v: { reason?: string; description?: string } = {};
+    if (!reason) v.reason = 'Seleziona un motivo del reclamo';
+    if (description.trim().length < 20) {
+      v.description = `Descrivi meglio: servono almeno 20 caratteri (ne hai ${description.trim().length})`;
+    }
+    setErrs(v);
+    if (v.reason || v.description) return;
 
     setSubmitting(true);
     try {
@@ -112,7 +118,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
                   name="reason"
                   value={r.value}
                   checked={reason === r.value}
-                  onChange={(e) => setReason(e.target.value)}
+                  onChange={(e) => { setReason(e.target.value); setErrs((p) => ({ ...p, reason: undefined })); }}
                   className="mt-0.5"
                 />
                 <div>
@@ -122,6 +128,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
               </label>
             ))}
           </div>
+          {errs.reason && <p className="text-red-500 text-xs mt-2">{errs.reason}</p>}
         </div>
 
         <div>
@@ -130,13 +137,19 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
           </label>
           <textarea
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => { setDescription(e.target.value); setErrs((p) => ({ ...p, description: undefined })); }}
             rows={5}
             maxLength={2000}
             placeholder={selectedReason?.hint ?? 'Spiega in dettaglio cosa non ha funzionato, quando, e cosa ti aspetteresti per risolvere.'}
-            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y"
+            aria-invalid={errs.description ? true : undefined}
+            className={`w-full bg-cream-50 border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 resize-y ${
+              errs.description ? 'border-red-400 focus:ring-red-300' : 'border-cream-300 focus:ring-primary-400'
+            }`}
           />
-          <p className="text-xs text-ink-400 mt-1 text-right">{description.length}/2000</p>
+          <div className="flex justify-between items-center mt-1 gap-3">
+            {errs.description ? <p className="text-red-500 text-xs">{errs.description}</p> : <span />}
+            <p className="text-xs text-ink-400 text-right shrink-0">{description.length}/2000</p>
+          </div>
         </div>
 
         <div className="bg-cream-100 rounded-lg p-3 text-xs text-ink-600">
@@ -151,7 +164,7 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
 
         <button
           type="submit"
-          disabled={submitting || !reason || description.trim().length < 20}
+          disabled={submitting}
           className="w-full bg-secondary-600 hover:bg-secondary-700 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-bold transition-colors"
         >
           {submitting ? tStates('sending') : tForms('openDispute')}

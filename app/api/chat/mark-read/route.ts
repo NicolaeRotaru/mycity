@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { zodFirstFieldMessage } from '@/lib/zod-field-errors';
 
 export const runtime = 'nodejs';
 
@@ -18,7 +19,7 @@ export const POST = withAuthRateLimit({ name: 'chat-mark-read', max: 300, window
   let json: unknown;
   try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = Schema.safeParse(json);
-  if (!parsed.success) return ApiErrors.invalidRequest('Input non valido');
+  if (!parsed.success) return ApiErrors.invalidRequest(zodFirstFieldMessage(parsed.error, { conversationId: 'Conversazione' }));
 
   const supa = getServerSupabase();
   const { data: conv } = await supa

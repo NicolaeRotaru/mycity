@@ -4,6 +4,7 @@ import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { zodFirstFieldMessage } from '@/lib/zod-field-errors';
 
 export const runtime = 'nodejs';
 
@@ -28,12 +29,21 @@ const Body = z.object({
  */
 // Rate limit: 10 reso / ora per utente (anti-spam reso fraudolento)
 export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowMs: 60 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
-  let body;
-  try {
-    body = Body.parse(await req.json());
-  } catch (e) {
-    return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
+  let json: unknown;
+  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body non valido'); }
+  const parsed = Body.safeParse(json);
+  if (!parsed.success) {
+    return ApiErrors.invalidRequest(
+      zodFirstFieldMessage(parsed.error, {
+        orderId: 'Ordine',
+        orderItemId: 'Articolo',
+        reason: 'Motivo',
+        notes: 'Note',
+        photoUrls: 'Foto',
+      }),
+    );
   }
+  const body = parsed.data;
 
   const supa = getServerSupabase();
   const { data: order, error: oErr } = await supa

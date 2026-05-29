@@ -76,25 +76,33 @@ const coverSchema = z.string().refine((v) => COVER_KEYS.includes(v), 'Stile cove
 const handleSchema = z
   .string()
   .trim()
-  .max(64, 'Troppo lungo')
-  .regex(/^@?[A-Za-z0-9._-]+$/, 'Handle non valido')
+  .max(64, 'Massimo 64 caratteri')
+  .regex(/^@?[A-Za-z0-9._-]+$/, 'Inserisci solo il nome utente, non il link completo')
   .optional()
   .or(z.literal(''));
 
 const whatsappSchema = z
   .string()
   .trim()
-  .regex(/^[0-9+\s]{6,20}$/, 'Numero non valido')
+  .regex(/^[0-9+\s]{6,20}$/, 'Inserisci solo il numero (es. +39 333 1234567)')
   .optional()
   .or(z.literal(''));
 
-const websiteSchema = z
-  .string()
-  .trim()
-  .url('URL non valido')
-  .max(200)
-  .optional()
-  .or(z.literal(''));
+// Accetta anche URL senza protocollo (es. "ilmionegozio.it") aggiungendo https://.
+const websiteSchema = z.preprocess(
+  (v) => {
+    if (typeof v !== 'string') return v;
+    const t = v.trim();
+    if (!t) return '';
+    return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+  },
+  z
+    .string()
+    .url('Inserisci un indirizzo valido (es. https://ilmionegozio.it)')
+    .max(200)
+    .optional()
+    .or(z.literal('')),
+);
 
 export const storeCustomizationSchema = z.object({
   theme: z

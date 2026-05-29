@@ -5,6 +5,7 @@ import { getAdminSupabase, getCurrentUser } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
 import { ApiErrors } from '@/lib/api/responses';
+import { zodFirstFieldMessage } from '@/lib/zod-field-errors';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +27,9 @@ export async function POST(req: Request) {
   try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body non valido'); }
   const parsed = Schema.safeParse(json);
   if (!parsed.success) {
-    return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
+    return ApiErrors.invalidRequest(
+      zodFirstFieldMessage(parsed.error, { name: 'Nome', email: 'Email', subject: 'Oggetto', message: 'Messaggio' }),
+    );
   }
   const { company, ...payload } = parsed.data;
   if (company) {
