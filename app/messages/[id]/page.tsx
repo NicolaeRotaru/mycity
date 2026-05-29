@@ -207,15 +207,32 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
           <Link href="/messages" className="text-ink-500 hover:text-ink-700">
             <ArrowLeft size={20} />
           </Link>
-          <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
-            iAmBuyer ? 'bg-secondary-100 text-secondary-700' : 'bg-primary-100 text-primary-800'
-          }`}>
-            {counterpartName[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-ink-900 truncate">{counterpartName}</h2>
-            <p className="text-xs text-ink-500">{iAmBuyer ? 'Negozio' : 'Cliente'}</p>
-          </div>
+          {iAmBuyer ? (
+            /* Buyer: nome + avatar cliccabili → vetrina del negozio */
+            <Link
+              href={`/store/${conversation.seller_id}`}
+              className="flex items-center gap-3 flex-1 min-w-0 group"
+              title="Vai alla vetrina del negozio"
+            >
+              <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-secondary-100 text-secondary-700">
+                {counterpartName[0]?.toUpperCase() ?? '?'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-semibold text-ink-900 truncate group-hover:text-primary-700 group-hover:underline">{counterpartName}</h2>
+                <p className="text-xs text-ink-500">Negozio · vedi vetrina →</p>
+              </div>
+            </Link>
+          ) : (
+            <>
+              <div className="shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-primary-100 text-primary-800">
+                {counterpartName[0]?.toUpperCase() ?? '?'}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="font-semibold text-ink-900 truncate">{counterpartName}</h2>
+                <p className="text-xs text-ink-500">Cliente</p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* THREAD */}

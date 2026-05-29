@@ -140,6 +140,7 @@ export default function Navbar() {
                       isSeller={isSeller}
                       isRider={isRider}
                       isAdmin={isAdmin}
+                      cartCount={cartCount}
                       onSignOut={handleSignOut}
                     />
                   </>
@@ -221,13 +222,14 @@ const CartButton = ({ count }: { count: number }) => (
   </Link>
 );
 
-const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, onSignOut }: {
+const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, cartCount, onSignOut }: {
   displayName: string;
   role: Role;
   profileHref: string;
   isSeller: boolean;
   isRider: boolean;
   isAdmin: boolean;
+  cartCount: number;
   onSignOut: () => void;
 }) => {
   const [open, setOpen] = useState(false);
@@ -296,6 +298,7 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
                 <MenuLink href="/seller/analytics" icon={TrendingUp} label="Analytics" />
                 <MenuLink href="/seller/products" icon={Package} label="I miei prodotti" />
                 <MenuLink href="/seller/orders" icon={ShoppingCart} label="Ordini ricevuti" />
+                <MenuLink href="/cart" icon={ShoppingCart} label="Carrello" badge={cartCount} />
                 <MenuLink href="/seller/promotions" icon={Sparkles} label="Promozioni" />
                 <MenuLink href="/seller/stories" icon={Camera} label="Storie" />
                 <MenuLink href="/seller/earnings" icon={Euro} label="Guadagni" />
@@ -305,6 +308,7 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
               <>
                 <MenuLink href="/rider" icon={Bike} label="Dashboard" />
                 <MenuLink href="/rider/availability" icon={CircleDot} label="Disponibilità" />
+                <MenuLink href="/cart" icon={ShoppingCart} label="Carrello" badge={cartCount} />
                 <MenuLink href="/rider/earnings" icon={Euro} label="Guadagni" />
               </>
             )}
@@ -328,11 +332,16 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
   );
 };
 
-const MenuLink = ({ href, icon: Icon, label }: { href: string; icon: typeof Bell; label: string }) => (
+const MenuLink = ({ href, icon: Icon, label, badge }: { href: string; icon: typeof Bell; label: string; badge?: number }) => (
   <li>
     <Link href={href} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-cream-100">
       <Icon size={16} strokeWidth={2.2} className="text-ink-500 shrink-0" aria-hidden />
-      <span className="font-medium">{label}</span>
+      <span className="font-medium flex-1">{label}</span>
+      {badge && badge > 0 ? (
+        <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      ) : null}
     </Link>
   </li>
 );
