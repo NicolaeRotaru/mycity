@@ -14,6 +14,7 @@ export type Profile = {
   role: Role;
   is_approved: boolean;
   store_name: string | null;
+  store_logo: string | null;
   full_name: string | null;
   email: string | null;
 };
@@ -50,7 +51,7 @@ export const useProfile = () => {
       if (!userId) return null;
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, role, is_approved, store_name, full_name')
+        .select('id, role, is_approved, store_name, store_logo, full_name')
         .eq('id', userId)
         .single();
       if (error) return null;

@@ -159,6 +159,14 @@ export const queryKeys = {
                               ['seller-onboarding-checklist', uid] as const,
     health:  (uid: string)   => ['seller', 'health', uid] as const,
     healthV2: (uid: string)  => ['seller-health', uid] as const,
+    returnForOrder: (orderId: string) => ['seller', 'return', orderId] as const,
+  },
+
+  promotions: {
+    all:                     ['promotions'] as const,
+    active:                  ['promotions', 'active'] as const,
+    home:                    ['promotions', 'home'] as const,
+    byStore: (id: string)    => ['promotions', 'store', id] as const,
   },
 
   rider: {

@@ -30,7 +30,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
       let q = supabase
         .from('products')
         .select(`
-          id, name, description, price, images, stock, created_at, seller_id,
+          id, name, description, price, images, stock, created_at, seller_id, category_id,
           profiles!products_seller_id_fkey!inner ( store_name, store_hours, is_approved )
         `)
         .eq('status', 'available')
@@ -63,7 +63,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
   type Prod = {
     id: string; name: string; description: string | null; price: string | number;
     images: string[] | null; stock: number | null; created_at: string;
-    seller_id: string | null;
+    seller_id: string | null; category_id: string | null;
     profiles?: { store_name: string | null; is_approved?: boolean; store_hours?: unknown } | null;
   };
   const prods = products as unknown as Prod[];
@@ -85,6 +85,38 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
       return map;
     },
   });
+
+  // Sconti promo del negozio: calcolati solo in vetrina (quando filtriamo per sellerId).
+  type PromoRow = { discount_percent: number; scope: string; category_id: string | null; product_ids: string[] | null };
+  const { data: promos = [] } = useQuery<PromoRow[]>({
+    queryKey: queryKeys.promotions.byStore(sellerId ?? ''),
+    enabled: !!sellerId,
+    queryFn: async (): Promise<PromoRow[]> => {
+      const nowIso = new Date().toISOString();
+      const { data } = await supabase
+        .from('seller_promotions')
+        .select('discount_percent, scope, category_id, product_ids')
+        .eq('seller_id', sellerId!)
+        .eq('status', 'active')
+        .lte('starts_at', nowIso)
+        .gte('ends_at', nowIso);
+      return (data ?? []) as PromoRow[];
+    },
+    staleTime: 60_000,
+  });
+
+  const discountFor = (p: Prod): number => {
+    if (!sellerId || promos.length === 0) return 0;
+    let best = 0;
+    for (const promo of promos) {
+      const applies =
+        promo.scope === 'store' ||
+        (promo.scope === 'category' && promo.category_id === p.category_id) ||
+        (promo.scope === 'products' && Array.isArray(promo.product_ids) && promo.product_ids.includes(p.id));
+      if (applies && promo.discount_percent > best) best = promo.discount_percent;
+    }
+    return best;
+  };
 
   // Filtro client-side: orari aperti, rating minimo, ordinamento per rating
   const filtered = useMemo(() => {
@@ -135,6 +167,7 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
           createdAt={p.created_at}
           storeName={p.profiles?.store_name ?? undefined}
           sellerId={p.seller_id ?? undefined}
+          discountPercent={discountFor(p)}
           priority={i < 4}
         />
       ))}

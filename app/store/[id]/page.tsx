@@ -2,10 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { Phone, MapPin, Clock, Megaphone, Star, Instagram, Facebook, Globe, MessageCircle, Music2 } from 'lucide-react';
+import { Phone, MapPin, Clock, Megaphone, Star, Instagram, Facebook, Globe, MessageCircle, Music2, ChevronDown, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid from '@/components/ProductGrid';
-import StoreAvatar from '@/components/StoreAvatar';
+import StoreStoryRing from '@/components/StoreStoryRing';
 import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
 import StoreFeaturedStrip from '@/components/StoreFeaturedStrip';
 import { formatToday, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
@@ -70,6 +70,23 @@ export default function StorePage({ params }: { params: { id: string } }) {
         .order('created_at', { ascending: false })
         .limit(20);
       return (data ?? []) as StoreReview[];
+    },
+  });
+
+  type StorePromo = { id: string; title: string; discount_percent: number; ends_at: string };
+  const { data: promos = [] } = useQuery({
+    queryKey: queryKeys.promotions.byStore(id),
+    queryFn: async (): Promise<StorePromo[]> => {
+      const nowIso = new Date().toISOString();
+      const { data } = await supabase
+        .from('seller_promotions')
+        .select('id, title, discount_percent, ends_at')
+        .eq('seller_id', id)
+        .eq('status', 'active')
+        .lte('starts_at', nowIso)
+        .gte('ends_at', nowIso)
+        .order('discount_percent', { ascending: false });
+      return (data ?? []) as StorePromo[];
     },
   });
 
@@ -178,9 +195,9 @@ export default function StorePage({ params }: { params: { id: string } }) {
           />
           {/* Overlay scuro per contrasto logo + nome */}
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-          {/* Logo in basso a sinistra, dentro la cover */}
-          <div className="absolute bottom-4 left-4 z-20 ring-4 ring-white rounded-full bg-white shadow-2xl">
-            <StoreAvatar logoUrl={store.store_logo} storeName={store.store_name} size="xl" />
+          {/* Logo in basso a sinistra, dentro la cover (anello storia se attiva) */}
+          <div className="absolute bottom-4 left-4 z-20 rounded-full shadow-2xl">
+            <StoreStoryRing sellerId={store.id} logoUrl={store.store_logo} storeName={store.store_name} />
           </div>
           {/* Badge stato in alto a destra */}
           {hasHours && (
@@ -300,11 +317,22 @@ export default function StorePage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* Full hours */}
+      {/* Full hours — collassati di default per non occupare troppo spazio */}
       {hasHours && (
-        <div className="bg-white border border-cream-300 rounded-2xl p-6">
-          <h2 className="font-semibold text-lg text-ink-900 mb-4">Orari di apertura</h2>
-          <ul className="divide-y divide-cream-100">
+        <details className="group bg-white border border-cream-300 rounded-2xl overflow-hidden">
+          <summary className="flex items-center justify-between gap-3 cursor-pointer list-none px-6 py-4 hover:bg-cream-50 transition-colors">
+            <h2 className="font-semibold text-lg text-ink-900 flex items-center gap-2">
+              <Clock size={18} className="text-accent-600" aria-hidden />
+              Orari di apertura
+            </h2>
+            <span className="flex items-center gap-2 text-sm text-ink-500">
+              <span className={`font-medium ${openNow ? 'text-olive-700' : 'text-ink-500'}`}>
+                {openNow ? 'Aperto ora' : todayLabel}
+              </span>
+              <ChevronDown size={18} className="transition-transform group-open:rotate-180" aria-hidden />
+            </span>
+          </summary>
+          <ul className="divide-y divide-cream-100 px-6 pb-5">
             {DAYS.map((d) => {
               const intervals = hours[d.key];
               const closed = !intervals || intervals.length === 0;
@@ -331,7 +359,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
               );
             })}
           </ul>
-        </div>
+        </details>
       )}
 
       {/* RECENSIONI */}
@@ -383,6 +411,25 @@ export default function StorePage({ params }: { params: { id: string } }) {
           productIds={featuredIds}
           accent={accent}
         />
+      )}
+
+      {/* Promozioni attive del negozio */}
+      {promos.length > 0 && (
+        <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 sm:p-5">
+          <h2 className="font-semibold text-ink-900 flex items-center gap-2 mb-3">
+            <Tag size={18} className="text-rose-600" aria-hidden />
+            Promozioni attive
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {promos.map((p) => (
+              <span key={p.id} className="inline-flex items-center gap-2 bg-white border border-rose-200 rounded-full pl-2 pr-3 py-1.5 text-sm">
+                <span className="bg-rose-600 text-white font-bold rounded-full px-2 py-0.5 text-xs">-{p.discount_percent}%</span>
+                <span className="font-medium text-ink-800">{p.title}</span>
+                <span className="text-ink-400 text-xs whitespace-nowrap">fino al {new Date(p.ends_at).toLocaleDateString('it-IT')}</span>
+              </span>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Tutti i prodotti */}

@@ -19,6 +19,7 @@ import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
 type OrderRow = {
   id: string;
@@ -85,6 +86,21 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         .from('order_pickup_codes')
         .select('code, verified_at')
         .eq('order_id', id)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  // Eventuale richiesta di reso collegata a quest'ordine (UI venditore).
+  const { data: returnRow } = useQuery({
+    queryKey: queryKeys.seller.returnForOrder(id),
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('returns')
+        .select('id, status, reason, notes, photo_urls, refund_amount_cents, decision_notes, created_at')
+        .eq('order_id', id)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
       return data;
     },
@@ -164,6 +180,18 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         deliveredAt={order.delivered_at}
         canceledAt={order.canceled_at}
       />
+
+      {/* RICHIESTA DI RESO */}
+      {returnRow && (
+        <ReturnRequestCard
+          ret={returnRow as unknown as ReturnRow}
+          orderTotal={Number(order.total_price)}
+          onDecided={() => {
+            qc.invalidateQueries({ queryKey: queryKeys.seller.returnForOrder(id) });
+            qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
+          }}
+        />
+      )}
 
       {/* AZIONI */}
       {order.delivery_status === 'NEW' && (

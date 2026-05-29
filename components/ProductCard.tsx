@@ -23,14 +23,18 @@ interface ProductCardProps {
   createdAt?: string;
   storeName?: string;
   sellerId?: string;
+  /** Sconto promo attivo in percentuale (0-100): mostra prezzo barrato + badge. */
+  discountPercent?: number;
   /** true per le prime immagini above-the-fold (LCP): eager + fetchPriority alta. */
   priority?: boolean;
 }
 
 const ProductCard = ({
   id, name, description, price, images, rating, reviewCount = 0,
-  stock, createdAt, storeName, sellerId, priority,
+  stock, createdAt, storeName, sellerId, discountPercent, priority,
 }: ProductCardProps) => {
+  const hasDiscount = !!discountPercent && discountPercent > 0;
+  const discountedPrice = hasDiscount ? price * (1 - (discountPercent as number) / 100) : price;
   const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
   const img = sizedImage(rawImg, 'card');
   const { favorites, toggle } = useFavorites();
@@ -73,10 +77,15 @@ const ProductCard = ({
   return (
     <Link
       href={`/product/${id}`}
-      className="group bg-white border border-cream-200 rounded-xl overflow-hidden hover:shadow-warm-lg hover:-translate-y-1 hover:border-primary-200 transition-all duration-200 flex flex-col relative"
+      className="group bg-white border border-cream-200 rounded-2xl overflow-hidden hover:shadow-warm-lg hover:-translate-y-1 hover:border-primary-200 transition-all duration-200 flex flex-col relative"
     >
       {/* Badges in alto a sinistra */}
       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+        {hasDiscount && (
+          <span className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
+            -{discountPercent}%
+          </span>
+        )}
         {isNew && (
           <span className="bg-olive-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
             Nuovo
@@ -146,7 +155,14 @@ const ProductCard = ({
 
         <div className="mt-auto pt-2">
           <div className="flex items-baseline gap-2 mb-2 flex-wrap">
-            <span className="text-xl font-bold text-ink-900">{formatPrice(price)}</span>
+            {hasDiscount ? (
+              <>
+                <span className="text-xl font-bold text-rose-700">{formatPrice(discountedPrice)}</span>
+                <span className="text-sm text-ink-400 line-through">{formatPrice(price)}</span>
+              </>
+            ) : (
+              <span className="text-xl font-bold text-ink-900">{formatPrice(price)}</span>
+            )}
             {freeShipping && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-olive-700 bg-olive-50 px-1.5 py-0.5 rounded">
                 <Truck size={10} strokeWidth={2.4} aria-hidden />
@@ -158,14 +174,14 @@ const ProductCard = ({
             type="button"
             onClick={handleAdd}
             disabled={isOutOfStock}
-            className="w-full inline-flex items-center justify-center gap-1.5 bg-ink-900 hover:bg-primary-700 disabled:bg-cream-200 disabled:text-ink-400 disabled:cursor-not-allowed text-white text-xs font-semibold py-2 rounded-lg transition-colors"
+            className="w-full inline-flex items-center justify-center gap-1.5 bg-primary-600 hover:bg-primary-700 active:scale-[0.98] disabled:bg-cream-200 disabled:text-ink-400 disabled:cursor-not-allowed disabled:active:scale-100 text-white text-[13px] font-semibold py-2.5 rounded-full shadow-sm hover:shadow-warm transition-all duration-150"
           >
             {isOutOfStock ? (
               'Non disponibile'
             ) : (
               <>
-                <ShoppingCart size={14} strokeWidth={2.2} aria-hidden />
-                Aggiungi al carrello
+                <ShoppingCart size={15} strokeWidth={2.4} aria-hidden />
+                Aggiungi
               </>
             )}
           </button>
