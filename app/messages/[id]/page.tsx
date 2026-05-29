@@ -258,6 +258,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Scrivi un messaggio..."
+            aria-label="Scrivi un messaggio"
             maxLength={4000}
             disabled={sendMutation.isPending}
             className="flex-1 border border-cream-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-60"
@@ -268,7 +269,7 @@ export default function ConversationThreadPage({ params }: { params: { id: strin
             aria-label="Invia"
             className="bg-primary-700 hover:bg-primary-800 disabled:opacity-50 text-white rounded-full p-3"
           >
-            <Send size={18} />
+            <Send size={18} aria-hidden />
           </button>
         </form>
       </div>

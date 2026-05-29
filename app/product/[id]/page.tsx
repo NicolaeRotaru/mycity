@@ -254,7 +254,10 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               {images.slice(0, 5).map((img, i) => (
                 <button
                   key={i}
+                  type="button"
                   onClick={() => setActiveImg(i)}
+                  aria-label={`Mostra foto ${i + 1}`}
+                  aria-pressed={activeImg === i}
                   className={`relative aspect-square bg-cream-100 rounded-lg overflow-hidden border-2 transition ${
                     activeImg === i ? 'border-indigo-500' : 'border-transparent hover:border-cream-300'
                   }`}
@@ -412,18 +415,23 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               <label className="text-sm font-medium">Q.tà:</label>
               <div className="flex items-center border rounded-lg">
                 <button
+                  type="button"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  aria-label="Diminuisci quantità"
                   className="w-9 h-9 hover:bg-cream-50 rounded-l-lg"
                 >−</button>
                 <span className="w-10 text-center font-semibold">{quantity}</span>
                 <button
+                  type="button"
                   onClick={() => setQuantity(quantity + 1)}
+                  aria-label="Aumenta quantità"
                   className="w-9 h-9 hover:bg-cream-50 rounded-r-lg"
                 >+</button>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={handleAdd}
               disabled={isOutOfStock}
               className="w-full bg-accent-400 hover:bg-accent-500 disabled:bg-cream-300 disabled:cursor-not-allowed text-ink-900 py-3 rounded-lg font-bold shadow-md hover:shadow-lg transition-all"

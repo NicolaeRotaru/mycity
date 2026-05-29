@@ -123,8 +123,9 @@ const SignInForm = () => {
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Email</label>
+          <label htmlFor="signin-email" className="block text-sm font-medium text-ink-700 mb-1">Email</label>
           <input
+            id="signin-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -136,7 +137,7 @@ const SignInForm = () => {
         </div>
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-ink-700">Password</label>
+            <label htmlFor="signin-password" className="block text-sm font-medium text-ink-700">Password</label>
             <button
               type="button"
               onClick={handleResetPassword}
@@ -148,6 +149,7 @@ const SignInForm = () => {
           </div>
           <div className="relative">
             <input
+              id="signin-password"
               type={showPwd ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -162,7 +164,7 @@ const SignInForm = () => {
               aria-label={showPwd ? 'Nascondi password' : 'Mostra password'}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-ink-500 hover:text-ink-700 px-2 py-1"
             >
-              {showPwd ? '🙈' : '👁'}
+              <span aria-hidden>{showPwd ? '🙈' : '👁'}</span>
             </button>
           </div>
         </div>

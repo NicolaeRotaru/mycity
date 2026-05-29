@@ -82,15 +82,16 @@ export default function ShareCartButton({ items }: Props) {
                 Invia via email
               </a>
               <button
+                type="button"
                 onClick={copy}
                 className="w-full inline-flex items-center gap-3 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-3 rounded-lg font-semibold transition-colors"
               >
-                <Copy size={18} />
+                <Copy size={18} aria-hidden />
                 Copia testo
               </button>
             </div>
 
-            <button onClick={() => setOpen(false)} className="w-full text-xs text-ink-500 hover:text-ink-800">
+            <button type="button" onClick={() => setOpen(false)} className="w-full text-xs text-ink-500 hover:text-ink-800">
               Chiudi
             </button>
           </div>
