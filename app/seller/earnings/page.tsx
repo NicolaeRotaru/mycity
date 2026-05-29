@@ -7,6 +7,7 @@ import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
+import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
 
 // Commissione marketplace e schedule payout (per ora hardcoded, in futuro
 // configurabile per seller).
@@ -183,9 +184,13 @@ export default function SellerEarningsPage() {
             </p>
             <p className="text-xs text-olive-700 mt-1">
               I bonifici partono il giorno 5 di ogni mese verso l'IBAN registrato su Stripe.
+              Per saldo e bonifici reali apri la dashboard Stripe.
             </p>
           </div>
-          <StripeConnectButton />
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+            <StripeConnectButton />
+            <StripeDashboardButton />
+          </div>
         </div>
       </section>
 
