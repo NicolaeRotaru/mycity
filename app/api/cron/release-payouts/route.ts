@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { releaseOrderPayout } from '@/lib/stripe/payout';
+import { releaseOrderPayout, releaseRiderPayout } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -91,9 +91,45 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     }
   }
 
-  if (released > 0 || failed > 0) {
-    logger.info(`[cron] release-payouts: released=${released} skipped=${skipped} failed=${failed}`);
+  // --- COMPENSO RIDER: transfer della quota shipping_cost ai rider ---
+  // Ordini card consegnati con rider, non ancora pagati (o da ritentare).
+  // Niente blocco su resi (il rider ha comunque effettuato la consegna); i
+  // chargeback sono già esclusi via dispute_status IS NULL.
+  let riderReleased = 0;
+  let riderSkipped = 0;
+  let riderFailed = 0;
+  const { data: riderCands } = await admin
+    .from('orders')
+    .select('id')
+    .eq('payment_method', 'card')
+    .eq('delivery_status', 'DELIVERED')
+    .not('rider_id', 'is', null)
+    .or('rider_payout_status.is.null,rider_payout_status.eq.PENDING_RIDER_ONBOARDING,rider_payout_status.eq.FAILED')
+    .is('dispute_status', null)
+    .lte('delivered_at', cutoffIso)
+    .limit(BATCH_LIMIT);
+
+  for (const o of riderCands ?? []) {
+    const id = o.id as string;
+    try {
+      const res = await releaseRiderPayout(id);
+      if (res.ok) riderReleased++;
+      else if (res.code === 'RIDER_NOT_READY' || res.code === 'BAD_STATE') riderSkipped++;
+      else riderFailed++;
+    } catch (e) {
+      logger.error('[cron] release rider payout failed', { id, e });
+      riderFailed++;
+    }
   }
 
-  return NextResponse.json({ ok: true, released, skipped, failed }, { status: 200 });
+  if (released > 0 || failed > 0 || riderReleased > 0 || riderFailed > 0) {
+    logger.info(
+      `[cron] release-payouts: seller released=${released} skipped=${skipped} failed=${failed} · rider released=${riderReleased} skipped=${riderSkipped} failed=${riderFailed}`,
+    );
+  }
+
+  return NextResponse.json(
+    { ok: true, released, skipped, failed, riderReleased, riderSkipped, riderFailed },
+    { status: 200 },
+  );
 });

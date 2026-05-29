@@ -42,7 +42,7 @@ export type PayoutResult =
   | { ok: true; transferId: string }
   | {
       ok: false;
-      code: 'NOT_FOUND' | 'NOT_DELIVERED' | 'BAD_STATE' | 'INVALID_AMOUNT' | 'SELLER_NOT_READY' | 'TRANSFER_FAILED';
+      code: 'NOT_FOUND' | 'NOT_DELIVERED' | 'BAD_STATE' | 'INVALID_AMOUNT' | 'SELLER_NOT_READY' | 'RIDER_NOT_READY' | 'TRANSFER_FAILED';
       reason: string;
     };
 
@@ -110,6 +110,65 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
     logger.error('[stripe] transfer failed', err);
     await admin.from('orders').update({ payout_status: 'FAILED' }).eq('id', order.id);
     return { ok: false, code: 'TRANSFER_FAILED', reason: 'Transfer failed' };
+  }
+}
+
+/**
+ * Rilascia il compenso di consegna (transfer SCT) al RIDER per UN ordine
+ * DELIVERED pagato con CARTA. Il compenso = `shipping_cost` dell'ordine.
+ * Idempotente: no-op se già 'TRANSFERRED'. Se il Connect del rider non è
+ * pronto → 'PENDING_RIDER_ONBOARDING' (ritentato al prossimo cron).
+ * Per gli ordini COD il rider incassa i contanti: nessun transfer qui.
+ */
+export async function releaseRiderPayout(orderId: string): Promise<PayoutResult> {
+  const admin = getAdminSupabase();
+  const { data: order, error } = await admin
+    .from('orders')
+    .select('id, rider_id, shipping_cost, payment_method, delivery_status, rider_payout_status, stripe_charge_id, stripe_transfer_group')
+    .eq('id', orderId)
+    .single();
+
+  if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
+  if (order.delivery_status !== 'DELIVERED') return { ok: false, code: 'NOT_DELIVERED', reason: 'Ordine non consegnato' };
+  if (order.payment_method !== 'card') return { ok: false, code: 'BAD_STATE', reason: 'COD: il rider incassa i contanti' };
+  if (!order.rider_id) return { ok: false, code: 'BAD_STATE', reason: 'Nessun rider assegnato' };
+  if (order.rider_payout_status === 'TRANSFERRED') return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già versato' };
+
+  const feeCents = Math.round(Number(order.shipping_cost ?? 0) * 100);
+  if (feeCents <= 0) return { ok: false, code: 'INVALID_AMOUNT', reason: 'Compenso di consegna nullo' };
+
+  const { data: rider } = await admin
+    .from('profiles')
+    .select('stripe_account_id, stripe_payouts_enabled')
+    .eq('id', order.rider_id)
+    .single();
+
+  if (!rider?.stripe_account_id || !rider.stripe_payouts_enabled) {
+    await admin.from('orders').update({ rider_payout_status: 'PENDING_RIDER_ONBOARDING' }).eq('id', order.id);
+    return { ok: false, code: 'RIDER_NOT_READY', reason: 'Rider senza Connect/IBAN attivo' };
+  }
+
+  try {
+    const stripe = getStripe();
+    const transfer = await stripe.transfers.create({
+      amount: feeCents,
+      currency: 'eur',
+      destination: rider.stripe_account_id,
+      ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
+      transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
+      metadata: { order_id: order.id, rider_id: order.rider_id, kind: 'rider_fee' },
+    });
+
+    await admin
+      .from('orders')
+      .update({ rider_transfer_id: transfer.id, rider_payout_status: 'TRANSFERRED', rider_payout_at: new Date().toISOString() })
+      .eq('id', order.id);
+
+    return { ok: true, transferId: transfer.id };
+  } catch (err) {
+    logger.error('[stripe] rider transfer failed', err);
+    await admin.from('orders').update({ rider_payout_status: 'FAILED' }).eq('id', order.id);
+    return { ok: false, code: 'TRANSFER_FAILED', reason: 'Transfer rider fallito' };
   }
 }
 

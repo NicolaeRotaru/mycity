@@ -3,7 +3,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
-import { withSellerAuthRateLimit } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -19,7 +19,7 @@ export const runtime = 'nodejs';
  * (return_url) e dal bottone "Aggiorna stato" in Guadagni.
  */
 // Rate limit: 20 / 10 min per seller.
-export const POST = withSellerAuthRateLimit({ name: 'stripe-connect-refresh', max: 20, windowMs: 10 * 60_000 }, async ({ user }): Promise<NextResponse> => {
+export const POST = withAuthRateLimit({ name: 'stripe-connect-refresh', max: 20, windowMs: 10 * 60_000 }, async ({ user }): Promise<NextResponse> => {
   if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
 
   const supa = getServerSupabase();

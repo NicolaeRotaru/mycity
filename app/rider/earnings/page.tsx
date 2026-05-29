@@ -1,12 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import RiderConnectButton from '@/components/rider/RiderConnectButton';
 
 type PeriodKey = 'today' | '7d' | '30d' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -15,8 +15,6 @@ const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
   { key: '30d',   label: 'Ultimi 30 giorni', days: 30 },
   { key: 'all',   label: 'Tutto',            days: null },
 ];
-
-const PAYOUT_DAY = 5;
 
 export default function RiderEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('30d');
@@ -28,12 +26,12 @@ export default function RiderEarningsPage() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('orders')
-        .select('id, shipping_cost, delivered_at')
+        .select('id, shipping_cost, delivered_at, rider_payout_status, payment_method')
         .eq('rider_id', user.id)
         .eq('delivery_status', 'DELIVERED')
         .order('delivered_at', { ascending: false });
       if (error) throw error;
-      type EarningOrder = { id: string; shipping_cost: number | null; delivered_at: string | null };
+      type EarningOrder = { id: string; shipping_cost: number | null; delivered_at: string | null; rider_payout_status: string | null; payment_method: string | null };
       return (data ?? []) as EarningOrder[];
     },
   });
@@ -52,6 +50,8 @@ export default function RiderEarningsPage() {
 
   const totalEarned = filtered.reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
   const avgPerDelivery = filtered.length > 0 ? totalEarned / filtered.length : 0;
+  const paid = filtered.filter((o) => o.rider_payout_status === 'TRANSFERRED').reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
+  const pending = filtered.filter((o) => o.payment_method === 'card' && o.rider_payout_status !== 'TRANSFERRED').reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
 
   // Mini-grafico ultimi 7 giorni
   const daily = useMemo(() => {
@@ -72,13 +72,6 @@ export default function RiderEarningsPage() {
     return Object.entries(days);
   }, [orders]);
   const maxDaily = Math.max(...daily.map(([, v]) => v.total), 1);
-
-  const nextPayout = useMemo(() => {
-    const now = new Date();
-    const next = new Date(now.getFullYear(), now.getMonth(), PAYOUT_DAY);
-    if (next <= now) next.setMonth(next.getMonth() + 1);
-    return next;
-  }, []);
 
   if (isLoading) return <LoadingState />;
 
@@ -148,27 +141,21 @@ export default function RiderEarningsPage() {
         </div>
       </section>
 
-      {/* Payout */}
+      {/* Compensi reali + IBAN */}
       <section className="bg-white border rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="font-bold text-ink-900 mb-1 flex items-center gap-2">
-              🏦 Prossimo bonifico
-            </h2>
+            <h2 className="font-bold text-ink-900 mb-1 flex items-center gap-2">🏦 I tuoi compensi</h2>
             <p className="text-sm text-ink-700">
-              Riceverai i guadagni del periodo entro il{' '}
-              <strong>{nextPayout.toLocaleDateString('it', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
+              <strong>{formatPrice(paid)}</strong> già versati ·{' '}
+              <strong>{formatPrice(pending)}</strong> in arrivo (consegne con carta).
             </p>
             <p className="text-xs text-ink-500 mt-1">
-              Bonifici mensili il giorno 5 sull'IBAN registrato.
+              Il compenso viene versato sul tuo IBAN circa 24h dopo la consegna. Le consegne in
+              contanti le incassi direttamente.
             </p>
           </div>
-          <Link
-            href="/profile/settings"
-            className="bg-accent-500 hover:bg-accent-600 text-white px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap"
-          >
-            ⚙️ Configura IBAN
-          </Link>
+          <RiderConnectButton />
         </div>
       </section>
 
