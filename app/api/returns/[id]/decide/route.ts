@@ -1,9 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
-import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
-import { sendEmail } from '@/lib/email/client';
-import { refundIssuedTemplate } from '@/lib/email/templates';
+import { isStripeConfigured } from '@/lib/stripe/client';
+import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -54,22 +53,23 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let newStatus: string = body.decision;
 
   if (body.decision === 'APPROVED' && body.refundAmountCents) {
-    // Refund immediato Stripe (parziale o totale)
+    // Refund reale + claw-back del transfer se il venditore era già pagato.
     const { data: order } = await admin
       .from('orders')
-      .select('stripe_payment_intent, stripe_charge_id')
+      .select('stripe_payment_intent')
       .eq('id', ret.order_id)
       .single();
 
     if (isStripeConfigured() && order?.stripe_payment_intent) {
       try {
-        const stripe = getStripe();
-        const refund = await stripe.refunds.create({
-          payment_intent: order.stripe_payment_intent,
-          amount: body.refundAmountCents,
-          metadata: { order_id: ret.order_id, return_id: ret.id, reason: 'requested_by_customer' },
+        const res = await refundOrder({
+          orderId: ret.order_id,
+          amountCents: body.refundAmountCents,
+          reason: body.notes ?? 'requested_by_customer',
+          metadata: { return_id: ret.id },
+          notifyBuyer: true,
         });
-        refundId = refund.id;
+        refundId = res.refundId;
         refundedAt = new Date().toISOString();
         newStatus = 'REFUNDED';
       } catch (err) {
@@ -102,19 +102,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     link: `/orders/${ret.order_id}`,
   });
 
-  // Email rimborso (se emesso)
-  if (refundId && body.refundAmountCents) {
-    const { data: ua } = await admin.auth.admin.getUserById(ret.buyer_id);
-    const buyerEmail = ua?.user?.email;
-    if (buyerEmail) {
-      const t = refundIssuedTemplate({
-        orderId: ret.order_id,
-        amount: body.refundAmountCents / 100,
-        reason: body.notes ?? null,
-      });
-      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
-    }
-  }
+  // Email di rimborso: già inviata da refundOrder (notifyBuyer: true).
 
   return NextResponse.json({ ok: true, status: newStatus, refundId }, { status: 200 });
 }

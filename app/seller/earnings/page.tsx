@@ -9,11 +9,6 @@ import { queryKeys } from '@/lib/queries/keys';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
 import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
 
-// Commissione marketplace e schedule payout (per ora hardcoded, in futuro
-// configurabile per seller).
-const COMMISSION_PCT = 8;
-const PAYOUT_DAY = 5; // payout ogni 1° e 16° del mese, esempio
-
 type PeriodKey = '7d' | '30d' | '90d' | 'all';
 
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -23,79 +18,104 @@ const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
   { key: 'all', label: 'Tutto',            days: null },
 ];
 
+type OrderRow = {
+  id: string;
+  total_price: number;
+  created_at: string;
+  delivery_status: string;
+  payment_method: string | null;
+  payout_status: string | null;
+  payout_at: string | null;
+  seller_payout_cents: number | null;
+  application_fee_cents: number | null;
+  stripe_transfer_id: string | null;
+  stripe_reversal_id: string | null;
+};
+
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+
+/** Badge stato payout reale (da orders.payout_status). */
+function payoutBadge(o: OrderRow): { label: string; cls: string } {
+  if (o.payment_method === 'cod') return { label: 'Contanti', cls: 'bg-cream-200 text-ink-700' };
+  switch (o.payout_status) {
+    case 'TRANSFERRED':
+      return { label: o.payout_at ? `Pagato ${fmtDate(o.payout_at)}` : 'Pagato', cls: 'bg-olive-100 text-olive-800' };
+    case 'HELD':
+      return { label: 'In attesa', cls: 'bg-accent-100 text-accent-800' };
+    case 'PENDING_SELLER_ONBOARDING':
+      return { label: 'Completa onboarding', cls: 'bg-primary-100 text-primary-800' };
+    case 'REVERSED':
+      return { label: 'Stornato', cls: 'bg-secondary-100 text-secondary-800' };
+    case 'REFUNDED':
+      return { label: 'Rimborsato', cls: 'bg-secondary-100 text-secondary-800' };
+    case 'FAILED':
+      return { label: 'Verifica IBAN', cls: 'bg-secondary-100 text-secondary-800' };
+    default:
+      return { label: o.payout_status ?? '—', cls: 'bg-cream-200 text-ink-700' };
+  }
+}
+
 export default function SellerEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('30d');
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading } = useQuery({
     queryKey: queryKeys.seller.earnings,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
-        .from('order_items')
-        .select('quantity, unit_price, orders(id, created_at, delivery_status), products!inner(seller_id, name)')
-        .eq('products.seller_id', user.id);
+        .from('orders')
+        .select(
+          'id, total_price, created_at, delivery_status, payment_method, payout_status, payout_at, seller_payout_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id',
+        )
+        .eq('seller_id', user.id)
+        .order('created_at', { ascending: false });
       if (error) throw error;
-      type EarningRow = {
-        quantity: number;
-        unit_price: number;
-        orders: { id: string; created_at: string; delivery_status: string } | null;
-        products: { seller_id: string; name: string } | null;
-      };
-      return (data ?? []) as unknown as EarningRow[];
+      return (data ?? []) as unknown as OrderRow[];
     },
   });
 
   const filtered = useMemo(() => {
     const conf = PERIODS.find((p) => p.key === period)!;
-    if (!conf.days) return items;
+    if (!conf.days) return orders;
     const cutoff = Date.now() - conf.days * 86400000;
-    return items.filter((it) => new Date(it.orders?.created_at ?? 0).getTime() >= cutoff);
-  }, [items, period]);
+    return orders.filter((o) => new Date(o.created_at).getTime() >= cutoff);
+  }, [orders, period]);
 
-  const gross = filtered.reduce((s, it) => s + Number(it.unit_price) * it.quantity, 0);
-  const fees = (gross * COMMISSION_PCT) / 100;
-  const net = gross - fees;
+  // Solo ordini carta passano dai payout Stripe. I refund/storni non contano nel netto.
+  const cardOrders = useMemo(() => filtered.filter((o) => o.payment_method !== 'cod'), [filtered]);
+  const activeCard = useMemo(
+    () => cardOrders.filter((o) => o.payout_status !== 'REFUNDED' && o.payout_status !== 'REVERSED'),
+    [cardOrders],
+  );
 
-  // ultimi 7 giorni breakdown per mini-grafico
+  const grossCents = activeCard.reduce((s, o) => s + Math.round(Number(o.total_price) * 100), 0);
+  const feeCents = activeCard.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0);
+  const netCents = activeCard.reduce((s, o) => s + (o.seller_payout_cents ?? 0), 0);
+
+  const heldCents = cardOrders
+    .filter((o) => o.payout_status === 'HELD' || o.payout_status === 'PENDING_SELLER_ONBOARDING')
+    .reduce((s, o) => s + (o.seller_payout_cents ?? 0), 0);
+  const paidCents = cardOrders
+    .filter((o) => o.payout_status === 'TRANSFERRED')
+    .reduce((s, o) => s + (o.seller_payout_cents ?? 0), 0);
+
+  // Mini-grafico ultimi 7 giorni (incasso lordo carta per giorno).
   const daily = useMemo(() => {
     const days: Record<string, number> = {};
     const now = new Date();
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(now.getDate() - i);
-      const k = d.toISOString().slice(0, 10);
-      days[k] = 0;
+      days[d.toISOString().slice(0, 10)] = 0;
     }
-    for (const it of items) {
-      const k = (it.orders?.created_at ?? '').slice(0, 10);
-      if (k in days) days[k] += Number(it.unit_price) * it.quantity;
+    for (const o of cardOrders) {
+      const k = o.created_at.slice(0, 10);
+      if (k in days) days[k] += Number(o.total_price);
     }
     return Object.entries(days);
-  }, [items]);
-
+  }, [cardOrders]);
   const maxDaily = Math.max(...daily.map(([, v]) => v), 1);
-
-  // recent payouts simulati
-  const payouts = useMemo(() => {
-    if (filtered.length === 0) return [];
-    const monthly: Record<string, number> = {};
-    for (const it of filtered) {
-      const k = (it.orders?.created_at ?? '').slice(0, 7); // YYYY-MM
-      monthly[k] = (monthly[k] ?? 0) + Number(it.unit_price) * it.quantity * (1 - COMMISSION_PCT / 100);
-    }
-    return Object.entries(monthly)
-      .sort((a, b) => (a[0] < b[0] ? 1 : -1))
-      .slice(0, 6);
-  }, [filtered]);
-
-  // prossimo payout previsto
-  const nextPayout = useMemo(() => {
-    const now = new Date();
-    const next = new Date(now.getFullYear(), now.getMonth(), PAYOUT_DAY);
-    if (next <= now) next.setMonth(next.getMonth() + 1);
-    return next;
-  }, []);
 
   if (isLoading) return <LoadingState />;
 
@@ -103,7 +123,7 @@ export default function SellerEarningsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-extrabold text-ink-900">💶 Guadagni</h1>
-        <p className="text-sm text-ink-500">Tutto quello che hai incassato e quanto ti spetta.</p>
+        <p className="text-sm text-ink-500">Importi reali dai tuoi ordini e stato dei bonifici.</p>
       </div>
 
       {/* Period switcher */}
@@ -114,9 +134,7 @@ export default function SellerEarningsPage() {
             type="button"
             onClick={() => setPeriod(p.key)}
             className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-              period === p.key
-                ? 'bg-primary-700 text-white'
-                : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
+              period === p.key ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
             }`}
           >
             {p.label}
@@ -126,25 +144,9 @@ export default function SellerEarningsPage() {
 
       {/* KPI tower */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Stat
-          label="Fatturato lordo"
-          value={formatPrice(gross)}
-          hint={`${filtered.length} articoli venduti`}
-          color="indigo"
-        />
-        <Stat
-          label={`Commissione marketplace (${COMMISSION_PCT}%)`}
-          value={'− ' + formatPrice(fees)}
-          hint="Trattenuta automaticamente"
-          color="rose"
-        />
-        <Stat
-          label="Netto per te"
-          value={formatPrice(net)}
-          hint="Da ricevere via bonifico"
-          color="emerald"
-          highlight
-        />
+        <Stat label="Fatturato lordo (carta)" value={formatPrice(grossCents / 100)} hint={`${activeCard.length} ordini`} color="indigo" />
+        <Stat label="Commissione marketplace" value={'− ' + formatPrice(feeCents / 100)} hint="Trattenuta automaticamente" color="rose" />
+        <Stat label="Netto per te" value={formatPrice(netCents / 100)} hint="Già pagato + in attesa" color="emerald" highlight />
       </div>
 
       {/* Daily chart */}
@@ -171,19 +173,17 @@ export default function SellerEarningsPage() {
         </div>
       </section>
 
-      {/* Payout schedule */}
+      {/* Stato bonifici (reale) */}
       <section className="bg-gradient-to-br from-olive-50 to-teal-50 border border-olive-200 rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="font-bold text-olive-900 mb-1 flex items-center gap-2">
-              🏦 Prossimo bonifico
-            </h2>
+            <h2 className="font-bold text-olive-900 mb-1 flex items-center gap-2">🏦 Bonifici</h2>
             <p className="text-sm text-olive-800">
-              Riceverai i guadagni del periodo entro il{' '}
-              <strong>{nextPayout.toLocaleDateString('it', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>.
+              <strong>{formatPrice(paidCents / 100)}</strong> già versati ·{' '}
+              <strong>{formatPrice(heldCents / 100)}</strong> in attesa di liquidazione.
             </p>
             <p className="text-xs text-olive-700 mt-1">
-              I bonifici partono il giorno 5 di ogni mese verso l'IBAN registrato su Stripe.
+              Pagamento automatico 3 giorni dopo la consegna, verso l&apos;IBAN registrato su Stripe.
               Per saldo e bonifici reali apri la dashboard Stripe.
             </p>
           </div>
@@ -194,43 +194,39 @@ export default function SellerEarningsPage() {
         </div>
       </section>
 
-      {/* Storico mensile */}
+      {/* Storico ordini (stato payout reale) */}
       <section className="bg-white border rounded-xl overflow-hidden">
         <div className="px-5 py-4 border-b">
-          <h2 className="font-bold text-ink-900">Storico mensile</h2>
-          <p className="text-xs text-ink-500">Importi netti già pagati o in attesa di liquidazione</p>
+          <h2 className="font-bold text-ink-900">Storico pagamenti</h2>
+          <p className="text-xs text-ink-500">Stato reale del bonifico per ogni ordine</p>
         </div>
-        {payouts.length === 0 ? (
-          <div className="p-8 text-center text-ink-400 text-sm">Ancora nessun guadagno nel periodo selezionato.</div>
+        {cardOrders.length === 0 ? (
+          <div className="p-8 text-center text-ink-400 text-sm">Ancora nessun ordine pagato con carta nel periodo selezionato.</div>
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-cream-50 text-xs uppercase text-ink-500">
               <tr>
-                <th className="text-left p-3">Mese</th>
+                <th className="text-left p-3">Ordine</th>
                 <th className="text-right p-3">Netto</th>
                 <th className="text-right p-3">Stato</th>
               </tr>
             </thead>
             <tbody>
-              {payouts.map(([month, amount], i) => (
-                <tr key={month} className="border-t">
-                  <td className="p-3 font-medium">
-                    {new Date(month + '-01').toLocaleDateString('it', { month: 'long', year: 'numeric' })}
-                  </td>
-                  <td className="p-3 text-right font-bold text-olive-700">{formatPrice(amount)}</td>
-                  <td className="p-3 text-right">
-                    {i === 0 ? (
-                      <span className="bg-accent-100 text-accent-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                        In attesa
-                      </span>
-                    ) : (
-                      <span className="bg-olive-100 text-olive-700 text-xs font-semibold px-2 py-0.5 rounded-full">
-                        ✓ Pagato
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {cardOrders.slice(0, 30).map((o) => {
+                const badge = payoutBadge(o);
+                return (
+                  <tr key={o.id} className="border-t">
+                    <td className="p-3">
+                      <span className="font-medium">#{o.id.slice(0, 8)}</span>
+                      <span className="text-xs text-ink-400 ml-2">{fmtDate(o.created_at)}</span>
+                    </td>
+                    <td className="p-3 text-right font-bold text-olive-700">{formatPrice((o.seller_payout_cents ?? 0) / 100)}</td>
+                    <td className="p-3 text-right">
+                      <span className={`${badge.cls} text-xs font-semibold px-2 py-0.5 rounded-full`}>{badge.label}</span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -238,17 +234,15 @@ export default function SellerEarningsPage() {
 
       {/* Info commissioni */}
       <details className="bg-cream-50 border rounded-xl">
-        <summary className="cursor-pointer p-4 font-semibold text-ink-700">
-          ℹ️ Come funziona la commissione?
-        </summary>
+        <summary className="cursor-pointer p-4 font-semibold text-ink-700">ℹ️ Come funziona la commissione?</summary>
         <div className="px-4 pb-4 text-sm text-ink-600 space-y-2">
           <p>
-            Su MyCity paghi <strong>solo l'{COMMISSION_PCT}% del venduto</strong> realmente concluso (non rimborsi, non ordini annullati).
+            Su MyCity paghi <strong>solo l&apos;8% del venduto</strong> realmente concluso (non rimborsi, non ordini annullati).
             Nessuna commissione mensile, nessun costo di iscrizione.
           </p>
           <p>
-            La commissione include: hosting, gateway di pagamento (quando attivo), supporto clienti, marketing locale.
-            La consegna è invece pagata dal cliente direttamente al rider/al negozio.
+            Il bonifico parte <strong>in automatico 3 giorni dopo la consegna</strong>. In caso di reso o contestazione la
+            quota corrispondente viene trattenuta o recuperata.
           </p>
         </div>
       </details>

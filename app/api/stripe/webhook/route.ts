@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import type Stripe from 'stripe';
 import { getStripe, computeApplicationFeeCents } from '@/lib/stripe/client';
+import { reverseOrderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
@@ -17,8 +18,12 @@ export const dynamic = 'force-dynamic';
  *  - checkout.session.completed  → legge il pending_checkout linkato
  *                                  e crea N ordini DB (uno per seller)
  *                                  con payment_status PAID, payout_status HELD
- *  - charge.refunded             → annulla TUTTI gli ordini legati a quella
- *                                  charge (multi-seller: stesso PI condiviso)
+ *  - charge.refunded             → su refund PIENO annulla gli ordini della
+ *                                  charge + claw-back dei transfer già inviati
+ *                                  (refund parziale: gestito da refundOrder)
+ *  - charge.dispute.created      → flag dispute_status=OPEN (blocca il payout
+ *                                  cron) + auto-reversal se già pagato + alert admin
+ *  - charge.dispute.closed       → won: sblocca; lost: annulla l'ordine
  *  - account.updated             → aggiorna stato Connect del seller
  *
  * Sicurezza:
@@ -62,6 +67,14 @@ export async function POST(req: NextRequest) {
       case 'charge.refunded': {
         const charge = event.data.object as Stripe.Charge;
         await handleChargeRefunded(charge);
+        break;
+      }
+      case 'charge.dispute.created': {
+        await handleDisputeCreated(event.data.object as Stripe.Dispute);
+        break;
+      }
+      case 'charge.dispute.closed': {
+        await handleDisputeClosed(event.data.object as Stripe.Dispute);
         break;
       }
       case 'account.updated': {
@@ -297,28 +310,57 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   if (!pi) return;
 
   // Multi-seller: una charge può avere N ordini (uno per seller).
-  // Annulliamo TUTTI gli ordini legati a quel PaymentIntent.
   const { data: orders } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_id')
+    .select('id, user_id, total_price, seller_id, payout_status, stripe_transfer_id, seller_payout_cents, stripe_reversal_id')
     .eq('stripe_payment_intent', pi);
 
   if (!orders || orders.length === 0) return;
+
+  // Solo i refund PIENI annullano gli ordini a tappeto. I refund parziali
+  // (reso/dispute di un singolo ordine) sono già gestiti per-ordine da
+  // refundOrder: qui li ignoriamo per non cancellare l'intera charge
+  // multi-seller.
+  const fullyRefunded = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
+  if (!fullyRefunded) {
+    logger.info('[stripe] charge.refunded parziale: nessun blanket-cancel', { pi, amountRefunded: charge.amount_refunded });
+    return;
+  }
 
   const refundAmount = (charge.amount_refunded ?? 0) / 100;
   const refundReason = charge.refunds?.data?.[0]?.reason ?? null;
   const refundId = charge.refunds?.data?.[0]?.id ?? null;
 
+  // Claw-back dei transfer già inviati (idempotente: no-op se non TRANSFERRED
+  // o già revertito). reverseOrderTransfer porta quelli pagati a 'REVERSED'.
+  const reversedIds: string[] = [];
+  for (const o of orders) {
+    if (o.payout_status === 'TRANSFERRED') {
+      try {
+        const { reversalId } = await reverseOrderTransfer(o);
+        if (reversalId) reversedIds.push(o.id);
+      } catch (e) {
+        logger.error('[stripe] reversal on charge.refunded failed', { orderId: o.id, e });
+      }
+    }
+  }
+
+  const allIds = orders.map((o) => o.id);
   await admin
     .from('orders')
     .update({
       payment_status: 'FAILED',
       delivery_status: 'CANCELED',
-      payout_status: 'REFUNDED',
       stripe_refund_id: refundId,
       canceled_at: new Date().toISOString(),
     })
-    .in('id', orders.map((o) => o.id));
+    .in('id', allIds);
+
+  // payout_status: i pagati sono già 'REVERSED' dal reversal; gli altri 'REFUNDED'.
+  const refundedIds = allIds.filter((id) => !reversedIds.includes(id));
+  if (refundedIds.length > 0) {
+    await admin.from('orders').update({ payout_status: 'REFUNDED' }).in('id', refundedIds);
+  }
 
   // Email buyer (una sola email anche se sono N ordini — è la stessa charge)
   const firstOrder = orders[0];
@@ -344,4 +386,105 @@ async function handleAccountUpdated(acct: Stripe.Account) {
       stripe_details_submitted: !!acct.details_submitted,
     })
     .eq('stripe_account_id', acct.id);
+}
+
+type DisputeOrderRow = {
+  id: string;
+  payout_status: string | null;
+  stripe_transfer_id: string | null;
+  seller_payout_cents: number | null;
+  stripe_reversal_id: string | null;
+};
+
+/** Trova gli ordini legati alla charge/PI di una dispute (multi-seller). */
+async function findOrdersForDispute(dispute: Stripe.Dispute, columns: string): Promise<DisputeOrderRow[]> {
+  const admin = getAdminSupabase();
+  const pi = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : null;
+  const chargeId = typeof dispute.charge === 'string' ? dispute.charge : (dispute.charge?.id ?? null);
+  if (pi) {
+    const { data } = await admin.from('orders').select(columns).eq('stripe_payment_intent', pi);
+    if (data && data.length > 0) return data as unknown as DisputeOrderRow[];
+  }
+  if (chargeId) {
+    const { data } = await admin.from('orders').select(columns).eq('stripe_charge_id', chargeId);
+    if (data && data.length > 0) return data as unknown as DisputeOrderRow[];
+  }
+  return [];
+}
+
+/** Inserisce una notifica per tutti gli admin. */
+async function notifyAdmins(title: string, body: string, link: string) {
+  const admin = getAdminSupabase();
+  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+  if (!admins || admins.length === 0) return;
+  await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link })));
+}
+
+/**
+ * charge.dispute.created → chargeback aperto. Stripe ha GIÀ prelevato i fondi
+ * dalla piattaforma, quindi NON emettiamo refund (sarebbe doppio): facciamo
+ * solo claw-back del transfer se il venditore era già stato pagato, flagghiamo
+ * gli ordini (dispute_status='OPEN' blocca il payout cron) e avvisiamo gli admin.
+ */
+async function handleDisputeCreated(dispute: Stripe.Dispute) {
+  const orders = await findOrdersForDispute(
+    dispute,
+    'id, payout_status, stripe_transfer_id, seller_payout_cents, stripe_reversal_id',
+  );
+  if (orders.length === 0) {
+    logger.warn('[stripe] dispute.created: nessun ordine trovato', { disputeId: dispute.id });
+    return;
+  }
+
+  for (const o of orders) {
+    if (o.payout_status === 'TRANSFERRED') {
+      try {
+        await reverseOrderTransfer(o);
+      } catch (e) {
+        logger.error('[stripe] reversal on dispute.created failed', { orderId: o.id, e });
+      }
+    }
+  }
+
+  const admin = getAdminSupabase();
+  await admin
+    .from('orders')
+    .update({ dispute_status: 'OPEN', disputed_at: new Date().toISOString() })
+    .in('id', orders.map((o) => o.id));
+
+  await notifyAdmins(
+    '⚠️ Chargeback aperto',
+    `Contestazione bancaria su ordine ${orders[0].id}${orders.length > 1 ? ` (+${orders.length - 1})` : ''} — ${((dispute.amount ?? 0) / 100).toFixed(2)}€.`,
+    '/admin/disputes',
+  );
+}
+
+/**
+ * charge.dispute.closed → won: sblocca (gli ordini HELD tornano eleggibili al
+ * payout cron). lost: i fondi sono già stati prelevati da Stripe (reversal già
+ * fatto all'apertura) → annulla l'ordine (semantica rimborso).
+ */
+async function handleDisputeClosed(dispute: Stripe.Dispute) {
+  const orders = await findOrdersForDispute(dispute, 'id, payout_status');
+  if (orders.length === 0) return;
+  const admin = getAdminSupabase();
+  const ids = orders.map((o) => o.id);
+
+  if (dispute.status === 'won') {
+    await admin.from('orders').update({ dispute_status: 'WON' }).in('id', ids);
+    await notifyAdmins('✓ Chargeback vinto', `Contestazione vinta su ordine ${ids[0]}. Payout sbloccato.`, '/admin/disputes');
+  } else if (dispute.status === 'lost') {
+    await admin
+      .from('orders')
+      .update({
+        dispute_status: 'LOST',
+        delivery_status: 'CANCELED',
+        payment_status: 'FAILED',
+        canceled_at: new Date().toISOString(),
+      })
+      .in('id', ids);
+    await notifyAdmins('✕ Chargeback perso', `Contestazione persa su ordine ${ids[0]}. Ordine annullato.`, '/admin/disputes');
+  } else {
+    logger.info('[stripe] dispute.closed: stato non gestito', { status: dispute.status });
+  }
 }
