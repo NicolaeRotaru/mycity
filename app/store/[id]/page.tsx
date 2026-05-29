@@ -39,14 +39,14 @@ export default function StorePage({ params }: { params: { id: string } }) {
     },
   });
 
-  type StoreReview = { id: string; rating: number; comment: string | null; created_at: string };
+  type StoreReview = { id: string; rating: number; comment: string | null; created_at: string; seller_reply: string | null };
 
   const { data: reviews = [] } = useQuery({
     queryKey: queryKeys.reviews.store(id),
     queryFn: async (): Promise<StoreReview[]> => {
       const { data } = await supabase
         .from('store_reviews')
-        .select('id, rating, comment, created_at')
+        .select('id, rating, comment, created_at, seller_reply')
         .eq('store_id', id)
         .order('created_at', { ascending: false })
         .limit(20);
@@ -281,6 +281,12 @@ export default function StorePage({ params }: { params: { id: string } }) {
                   </span>
                 </div>
                 {r.comment && <p className="text-sm text-ink-700">{r.comment}</p>}
+                {r.seller_reply && (
+                  <div className="mt-2 ml-3 pl-3 border-l-2 border-primary-200 bg-cream-50 rounded-r-lg py-1.5 pr-2">
+                    <p className="text-xs font-semibold text-primary-700">Risposta del negozio</p>
+                    <p className="text-sm text-ink-700 whitespace-pre-wrap">{r.seller_reply}</p>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

@@ -4,6 +4,15 @@ import { Button } from '@/components/ui/Button';
 export const metadata = {
   title: 'Resi e rimborsi · MyCity',
   description: 'Politica di reso e rimborso del marketplace MyCity.',
+  alternates: { canonical: '/returns' },
+  openGraph: {
+    title: 'Resi e rimborsi · MyCity',
+    description: 'Politica di reso e rimborso del marketplace MyCity.',
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/returns',
+  },
 };
 
 export default function ReturnsPage() {

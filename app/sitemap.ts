@@ -52,13 +52,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [products, stores, categories] = await Promise.all([
     supabase
       .from('products')
-      .select('id, updated_at, profiles!products_seller_id_fkey ( is_approved )')
+      .select('id, created_at, profiles!products_seller_id_fkey ( is_approved )')
       .eq('status', 'available')
-      .order('updated_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(5000),
     supabase
       .from('profiles')
-      .select('id, updated_at')
+      .select('id, created_at')
       .eq('role', 'seller')
       .eq('is_approved', true)
       .limit(2000),
@@ -68,22 +68,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .limit(200),
   ]);
 
-  type ProductSlug = { id: string; updated_at?: string | null; profiles?: { is_approved?: boolean } | null };
-  type StoreSlug = { id: string; updated_at?: string | null };
+  type ProductSlug = { id: string; created_at?: string | null; profiles?: { is_approved?: boolean } | null };
+  type StoreSlug = { id: string; created_at?: string | null };
   type CategorySlug = { slug: string };
 
   const productEntries: MetadataRoute.Sitemap = ((products.data ?? []) as unknown as ProductSlug[])
     .filter((p) => p.profiles?.is_approved)
     .map((p) => ({
       url: `${APP_URL}/product/${p.id}`,
-      lastModified: p.updated_at ? new Date(p.updated_at) : now,
+      lastModified: p.created_at ? new Date(p.created_at) : now,
       priority: 0.7,
       changeFrequency: 'weekly' as const,
     }));
 
   const storeEntries: MetadataRoute.Sitemap = ((stores.data ?? []) as StoreSlug[]).map((s) => ({
     url: `${APP_URL}/store/${s.id}`,
-    lastModified: s.updated_at ? new Date(s.updated_at) : now,
+    lastModified: s.created_at ? new Date(s.created_at) : now,
     priority: 0.8,
     changeFrequency: 'weekly' as const,
   }));

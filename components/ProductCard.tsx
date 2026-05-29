@@ -146,12 +146,13 @@ const ProductCard = ({
             <span className="text-xl font-bold text-ink-900">{formatPrice(price)}</span>
             {freeShipping && (
               <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-olive-700 bg-olive-50 px-1.5 py-0.5 rounded">
-                <Truck size={10} strokeWidth={2.4} />
+                <Truck size={10} strokeWidth={2.4} aria-hidden />
                 Sped. gratis
               </span>
             )}
           </div>
           <button
+            type="button"
             onClick={handleAdd}
             disabled={isOutOfStock}
             className="w-full inline-flex items-center justify-center gap-1.5 bg-ink-900 hover:bg-primary-700 disabled:bg-cream-200 disabled:text-ink-400 disabled:cursor-not-allowed text-white text-xs font-semibold py-2 rounded-lg transition-colors"
@@ -160,7 +161,7 @@ const ProductCard = ({
               'Non disponibile'
             ) : (
               <>
-                <ShoppingCart size={14} strokeWidth={2.2} />
+                <ShoppingCart size={14} strokeWidth={2.2} aria-hidden />
                 Aggiungi al carrello
               </>
             )}

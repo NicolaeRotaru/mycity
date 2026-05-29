@@ -15,6 +15,15 @@ import Link from 'next/link';
 export const metadata: Metadata = {
   title: 'Dichiarazione di accessibilità — MyCity Piacenza',
   description: 'Dichiarazione di accessibilità ai sensi dell\'European Accessibility Act.',
+  alternates: { canonical: '/accessibility' },
+  openGraph: {
+    title: 'Dichiarazione di accessibilità · MyCity',
+    description: 'Dichiarazione di accessibilità ai sensi dell\'European Accessibility Act.',
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/accessibility',
+  },
 };
 
 const LAST_UPDATED = '2026-05-26';

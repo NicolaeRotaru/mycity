@@ -118,16 +118,21 @@ export default function CartPage() {
                   <div className="flex items-center gap-2">
                     <div className="flex items-center border rounded-lg">
                       <button
+                        type="button"
                         onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        aria-label="Diminuisci quantità"
                         className="w-8 h-8 hover:bg-cream-100 rounded-l-lg"
                       >−</button>
                       <span className="w-8 text-center font-semibold">{item.quantity}</span>
                       <button
+                        type="button"
                         onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        aria-label="Aumenta quantità"
                         className="w-8 h-8 hover:bg-cream-100 rounded-r-lg"
                       >+</button>
                     </div>
                     <button
+                      type="button"
                       onClick={() => removeFromCart(item.id)}
                       className="text-ink-400 hover:text-red-600 text-sm ml-2"
                     >

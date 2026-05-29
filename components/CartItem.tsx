@@ -18,14 +18,18 @@ const CartItem = ({ id, name, price, quantity, onRemove, onQuantityChange }: Car
         {onQuantityChange && (
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => onQuantityChange(id, Math.max(1, quantity - 1))}
+              aria-label="Diminuisci quantità"
               className="w-7 h-7 rounded-full border flex items-center justify-center hover:bg-cream-100"
             >
               −
             </button>
             <span className="font-semibold w-6 text-center">{quantity}</span>
             <button
+              type="button"
               onClick={() => onQuantityChange(id, quantity + 1)}
+              aria-label="Aumenta quantità"
               className="w-7 h-7 rounded-full border flex items-center justify-center hover:bg-cream-100"
             >
               +
@@ -34,6 +38,7 @@ const CartItem = ({ id, name, price, quantity, onRemove, onQuantityChange }: Car
         )}
         {onRemove && (
           <button
+            type="button"
             onClick={() => onRemove(id)}
             className="text-red-500 hover:text-red-700 text-sm transition-colors"
           >

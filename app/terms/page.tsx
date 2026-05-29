@@ -3,6 +3,15 @@ import Link from 'next/link';
 export const metadata = {
   title: 'Termini di servizio · MyCity',
   description: 'Termini e condizioni d\'uso del marketplace MyCity.',
+  alternates: { canonical: '/terms' },
+  openGraph: {
+    title: 'Termini di servizio · MyCity',
+    description: 'Termini e condizioni d\'uso del marketplace MyCity.',
+    type: 'website',
+    locale: 'it_IT',
+    siteName: 'MyCity',
+    url: '/terms',
+  },
 };
 
 const VERSION = '2.0';

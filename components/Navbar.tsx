@@ -210,6 +210,7 @@ const IconButton = ({ href, label, badge, children }: { href: string; label: str
   <Link
     href={href}
     title={label}
+    aria-label={label}
     className="relative p-2 hover:bg-white/10 rounded-full transition-colors"
   >
     {children}
@@ -225,6 +226,7 @@ const CartButton = ({ count }: { count: number }) => (
   <Link
     href="/cart"
     title="Carrello"
+    aria-label="Carrello"
     className="ml-1 inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-ink-900 px-3 py-2 rounded-full text-sm font-bold transition-colors relative"
   >
     <ShoppingCart size={16} strokeWidth={2.4} />
@@ -268,6 +270,8 @@ const UserMenu = ({ displayName, role, profileHref, isSeller, isRider, isAdmin, 
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 hover:bg-white/10 px-2 py-1.5 rounded-full transition-colors"
         aria-label="Menu account"
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         <span className={`w-9 h-9 rounded-full ring-2 ring-white/20 flex items-center justify-center text-sm font-bold uppercase ${
           isSeller ? 'bg-accent-500 text-ink-900' :

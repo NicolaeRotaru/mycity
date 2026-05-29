@@ -135,7 +135,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       <form onSubmit={submit} className="relative">
-        <Search size={18} strokeWidth={2.2} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
+        <Search size={18} strokeWidth={2.2} aria-hidden className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -143,6 +143,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
+          aria-label="Cerca"
           autoFocus={autoFocus}
           className="w-full bg-white border-2 border-transparent focus:border-primary-400 focus:bg-white text-ink-900 placeholder-ink-400 rounded-full pl-11 pr-11 py-2.5 text-sm font-medium focus:outline-none transition-colors shadow-sm"
         />

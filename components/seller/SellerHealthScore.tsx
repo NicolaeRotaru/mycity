@@ -34,8 +34,8 @@ export default function SellerHealthScore() {
       const { data: profile } = await supabase
         .from('profiles')
         .select(`
-          store_name, store_description, store_logo, store_city,
-          store_lat, store_lng, contact_phone, contact_email,
+          store_name, store_description, store_logo,
+          store_lat, store_lng, store_phone,
           billing_iban, business_pec, store_address
         `)
         .eq('id', userId!)
@@ -85,7 +85,7 @@ export default function SellerHealthScore() {
           id: 'contact-phone',
           label: 'Telefono di contatto',
           points: 5,
-          passed: !!profile?.contact_phone,
+          passed: !!profile?.store_phone,
           fix: { href: '/seller/profile', label: 'Aggiungi telefono' },
         },
         {

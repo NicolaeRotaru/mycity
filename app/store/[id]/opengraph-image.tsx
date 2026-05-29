@@ -6,7 +6,7 @@ export const alt = 'Negozio su MyCity';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
-type StoreOGData = { store_name: string | null; store_description: string | null; store_logo: string | null; store_city: string | null };
+type StoreOGData = { store_name: string | null; store_description: string | null; store_logo: string | null; city: string | null };
 
 async function fetchStore(id: string): Promise<StoreOGData | null> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,7 +16,7 @@ async function fetchStore(id: string): Promise<StoreOGData | null> {
     const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data } = await supabase
       .from('profiles')
-      .select('store_name, store_description, store_logo, store_city')
+      .select('store_name, store_description, store_logo, city')
       .eq('id', id)
       .eq('role', 'seller')
       .single();
@@ -29,7 +29,7 @@ async function fetchStore(id: string): Promise<StoreOGData | null> {
 export default async function StoreOG({ params }: { params: { id: string } }) {
   const s = await fetchStore(params.id);
   const name = s?.store_name ?? 'Negozio su MyCity';
-  const city = s?.store_city ?? 'Piacenza';
+  const city = s?.city ?? 'Piacenza';
   const desc = s?.store_description ?? 'Acquista direttamente dal negozio della tua città.';
   const logo = s?.store_logo ?? null;
 
