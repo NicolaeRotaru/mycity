@@ -32,8 +32,9 @@ export function isStripeConfigured(): boolean {
  *  - Il buyer paga il totale a MyCity (account piattaforma).
  *  - Al webhook checkout.session.completed vengono creati N ordini DB
  *    (uno per ciascun seller) con payout_status=HELD.
- *  - I transfer ai seller partono da /api/stripe/payout DOPO DELIVERED
- *    (idealmente +7gg per coprire recesso 14gg, via cron).
+ *  - I transfer ai seller partono DOPO DELIVERED via cron automatico
+ *    (app/api/cron/release-payouts, consegna +3gg). I rimborsi/recessi
+ *    tardivi sono recuperati dal venditore via reversal (claw-back).
  *  - Ogni transfer usa source_transaction=charge_id per legare la
  *    liquidità a quella specifica charge (vedi /api/stripe/payout).
  *

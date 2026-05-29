@@ -989,6 +989,10 @@ export interface Database {
           coupon_code: string | null;
           pickup_in_store: boolean | null;
           stripe_session_id: string | null;
+          stripe_transfer_group: string | null;
+          stripe_reversal_id: string | null;
+          dispute_status: string | null;
+          disputed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -1001,6 +1005,10 @@ export interface Database {
           coupon_code?: string | null;
           pickup_in_store?: boolean | null;
           stripe_session_id?: string | null;
+          stripe_transfer_group?: string | null;
+          stripe_reversal_id?: string | null;
+          dispute_status?: string | null;
+          disputed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -1013,6 +1021,64 @@ export interface Database {
           coupon_code?: string | null;
           pickup_in_store?: boolean | null;
           stripe_session_id?: string | null;
+          stripe_transfer_group?: string | null;
+          stripe_reversal_id?: string | null;
+          dispute_status?: string | null;
+          disputed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      pending_checkouts: {
+        Row: {
+          id: string;
+          buyer_id: string;
+          stripe_session_id: string | null;
+          stripe_payment_intent: string | null;
+          total_cents: number;
+          currency: string;
+          groups: Json;
+          coupon_code: string | null;
+          b2b: Json | null;
+          delivery: Json;
+          pickup_in_store: boolean;
+          status: string;
+          created_at: string;
+          expires_at: string;
+          processed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          buyer_id: string;
+          stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          total_cents: number;
+          currency?: string;
+          groups: Json;
+          coupon_code?: string | null;
+          b2b?: Json | null;
+          delivery: Json;
+          pickup_in_store?: boolean;
+          status?: string;
+          created_at?: string;
+          expires_at?: string;
+          processed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          buyer_id?: string;
+          stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          total_cents?: number;
+          currency?: string;
+          groups?: Json;
+          coupon_code?: string | null;
+          b2b?: Json | null;
+          delivery?: Json;
+          pickup_in_store?: boolean;
+          status?: string;
+          created_at?: string;
+          expires_at?: string;
+          processed_at?: string | null;
         };
         Relationships: [];
       };

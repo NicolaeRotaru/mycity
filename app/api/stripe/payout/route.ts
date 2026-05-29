@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
-import { getAdminSupabase } from '@/lib/supabase/server';
-import { logger } from '@/lib/logger';
+import { isStripeConfigured } from '@/lib/stripe/client';
+import { releaseOrderPayout } from '@/lib/stripe/payout';
 import { withInternalAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -15,12 +14,9 @@ const Body = z.object({
 /**
  * Rilascia il payout al seller per un ordine DELIVERED.
  *
- * Tipicamente chiamato da una cron job 7 giorni dopo la consegna
- * (per coprire il periodo di recesso 14gg al consumatore).
- * In MVP puo' essere chiamato manualmente da admin o dal trigger
- * "delivered" se non c'e' politica escrow.
- *
- * SOLO server-to-server. Verifica la chiave x-internal-secret.
+ * Trigger manuale/admin server-to-server (verifica x-internal-secret). La
+ * logica vive in lib/stripe/payout.ts (`releaseOrderPayout`), condivisa col
+ * cron automatico app/api/cron/release-payouts che paga a consegna +3gg.
  */
 export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
@@ -32,74 +28,22 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
     return ApiErrors.invalidRequest('Bad request', e instanceof Error ? e.message : undefined);
   }
 
-  const admin = getAdminSupabase();
-  const { data: order, error } = await admin
-    .from('orders')
-    .select('id, seller_id, payout_status, seller_payout_cents, stripe_payment_intent, stripe_charge_id, stripe_transfer_group, delivery_status')
-    .eq('id', body.orderId)
-    .single();
-
-  if (error || !order) return ApiErrors.notFound('Ordine non trovato');
-  if (order.delivery_status !== 'DELIVERED') {
-    return ApiErrors.conflict('Ordine non ancora consegnato');
-  }
-  if (order.payout_status !== 'HELD' && order.payout_status !== 'PENDING_SELLER_ONBOARDING') {
-    return ApiErrors.conflict(`Payout in stato ${order.payout_status}, no-op`);
-  }
-  if (!order.seller_payout_cents || order.seller_payout_cents <= 0) {
-    return ApiErrors.invalidRequest('Importo payout non valido');
+  const result = await releaseOrderPayout(body.orderId);
+  if (result.ok) {
+    return NextResponse.json({ ok: true, transferId: result.transferId }, { status: 200 });
   }
 
-  const { data: seller } = await admin
-    .from('profiles')
-    .select('stripe_account_id, stripe_payouts_enabled')
-    .eq('id', order.seller_id)
-    .single();
-
-  if (!seller?.stripe_account_id || !seller.stripe_payouts_enabled) {
-    // Seller paid ma Connect non completato: trattieni i fondi sulla
-    // piattaforma e marca lo stato così un cron può riprovare al
-    // prossimo account.updated webhook.
-    await admin
-      .from('orders')
-      .update({ payout_status: 'PENDING_SELLER_ONBOARDING' })
-      .eq('id', order.id);
-    return ApiErrors.conflict("Seller non ha completato l'onboarding Stripe Connect");
-  }
-
-  try {
-    const stripe = getStripe();
-    // source_transaction = charge_id: garantisce che il transfer sia
-    // finanziato da quella specifica charge (cruciale per SCT multi-seller
-    // e per evitare failure quando il balance piattaforma è basso).
-    const transfer = await stripe.transfers.create({
-      amount: order.seller_payout_cents,
-      currency: 'eur',
-      destination: seller.stripe_account_id,
-      ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
-      transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
-      metadata: {
-        order_id: order.id,
-        seller_id: order.seller_id,
-      },
-    });
-
-    await admin
-      .from('orders')
-      .update({
-        stripe_transfer_id: transfer.id,
-        payout_status: 'TRANSFERRED',
-        payout_at: new Date().toISOString(),
-      })
-      .eq('id', order.id);
-
-    return NextResponse.json({ ok: true, transferId: transfer.id }, { status: 200 });
-  } catch (err) {
-    logger.error('[stripe] transfer failed', err);
-    await admin
-      .from('orders')
-      .update({ payout_status: 'FAILED' })
-      .eq('id', order.id);
-    return ApiErrors.internal('Transfer failed');
+  switch (result.code) {
+    case 'NOT_FOUND':
+      return ApiErrors.notFound(result.reason);
+    case 'INVALID_AMOUNT':
+      return ApiErrors.invalidRequest(result.reason);
+    case 'NOT_DELIVERED':
+    case 'BAD_STATE':
+    case 'SELLER_NOT_READY':
+      return ApiErrors.conflict(result.reason);
+    case 'TRANSFER_FAILED':
+    default:
+      return ApiErrors.internal(result.reason);
   }
 });

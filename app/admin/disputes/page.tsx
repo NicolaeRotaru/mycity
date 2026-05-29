@@ -73,18 +73,22 @@ export default function AdminDisputesPage() {
     mutationFn: async ({ id, status, notes, refund }: {
       id: string; status: Dispute['status']; notes: string; refund?: number;
     }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase
-        .from('disputes')
-        .update({
-          status,
-          resolution_notes: notes,
-          resolved_by: user?.id,
-          resolved_at: new Date().toISOString(),
-          refund_cents: refund ?? null,
-        })
-        .eq('id', id);
-      if (error) throw error;
+      // Passa dalla route admin server-side: emette il rimborso Stripe reale
+      // (refundOrder) ed evita il fallimento RLS dell'update client-side.
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/admin/disputes/${id}/resolve`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ status, notes, refundCents: refund }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error?.message ?? data?.error ?? 'Errore risoluzione reclamo');
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.disputes2() });
