@@ -55,7 +55,7 @@ export default function SellerAnalyticsPage() {
           .gte('viewed_at', since30),
         supabase
           .from('orders')
-          .select('id, total_cents, status, created_at')
+          .select('id, total_price, delivery_status, created_at')
           .eq('seller_id', userId!)
           .gte('created_at', since30),
         supabase
@@ -65,7 +65,7 @@ export default function SellerAnalyticsPage() {
       ]);
 
       const views = (viewsRes.data ?? []) as Array<{ product_id: string; viewed_at: string }>;
-      const orders = (ordersRes.data ?? []) as Array<{ id: string; total_cents: number; status: string; created_at: string }>;
+      const orders = (ordersRes.data ?? []) as Array<{ id: string; total_price: number; delivery_status: string; created_at: string }>;
       const reviews = (reviewsRes.data ?? []) as Array<{ product_id: string; rating: number }>;
 
       const views30 = views.length;
@@ -75,10 +75,10 @@ export default function SellerAnalyticsPage() {
 
       const orders30 = orders.length;
       const orders7 = orders.filter((o) => o.created_at >= since7).length;
-      const revenue30 = orders.filter((o) => ['paid', 'delivered'].includes(o.status))
-        .reduce((s, o) => s + (o.total_cents || 0), 0) / 100;
-      const revenue7 = orders.filter((o) => o.created_at >= since7 && ['paid', 'delivered'].includes(o.status))
-        .reduce((s, o) => s + (o.total_cents || 0), 0) / 100;
+      const revenue30 = orders.filter((o) => o.delivery_status === 'DELIVERED')
+        .reduce((s, o) => s + Number(o.total_price || 0), 0);
+      const revenue7 = orders.filter((o) => o.created_at >= since7 && o.delivery_status === 'DELIVERED')
+        .reduce((s, o) => s + Number(o.total_price || 0), 0);
 
       const conversionRate = views30 > 0 ? (orders30 / views30) * 100 : 0;
 
