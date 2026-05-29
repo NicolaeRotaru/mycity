@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Input, PasswordInput } from '@/components/ui/Field';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
@@ -29,7 +30,6 @@ function translateAuthError(msg: string): string {
 const SignInForm = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPwd, setShowPwd] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
@@ -122,22 +122,26 @@ const SignInForm = () => {
         <p className="text-sm text-ink-500 mt-1">Bentornato su MyCity</p>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="signin-email" className="block text-sm font-medium text-ink-700 mb-1">Email</label>
-          <input
-            id="signin-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="la-tua@email.it"
-            autoComplete="email"
-            required
-            className="w-full border p-2 rounded text-base focus:outline-none focus:ring-2 focus:ring-primary-400"
-          />
-        </div>
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label htmlFor="signin-password" className="block text-sm font-medium text-ink-700">Password</label>
+        <Input
+          id="signin-email"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="la-tua@email.it"
+          autoComplete="email"
+          inputMode="email"
+          required
+        />
+        <PasswordInput
+          id="signin-password"
+          label="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          autoComplete="current-password"
+          required
+          labelAction={
             <button
               type="button"
               onClick={handleResetPassword}
@@ -146,28 +150,8 @@ const SignInForm = () => {
             >
               {sendingReset ? 'Invio…' : 'Password dimenticata?'}
             </button>
-          </div>
-          <div className="relative">
-            <input
-              id="signin-password"
-              type={showPwd ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete="current-password"
-              required
-              className="w-full border p-2 pr-12 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPwd((v) => !v)}
-              aria-label={showPwd ? 'Nascondi password' : 'Mostra password'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-ink-500 hover:text-ink-700 px-2 py-1"
-            >
-              <span aria-hidden>{showPwd ? '🙈' : '👁'}</span>
-            </button>
-          </div>
-        </div>
+          }
+        />
         {TURNSTILE_SITE_KEY && (
           <div className="flex justify-center">
             <Turnstile

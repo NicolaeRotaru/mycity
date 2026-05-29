@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
 import { trackSignupCompleted } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { Input } from '@/components/ui/Field';
+import { Input, Checkbox } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 
 type Role = 'buyer' | 'seller' | 'rider';
@@ -145,19 +145,17 @@ function SignUpInner() {
           autoComplete="new-password"
         />
 
-        <label className="flex items-start gap-2 text-sm text-ink-700">
-          <input
-            type="checkbox"
-            checked={acceptTos}
-            onChange={(e) => setAcceptTos(e.target.checked)}
-            className="mt-0.5 h-4 w-4 rounded border-cream-300 text-primary-700"
-          />
-          <span>
-            Ho letto e accetto i{' '}
-            <Link href="/terms" target="_blank" className="text-primary-700 underline">Termini di servizio</Link>{' '}e l&apos;
-            <Link href="/privacy" target="_blank" className="text-primary-700 underline">Informativa sulla privacy</Link>.
-          </span>
-        </label>
+        <Checkbox
+          checked={acceptTos}
+          onChange={(e) => setAcceptTos(e.target.checked)}
+          label={
+            <>
+              Ho letto e accetto i{' '}
+              <Link href="/terms" target="_blank" className="text-primary-700 underline">Termini di servizio</Link>{' '}e l&apos;
+              <Link href="/privacy" target="_blank" className="text-primary-700 underline">Informativa sulla privacy</Link>.
+            </>
+          }
+        />
 
         {TURNSTILE_SITE_KEY && (
           <div className="flex justify-center">
