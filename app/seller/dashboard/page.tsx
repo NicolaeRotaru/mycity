@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
@@ -16,17 +16,36 @@ import { queryKeys } from '@/lib/queries/keys';
 export default function SellerDashboard() {
   const { profile, isSeller } = useProfile();
 
-  // Feedback al rientro da Stripe Connect onboarding
+  const queryClient = useQueryClient();
+
+  // Feedback + sync al rientro da Stripe Connect onboarding. Il webhook
+  // account.updated potrebbe non arrivare (es. endpoint non iscritto agli
+  // eventi Connect): qui rileggiamo lo stato da Stripe e invalidiamo le viste
+  // che lo mostrano, così checklist e Guadagni si aggiornano subito.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const s = params.get('stripe');
     if (s === 'connected') {
-      toast.success('Configurazione pagamenti completata! A breve potrai ricevere i bonifici.');
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const token = session?.access_token;
+          await fetch('/api/stripe/connect/refresh-status', {
+            method: 'POST',
+            headers: token ? { authorization: `Bearer ${token}` } : {},
+          });
+        } catch {
+          /* il webhook resta come fallback */
+        }
+        queryClient.invalidateQueries({ queryKey: ['seller'] });
+        toast.success('Configurazione pagamenti aggiornata!');
+      })();
       window.history.replaceState({}, '', '/seller/dashboard');
     } else if (s === 'refresh') {
       toast('Configurazione interrotta. Riprova quando vuoi dalla pagina Guadagni.', { icon: '🏦' });
       window.history.replaceState({}, '', '/seller/dashboard');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { data: stats, isLoading } = useQuery({
