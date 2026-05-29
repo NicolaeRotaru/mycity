@@ -42,7 +42,8 @@ const nextConfig = {
       { protocol: 'https', hostname: 'images.pexels.com' },
     ],
     formats: ['image/avif', 'image/webp'],
-    minimumCacheTTL: 60,
+    // Media Supabase = immutabili (URL versionato per upload) → cache lunga.
+    minimumCacheTTL: 31536000, // 1 anno
   },
   experimental: {
     // instrumentationHook attiva il caricamento di instrumentation.ts

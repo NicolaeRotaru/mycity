@@ -91,6 +91,14 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next({ request: { headers: reqHeaders } });
   res.headers.set('Content-Security-Policy', csp);
 
+  // Perf: solo /admin, /seller, /rider richiedono sessione + ruolo. Per ogni
+  // altra rotta (home, catalogo pubblico = ~90% del traffico) usciamo subito con
+  // la sola CSP, evitando la round-trip auth a Supabase (getUser) ad ogni request.
+  // Il refresh del cookie sessione sulle rotte pubbliche resta coperto dal client
+  // supabase-js nel browser (auto-refresh) e dai server component su rotte protette.
+  const roleRule = findRoleRule(pathname);
+  if (!roleRule) return res;
+
   if (!SUPABASE_URL || !SUPABASE_KEY) return res;
 
   // Client server-side che legge/scrive cookie su richiesta+risposta.
@@ -119,9 +127,6 @@ export async function middleware(req: NextRequest) {
     r.headers.set('Content-Security-Policy', csp);
     return r;
   };
-
-  const roleRule = findRoleRule(pathname);
-  if (!roleRule) return res;
 
   if (!user) {
     const url = req.nextUrl.clone();
