@@ -24,7 +24,7 @@ interface Props {
 const StoreMediaCarousel = ({
   media,
   heightClass = 'h-44 sm:h-56',
-  fallbackClass = 'bg-gradient-to-br from-primary-500 via-purple-500 to-pink-500',
+  fallbackClass = 'bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600',
   rounded = '',
   className = '',
 }: Props) => {

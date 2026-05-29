@@ -1,11 +1,22 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import type { LucideIcon } from 'lucide-react';
+import { Phone, MapPin, Clock, Megaphone, Star, Instagram, Facebook, Globe, MessageCircle, Music2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid from '@/components/ProductGrid';
 import StoreAvatar from '@/components/StoreAvatar';
 import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
+import StoreFeaturedStrip from '@/components/StoreFeaturedStrip';
 import { formatToday, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
+import {
+  normalizeCustomization,
+  accentHex,
+  coverClassName,
+  announcementActive,
+  socialLinks,
+  badgeLabel,
+} from '@/lib/store-customization';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
@@ -23,6 +34,14 @@ const DAYS: { key: keyof StoreHours; label: string }[] = [
 
 const DAY_KEYS: (keyof StoreHours)[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
+const SOCIAL_ICON: Record<string, LucideIcon> = {
+  instagram: Instagram,
+  facebook: Facebook,
+  tiktok: Music2,
+  whatsapp: MessageCircle,
+  website: Globe,
+};
+
 export default function StorePage({ params }: { params: { id: string } }) {
   const { id } = params;
 
@@ -31,7 +50,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, store_logo, store_hours, store_media, store_description')
+        .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, store_logo, store_hours, store_media, store_description, store_customization')
         .eq('id', id)
         .single();
       if (error) throw error;
@@ -89,9 +108,15 @@ export default function StorePage({ params }: { params: { id: string } }) {
 
   const media = (Array.isArray(store.store_media) ? store.store_media : []) as StoreMediaItem[];
 
+  // Personalizzazione vetrina (validata + default on-brand)
+  const custom = normalizeCustomization(store.store_customization);
+  const accent = accentHex(custom);
+  const socials = socialLinks(custom);
+  const badges = custom.badges ?? [];
+  const featuredIds = custom.featuredProductIds ?? [];
+  const showAnnouncement = announcementActive(custom);
+
   // Schema.org LocalBusiness JSON-LD — critical per SEO local
-  // Esperti: SEO Specialist: "Senza Schema LocalBusiness sei invisibile su
-  // Google local pack e Maps. Ogni store page deve averlo."
   const localBusinessSchema = {
     '@context': 'https://schema.org',
     '@type': 'Store',
@@ -99,6 +124,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
     description: store.store_description ?? undefined,
     image: store.store_logo ?? undefined,
     telephone: store.store_phone ?? undefined,
+    slogan: custom.tagline || undefined,
     address: {
       '@type': 'PostalAddress',
       streetAddress: store.store_address ?? undefined,
@@ -111,6 +137,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
       latitude: store.store_lat,
       longitude: store.store_lng,
     } : undefined,
+    sameAs: socials.length > 0 ? socials.map((s) => s.href) : undefined,
     aggregateRating: reviews.length > 0 ? {
       '@type': 'AggregateRating',
       ratingValue: (reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length).toFixed(1),
@@ -130,17 +157,28 @@ export default function StorePage({ params }: { params: { id: string } }) {
         { label: 'Negozi', href: '/stores' },
         { label: store.store_name },
       ]} />
-      {/* Hero card: COVER con media + logo DENTRO la cover (fully visible) */}
-      <div className="bg-white border border-cream-300 rounded-2xl overflow-hidden shadow-sm">
+
+      {/* Banner annuncio (es. ferie / novità) */}
+      {showAnnouncement && (
+        <div role="status" className="flex items-start gap-3 rounded-xl bg-cream-50 border px-4 py-3" style={{ borderColor: accent }}>
+          <Megaphone size={18} className="shrink-0 mt-0.5" style={{ color: accent }} aria-hidden />
+          <p className="text-sm text-ink-800">{custom.announcement?.text}</p>
+        </div>
+      )}
+
+      {/* Hero card: cover con media + logo dentro la cover */}
+      <div className="bg-white border border-cream-300 rounded-2xl overflow-hidden shadow-warm">
+        {/* Striscia colore brand del negozio */}
+        <div className="h-1.5" style={{ backgroundColor: accent }} aria-hidden />
         <div className="relative">
           <StoreMediaCarousel
             media={media}
             heightClass="h-48 sm:h-72"
-            fallbackClass="bg-gradient-to-r from-primary-500 via-purple-500 to-pink-500"
+            fallbackClass={coverClassName(custom)}
           />
           {/* Overlay scuro per contrasto logo + nome */}
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/50 to-transparent pointer-events-none" />
-          {/* Logo posizionato in basso a sinistra, dentro la cover */}
+          {/* Logo in basso a sinistra, dentro la cover */}
           <div className="absolute bottom-4 left-4 z-20 ring-4 ring-white rounded-full bg-white shadow-2xl">
             <StoreAvatar logoUrl={store.store_logo} storeName={store.store_name} size="xl" />
           </div>
@@ -159,44 +197,85 @@ export default function StorePage({ params }: { params: { id: string } }) {
 
         {/* Info principali sotto la cover */}
         <div className="px-6 py-5">
-          <h1 className="text-2xl sm:text-3xl font-bold text-ink-900 flex items-center gap-2 flex-wrap">
+          <h1 className="text-2xl sm:text-3xl font-bold font-serif text-ink-900 flex items-center gap-2 flex-wrap">
             <span className="truncate">{store.store_name}</span>
             {store.is_approved && <VerifiedBadge size="md" showLabel />}
           </h1>
+          {custom.tagline && <p className="text-ink-600 italic mt-1">{custom.tagline}</p>}
           {street && <p className="text-ink-500 text-sm mt-1">{street}</p>}
           {store.store_description && (
             <p className="text-ink-700 text-sm mt-3 leading-relaxed">{store.store_description}</p>
+          )}
+
+          {/* Badge punti di forza */}
+          {badges.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {badges.map((b) => (
+                <span
+                  key={b}
+                  className="inline-flex items-center gap-1.5 bg-cream-100 text-ink-700 border border-cream-200 rounded-full px-2.5 py-1 text-xs font-medium"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: accent }} aria-hidden />
+                  {badgeLabel(b)}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Link social */}
+          {socials.length > 0 && (
+            <div className="flex items-center gap-2 mt-4">
+              {socials.map((s) => {
+                const Icon = SOCIAL_ICON[s.key] ?? Globe;
+                return (
+                  <a
+                    key={s.key}
+                    href={s.href}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    aria-label={s.label}
+                    title={s.label}
+                    className="w-9 h-9 rounded-full bg-cream-100 hover:bg-cream-200 flex items-center justify-center transition-colors"
+                    style={{ color: accent }}
+                  >
+                    <Icon size={18} aria-hidden />
+                  </a>
+                );
+              })}
+            </div>
           )}
         </div>
       </div>
 
       {/* Info grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <a
-          href={`tel:${store.store_phone}`}
-          className="bg-white border border-cream-300 rounded-xl p-4 hover:border-primary-300 hover:shadow-sm transition-all"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary-50 text-primary-700 flex items-center justify-center text-lg">
-              📞
+        {store.store_phone && (
+          <a
+            href={`tel:${store.store_phone}`}
+            className="bg-white border border-cream-300 rounded-2xl p-4 hover:border-primary-300 hover:shadow-warm transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-primary-50 text-primary-700 flex items-center justify-center">
+                <Phone size={18} aria-hidden />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs text-ink-500 font-medium">Telefono</div>
+                <div className="text-ink-900 font-medium truncate">{store.store_phone}</div>
+              </div>
             </div>
-            <div className="min-w-0">
-              <div className="text-xs text-ink-500 font-medium">Telefono</div>
-              <div className="text-ink-900 font-medium truncate">{store.store_phone}</div>
-            </div>
-          </div>
-        </a>
+          </a>
+        )}
 
         {mapsQuery && (
           <a
             href={`https://www.google.com/maps?q=${mapsQuery}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-white border border-cream-300 rounded-xl p-4 hover:border-primary-300 hover:shadow-sm transition-all"
+            className="bg-white border border-cream-300 rounded-2xl p-4 hover:border-primary-300 hover:shadow-warm transition-all"
           >
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-lg">
-                📍
+              <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                <MapPin size={18} aria-hidden />
               </div>
               <div className="min-w-0">
                 <div className="text-xs text-ink-500 font-medium">Indirizzo</div>
@@ -208,10 +287,10 @@ export default function StorePage({ params }: { params: { id: string } }) {
           </a>
         )}
 
-        <div className="bg-white border border-cream-300 rounded-xl p-4">
+        <div className="bg-white border border-cream-300 rounded-2xl p-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-accent-50 text-accent-600 flex items-center justify-center text-lg">
-              🕒
+            <div className="w-10 h-10 rounded-lg bg-accent-50 text-accent-600 flex items-center justify-center">
+              <Clock size={18} aria-hidden />
             </div>
             <div className="min-w-0">
               <div className="text-xs text-ink-500 font-medium">Oggi</div>
@@ -223,7 +302,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
 
       {/* Full hours */}
       {hasHours && (
-        <div className="bg-white border border-cream-300 rounded-xl p-6">
+        <div className="bg-white border border-cream-300 rounded-2xl p-6">
           <h2 className="font-semibold text-lg text-ink-900 mb-4">Orari di apertura</h2>
           <ul className="divide-y divide-cream-100">
             {DAYS.map((d) => {
@@ -257,9 +336,12 @@ export default function StorePage({ params }: { params: { id: string } }) {
 
       {/* RECENSIONI */}
       {reviews.length > 0 && (
-        <div className="bg-white border border-cream-300 rounded-xl p-6">
+        <div className="bg-white border border-cream-300 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-4">
-            <h2 className="font-semibold text-lg text-ink-900">⭐ Recensioni clienti</h2>
+            <h2 className="font-semibold text-lg text-ink-900 flex items-center gap-2">
+              <Star size={18} className="text-accent-500 fill-accent-400" aria-hidden />
+              Recensioni clienti
+            </h2>
             <div className="flex items-center gap-1">
               <span className="text-accent-400 text-lg">
                 {'★'.repeat(Math.round(avgRating))}{'☆'.repeat(5 - Math.round(avgRating))}
@@ -293,9 +375,20 @@ export default function StorePage({ params }: { params: { id: string } }) {
         </div>
       )}
 
-      {/* Products */}
+      {/* Prodotti in evidenza scelti dal venditore */}
+      {featuredIds.length > 0 && (
+        <StoreFeaturedStrip
+          sellerId={store.id}
+          storeName={store.store_name}
+          productIds={featuredIds}
+          accent={accent}
+        />
+      )}
+
+      {/* Tutti i prodotti */}
       <section>
-        <h2 className="text-xl sm:text-2xl font-bold text-ink-900 mb-4">
+        <h2 className="text-xl sm:text-2xl font-bold font-serif text-ink-900 mb-4 flex items-center gap-2.5">
+          <span className="inline-block w-1.5 h-6 rounded-full" style={{ backgroundColor: accent }} aria-hidden />
           Prodotti del negozio
         </h2>
         <ProductGrid sellerId={store.id} />

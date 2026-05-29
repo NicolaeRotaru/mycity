@@ -55,7 +55,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           <div className="flex flex-wrap gap-2 justify-center text-sm">
             <Link
               href="/sell"
-              className="bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 text-white px-5 py-2.5 rounded-lg font-bold shadow"
+              className="bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 text-white px-5 py-2.5 rounded-lg font-bold shadow"
             >
               🏪 Diventa venditore
             </Link>
