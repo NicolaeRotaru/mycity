@@ -53,3 +53,21 @@ services:
         value: https://mycity-marketplace.com
       - key: NEXT_PUBLIC_WHATSAPP_NUMBER
         sync: false
+
+  # Cron: rilascia i payout ai venditori a consegna +3gg (claw-back via reversal
+  # per rimborsi tardivi). Giornaliero alle 03:00 UTC. In alternativa, uno
+  # scheduler esterno (cron-job.org) che POSTa lo stesso endpoint con CRON_SECRET.
+  - type: cron
+    name: mycity-release-payouts
+    runtime: node
+    plan: starter
+    region: frankfurt
+    branch: main
+    schedule: "0 3 * * *"
+    buildCommand: npm ci
+    startCommand: 'curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/release-payouts"'
+    envVars:
+      - key: CRON_SECRET
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        value: https://mycity-marketplace.com
