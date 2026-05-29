@@ -87,7 +87,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
   const { data: products, error: prodErr } = await supa
     .from('products')
-    .select('id, name, price, images, seller_id, stock, status, is_approved')
+    .select('id, name, price, images, seller_id, stock, status')
     .in('id', allProductIds);
 
   if (prodErr || !products || products.length === 0) {
@@ -129,7 +129,11 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       if (p.seller_id !== g.sellerId) {
         return ApiErrors.invalidRequest(`Prodotto ${p.name} non appartiene al venditore indicato.`);
       }
-      if (!p.is_approved || p.status !== 'available') {
+      // Nota: l'approvazione del venditore è già garantita dall'RLS
+      // (migration 023: solo prodotti `available` di venditori approvati sono
+      // leggibili) — un prodotto non leggibile cade sul `if (!p)` qui sopra.
+      // `products` NON ha una colonna is_approved: si controlla solo lo status.
+      if (p.status !== 'available') {
         return ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`);
       }
       if (typeof p.stock === 'number' && p.stock < it.quantity) {

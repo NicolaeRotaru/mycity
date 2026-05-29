@@ -33,7 +33,6 @@ type Product = {
   price: number;
   images: string[] | null;
   status: string;
-  is_approved: boolean;
   stock: number | null;
   profiles: { store_name: string | null } | null;
 };
@@ -79,7 +78,7 @@ function SharedCartInner() {
       const { data } = await supabase
         .from('products')
         .select(`
-          id, name, price, images, status, is_approved, stock,
+          id, name, price, images, status, stock,
           profiles!products_seller_id_fkey ( store_name )
         `)
         .in('id', ids);
@@ -105,7 +104,7 @@ function SharedCartInner() {
     );
   }
 
-  const available = products.filter((p) => p.is_approved && p.status === 'available');
+  const available = products.filter((p) => p.status === 'available');
   const unavailable = parsed.filter((p) => !available.find((a) => a.id === p.id));
 
   const addAll = () => {
