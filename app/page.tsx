@@ -16,9 +16,11 @@ import HeroStoreCard from '@/components/home/HeroStoreCard';
 import HomeEvents from '@/components/home/HomeEvents';
 import MaybeSection from '@/components/home/MaybeSection';
 
-// ISR: la home è un server component con figli client (useQuery). Rigeneriamo lo
-// shell ogni 60s invece di fare SSR ad ogni richiesta → meno carico, freschezza ok.
-export const revalidate = 60;
+// NB: ISR non applicabile. next-intl è cookie-based (getLocale/getMessages nel
+// root layout leggono i cookie) → tutte le rotte sono dinamiche per-request, e un
+// `export const revalidate` sarebbe un no-op finché l'i18n non passa a routing
+// per-URL. Le performance qui derivano da: middleware leggero sulle rotte
+// pubbliche, aggregazioni via RPC e immagini ottimizzate.
 
 /**
  * Homepage MyCity — "Mediterranean Modern" + edit del giorno.
