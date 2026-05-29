@@ -14,6 +14,7 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
+import OrderTimeline from '@/components/OrderTimeline';
 import { notify } from '@/lib/notifications';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -30,6 +31,12 @@ type OrderRow = {
   total_price: number;
   shipping_cost: number;
   delivery_status: OrderStatus;
+  created_at: string;
+  accepted_at: string | null;
+  ready_at: string | null;
+  picked_up_at: string | null;
+  delivered_at: string | null;
+  canceled_at: string | null;
   payment_method: 'cod' | 'card' | null;
   cash_confirmed_at: string | null;
   delivery_full_name: string | null;
@@ -70,6 +77,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         .from('orders')
         .select(`
           id, user_id, seller_id, total_price, shipping_cost, delivery_status,
+          created_at, accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           payment_method, cash_confirmed_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           delivery_lat, delivery_lng,
@@ -227,6 +235,16 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
         </div>
         <OrderStatusBadge status={order.delivery_status} />
       </div>
+
+      <OrderTimeline
+        status={order.delivery_status}
+        createdAt={order.created_at}
+        acceptedAt={order.accepted_at}
+        readyAt={order.ready_at}
+        pickedUpAt={order.picked_up_at}
+        deliveredAt={order.delivered_at}
+        canceledAt={order.canceled_at}
+      />
 
       {/* MAPPA */}
       {points.length > 0 && (
