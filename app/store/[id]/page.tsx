@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
 import { Phone, MapPin, Clock, Megaphone, Star, Instagram, Facebook, Globe, MessageCircle, Music2, ChevronDown, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import ProductGrid from '@/components/ProductGrid';
+import StoreProductExplorer from '@/components/StoreProductExplorer';
 import StoreStoryRing from '@/components/StoreStoryRing';
 import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
 import StoreFeaturedStrip from '@/components/StoreFeaturedStrip';
@@ -164,7 +164,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
   };
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-5xl space-y-6">
+    <div className="container mx-auto px-4 py-6 max-w-5xl space-y-4">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
@@ -265,11 +265,11 @@ export default function StorePage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Info grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {store.store_phone && (
           <a
             href={`tel:${store.store_phone}`}
-            className="bg-white border border-cream-300 rounded-2xl p-4 hover:border-primary-300 hover:shadow-warm transition-all"
+            className="bg-white border border-cream-300 rounded-2xl p-3 hover:border-primary-300 hover:shadow-warm transition-all"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary-50 text-primary-700 flex items-center justify-center">
@@ -288,7 +288,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
             href={`https://www.google.com/maps?q=${mapsQuery}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-white border border-cream-300 rounded-2xl p-4 hover:border-primary-300 hover:shadow-warm transition-all"
+            className="bg-white border border-cream-300 rounded-2xl p-3 hover:border-primary-300 hover:shadow-warm transition-all"
           >
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
@@ -438,7 +438,7 @@ export default function StorePage({ params }: { params: { id: string } }) {
           <span className="inline-block w-1.5 h-6 rounded-full" style={{ backgroundColor: accent }} aria-hidden />
           Prodotti del negozio
         </h2>
-        <ProductGrid sellerId={store.id} />
+        <StoreProductExplorer sellerId={store.id} />
       </section>
     </div>
   );

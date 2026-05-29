@@ -85,7 +85,11 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
 
       <section>
         <h2 className="text-xl font-bold mb-4">Prodotti</h2>
-        <ProductGrid categoryId={category.id} />
+        {category.parent_id === null && subcategories.length > 0 ? (
+          <ProductGrid categoryIds={[category.id, ...subcategories.map((s) => s.id)]} />
+        ) : (
+          <ProductGrid categoryId={category.id} />
+        )}
       </section>
     </div>
   );

@@ -13,6 +13,8 @@ export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | '
 
 interface Props {
   categoryId?: string;
+  /** Più categorie (es. categoria padre + sottocategorie): usa IN al posto di EQ. */
+  categoryIds?: string[];
   sellerId?: string;
   search?: string;
   limit?: number;
@@ -23,9 +25,9 @@ interface Props {
   sort?: SortOption;
 }
 
-const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance' }: Props) => {
   const { data: products = [], isLoading } = useQuery({
-    queryKey: queryKeys.products.grid({ categoryId, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort }),
+    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort }),
     queryFn: async () => {
       let q = supabase
         .from('products')
@@ -44,7 +46,8 @@ const ProductGrid = ({ categoryId, sellerId, search, limit, maxPrice, minPrice, 
         default:           q = q.order('created_at', { ascending: false });
       }
 
-      if (categoryId) q = q.eq('category_id', categoryId);
+      if (categoryIds && categoryIds.length > 0) q = q.in('category_id', categoryIds);
+      else if (categoryId) q = q.eq('category_id', categoryId);
       if (sellerId)   q = q.eq('seller_id', sellerId);
       if (search) {
         const safe = search.replace(/[%_]/g, '\\$&').slice(0, 100);
