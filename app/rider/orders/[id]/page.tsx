@@ -217,7 +217,7 @@ export default function RiderOrderDetailPage({ params }: { params: { id: string 
       : { lat: order.seller?.store_lat, lng: order.seller?.store_lng, label: order.seller?.store_address };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <Link href="/rider" className="text-sm text-accent-600 hover:underline">← Dashboard</Link>
