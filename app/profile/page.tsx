@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -157,26 +158,31 @@ export default function ProfilePage() {
               onSubmit={handleSubmit((d) => update.mutate(d))}
               className="grid grid-cols-1 gap-4 sm:grid-cols-2"
             >
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Nome e cognome</label>
-                <input {...register('full_name')} className="w-full rounded border p-2" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Telefono</label>
-                <input {...register('phone')} className="w-full rounded border p-2" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">CAP</label>
-                <input {...register('zip')} className="w-full rounded border p-2" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Indirizzo</label>
-                <input {...register('address')} className="w-full rounded border p-2" />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="mb-1 block text-sm font-medium">Città</label>
-                <input {...register('city')} className="w-full rounded border p-2" />
-              </div>
+              <Input
+                label="Nome e cognome"
+                containerClassName="sm:col-span-2"
+                {...register('full_name')}
+              />
+              <Input
+                label="Telefono"
+                inputMode="tel"
+                {...register('phone')}
+              />
+              <Input
+                label="CAP"
+                inputMode="numeric"
+                {...register('zip')}
+              />
+              <Input
+                label="Indirizzo"
+                containerClassName="sm:col-span-2"
+                {...register('address')}
+              />
+              <Input
+                label="Città"
+                containerClassName="sm:col-span-2"
+                {...register('city')}
+              />
               <div className="sm:col-span-2">
                 <Button type="submit" loading={update.isPending} fullWidth>
                   Salva modifiche

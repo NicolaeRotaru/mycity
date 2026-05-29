@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
+import { Input } from '@/components/ui/Field';
 
 export default function RiderProfilePage() {
   const qc = useQueryClient();
@@ -75,26 +76,21 @@ export default function RiderProfilePage() {
       </div>
 
       <div className="bg-white border rounded-lg p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Nome e cognome</label>
-          <input
-            type="text"
-            defaultValue={profile?.full_name ?? ''}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Mario Rossi"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-accent-400"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Telefono</label>
-          <input
-            type="tel"
-            defaultValue={profile?.phone ?? ''}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="3331234567"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-accent-400"
-          />
-        </div>
+        <Input
+          label="Nome e cognome"
+          type="text"
+          defaultValue={profile?.full_name ?? ''}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="Mario Rossi"
+        />
+        <Input
+          label="Telefono"
+          type="tel"
+          defaultValue={profile?.phone ?? ''}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="3331234567"
+          inputMode="tel"
+        />
         <button
           onClick={() => update.mutate()}
           disabled={update.isPending}

@@ -10,6 +10,7 @@ import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -206,26 +207,22 @@ export default function SellerStoriesPage() {
                   </p>
                 )}
               </div>
-              <div>
-                <label className="block text-sm font-semibold mb-1">Caption (1 frase)</label>
-                <textarea
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  maxLength={140}
-                  rows={2}
-                  placeholder="Es: Appena arrivata la prima fragola del Trebbia!"
-                  className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm resize-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold mb-1">Link prodotto/categoria (opz.)</label>
-                <input
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  placeholder="/category/alimentari"
-                  className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
+              <Textarea
+                label="Caption (1 frase)"
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                maxLength={140}
+                rows={2}
+                placeholder="Es: Appena arrivata la prima fragola del Trebbia!"
+                className="bg-cream-50 resize-none"
+              />
+              <Input
+                label="Link prodotto/categoria (opz.)"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="/category/alimentari"
+                className="bg-cream-50"
+              />
           </div>
       </Modal>
     </div>

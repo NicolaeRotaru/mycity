@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { Input, Select } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -198,17 +199,15 @@ export default function SellerPromotionsPage() {
       >
         <div className="space-y-5">
             {/* Step 1: Titolo */}
-            <div>
-              <label className="block text-sm font-semibold text-ink-900 mb-1">Titolo</label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Es. Saldi del weekend"
-                maxLength={80}
-                className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-              />
-            </div>
+            <Input
+              label="Titolo"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Es. Saldi del weekend"
+              maxLength={80}
+              className="bg-cream-50"
+            />
 
             {/* Step 2: Percentuale */}
             <div>
@@ -247,18 +246,16 @@ export default function SellerPromotionsPage() {
             </div>
 
             {/* Step 4: Durata */}
-            <div>
-              <label className="block text-sm font-semibold text-ink-900 mb-2">Durata</label>
-              <select
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-              >
-                {DURATIONS.map((d) => (
-                  <option key={d.value} value={d.value}>{d.label}</option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Durata"
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+              className="bg-cream-50"
+            >
+              {DURATIONS.map((d) => (
+                <option key={d.value} value={d.value}>{d.label}</option>
+              ))}
+            </Select>
 
             {/* Preview */}
             <div className="bg-accent-50 border border-accent-200 rounded-lg p-3 text-sm text-ink-700">

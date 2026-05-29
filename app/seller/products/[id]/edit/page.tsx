@@ -16,6 +16,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Input, Textarea, Select } from '@/components/ui/Field';
 import { queryKeys } from '@/lib/queries/keys';
 
 const Schema = z.object({
@@ -230,48 +231,54 @@ export default function EditProductPage({ params }: { params: { id: string } }) 
       </div>
 
       <form onSubmit={handleSubmit((d) => update.mutate(d))} className="bg-white border rounded-lg p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">Nome prodotto</label>
-          <input {...register('name')} className="w-full border p-2 rounded" />
-          {errors.name && <p role="alert" aria-live="polite" className="text-rose-600 text-sm mt-1">{errors.name.message}</p>}
-        </div>
+        <Input
+          label="Nome prodotto"
+          {...register('name')}
+          error={typeof errors.name?.message === 'string' ? errors.name.message : undefined}
+        />
 
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium">Descrizione</label>
+        <Textarea
+          label="Descrizione"
+          labelAction={
             <AIDescriptionButton
               productName={watch('name') ?? ''}
               categoryName={categories.find((c: { id: string; name: string }) => c.id === selectedCategoryId)?.name}
               currentText={watch('description') ?? ''}
               onResult={(text) => setValue('description', text, { shouldValidate: true, shouldDirty: true })}
             />
-          </div>
-          <textarea {...register('description')} rows={4} className="w-full border p-2 rounded" />
-          {errors.description && <p role="alert" aria-live="polite" className="text-rose-600 text-sm mt-1">{errors.description.message}</p>}
-        </div>
+          }
+          {...register('description')}
+          rows={4}
+          error={typeof errors.description?.message === 'string' ? errors.description.message : undefined}
+        />
 
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium mb-1">Prezzo (€)</label>
-            <input type="number" step="0.01" {...register('price')} className="w-full border p-2 rounded" />
-            {errors.price && <p role="alert" aria-live="polite" className="text-rose-600 text-sm mt-1">{errors.price.message}</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Disponibilità</label>
-            <input type="number" {...register('stock')} className="w-full border p-2 rounded" />
-          </div>
+          <Input
+            label="Prezzo (€)"
+            type="number"
+            step="0.01"
+            inputMode="decimal"
+            {...register('price')}
+            error={typeof errors.price?.message === 'string' ? errors.price.message : undefined}
+          />
+          <Input
+            label="Disponibilità"
+            type="number"
+            inputMode="numeric"
+            {...register('stock')}
+          />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Categoria</label>
-          <select {...register('category_id')} className="w-full border p-2 rounded">
-            <option value="">Seleziona...</option>
-            {categories.map((c: { id: string; name: string }) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          {errors.category_id && <p role="alert" aria-live="polite" className="text-rose-600 text-sm mt-1">{errors.category_id.message}</p>}
-        </div>
+        <Select
+          label="Categoria"
+          {...register('category_id')}
+          error={typeof errors.category_id?.message === 'string' ? errors.category_id.message : undefined}
+        >
+          <option value="">Seleziona...</option>
+          {categories.map((c: { id: string; name: string }) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </Select>
 
         <div className="border-t pt-4">
           <AttributesFields

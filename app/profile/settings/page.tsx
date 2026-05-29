@@ -10,6 +10,7 @@ import PublicProfileToggle from '@/components/PublicProfileToggle';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Input, Select } from '@/components/ui/Field';
 import { useLocalStorage } from '@/lib/hooks';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
@@ -284,12 +285,13 @@ export default function SettingsPage() {
                   Email attuale: <span className="font-mono text-ink-900">{email}</span>
                 </p>
                 <form onSubmit={handleChangeEmail} className="flex flex-col sm:flex-row gap-2">
-                  <input
+                  <Input
                     type="email"
                     placeholder="nuova-email@example.com"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    className="flex-1 border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                    inputMode="email"
+                    containerClassName="flex-1"
                   />
                   <Button
                     type="submit"
@@ -307,14 +309,13 @@ export default function SettingsPage() {
               <div>
                 <h2 className="text-lg font-bold mb-1">Lingua</h2>
                 <p className="text-sm text-ink-500 mb-3">Lingua dell'interfaccia.</p>
-                <select
+                <Select
                   value={prefs.language}
                   onChange={(e) => updatePref('language', e.target.value as 'it' | 'en')}
-                  className="border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
                 >
                   <option value="it">🇮🇹 Italiano</option>
                   <option value="en">🇬🇧 English (presto)</option>
-                </select>
+                </Select>
               </div>
 
               <hr />
@@ -334,38 +335,29 @@ export default function SettingsPage() {
               <h2 className="text-lg font-bold mb-1">🔐 Cambia password</h2>
               <p className="text-sm text-ink-500 mb-5">Usa una password di almeno 8 caratteri, diversa dalle altre.</p>
               <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Password attuale</label>
-                  <input
-                    type="password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    autoComplete="current-password"
-                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Nuova password</label>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    autoComplete="new-password"
-                    minLength={8}
-                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Conferma nuova password</label>
-                  <input
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    autoComplete="new-password"
-                    minLength={8}
-                    className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
-                  />
-                </div>
+                <Input
+                  label="Password attuale"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
+                <Input
+                  label="Nuova password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                />
+                <Input
+                  label="Conferma nuova password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={8}
+                />
                 <Button
                   type="submit"
                   loading={changingPwd}

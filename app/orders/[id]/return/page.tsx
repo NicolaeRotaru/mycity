@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Textarea } from '@/components/ui/Field';
 import { apiErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 
@@ -111,15 +112,13 @@ export default function NewReturnPage() {
           ))}
         </div>
 
-        <label className="mt-6 block text-sm font-medium text-ink-700">
-          Dettagli aggiuntivi (opzionale)
-        </label>
-        <textarea
+        <Textarea
+          label="Dettagli aggiuntivi (opzionale)"
+          containerClassName="mt-6"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
           maxLength={2000}
-          className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-sm"
           placeholder="Descrivi il problema in dettaglio…"
         />
 

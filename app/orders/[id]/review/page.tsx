@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { Package } from 'lucide-react';
@@ -120,12 +121,13 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
           <p className="font-semibold text-ink-900">🏪 {order.seller?.store_name ?? 'Negozio'}</p>
           <p className="text-xs text-ink-500 mb-3">Com'è stato il negozio? Qualità, packaging, prodotti.</p>
           <StarRating value={storeRating} onChange={setStoreRating} />
-          <textarea
+          <Textarea
             value={storeComment}
             onChange={(e) => setStoreComment(e.target.value)}
             rows={2}
             placeholder="Scrivi un commento (opzionale)…"
-            className="w-full mt-3 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+            containerClassName="mt-3"
+            className="resize-none"
           />
         </div>
       </div>
@@ -136,12 +138,13 @@ export default function OrderReviewPage({ params }: { params: { id: string } }) 
             <p className="font-semibold text-ink-900">🛵 {order.rider?.full_name ?? 'Il tuo rider'}</p>
             <p className="text-xs text-ink-500 mb-3">Com'è stato il rider? Puntualità, gentilezza.</p>
             <StarRating value={riderRating} onChange={setRiderRating} />
-            <textarea
+            <Textarea
               value={riderComment}
               onChange={(e) => setRiderComment(e.target.value)}
               rows={2}
               placeholder="Scrivi un commento (opzionale)…"
-              className="w-full mt-3 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+              containerClassName="mt-3"
+              className="resize-none"
             />
           </div>
         </div>

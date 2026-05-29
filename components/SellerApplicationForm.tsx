@@ -13,6 +13,7 @@ import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
+import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { useTranslations } from 'next-intl';
 
 /**
@@ -113,8 +114,6 @@ const Field = ({
     {error && <p role="alert" aria-live="polite" className="text-xs text-rose-600 mt-1">{error}</p>}
   </div>
 );
-
-const inputCls = 'w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400';
 
 const BUSINESS_FORMS: { value: SchemaData['businessForm']; label: string }[] = [
   { value: 'ditta_individuale', label: 'Ditta individuale / Libero professionista' },
@@ -233,74 +232,102 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
       {/* STEP 1: Contatti */}
       <Section step={1} title="Contatti operativi" subtitle="Come ti contatteremo per ordini e supporto">
-        <Field label="Email operativa" required error={errors.contactEmail?.message} hint="Diverso da quella di login? Inserisci quella che leggi tutti i giorni">
-          <input type="email" className={inputCls} placeholder="negozio@example.com" {...register('contactEmail')} />
-        </Field>
-        <Field label="Telefono" required error={errors.contactPhone?.message}>
-          <input type="tel" className={inputCls} placeholder="3331234567" {...register('contactPhone')} />
-        </Field>
+        <Input
+          label="Email operativa"
+          required
+          type="email"
+          inputMode="email"
+          placeholder="negozio@example.com"
+          {...register('contactEmail')}
+          error={errors.contactEmail?.message}
+          hint="Diverso da quella di login? Inserisci quella che leggi tutti i giorni"
+        />
+        <Input
+          label="Telefono"
+          required
+          type="tel"
+          inputMode="tel"
+          placeholder="3331234567"
+          {...register('contactPhone')}
+          error={errors.contactPhone?.message}
+        />
       </Section>
 
       {/* STEP 2: Anagrafica titolare */}
       <Section step={2} title="Anagrafica del titolare" subtitle="Rappresentante legale dell'attività">
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Nome" required error={errors.legalFirstName?.message}>
-            <input className={inputCls} {...register('legalFirstName')} />
-          </Field>
-          <Field label="Cognome" required error={errors.legalLastName?.message}>
-            <input className={inputCls} {...register('legalLastName')} />
-          </Field>
-          <Field label="Codice fiscale" required error={errors.legalFiscalCode?.message} hint="16 caratteri alfanumerici">
-            <input className={inputCls + ' uppercase'} maxLength={16} {...register('legalFiscalCode')} />
-          </Field>
-          <Field label="Data di nascita" required error={errors.legalBirthDate?.message}>
-            <input type="date" className={inputCls} {...register('legalBirthDate')} />
-          </Field>
+          <Input label="Nome" required {...register('legalFirstName')} error={errors.legalFirstName?.message} />
+          <Input label="Cognome" required {...register('legalLastName')} error={errors.legalLastName?.message} />
+          <Input
+            label="Codice fiscale"
+            required
+            className="uppercase"
+            maxLength={16}
+            {...register('legalFiscalCode')}
+            error={errors.legalFiscalCode?.message}
+            hint="16 caratteri alfanumerici"
+          />
+          <Input label="Data di nascita" required type="date" {...register('legalBirthDate')} error={errors.legalBirthDate?.message} />
         </div>
-        <Field label="Indirizzo di residenza" required error={errors.legalResidenceAddr?.message} hint="Resta privato, non viene mostrato ai clienti">
-          <input className={inputCls} placeholder="Via, numero civico" {...register('legalResidenceAddr')} />
-        </Field>
+        <Input
+          label="Indirizzo di residenza"
+          required
+          placeholder="Via, numero civico"
+          {...register('legalResidenceAddr')}
+          error={errors.legalResidenceAddr?.message}
+          hint="Resta privato, non viene mostrato ai clienti"
+        />
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Città di residenza" required error={errors.legalResidenceCity?.message}>
-            <input className={inputCls} {...register('legalResidenceCity')} />
-          </Field>
-          <Field label="CAP" required error={errors.legalResidenceZip?.message}>
-            <input className={inputCls} maxLength={5} {...register('legalResidenceZip')} />
-          </Field>
+          <Input label="Città di residenza" required {...register('legalResidenceCity')} error={errors.legalResidenceCity?.message} />
+          <Input label="CAP" required inputMode="numeric" maxLength={5} {...register('legalResidenceZip')} error={errors.legalResidenceZip?.message} />
         </div>
       </Section>
 
       {/* STEP 3: Azienda */}
       <Section step={3} title="Dati azienda" subtitle="Necessari per fatturazione ed obblighi fiscali">
-        <Field label="Forma giuridica" required error={errors.businessForm?.message}>
-          <select className={inputCls} {...register('businessForm')}>
-            {BUSINESS_FORMS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </select>
-        </Field>
-        <Field label="Ragione sociale" required error={errors.businessLegalName?.message} hint="Nome completo dell'azienda come da visura camerale">
-          <input className={inputCls} placeholder="Es. Rossi Mario, Salumeria del Borgo S.r.l." {...register('businessLegalName')} />
-        </Field>
-        <Field label="Partita IVA" required error={errors.businessVatNumber?.message} hint="Italiana 11 cifre, oppure formato UE">
-          <input className={inputCls + ' uppercase'} maxLength={15} {...register('businessVatNumber')} />
-        </Field>
-        <Field label="Sede legale — Via" required error={errors.businessAddress?.message}>
-          <input className={inputCls} placeholder="Via, numero civico" {...register('businessAddress')} />
-        </Field>
+        <Select label="Forma giuridica" required {...register('businessForm')} error={errors.businessForm?.message}>
+          {BUSINESS_FORMS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+        </Select>
+        <Input
+          label="Ragione sociale"
+          required
+          placeholder="Es. Rossi Mario, Salumeria del Borgo S.r.l."
+          {...register('businessLegalName')}
+          error={errors.businessLegalName?.message}
+          hint="Nome completo dell'azienda come da visura camerale"
+        />
+        <Input
+          label="Partita IVA"
+          required
+          className="uppercase"
+          maxLength={15}
+          {...register('businessVatNumber')}
+          error={errors.businessVatNumber?.message}
+          hint="Italiana 11 cifre, oppure formato UE"
+        />
+        <Input label="Sede legale — Via" required placeholder="Via, numero civico" {...register('businessAddress')} error={errors.businessAddress?.message} />
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="Città" required error={errors.businessCity?.message}>
-            <input className={inputCls} {...register('businessCity')} />
-          </Field>
-          <Field label="CAP" required error={errors.businessZip?.message}>
-            <input className={inputCls} maxLength={5} {...register('businessZip')} />
-          </Field>
+          <Input label="Città" required {...register('businessCity')} error={errors.businessCity?.message} />
+          <Input label="CAP" required inputMode="numeric" maxLength={5} {...register('businessZip')} error={errors.businessZip?.message} />
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="PEC" error={errors.businessPec?.message} hint="Opzionale ma consigliata">
-            <input type="email" className={inputCls} placeholder="negozio@pec.it" {...register('businessPec')} />
-          </Field>
-          <Field label="Codice SDI" error={errors.businessSdi?.message} hint="7 caratteri per fatturazione elettronica">
-            <input className={inputCls + ' uppercase'} maxLength={7} {...register('businessSdi')} />
-          </Field>
+          <Input
+            label="PEC"
+            type="email"
+            inputMode="email"
+            placeholder="negozio@pec.it"
+            {...register('businessPec')}
+            error={errors.businessPec?.message}
+            hint="Opzionale ma consigliata"
+          />
+          <Input
+            label="Codice SDI"
+            className="uppercase"
+            maxLength={7}
+            {...register('businessSdi')}
+            error={errors.businessSdi?.message}
+            hint="7 caratteri per fatturazione elettronica"
+          />
         </div>
       </Section>
 
@@ -331,18 +358,23 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
         <StoreMediaManager value={media} onChange={setMedia} />
 
-        <Field label="Nome del negozio" required error={errors.storeName?.message} hint="Come ti chiameranno i clienti (può essere diverso dalla ragione sociale)">
-          <input className={inputCls} placeholder="Es. Salumeria del Borgo" {...register('storeName')} />
-        </Field>
+        <Input
+          label="Nome del negozio"
+          required
+          placeholder="Es. Salumeria del Borgo"
+          {...register('storeName')}
+          error={errors.storeName?.message}
+          hint="Come ti chiameranno i clienti (può essere diverso dalla ragione sociale)"
+        />
 
-        <Field label="Descrizione (opzionale)" error={errors.storeDescription?.message}>
-          <textarea
-            rows={3}
-            className={inputCls + ' resize-none'}
-            placeholder="Cosa rende speciale il tuo negozio? Storia, tradizione, prodotti tipici…"
-            {...register('storeDescription')}
-          />
-        </Field>
+        <Textarea
+          label="Descrizione (opzionale)"
+          rows={3}
+          className="resize-none"
+          placeholder="Cosa rende speciale il tuo negozio? Storia, tradizione, prodotti tipici…"
+          {...register('storeDescription')}
+          error={errors.storeDescription?.message}
+        />
 
         <Field label="Indirizzo del negozio (pubblico)" required hint="Dove i clienti possono ritirare. È mostrato sulla mappa nel marketplace.">
           <StoreLocationPicker
@@ -362,13 +394,14 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
 
       {/* STEP 5: Pagamenti */}
       <Section step={5} title="Pagamenti" subtitle="Come ricevi i guadagni e come ti addebitiamo l'abbonamento">
-        <Field
+        <Input
           label="IBAN per i bonifici dei tuoi incassi"
+          className="uppercase font-mono text-xs"
+          placeholder="IT60X0542811101000000123456"
+          {...register('billingIban')}
           error={errors.billingIban?.message}
           hint="Italiano (IT) o europeo. Lo riceveremo cifrato."
-        >
-          <input className={inputCls + ' uppercase font-mono text-xs'} placeholder="IT60X0542811101000000123456" {...register('billingIban')} />
-        </Field>
+        />
 
         <div className="bg-accent-50 border border-accent-200 rounded-lg p-4 text-sm text-accent-900">
           <p className="font-semibold mb-1">💳 Carta di credito per abbonamento</p>
@@ -422,12 +455,11 @@ function Consent({
   label, register, error,
 }: { label: React.ReactNode; register: UseFormRegisterReturn; error?: string }) {
   return (
-    <div>
-      <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg border hover:bg-cream-50 transition-colors">
-        <input type="checkbox" className="mt-0.5 w-4 h-4 rounded text-primary-700 focus:ring-primary-500" {...register} />
-        <span className="text-sm text-ink-700">{label}</span>
-      </label>
-      {error && <p className="text-xs text-rose-600 mt-1 ml-3">{error}</p>}
-    </div>
+    <Checkbox
+      label={label}
+      error={error}
+      {...register}
+      containerClassName="rounded-lg border hover:bg-cream-50 transition-colors [&>label]:p-3"
+    />
   );
 }
