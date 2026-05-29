@@ -11,7 +11,6 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Field';
-import { useLocalStorage } from '@/lib/hooks';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
 
@@ -22,8 +21,6 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'privacy',       label: 'Privacy e dati',   icon: '🛡️' },
   { id: 'danger',        label: 'Zona pericolosa',  icon: '⚠️' },
 ];
-
-const PREFS_KEY = 'mycity_prefs';
 
 type Prefs = {
   notif_order_updates: boolean;
@@ -62,8 +59,9 @@ export default function SettingsPage() {
   const [newEmail, setNewEmail] = useState('');
   const [changingEmail, setChangingEmail] = useState(false);
 
-  // Prefs
-  const [prefs, setPrefs] = useLocalStorage<Prefs>(PREFS_KEY, DEFAULT_PREFS);
+  // Prefs — le 5 notifiche sono persistite su profiles (load nel useEffect, save
+  // in updatePref). push_enabled/language restano locali (non funzionali sul DB).
+  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
 
   // Delete account (cooldown 7gg)
   const [deleteConfirm, setDeleteConfirm] = useState('');
@@ -79,6 +77,22 @@ export default function SettingsPage() {
       }
       setEmail(data.user.email ?? '');
       setUserId(data.user.id);
+      // Carica le preferenze notifiche persistite sul profilo.
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('notif_order_updates, notif_promos, notif_groups, notif_newsletter, email_marketing')
+        .eq('id', data.user.id)
+        .single();
+      if (prof) {
+        setPrefs((prev) => ({
+          ...prev,
+          notif_order_updates: !!prof.notif_order_updates,
+          notif_promos: !!prof.notif_promos,
+          notif_groups: !!prof.notif_groups,
+          notif_newsletter: !!prof.notif_newsletter,
+          email_marketing: !!prof.email_marketing,
+        }));
+      }
       // Verifica se c'è una richiesta di eliminazione pendente (cooldown 7gg)
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -99,7 +113,16 @@ export default function SettingsPage() {
 
   const updatePref = <K extends keyof Prefs>(key: K, value: Prefs[K]) => {
     setPrefs((prev) => ({ ...prev, [key]: value }));
-    toast.success('Preferenza salvata');
+    const dbCols = ['notif_order_updates', 'notif_promos', 'notif_groups', 'notif_newsletter', 'email_marketing'];
+    if (userId && dbCols.includes(key as string)) {
+      void (async () => {
+        const { error } = await supabase.from('profiles').update({ [key]: value }).eq('id', userId);
+        if (error) toast.error('Errore nel salvataggio');
+        else toast.success('Preferenza salvata');
+      })();
+    } else {
+      toast.success('Preferenza salvata');
+    }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
