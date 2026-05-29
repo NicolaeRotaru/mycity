@@ -14,7 +14,7 @@ interface Props {
 
 const ERROR_LABELS: Record<string, string> = {
   WRONG_CODE: 'Codice errato. Chiedi al negoziante/cliente di mostrartelo di nuovo.',
-  WRONG_STATUS: 'Non è il momento giusto per verificare questo codice.',
+  WRONG_STATUS: 'Ordine non nello stato giusto: potrebbe essere già stato confermato. Ricarica la pagina.',
   NOT_ASSIGNED_OR_WRONG_STATUS: 'Questo ordine non è più assegnato a te.',
   ORDER_NOT_FOUND: 'Ordine non trovato.',
 };

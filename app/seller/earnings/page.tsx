@@ -91,7 +91,6 @@ export default function SellerEarningsPage() {
 
   const grossCents = activeCard.reduce((s, o) => s + Math.round(Number(o.total_price) * 100), 0);
   const feeCents = activeCard.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0);
-  const netCents = activeCard.reduce((s, o) => s + (o.seller_payout_cents ?? 0), 0);
 
   const heldCents = cardOrders
     .filter((o) => o.payout_status === 'HELD' || o.payout_status === 'PENDING_SELLER_ONBOARDING')
@@ -146,7 +145,7 @@ export default function SellerEarningsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Stat label="Fatturato lordo (carta)" value={formatPrice(grossCents / 100)} hint={`${activeCard.length} ordini`} color="indigo" />
         <Stat label="Commissione marketplace" value={'− ' + formatPrice(feeCents / 100)} hint="Trattenuta automaticamente" color="rose" />
-        <Stat label="Netto per te" value={formatPrice(netCents / 100)} hint="Già pagato + in attesa" color="emerald" highlight />
+        <Stat label="Incassato" value={formatPrice(paidCents / 100)} hint={`${formatPrice(heldCents / 100)} in arrivo dopo la consegna`} color="emerald" highlight />
       </div>
 
       {/* Daily chart */}
