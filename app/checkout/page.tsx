@@ -71,17 +71,19 @@ export default function CheckoutPage() {
       // stale/non-disponibile (re-seed, prodotto rimosso, venditore sospeso)
       // e verrà rimosso dal carrello a valle.
       const lookupMap = new Map<string, string>(); // productId → seller_id (fonte: DB)
+      const stockMap = new Map<string, number>();  // productId → stock disponibile (DB)
       const validIds = new Set<string>();
 
       if (cart.length > 0) {
         const { data: products, error: pErr } = await supabase
           .from('products')
-          .select('id, seller_id')
+          .select('id, seller_id, stock')
           .in('id', cart.map((c) => c.id));
         if (pErr) throw pErr;
         for (const p of products ?? []) {
           validIds.add(p.id);
           if (p.seller_id) lookupMap.set(p.id, p.seller_id);
+          stockMap.set(p.id, p.stock ?? 0);
         }
       }
 
@@ -140,12 +142,19 @@ export default function CheckoutPage() {
         sellerMap.get(sellerId)!.items.push(item);
       }
 
-      return { groups: Array.from(sellerMap.values()), orphans: orphanItems };
+      // Articoli la cui quantità supera lo stock disponibile (verifica al checkout,
+      // non solo lato API): blocca l'ordine e segnala invece di fallire dopo.
+      const stockIssues = cart
+        .filter((it) => validIds.has(it.id) && it.quantity > (stockMap.get(it.id) ?? 0))
+        .map((it) => ({ id: it.id, name: it.name, requested: it.quantity, available: stockMap.get(it.id) ?? 0 }));
+
+      return { groups: Array.from(sellerMap.values()), orphans: orphanItems, stockIssues };
     },
   });
 
   const groups = cartData?.groups ?? [];
   const orphans = useMemo(() => cartData?.orphans ?? [], [cartData]);
+  const stockIssues = useMemo(() => cartData?.stockIssues ?? [], [cartData]);
 
   // Auto-rimozione degli articoli non più disponibili (id stale dopo re-seed,
   // prodotto rimosso/non-disponibile, venditore sospeso): li togliamo dal
@@ -196,8 +205,12 @@ export default function CheckoutPage() {
     fullName: '', address: '', city: 'Piacenza', zip: '29121', phone: '', notes: '',
     lat: null, lng: null,
   });
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const [errors, setErrors] = useState<Partial<Record<keyof AddressForm, string>>>({});
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => (prev[name as keyof AddressForm] ? { ...prev, [name]: undefined } : prev));
+  };
 
   // Quando arrivano gli indirizzi salvati, pre-seleziona il default
   useEffect(() => {
@@ -472,14 +485,33 @@ export default function CheckoutPage() {
 
   const isCheckingOut = placeOrders.isPending || payWithStripe.isPending;
 
+  const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
+    const e: Partial<Record<keyof AddressForm, string>> = {};
+    if (!form.fullName.trim()) e.fullName = 'Inserisci nome e cognome';
+    if (!form.address.trim()) e.address = 'Inserisci l\'indirizzo di consegna';
+    if (!form.city.trim()) e.city = 'Inserisci la città';
+    if (!/^\d{5}$/.test(form.zip.trim())) e.zip = 'CAP non valido (5 cifre)';
+    if (form.phone.trim().replace(/\D/g, '').length < 8) e.phone = 'Numero di telefono non valido';
+    return e;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!authUser) {
       router.push('/sign-in?returnTo=/checkout');
       return;
     }
-    if (!form.fullName.trim() || !form.address.trim() || !form.city.trim() || !form.zip.trim() || !form.phone.trim()) {
-      toast.error('Compila tutti i campi obbligatori');
+    const fieldErrors = validateAddress();
+    setErrors(fieldErrors);
+    const firstInvalid = (['fullName', 'address', 'city', 'zip', 'phone'] as const).find((k) => fieldErrors[k]);
+    if (firstInvalid) {
+      const el = document.querySelector<HTMLElement>(`[name="${firstInvalid}"]`);
+      el?.focus();
+      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+    if (stockIssues.length > 0) {
+      toast.error('Alcuni articoli superano la disponibilità: riduci le quantità nel carrello.');
       return;
     }
     if (paymentMethod === 'card' && stripeAvailable) {
@@ -504,6 +536,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl">
+      <h1 className="sr-only">Completa il tuo ordine</h1>
       <StepIndicator steps={CHECKOUT_STEPS} currentStep={2} />
 
       {!authUser && (
@@ -520,6 +553,7 @@ export default function CheckoutPage() {
           <ShippingAddressForm
             form={form}
             savedAddresses={savedAddresses}
+            errors={errors}
             onChange={handleChange}
             onSubmit={handleSubmit}
             onApplySavedAddress={applySavedAddress}
@@ -593,6 +627,12 @@ export default function CheckoutPage() {
             </div>
           )}
 
+          {stockIssues.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+              <strong>⚠ Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.
+            </div>
+          )}
+
           {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
             <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800">
               <strong>⚠ Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.
@@ -628,6 +668,7 @@ export default function CheckoutPage() {
               total={grandTotal}
               isCheckingOut={isCheckingOut}
               paymentMethod={paymentMethod}
+              disabled={groups.length === 0 || stockIssues.length > 0}
             />
           </div>
         </div>

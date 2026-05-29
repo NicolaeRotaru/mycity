@@ -28,10 +28,7 @@ const fetchShowcase = async () => {
       .eq('status', 'available')
       .order('created_at', { ascending: false })
       .limit(200),
-    supabase
-      .from('store_reviews')
-      .select('store_id, rating')
-      .in('store_id', storeIds),
+    supabase.rpc('store_review_stats', { p_store_ids: storeIds }),
   ]);
 
   const productsByStore: Record<string, ProductLite[]> = {};
@@ -40,14 +37,8 @@ const fetchShowcase = async () => {
   }
 
   const reviewsByStore: Record<string, { avg: number; count: number }> = {};
-  for (const r of (reviewsRes.data ?? []) as { store_id: string; rating: number }[]) {
-    const ex = reviewsByStore[r.store_id];
-    if (ex) {
-      ex.avg = (ex.avg * ex.count + r.rating) / (ex.count + 1);
-      ex.count += 1;
-    } else {
-      reviewsByStore[r.store_id] = { avg: r.rating, count: 1 };
-    }
+  for (const r of (reviewsRes.data ?? []) as { store_id: string; avg: number | string; count: number }[]) {
+    reviewsByStore[r.store_id] = { avg: Number(r.avg), count: Number(r.count) };
   }
 
   return { stores, productsByStore, reviewsByStore };

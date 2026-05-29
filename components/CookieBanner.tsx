@@ -39,6 +39,16 @@ export default function CookieBanner() {
     return () => window.removeEventListener('mc:open-consent', onReopen);
   }, []);
 
+  // Esc = chiusura senza scelta = rifiuto totale (coerente con le linee guida).
+  useEffect(() => {
+    if (!show) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { rejectAll(); setShow(false); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [show]);
+
   if (!show) return null;
 
   const close = () => setShow(false);

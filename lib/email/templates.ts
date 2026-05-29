@@ -37,7 +37,7 @@ function shell(title: string, body: string, footer?: string): string {
         ${body}
       </td></tr>
       <tr><td style="padding:24px 32px;background:#f1f5f9;color:#64748b;font-size:12px;line-height:1.5">
-        ${footer ?? `Hai ricevuto questa email perche' hai un account su ${BRAND}. <br>
+        ${footer ?? `Hai ricevuto questa email perché hai un account su ${BRAND}. <br>
         <a href="${appUrl()}/profile/settings" style="color:${BRAND_COLOR}">Gestisci preferenze</a> ·
         <a href="${appUrl()}/privacy" style="color:${BRAND_COLOR}">Privacy</a> ·
         <a href="${appUrl()}/cookies" style="color:${BRAND_COLOR}">Cookie</a>`}
@@ -128,14 +128,14 @@ export function orderDeliveredTemplate(args: { orderId: string; name?: string | 
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#059669">✅ Ordine consegnato</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Ciao ${escapeHtml(args.name ?? '')}, il tuo ordine e' stato consegnato.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Ciao ${escapeHtml(args.name ?? '')}, il tuo ordine è stato consegnato.</p>
     <p style="margin:0 0 12px;line-height:1.6">Grazie per aver scelto ${BRAND}. Lascia una recensione per aiutare altri acquirenti.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Lascia recensione')}</p>
   `;
   return {
     subject: `✅ Ordine consegnato — lascia una recensione`,
     html: shell('Ordine consegnato', body),
-    text: `Il tuo ordine e' stato consegnato. Lascia recensione: ${orderUrl}`,
+    text: `Il tuo ordine è stato consegnato. Lascia recensione: ${orderUrl}`,
   };
 }
 
@@ -159,7 +159,7 @@ export function refundIssuedTemplate(args: { orderId: string; amount: number; re
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">💶 Rimborso emesso</h1>
     <p style="margin:0 0 12px;line-height:1.6">Abbiamo emesso un rimborso di <strong>€${args.amount.toFixed(2)}</strong> sul tuo ordine.</p>
     ${args.reason ? `<p style="margin:0 0 12px;color:#64748b">Motivo: ${escapeHtml(args.reason)}</p>` : ''}
-    <p style="margin:0 0 12px;line-height:1.6">Il rimborso arrivera' sul tuo metodo di pagamento entro 5-10 giorni lavorativi.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Il rimborso arriverà sul tuo metodo di pagamento entro 5-10 giorni lavorativi.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi dettaglio')}</p>
   `;
   return {

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Textarea } from '@/components/ui/Field';
 import { useTranslations } from 'next-intl';
 
 const REASONS: Array<{ value: string; label: string; hint: string }> = [
@@ -125,16 +126,15 @@ export default function OpenDisputePage({ params }: { params: { id: string } }) 
         </div>
 
         <div>
-          <label className="block text-sm font-semibold text-ink-900 mb-2">
-            Cosa è successo? <span className="text-ink-400 font-normal">(min 20 caratteri)</span>
-          </label>
-          <textarea
+          <Textarea
+            label="Cosa è successo?"
+            hint="(min 20 caratteri)"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={5}
             maxLength={2000}
             placeholder={selectedReason?.hint ?? 'Spiega in dettaglio cosa non ha funzionato, quando, e cosa ti aspetteresti per risolvere.'}
-            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-y"
+            className="bg-cream-50 resize-y"
           />
           <p className="text-xs text-ink-400 mt-1 text-right">{description.length}/2000</p>
         </div>

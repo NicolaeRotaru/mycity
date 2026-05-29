@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import Honeypot from '@/components/Honeypot';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
+import { Input, Textarea, Select } from '@/components/ui/Field';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
@@ -77,54 +78,44 @@ export default function ContactPage() {
           <form onSubmit={submit} className="space-y-4">
             <Honeypot value={honeypotRef.current} onChange={(v) => (honeypotRef.current = v)} name="company" />
             <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Nome *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Email *</label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Argomento</label>
-              <select
-                value={form.subject}
-                onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400"
-              >
-                <option>Domanda generale</option>
-                <option>Problema con un ordine</option>
-                <option>Voglio diventare venditore</option>
-                <option>Voglio diventare rider</option>
-                <option>Reclamo</option>
-                <option>Privacy / GDPR</option>
-                <option>Stampa e media</option>
-                <option>Altro</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Messaggio *</label>
-              <textarea
-                rows={5}
-                value={form.message}
-                onChange={(e) => setForm({ ...form, message: e.target.value })}
-                className="w-full border rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+              <Input
+                label="Nome"
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
               />
+              <Input
+                label="Email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                required
+                inputMode="email"
+              />
             </div>
+            <Select
+              label="Argomento"
+              value={form.subject}
+              onChange={(e) => setForm({ ...form, subject: e.target.value })}
+            >
+              <option>Domanda generale</option>
+              <option>Problema con un ordine</option>
+              <option>Voglio diventare venditore</option>
+              <option>Voglio diventare rider</option>
+              <option>Reclamo</option>
+              <option>Privacy / GDPR</option>
+              <option>Stampa e media</option>
+              <option>Altro</option>
+            </Select>
+            <Textarea
+              label="Messaggio"
+              rows={5}
+              value={form.message}
+              onChange={(e) => setForm({ ...form, message: e.target.value })}
+              required
+              className="resize-none"
+            />
             <p className="text-xs text-ink-500">
               Inviando il messaggio accetti la nostra <Link href="/privacy" className="text-primary-700 underline">Privacy Policy</Link>.
             </p>

@@ -13,6 +13,7 @@ import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 
 const VendorSchema = z.object({
@@ -154,38 +155,31 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
       {/* Cover media gallery */}
       <StoreMediaManager value={media} onChange={setMedia} />
 
-      <div>
-        <label className="block text-sm font-medium text-ink-700 mb-1">Nome del negozio</label>
-        <input
-          {...register('storeName')}
-          type="text"
-          placeholder="Es. Panificio Rossi"
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
-        />
-        {errors.storeName && <p className="text-red-500 text-sm mt-1">{errors.storeName.message}</p>}
-      </div>
+      <Input
+        label="Nome del negozio"
+        {...register('storeName')}
+        type="text"
+        placeholder="Es. Panificio Rossi"
+        error={typeof errors.storeName?.message === 'string' ? errors.storeName.message : undefined}
+      />
 
-      <div>
-        <label className="block text-sm font-medium text-ink-700 mb-1">Descrizione (opzionale)</label>
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-          placeholder="Cosa rende speciale il tuo negozio? Storia, tradizione, prodotti tipici…"
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
-        />
-      </div>
+      <Textarea
+        label="Descrizione (opzionale)"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        rows={3}
+        placeholder="Cosa rende speciale il tuo negozio? Storia, tradizione, prodotti tipici…"
+        className="resize-none"
+      />
 
-      <div>
-        <label className="block text-sm font-medium text-ink-700 mb-1">Telefono</label>
-        <input
-          {...register('storePhone')}
-          type="text"
-          placeholder="3331234567 (10 cifre)"
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
-        />
-        {errors.storePhone && <p className="text-red-500 text-sm mt-1">{errors.storePhone.message}</p>}
-      </div>
+      <Input
+        label="Telefono"
+        {...register('storePhone')}
+        type="text"
+        inputMode="numeric"
+        placeholder="3331234567 (10 cifre)"
+        error={typeof errors.storePhone?.message === 'string' ? errors.storePhone.message : undefined}
+      />
 
       <StoreLocationPicker
         defaultValue={{

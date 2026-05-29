@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import type { ChangeEvent, FormEvent } from 'react';
+import { Input, Textarea, Select } from '@/components/ui/Field';
 
 /**
  * Form indirizzo di consegna per checkout.
  *
  * Estratto da app/checkout/page.tsx per ridurre il monolite.
  * Riceve form state + handlers come props (controlled component).
+ * Usa la primitiva Input/Textarea/Select: label, errori per-campo, aria,
+ * autocomplete/inputmode (UX mobile, no zoom iOS).
  */
 
 export type AddressForm = {
@@ -37,6 +40,7 @@ export type SavedAddress = {
 type Props = {
   form: AddressForm;
   savedAddresses: SavedAddress[];
+  errors?: Partial<Record<keyof AddressForm, string>>;
   onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onSubmit: (e: FormEvent) => void;
   onApplySavedAddress: (id: string) => void;
@@ -45,6 +49,7 @@ type Props = {
 export function ShippingAddressForm({
   form,
   savedAddresses,
+  errors = {},
   onChange,
   onSubmit,
   onApplySavedAddress,
@@ -55,12 +60,9 @@ export function ShippingAddressForm({
 
       {savedAddresses.length > 0 && (
         <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">
-            Indirizzo salvato
-          </label>
-          <select
+          <Select
+            label="Indirizzo salvato"
             onChange={(e) => onApplySavedAddress(e.target.value)}
-            className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400"
           >
             {savedAddresses.map((a) => (
               <option key={a.id} value={a.id}>
@@ -68,54 +70,78 @@ export function ShippingAddressForm({
                 {a.is_default ? ' (predefinito)' : ''}
               </option>
             ))}
-          </select>
+          </Select>
           <p className="text-xs text-ink-400 mt-1">
-            Oppure modifica i campi sotto. <Link href="/profile/addresses" className="text-primary-700 hover:underline">Gestisci indirizzi</Link>
+            Oppure modifica i campi sotto.{' '}
+            <Link href="/profile/addresses" className="text-primary-700 hover:underline">Gestisci indirizzi</Link>
           </p>
         </div>
       )}
 
       <form onSubmit={onSubmit} className="space-y-4" id="checkout-form">
-        <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Nome e cognome</label>
-          <input type="text" name="fullName" value={form.fullName} onChange={onChange}
-            placeholder="Mario Rossi"
-            className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Indirizzo</label>
-          <input type="text" name="address" value={form.address} onChange={onChange}
-            placeholder="Via Roma 1"
-            className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-        </div>
+        <Input
+          label="Nome e cognome"
+          name="fullName"
+          value={form.fullName}
+          onChange={onChange}
+          placeholder="Es. Luca Bianchi"
+          autoComplete="name"
+          required
+          error={errors.fullName}
+        />
+        <Input
+          label="Indirizzo"
+          name="address"
+          value={form.address}
+          onChange={onChange}
+          placeholder="Via Roma 1"
+          autoComplete="street-address"
+          required
+          error={errors.address}
+        />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-ink-700 mb-1">Città</label>
-            <input type="text" name="city" value={form.city} onChange={onChange}
-              className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-ink-700 mb-1">CAP</label>
-            <input type="text" name="zip" value={form.zip} onChange={onChange}
-              className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-          </div>
+          <Input
+            label="Città"
+            name="city"
+            value={form.city}
+            onChange={onChange}
+            autoComplete="address-level2"
+            required
+            error={errors.city}
+          />
+          <Input
+            label="CAP"
+            name="zip"
+            value={form.zip}
+            onChange={onChange}
+            autoComplete="postal-code"
+            inputMode="numeric"
+            required
+            error={errors.zip}
+          />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Telefono</label>
-          <input type="tel" name="phone" value={form.phone} onChange={onChange}
-            placeholder="3331234567"
-            className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400" />
-          <p className="text-xs text-ink-400 mt-1">Il rider ti chiamerà se serve per la consegna</p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">
-            Note per il rider <span className="text-ink-400 font-normal">(opzionale)</span>
-          </label>
-          <textarea name="notes" value={form.notes} onChange={onChange}
-            rows={2}
-            placeholder="Es. citofono Rossi, suonare al 2° piano…"
-            className="w-full border p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none" />
-        </div>
+        <Input
+          label="Telefono"
+          name="phone"
+          type="tel"
+          value={form.phone}
+          onChange={onChange}
+          placeholder="3331234567"
+          autoComplete="tel"
+          inputMode="tel"
+          required
+          error={errors.phone}
+          hint="Il rider ti chiamerà se serve per la consegna"
+        />
+        <Textarea
+          label="Note per il rider (opzionale)"
+          name="notes"
+          value={form.notes}
+          onChange={onChange}
+          rows={2}
+          placeholder="Es. citofono Rossi, suonare al 2° piano…"
+          className="resize-none"
+        />
       </form>
     </div>
   );

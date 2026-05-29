@@ -30,16 +30,12 @@ export default function TrendingNow() {
   const { data: items = [], isLoading } = useQuery({
     queryKey: queryKeys.home.trendingNow,
     queryFn: async (): Promise<Trending[]> => {
-      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      // Aggreghiamo lato client: RPC sarebbe più elegante ma rischia di non
-      // esistere in DB. Limitiamo righe per non bruciare bandwidth.
-      const { data: views } = await supabase
-        .from('product_views')
-        .select('product_id')
-        .gte('viewed_at', since)
-        .limit(500);
+      // Top prodotti per views nelle ultime 24h: aggregazione lato DB (RPC 052)
+      // invece di scaricare fino a 500 righe di product_views e contare nel browser.
+      const { data: trending } = await supabase.rpc('trending_product_ids_24h', { p_limit: 8 });
+      const rows = (trending ?? []) as { product_id: string; view_count: number | string }[];
 
-      if (!views || views.length === 0) {
+      if (rows.length === 0) {
         // Fallback: ultimi 8 prodotti disponibili
         const { data } = await supabase
           .from('products')
@@ -63,17 +59,9 @@ export default function TrendingNow() {
           }));
       }
 
-      // Conta per product_id
       const counts = new Map<string, number>();
-      for (const v of views) {
-        counts.set(v.product_id, (counts.get(v.product_id) ?? 0) + 1);
-      }
-      const topIds = Array.from(counts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .map(([id]) => id);
-
-      if (topIds.length === 0) return [];
+      for (const r of rows) counts.set(r.product_id, Number(r.view_count));
+      const topIds = rows.map((r) => r.product_id);
 
       const { data: products } = await supabase
         .from('products')

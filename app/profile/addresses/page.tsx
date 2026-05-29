@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Input, Checkbox } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 import { queryKeys } from '@/lib/queries/keys';
@@ -133,46 +134,59 @@ export default function AddressesPage() {
           className="bg-white border rounded-xl p-5 space-y-3"
         >
           <h2 className="font-bold">{editing ? 'Modifica indirizzo' : 'Nuovo indirizzo'}</h2>
-          <div>
-            <label className="text-sm font-medium text-ink-700">Etichetta</label>
-            <input
-              value={form.label}
-              onChange={(e) => setForm({ ...form, label: e.target.value })}
-              placeholder="Casa, Ufficio, Mamma…"
-              className="w-full border p-2 rounded mt-1"
+          <Input
+            label="Etichetta"
+            value={form.label}
+            onChange={(e) => setForm({ ...form, label: e.target.value })}
+            placeholder="Casa, Ufficio, Mamma…"
+            required
+          />
+          <Input
+            label="Nome e cognome"
+            value={form.full_name}
+            onChange={(e) => setForm({ ...form, full_name: e.target.value })}
+            required
+          />
+          <Input
+            label="Telefono"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            inputMode="tel"
+            required
+          />
+          <Input
+            label="Indirizzo"
+            value={form.address}
+            onChange={(e) => setForm({ ...form, address: e.target.value })}
+            placeholder="Via Roma 1"
+            required
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Città"
+              value={form.city}
+              onChange={(e) => setForm({ ...form, city: e.target.value })}
+              required
+            />
+            <Input
+              label="CAP"
+              value={form.zip}
+              onChange={(e) => setForm({ ...form, zip: e.target.value })}
+              inputMode="numeric"
               required
             />
           </div>
-          <div>
-            <label className="text-sm font-medium text-ink-700">Nome e cognome</label>
-            <input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} className="w-full border p-2 rounded mt-1" required />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-ink-700">Telefono</label>
-            <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="w-full border p-2 rounded mt-1" required />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-ink-700">Indirizzo</label>
-            <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Via Roma 1" className="w-full border p-2 rounded mt-1" required />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-ink-700">Città</label>
-              <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="w-full border p-2 rounded mt-1" required />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-ink-700">CAP</label>
-              <input value={form.zip} onChange={(e) => setForm({ ...form, zip: e.target.value })} className="w-full border p-2 rounded mt-1" required />
-            </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-ink-700">Note per il rider</label>
-            <input value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Citofono, piano…" className="w-full border p-2 rounded mt-1" />
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.is_default} onChange={(e) => setForm({ ...form, is_default: e.target.checked })} />
-            <span>Imposta come indirizzo predefinito</span>
-          </label>
+          <Input
+            label="Note per il rider"
+            value={form.notes ?? ''}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            placeholder="Citofono, piano…"
+          />
+          <Checkbox
+            checked={form.is_default}
+            onChange={(e) => setForm({ ...form, is_default: e.target.checked })}
+            label="Imposta come indirizzo predefinito"
+          />
           <div className="flex gap-2">
             <Button type="submit" loading={save.isPending}>Salva</Button>
             <Button variant="ghost" onClick={() => { setShowForm(false); setEditing(null); }}>

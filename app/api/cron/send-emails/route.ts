@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
-import { requireSupabaseService } from '@/lib/env';
+import { env, requireSupabaseService } from '@/lib/env';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -21,11 +21,14 @@ import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
+// URL assoluto del sito per i link nelle email (niente domini hardcoded).
+const APP_URL = env.appUrl().replace(/\/$/, '');
+
 type EmailTemplateData = { name?: string | null; total?: number; [k: string]: unknown };
 const TEMPLATES: Record<string, { subject: string; html: (data: EmailTemplateData) => string; text: (data: EmailTemplateData) => string }> = {
   welcome: {
     subject: 'Benvenuto su MyCity Piacenza 🎉',
-    html: (d) => `<p>Ciao ${d.name ?? ''},</p><p>Grazie per esserti iscritto a MyCity. Il marketplace dei negozi di Piacenza ti aspetta.</p><p><a href="https://mycity-marketplace.com">Inizia ad esplorare →</a></p>`,
+    html: (d) => `<p>Ciao ${d.name ?? ''},</p><p>Grazie per esserti iscritto a MyCity. Il marketplace dei negozi di Piacenza ti aspetta.</p><p><a href="${APP_URL}">Inizia ad esplorare →</a></p>`,
     text: (d) => `Ciao ${d.name ?? ''}, grazie per esserti iscritto a MyCity Piacenza.`,
   },
   tutorial_day2: {
@@ -35,12 +38,12 @@ const TEMPLATES: Record<string, { subject: string; html: (data: EmailTemplateDat
   },
   first_order_promo: {
     subject: 'Sblocca €5 al primo ordine',
-    html: () => `<p>Hai €5 di benvenuto pronti.</p><p>Usali al primo ordine: lo sconto si applica automaticamente.</p><p><a href="https://mycity-marketplace.com/search">Vai allo shopping →</a></p>`,
-    text: () => 'Hai €5 di sconto al primo ordine. Usali su mycity-marketplace.com.',
+    html: () => `<p>Hai €5 di benvenuto pronti.</p><p>Usali al primo ordine: lo sconto si applica automaticamente.</p><p><a href="${APP_URL}/search">Vai allo shopping →</a></p>`,
+    text: () => 'Hai €5 di sconto al primo ordine. Usali su MyCity.',
   },
   reengagement_14d: {
     subject: 'Cosa succede in città questa settimana',
-    html: () => `<p>Eventi, novità dai negozi, e gli sconti del momento. Dai un\'occhiata.</p><p><a href="https://mycity-marketplace.com/events">Vedi gli eventi →</a></p>`,
+    html: () => `<p>Eventi, novità dai negozi, e gli sconti del momento. Dai un\'occhiata.</p><p><a href="${APP_URL}/events">Vedi gli eventi →</a></p>`,
     text: () => 'Eventi della settimana su MyCity.',
   },
   winback_60d: {
@@ -50,7 +53,7 @@ const TEMPLATES: Record<string, { subject: string; html: (data: EmailTemplateDat
   },
   abandoned_cart_4h: {
     subject: 'Hai dimenticato qualcosa nel carrello',
-    html: () => `<p>Il tuo carrello ti aspetta.</p><p><a href="https://mycity-marketplace.com/cart">Vai al carrello →</a></p>`,
+    html: () => `<p>Il tuo carrello ti aspetta.</p><p><a href="${APP_URL}/cart">Vai al carrello →</a></p>`,
     text: () => 'Il tuo carrello ti aspetta su MyCity.',
   },
 };

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
+import { PasswordInput } from '@/components/ui/Field';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { logger } from '@/lib/logger';
 
@@ -49,7 +50,6 @@ function ResetPasswordInner() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [showPwd, setShowPwd] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -167,49 +167,27 @@ function ResetPasswordInner() {
         <p className="text-sm text-ink-500 mt-1">Scegli una password sicura, di almeno 8 caratteri.</p>
       </div>
       <form onSubmit={submit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Nuova password</label>
-          <div className="relative">
-            <input
-              type={showPwd ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={8}
-              maxLength={200}
-              autoComplete="new-password"
-              required
-              placeholder="••••••••"
-              className="w-full border p-2 pr-12 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPwd((v) => !v)}
-              aria-label={showPwd ? 'Nascondi password' : 'Mostra password'}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-ink-500 hover:text-ink-700 px-2 py-1"
-            >
-              {showPwd ? '🙈' : '👁'}
-            </button>
-          </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-ink-700 mb-1">Conferma nuova password</label>
-          <input
-            type={showPwd ? 'text' : 'password'}
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-            minLength={8}
-            maxLength={200}
-            autoComplete="new-password"
-            required
-            placeholder="••••••••"
-            className={`w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 ${
-              confirm && password !== confirm ? 'border-rose-300' : ''
-            }`}
-          />
-          {confirm && password !== confirm && (
-            <p className="text-xs text-rose-600 mt-1">Le due password non coincidono</p>
-          )}
-        </div>
+        <PasswordInput
+          label="Nuova password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          minLength={8}
+          maxLength={200}
+          autoComplete="new-password"
+          required
+          placeholder="••••••••"
+        />
+        <PasswordInput
+          label="Conferma nuova password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          minLength={8}
+          maxLength={200}
+          autoComplete="new-password"
+          required
+          placeholder="••••••••"
+          error={confirm && password !== confirm ? 'Le due password non coincidono' : undefined}
+        />
 
         {/* Strength hint */}
         <PasswordStrength value={password} />

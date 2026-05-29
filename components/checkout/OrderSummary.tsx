@@ -18,6 +18,8 @@ type Props = {
   total: number;
   isCheckingOut: boolean;
   paymentMethod: 'cod' | 'card';
+  /** Disabilita il submit (es. carrello vuoto o articoli senza disponibilità). */
+  disabled?: boolean;
   couponSection?: React.ReactNode;
 };
 
@@ -29,6 +31,7 @@ export function OrderSummary({
   total,
   isCheckingOut,
   paymentMethod,
+  disabled = false,
   couponSection,
 }: Props) {
   return (
@@ -67,8 +70,9 @@ export function OrderSummary({
       <button
         type="submit"
         form="checkout-form"
-        disabled={isCheckingOut}
-        className={`w-full disabled:opacity-50 py-4 font-extrabold text-base transition-colors shadow-lg ${
+        disabled={isCheckingOut || disabled}
+        aria-label={paymentMethod === 'card' ? 'Paga con carta e conferma ordine' : 'Conferma ordine'}
+        className={`w-full disabled:opacity-50 disabled:cursor-not-allowed py-4 font-extrabold text-base transition-colors shadow-lg ${
           paymentMethod === 'card'
             ? 'bg-primary-700 hover:bg-primary-800 text-white'
             : 'bg-accent-400 hover:bg-accent-500 text-ink-900'

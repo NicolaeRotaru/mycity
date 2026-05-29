@@ -11,6 +11,7 @@ import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Input, Textarea } from '@/components/ui/Field';
 import { queryKeys } from '@/lib/queries/keys';
 
 type GiftCard = {
@@ -153,37 +154,29 @@ export default function GiftCardsPage() {
           </div>
 
           {/* Destinatario */}
-          <div>
-            <label className="block text-sm font-semibold text-ink-900 mb-1">Nome destinatario *</label>
-            <input
-              type="text"
-              value={recipientName}
-              onChange={(e) => setRecipientName(e.target.value)}
-              placeholder="Es. Mario Rossi"
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-ink-900 mb-1">Email destinatario *</label>
-            <input
-              type="email"
-              value={recipientEmail}
-              onChange={(e) => setRecipientEmail(e.target.value)}
-              placeholder="mario@example.com"
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-ink-900 mb-1">Messaggio personale (opzionale)</label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={3}
-              placeholder="Buon compleanno!"
-              maxLength={500}
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-            />
-          </div>
+          <Input
+            label="Nome destinatario *"
+            type="text"
+            value={recipientName}
+            onChange={(e) => setRecipientName(e.target.value)}
+            placeholder="Es. Mario Rossi"
+          />
+          <Input
+            label="Email destinatario *"
+            type="email"
+            value={recipientEmail}
+            onChange={(e) => setRecipientEmail(e.target.value)}
+            placeholder="mario@example.com"
+            inputMode="email"
+          />
+          <Textarea
+            label="Messaggio personale (opzionale)"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={3}
+            placeholder="Buon compleanno!"
+            maxLength={500}
+          />
 
           <div className="bg-accent-50 border border-accent-200 rounded-lg p-3 text-sm text-ink-700">
             <p><strong>Come funziona:</strong> generi un codice univoco da inviare al destinatario. Lui lo riscatta su MyCity e ha credito di €{amount} per 2 anni.</p>
