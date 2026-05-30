@@ -4,6 +4,7 @@ import type { Metadata, Viewport } from 'next';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import MobileTabBar from '@/components/MobileTabBar';
+import SupportChatButton from '@/components/SupportChatButton';
 import QueryProvider from '@/components/providers/QueryProvider';
 import ToastProvider from '@/components/providers/ToastProvider';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
@@ -119,6 +120,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <main id="main-content" className="min-h-screen">{children}</main>
             <Footer />
             <MobileTabBar />
+            <SupportChatButton />
             <DailyCheckIn />
             <CartCrossDeviceSync />
             <BuyerOnboardingTour />

@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProfile } from '@/components/hooks/useProfile';
-import SOSButton from '@/components/rider/SOSButton';
 import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function RiderLayout({ children }: { children: React.ReactNode }) {
@@ -35,7 +34,6 @@ export default function RiderLayout({ children }: { children: React.ReactNode })
   return (
     <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-6xl">
       <main>{children}</main>
-      {isRider && <SOSButton />}
     </div>
   );
 }

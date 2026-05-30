@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -13,10 +12,8 @@ import { Input } from '@/components/ui/Field';
 
 export default function RiderProfilePage() {
   const qc = useQueryClient();
-  const router = useRouter();
   const tStates = useTranslations('states');
   const tActions = useTranslations('actions');
-  const [signingOut, setSigningOut] = useState(false);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: queryKeys.rider.profile,
@@ -54,14 +51,6 @@ export default function RiderProfilePage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  const handleSignOut = async () => {
-    setSigningOut(true);
-    await supabase.auth.signOut();
-    qc.clear();
-    router.push('/sign-in');
-    router.refresh();
-  };
-
   if (isLoading) return <LoadingState />;
 
   return (
@@ -97,18 +86,6 @@ export default function RiderProfilePage() {
           className="bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white px-6 py-2.5 rounded font-semibold"
         >
           {update.isPending ? tStates('saving') : tActions('save')}
-        </button>
-      </div>
-
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={handleSignOut}
-          disabled={signingOut}
-          className="text-red-600 hover:text-red-700 font-semibold disabled:opacity-50 flex items-center gap-2"
-        >
-          <span>↪</span>
-          <span>{signingOut ? 'Disconnessione...' : 'Esci dal tuo account'}</span>
         </button>
       </div>
     </div>
