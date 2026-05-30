@@ -11,7 +11,6 @@ import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
-import { notify } from '@/lib/notifications';
 import { haversineKm, riderFee } from '@/lib/geo';
 import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackOrderPlaced } from '@/lib/analytics/events';
@@ -27,7 +26,6 @@ import { CouponInput } from '@/components/checkout/CouponInput';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
-import { logger } from '@/lib/logger';
 
 type AddressForm = {
   fullName: string;
@@ -316,84 +314,43 @@ export default function CheckoutPage() {
         } catch {}
       }
 
-      const createdOrders: string[] = [];
-
-      // Distribuisce lo sconto in proporzione al subtotale di ogni gruppo
-      const couponDiscount = appliedCoupon?.discount ?? 0;
-      const couponCodeUsed = appliedCoupon?.coupon.code ?? null;
-
-      for (const g of groups) {
-        const subtotal = groupSubtotal(g);
-        const shipping = appliedCoupon?.freeShipping ? 0 : shippingFor(g);
-        const portionOfCoupon = grandSubtotal > 0
-          ? Math.round((couponDiscount * (subtotal / grandSubtotal)) * 100) / 100
-          : 0;
-        const portionOfPickup = pickupInStore
-          ? Math.round(subtotal * (PICKUP_DISCOUNT_PERCENT / 100) * 100) / 100
-          : 0;
-        const portionOfDiscount = portionOfCoupon + portionOfPickup;
-        const total = Math.max(0, subtotal + shipping - portionOfDiscount);
-
-        const { data: order, error: orderError } = await supabase.from('orders').insert({
-          user_id: user.id,
-          seller_id: g.sellerId,
-          total_price: total,
-          shipping_cost: shipping,
-          discount_amount: portionOfDiscount,
-          coupon_code: couponCodeUsed,
-          pickup_in_store: pickupInStore,
-          payment_status: 'PENDING',
-          delivery_status: 'NEW',
-          delivery_full_name: form.fullName,
-          delivery_phone: form.phone,
-          delivery_address: form.address,
-          delivery_city: form.city,
-          delivery_zip: form.zip,
-          delivery_notes: form.notes || null,
-          delivery_lat: deliveryLat,
-          delivery_lng: deliveryLng,
-          payment_method: 'cod',
-        }).select().single();
-        if (orderError) throw orderError;
-
-        const items = g.items.map((item) => ({
-          order_id: order.id,
-          product_id: item.id,
-          quantity: item.quantity,
-          unit_price: item.price,
-        }));
-        const { error: itemsError } = await supabase.from('order_items').insert(items);
-        if (itemsError) throw itemsError;
-
-        // B2B: salva dettagli fatturazione elettronica per questo ordine
-        if (b2bActive && b2bForm.company_name && b2bForm.vat_number) {
-          const { error: bErr } = await supabase.from('business_orders').insert({
-            order_id: order.id,
+      // SICUREZZA: gli ordini COD vengono creati SERVER-SIDE (/api/orders/cod),
+      // che ricalcola prezzi, spedizione e sconti dal DB. Il client invia solo
+      // prodotti+quantità, l'indirizzo e l'eventuale coupon; nessun importo.
+      const res = await fetch('/api/orders/cod', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          groups: groups.map((g) => ({
+            sellerId: g.sellerId,
+            items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity })),
+          })),
+          delivery: {
+            fullName: form.fullName,
+            address: form.address,
+            city: form.city,
+            zip: form.zip,
+            phone: form.phone,
+            notes: form.notes || null,
+            lat: deliveryLat,
+            lng: deliveryLng,
+          },
+          couponCode: appliedCoupon?.coupon.code ?? null,
+          pickupInStore,
+          b2b: b2bActive && b2bForm.company_name && b2bForm.vat_number ? {
             company_name: b2bForm.company_name.trim(),
             vat_number: b2bForm.vat_number.trim().toUpperCase(),
             sdi_code: b2bForm.sdi_code.trim().toUpperCase() || null,
             pec: b2bForm.pec.trim().toLowerCase() || null,
-            invoice_required: true,
-          });
-          // Non bloccare l'ordine se la migration 035 non è applicata
-          if (bErr && !bErr.message.includes('does not exist')) {
-            // Log ma non interrompere — l'ordine è già creato
-            logger.warn('business_orders insert failed', { message: bErr.message });
-          }
-        }
-
-        // Notifica il seller
-        notify({
-          userId: g.sellerId,
-          title: '🎉 Nuovo ordine!',
-          body: `${form.fullName} ha effettuato un ordine da ${formatPrice(total)}`,
-          link: `/seller/orders/${order.id}`,
-        });
-
-        trackOrderPlaced(order.id, Math.round(total * 100), 'cod', g.sellerId);
-        createdOrders.push(order.id);
+          } : null,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
+      const createdOrders: string[] = (body as { orderIds?: string[] }).orderIds ?? [];
+      for (const id of createdOrders) {
+        trackOrderPlaced(id, 0, 'cod', '');
       }
-
       return createdOrders;
     },
     onSuccess: (orderIds) => {

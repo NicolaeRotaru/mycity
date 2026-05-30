@@ -2,6 +2,11 @@ export const FREE_SHIPPING_THRESHOLD = 30;
 export const LOW_STOCK_THRESHOLD = 5;
 export const NEW_PRODUCT_DAYS = 14;
 
+/** Spedizione flat di fallback quando le coordinate non sono note (€). */
+export const SHIPPING_PER_ORDER = 4.9;
+/** Sconto percentuale per ritiro in negozio. */
+export const PICKUP_DISCOUNT_PERCENT = 10;
+
 // Riferimenti per icone (nomi lucide-react). Componenti li importano e
 // renderizzano per evitare di sparare emoji nelle UI strutturali.
 export const VALUE_PROPS = [
