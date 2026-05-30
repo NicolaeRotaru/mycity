@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Heart, Banknote, Bike, RotateCcw, Store } from 'lucide-react';
+import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -441,14 +441,16 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               </div>
             </div>
 
-            <button
-              type="button"
+            <Button
+              variant="accent"
+              size="lg"
+              fullWidth
               onClick={handleAdd}
               disabled={isOutOfStock}
-              className="w-full bg-accent-400 hover:bg-accent-500 disabled:bg-surface-200 disabled:text-ink-400 disabled:cursor-not-allowed text-ink-900 py-3 rounded-lg font-bold shadow-sm hover:shadow-warm transition-all"
+              icon={isOutOfStock ? undefined : ShoppingCart}
             >
-              {isOutOfStock ? 'Non disponibile' : '🛒 Aggiungi al carrello'}
-            </button>
+              {isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
+            </Button>
 
             <Link
               href="/cart"

@@ -27,17 +27,17 @@ import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
 /**
  * Homepage MyCity — "Mediterranean Modern" + edit del giorno.
  *
- * Architettura del feed (top → bottom):
- *  1. Hero: claim + CTA + card prodotto fake "premium"
+ * Architettura del feed (top → bottom), funnel-first:
+ *  1. Hero: claim + cutoff consegna + zero-rischio
  *  2. Drop del giorno (urgenza + countdown)
- *  3. Storia di oggi (content + brand locale)
- *  4. Trending now (FOMO + social proof)
- *  5. Categorie (discoverability)
- *  6. Live activity (FOMO continuo)
- *  7. Negozi vicini (proximity)
- *  8. Trust band (riassurance)
- *  9. Newsletter incentive
- * 10. CTA venditore (acquisizione supply)
+ *  3. Categorie (discoverability)
+ *  4. Prodotti che vanno forte (catalogo: cuore della conversione)
+ *  5. Live activity + "Perché MyCity" (FOMO + reassurance)
+ *  6. Negozi vicini (orgoglio locale)
+ *  7. Sezioni editoriali/promozionali (stories, negozio del mese, trending,
+ *     promo, storia, sponsored) — sotto il funnel, si auto-nascondono se vuote
+ *  8. Newsletter incentive
+ *  9. CTA venditore (acquisizione supply)
  */
 export default function Home() {
   return (
@@ -109,44 +109,9 @@ export default function Home() {
         </div>
       </section>
 
-      {/* STORIES NEGOZI (instagram-like, scadono 24h) */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 pt-6">
-        <StoriesCarousel />
-      </MaybeSection>
-
-      {/* NEGOZIO DEL MESE */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
-        <ShopOfMonthHero />
-      </MaybeSection>
-
-      {/* EVENTI (admin) */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
-        <HomeEvents />
-      </MaybeSection>
-
-      {/* DROP DEL GIORNO */}
+      {/* DROP DEL GIORNO — urgenza in cima al funnel */}
       <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
         <DropOfDay />
-      </MaybeSection>
-
-      {/* STORIA DI OGGI */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
-        <StoryOfDay />
-      </MaybeSection>
-
-      {/* SPONSORED — solo se ci sono listing attivi */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
-        <SponsoredCarousel placement="home_top" />
-      </MaybeSection>
-
-      {/* TRENDING NOW */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
-        <TrendingNow />
-      </MaybeSection>
-
-      {/* PROMOZIONI — sconti attivi dei negozi */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
-        <PromoDeals />
       </MaybeSection>
 
       {/* CATEGORIE */}
@@ -156,6 +121,27 @@ export default function Home() {
           <p className="text-ink-500 text-sm mt-2">Tutte le categorie del mercato locale</p>
         </div>
         <CategoryShowcase />
+      </section>
+
+      {/* PRODOTTI POPOLARI — spinti in alto: sono il cuore della conversione */}
+      <section className="bg-white border-y border-cream-300 py-12">
+        <div className="container mx-auto px-4 sm:px-6">
+          <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
+            <div>
+              <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
+                <Heart size={14} strokeWidth={2.4} />
+                I più amati
+              </span>
+              <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">
+                Prodotti che vanno forte
+              </h2>
+            </div>
+            <Link href="/search" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
+              Vedi tutto <ArrowRight size={16} strokeWidth={2.4} />
+            </Link>
+          </div>
+          <ProductGrid limit={8} />
+        </div>
       </section>
 
       {/* LIVE ACTIVITY + Trust band */}
@@ -189,27 +175,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* PRODOTTI POPOLARI (catalogo grosso) */}
-      <section className="bg-white border-y border-cream-300 py-12">
-        <div className="container mx-auto px-4 sm:px-6">
-          <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
-            <div>
-              <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
-                <Heart size={14} strokeWidth={2.4} />
-                I più amati
-              </span>
-              <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">
-                Prodotti che vanno forte
-              </h2>
-            </div>
-            <Link href="/search" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
-              Vedi tutto <ArrowRight size={16} strokeWidth={2.4} />
-            </Link>
-          </div>
-          <ProductGrid limit={8} />
-        </div>
-      </section>
-
       {/* NEGOZI VICINI */}
       <section className="container mx-auto px-4 sm:px-6 py-12">
         <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
@@ -229,6 +194,44 @@ export default function Home() {
         </div>
         <StoreShowcase />
       </section>
+
+      {/* ───── Sezioni editoriali/promozionali: sotto il funnel principale.
+              Si auto-nascondono via MaybeSection quando non c'è contenuto. ───── */}
+
+      {/* STORIES NEGOZI (instagram-like, scadono 24h) */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 pt-6">
+        <StoriesCarousel />
+      </MaybeSection>
+
+      {/* NEGOZIO DEL MESE */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
+        <ShopOfMonthHero />
+      </MaybeSection>
+
+      {/* EVENTI (admin) */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
+        <HomeEvents />
+      </MaybeSection>
+
+      {/* TRENDING NOW */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
+        <TrendingNow />
+      </MaybeSection>
+
+      {/* PROMOZIONI — sconti attivi dei negozi */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
+        <PromoDeals />
+      </MaybeSection>
+
+      {/* STORIA DI OGGI */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
+        <StoryOfDay />
+      </MaybeSection>
+
+      {/* SPONSORED — solo se ci sono listing attivi */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
+        <SponsoredCarousel placement="home_top" />
+      </MaybeSection>
 
       {/* NEWSLETTER + REFERRAL */}
       <section className="bg-gradient-to-br from-accent-100 via-accent-50 to-cream-100 border-y border-cream-300">
