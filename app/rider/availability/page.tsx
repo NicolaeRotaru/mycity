@@ -168,8 +168,8 @@ export default function RiderAvailabilityPage() {
           {DAYS.map((d) => {
             const cfg = avail.schedule[d.key];
             return (
-              <div key={d.key} className={`flex items-center gap-3 p-3 rounded-lg border ${cfg.enabled ? 'bg-white border-cream-300' : 'bg-cream-50 border-cream-200 opacity-60'}`}>
-                <label className="flex items-center gap-2 w-32 shrink-0 cursor-pointer">
+              <div key={d.key} className={`flex flex-wrap items-center gap-x-3 gap-y-2 p-3 rounded-lg border ${cfg.enabled ? 'bg-white border-cream-300' : 'bg-cream-50 border-cream-200 opacity-60'}`}>
+                <label className="flex items-center gap-2 w-28 shrink-0 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={cfg.enabled}
@@ -181,7 +181,7 @@ export default function RiderAvailabilityPage() {
                   />
                   <span className="font-semibold text-sm">{d.label}</span>
                 </label>
-                <div className="flex items-center gap-2 flex-1">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <input
                     type="time"
                     value={cfg.from}
@@ -190,9 +190,9 @@ export default function RiderAvailabilityPage() {
                       ...avail,
                       schedule: { ...avail.schedule, [d.key]: { ...cfg, from: e.target.value } },
                     }, true)}
-                    className="border rounded px-2 py-1 text-sm disabled:bg-cream-100"
+                    className="border rounded px-2 py-1 text-sm disabled:bg-cream-100 flex-1 min-w-0"
                   />
-                  <span className="text-ink-400 text-sm">→</span>
+                  <span className="text-ink-400 text-sm shrink-0">→</span>
                   <input
                     type="time"
                     value={cfg.to}
@@ -201,7 +201,7 @@ export default function RiderAvailabilityPage() {
                       ...avail,
                       schedule: { ...avail.schedule, [d.key]: { ...cfg, to: e.target.value } },
                     }, true)}
-                    className="border rounded px-2 py-1 text-sm disabled:bg-cream-100"
+                    className="border rounded px-2 py-1 text-sm disabled:bg-cream-100 flex-1 min-w-0"
                   />
                 </div>
               </div>

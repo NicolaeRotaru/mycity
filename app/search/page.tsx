@@ -57,10 +57,10 @@ function SearchInner() {
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-      <aside className="md:col-span-1 bg-white border border-cream-300 rounded-2xl p-5 h-fit space-y-5 md:sticky md:top-32 shadow-warm">
-        <div className="flex items-center justify-between">
+      <aside className="md:col-span-1 bg-white border border-cream-300 rounded-2xl p-4 h-fit md:sticky md:top-32 shadow-warm divide-y divide-cream-100">
+        <div className="flex items-center justify-between pb-3">
           <h2 className="font-serif font-bold text-ink-900 flex items-center gap-2">
-            <Filter size={18} strokeWidth={2.2} className="text-primary-600" />
+            <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
             Filtri
             {activeFilters > 0 && (
               <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
@@ -71,82 +71,76 @@ function SearchInner() {
           {activeFilters > 0 && (
             <button onClick={reset} className="text-xs text-ink-500 hover:text-primary-700 inline-flex items-center gap-1">
               <RotateCcw size={12} />
-              Reset
+              Azzera
             </button>
           )}
         </div>
 
-        {/* Ordinamento */}
-        <div>
-          <label className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Ordina per</label>
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as SortOption)}
-            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-          >
-            <option value="relevance">Rilevanza</option>
-            <option value="newest">Più recenti</option>
-            <option value="price_asc">Prezzo crescente</option>
-            <option value="price_desc">Prezzo decrescente</option>
-            <option value="rating">Più recensiti</option>
-          </select>
+        {/* Ordinamento + Categoria */}
+        <div className="py-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-3">
+          <label className="block">
+            <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-wider">Ordina per</span>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortOption)}
+              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            >
+              <option value="relevance">Rilevanza</option>
+              <option value="newest">Più recenti</option>
+              <option value="price_asc">Prezzo crescente</option>
+              <option value="price_desc">Prezzo decrescente</option>
+              <option value="rating">Più recensiti</option>
+            </select>
+          </label>
+          <label className="block">
+            <span className="block text-[11px] font-semibold text-ink-500 mb-1 uppercase tracking-wider">Categoria</span>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            >
+              <option value="">Tutte le categorie</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
         </div>
 
-        {/* Categoria */}
-        <div>
-          <label className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Categoria</label>
-          <select
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
-          >
-            <option value="">Tutte le categorie</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Range prezzo */}
-        <div>
-          <div className="flex justify-between text-sm mb-2">
-            <label className="text-xs font-semibold text-ink-700 uppercase tracking-wider">Prezzo</label>
-            <span className="font-bold text-primary-700 text-xs">€{minPrice} - €{maxPrice}{maxPrice >= 500 ? '+' : ''}</span>
+        {/* Range prezzo — compatto */}
+        <div className="py-3">
+          <div className="flex justify-between items-center mb-1.5">
+            <span className="text-[11px] font-semibold text-ink-500 uppercase tracking-wider">Prezzo</span>
+            <span className="font-bold text-primary-700 text-xs">€{minPrice} – €{maxPrice}{maxPrice >= 500 ? '+' : ''}</span>
           </div>
-          <div className="space-y-2">
-            <div>
-              <input
-                type="range"
-                min={0}
-                max={500}
-                step={5}
-                value={minPrice}
-                onChange={(e) => setMinPrice(Math.min(Number(e.target.value), maxPrice - 5))}
-                className="w-full accent-primary-600"
-              />
-              <p className="text-[10px] text-ink-400 text-center">Minimo €{minPrice}</p>
-            </div>
-            <div>
-              <input
-                type="range"
-                min={5}
-                max={500}
-                step={5}
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(Math.max(Number(e.target.value), minPrice + 5))}
-                className="w-full accent-primary-600"
-              />
-              <p className="text-[10px] text-ink-400 text-center">Massimo €{maxPrice}{maxPrice >= 500 ? '+' : ''}</p>
-            </div>
-          </div>
+          <input
+            type="range"
+            min={0}
+            max={500}
+            step={5}
+            value={minPrice}
+            onChange={(e) => setMinPrice(Math.min(Number(e.target.value), maxPrice - 5))}
+            className="w-full accent-primary-600"
+            aria-label="Prezzo minimo"
+          />
+          <input
+            type="range"
+            min={5}
+            max={500}
+            step={5}
+            value={maxPrice}
+            onChange={(e) => setMaxPrice(Math.max(Number(e.target.value), minPrice + 5))}
+            className="w-full accent-primary-600"
+            aria-label="Prezzo massimo"
+          />
         </div>
 
         {/* Rating minimo */}
-        <div>
-          <label className="block text-xs font-semibold text-ink-700 mb-2 uppercase tracking-wider flex items-center gap-1">
+        <div className="py-3">
+          <span className="text-[11px] font-semibold text-ink-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
             <Star size={11} strokeWidth={2.2} />
             Rating minimo
-          </label>
+          </span>
           <div className="flex gap-1.5">
             {[0, 3, 4, 4.5].map((r) => (
               <button
@@ -165,7 +159,7 @@ function SearchInner() {
         </div>
 
         {/* Checkbox */}
-        <div className="space-y-2 border-t border-cream-200 pt-4">
+        <div className="pt-3 space-y-2">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input
               type="checkbox"

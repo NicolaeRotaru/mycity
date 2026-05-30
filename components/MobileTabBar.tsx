@@ -12,7 +12,7 @@ import { useMessagesUnread } from './hooks/useMessagesUnread';
 import MobileAccountSheet from './MobileAccountSheet';
 import type { MenuRole } from '@/lib/account-menu';
 
-type Tab = { href: string; icon: LucideIcon; label: string; badge?: number; isAccount?: boolean };
+type Tab = { href: string; icon: LucideIcon; label: string; badge?: number; isAccount?: boolean; exact?: boolean };
 
 /**
  * Bottom tab bar mobile — feel "app nativa" (Glovo, Deliveroo, Just Eat).
@@ -47,7 +47,7 @@ export default function MobileTabBar() {
 
   if (isAdmin) {
     tabs = [
-      { href: '/admin',          icon: Shield,        label: t('admin') },
+      { href: '/admin',          icon: Shield,        label: t('admin'), exact: true },
       { href: '/admin/users',    icon: User,          label: t('users') },
       { href: '/admin/orders',   icon: Package,       label: t('orders') },
       { href: '/messages',       icon: MessageCircle, label: t('messages'), badge: msgUnread },
@@ -55,7 +55,7 @@ export default function MobileTabBar() {
     ];
   } else if (isSeller) {
     tabs = [
-      { href: '/seller/dashboard', icon: Home,          label: t('home') },
+      { href: '/seller/dashboard', icon: Home,          label: t('home'), exact: true },
       { href: '/seller/products',  icon: Package,       label: t('products') },
       { href: '/seller/orders',    icon: ShoppingCart,  label: t('orders') },
       { href: '/messages',         icon: MessageCircle, label: t('messages'), badge: msgUnread },
@@ -63,7 +63,7 @@ export default function MobileTabBar() {
     ];
   } else if (isRider) {
     tabs = [
-      { href: '/rider',              icon: Home,          label: t('home') },
+      { href: '/rider',              icon: ShoppingCart,  label: t('orders'), exact: true },
       { href: '/rider/history',      icon: Package,       label: t('history') },
       { href: '/rider/availability', icon: Bike,          label: t('availability') },
       { href: '/messages',           icon: MessageCircle, label: t('messages'), badge: msgUnread },
@@ -87,8 +87,8 @@ export default function MobileTabBar() {
     ];
   }
 
-  const isActive = (href: string) =>
-    href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(href + '/');
+  const isActive = (href: string, exact?: boolean) =>
+    href === '/' || exact ? pathname === href : pathname === href || pathname.startsWith(href + '/');
 
   const role: MenuRole = isAdmin ? 'admin' : isSeller ? 'seller' : isRider ? 'rider' : isAuthenticated ? 'buyer' : null;
   const displayName =
@@ -138,7 +138,7 @@ export default function MobileTabBar() {
       >
         <ul className="flex items-stretch justify-around">
           {tabs.map((tab) => {
-            const active = tab.isAccount ? (sheetOpen || isActive(tab.href)) : isActive(tab.href);
+            const active = tab.isAccount ? (sheetOpen || isActive(tab.href, tab.exact)) : isActive(tab.href, tab.exact);
             return (
               <li key={tab.href} className="flex-1">
                 {tab.isAccount ? (
