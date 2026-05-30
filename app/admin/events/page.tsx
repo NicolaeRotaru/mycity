@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { ImageUrlField } from '@/components/ImageUrlField';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -143,7 +144,8 @@ export default function AdminEventsPage() {
         <Button onClick={() => setEditing(emptyForm())} size="sm" icon={Plus}>Nuovo evento</Button>
       </div>
 
-      <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
+      {/* DESKTOP: tabella */}
+      <div className="hidden md:block bg-white border border-cream-300 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead className="bg-cream-50 text-ink-600">
             <tr>
@@ -204,6 +206,57 @@ export default function AdminEventsPage() {
         </table>
       </div>
 
+      {/* MOBILE: card con azioni sempre visibili */}
+      <div className="md:hidden space-y-3">
+        {events.length === 0 ? (
+          <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-500">Nessun evento.</div>
+        ) : events.map((ev) => (
+          <div key={ev.id} className="bg-white border border-cream-300 rounded-xl p-4">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="font-semibold text-ink-900">{ev.title}</h3>
+              <span className={`shrink-0 inline-block px-2 py-0.5 rounded-full text-xs font-bold ${STATUS_BADGE[ev.status]}`}>{ev.status}</span>
+            </div>
+            <p className="text-xs text-ink-500 mt-1">
+              {new Date(ev.starts_at).toLocaleString('it-IT')} → {new Date(ev.ends_at).toLocaleString('it-IT')}
+            </p>
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-cream-100 flex-wrap">
+              {ev.status === 'scheduled' && (
+                <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'live' })} className="flex-1 min-w-[90px] inline-flex items-center justify-center gap-1 bg-rose-50 text-rose-700 font-semibold py-2 rounded-lg text-sm">
+                  <Play size={14} strokeWidth={2.4} /> Vai live
+                </button>
+              )}
+              {ev.status === 'live' && (
+                <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'ended' })} className="flex-1 min-w-[90px] inline-flex items-center justify-center gap-1 bg-cream-100 text-ink-700 font-semibold py-2 rounded-lg text-sm">
+                  <Pause size={14} strokeWidth={2.4} /> Termina
+                </button>
+              )}
+              <button onClick={() => setEditing({
+                ...ev,
+                starts_at: ev.starts_at.slice(0, 16),
+                ends_at: ev.ends_at.slice(0, 16),
+              })} className="flex-1 min-w-[90px] inline-flex items-center justify-center gap-1 bg-primary-50 text-primary-700 font-semibold py-2 rounded-lg text-sm">
+                <Pencil size={14} strokeWidth={2.4} /> Modifica
+              </button>
+              <button
+                onClick={async () => {
+                  const ok = await confirmDialog({
+                    title: 'Eliminare evento?',
+                    message: 'I partecipanti RSVP verranno notificati.',
+                    confirmLabel: 'Elimina',
+                    danger: true,
+                  });
+                  if (ok) del.mutate(ev.id);
+                }}
+                aria-label="Elimina"
+                className="px-3 py-2 text-rose-700 bg-rose-50 rounded-lg"
+              >
+                <Trash2 size={16} strokeWidth={2.4} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <Modal
         open={!!editing}
         onClose={() => setEditing(null)}
@@ -230,10 +283,13 @@ export default function AdminEventsPage() {
                 <label className="block text-sm font-semibold mb-1">Descrizione</label>
                 <textarea value={editing.description ?? ''} onChange={(e) => setEditing({ ...editing, description: e.target.value })} rows={3} className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm resize-none" required />
               </div>
-              <div>
-                <label className="block text-sm font-semibold mb-1">URL immagine cover</label>
-                <input value={editing.cover_image_url ?? ''} onChange={(e) => setEditing({ ...editing, cover_image_url: e.target.value })} type="url" className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm" />
-              </div>
+              <ImageUrlField
+                label="Immagine cover"
+                value={editing.cover_image_url ?? ''}
+                onChange={(url) => setEditing({ ...editing, cover_image_url: url })}
+                pathPrefix="events"
+                hint="Consigliato 16:9. Carica un file o incolla un URL."
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-semibold mb-1">Inizio</label>

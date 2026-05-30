@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import AdminSidebar from '@/components/AdminSidebar';
 import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
 
@@ -32,9 +31,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  // La navigazione admin vive ora nel menu "Tu" (account menu). Qui resta solo
+  // il contenuto a piena larghezza; sotto l'icona scudo c'è la dashboard.
   return (
-    <div className="container mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-6">
-      <AdminSidebar />
+    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-5xl">
       <main>{children}</main>
     </div>
   );

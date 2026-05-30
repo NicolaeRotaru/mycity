@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { Button } from '@/components/ui/Button';
+import { ImageUrlField } from '@/components/ImageUrlField';
 
 /**
  * Admin: Negozio del mese.
@@ -160,16 +161,13 @@ export default function AdminShopOfMonthPage() {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-ink-700 mb-1">URL immagine cover (16:9 consigliato)</label>
-          <input
-            type="url"
-            value={coverUrl}
-            onChange={(e) => setCoverUrl(e.target.value)}
-            placeholder="https://…"
-            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm"
-          />
-        </div>
+        <ImageUrlField
+          label="Immagine cover (16:9 consigliato)"
+          value={coverUrl}
+          onChange={setCoverUrl}
+          pathPrefix="shop"
+          hint="Carica un file o incolla un URL."
+        />
 
         <div className="grid grid-cols-2 gap-3">
           <div>

@@ -9,6 +9,7 @@ import { formatDate } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
@@ -62,6 +63,7 @@ function AdminUsersPageInner() {
   const [filter, setFilter] = useState<string>(initialFilter);
   const [search, setSearch] = useState('');
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [editUser, setEditUser] = useState<Profile | null>(null);
 
   const { data: profiles = [], isLoading, error } = useQuery({
     queryKey: queryKeys.admin.users(),
@@ -219,6 +221,20 @@ function AdminUsersPageInner() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  const saveUser = useMutation({
+    mutationFn: async (vars: { id: string; patch: Partial<Profile> }) => {
+      const { error } = await supabase.from('profiles').update(vars.patch).eq('id', vars.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
+      setEditUser(null);
+      toast.success('Utente aggiornato');
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
   const pendingCount = profiles.filter((p) => p.approval_status === 'pending' && p.role === 'seller').length;
 
   const filtered = profiles.filter((p) => {
@@ -333,7 +349,8 @@ function AdminUsersPageInner() {
         />
       </div>
 
-      <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
+      {/* DESKTOP: tabella */}
+      <div className="hidden md:block bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
           <thead className="bg-cream-50 border-b text-xs uppercase tracking-wide text-ink-500">
             <tr>
@@ -390,6 +407,12 @@ function AdminUsersPageInner() {
                       {isPending && (
                         <Button onClick={() => setDetailId(p.id)} size="sm">Esamina</Button>
                       )}
+                      <button
+                        onClick={() => setEditUser(p)}
+                        className="text-xs bg-primary-100 hover:bg-primary-200 text-primary-800 px-2 py-1 rounded font-semibold"
+                      >
+                        Modifica
+                      </button>
                       {isApproved && (
                         <button
                           onClick={async () => {
@@ -452,6 +475,123 @@ function AdminUsersPageInner() {
         </table>
       </div>
 
+      {/* MOBILE: card con azioni sempre visibili */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 ? (
+          <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-400 text-sm">
+            Nessun utente da mostrare.
+          </div>
+        ) : filtered.map((p) => {
+          const r = ROLE_LABELS[p.role] ?? ROLE_LABELS.buyer;
+          const a = p.approval_status ? APPROVAL_LABELS[p.approval_status] : null;
+          const isSeller    = p.role === 'seller';
+          const isPending   = isSeller && p.approval_status === 'pending';
+          const isApproved  = isSeller && p.approval_status === 'approved' && p.is_approved;
+          const isSuspended = isSeller && p.approval_status === 'suspended';
+          return (
+            <div key={p.id} className="bg-white border border-cream-300 rounded-xl p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink-900 truncate">
+                    {p.store_name ?? p.business_legal_name ?? p.full_name ?? '—'}
+                  </p>
+                  <p className="text-xs text-ink-400 font-mono">{p.id.slice(0, 8)}…</p>
+                </div>
+                <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}`}>
+                  <span>{r.emoji}</span>{r.label}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs text-ink-500">
+                {p.role === 'seller' && a && (
+                  <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${a.color}`}>{a.label}</span>
+                )}
+                <span>Iscritto il {formatDate(p.created_at)}</span>
+              </div>
+              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-cream-100 flex-wrap">
+                {isPending && (
+                  <button onClick={() => setDetailId(p.id)} className="flex-1 min-w-[80px] text-center bg-primary-600 text-white font-semibold py-2 rounded-lg text-sm">
+                    Esamina
+                  </button>
+                )}
+                <button onClick={() => setEditUser(p)} className="flex-1 min-w-[80px] text-center bg-primary-50 text-primary-700 font-semibold py-2 rounded-lg text-sm">
+                  Modifica
+                </button>
+                {isApproved && (
+                  <button
+                    onClick={async () => {
+                      const ok = await confirmDialog({
+                        title: 'Sospendere il negozio?',
+                        message: `${p.store_name ?? 'Il venditore'} non potrà più operare finché non lo riattiverai.`,
+                        confirmLabel: tConfirm('yesSuspend'), cancelLabel: tActions('cancel'), danger: true, icon: '⏸️',
+                      });
+                      if (ok) suspend.mutate(p.id);
+                    }}
+                    className="flex-1 min-w-[80px] text-center bg-orange-100 text-orange-800 font-semibold py-2 rounded-lg text-sm"
+                  >
+                    Sospendi
+                  </button>
+                )}
+                {isSuspended && (
+                  <button
+                    onClick={async () => {
+                      const ok = await confirmDialog({
+                        title: 'Riattivare il negozio?',
+                        message: `${p.store_name ?? 'Il venditore'} tornerà operativo immediatamente.`,
+                        confirmLabel: tConfirm('yesReactivate'), cancelLabel: tActions('cancel'), icon: '▶️',
+                      });
+                      if (ok) reactivate.mutate(p.id);
+                    }}
+                    className="flex-1 min-w-[80px] text-center bg-olive-100 text-olive-800 font-semibold py-2 rounded-lg text-sm"
+                  >
+                    Riattiva
+                  </button>
+                )}
+                {p.role !== 'admin' && (
+                  <button
+                    onClick={async () => {
+                      const name = p.store_name ?? p.business_legal_name ?? p.full_name ?? `Utente ${p.id.slice(0, 6)}`;
+                      const ok = await confirmDialog({
+                        title: 'Eliminare definitivamente?',
+                        message: `${name} verrà rimosso da auth.users e il profilo anonimizzato. Azione irreversibile.`,
+                        confirmLabel: tConfirm('yesDelete'), danger: true, icon: '🗑️',
+                      });
+                      if (ok) deleteAccount.mutate(p.id);
+                    }}
+                    aria-label="Elimina"
+                    className="px-3 py-2 text-rose-700 bg-rose-50 rounded-lg"
+                  >
+                    🗑️
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Modale modifica utente */}
+      {editUser && (
+        <EditUserModal
+          profile={editUser}
+          saving={saveUser.isPending}
+          onClose={() => setEditUser(null)}
+          onSave={async (patch) => {
+            // Cambio ruolo: azione delicata → conferma extra.
+            if (patch.role && patch.role !== editUser.role) {
+              const ok = await confirmDialog({
+                title: 'Cambiare il ruolo?',
+                message: `Stai cambiando il ruolo di questo utente in "${ROLE_LABELS[patch.role]?.label ?? patch.role}". ${patch.role === 'admin' ? 'Avrà accesso completo al pannello admin.' : ''} Confermi?`,
+                confirmLabel: 'Sì, cambia ruolo',
+                danger: patch.role === 'admin',
+                icon: '🛡️',
+              });
+              if (!ok) return;
+            }
+            saveUser.mutate({ id: editUser.id, patch });
+          }}
+        />
+      )}
+
       {/* Pannello dettaglio richiesta */}
       {detail && (
         <DetailPanel
@@ -467,6 +607,94 @@ function AdminUsersPageInner() {
         />
       )}
     </div>
+  );
+}
+
+function EditUserModal({
+  profile, saving, onClose, onSave,
+}: {
+  profile: Profile;
+  saving: boolean;
+  onClose: () => void;
+  onSave: (patch: Partial<Profile>) => void;
+}) {
+  const [fullName, setFullName] = useState(profile.full_name ?? '');
+  const [phone, setPhone] = useState(profile.phone ?? '');
+  const [storeAddress, setStoreAddress] = useState(profile.store_address ?? '');
+  const [storeName, setStoreName] = useState(profile.store_name ?? '');
+  const [role, setRole] = useState(profile.role);
+
+  const inputCls = 'w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400';
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Modifica utente"
+      size="lg"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>Annulla</Button>
+          <Button type="submit" form="edit-user-form" loading={saving}>Salva</Button>
+        </>
+      }
+    >
+      <form
+        id="edit-user-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave({
+            full_name: fullName.trim() || null,
+            phone: phone.trim() || null,
+            store_address: storeAddress.trim() || null,
+            store_name: storeName.trim() || null,
+            role,
+          });
+        }}
+        className="space-y-4"
+      >
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-2">Dati di contatto</h3>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-semibold mb-1">Nome e cognome</label>
+              <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-1">Telefono</label>
+              <input value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold mb-1">Indirizzo</label>
+              <input value={storeAddress} onChange={(e) => setStoreAddress(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-2">Dati negozio</h3>
+          <div>
+            <label className="block text-sm font-semibold mb-1">Nome negozio</label>
+            <input value={storeName} onChange={(e) => setStoreName(e.target.value)} className={inputCls} />
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-2">Ruolo account</h3>
+          <select value={role} onChange={(e) => setRole(e.target.value)} className={inputCls}>
+            <option value="buyer">Acquirente</option>
+            <option value="seller">Venditore</option>
+            <option value="rider">Rider</option>
+            <option value="admin">Admin</option>
+          </select>
+          {role !== profile.role && (
+            <p className="mt-1 text-xs text-accent-700">
+              ⚠️ Stai cambiando il ruolo: ti verrà chiesta conferma al salvataggio.
+            </p>
+          )}
+        </div>
+      </form>
+    </Modal>
   );
 }
 
