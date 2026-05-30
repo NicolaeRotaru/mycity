@@ -12,7 +12,7 @@ export const runtime = 'nodejs';
  * Auth: solo il seller proprietario dell'ordine.
  */
 async function handler(_req: NextRequest, user: { id: string }, params: { id: string }) {
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data: order, error } = await supa
     .from('orders')
     .select(`
@@ -53,5 +53,5 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   });
 }
 
-export const GET = (req: NextRequest, ctx: { params: { id: string } }) =>
-  withSellerAuth(async ({ user }) => handler(req, user, ctx.params))(req);
+export const GET = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
+  withSellerAuth(async ({ user }) => handler(req, user, await ctx.params))(req);

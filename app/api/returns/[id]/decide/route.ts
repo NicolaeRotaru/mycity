@@ -29,7 +29,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
     .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents')
@@ -108,5 +108,5 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 }
 
 // Rate limit: 30 decisioni / 10 min per seller (anti-abuse refund Stripe)
-export const POST = (req: NextRequest, ctx: { params: { id: string } }) =>
-  withAuthRateLimit({ name: 'returns-decide', max: 30, windowMs: 10 * 60_000 }, async ({ user }) => handler(req, user, ctx.params))(req);
+export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
+  withAuthRateLimit({ name: 'returns-decide', max: 30, windowMs: 10 * 60_000 }, async ({ user }) => handler(req, user, await ctx.params))(req);

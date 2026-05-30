@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -29,7 +29,8 @@ const Schema = z.object({
 
 type FormData = z.infer<typeof Schema>;
 
-export default function EditProductPage({ params }: { params: { id: string } }) {
+export default function EditProductPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const { id } = params;
   const router = useRouter();
   const qc = useQueryClient();

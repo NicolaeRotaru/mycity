@@ -21,7 +21,7 @@ export const POST = withSellerAuthRateLimit({ name: 'stripe-onboarding', max: 10
   if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
   if (!user.email) return ApiErrors.unauthorized();
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data: profile, error: pErr } = await supa
     .from('profiles')
     .select('approval_status, stripe_account_id, store_name')

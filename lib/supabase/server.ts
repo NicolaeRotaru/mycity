@@ -8,9 +8,10 @@ import { requireSupabasePublic, requireSupabaseService } from '@/lib/env';
  * Da chiamare dentro Server Components, Server Actions o Route Handlers.
  * Rispetta RLS perché viaggia con il JWT dell'utente.
  */
-export function getServerSupabase() {
+export async function getServerSupabase() {
   const { url, key } = requireSupabasePublic();
-  const cookieStore = cookies();
+  // Next 15: cookies() è asincrono.
+  const cookieStore = await cookies();
   return createServerClient(url, key, {
     cookies: {
       get(name: string) {
@@ -53,7 +54,7 @@ export function getAdminSupabase() {
  */
 export async function getCurrentUser() {
   try {
-    const supa = getServerSupabase();
+    const supa = await getServerSupabase();
     const { data, error } = await supa.auth.getUser();
     if (error || !data?.user) return null;
     return data.user;
@@ -69,7 +70,7 @@ export async function getCurrentUser() {
 export async function getCurrentUserWithProfile() {
   const user = await getCurrentUser();
   if (!user) return null;
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data: profile } = await supa
     .from('profiles')
     .select('id, role, is_approved, approval_status, full_name')

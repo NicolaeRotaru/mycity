@@ -1,4 +1,5 @@
-'use client';
+'use client';;
+import { use } from "react";
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -49,7 +50,8 @@ type OrderRow = {
   }[];
 };
 
-export default function SellerOrderDetailPage({ params }: { params: { id: string } }) {
+export default function SellerOrderDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const { id } = params;
   const qc = useQueryClient();
 
@@ -170,7 +172,6 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         </div>
         <OrderStatusBadge status={order.delivery_status} />
       </div>
-
       <OrderTimeline
         status={order.delivery_status}
         createdAt={order.created_at}
@@ -180,7 +181,6 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
         deliveredAt={order.delivered_at}
         canceledAt={order.canceled_at}
       />
-
       {/* RICHIESTA DI RESO */}
       {returnRow && (
         <ReturnRequestCard
@@ -192,7 +192,6 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
           }}
         />
       )}
-
       {/* AZIONI */}
       {order.delivery_status === 'NEW' && (
         <div className="bg-white border border-cream-300 rounded-xl p-5">
@@ -239,7 +238,6 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
           </div>
         </div>
       )}
-
       {/* CODICE RITIRO (visibile dopo ACCEPTED) */}
       {showPickupCode && (
         <div className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white rounded-2xl p-6 shadow-lg">
@@ -261,7 +259,6 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
           </div>
         </div>
       )}
-
       {order.delivery_status === 'READY' && !order.rider_id && (
         <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800">
           ⏳ In attesa che un rider prenda in carico questo ordine.
@@ -272,7 +269,6 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
           🛵 Rider <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.
         </div>
       )}
-
       {/* CLIENTE + INDIRIZZO */}
       <div className="bg-white border border-cream-300 rounded-xl p-6">
         <h2 className="font-semibold text-ink-900 mb-3">Cliente</h2>
@@ -283,7 +279,6 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
           {order.delivery_notes && <p className="text-ink-500 italic mt-2">Note: {order.delivery_notes}</p>}
         </div>
       </div>
-
       {/* PRODOTTI */}
       <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-cream-200">
@@ -297,7 +292,7 @@ export default function SellerOrderDetailPage({ params }: { params: { id: string
                 <div className="w-14 h-14 rounded bg-cream-100 overflow-hidden flex items-center justify-center shrink-0">
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    (<img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />)
                   ) : '📦'}
                 </div>
                 <div className="flex-1 min-w-0">

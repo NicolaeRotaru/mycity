@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -98,7 +98,8 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
   return data as unknown as OrderRow;
 };
 
-export default function BuyerOrderDetailPage({ params }: { params: { id: string } }) {
+export default function BuyerOrderDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const { id } = params;
   const router = useRouter();
   const qc = useQueryClient();
@@ -224,7 +225,6 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
         <OrderStatusBadge status={status} />
 
       </div>
-
       {isDelivered && (
         <div className="bg-olive-50 border-2 border-olive-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-olive-800 font-medium">
@@ -277,7 +277,6 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
           </div>
         </div>
       )}
-
       {/* ANNULLAMENTO (solo NEW) */}
       {isCancellable && (
         <div className="bg-accent-50 border-2 border-accent-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
@@ -303,13 +302,11 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
           </button>
         </div>
       )}
-
       {status === 'CANCELED' && (
         <div className="bg-rose-50 border-2 border-rose-200 rounded-xl p-4 text-sm text-rose-800">
           ❌ Questo ordine è stato annullato.
         </div>
       )}
-
       {/* CODICE CONSEGNA (visibile quando rider sta arrivando) */}
       {showDeliveryCode && deliveryCode?.code && (
         <div className="bg-gradient-to-br from-olive-500 to-teal-600 text-white rounded-2xl p-6 shadow-lg">
@@ -331,7 +328,6 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
           </div>
         </div>
       )}
-
       {/* TIMELINE */}
       <div className="bg-white border border-cream-300 rounded-xl p-6">
         <h2 className="font-semibold text-ink-900 mb-4">Stato della consegna</h2>
@@ -382,7 +378,6 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
           </ol>
         )}
       </div>
-
       {/* MAPPA + RIDER LIVE */}
       {points.length > 0 && (
         <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
@@ -408,7 +403,6 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
           <DeliveryMap points={points} className="w-full h-72 z-0" />
         </div>
       )}
-
       {/* INFO NEGOZIO E RIDER */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white border border-cream-300 rounded-xl p-5">
@@ -417,7 +411,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
             <div className="w-12 h-12 rounded-full overflow-hidden bg-cream-100 flex items-center justify-center text-xl">
               {order.seller?.store_logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={order.seller.store_logo} alt="" loading="lazy" className="w-full h-full object-cover" />
+                (<img src={order.seller.store_logo} alt="" loading="lazy" className="w-full h-full object-cover" />)
               ) : '🏪'}
             </div>
             <div className="min-w-0">
@@ -448,7 +442,6 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
           )}
         </div>
       </div>
-
       {/* PRODOTTI */}
       <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-cream-200">
@@ -462,7 +455,7 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
                 <div className="w-14 h-14 rounded bg-cream-100 overflow-hidden flex items-center justify-center shrink-0">
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    (<img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />)
                   ) : '📦'}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -480,7 +473,6 @@ export default function BuyerOrderDetailPage({ params }: { params: { id: string 
           <div className="flex justify-between font-bold text-base pt-1 border-t border-cream-300"><span>Totale</span><span className="text-primary-800">{formatPrice(order.total_price)}</span></div>
         </div>
       </div>
-
       {/* INDIRIZZO CONSEGNA */}
       <div className="bg-white border border-cream-300 rounded-xl p-6">
         <h2 className="font-semibold text-ink-900 mb-3">Consegna a</h2>

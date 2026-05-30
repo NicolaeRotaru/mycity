@@ -1,4 +1,5 @@
-'use client';
+'use client';;
+import { use } from "react";
 
 import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
@@ -42,7 +43,8 @@ const SOCIAL_ICON: Record<string, LucideIcon> = {
   website: Globe,
 };
 
-export default function StorePage({ params }: { params: { id: string } }) {
+export default function StorePage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const { id } = params;
 
   const { data: store, isLoading } = useQuery({

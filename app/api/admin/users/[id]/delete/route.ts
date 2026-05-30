@@ -111,5 +111,5 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
 }
 
 // Rate limit destructive: 20 cancellazioni / ora per admin (anti-abuse + audit trail)
-export const DELETE = (req: NextRequest, ctx: { params: { id: string } }) =>
-  withAdminAuthRateLimit({ name: 'admin-delete-user', max: 20, windowMs: 60 * 60_000 }, async ({ user }) => handler(req, user, ctx))(req);
+export const DELETE = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
+  withAdminAuthRateLimit({ name: 'admin-delete-user', max: 20, windowMs: 60 * 60_000 }, async ({ user }) => handler(req, user, { params: await ctx.params }))(req);

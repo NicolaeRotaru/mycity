@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, use } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -62,7 +62,8 @@ type OrderRow = {
   }[];
 };
 
-export default function RiderOrderDetailPage({ params }: { params: { id: string } }) {
+export default function RiderOrderDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const { id } = params;
   const qc = useQueryClient();
   const router = useRouter();

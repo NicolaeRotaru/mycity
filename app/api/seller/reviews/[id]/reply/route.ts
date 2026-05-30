@@ -48,5 +48,5 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   return apiSuccess({ id: params.id, seller_reply: reply, seller_reply_at });
 }
 
-export const POST = (req: NextRequest, ctx: { params: { id: string } }) =>
-  withSellerAuth(async ({ user }) => handler(req, user, ctx.params))(req);
+export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
+  withSellerAuth(async ({ user }) => handler(req, user, await ctx.params))(req);
