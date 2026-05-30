@@ -541,11 +541,11 @@ export default function CheckoutPage() {
       <StepIndicator steps={CHECKOUT_STEPS} currentStep={2} />
 
       {!authUser && (
-        <div className="bg-primary-50 border-2 border-primary-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm text-primary-900">
-            <strong>🔑 Per completare l'ordine devi accedere</strong> — i tuoi articoli restano nel carrello.
+        <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-olive-900">
+            <strong>Ci sei quasi! 🎉</strong> Accedi (bastano pochi secondi) e completiamo l'ordine — i tuoi articoli restano nel carrello, e paghi comodamente alla consegna.
           </p>
-          <Button href="/sign-in?returnTo=/checkout" size="sm">Accedi ora</Button>
+          <Button href="/sign-in?returnTo=/checkout" size="sm" variant="success">Accedi e continua</Button>
         </div>
       )}
 
