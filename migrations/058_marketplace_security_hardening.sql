@@ -32,7 +32,13 @@ AS $$
    WHERE code = upper(trim(p_code));
 $$;
 
+-- NB: Supabase concede EXECUTE di default ai ruoli anon/authenticated alla
+-- creazione di una funzione; il solo REVOKE FROM public NON li copre. Revochiamo
+-- esplicitamente così che solo service_role possa incrementare uses_count
+-- (altrimenti un utente potrebbe esaurire un coupon chiamando l'RPC).
 REVOKE ALL ON FUNCTION public.increment_coupon_usage(text) FROM public;
+REVOKE EXECUTE ON FUNCTION public.increment_coupon_usage(text) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.increment_coupon_usage(text) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.increment_coupon_usage(text) TO service_role;
 
 -- =============================================================================
