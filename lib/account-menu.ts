@@ -1,7 +1,8 @@
 import {
   User, Package, Heart, MapPin, Sparkles, Award, Gift, ListChecks, Megaphone,
   LayoutDashboard, TrendingUp, ShoppingCart, Camera, Euro, Bike, CircleDot,
-  Settings, HelpCircle, Shield, type LucideIcon,
+  Settings, HelpCircle, Shield, Home, Users, ShoppingBag, Ticket, Crown,
+  Calendar, Coins, AlertTriangle, Headset, type LucideIcon,
 } from 'lucide-react';
 
 /**
@@ -48,7 +49,23 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/rider/earnings', icon: Euro, label: 'Guadagni' },
     );
   } else if (role === 'admin') {
-    items.push({ href: '/admin', icon: Shield, label: 'Admin' });
+    // Tutta la navigazione admin vive qui (menu "Tu"); sotto l'icona scudo
+    // resta solo la dashboard amministratore.
+    items.push(
+      { href: '/admin', icon: Shield, label: 'Dashboard admin' },
+      { href: '/admin/today', icon: Home, label: 'Today' },
+      { href: '/admin/funnel', icon: TrendingUp, label: 'Funnel & Cohort' },
+      { href: '/admin/users', icon: Users, label: 'Utenti' },
+      { href: '/admin/orders', icon: ShoppingBag, label: 'Ordini' },
+      { href: '/admin/products', icon: Package, label: 'Prodotti' },
+      { href: '/admin/support-chat', icon: Headset, label: 'Chat assistenza' },
+      { href: '/admin/coupons', icon: Ticket, label: 'Coupon' },
+      { href: '/admin/shop-of-month', icon: Crown, label: 'Negozio mese' },
+      { href: '/admin/events', icon: Calendar, label: 'Eventi' },
+      { href: '/admin/sponsored', icon: Megaphone, label: 'Sponsored' },
+      { href: '/admin/cashback', icon: Coins, label: 'Cashback' },
+      { href: '/admin/sos', icon: AlertTriangle, label: 'SOS Rider' },
+    );
   }
 
   items.push(

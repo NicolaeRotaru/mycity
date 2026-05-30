@@ -59,7 +59,9 @@ export default function RiderDashboardPage() {
     staleTime: 15_000,
   });
 
-  const myActive   = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED');
+  // Gli ordini annullati (CANCELED) non sono consegne attive: restano visibili
+  // solo a buyer (proprietario) e admin, non al rider.
+  const myActive   = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED' && o.delivery_status !== 'CANCELED');
   const available  = orders.filter((o) => !o.rider_id && o.delivery_status === 'READY');
   const inPrep     = orders.filter((o) => !o.rider_id && o.delivery_status === 'ACCEPTED');
 

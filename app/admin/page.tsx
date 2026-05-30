@@ -7,6 +7,7 @@ import { formatPrice } from '@/lib/format';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { getAccountMenuItems } from '@/lib/account-menu';
 
 const StatCard = ({ label, value, color, href, icon }: { label: string; value: string | number; color: string; href?: string; icon: string }) => {
   const inner = (
@@ -84,6 +85,28 @@ export default function AdminDashboard() {
         <h1 className="text-2xl font-bold text-ink-900">Dashboard amministratore</h1>
         <p className="text-sm text-ink-500">Panoramica del marketplace in tempo reale.</p>
       </div>
+
+      {/* Sezioni admin: scorciatoie (la stessa navigazione è anche nel menu "Tu") */}
+      <section>
+        <h2 className="font-bold text-ink-900 mb-3">Sezioni</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {getAccountMenuItems('admin')
+            .filter((it) => it.href.startsWith('/admin') && it.href !== '/admin')
+            .map((it) => {
+              const Icon = it.icon;
+              return (
+                <Link
+                  key={it.href}
+                  href={it.href}
+                  className="flex items-center gap-2 bg-white border border-cream-300 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:bg-cream-50 transition-colors"
+                >
+                  <Icon size={16} strokeWidth={2.2} className="text-primary-700 shrink-0" aria-hidden />
+                  <span className="truncate">{it.label}</span>
+                </Link>
+              );
+            })}
+        </div>
+      </section>
 
       <section>
         <h2 className="font-bold text-ink-900 mb-3">👥 Utenti ({stats.users.total})</h2>
