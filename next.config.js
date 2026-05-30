@@ -46,16 +46,13 @@ const nextConfig = {
     minimumCacheTTL: 31536000, // 1 anno
   },
   experimental: {
-    // instrumentationHook attiva il caricamento di instrumentation.ts
-    // (Sentry server + edge config). In Next 15+ e' default.
-    instrumentationHook: true,
     optimizePackageImports: ['lucide-react', 'sonner', '@tanstack/react-query'],
-    // pdfkit + fontkit + restructure hanno dipendenze native (iconv-lite,
-    // brotli, ecc.) che webpack non riesce a bundlare lato server. Le
-    // teniamo "external": Next le importa direttamente da node_modules a
-    // runtime (server-only), niente warning di build.
-    serverComponentsExternalPackages: ['pdfkit', 'fontkit', 'restructure'],
   },
+  // pdfkit + fontkit + restructure hanno dipendenze native (iconv-lite, brotli,
+  // ecc.) che webpack non riesce a bundlare lato server. Le teniamo "external":
+  // Next le importa direttamente da node_modules a runtime (server-only).
+  // Next 15: spostato da experimental.serverComponentsExternalPackages.
+  serverExternalPackages: ['pdfkit', 'fontkit', 'restructure'],
   async headers() {
     return [
       {

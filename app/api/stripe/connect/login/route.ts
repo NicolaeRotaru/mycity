@@ -21,7 +21,7 @@ export const runtime = 'nodejs';
 export const POST = withSellerAuthRateLimit({ name: 'stripe-login', max: 20, windowMs: 60 * 60_000 }, async ({ user }): Promise<NextResponse> => {
   if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data: profile, error: pErr } = await supa
     .from('profiles')
     .select('stripe_account_id')

@@ -35,7 +35,7 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data: order, error: oErr } = await supa
     .from('orders')
     .select('id, user_id, seller_id, delivery_status, delivered_at, total_price')

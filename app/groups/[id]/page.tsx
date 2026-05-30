@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -39,7 +39,8 @@ function timeLeft(deadline: string): string {
   return `${Math.floor(ms / 60000)} min`;
 }
 
-export default function GroupDetailPage({ params }: { params: { id: string } }) {
+export default function GroupDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const { id } = params;
   const router = useRouter();
   const qc = useQueryClient();
@@ -143,7 +144,6 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
   return (
     <div className="container mx-auto px-4 py-6 max-w-3xl space-y-6">
       <Link href="/groups" className="text-sm text-primary-700 hover:underline">← Tutti i gruppi</Link>
-
       <div className="bg-white border-2 border-accent-200 rounded-2xl overflow-hidden">
         <div className="bg-gradient-to-r from-accent-500 to-rose-500 text-white p-6">
           <div className="flex items-center justify-between flex-wrap gap-2">
@@ -159,7 +159,7 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
         <div className="p-6 space-y-5">
           {img && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={img} alt="" loading="lazy" decoding="async" className="w-full h-48 object-cover rounded-lg" />
+            (<img src={img} alt="" loading="lazy" decoding="async" className="w-full h-48 object-cover rounded-lg" />)
           )}
 
           <div className="flex items-baseline gap-3">
@@ -225,7 +225,6 @@ export default function GroupDetailPage({ params }: { params: { id: string } }) 
           </p>
         </div>
       </div>
-
       {group.product?.description && (
         <div className="bg-white border rounded-xl p-5">
           <h2 className="font-bold text-ink-900 mb-2">Dettagli prodotto</h2>

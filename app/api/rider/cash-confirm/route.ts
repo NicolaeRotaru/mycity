@@ -41,7 +41,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data: order, error } = await supa
     .from('orders')
     .select('id, rider_id, total_price, payment_method, delivery_status, cash_confirmed_at')

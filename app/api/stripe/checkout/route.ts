@@ -87,7 +87,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const admin = getAdminSupabase();
 
   // --- 1. Carica tutti i prodotti dal DB in un'unica query.

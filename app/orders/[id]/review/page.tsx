@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
@@ -30,7 +30,8 @@ const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) 
   </div>
 );
 
-export default function OrderReviewPage({ params }: { params: { id: string } }) {
+export default function OrderReviewPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const { id } = params;
   const router = useRouter();
   const [storeRating, setStoreRating] = useState(5);

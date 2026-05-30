@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -53,7 +53,8 @@ type Item = {
   } | null;
 };
 
-export default function ListDetailPage({ params }: { params: { id: string } }) {
+export default function ListDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const router = useRouter();
   const qc = useQueryClient();
   const tActions = useTranslations('actions');

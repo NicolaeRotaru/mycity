@@ -55,7 +55,8 @@ async function fetchAchievements(userId: string) {
   }
 }
 
-export async function generateMetadata({ params }: { params: { handle: string } }) {
+export async function generateMetadata(props: { params: Promise<{ handle: string }> }) {
+  const params = await props.params;
   const profile = await fetchProfileByHandle(params.handle);
   if (!profile) return { title: 'Profilo non trovato · MyCity', robots: { index: false } };
   const name = profile.full_name?.split(' ')[0] ?? profile.public_handle;
@@ -70,7 +71,8 @@ export async function generateMetadata({ params }: { params: { handle: string } 
   };
 }
 
-export default async function PublicProfilePage({ params }: { params: { handle: string } }) {
+export default async function PublicProfilePage(props: { params: Promise<{ handle: string }> }) {
+  const params = await props.params;
   const profile = await fetchProfileByHandle(params.handle);
   if (!profile) notFound();
   const achievements = await fetchAchievements(profile.id);

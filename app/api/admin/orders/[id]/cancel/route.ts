@@ -82,5 +82,5 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   return NextResponse.json({ ok: true, refundId }, { status: 200 });
 }
 
-export const POST = (req: NextRequest, ctx: { params: { id: string } }) =>
-  withAdminAuth(async ({ user }) => handler(req, user, ctx.params))(req);
+export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
+  withAdminAuth(async ({ user }) => handler(req, user, await ctx.params))(req);

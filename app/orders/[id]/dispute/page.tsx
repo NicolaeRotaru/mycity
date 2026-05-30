@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
@@ -20,7 +20,8 @@ const REASONS: Array<{ value: string; label: string; hint: string }> = [
   { value: 'other',             label: 'Altro motivo',                 hint: 'Descrivi nei dettagli qui sotto.' },
 ];
 
-export default function OpenDisputePage({ params }: { params: { id: string } }) {
+export default function OpenDisputePage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const router = useRouter();
   const tStates = useTranslations('states');
   const tForms = useTranslations('forms');

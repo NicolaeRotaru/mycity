@@ -97,5 +97,5 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 }
 
 // Rate limit ereditato da withAdminAuth (solo admin). Params Next 14 sync.
-export const POST = (req: NextRequest, ctx: { params: { id: string } }) =>
-  withAdminAuth(async ({ user }) => handler(req, user, ctx.params))(req);
+export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
+  withAdminAuth(async ({ user }) => handler(req, user, await ctx.params))(req);

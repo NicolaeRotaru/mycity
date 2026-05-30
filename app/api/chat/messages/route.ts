@@ -30,7 +30,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
   const { conversationId, body } = parsed.data;
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data, error } = await supa
     .from('messages')
     .insert({ conversation_id: conversationId, sender_id: user.id, body })

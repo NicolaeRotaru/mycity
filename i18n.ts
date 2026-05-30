@@ -43,8 +43,8 @@ export function resolveLocale(cookieLocale: string | undefined, acceptLang: stri
 }
 
 export default getRequestConfig(async () => {
-  const cookieLocale = cookies().get('NEXT_LOCALE')?.value;
-  const acceptLang = headers().get('accept-language');
+  const cookieLocale = (await cookies()).get('NEXT_LOCALE')?.value;
+  const acceptLang = (await headers()).get('accept-language');
   const locale = resolveLocale(cookieLocale, acceptLang);
 
   return {

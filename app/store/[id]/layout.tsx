@@ -32,9 +32,8 @@ async function fetchStore(id: string): Promise<StoreMeta | null> {
   }
 }
 
-export async function generateMetadata(
-  { params }: { params: { id: string } },
-): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const store = await fetchStore(params.id);
   if (!store || store.role !== 'seller' || !store.is_approved) {
     return { title: 'Negozio non trovato · MyCity', robots: { index: false } };

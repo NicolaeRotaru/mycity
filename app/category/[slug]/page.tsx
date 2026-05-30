@@ -1,4 +1,5 @@
-'use client';
+'use client';;
+import { use } from "react";
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -7,7 +8,8 @@ import ProductGrid from '@/components/ProductGrid';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 
-export default function CategoryPage({ params }: { params: { slug: string } }) {
+export default function CategoryPage(props: { params: Promise<{ slug: string }> }) {
+  const params = use(props.params);
   const { slug } = params;
 
   const { data: category, isLoading } = useQuery({

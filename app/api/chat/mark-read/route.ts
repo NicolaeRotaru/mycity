@@ -20,7 +20,7 @@ export const POST = withAuthRateLimit({ name: 'chat-mark-read', max: 300, window
   const parsed = Schema.safeParse(json);
   if (!parsed.success) return ApiErrors.invalidRequest('Input non valido');
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
   const { data: conv } = await supa
     .from('conversations')
     .select('buyer_id, seller_id')

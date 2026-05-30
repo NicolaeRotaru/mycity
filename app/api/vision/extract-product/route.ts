@@ -155,7 +155,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Lookup category_id da slug
   let categoryId: string | null = null;
   try {
-    const supa = getServerSupabase();
+    const supa = await getServerSupabase();
     const { data } = await supa
       .from('categories')
       .select('id')

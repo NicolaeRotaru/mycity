@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -47,7 +47,8 @@ function formatDateSeparator(iso: string): string {
   return d.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
-export default function ConversationThreadPage({ params }: { params: { id: string } }) {
+export default function ConversationThreadPage(props: { params: Promise<{ id: string }> }) {
+  const params = use(props.params);
   const router = useRouter();
   const qc = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);

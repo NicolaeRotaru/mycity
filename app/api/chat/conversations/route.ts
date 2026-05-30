@@ -33,7 +33,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
 
   if (sellerId === user.id) return ApiErrors.invalidRequest('Non puoi scriverti da solo');
 
-  const supa = getServerSupabase();
+  const supa = await getServerSupabase();
 
   // Verifica che sellerId sia effettivamente un seller approvato (non scrivere
   // a buyer / rider / negozi sospesi). Evita anche enumeration di utenti.

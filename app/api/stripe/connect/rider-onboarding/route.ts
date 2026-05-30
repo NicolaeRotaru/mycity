@@ -23,7 +23,7 @@ export const POST = withAuthRateLimit(
       return ApiErrors.forbidden('Solo rider');
     }
 
-    const supa = getServerSupabase();
+    const supa = await getServerSupabase();
     const { data: prof, error: pErr } = await supa
       .from('profiles')
       .select('stripe_account_id')

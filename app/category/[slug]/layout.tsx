@@ -35,9 +35,8 @@ async function fetchCategory(slug: string): Promise<CategoryMeta | null> {
   }
 }
 
-export async function generateMetadata(
-  { params }: { params: { slug: string } },
-): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const cat = await fetchCategory(params.slug);
   if (!cat) {
     return { title: 'Categoria non trovata · MyCity', robots: { index: false } };

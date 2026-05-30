@@ -79,7 +79,7 @@ export const POST = withAuthRateLimit(
       return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
     }
 
-    const supa = getServerSupabase();
+    const supa = await getServerSupabase();
     const admin = getAdminSupabase();
 
     // --- 1. Carica i prodotti dal DB (mai trust client su prezzo/seller/stock).
