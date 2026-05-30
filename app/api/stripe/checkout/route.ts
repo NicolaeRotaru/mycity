@@ -6,6 +6,9 @@ import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { validateCoupon } from '@/lib/coupons';
+import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { shippingCentsFor } from '@/lib/shipping';
 
 export const runtime = 'nodejs';
 
@@ -42,9 +45,13 @@ const Body = z.object({
   groups: z.array(GroupSchema).min(1).max(10),
   delivery: DeliverySchema,
   couponCode: z.string().max(40).optional().nullable(),
-  /** Importo coupon validato lato client; verrà ri-validato lato server. */
+  /**
+   * NOTA SICUREZZA: questi importi sono accettati per retro-compatibilità del
+   * client ma IGNORATI lato server. Spedizione, sconto ritiro e sconto coupon
+   * sono ricalcolati dalla fonte autorevole (DB) più sotto. Non fidarsi mai di
+   * valori monetari provenienti dal client.
+   */
   couponDiscountCents: z.number().int().nonnegative().default(0),
-  /** Sconto ritiro in negozio in centesimi (10% sul subtotale del carrello). */
   pickupDiscountCents: z.number().int().nonnegative().default(0),
   pickupInStore: z.boolean().default(false),
   b2b: B2BSchema,
@@ -101,12 +108,14 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
   const { data: sellers } = await supa
     .from('profiles')
-    .select('id, store_name, full_name')
+    .select('id, store_name, full_name, store_lat, store_lng')
     .in('id', sellerIds);
 
   const sellerNameMap = new Map<string, string>();
+  const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
   for (const s of sellers ?? []) {
     sellerNameMap.set(s.id, s.store_name ?? s.full_name ?? 'Negozio');
+    sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
   }
 
   // --- 3. Validazioni per ogni gruppo + costruzione line items per Stripe.
@@ -163,25 +172,67 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     subtotalPerGroupCents.push(groupSubtotalCents);
   }
 
-  // --- 4. Distribuisci pro-rata coupon + pickup discount per gruppo.
+  // --- 4. RICALCOLO SERVER-SIDE di spedizione, sconto ritiro e coupon.
+  // SICUREZZA (H1): i prezzi unitari sono già stati ricalcolati dal DB (step 3).
+  // Qui ricalcoliamo dalla fonte autorevole anche spedizione, sconto ritiro e
+  // sconto coupon, IGNORANDO body.couponDiscountCents / pickupDiscountCents /
+  // groups[].shippingCents. Senza questo, un client poteva inviare uno sconto
+  // pari al totale e pagare ~€0,01 qualunque ordine.
   const grandSubtotalCents = subtotalPerGroupCents.reduce((s, x) => s + x, 0);
-  const grandShippingCents = body.groups.reduce((s, g) => s + g.shippingCents, 0);
-  const totalDiscountCents = Math.min(
-    body.couponDiscountCents + body.pickupDiscountCents,
-    Math.max(0, grandSubtotalCents + grandShippingCents - 1), // mai sotto €0,01
-  );
-
   if (grandSubtotalCents <= 0) {
     return ApiErrors.invalidRequest('Importo non valido.');
   }
 
+  // 4a. Coupon: ri-validato e ri-calcolato dal coupon reale (mai dal client).
+  let couponDiscountCents = 0;
+  let couponFreeShipping = false;
+  let validatedCouponCode: string | null = null;
+  if (body.couponCode && body.couponCode.trim()) {
+    const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
+    if (!couponRes.ok) {
+      return ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`);
+    }
+    couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
+    couponFreeShipping = couponRes.freeShipping;
+    validatedCouponCode = couponRes.coupon.code;
+  }
+
+  // 4b. Spedizione per gruppo: ricalcolata server-side con la STESSA logica
+  // distanza-based della UI (lib/shipping.ts), usando le coordinate negozio dal
+  // DB e quelle di consegna inviate dal client. Coupon FREE_SHIPPING o soglia
+  // raggiunta ⇒ 0. Si ignora qualunque importo di spedizione dal client.
+  const shippingPerGroupCents = stripeGroups.map((g, i) => {
+    const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
+    return shippingCentsFor({
+      subtotal: subtotalPerGroupCents[i] / 100,
+      storeLat: coord.lat,
+      storeLng: coord.lng,
+      deliveryLat: body.delivery.lat ?? null,
+      deliveryLng: body.delivery.lng ?? null,
+      pickupInStore: body.pickupInStore,
+      freeShipping: couponFreeShipping,
+    });
+  });
+  const grandShippingCents = shippingPerGroupCents.reduce((s, x) => s + x, 0);
+
+  // 4c. Sconto ritiro in negozio: PICKUP_DISCOUNT_PERCENT sul subtotale carrello.
+  const pickupDiscountCents = body.pickupInStore
+    ? Math.round(grandSubtotalCents * (PICKUP_DISCOUNT_PERCENT / 100))
+    : 0;
+
+  // Clamp difensivo finale: lo sconto totale non può superare (subtotale+spedizione-1c).
+  const totalDiscountCents = Math.min(
+    couponDiscountCents + pickupDiscountCents,
+    Math.max(0, grandSubtotalCents + grandShippingCents - 1),
+  );
+
   const groupPersisted = stripeGroups.map((g, i) => {
     const subtotal = subtotalPerGroupCents[i];
-    const shipping = body.groups[i].shippingCents;
+    const shipping = shippingPerGroupCents[i];
     // Quota proporzionale del coupon globale rispetto al subtotale del gruppo
     const portion = grandSubtotalCents > 0 ? subtotal / grandSubtotalCents : 0;
-    const couponPortionCents = Math.round(body.couponDiscountCents * portion);
-    const pickupPortionCents = Math.round(body.pickupDiscountCents * portion);
+    const couponPortionCents = Math.round(couponDiscountCents * portion);
+    const pickupPortionCents = Math.round(pickupDiscountCents * portion);
     const totalCents = Math.max(0, subtotal + shipping - couponPortionCents - pickupPortionCents);
     return {
       sellerId: g.sellerId,
@@ -207,7 +258,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       total_cents: expectedChargeCents,
       currency: 'eur',
       groups: groupPersisted,
-      coupon_code: body.couponCode ?? null,
+      coupon_code: validatedCouponCode,
       b2b: body.b2b ?? null,
       delivery: {
         full_name: body.delivery.fullName,
@@ -238,7 +289,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     const session = await createMultiSellerCheckoutSession({
       pendingCheckoutId: pending.id,
       groups: stripeGroups,
-      shippingPerGroupCents: body.groups.map((g) => g.shippingCents),
+      shippingPerGroupCents,
       totalDiscountCents,
       buyerEmail: user.email,
       buyerUserId: user.id,

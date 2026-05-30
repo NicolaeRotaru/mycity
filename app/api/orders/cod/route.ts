@@ -1,0 +1,258 @@
+import { NextResponse } from 'next/server';
+import { z } from 'zod';
+import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
+import { withAuthRateLimit } from '@/lib/api/middleware';
+import { ApiErrors } from '@/lib/api/responses';
+import { validateCoupon } from '@/lib/coupons';
+import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { shippingCentsFor } from '@/lib/shipping';
+
+export const runtime = 'nodejs';
+
+const ItemSchema = z.object({
+  productId: z.string().uuid(),
+  quantity: z.number().int().positive().max(99),
+});
+
+const GroupSchema = z.object({
+  sellerId: z.string().uuid(),
+  items: z.array(ItemSchema).min(1).max(50),
+});
+
+const DeliverySchema = z.object({
+  fullName: z.string().min(1).max(200),
+  address: z.string().min(1).max(300),
+  city: z.string().min(1).max(120),
+  zip: z.string().min(1).max(20),
+  phone: z.string().min(1).max(40),
+  notes: z.string().max(500).optional().nullable(),
+  lat: z.number().nullable().optional(),
+  lng: z.number().nullable().optional(),
+});
+
+const B2BSchema = z
+  .object({
+    company_name: z.string().min(1).max(200),
+    vat_number: z.string().min(1).max(40),
+    sdi_code: z.string().max(20).optional().nullable(),
+    pec: z.string().email().max(200).optional().nullable(),
+  })
+  .nullable()
+  .optional();
+
+const Body = z.object({
+  groups: z.array(GroupSchema).min(1).max(10),
+  delivery: DeliverySchema,
+  couponCode: z.string().max(40).optional().nullable(),
+  pickupInStore: z.boolean().default(false),
+  b2b: B2BSchema,
+});
+
+/**
+ * Crea ordini COD (pagamento alla consegna) SERVER-SIDE.
+ *
+ * SICUREZZA (H1 / COD): in passato il client inseriva direttamente gli ordini
+ * via `supabase.from('orders').insert(...)` con `total_price`, `discount_amount`
+ * e `payment_status` calcolati nel browser e RLS che controllava solo
+ * `auth.uid() = user_id`. Un utente poteva quindi creare ordini con prezzi/sconti
+ * arbitrari. Qui ricalcoliamo TUTTO dal DB (prezzi prodotto, spedizione, sconto
+ * ritiro, coupon) e inseriamo con il client admin. La policy RLS di INSERT su
+ * `orders`/`order_items` per il ruolo `authenticated` viene rimossa nella
+ * migration di hardening: gli ordini si creano solo via questo endpoint o via
+ * webhook Stripe.
+ *
+ * Rate limit: 30 ordini / 10 min per utente.
+ */
+export const POST = withAuthRateLimit(
+  { name: 'orders-cod', max: 30, windowMs: 10 * 60_000 },
+  async ({ user, req }): Promise<NextResponse> => {
+    if (!user.email) return ApiErrors.unauthorized();
+    if (!user.email_confirmed_at) {
+      return ApiErrors.forbidden('Conferma la tua email prima di ordinare.');
+    }
+
+    let body: z.infer<typeof Body>;
+    try {
+      body = Body.parse(await req.json());
+    } catch (e) {
+      return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
+    }
+
+    const supa = getServerSupabase();
+    const admin = getAdminSupabase();
+
+    // --- 1. Carica i prodotti dal DB (mai trust client su prezzo/seller/stock).
+    const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
+    const { data: products, error: prodErr } = await supa
+      .from('products')
+      .select('id, name, price, seller_id, stock, status')
+      .in('id', allProductIds);
+
+    if (prodErr || !products || products.length === 0) {
+      return ApiErrors.notFound('Prodotti non trovati.');
+    }
+    if (products.length !== allProductIds.length) {
+      return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
+    }
+
+    // --- 2. Coordinate negozio (per spedizione distanza-based).
+    const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
+    const { data: sellers } = await supa
+      .from('profiles')
+      .select('id, store_lat, store_lng')
+      .in('id', sellerIds);
+    const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
+    for (const s of sellers ?? []) {
+      sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
+    }
+
+    // --- 3. Valida ogni gruppo + calcola subtotale per gruppo dal DB.
+    const subtotalPerGroupCents: number[] = [];
+    const itemsPerGroupCents: Array<Array<{ productId: string; quantity: number; unitCents: number }>> = [];
+
+    for (const g of body.groups) {
+      let groupSubtotalCents = 0;
+      const items: Array<{ productId: string; quantity: number; unitCents: number }> = [];
+      for (const it of g.items) {
+        const p = products.find((x) => x.id === it.productId);
+        if (!p) return ApiErrors.notFound(`Prodotto ${it.productId} non trovato`);
+        if (p.seller_id !== g.sellerId) {
+          return ApiErrors.invalidRequest(`Prodotto ${p.name} non appartiene al venditore indicato.`);
+        }
+        if (p.status !== 'available') {
+          return ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`);
+        }
+        if (typeof p.stock === 'number' && p.stock < it.quantity) {
+          return NextResponse.json(
+            { error: `Stock insufficiente per ${p.name} (${p.stock} disponibili).` },
+            { status: 409 },
+          );
+        }
+        const unitCents = Math.round(Number(p.price) * 100);
+        items.push({ productId: p.id, quantity: it.quantity, unitCents });
+        groupSubtotalCents += unitCents * it.quantity;
+      }
+      subtotalPerGroupCents.push(groupSubtotalCents);
+      itemsPerGroupCents.push(items);
+    }
+
+    const grandSubtotalCents = subtotalPerGroupCents.reduce((s, x) => s + x, 0);
+    if (grandSubtotalCents <= 0) return ApiErrors.invalidRequest('Importo non valido.');
+
+    // --- 4. Coupon / spedizione / ritiro: ricalcolati server-side.
+    let couponDiscountCents = 0;
+    let couponFreeShipping = false;
+    let validatedCouponCode: string | null = null;
+    if (body.couponCode && body.couponCode.trim()) {
+      const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
+      if (!couponRes.ok) return ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`);
+      couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
+      couponFreeShipping = couponRes.freeShipping;
+      validatedCouponCode = couponRes.coupon.code;
+    }
+
+    const shippingPerGroupCents = body.groups.map((g, i) => {
+      const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
+      return shippingCentsFor({
+        subtotal: subtotalPerGroupCents[i] / 100,
+        storeLat: coord.lat,
+        storeLng: coord.lng,
+        deliveryLat: body.delivery.lat ?? null,
+        deliveryLng: body.delivery.lng ?? null,
+        pickupInStore: body.pickupInStore,
+        freeShipping: couponFreeShipping,
+      });
+    });
+    const pickupDiscountCents = body.pickupInStore
+      ? Math.round(grandSubtotalCents * (PICKUP_DISCOUNT_PERCENT / 100))
+      : 0;
+
+    // --- 5. Inserisci N ordini (uno per gruppo) con il client admin.
+    const createdOrderIds: string[] = [];
+    for (let i = 0; i < body.groups.length; i++) {
+      const g = body.groups[i];
+      const subtotal = subtotalPerGroupCents[i];
+      const shipping = shippingPerGroupCents[i];
+      const portion = grandSubtotalCents > 0 ? subtotal / grandSubtotalCents : 0;
+      const couponPortionCents = Math.round(couponDiscountCents * portion);
+      const pickupPortionCents = Math.round(pickupDiscountCents * portion);
+      const discountCents = couponPortionCents + pickupPortionCents;
+      const totalCents = Math.max(0, subtotal + shipping - discountCents);
+
+      const { data: order, error: orderErr } = await admin
+        .from('orders')
+        .insert({
+          user_id: user.id,
+          seller_id: g.sellerId,
+          total_price: totalCents / 100,
+          shipping_cost: shipping / 100,
+          discount_amount: discountCents / 100,
+          coupon_code: validatedCouponCode,
+          pickup_in_store: body.pickupInStore,
+          payment_method: 'cod',
+          payment_status: 'PENDING',
+          delivery_status: 'NEW',
+          delivery_full_name: body.delivery.fullName,
+          delivery_phone: body.delivery.phone,
+          delivery_address: body.delivery.address,
+          delivery_city: body.delivery.city,
+          delivery_zip: body.delivery.zip,
+          delivery_notes: body.delivery.notes ?? null,
+          delivery_lat: body.delivery.lat ?? null,
+          delivery_lng: body.delivery.lng ?? null,
+        })
+        .select('id')
+        .single();
+
+      if (orderErr || !order) {
+        logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
+        return ApiErrors.internal('Errore nella creazione ordine.');
+      }
+
+      const itemsRows = itemsPerGroupCents[i].map((it) => ({
+        order_id: order.id,
+        product_id: it.productId,
+        quantity: it.quantity,
+        unit_price: it.unitCents / 100,
+      }));
+      const { error: itemsErr } = await admin.from('order_items').insert(itemsRows);
+      if (itemsErr) {
+        logger.error(itemsErr, { context: 'cod-order-items-insert', orderId: order.id });
+      }
+
+      // B2B: dettaglio fattura elettronica (se attivato)
+      if (body.b2b && body.b2b.company_name && body.b2b.vat_number) {
+        const { error: bErr } = await admin.from('business_orders').insert({
+          order_id: order.id,
+          company_name: body.b2b.company_name,
+          vat_number: body.b2b.vat_number,
+          sdi_code: body.b2b.sdi_code ?? null,
+          pec: body.b2b.pec ?? null,
+          invoice_required: true,
+        });
+        if (bErr && !bErr.message.includes('does not exist')) {
+          logger.warn('business_orders insert failed', { message: bErr.message });
+        }
+      }
+
+      // Notifica in-app al venditore — nuovo ordine COD ricevuto
+      await admin.from('notifications').insert({
+        user_id: g.sellerId,
+        title: '🎉 Nuovo ordine!',
+        body: `Ordine #${order.id.slice(0, 6).toUpperCase()} · €${(totalCents / 100).toFixed(2)} · pagamento alla consegna`,
+        link: `/seller/orders/${order.id}`,
+      });
+
+      createdOrderIds.push(order.id);
+    }
+
+    // Traccia uso coupon (server-side authoritative).
+    if (validatedCouponCode && createdOrderIds.length > 0) {
+      const { error: cErr } = await admin.rpc('increment_coupon_usage', { p_code: validatedCouponCode });
+      if (cErr) logger.warn('[cod] increment_coupon_usage fallito', { code: validatedCouponCode, message: cErr.message });
+    }
+
+    return NextResponse.json({ orderIds: createdOrderIds }, { status: 200 });
+  },
+);

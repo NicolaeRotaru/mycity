@@ -265,6 +265,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     });
   }
 
+  // Traccia l'uso del coupon (server-side authoritative). handleCheckoutCompleted
+  // esce subito se il pending era già COMPLETED, quindi l'incremento è eseguito
+  // una sola volta per checkout.
+  if (couponCode && createdOrderIds.length > 0) {
+    const { error: cErr } = await admin.rpc('increment_coupon_usage', { p_code: couponCode });
+    if (cErr) logger.warn('[stripe] increment_coupon_usage fallito', { couponCode, message: cErr.message });
+  }
+
   // Marca pending_checkout come COMPLETED (idempotenza guard per re-delivery webhook)
   await admin
     .from('pending_checkouts')
