@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
+import { Badge } from './ui/Badge';
 import { useFavorites } from './hooks/useFavorites';
 
 interface ProductCardProps {
@@ -77,34 +78,18 @@ const ProductCard = ({
   return (
     <Link
       href={`/product/${id}`}
-      className="group bg-white border border-cream-200 rounded-2xl overflow-hidden hover:shadow-warm-lg hover:-translate-y-1 hover:border-primary-200 transition-all duration-200 flex flex-col relative"
+      className="group bg-white border border-surface-200 rounded-2xl overflow-hidden hover:shadow-warm-lg hover:-translate-y-1 hover:border-primary-200 transition-all duration-200 flex flex-col relative"
     >
       {/* Badges in alto a sinistra */}
       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-        {hasDiscount && (
-          <span className="bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
-            -{discountPercent}%
-          </span>
-        )}
-        {isNew && (
-          <span className="bg-olive-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
-            Nuovo
-          </span>
-        )}
-        {isOutOfStock && (
-          <span className="bg-ink-700 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
-            Esaurito
-          </span>
-        )}
-        {isLowStock && !isOutOfStock && (
-          <span className="bg-secondary-500 text-white text-[10px] font-semibold px-2 py-0.5 rounded uppercase tracking-wide">
-            Ultimi {stock}
-          </span>
-        )}
+        {hasDiscount && <Badge variant="discount">-{discountPercent}%</Badge>}
+        {isNew && <Badge variant="new">Nuovo</Badge>}
+        {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}
+        {isLowStock && !isOutOfStock && <Badge variant="lowstock">Ultimi {stock}</Badge>}
       </div>
 
       {/* Immagine + favorite button */}
-      <div className="relative w-full h-48 bg-gradient-to-br from-cream-50 to-cream-200 overflow-hidden">
+      <div className="relative w-full h-52 bg-surface-50 overflow-hidden">
         <Image
           src={img}
           alt={name}
@@ -157,7 +142,7 @@ const ProductCard = ({
           <div className="flex items-baseline gap-2 mb-2 flex-wrap">
             {hasDiscount ? (
               <>
-                <span className="text-xl font-bold text-rose-700">{formatPrice(discountedPrice)}</span>
+                <span className="text-xl font-bold text-secondary-700">{formatPrice(discountedPrice)}</span>
                 <span className="text-sm text-ink-400 line-through">{formatPrice(price)}</span>
               </>
             ) : (

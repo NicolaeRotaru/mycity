@@ -24,6 +24,7 @@ import { B2BInvoiceForm } from '@/components/checkout/B2BInvoiceForm';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
+import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
@@ -642,13 +643,18 @@ export default function CheckoutPage() {
 
         {/* RIEPILOGO ORDINE */}
         <div className="lg:sticky lg:top-32 h-fit space-y-4">
-          <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-cream-50 border-b px-5 py-3 flex justify-between items-center">
+          <div className="bg-white border border-surface-200 rounded-xl shadow-card overflow-hidden">
+            <div className="bg-surface-50 border-b border-surface-200 px-5 py-3 flex justify-between items-center">
               <h2 className="font-bold">Riepilogo ordine</h2>
               <span className="text-xs text-ink-400">{cart.length} articoli</span>
             </div>
 
             <CartGroupsList groups={groups} />
+
+            {/* Spinta add-back: a un soffio dalla spedizione gratis */}
+            <div className="px-5 pt-3">
+              <FreeShippingProgress subtotal={grandSubtotal} />
+            </div>
 
             {/* Coupon input */}
             <CouponInput

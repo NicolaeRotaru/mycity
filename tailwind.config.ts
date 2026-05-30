@@ -70,6 +70,17 @@ export default {
           400: '#E6CC95',
           500: '#D9B36F',
         },
+        // Surface: base neutra/bianca per le pagine del funnel d'acquisto
+        // (Home / Prodotto / Checkout). Grigi caldissimi che convivono con la
+        // terracotta senza il "giallo" del cream, così le FOTO risaltano.
+        // NON sostituisce cream globalmente: applicato chirurgicamente.
+        surface: {
+          0:   '#FFFFFF',
+          50:  '#FAFAF9',
+          100: '#F5F5F4',
+          200: '#EAE8E4',
+          300: '#D9D6D1',
+        },
         // Charcoal (text)
         ink: {
           50:  '#F5F5F4',
@@ -131,6 +142,10 @@ export default {
         'warm':     '0 4px 12px -2px rgba(192, 73, 44, 0.08), 0 2px 4px -1px rgba(192, 73, 44, 0.04)',
         'warm-lg':  '0 12px 32px -8px rgba(192, 73, 44, 0.15), 0 4px 8px -2px rgba(192, 73, 44, 0.06)',
         'warm-xl':  '0 24px 48px -12px rgba(192, 73, 44, 0.22)',
+        // Ombre neutre per il canvas bianco/surface (le warm-* su bianco puro
+        // risultano "fangose"): inchiostro tenue invece di terracotta.
+        'sm-neutral': '0 1px 2px 0 rgba(28, 26, 24, 0.06)',
+        'card':       '0 1px 3px rgba(28, 26, 24, 0.08), 0 4px 12px -4px rgba(28, 26, 24, 0.10)',
       },
       animation: {
         // Micro-interazioni
@@ -142,6 +157,7 @@ export default {
         'slide-down':  'slideDown 260ms cubic-bezier(0.16, 1, 0.3, 1)',
         'fade-in':     'fadeIn 200ms ease-out',
         'pop-in':      'popIn 240ms cubic-bezier(0.16, 1, 0.3, 1)',
+        'progress-fill': 'progressFill 600ms cubic-bezier(0.16, 1, 0.3, 1)',
       },
       keyframes: {
         heartBeat: {
@@ -176,6 +192,9 @@ export default {
         popIn: {
           from: { opacity: '0', transform: 'scale(0.92) translateY(8px)' },
           to:   { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
+        progressFill: {
+          from: { width: '0%' },
         },
       },
     },
