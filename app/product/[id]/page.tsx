@@ -110,18 +110,11 @@ export default function ProductPage({ params }: { params: { id: string } }) {
       });
       if (error) throw error;
 
-      // Bonus loyalty per recensione con foto (CRM Manager: +engagement).
-      // Best-effort: se la RPC non esiste (migration 027 non applicata), ignora.
-      if (reviewPhotos.length > 0) {
-        try {
-          await supabase.rpc('award_loyalty_points', {
-            p_user: user.id,
-            p_delta: 20,
-            p_reason: 'review_with_photo',
-            p_order: null,
-          });
-        } catch { /* noop */ }
-      }
+      // SICUREZZA: il bonus fedeltà per recensione-con-foto (+20) è accreditato
+      // SERVER-SIDE da un trigger su `reviews` (migration 059), con valore fisso.
+      // Prima veniva chiamata `award_loyalty_points` dal browser con p_delta
+      // arbitrario: un utente poteva accreditarsi punti illimitati. La RPC ora
+      // è eseguibile solo da service_role.
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.reviews.detail(id) });
