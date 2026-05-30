@@ -16,6 +16,7 @@ import StoriesCarousel from '@/components/home/StoriesCarousel';
 import HeroStoreCard from '@/components/home/HeroStoreCard';
 import HomeEvents from '@/components/home/HomeEvents';
 import MaybeSection from '@/components/home/MaybeSection';
+import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
 
 // NB: ISR non applicabile. next-intl è cookie-based (getLocale/getMessages nel
 // root layout leggono i cookie) → tutte le rotte sono dinamiche per-request, e un
@@ -40,11 +41,11 @@ import MaybeSection from '@/components/home/MaybeSection';
  */
 export default function Home() {
   return (
-    <div className="bg-cream-100">
+    <div className="bg-surface-50">
       <HomeRedirectGuard />
 
-      {/* HERO — cream background, terracotta accents, serif headline */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-cream-50 to-cream-100">
+      {/* HERO — canvas neutro pulito, accenti terracotta, headline serif */}
+      <section className="relative overflow-hidden bg-gradient-to-b from-surface-0 to-surface-100">
         {/* Decorazione discreta */}
         <div aria-hidden className="absolute -top-20 -right-20 w-[500px] h-[500px] rounded-full bg-primary-200/40 blur-3xl" />
         <div aria-hidden className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-accent-200/40 blur-3xl" />
@@ -76,12 +77,15 @@ export default function Home() {
                 </Link>
                 <Link
                   href="/stores"
-                  className="inline-flex items-center gap-2 bg-white hover:bg-cream-50 text-ink-900 border border-cream-300 px-6 py-3 rounded-full font-semibold transition-colors"
+                  className="inline-flex items-center gap-2 bg-white hover:bg-surface-100 text-ink-900 border border-surface-300 px-6 py-3 rounded-full font-semibold transition-colors"
                 >
                   <Store size={18} strokeWidth={2.2} />
                   Esplora i negozi
                 </Link>
               </div>
+
+              {/* Urgenza + zero-rischio above the fold */}
+              <DeliveryCutoff variant="banner" className="max-w-sm" />
 
               <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 text-sm text-ink-600">
                 <span className="inline-flex items-center gap-1.5">
@@ -94,7 +98,7 @@ export default function Home() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <Check size={16} strokeWidth={2.4} className="text-olive-600" />
-                  Pagamento alla consegna
+                  Paghi alla consegna
                 </span>
               </div>
             </div>
@@ -215,9 +219,9 @@ export default function Home() {
               Vicino a te
             </span>
             <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">
-              I negozi del tuo quartiere
+              Sostieni i negozi di Piacenza
             </h2>
-            <p className="text-ink-500 text-sm mt-1">Sostieni chi vende davvero qui</p>
+            <p className="text-ink-500 text-sm mt-1">Ogni ordine aiuta un commerciante della tua città, non un colosso lontano.</p>
           </div>
           <Link href="/stores" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
             Tutti i negozi <ArrowRight size={16} strokeWidth={2.4} />

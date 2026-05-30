@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Heart } from 'lucide-react';
+import { Heart, Banknote, Bike, RotateCcw, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -28,6 +28,10 @@ import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
+import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
+import { SocialProof } from '@/components/ui/SocialProof';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -236,17 +240,15 @@ export default function ProductPage({ params }: { params: { id: string } }) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_1fr_320px] gap-6">
         {/* GALLERIA */}
         <div className="space-y-3">
-          <div className="relative w-full aspect-square bg-gradient-to-br from-gray-50 to-gray-100 rounded-xl overflow-hidden border">
+          <div className="relative w-full aspect-square bg-surface-0 rounded-xl overflow-hidden border border-surface-200">
             <Image src={sizedImage(images[activeImg], 'detail')} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-contain p-4" />
             {isOutOfStock && (
-              <div className="absolute top-4 left-4 bg-ink-900 text-white text-xs font-bold px-3 py-1.5 rounded-full">
-                ESAURITO
-              </div>
+              <Badge variant="soldout" size="md" className="absolute top-4 left-4">ESAURITO</Badge>
             )}
             {isLowStock && !isOutOfStock && (
-              <div className="absolute top-4 left-4 bg-red-500 text-white text-xs font-bold px-3 py-1.5 rounded-full animate-pulse">
-                🔥 SOLO {stock} DISPONIBILI
-              </div>
+              <Badge variant="lowstock" size="md" className="absolute top-4 left-4">
+                Solo {stock} rimasti
+              </Badge>
             )}
           </div>
           {images.length > 1 && (
@@ -258,8 +260,8 @@ export default function ProductPage({ params }: { params: { id: string } }) {
                   onClick={() => setActiveImg(i)}
                   aria-label={`Mostra foto ${i + 1}`}
                   aria-pressed={activeImg === i}
-                  className={`relative aspect-square bg-cream-100 rounded-lg overflow-hidden border-2 transition ${
-                    activeImg === i ? 'border-indigo-500' : 'border-transparent hover:border-cream-300'
+                  className={`relative aspect-square bg-surface-50 rounded-lg overflow-hidden border-2 transition ${
+                    activeImg === i ? 'border-primary-600' : 'border-transparent hover:border-surface-300'
                   }`}
                 >
                   <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-cover" />
@@ -324,27 +326,33 @@ export default function ProductPage({ params }: { params: { id: string } }) {
             ) : (
               <span className="text-sm text-ink-400">Sii il primo a recensire questo prodotto</span>
             )}
+            <SocialProof productId={id} />
           </div>
 
-          <div className="border-y py-4">
-            <div className="flex items-baseline gap-3 mb-1">
+          <div className="border-y border-surface-200 py-4 space-y-3">
+            <div className="flex items-baseline gap-3">
               <span className="text-4xl font-extrabold text-ink-900">{formatPrice(price)}</span>
               <span className="text-sm text-ink-400">IVA inclusa</span>
             </div>
-            {/* Trust signal forte: confronto vs media categoria (Behavioral Scientist) */}
-            <div className="mb-2 space-y-2">
+            {/* Ancoraggio prezzo + confronto media categoria (Behavioral Scientist) */}
+            <div className="space-y-2">
               <ActivePromoBadge productId={id} basePrice={price} />
               <PriceComparison productId={id} categoryId={product.category_id ?? null} currentPrice={price} />
             </div>
-            {freeShipping ? (
-              <p className="text-olive-600 font-semibold text-sm">
-                ✓ <strong>Spedizione GRATUITA</strong> · Consegna in 24-48h
+
+            {/* Zero rischio: la leva più forte di questo marketplace (COD) */}
+            <div className="flex items-center gap-2.5 rounded-lg bg-olive-50 border border-olive-200 px-3 py-2.5">
+              <Banknote size={20} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
+              <p className="text-sm text-olive-800">
+                <strong>Paghi alla consegna in contanti</strong> — zero rischio, zero carta.
               </p>
-            ) : (
-              <p className="text-ink-600 text-sm">
-                Aggiungi <strong>{formatPrice(FREE_SHIPPING_THRESHOLD - price)}</strong> per la spedizione gratuita
-              </p>
-            )}
+            </div>
+
+            {/* Urgenza onesta legata al cutoff reale di consegna */}
+            <DeliveryCutoff variant="inline" />
+
+            {/* Barra spedizione gratis reattiva alla quantità */}
+            <FreeShippingProgress subtotal={price * quantity} />
           </div>
 
           <div>
@@ -378,16 +386,16 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               </div>
             )}
 
-          {/* Trust signals */}
+          {/* Trust signals — COD e orgoglio locale in testa */}
           <div className="grid grid-cols-2 gap-3 pt-2">
             {[
-              { icon: '💰', label: 'Pagamento alla consegna' },
-              { icon: '🚚', label: 'Consegna in 24-48h' },
-              { icon: '↩️', label: 'Reso entro 14 giorni' },
-              { icon: '🏘️', label: 'Venditore locale' },
+              { Icon: Banknote, label: 'Paghi alla consegna' },
+              { Icon: Store, label: 'Sostieni i negozi di Piacenza' },
+              { Icon: Bike, label: 'Consegna oggi o domani' },
+              { Icon: RotateCcw, label: 'Reso entro 14 giorni' },
             ].map((t) => (
-              <div key={t.label} className="flex items-center gap-2 text-xs text-ink-700 bg-cream-50 rounded-lg px-3 py-2">
-                <span className="text-lg">{t.icon}</span>
+              <div key={t.label} className="flex items-center gap-2 text-xs text-ink-700 bg-surface-50 border border-surface-200 rounded-lg px-3 py-2">
+                <t.Icon size={18} strokeWidth={2.2} className="text-primary-600 shrink-0" aria-hidden />
                 <span className="font-medium">{t.label}</span>
               </div>
             ))}
@@ -396,36 +404,39 @@ export default function ProductPage({ params }: { params: { id: string } }) {
 
         {/* CTA STICKY */}
         <div className="lg:sticky lg:top-32 h-fit">
-          <div className="bg-white border-2 border-accent-300 rounded-xl p-5 shadow-lg space-y-3">
+          <div className="bg-surface-0 border border-surface-200 rounded-xl p-5 shadow-card space-y-3">
             <div className="text-2xl font-extrabold text-ink-900">{formatPrice(price)}</div>
             {freeShipping && (
-              <p className="text-olive-600 text-xs font-bold">SPEDIZIONE GRATUITA</p>
+              <Badge variant="free" icon={Bike}>Spedizione gratuita</Badge>
             )}
             <p className="text-xs">
               {isOutOfStock ? (
-                <span className="text-red-600 font-bold">❌ Esaurito</span>
+                <span className="text-secondary-700 font-bold">Esaurito</span>
               ) : isLowStock ? (
-                <span className="text-red-600 font-bold">🔥 Solo {stock} disponibili — affrettati!</span>
+                <span className="text-secondary-700 font-bold">🔥 Solo {stock} rimasti — affrettati!</span>
               ) : (
-                <span className="text-olive-600 font-bold">✓ Disponibile · pronto per la spedizione</span>
+                <span className="text-olive-700 font-bold">✓ Disponibile · pronto per la consegna</span>
               )}
             </p>
 
+            {/* Urgenza al momento della decisione */}
+            {!isOutOfStock && <DeliveryCutoff variant="inline" />}
+
             <div className="flex items-center gap-3 pt-2">
               <label className="text-sm font-medium">Q.tà:</label>
-              <div className="flex items-center border rounded-lg">
+              <div className="flex items-center border border-surface-300 rounded-lg">
                 <button
                   type="button"
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
                   aria-label="Diminuisci quantità"
-                  className="w-9 h-9 hover:bg-cream-50 rounded-l-lg"
+                  className="w-9 h-9 hover:bg-surface-50 rounded-l-lg"
                 >−</button>
                 <span className="w-10 text-center font-semibold">{quantity}</span>
                 <button
                   type="button"
                   onClick={() => setQuantity(quantity + 1)}
                   aria-label="Aumenta quantità"
-                  className="w-9 h-9 hover:bg-cream-50 rounded-r-lg"
+                  className="w-9 h-9 hover:bg-surface-50 rounded-r-lg"
                 >+</button>
               </div>
             </div>
@@ -434,7 +445,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               type="button"
               onClick={handleAdd}
               disabled={isOutOfStock}
-              className="w-full bg-accent-400 hover:bg-accent-500 disabled:bg-cream-300 disabled:cursor-not-allowed text-ink-900 py-3 rounded-lg font-bold shadow-md hover:shadow-lg transition-all"
+              className="w-full bg-accent-400 hover:bg-accent-500 disabled:bg-surface-200 disabled:text-ink-400 disabled:cursor-not-allowed text-ink-900 py-3 rounded-lg font-bold shadow-sm hover:shadow-warm transition-all"
             >
               {isOutOfStock ? 'Non disponibile' : '🛒 Aggiungi al carrello'}
             </button>
@@ -443,7 +454,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               href="/cart"
               className="block w-full text-center bg-ink-900 hover:bg-ink-800 text-white py-3 rounded-lg font-bold"
             >
-              Acquista ora
+              Compra ora · paghi alla consegna
             </Link>
 
             {(sellerProfile?.id ?? product.seller_id) && (
@@ -454,9 +465,9 @@ export default function ProductPage({ params }: { params: { id: string } }) {
               />
             )}
 
-            <div className="pt-3 border-t space-y-1.5 text-xs text-ink-500">
-              <p>📦 Venduto e spedito da <strong className="text-ink-700">{product.profiles?.store_name}</strong></p>
-              <p>🔒 Acquisto protetto al 100%</p>
+            <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
+              <p>📦 Venduto e consegnato da <strong className="text-ink-700">{product.profiles?.store_name}</strong></p>
+              <p>🔒 Compri sicuro: paghi solo quando arriva.</p>
             </div>
           </div>
         </div>
@@ -597,7 +608,7 @@ export default function ProductPage({ params }: { params: { id: string } }) {
       </section>
 
       {/* Sticky CTA mobile */}
-      <StickyAddToCart price={price} available={!isOutOfStock} onAdd={handleAdd} />
+      <StickyAddToCart price={price} available={!isOutOfStock} onAdd={handleAdd} note="Paghi alla consegna" />
 
       {/* Tracking view (side-effect only) */}
       <ProductViewTracker productId={id} />

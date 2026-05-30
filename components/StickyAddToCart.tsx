@@ -8,6 +8,8 @@ type Props = {
   price: number;
   available: boolean;
   onAdd: () => void;
+  /** Microcopy di rassicurazione sotto il prezzo (es. "Paghi alla consegna"). */
+  note?: string;
 };
 
 /**
@@ -17,7 +19,7 @@ type Props = {
  * Solo md:hidden — su desktop c'è già la sticky card a destra del prodotto.
  * Lascia spazio per la MobileTabBar in basso (z-index + bottom offset).
  */
-export default function StickyAddToCart({ price, available, onAdd }: Props) {
+export default function StickyAddToCart({ price, available, onAdd, note }: Props) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -42,8 +44,10 @@ export default function StickyAddToCart({ price, available, onAdd }: Props) {
       <div className="container mx-auto px-3">
         <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-3 flex items-center gap-3">
           <div className="min-w-0">
-            <p className="text-xs text-ink-500 leading-tight">Totale</p>
             <p className="text-lg font-bold text-primary-700 leading-tight">{formatPrice(price)}</p>
+            <p className="text-[11px] text-olive-700 font-medium leading-tight">
+              {note ?? 'Totale'}
+            </p>
           </div>
           <button
             onClick={onAdd}

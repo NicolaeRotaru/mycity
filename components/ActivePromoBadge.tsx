@@ -39,13 +39,19 @@ export default function ActivePromoBadge({ productId, basePrice }: Props) {
   if (!discount || discount <= 0) return null;
 
   const discounted = basePrice * (1 - discount / 100);
+  const savings = basePrice - discounted;
 
   return (
-    <div className="inline-flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-lg px-3 py-1.5">
-      <Tag size={14} className="text-rose-700" strokeWidth={2.4} />
-      <span className="text-sm font-bold text-rose-700">In promo -{discount}%</span>
-      <span className="text-sm text-ink-500 line-through">{formatPrice(basePrice)}</span>
-      <span className="text-sm font-bold text-rose-700">{formatPrice(discounted)}</span>
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="inline-flex items-center gap-2 bg-secondary-50 border border-secondary-200 rounded-lg px-3 py-1.5">
+        <Tag size={14} className="text-secondary-700" strokeWidth={2.4} />
+        <span className="text-sm font-bold text-secondary-700">In promo -{discount}%</span>
+        <span className="text-sm text-ink-500 line-through">{formatPrice(basePrice)}</span>
+        <span className="text-sm font-bold text-secondary-700">{formatPrice(discounted)}</span>
+      </div>
+      <span className="inline-flex items-center text-xs font-bold text-olive-700 bg-olive-50 px-2 py-1 rounded">
+        Risparmi {formatPrice(savings)}
+      </span>
     </div>
   );
 }

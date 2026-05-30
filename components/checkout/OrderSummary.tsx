@@ -1,5 +1,6 @@
 'use client';
 
+import { Banknote, Lock, RotateCcw, Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 
@@ -84,6 +85,31 @@ export function OrderSummary({
               ? `🔒 Paga con carta · ${formatPrice(total)}`
               : `✓ Conferma ordine · ${formatPrice(total)}`)}
       </button>
+
+      {/* Rassicurazione al momento del pagamento — leva anti-abbandono */}
+      <div className="px-5 py-4 space-y-3 border-t border-surface-200">
+        <p className="flex items-start gap-2 text-sm text-olive-800">
+          {paymentMethod === 'card' ? (
+            <>
+              <Lock size={16} strokeWidth={2.2} className="text-olive-600 shrink-0 mt-0.5" aria-hidden />
+              <span><strong>Pagamento sicuro con Stripe.</strong> Niente costi nascosti.</span>
+            </>
+          ) : (
+            <>
+              <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0 mt-0.5" aria-hidden />
+              <span><strong>Non paghi adesso.</strong> Paghi in contanti al rider quando arriva.</span>
+            </>
+          )}
+        </p>
+        <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-ink-500">
+          <li className="inline-flex items-center gap-1">
+            <RotateCcw size={13} strokeWidth={2.2} aria-hidden /> Reso entro 14 giorni
+          </li>
+          <li className="inline-flex items-center gap-1">
+            <Store size={13} strokeWidth={2.2} aria-hidden /> Venditore locale
+          </li>
+        </ul>
+      </div>
     </>
   );
 }

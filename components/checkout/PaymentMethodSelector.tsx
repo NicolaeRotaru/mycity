@@ -11,6 +11,8 @@
  * Estratto da app/checkout/page.tsx per ridurre il monolite.
  */
 
+import { Badge } from '@/components/ui/Badge';
+
 type PaymentMethod = 'cod' | 'card';
 
 type Props = {
@@ -72,7 +74,10 @@ export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiS
             className="mt-1"
           />
           <div className="flex-1">
-            <p className="font-bold text-ink-900">💵 Contanti alla consegna</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-bold text-ink-900">💵 Contanti alla consegna</p>
+              <Badge variant="cod">Zero rischio</Badge>
+            </div>
             <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
           </div>
         </label>
