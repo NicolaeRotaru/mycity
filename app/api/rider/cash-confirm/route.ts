@@ -14,6 +14,11 @@ const Body = z.object({
   deliveryPhotoUrl: z.string().url().optional(),
 });
 
+/** Sopra questa soglia la prova (foto contanti o firma) è obbligatoria. */
+const HIGH_VALUE_THRESHOLD_CENTS = 5000; // €50
+/** Tolleranza per arrotondamenti prima di considerarlo un mismatch. */
+const MISMATCH_TOLERANCE_CENTS = 50; // €0,50
+
 /**
  * Il rider conferma di aver incassato contanti al momento della consegna.
  *
@@ -59,6 +64,19 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     return ApiErrors.conflict("Incasso gia' confermato");
   }
 
+  // L'ATTESO è autoritativo (dal DB): il rider risponde dell'intero total_price
+  // a prescindere da quanto dichiara di aver incassato.
+  const expectedCents = Math.round(Number(order.total_price) * 100);
+
+  // Cap difensivo: rifiuta importi palesemente fuori range (errore di battitura/abuso).
+  if (body.cashCollectedCents > expectedCents * 2 + 1000) {
+    return ApiErrors.invalidRequest('Importo incassato fuori range rispetto al totale ordine.');
+  }
+  // Prova obbligatoria sopra soglia (anti-frode + dispute "non ho pagato/ricevuto").
+  if (expectedCents >= HIGH_VALUE_THRESHOLD_CENTS && !body.photoUrl && !body.signatureUrl) {
+    return ApiErrors.invalidRequest('Per ordini sopra €50 allega una prova: foto dei contanti o firma del cliente.');
+  }
+
   const admin = getAdminSupabase();
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
@@ -77,50 +95,61 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 
   if (updErr) return ApiErrors.internal('Update fallito');
 
-  // Aggiorna riconciliazione giornaliera
+  // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).
   await upsertReconciliation(admin, user.id, today);
 
-  // Alert immediato se delta > 5%
-  const expectedCents = Math.round(Number(order.total_price) * 100);
+  // Mismatch → alert agli ADMIN (NON al rider, che è la parte da controllare).
   const delta = body.cashCollectedCents - expectedCents;
-  const deltaPct = expectedCents > 0 ? Math.abs(delta) / expectedCents : 0;
-  if (deltaPct > 0.05) {
-    await admin.from('notifications').insert({
-      user_id: user.id,
-      title: '⚠️ Incasso non quadra',
-      body: `Ordine ${body.orderId.slice(0, 8)}: incassati €${(body.cashCollectedCents/100).toFixed(2)}, attesi €${(expectedCents/100).toFixed(2)}.`,
-    });
+  if (Math.abs(delta) > MISMATCH_TOLERANCE_CENTS) {
+    const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+    const rows = (admins ?? []).map((a) => ({
+      user_id: a.id,
+      title: '⚠️ Incasso COD non quadra',
+      body: `Rider ${user.id.slice(0, 8)} · ordine ${body.orderId.slice(0, 8)}: incassati €${(body.cashCollectedCents / 100).toFixed(2)}, attesi €${(expectedCents / 100).toFixed(2)} (Δ €${(delta / 100).toFixed(2)}).`,
+      link: '/admin/orders',
+    }));
+    if (rows.length > 0) await admin.from('notifications').insert(rows);
   }
 
-  return NextResponse.json({ ok: true, delta }, { status: 200 });
+  return NextResponse.json({ ok: true, delta, expectedCents }, { status: 200 });
 });
 
 type AdminSupabase = ReturnType<typeof import('@/lib/supabase/server').getAdminSupabase>;
 type ReconciliationRow = { total_price: number | string | null; cash_collected_cents: number | null };
 
 async function upsertReconciliation(admin: AdminSupabase, riderId: string, isoDate: string) {
-  // Calcola expected e collected per quel giorno
   const start = `${isoDate}T00:00:00Z`;
   const end = `${isoDate}T23:59:59Z`;
 
-  const { data: rows } = await admin
+  // ATTESO: tutti i COD consegnati quel giorno (per delivered_at), ANCHE quelli mai
+  // confermati. Così un rider che semplicemente "non conferma" e tiene i contanti
+  // emerge come ammanco, invece di sparire dalla riconciliazione.
+  const { data: deliveredRows } = await admin
     .from('orders')
-    .select('total_price, cash_collected_cents')
+    .select('total_price')
+    .eq('rider_id', riderId)
+    .eq('payment_method', 'cod')
+    .eq('delivery_status', 'DELIVERED')
+    .gte('delivered_at', start)
+    .lte('delivered_at', end);
+  const expected = (deliveredRows ?? []).reduce(
+    (s, r) => s + Math.round(Number((r as ReconciliationRow).total_price) * 100), 0,
+  );
+
+  // INCASSATO: somma dichiarata sugli ordini confermati quel giorno.
+  const { data: confirmedRows } = await admin
+    .from('orders')
+    .select('cash_collected_cents')
     .eq('rider_id', riderId)
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
     .gte('cash_confirmed_at', start)
     .lte('cash_confirmed_at', end);
-
-  const rowsTyped = (rows ?? []) as unknown as ReconciliationRow[];
-  const expected = rowsTyped.reduce(
-    (s, r) => s + Math.round(Number(r.total_price) * 100), 0,
-  );
-  const collected = rowsTyped.reduce(
-    (s, r) => s + Number(r.cash_collected_cents ?? 0), 0,
+  const collected = (confirmedRows ?? []).reduce(
+    (s, r) => s + Number((r as ReconciliationRow).cash_collected_cents ?? 0), 0,
   );
 
-  const status = expected === collected ? 'OK' : 'MISMATCH';
+  const status = Math.abs(expected - collected) <= 50 ? 'OK' : 'MISMATCH';
 
   await admin
     .from('cod_reconciliations')
