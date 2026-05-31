@@ -1,29 +1,22 @@
--- 067: completa il lockdown EXECUTE sulle funzioni SECURITY DEFINER mancanti
+-- 067: revoca `anon` dalle funzioni SECURITY DEFINER di integrità ordine
 --
--- Security advisor (0028/0029): alcune funzioni SECURITY DEFINER restavano
--- chiamabili da `anon`/`authenticated` via PostgREST (/rest/v1/rpc/...),
--- bypassando le route server che fanno l'auth check. La migration 064 non le
--- copriva tutte:
---   - cancel_order, seller_reject_order: non erano nell'elenco di 064
---   - rider_release_order: creata DOPO (066) con il GRANT a PUBLIC di default
+-- Security advisor 0028: cancel_order, seller_reject_order, rider_release_order,
+-- verify_pickup_code, verify_delivery_code restavano chiamabili da `anon` via
+-- PostgREST (/rest/v1/rpc/...). Vanno chiuse ad anon.
 --
--- Verifica grant reali (has_function_privilege) prima del fix:
---   cancel_order        anon=t auth=t   seller_reject_order anon=t auth=t
---   rider_release_order anon=t auth=t
---
--- Regola:
---   * cancel_order  -> invocata dal CLIENT utente (OrderActions.tsx). Verifica
---     internamente auth.uid() = acquirente (FORBIDDEN altrimenti): resta a
---     `authenticated`, si toglie solo `anon`.
---   * seller_reject_order / rider_release_order / verify_*_code -> invocate SOLO
---     da route server (admin/service_role): si revoca anche `authenticated`.
---     verify_*_code sono incluse in modo idempotente (gia' chiuse da 064).
+-- ATTENZIONE (correzione rispetto a una prima stesura errata): queste funzioni
+-- NON sono server-only. Sono invocate CLIENT-SIDE come `authenticated`:
+--   * cancel_order        -> app/orders/[id]/page.tsx          (acquirente)
+--   * seller_reject_order  -> app/seller/orders/[id]/page.tsx   (venditore)
+--   * rider_release_order  -> app/rider/orders/[id]/page.tsx    (rider)
+--   * verify_pickup_code   -> app/rider/orders/[id]/page.tsx    (rider)
+--   * verify_delivery_code -> app/rider/orders/[id]/page.tsx    (rider)
+-- Tutte applicano internamente il controllo auth.uid() (rider_id/seller_id/
+-- acquirente) + lockout, quindi `authenticated` è sicuro e necessario.
+-- REVOCARE `authenticated` romperebbe i bottoni rifiuta/rilascia e la conferma
+-- ritiro/consegna del rider. Si revoca SOLO `anon` (e PUBLIC), si mantiene
+-- `authenticated` + `service_role`.
 
--- 1) cancel_order: utente loggato proprietario -> via anon, resta authenticated
-REVOKE EXECUTE ON FUNCTION public.cancel_order(uuid) FROM PUBLIC, anon;
-GRANT  EXECUTE ON FUNCTION public.cancel_order(uuid) TO authenticated, service_role;
-
--- 2) funzioni server-only: solo service_role
 DO $$
 DECLARE r record;
 BEGIN
@@ -33,12 +26,14 @@ BEGIN
     WHERE n.nspname = 'public'
       AND p.prosecdef = true
       AND p.proname IN (
-        'seller_reject_order', 'rider_release_order',
+        'cancel_order', 'seller_reject_order', 'rider_release_order',
         'verify_pickup_code', 'verify_delivery_code'
       )
   LOOP
-    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated', r.sig);
-    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', r.sig);
+    -- toglie l'accesso a chiunque non loggato; PUBLIC include anon
+    EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon', r.sig);
+    -- ripristina esplicitamente i ruoli legittimi (idempotente)
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO authenticated, service_role', r.sig);
   END LOOP;
 END $$;
 
