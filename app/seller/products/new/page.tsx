@@ -19,6 +19,8 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackProductPublished } from '@/lib/analytics/events';
+import { formatPrice } from '@/lib/format';
+import { Eye, Image as ImageIcon } from 'lucide-react';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
@@ -285,6 +287,32 @@ export default function NewProductPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* ANTEPRIMA — come la vede il cliente, prima di pubblicare */}
+        <div className="border-t pt-4 space-y-2">
+          <h2 className="text-sm font-semibold text-ink-500 flex items-center gap-1.5">
+            <Eye size={15} strokeWidth={2.2} aria-hidden /> Anteprima — come la vede il cliente
+          </h2>
+          <div className="bg-white border border-cream-300 rounded-xl overflow-hidden shadow-warm max-w-[16rem]">
+            <div className="aspect-square bg-cream-100">
+              {imageUrls[0] ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                </>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-ink-300">
+                  <ImageIcon size={40} strokeWidth={1.5} aria-hidden />
+                </div>
+              )}
+            </div>
+            <div className="p-3">
+              <p className="font-semibold text-ink-900 line-clamp-1">{watch('name') || 'Nome prodotto'}</p>
+              <p className="text-sm text-ink-500 line-clamp-2 mt-0.5">{watch('description') || 'La descrizione apparirà qui…'}</p>
+              <p className="font-bold text-primary-700 mt-1.5">{watch('price') ? formatPrice(Number(watch('price'))) : '€—'}</p>
+            </div>
+          </div>
         </div>
 
         <Button type="submit" loading={create.isPending} fullWidth size="lg">
