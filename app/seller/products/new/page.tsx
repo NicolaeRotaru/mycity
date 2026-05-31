@@ -18,10 +18,11 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { queryKeys } from '@/lib/queries/keys';
+import { trackProductPublished } from '@/lib/analytics/events';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
-  description: z.string().min(10, 'Almeno 10 caratteri'),
+  description: z.string().min(30, 'Descrivi bene il prodotto: almeno 30 caratteri (materiali, taglia, condizione…)'),
   price: z.coerce.number().positive('Inserisci un prezzo valido'),
   stock: z.coerce.number().int().min(0).default(0),
   category_id: z.string().min(1, 'Seleziona una categoria'),
@@ -33,6 +34,7 @@ export default function NewProductPage() {
   const router = useRouter();
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
 
   type Category = { id: string; name: string; slug: string; parent_id: string | null };
@@ -133,6 +135,7 @@ export default function NewProductPage() {
           uploaded.push(data.publicUrl);
         }
         setImageUrls((prev) => [...prev, ...uploaded]);
+        setImageError(null);
         toast.success('Immagini caricate');
       } catch (err) {
         toast.error(friendlyError(err));
@@ -146,7 +149,7 @@ export default function NewProductPage() {
     mutationFn: async (form: FormData) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { error } = await supabase.from('products').insert({
+      const { data, error } = await supabase.from('products').insert({
         name: form.name,
         description: form.description,
         price: form.price,
@@ -156,15 +159,28 @@ export default function NewProductPage() {
         images: imageUrls,
         attributes,
         status: 'available',
-      });
+      }).select('id').single();
       if (error) throw error;
+      return { id: data.id as string, sellerId: user.id };
     },
-    onSuccess: () => {
+    onSuccess: ({ id, sellerId }) => {
+      trackProductPublished(id, sellerId);
       toast.success('Prodotto pubblicato!');
       router.push('/seller/products');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
+
+  const onValid = (form: FormData) => {
+    // Fabbrica della qualità: nessun annuncio senza foto. Gli annunci con foto
+    // convertono molto di più — blocchiamo la pubblicazione e spieghiamo perché.
+    if (imageUrls.length === 0) {
+      setImageError('Aggiungi almeno una foto: senza immagini il prodotto non vende.');
+      document.getElementById('image-dropzone')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+    create.mutate(form);
+  };
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -172,7 +188,7 @@ export default function NewProductPage() {
 
       <PhotoFillButton onFilled={handleExtracted} />
 
-      <form onSubmit={handleSubmit((d) => create.mutate(d))} className="bg-white border rounded-lg p-6 space-y-4">
+      <form onSubmit={handleSubmit(onValid)} className="bg-white border rounded-lg p-6 space-y-4">
         <Input
           label="Nome prodotto"
           {...register('name')}
@@ -192,6 +208,7 @@ export default function NewProductPage() {
           }
           {...register('description')}
           rows={4}
+          placeholder="Cosa è, materiali, dimensioni/taglia, condizione, cosa lo rende speciale…"
           error={typeof errors.description?.message === 'string' ? errors.description.message : undefined}
         />
 
@@ -233,12 +250,14 @@ export default function NewProductPage() {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Immagini</label>
+        <div id="image-dropzone">
+          <label className="block text-sm font-medium mb-1">
+            Foto del prodotto <span className="text-ink-400 font-normal">— almeno 1, consigliate 3</span>
+          </label>
           <div
             {...getRootProps()}
             className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-              isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-primary-400'
+              imageError ? 'border-rose-300 bg-rose-50' : isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-primary-400'
             }`}
           >
             <input {...getInputProps()} />
@@ -247,6 +266,8 @@ export default function NewProductPage() {
               : <p className="text-ink-500">Trascina qui le foto o clicca per selezionarle</p>
             }
           </div>
+          <p className="text-xs text-ink-400 mt-1">Luce naturale, sfondo pulito, prodotto centrato — è la prima cosa che convince chi compra.</p>
+          {imageError && <p className="text-sm text-rose-600 mt-1">{imageError}</p>}
           {imageUrls.length > 0 && (
             <div className="grid grid-cols-4 gap-2 mt-3">
               {imageUrls.map((url, i) => (
