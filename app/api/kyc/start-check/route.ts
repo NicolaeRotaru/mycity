@@ -68,6 +68,24 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
     }
   }
 
+  // I campi kyc_*_url contengono il PATH nel bucket privato: generiamo signed URL
+  // fresche e brevi SOLO ora, al momento del check (nessuna URL persistita nel DB).
+  // Fallback legacy: se il valore è già una URL http, la usiamo così com'è.
+  const toSignedUrl = async (val: string | null): Promise<string | null> => {
+    if (!val) return null;
+    if (val.startsWith('http')) return val;
+    const { data } = await admin.storage.from('kyc-docs').createSignedUrl(val, 60 * 15);
+    return data?.signedUrl ?? null;
+  };
+  const [idFrontUrl, idBackUrl, selfieUrl] = await Promise.all([
+    toSignedUrl(profile.kyc_id_doc_front_url),
+    toSignedUrl(profile.kyc_id_doc_back_url),
+    toSignedUrl(profile.kyc_selfie_url),
+  ]);
+  if (!idFrontUrl || !selfieUrl) {
+    return ApiErrors.internal('Impossibile generare gli URL firmati dei documenti.');
+  }
+
   // Provider KYC
   const provider = getKycProvider();
   const result = await provider.startCheck(
@@ -80,9 +98,9 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
       birthDate: profile.legal_birth_date,
     },
     {
-      idFrontUrl: profile.kyc_id_doc_front_url,
-      idBackUrl: profile.kyc_id_doc_back_url,
-      selfieUrl: profile.kyc_selfie_url,
+      idFrontUrl,
+      idBackUrl,
+      selfieUrl,
     },
   );
 

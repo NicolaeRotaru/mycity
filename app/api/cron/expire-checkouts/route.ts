@@ -29,7 +29,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .update({ status: 'EXPIRED' })
     .eq('status', 'PENDING')
     .lt('expires_at', new Date().toISOString())
-    .select('id');
+    .select('id, groups');
 
   if (error) {
     logger.error('[cron] expire-checkouts failed', error);
@@ -37,6 +37,17 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   }
 
   const count = data?.length ?? 0;
+
+  // Rilascia lo stock riservato al checkout per i pending scaduti (P0-4).
+  for (const pc of data ?? []) {
+    const groups = (pc.groups as Array<{ items?: Array<{ productId: string; quantity: number }> }> | null) ?? [];
+    const items = groups.flatMap((g) => (g.items ?? []).map((it) => ({ product_id: it.productId, qty: it.quantity })));
+    if (items.length > 0) {
+      const { error: rErr } = await admin.rpc('restore_stock', { p_items: items });
+      if (rErr) logger.warn('[cron] restore_stock on expire fallita', { id: pc.id, message: rErr.message });
+    }
+  }
+
   if (count > 0) {
     logger.info(`[cron] expired ${count} pending checkouts`);
   }

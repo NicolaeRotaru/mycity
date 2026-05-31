@@ -109,11 +109,29 @@ async function viesVatLookup(vat: string): Promise<{ valid: boolean; name?: stri
   }
 }
 
+/**
+ * Provider fail-closed per la PRODUZIONE quando manca un provider reale: NON
+ * auto-approva mai (status 'PENDING' → review manuale admin). Evita che un deploy
+ * senza Onfido configurato verifichi automaticamente ogni venditore.
+ */
+class ManualReviewKycProvider implements KycProvider {
+  async startCheck(_subject: KycSubject, docs: KycDocs): Promise<KycCheckResult> {
+    if (!docs.idFrontUrl) return { ok: false, error: 'Documento mancante' };
+    return { ok: true, status: 'PENDING', providerCheckId: `manual_${Date.now()}` };
+  }
+
+  async verifyVatNumber(vat: string) {
+    return viesVatLookup(vat);
+  }
+}
+
 export function getKycProvider(): KycProvider {
   const which = env.kycProvider();
   const key = env.kycApiKey();
   if (which === 'onfido' && key) return new OnfidoProvider(key);
-  // Jumio/Veriff: stub futuro, fallback al mock.
+  // PRODUZIONE: nessun provider reale → fail-closed (PENDING, mai APPROVED auto).
+  // Il MockKycProvider (APPROVED) resta solo per dev/CI.
+  if (process.env.NODE_ENV === 'production') return new ManualReviewKycProvider();
   return new MockKycProvider();
 }
 

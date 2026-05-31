@@ -26,7 +26,7 @@ type OrderItem = {
 type Order = {
   id: string;
   total_price: number;
-  payment_status: 'PAID' | 'FAILED' | 'PENDING';
+  payment_status: 'PAID' | 'FAILED' | 'PENDING' | 'REFUNDED' | 'PARTIALLY_REFUNDED';
   delivery_status: OrderStatus;
   created_at: string;
   seller_id: string | null;

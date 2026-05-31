@@ -51,10 +51,25 @@ export async function POST(req: NextRequest) {
 
   const admin = getAdminSupabase();
 
-  // Idempotenza basata su event.id (created_at unique)
+  // Idempotenza event-level. processed=true viene scritto SOLO a fine handler riuscito:
+  // se un tentativo precedente è fallito (processed=false), il retry di Stripe deve
+  // riprocessare — prima rispondeva 200 "duplicated" e l'evento andava perso (es.
+  // "pagato ma nessun ordine creato").
   const seen = await admin.from('stripe_event_log').insert({ event_id: event.id, type: event.type });
-  if (seen.error && seen.error.code === '23505') {
-    return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
+  if (seen.error) {
+    if (seen.error.code === '23505') {
+      const { data: existing } = await admin
+        .from('stripe_event_log')
+        .select('processed')
+        .eq('event_id', event.id)
+        .single();
+      if (existing?.processed) {
+        return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
+      }
+      // tentativo precedente non completato → procedi a riprocessare
+    } else {
+      logger.error(seen.error, { context: 'stripe-event-log-insert' });
+    }
   }
 
   try {
@@ -82,10 +97,31 @@ export async function POST(req: NextRequest) {
         await handleAccountUpdated(acct);
         break;
       }
+      case 'transfer.reversed': {
+        await handleTransferReversed(event.data.object as Stripe.Transfer);
+        break;
+      }
+      case 'checkout.session.expired': {
+        await handleCheckoutExpired(event.data.object as Stripe.Checkout.Session);
+        break;
+      }
+      case 'payout.failed': {
+        await handlePayoutFailed(event.data.object as Stripe.Payout);
+        break;
+      }
+      case 'payment_intent.payment_failed': {
+        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        break;
+      }
       default:
         // Eventi non gestiti: log e basta
         logger.info('Unhandled Stripe event', { type: event.type });
     }
+    // Marca l'evento come processato SOLO dopo il successo dell'handler.
+    await admin
+      .from('stripe_event_log')
+      .update({ processed: true, processed_at: new Date().toISOString() })
+      .eq('event_id', event.id);
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err) {
     logger.error(err, { context: 'stripe-webhook-handler' });
@@ -365,17 +401,29 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   await admin
     .from('orders')
     .update({
-      payment_status: 'FAILED',
+      payment_status: 'REFUNDED',
       delivery_status: 'CANCELED',
       stripe_refund_id: refundId,
       canceled_at: new Date().toISOString(),
     })
     .in('id', allIds);
+  // refunded_amount_cents per ordine (refund pieno = totale ordine).
+  for (const o of orders) {
+    await admin
+      .from('orders')
+      .update({ refunded_amount_cents: Math.round(Number(o.total_price) * 100) })
+      .eq('id', o.id);
+  }
 
   // payout_status: i pagati sono già 'REVERSED' dal reversal; gli altri 'REFUNDED'.
   const refundedIds = allIds.filter((id) => !reversedIds.includes(id));
   if (refundedIds.length > 0) {
     await admin.from('orders').update({ payout_status: 'REFUNDED' }).in('id', refundedIds);
+  }
+
+  // Ripristina lo stock degli ordini annullati dal refund pieno (P0-4).
+  for (const id of allIds) {
+    await admin.rpc('restore_stock_for_order', { p_order_id: id });
   }
 
   // Email buyer (una sola email anche se sono N ordini — è la stessa charge)
@@ -488,12 +536,65 @@ async function handleDisputeClosed(dispute: Stripe.Dispute) {
       .update({
         dispute_status: 'LOST',
         delivery_status: 'CANCELED',
-        payment_status: 'FAILED',
+        payment_status: 'REFUNDED',
         canceled_at: new Date().toISOString(),
       })
       .in('id', ids);
+    for (const id of ids) {
+      await admin.rpc('restore_stock_for_order', { p_order_id: id });
+    }
     await notifyAdmins('✕ Chargeback perso', `Contestazione persa su ordine ${ids[0]}. Ordine annullato.`, '/admin/disputes');
   } else {
     logger.info('[stripe] dispute.closed: stato non gestito', { status: dispute.status });
   }
+}
+
+/**
+ * transfer.reversed → un transfer al seller/rider è stato revertito (claw-back o
+ * azione Stripe). Sincronizza lo stato payout dell'ordine, così il DB non diverge
+ * silenziosamente dalla realtà Stripe.
+ */
+async function handleTransferReversed(transfer: Stripe.Transfer) {
+  const admin = getAdminSupabase();
+  await admin.from('orders').update({ payout_status: 'REVERSED' }).eq('stripe_transfer_id', transfer.id);
+  await admin.from('orders').update({ rider_payout_status: 'REVERSED' }).eq('rider_transfer_id', transfer.id);
+  logger.info('[stripe] transfer.reversed sincronizzato', { transferId: transfer.id });
+}
+
+/**
+ * checkout.session.expired → il buyer ha abbandonato il pagamento. Rilascia lo stock
+ * riservato al checkout (immediato, senza attendere il cron expire-checkouts).
+ */
+async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
+  const admin = getAdminSupabase();
+  const pid = session.client_reference_id ?? session.metadata?.pending_checkout_id;
+  if (!pid) return;
+  const { data: pending } = await admin
+    .from('pending_checkouts')
+    .select('id, status, groups')
+    .eq('id', pid)
+    .single();
+  if (!pending || pending.status !== 'PENDING') return;
+  const groups = (pending.groups as PendingGroup[]) ?? [];
+  const items = groups.flatMap((g) => (g.items ?? []).map((it) => ({ product_id: it.productId, qty: it.quantity })));
+  if (items.length > 0) await admin.rpc('restore_stock', { p_items: items });
+  await admin.from('pending_checkouts').update({ status: 'EXPIRED' }).eq('id', pid);
+}
+
+/** payout.failed → il bonifico bancario di un connected account è fallito: alert admin. */
+async function handlePayoutFailed(payout: Stripe.Payout) {
+  await notifyAdmins(
+    '⚠️ Payout bancario fallito',
+    `Payout ${payout.id} fallito (${((payout.amount ?? 0) / 100).toFixed(2)}€): ${payout.failure_message ?? 'motivo sconosciuto'}.`,
+    '/admin',
+  );
+  logger.warn('[stripe] payout.failed', { payoutId: payout.id, failure: payout.failure_message });
+}
+
+/** payment_intent.payment_failed → pagamento non riuscito: log (l'ordine non viene creato). */
+async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
+  logger.warn('[stripe] payment_intent.payment_failed', {
+    paymentIntent: pi.id,
+    lastError: pi.last_payment_error?.message ?? null,
+  });
 }

@@ -27,9 +27,9 @@ const DeliverySchema = z.object({
   zip: z.string().min(1).max(20),
   phone: z.string().min(1).max(40),
   notes: z.string().max(500).optional().nullable(),
-  lat: z.number().nullable().optional(),
-  lng: z.number().nullable().optional(),
-});
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+}).refine((d) => !(d.lat === 0 && d.lng === 0), { message: 'Coordinate di consegna non valide' });
 
 const B2BSchema = z
   .object({
@@ -180,6 +180,17 @@ export const POST = withAuthRateLimit(
       const discountCents = couponPortionCents + pickupPortionCents;
       const totalCents = Math.max(0, subtotal + shipping - discountCents);
 
+      // RISERVA ATOMICA DELLO STOCK del gruppo PRIMA di creare l'ordine (P0-4).
+      const groupStockItems = itemsPerGroupCents[i].map((it) => ({ product_id: it.productId, qty: it.quantity }));
+      const { error: resErr } = await admin.rpc('reserve_stock', { p_items: groupStockItems });
+      if (resErr) {
+        logger.warn('[cod] reserve_stock fallita', { sellerId: g.sellerId, message: resErr.message });
+        return NextResponse.json(
+          { error: 'Alcuni articoli non sono più disponibili nelle quantità richieste.' },
+          { status: 409 },
+        );
+      }
+
       const { data: order, error: orderErr } = await admin
         .from('orders')
         .insert({
@@ -206,6 +217,7 @@ export const POST = withAuthRateLimit(
         .single();
 
       if (orderErr || !order) {
+        await admin.rpc('restore_stock', { p_items: groupStockItems }); // rilascia la riserva del gruppo fallito
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
         return ApiErrors.internal('Errore nella creazione ordine.');
       }

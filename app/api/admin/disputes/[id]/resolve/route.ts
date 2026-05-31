@@ -58,6 +58,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         amountCents: body.refundCents,
         reason: body.notes,
         metadata: { dispute_id: dispute.id },
+        idempotencyKey: `dispute_${dispute.id}`,
         notifyBuyer: true,
       });
       refundId = res.refundId;
@@ -67,7 +68,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     }
   }
 
-  const { error: updErr } = await admin
+  // Guard di stato atomico: solo UNA risoluzione passa (anti doppio-click);
+  // l'eventuale refund è già protetto dall'idempotencyKey lato Stripe.
+  const { data: updated, error: updErr } = await admin
     .from('disputes')
     .update({
       status: body.status,
@@ -76,9 +79,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       resolved_at: new Date().toISOString(),
       refund_cents: body.refundCents ?? null,
     })
-    .eq('id', params.id);
+    .eq('id', params.id)
+    .in('status', ['open', 'under_review'])
+    .select('id');
 
   if (updErr) return ApiErrors.internal('Update fallito');
+  if (!updated || updated.length === 0) return ApiErrors.conflict("Reclamo già risolto da un'altra sessione");
 
   // Notifica chi ha aperto il reclamo.
   await admin.from('notifications').insert({

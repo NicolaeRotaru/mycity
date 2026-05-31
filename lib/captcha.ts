@@ -1,4 +1,5 @@
 import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
 
 /**
  * Verifica server-side di un token Cloudflare Turnstile.
@@ -14,7 +15,16 @@ export async function verifyTurnstileToken(token: string | null | undefined, rem
   { ok: true; skipped?: true } | { ok: false; reason: string }
 > {
   const secret = env.turnstileSecretKey();
-  if (!secret) return { ok: true, skipped: true };
+  if (!secret) {
+    // In produzione la chiave DEVE esserci: logghiamo un errore (visibile in Sentry)
+    // così la misconfigurazione emerge subito, senza però bloccare i login legittimi.
+    if (process.env.NODE_ENV === 'production') {
+      logger.error(new Error('TURNSTILE_SECRET_KEY mancante in produzione: CAPTCHA disabilitato (rischio bot)'), {
+        context: 'captcha',
+      });
+    }
+    return { ok: true, skipped: true };
+  }
   if (!token) return { ok: false, reason: 'CAPTCHA mancante' };
 
   const body = new URLSearchParams();

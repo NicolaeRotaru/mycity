@@ -21,10 +21,10 @@ const ALLOWED_KINDS = new Set([
  * - Il bucket NON e' pubblico: gli URL si generano signed con
  *   createSignedUrl quando servono (admin review, provider KYC).
  *
- * Salva l'URL signed (lunga durata 30 giorni) nelle colonne profile
- * corrispondenti: kyc_id_doc_front_url, kyc_id_doc_back_url,
- * kyc_selfie_url, rider_license_url, rider_insurance_url,
- * rider_haccp_url.
+ * Salva il PATH del file (non una signed URL) nelle colonne profile
+ * corrispondenti: kyc_id_doc_front_url, kyc_id_doc_back_url, kyc_selfie_url,
+ * rider_license_url, rider_insurance_url, rider_haccp_url. Le signed URL si
+ * generano on-demand con TTL breve (no esposizione di URL valide nel DB).
  */
 // Rate limit: 20 upload / 10 min per utente (anti-abuse + protezione storage)
 export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 10 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
@@ -52,12 +52,6 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
     return ApiErrors.internal('Upload fallito (bucket "kyc-docs" esiste?)');
   }
 
-  const { data: signed } = await admin.storage
-    .from('kyc-docs')
-    .createSignedUrl(path, 60 * 60 * 24 * 30);
-  const url = signed?.signedUrl ?? null;
-  if (!url) return ApiErrors.internal('Signed URL non disponibile');
-
   // Mappa kind -> colonna profile
   const column: Record<string, string> = {
     id_front:        'kyc_id_doc_front_url',
@@ -67,10 +61,18 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
     rider_insurance: 'rider_insurance_url',
     rider_haccp:     'rider_haccp_url',
   };
+  // Persistiamo il PATH nel bucket privato, NON una signed URL a lunga scadenza:
+  // così un breach del DB non espone URL valide per 30 giorni. Le signed URL si
+  // generano on-demand (start-check, review admin) con TTL breve.
   await admin
     .from('profiles')
-    .update({ [column[kind]]: url })
+    .update({ [column[kind]]: path })
     .eq('id', user.id);
 
-  return NextResponse.json({ url, path, kind }, { status: 200 });
+  // URL breve (10 min) solo per l'anteprima immediata lato client, non persistita.
+  const { data: signed } = await admin.storage
+    .from('kyc-docs')
+    .createSignedUrl(path, 60 * 10);
+
+  return NextResponse.json({ url: signed?.signedUrl ?? null, path, kind }, { status: 200 });
 });
