@@ -111,6 +111,22 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  // Rilascio ordine: il rider non puo' completarlo → torna READY per altri rider (P2).
+  const release = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.rpc('rider_release_order', { p_order_id: id });
+      if (error) throw new Error(error.message);
+      const r = data as { ok: boolean; reason?: string };
+      if (!r.ok) throw new Error(r.reason ?? 'Impossibile rilasciare');
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
+      toast.success('Ordine rilasciato: tornerà disponibile per altri rider');
+      router.push('/rider');
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
   // Verifica codice pickup → server function (atomica + notifiche)
   const verifyPickup = async (code: string) => {
     const { data, error } = await supabase.rpc('verify_pickup_code', {
@@ -286,6 +302,15 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           className="w-full bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
         >
           ✋ Conferma ritiro al negozio
+        </button>
+      )}
+      {order.delivery_status === 'ASSIGNED' && (
+        <button
+          onClick={() => { if (confirm('Rilasciare questo ordine? Tornerà disponibile per altri rider.')) release.mutate(); }}
+          disabled={release.isPending}
+          className="w-full mt-2 border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50 px-6 py-3 rounded-xl font-semibold"
+        >
+          Non posso completarlo — rilascia ordine
         </button>
       )}
       {order.delivery_status === 'PICKED_UP' && (
