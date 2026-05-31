@@ -89,16 +89,33 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
     return { ok: false, code: 'SELLER_NOT_READY', reason: "Seller non ha completato l'onboarding Stripe Connect" };
   }
 
+  // Claim atomico: solo UNA esecuzione concorrente passa da HELD/PENDING a PROCESSING.
+  // Elimina il doppio payout quando il cron si sovrappone o coincide col trigger manuale.
+  const { data: claimed } = await admin
+    .from('orders')
+    .update({ payout_status: 'PROCESSING' })
+    .eq('id', order.id)
+    .in('payout_status', ['HELD', 'PENDING_SELLER_ONBOARDING'])
+    .select('id');
+  if (!claimed || claimed.length === 0) {
+    return { ok: false, code: 'BAD_STATE', reason: 'Payout già in lavorazione o completato, no-op' };
+  }
+
   try {
     const stripe = getStripe();
-    const transfer = await stripe.transfers.create({
-      amount: order.seller_payout_cents,
-      currency: 'eur',
-      destination: seller.stripe_account_id,
-      ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
-      transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
-      metadata: { order_id: order.id, seller_id: order.seller_id },
-    });
+    const transfer = await stripe.transfers.create(
+      {
+        amount: order.seller_payout_cents,
+        currency: 'eur',
+        destination: seller.stripe_account_id,
+        ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
+        transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
+        metadata: { order_id: order.id, seller_id: order.seller_id },
+      },
+      // Idempotency-Key: anche se DB/processo falliscono e si ritenta, Stripe
+      // restituisce lo stesso transfer e NON ne crea un secondo.
+      { idempotencyKey: `payout_seller_${order.id}` },
+    );
 
     await admin
       .from('orders')
@@ -108,7 +125,8 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
     return { ok: true, transferId: transfer.id };
   } catch (err) {
     logger.error('[stripe] transfer failed', err);
-    await admin.from('orders').update({ payout_status: 'FAILED' }).eq('id', order.id);
+    // Ripristina HELD: il prossimo cron ritenterà con lo stesso idempotencyKey (safe).
+    await admin.from('orders').update({ payout_status: 'HELD' }).eq('id', order.id);
     return { ok: false, code: 'TRANSFER_FAILED', reason: 'Transfer failed' };
   }
 }
@@ -148,16 +166,30 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
     return { ok: false, code: 'RIDER_NOT_READY', reason: 'Rider senza Connect/IBAN attivo' };
   }
 
+  // Claim atomico anche per il compenso rider (no doppio transfer da race).
+  const { data: claimed } = await admin
+    .from('orders')
+    .update({ rider_payout_status: 'PROCESSING' })
+    .eq('id', order.id)
+    .or('rider_payout_status.is.null,rider_payout_status.in.(HELD,PENDING_RIDER_ONBOARDING,FAILED)')
+    .select('id');
+  if (!claimed || claimed.length === 0) {
+    return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già in lavorazione o versato, no-op' };
+  }
+
   try {
     const stripe = getStripe();
-    const transfer = await stripe.transfers.create({
-      amount: feeCents,
-      currency: 'eur',
-      destination: rider.stripe_account_id,
-      ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
-      transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
-      metadata: { order_id: order.id, rider_id: order.rider_id, kind: 'rider_fee' },
-    });
+    const transfer = await stripe.transfers.create(
+      {
+        amount: feeCents,
+        currency: 'eur',
+        destination: rider.stripe_account_id,
+        ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
+        transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
+        metadata: { order_id: order.id, rider_id: order.rider_id, kind: 'rider_fee' },
+      },
+      { idempotencyKey: `payout_rider_${order.id}` },
+    );
 
     await admin
       .from('orders')
@@ -167,7 +199,7 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
     return { ok: true, transferId: transfer.id };
   } catch (err) {
     logger.error('[stripe] rider transfer failed', err);
-    await admin.from('orders').update({ rider_payout_status: 'FAILED' }).eq('id', order.id);
+    await admin.from('orders').update({ rider_payout_status: 'HELD' }).eq('id', order.id);
     return { ok: false, code: 'TRANSFER_FAILED', reason: 'Transfer rider fallito' };
   }
 }
@@ -211,10 +243,11 @@ export async function reverseOrderTransfer(
   if (reverseCents <= 0) return { reversalId: null, reversedCents: 0 };
 
   const stripe = getStripe();
-  const reversal = await stripe.transfers.createReversal(order.stripe_transfer_id, {
-    amount: reverseCents,
-    metadata: { order_id: order.id },
-  });
+  const reversal = await stripe.transfers.createReversal(
+    order.stripe_transfer_id,
+    { amount: reverseCents, metadata: { order_id: order.id } },
+    { idempotencyKey: `reversal_${order.id}` },
+  );
 
   const admin = getAdminSupabase();
   const isFull = reverseCents >= maxCents;
@@ -233,6 +266,8 @@ export interface RefundOrderOpts {
   reason?: string;
   metadata?: Record<string, string>;
   notifyBuyer?: boolean;
+  /** Idempotency-Key Stripe stabile (es. `return_<id>` / `dispute_<id>`). */
+  idempotencyKey?: string;
 }
 
 /**
@@ -259,28 +294,35 @@ export async function refundOrder(
   if (error || !order) throw new Error('refundOrder: ordine non trovato');
   if (!order.stripe_payment_intent) throw new Error('refundOrder: ordine senza payment_intent (non pagabile via Stripe)');
 
-  const stripe = getStripe();
-  const refund = await stripe.refunds.create({
-    payment_intent: order.stripe_payment_intent,
-    amount: opts.amountCents,
-    metadata: {
-      order_id: order.id,
-      ...(opts.reason ? { reason: opts.reason } : {}),
-      ...(opts.metadata ?? {}),
-    },
-  });
-
-  // Quota netta proporzionale del venditore da recuperare (no fee).
+  // Clamp di sicurezza: mai rimborsare più del totale dell'ordine (in multi-seller
+  // la charge è condivisa: un clamp per-ordine evita di prosciugare i fondi degli altri seller).
   const orderTotalCents = Math.round(Number(order.total_price) * 100);
+  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents));
+  if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
+
+  const stripe = getStripe();
+  const refund = await stripe.refunds.create(
+    {
+      payment_intent: order.stripe_payment_intent,
+      amount: safeAmountCents,
+      metadata: {
+        order_id: order.id,
+        ...(opts.reason ? { reason: opts.reason } : {}),
+        ...(opts.metadata ?? {}),
+      },
+    },
+    // Idempotency-Key: doppio-click su risoluzione dispute/reso NON genera doppio rimborso.
+    { idempotencyKey: opts.idempotencyKey ?? `refund_${order.id}_${safeAmountCents}` },
+  );
   const sellerNet = order.seller_payout_cents ?? 0;
   const sellerShare =
-    orderTotalCents > 0 ? Math.min(Math.round((opts.amountCents * sellerNet) / orderTotalCents), sellerNet) : 0;
+    orderTotalCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / orderTotalCents), sellerNet) : 0;
 
   const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
 
   // Aggiorna stato ordine. Rimborso pieno → annulla l'ordine (mirror di
   // handleChargeRefunded); parziale → marca solo il refund id.
-  const isFull = opts.amountCents >= orderTotalCents;
+  const isFull = safeAmountCents >= orderTotalCents;
   const wasTransferred = order.payout_status === 'TRANSFERRED';
   await admin
     .from('orders')
@@ -302,7 +344,7 @@ export async function refundOrder(
       const { data: ua } = await admin.auth.admin.getUserById(order.user_id);
       const buyerEmail = ua?.user?.email;
       if (buyerEmail) {
-        const t = refundIssuedTemplate({ orderId: order.id, amount: opts.amountCents / 100, reason: opts.reason ?? null });
+        const t = refundIssuedTemplate({ orderId: order.id, amount: safeAmountCents / 100, reason: opts.reason ?? null });
         await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
       }
     } catch (e) {
