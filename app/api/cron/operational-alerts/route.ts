@@ -110,6 +110,56 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     });
   }
 
+  // 5) Divergenza denaro: payout bloccati/falliti su ordini consegnati da >1h
+  const { data: payoutStuck } = await admin
+    .from('orders')
+    .select('id, payout_status, rider_payout_status')
+    .eq('delivery_status', 'DELIVERED')
+    .or('payout_status.in.(PROCESSING,FAILED),rider_payout_status.in.(PROCESSING,FAILED)')
+    .lt('delivered_at', oneHourAgo)
+    .limit(20);
+  for (const o of payoutStuck ?? []) {
+    const r = o as { id: string; payout_status: string | null; rider_payout_status: string | null };
+    alerts.push({
+      type: 'PAYOUT_STUCK',
+      detail: `Ordine #${r.id.slice(0, 8)} payout anomalo (seller=${r.payout_status}, rider=${r.rider_payout_status}) da >1h`,
+      url: `/admin/orders/${r.id}`,
+    });
+  }
+
+  // 6) Consegne in-flight stallate: ASSIGNED ma non ritirato da >30min (consegna orfana)
+  const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
+  const { data: stalledAssigned } = await admin
+    .from('orders')
+    .select('id, ready_at, profiles!orders_rider_id_fkey(full_name)')
+    .eq('delivery_status', 'ASSIGNED')
+    .lt('ready_at', thirtyMinAgo)
+    .limit(10);
+  for (const o of stalledAssigned ?? []) {
+    const rider = (o as { profiles?: { full_name?: string } | null }).profiles;
+    alerts.push({
+      type: 'DELIVERY_STALLED',
+      detail: `Ordine #${(o as { id: string }).id.slice(0, 8)} ASSIGNED a ${rider?.full_name ?? 'rider'} ma non ritirato da >30min`,
+      url: `/admin/orders/${(o as { id: string }).id}`,
+    });
+  }
+
+  // 7) Riconciliazioni COD in MISMATCH (rider che non quadra)
+  const { data: mismatches } = await admin
+    .from('cod_reconciliations')
+    .select('rider_id, for_date, expected_cents, collected_cents')
+    .eq('status', 'MISMATCH')
+    .gte('for_date', yesterday)
+    .limit(20);
+  for (const m of mismatches ?? []) {
+    const mm = m as { rider_id: string; for_date: string; expected_cents: number; collected_cents: number };
+    alerts.push({
+      type: 'COD_MISMATCH',
+      detail: `Riconciliazione COD rider ${mm.rider_id.slice(0, 8)} del ${mm.for_date}: atteso €${(mm.expected_cents / 100).toFixed(2)} vs incassato €${(mm.collected_cents / 100).toFixed(2)}`,
+      url: '/admin/orders',
+    });
+  }
+
   if (alerts.length === 0) {
     return NextResponse.json({ ok: true, alerts: 0, message: 'No anomalies detected' });
   }
