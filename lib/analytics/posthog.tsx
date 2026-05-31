@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { readConsent } from '@/lib/consent';
 
 /**
  * PostHog client wrapper.
@@ -27,15 +28,28 @@ type PostHogLike = {
   capture: (event: string, props?: Record<string, unknown>) => void;
   identify: (userId: string, traits?: Record<string, unknown>) => void;
   reset: () => void;
+  opt_in_capturing: () => void;
   opt_out_capturing: () => void;
 };
 
 let posthogInstance: PostHogLike | null = null;
 
 async function getPosthog() {
-  if (posthogInstance) return posthogInstance;
   if (!POSTHOG_KEY) return null;
   if (typeof window === 'undefined') return null;
+  // GDPR: nessun tracking analytics senza consenso esplicito dell'utente.
+  // Fonte di verità unica: readConsent().analytics (lib/consent.ts). Se il
+  // consenso cambia a runtime applichiamo opt-in/opt-out sull'istanza già
+  // caricata, così una revoca ha effetto immediato senza reload.
+  const consented = !!readConsent()?.analytics;
+  if (posthogInstance) {
+    try {
+      if (consented) posthogInstance.opt_in_capturing();
+      else posthogInstance.opt_out_capturing();
+    } catch {}
+    return consented ? posthogInstance : null;
+  }
+  if (!consented) return null;
   // Lazy import per non gonfiare bundle
   const { default: posthog } = await import('posthog-js').catch(() => ({ default: null }));
   if (!posthog) return null;
@@ -50,13 +64,6 @@ async function getPosthog() {
     },
     autocapture: {
       dom_event_allowlist: ['click', 'submit'],
-    },
-    loaded: (ph: PostHogLike) => {
-      // Rispetta cookie consent: opt_out se utente non ha accettato
-      try {
-        const consent = localStorage.getItem('mc_cookie_consent');
-        if (consent === 'rejected') ph.opt_out_capturing();
-      } catch {}
     },
   });
   posthogInstance = posthog;
@@ -96,6 +103,15 @@ export async function resetUser() {
 export default function PostHogProvider() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+
+  // Applica subito il consenso quando cambia (opt-in se accetta, opt-out se
+  // revoca) senza aspettare la navigazione successiva.
+  useEffect(() => {
+    if (!POSTHOG_KEY) return;
+    const onConsentChange = () => { void getPosthog(); };
+    window.addEventListener('mc:consent-change', onConsentChange);
+    return () => window.removeEventListener('mc:consent-change', onConsentChange);
+  }, []);
 
   useEffect(() => {
     if (!POSTHOG_KEY) return;

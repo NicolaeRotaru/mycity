@@ -607,7 +607,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       <StickyAddToCart price={price} available={!isOutOfStock} onAdd={handleAdd} note="Paghi alla consegna" />
 
       {/* Tracking view (side-effect only) */}
-      <ProductViewTracker productId={id} />
+      <ProductViewTracker
+        productId={id}
+        price={price}
+        category={product.categories?.slug ?? undefined}
+        sellerId={sellerProfile?.id ?? product.seller_id ?? undefined}
+      />
     </div>
   );
 }

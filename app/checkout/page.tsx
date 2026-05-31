@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { AlertTriangle, Store } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -13,10 +14,10 @@ import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { haversineKm, riderFee } from '@/lib/geo';
 import { validateCoupon, type Coupon } from '@/lib/coupons';
-import { trackCheckoutStarted, trackOrderPlaced } from '@/lib/analytics/events';
+import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { StepIndicator } from '@/components/checkout/StepIndicator';
+import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
 import { B2BInvoiceForm } from '@/components/checkout/B2BInvoiceForm';
@@ -35,12 +36,6 @@ type AddressForm = {
   phone: string;
   notes: string;
 };
-
-const CHECKOUT_STEPS: { num: number; label: string }[] = [
-  { num: 1, label: 'Carrello' },
-  { num: 2, label: 'Indirizzo' },
-  { num: 3, label: 'Conferma' },
-];
 
 const SHIPPING_PER_ORDER = 4.9;
 
@@ -278,6 +273,7 @@ export default function CheckoutPage() {
       return;
     }
     setAppliedCoupon({ coupon: result.coupon, discount: result.discount, freeShipping: result.freeShipping });
+    trackCouponApplied(result.coupon.code, Math.round(result.discount * 100));
     toast.success(`Codice "${result.coupon.code}" applicato`);
   };
 
@@ -348,8 +344,18 @@ export default function CheckoutPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
       const createdOrders: string[] = (body as { orderIds?: string[] }).orderIds ?? [];
-      for (const id of createdOrders) {
-        trackOrderPlaced(id, 0, 'cod', '');
+      // Misura: una conversione = un purchase col totale reale del checkout.
+      // Multi-seller crea N ordini ma con un solo flusso di pagamento: per non
+      // gonfiare il fatturato in GA4 emettiamo un order_placed aggregato sul
+      // primo orderId (transaction_id), seller 'multi' se più negozi.
+      if (createdOrders.length > 0) {
+        trackOrderPlaced(
+          createdOrders[0],
+          Math.round(grandTotal * 100),
+          'cod',
+          groups.length === 1 ? groups[0].sellerId : 'multi',
+          { coupon: appliedCoupon?.coupon.code },
+        );
       }
       return createdOrders;
     },
@@ -359,10 +365,10 @@ export default function CheckoutPage() {
       // Flag in sessionStorage → la order detail page mostra ConfettiBurst.
       try { sessionStorage.setItem('mc_just_ordered', '1'); } catch { /* noop */ }
       if (orderIds.length === 1) {
-        toast.success('Ordine effettuato! 🎉');
+        toast.success('Ordine effettuato!');
         router.push(`/orders/${orderIds[0]}`);
       } else {
-        toast.success(`${orderIds.length} ordini effettuati! 🎉`);
+        toast.success(`${orderIds.length} ordini effettuati!`);
         router.push('/orders');
       }
     },
@@ -431,6 +437,16 @@ export default function CheckoutPage() {
       return data.url as string;
     },
     onSuccess: (url) => {
+      // Stash del valore d'acquisto per emettere `purchase` (GA4) + `order_placed`
+      // al rientro su /orders?stripe=success: lì gli ordini sono già creati dal
+      // webhook ma il client non ne conosce i totali, quindi li portiamo da qui.
+      try {
+        sessionStorage.setItem('mc_pending_purchase', JSON.stringify({
+          valueCents: Math.round(grandTotal * 100),
+          coupon: appliedCoupon?.coupon.code ?? null,
+          sellerId: groups.length === 1 ? groups[0].sellerId : 'multi',
+        }));
+      } catch { /* noop */ }
       // Redirect alla pagina Stripe Hosted Checkout. Il rientro avviene
       // su /orders?stripe=success o /cart?stripe=canceled (vedi /api/stripe/checkout).
       window.location.assign(url);
@@ -472,6 +488,7 @@ export default function CheckoutPage() {
       toast.error('Alcuni articoli superano la disponibilità: riduci le quantità nel carrello.');
       return;
     }
+    trackCheckoutStep('address', { city: form.city });
     if (paymentMethod === 'card' && stripeAvailable) {
       payWithStripe.mutate();
     } else {
@@ -500,7 +517,7 @@ export default function CheckoutPage() {
       {!authUser && (
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-olive-900">
-            <strong>Ci sei quasi! 🎉</strong> Accedi (bastano pochi secondi) e completiamo l'ordine — i tuoi articoli restano nel carrello, e paghi comodamente alla consegna.
+            <strong>Ci sei quasi!</strong> Accedi (bastano pochi secondi) e completiamo l'ordine — i tuoi articoli restano nel carrello, e paghi comodamente alla consegna.
           </p>
           <Button href="/sign-in?returnTo=/checkout" size="sm" variant="success">Accedi e continua</Button>
         </div>
@@ -529,7 +546,7 @@ export default function CheckoutPage() {
                 className="mt-1 w-4 h-4 accent-olive-600"
               />
               <div className="flex-1">
-                <p className="font-bold text-ink-900">🏪 Ritira tu in negozio — risparmia {PICKUP_DISCOUNT_PERCENT}%</p>
+                <p className="font-bold text-ink-900 flex items-center gap-2"><Store size={16} aria-hidden /> Ritira tu in negozio — risparmia {PICKUP_DISCOUNT_PERCENT}%</p>
                 <p className="text-sm text-ink-600 mt-0.5">
                   Niente spedizione, sconto subito. Vai tu al negozio quando l'ordine è pronto.
                 </p>
@@ -551,7 +568,7 @@ export default function CheckoutPage() {
 
           <PaymentMethodSelector
             value={paymentMethod}
-            onChange={setPaymentMethod}
+            onChange={(m) => { setPaymentMethod(m); trackCheckoutStep('payment_method', { method: m }); }}
             stripeAvailable={stripeAvailable}
             multiSeller={groups.length > 1}
           />
@@ -568,8 +585,9 @@ export default function CheckoutPage() {
 
           {orphans.length > 0 && (
             <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 space-y-3">
-              <p>
-                <strong>⚠ {orphans.length} {orphans.length === 1 ? 'prodotto non è più disponibile' : 'prodotti non sono più disponibili'}</strong>: {orphans.map((o) => o.name).join(', ')}.
+              <p className="flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+                <span><strong>{orphans.length} {orphans.length === 1 ? 'prodotto non è più disponibile' : 'prodotti non sono più disponibili'}</strong>: {orphans.map((o) => o.name).join(', ')}.</span>
               </p>
               <button
                 type="button"
@@ -586,14 +604,16 @@ export default function CheckoutPage() {
           )}
 
           {stockIssues.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
-              <strong>⚠ Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+              <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.</span>
             </div>
           )}
 
           {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800">
-              <strong>⚠ Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 flex items-start gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+              <span><strong>Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.</span>
             </div>
           )}
         </div>

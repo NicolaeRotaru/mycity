@@ -9,7 +9,9 @@ import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
-import { ShoppingCart } from 'lucide-react';
+import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
+import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
+import { Banknote, Check, Lightbulb, Lock, RotateCcw, ShieldCheck, ShoppingCart, Store, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function CartPage() {
@@ -26,15 +28,13 @@ export default function CartPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('stripe') === 'canceled') {
-      toast('Pagamento annullato. Il carrello è ancora qui quando vuoi.', { icon: '🛒' });
+      toast('Pagamento annullato. Il carrello è ancora qui quando vuoi.');
       window.history.replaceState({}, '', '/cart');
     }
   }, []);
 
   const total = cartTotal(items);
   const count = cartCount(items);
-  const missing = Math.max(0, FREE_SHIPPING_THRESHOLD - total);
-  const shippingProgress = Math.min(100, (total / FREE_SHIPPING_THRESHOLD) * 100);
   const freeShipping = total >= FREE_SHIPPING_THRESHOLD;
   const shippingCost = freeShipping ? 0 : 4.9;
   const finalTotal = total + shippingCost;
@@ -57,14 +57,8 @@ export default function CartPage() {
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8">
-      {/* Step indicator (carrello attivo) */}
-      <div className="flex items-center gap-2 text-sm mb-6">
-        <span className="font-bold text-primary-800">1. Carrello</span>
-        <span className="text-ink-300">›</span>
-        <span className="text-ink-400">2. Indirizzo</span>
-        <span className="text-ink-300">›</span>
-        <span className="text-ink-400">3. Conferma</span>
-      </div>
+      {/* Step indicator condiviso col checkout (carrello = step 1) */}
+      <StepIndicator steps={CHECKOUT_STEPS} currentStep={1} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* COLONNA SX: prodotti */}
@@ -73,26 +67,8 @@ export default function CartPage() {
             Il tuo carrello <span className="text-ink-400 font-normal">({count} articoli)</span>
           </h1>
 
-          {/* Progress free shipping */}
-          <div className="bg-olive-50 border border-olive-200 rounded-xl p-4">
-            {freeShipping ? (
-              <p className="text-olive-700 font-semibold flex items-center gap-2">
-                <span className="text-2xl">🎉</span> Hai sbloccato la <strong>spedizione gratuita</strong>!
-              </p>
-            ) : (
-              <>
-                <p className="text-olive-800 font-medium mb-2">
-                  Ti mancano solo <strong>{formatPrice(missing)}</strong> per la <strong>spedizione gratuita</strong> 🚚
-                </p>
-                <div className="w-full bg-olive-100 rounded-full h-2 overflow-hidden">
-                  <div
-                    className="bg-olive-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${shippingProgress}%` }}
-                  />
-                </div>
-              </>
-            )}
-          </div>
+          {/* Progress spedizione gratis (componente condiviso PDP/carrello/checkout) */}
+          <FreeShippingProgress subtotal={total} />
 
           {items.map((item) => (
             <div key={item.id} className="bg-white border rounded-xl p-4 flex gap-4 hover:shadow-md transition-shadow">
@@ -113,7 +89,9 @@ export default function CartPage() {
                 >
                   {item.name}
                 </Link>
-                <p className="text-xs text-olive-600 font-semibold">✓ Disponibile · Spedizione 24-48h</p>
+                <p className="text-xs text-olive-600 font-semibold flex items-center gap-1">
+                  <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Spedizione 24-48h
+                </p>
                 <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <div className="flex items-center border rounded-lg">
@@ -134,9 +112,9 @@ export default function CartPage() {
                     <button
                       type="button"
                       onClick={() => removeFromCart(item.id)}
-                      className="text-ink-400 hover:text-red-600 text-sm ml-2"
+                      className="text-ink-400 hover:text-red-600 text-sm ml-2 flex items-center gap-1"
                     >
-                      🗑️ Rimuovi
+                      <Trash2 size={15} aria-hidden /> Rimuovi
                     </button>
                   </div>
                   <span className="font-bold text-ink-900 text-lg">{formatPrice(item.price * item.quantity)}</span>
@@ -184,9 +162,9 @@ export default function CartPage() {
 
             <Link
               href="/checkout"
-              className="block w-full text-center bg-accent-500 hover:bg-accent-600 text-ink-900 py-3.5 rounded-lg font-bold shadow-warm hover:shadow-warm-lg transition-all"
+              className="flex items-center justify-center gap-2 w-full text-center bg-accent-500 hover:bg-accent-600 text-ink-900 py-3.5 rounded-lg font-bold shadow-warm hover:shadow-warm-lg transition-all"
             >
-              🔒 Procedi al checkout
+              <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
             </Link>
 
             {/* Lista spesa condivisibile — Growth PM: viral coefficient,
@@ -196,15 +174,17 @@ export default function CartPage() {
             </div>
 
             <div className="space-y-2 pt-2 text-xs text-ink-500">
-              <p className="flex items-center gap-2"><span>💳</span> Pagamento in contanti alla consegna</p>
-              <p className="flex items-center gap-2"><span>🔒</span> I tuoi dati sono al sicuro</p>
-              <p className="flex items-center gap-2"><span>↩️</span> Reso facile entro 14 giorni</p>
-              <p className="flex items-center gap-2"><span>🏘️</span> Supporti il commercio locale</p>
+              <p className="flex items-center gap-2"><Banknote size={14} className="text-olive-600 shrink-0" aria-hidden /> Pagamento in contanti alla consegna</p>
+              <p className="flex items-center gap-2"><ShieldCheck size={14} className="text-olive-600 shrink-0" aria-hidden /> I tuoi dati sono al sicuro</p>
+              <p className="flex items-center gap-2"><RotateCcw size={14} className="text-olive-600 shrink-0" aria-hidden /> Reso facile entro 14 giorni</p>
+              <p className="flex items-center gap-2"><Store size={14} className="text-olive-600 shrink-0" aria-hidden /> Supporti il commercio locale</p>
             </div>
           </div>
 
           <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm">
-            <p className="font-bold text-primary-900 mb-1">💡 Lo sapevi?</p>
+            <p className="font-bold text-primary-900 mb-1 flex items-center gap-2">
+              <Lightbulb size={16} className="text-primary-700 shrink-0" aria-hidden /> Lo sapevi?
+            </p>
             <p className="text-primary-800">
               Acquistando qui sostieni direttamente i commercianti della tua città. Niente intermediari, niente commissioni nascoste.
             </p>

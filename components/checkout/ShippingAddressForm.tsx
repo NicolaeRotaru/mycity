@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { ChangeEvent, FormEvent } from 'react';
+import { MapPin } from 'lucide-react';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 
 /**
@@ -56,7 +57,7 @@ export function ShippingAddressForm({
 }: Props) {
   return (
     <div className="bg-white border rounded-xl p-6 space-y-4">
-      <h2 className="text-xl font-bold flex items-center gap-2">📍 Indirizzo di consegna</h2>
+      <h2 className="text-xl font-bold flex items-center gap-2"><MapPin size={20} strokeWidth={2.2} aria-hidden /> Indirizzo di consegna</h2>
 
       {savedAddresses.length > 0 && (
         <div>
@@ -66,7 +67,7 @@ export function ShippingAddressForm({
           >
             {savedAddresses.map((a) => (
               <option key={a.id} value={a.id}>
-                📍 {a.label} — {a.address}, {a.city}
+                {a.label} — {a.address}, {a.city}
                 {a.is_default ? ' (predefinito)' : ''}
               </option>
             ))}

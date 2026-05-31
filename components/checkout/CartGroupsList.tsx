@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import { Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import type { CartItem } from '@/lib/cart';
@@ -25,7 +26,7 @@ export function CartGroupsList({ groups }: Props) {
     <div className="divide-y max-h-72 overflow-y-auto">
       {groups.map((g) => (
         <div key={g.sellerId} className="px-5 py-3">
-          <p className="text-xs font-semibold text-primary-800 mb-2">🏪 {g.storeName}</p>
+          <p className="text-xs font-semibold text-primary-800 mb-2 flex items-center gap-1"><Store size={13} aria-hidden /> {g.storeName}</p>
           {g.items.map((item) => (
             <div key={item.id} className="flex gap-3 items-center pl-2 py-1">
               <div className="relative w-10 h-10 bg-cream-100 rounded shrink-0 overflow-hidden">

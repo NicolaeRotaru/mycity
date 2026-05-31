@@ -12,6 +12,7 @@
  */
 
 import { Badge } from '@/components/ui/Badge';
+import { Banknote, CreditCard, Info, Wallet } from 'lucide-react';
 
 type PaymentMethod = 'cod' | 'card';
 
@@ -26,7 +27,7 @@ type Props = {
 export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiSeller }: Props) {
   return (
     <div className="bg-white border rounded-xl p-6">
-      <h2 className="text-xl font-bold flex items-center gap-2 mb-4">💳 Metodo di pagamento</h2>
+      <h2 className="text-xl font-bold flex items-center gap-2 mb-4"><Wallet size={20} strokeWidth={2.2} aria-hidden /> Metodo di pagamento</h2>
       <div className="space-y-3">
         {stripeAvailable && (
           <label
@@ -45,13 +46,13 @@ export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiS
               className="mt-1"
             />
             <div className="flex-1">
-              <p className="font-bold text-ink-900">💳 Carta di credito / debito</p>
+              <p className="font-bold text-ink-900 flex items-center gap-2"><CreditCard size={16} aria-hidden /> Carta di credito / debito</p>
               <p className="text-sm text-ink-600">
                 Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
               </p>
               {multiSeller && (
-                <p className="text-xs text-primary-700 mt-1">
-                  ℹ Un solo pagamento per tutto il carrello, anche con più negozi.
+                <p className="text-xs text-primary-700 mt-1 flex items-center gap-1">
+                  <Info size={13} aria-hidden /> Un solo pagamento per tutto il carrello, anche con più negozi.
                 </p>
               )}
             </div>
@@ -75,7 +76,7 @@ export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiS
           />
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-bold text-ink-900">💵 Contanti alla consegna</p>
+              <p className="font-bold text-ink-900 flex items-center gap-2"><Banknote size={16} aria-hidden /> Contanti alla consegna</p>
               <Badge variant="cod">Zero rischio</Badge>
             </div>
             <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -8,6 +8,7 @@ import ProductCard from './ProductCard';
 import { queryKeys } from '@/lib/queries/keys';
 import { SkeletonGrid } from './SkeletonCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { trackSearchPerformed } from '@/lib/analytics/events';
 
 export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating';
 
@@ -143,6 +144,18 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     }
     return arr;
   }, [prods, onlyOpenStores, minRating, ratings, sort]);
+
+  // Funnel: emette `search_performed` (PostHog + GA4) quando una ricerca
+  // testuale si risolve. Solo in contesto ricerca (prop `search` valorizzata),
+  // una volta per termine (no inflation da refetch/re-render).
+  const lastTrackedSearch = useRef<string | null>(null);
+  useEffect(() => {
+    const term = search?.trim();
+    if (!term || isLoading) return;
+    if (lastTrackedSearch.current === term) return;
+    lastTrackedSearch.current = term;
+    trackSearchPerformed(term, prods.length);
+  }, [search, isLoading, prods.length]);
 
   if (isLoading) return <SkeletonGrid count={limit ?? 8} />;
 
