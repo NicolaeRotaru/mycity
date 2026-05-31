@@ -35,27 +35,30 @@ export default function SOSButton({ orderId }: Props) {
 
   const triggerSOS = async () => {
     setSending(true);
-    // 1. Posizione GPS (best effort)
+    // 1. Posizione GPS (best effort, alta accuratezza)
     let lat: number | null = null, lng: number | null = null;
     try {
       const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
         if (!navigator.geolocation) return reject(new Error('No geo'));
-        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5_000, enableHighAccuracy: false });
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 8_000, enableHighAccuracy: true });
       });
       lat = pos.coords.latitude;
       lng = pos.coords.longitude;
     } catch {}
 
-    // 2. Scrivi su DB (rider_sos_events)
+    // 2. Scrivi su DB (rider_sos_events) → trigger notifica admin
+    let alertSent = false;
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await supabase.from('rider_sos_events').insert({
+        const { error } = await supabase.from('rider_sos_events').insert({
           rider_id: user.id,
           order_id: orderId ?? null,
           lat, lng,
           triggered_at: new Date().toISOString(),
         });
+        if (error) throw error;
+        alertSent = true;
       }
     } catch (e) {
       captureError(e, { context: 'SOSButton' });
@@ -65,7 +68,12 @@ export default function SOSButton({ orderId }: Props) {
     window.location.href = 'tel:112';
     setSending(false);
     setOpen(false);
-    toast.success('SOS inviato. Stiamo chiamando il 112.');
+    if (alertSent) {
+      toast.success('SOS inviato. Stiamo chiamando il 112 e abbiamo allertato MyCity.');
+    } else {
+      // Fallback esplicito: il rider NON deve credere che l'alert sia partito.
+      toast.error('Chiamata al 112 in corso. Se non parte, chiama subito il 112 dal telefono.', { duration: 10_000 });
+    }
   };
 
   return (
