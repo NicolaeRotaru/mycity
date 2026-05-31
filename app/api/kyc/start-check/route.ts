@@ -82,6 +82,9 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
     toSignedUrl(profile.kyc_id_doc_back_url),
     toSignedUrl(profile.kyc_selfie_url),
   ]);
+  if (!idFrontUrl || !selfieUrl) {
+    return ApiErrors.internal('Impossibile generare gli URL firmati dei documenti.');
+  }
 
   // Provider KYC
   const provider = getKycProvider();
