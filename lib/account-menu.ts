@@ -22,15 +22,18 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
   ];
 
   if (role === 'buyer') {
+    // Ordine per retention: prima le leve legate al commercio (loyalty, referral),
+    // poi le utilità; la gamification pura (Badge) resta accessibile ma in fondo,
+    // così non compete con ciò che fa tornare a comprare.
     items.push(
       { href: '/orders', icon: Package, label: 'I miei ordini' },
       { href: '/favorites', icon: Heart, label: 'Preferiti' },
-      { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
       { href: '/profile/loyalty', icon: Sparkles, label: 'Punti & Livello' },
-      { href: '/profile/achievements', icon: Award, label: 'Badge' },
+      { href: '/profile/referral', icon: Megaphone, label: 'Invita amici · €5' },
+      { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
       { href: '/profile/gift-cards', icon: Gift, label: 'Gift Card' },
       { href: '/lists', icon: ListChecks, label: 'Liste curate' },
-      { href: '/profile/referral', icon: Megaphone, label: 'Invita amici · €5' },
+      { href: '/profile/achievements', icon: Award, label: 'Badge' },
     );
   } else if (role === 'seller') {
     items.push(

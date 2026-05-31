@@ -1,9 +1,11 @@
 'use client';
 
+import { Check } from 'lucide-react';
+
 /**
  * Step indicator visivo per il flow di checkout.
  *
- * Tre stati: done (✓ verde), active (numero su primary), pending (numero su grigio).
+ * Tre stati: done (spunta verde), active (numero su primary), pending (numero su grigio).
  * Estratto da app/checkout/page.tsx per ridurre LOC del monolite.
  */
 
@@ -16,13 +18,13 @@ type StepProps = {
 
 function Step({ num, label, active, done }: StepProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" aria-current={active ? 'step' : undefined}>
       <div
         className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
           done ? 'bg-olive-500 text-white' : active ? 'bg-primary-700 text-white' : 'bg-cream-200 text-ink-500'
         }`}
       >
-        {done ? '✓' : num}
+        {done ? <Check size={15} strokeWidth={3} aria-hidden /> : num}
       </div>
       <span className={`text-sm font-semibold ${active ? 'text-primary-800' : done ? 'text-olive-700' : 'text-ink-400'}`}>
         {label}
@@ -32,6 +34,13 @@ function Step({ num, label, active, done }: StepProps) {
 }
 
 type StepDef = { num: number; label: string };
+
+/** Step canonici del flusso d'acquisto, condivisi tra carrello e checkout. */
+export const CHECKOUT_STEPS: StepDef[] = [
+  { num: 1, label: 'Carrello' },
+  { num: 2, label: 'Indirizzo' },
+  { num: 3, label: 'Conferma' },
+];
 
 type Props = {
   steps: StepDef[];

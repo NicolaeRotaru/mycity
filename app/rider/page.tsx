@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Store, Package, ChefHat, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import {
@@ -135,7 +136,7 @@ export default function RiderDashboardPage() {
                         <OrderStatusBadge status={o.delivery_status} size="sm" />
                         <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                       </div>
-                      <p className="font-semibold text-ink-900">🏪 {o.seller?.store_name}</p>
+                      <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={15} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden /> {o.seller?.store_name}</p>
                       <p className="text-sm text-ink-500 truncate">→ {o.delivery_address}, {o.delivery_city}</p>
                     </div>
                     <div className="text-right">
@@ -168,11 +169,11 @@ export default function RiderDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 ring-1 ring-violet-200">
-                        📦 Pronto
+                        <Package size={12} strokeWidth={2.4} aria-hidden /> Pronto
                       </span>
                       <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                     </div>
-                    <p className="font-semibold text-ink-900">🏪 {o.seller?.store_name}</p>
+                    <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={15} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden /> {o.seller?.store_name}</p>
                     <p className="text-xs text-ink-500">{o.seller?.store_address}</p>
                     <p className="text-sm text-ink-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
                   </div>
@@ -184,7 +185,7 @@ export default function RiderDashboardPage() {
                     <button
                       onClick={() => claim.mutate(o.id)}
                       disabled={claim.isPending}
-                      className="bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap"
+                      className="bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-semibold whitespace-nowrap"
                     >
                       Accetta
                     </button>
@@ -213,11 +214,11 @@ export default function RiderDashboardPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-800 ring-1 ring-primary-200">
-                        👨‍🍳 In preparazione
+                        <ChefHat size={12} strokeWidth={2.4} aria-hidden /> In preparazione
                       </span>
                       <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                     </div>
-                    <p className="font-semibold text-ink-900">🏪 {o.seller?.store_name}</p>
+                    <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={15} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden /> {o.seller?.store_name}</p>
                     <p className="text-xs text-ink-500">{o.seller?.store_address}</p>
                     <p className="text-sm text-ink-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
                   </div>
@@ -228,9 +229,9 @@ export default function RiderDashboardPage() {
                     </div>
                     <button
                       disabled
-                      className="bg-cream-200 text-ink-400 px-5 py-2.5 rounded-lg font-semibold whitespace-nowrap cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 bg-cream-200 text-ink-400 px-5 py-3 rounded-lg font-semibold whitespace-nowrap cursor-not-allowed"
                     >
-                      ⏳ Attendi
+                      <Clock size={15} strokeWidth={2.2} aria-hidden /> Attendi
                     </button>
                   </div>
                 </div>

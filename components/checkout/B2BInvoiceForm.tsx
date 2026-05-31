@@ -1,5 +1,6 @@
 'use client';
 
+import { Building2 } from 'lucide-react';
 import { Input, Checkbox } from '@/components/ui/Field';
 
 /**
@@ -39,7 +40,7 @@ export function B2BInvoiceForm({ active, onToggle, form, onChange }: Props) {
         onChange={(e) => onToggle(e.target.checked)}
         label={
           <span className="block">
-            <span className="block font-bold text-ink-900">🏢 Sto comprando per la mia azienda — voglio la fattura elettronica</span>
+            <span className="flex items-center gap-2 font-bold text-ink-900"><Building2 size={16} className="shrink-0" aria-hidden /> Sto comprando per la mia azienda — voglio la fattura elettronica</span>
             <span className="block text-ink-600 mt-0.5">Inviata via SDI/PEC entro 12 giorni. Detraibilità completa.</span>
           </span>
         }

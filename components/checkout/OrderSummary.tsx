@@ -1,6 +1,6 @@
 'use client';
 
-import { Banknote, Lock, RotateCcw, Store } from 'lucide-react';
+import { Banknote, Check, Lock, RotateCcw, Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 
@@ -79,11 +79,18 @@ export function OrderSummary({
             : 'bg-accent-400 hover:bg-accent-500 text-ink-900'
         }`}
       >
-        {isCheckingOut
-          ? (paymentMethod === 'card' ? 'Apertura pagamento sicuro…' : 'Elaborazione…')
-          : (paymentMethod === 'card'
-              ? `🔒 Paga con carta · ${formatPrice(total)}`
-              : `✓ Conferma ordine · ${formatPrice(total)}`)}
+        {isCheckingOut ? (
+          paymentMethod === 'card' ? 'Apertura pagamento sicuro…' : 'Elaborazione…'
+        ) : (
+          <span className="inline-flex items-center justify-center gap-2">
+            {paymentMethod === 'card'
+              ? <Lock size={18} strokeWidth={2.4} aria-hidden />
+              : <Check size={18} strokeWidth={2.4} aria-hidden />}
+            {paymentMethod === 'card'
+              ? `Paga con carta · ${formatPrice(total)}`
+              : `Conferma ordine · ${formatPrice(total)}`}
+          </span>
+        )}
       </button>
 
       {/* Rassicurazione al momento del pagamento — leva anti-abbandono */}

@@ -4,7 +4,13 @@ import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { trackProductViewed } from '@/lib/analytics/events';
 
-type Props = { productId: string };
+type Props = {
+  productId: string;
+  /** Arricchiscono `product_viewed`/GA4 `view_item` per segmentare i funnel. */
+  price?: number;
+  category?: string;
+  sellerId?: string;
+};
 
 /**
  * Traccia la view di un prodotto:
@@ -14,13 +20,13 @@ type Props = { productId: string };
  * Componente invisibile, side effect only. Usa sessionStorage per dedupare:
  * lo stesso prodotto viene contato 1x per sessione (no inflation da F5 ripetuti).
  */
-export default function ProductViewTracker({ productId }: Props) {
+export default function ProductViewTracker({ productId, price, category, sellerId }: Props) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const key = `mc_viewed_${productId}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
-    trackProductViewed(productId);
+    trackProductViewed(productId, { price, category, seller_id: sellerId });
 
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -41,7 +47,7 @@ export default function ProductViewTracker({ productId }: Props) {
           );
       }
     })().catch(() => { /* noop, telemetria best-effort */ });
-  }, [productId]);
+  }, [productId, price, category, sellerId]);
 
   return null;
 }

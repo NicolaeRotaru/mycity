@@ -27,7 +27,7 @@ export function FreeShippingProgress({
       {unlocked ? (
         <p className="text-olive-700 font-semibold flex items-center gap-2 text-sm">
           <Truck size={16} strokeWidth={2.4} aria-hidden />
-          Hai la <strong>spedizione gratis</strong> 🎉
+          Hai la <strong>spedizione gratis</strong>
         </p>
       ) : (
         <>

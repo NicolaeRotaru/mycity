@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, TrendingUp, X } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
@@ -46,16 +46,40 @@ function SearchInner() {
   };
 
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const filterTriggerRef = useRef<HTMLButtonElement>(null);
 
-  // Mobile: blocca lo scroll del body quando il pannello filtri è aperto.
+  // Mobile bottom-sheet: scroll-lock + Esc, PIÙ focus-trap nel pannello e
+  // ritorno del focus al bottone "Filtri" alla chiusura (WCAG 2.1.2 / 2.4.3).
   useEffect(() => {
     if (!filtersOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setFiltersOpen(false); };
+    const trigger = filterTriggerRef.current;
+    const focusables = () =>
+      sheetRef.current
+        ? Array.from(
+            sheetRef.current.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((el) => el.offsetParent !== null)
+        : [];
+    // All'apertura sposta il focus dentro al pannello.
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setFiltersOpen(false); return; }
+      if (e.key !== 'Tab') return;
+      const els = focusables();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
+      trigger?.focus();
     };
   }, [filtersOpen]);
 
@@ -206,6 +230,7 @@ function SearchInner() {
 
       {/* MOBILE: bottone che apre il pannello a scomparsa */}
       <button
+        ref={filterTriggerRef}
         onClick={() => setFiltersOpen(true)}
         className="md:hidden flex items-center justify-center gap-2 w-full bg-white border border-cream-300 rounded-xl py-2.5 font-semibold text-ink-800 shadow-warm"
       >
@@ -222,7 +247,7 @@ function SearchInner() {
       {filtersOpen && (
         <div className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Filtri">
           <div className="absolute inset-0 bg-black/40" onClick={() => setFiltersOpen(false)} />
-          <div className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] flex flex-col pb-safe">
+          <div ref={sheetRef} className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] flex flex-col pb-safe">
             <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-cream-200 rounded-t-2xl">
               <h2 className="font-serif font-bold text-ink-900 flex items-center gap-2">
                 <Filter size={16} strokeWidth={2.2} className="text-primary-600" />

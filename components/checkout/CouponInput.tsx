@@ -1,5 +1,6 @@
 'use client';
 
+import { Check } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import type { Coupon } from '@/lib/coupons';
@@ -30,8 +31,8 @@ export function CouponInput({
     <div className="px-5 py-3 border-t bg-cream-50/50">
       {appliedCoupon ? (
         <div className="flex items-center justify-between bg-olive-50 border border-olive-200 rounded px-3 py-2 text-sm">
-          <span className="text-olive-800">
-            ✓ <strong>{appliedCoupon.coupon.code}</strong> applicato (−{formatPrice(appliedCoupon.discount)})
+          <span className="text-olive-800 inline-flex items-center gap-1">
+            <Check size={14} strokeWidth={2.5} aria-hidden /> <strong>{appliedCoupon.coupon.code}</strong> applicato (−{formatPrice(appliedCoupon.discount)})
           </span>
           <button
             type="button"

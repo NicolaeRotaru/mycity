@@ -15,6 +15,7 @@ import {
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { trackOrderPlaced } from '@/lib/analytics/events';
 
 type OrderItem = {
   id: string;
@@ -65,6 +66,22 @@ function StripeReturnHandler() {
   useEffect(() => {
     if (searchParams.get('stripe') === 'success') {
       toast.success('Pagamento completato! Il tuo ordine è confermato.');
+      // Funnel: emette `purchase` (GA4) + `order_placed` una sola volta per
+      // sessione Stripe. session_id = transaction_id (dedup lato GA4); il valore
+      // arriva dallo stash creato prima del redirect (mc_pending_purchase).
+      const sessionId = searchParams.get('session_id') ?? '';
+      const dedupKey = `mc_purchase_tracked_${sessionId}`;
+      try {
+        if (sessionId && !sessionStorage.getItem(dedupKey)) {
+          const raw = sessionStorage.getItem('mc_pending_purchase');
+          const p = raw ? (JSON.parse(raw) as { valueCents?: number; coupon?: string | null; sellerId?: string }) : null;
+          if (p?.valueCents) {
+            trackOrderPlaced(sessionId, p.valueCents, 'card', p.sellerId ?? 'multi', { coupon: p.coupon ?? undefined });
+          }
+          sessionStorage.setItem(dedupKey, '1');
+          sessionStorage.removeItem('mc_pending_purchase');
+        }
+      } catch { /* noop */ }
       // Pulisce il param dall'URL senza ricaricare
       router.replace('/orders');
     }
