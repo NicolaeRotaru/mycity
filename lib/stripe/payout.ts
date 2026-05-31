@@ -287,7 +287,7 @@ export async function refundOrder(
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_payout_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id')
+    .select('id, user_id, total_price, seller_payout_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents')
     .eq('id', opts.orderId)
     .single();
 
@@ -320,18 +320,20 @@ export async function refundOrder(
 
   const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
 
-  // Aggiorna stato ordine. Rimborso pieno → annulla l'ordine (mirror di
-  // handleChargeRefunded); parziale → marca solo il refund id.
-  const isFull = safeAmountCents >= orderTotalCents;
+  // Aggiorna stato ordine. payment_status ora distingue REFUNDED (pieno) da
+  // PARTIALLY_REFUNDED (parziale) invece di sovraccaricare 'FAILED'.
+  const newRefundedTotal = (order.refunded_amount_cents ?? 0) + safeAmountCents;
+  const isFull = newRefundedTotal >= orderTotalCents;
   const wasTransferred = order.payout_status === 'TRANSFERRED';
   await admin
     .from('orders')
     .update({
       stripe_refund_id: refund.id,
+      refunded_amount_cents: newRefundedTotal,
+      payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
       ...(isFull
         ? {
             payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED',
-            payment_status: 'FAILED',
             delivery_status: 'CANCELED',
             canceled_at: new Date().toISOString(),
           }

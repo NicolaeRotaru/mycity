@@ -401,12 +401,19 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   await admin
     .from('orders')
     .update({
-      payment_status: 'FAILED',
+      payment_status: 'REFUNDED',
       delivery_status: 'CANCELED',
       stripe_refund_id: refundId,
       canceled_at: new Date().toISOString(),
     })
     .in('id', allIds);
+  // refunded_amount_cents per ordine (refund pieno = totale ordine).
+  for (const o of orders) {
+    await admin
+      .from('orders')
+      .update({ refunded_amount_cents: Math.round(Number(o.total_price) * 100) })
+      .eq('id', o.id);
+  }
 
   // payout_status: i pagati sono già 'REVERSED' dal reversal; gli altri 'REFUNDED'.
   const refundedIds = allIds.filter((id) => !reversedIds.includes(id));
@@ -529,7 +536,7 @@ async function handleDisputeClosed(dispute: Stripe.Dispute) {
       .update({
         dispute_status: 'LOST',
         delivery_status: 'CANCELED',
-        payment_status: 'FAILED',
+        payment_status: 'REFUNDED',
         canceled_at: new Date().toISOString(),
       })
       .in('id', ids);
