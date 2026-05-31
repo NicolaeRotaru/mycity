@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Cookie } from 'lucide-react';
 import {
   readConsent,
   writeConsent,
@@ -12,7 +13,8 @@ import {
 
 /**
  * Banner cookie GDPR/ePrivacy conforme Garante (linee guida 2021):
- *  - 3 pulsanti di pari peso visivo (Accetta tutto / Rifiuta tutto / Personalizza)
+ *  - "Accetta tutto" e "Rifiuta tutto" di PARI peso visivo (no dark pattern);
+ *    "Personalizza" come azione secondaria
  *  - X / chiusura senza scelta = rifiuto totale (no scrolling = consenso)
  *  - Le categorie sono opt-in disattive di default (tranne necessary)
  *  - Re-prompt automatico ogni 6 mesi (CONSENT_MAX_AGE_DAYS)
@@ -61,8 +63,8 @@ export default function CookieBanner() {
       className="fixed inset-x-0 bottom-0 z-[100] p-3 sm:p-4"
     >
       <div className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-cream-300">
-        <h2 id="cookie-banner-title" className="text-base font-semibold text-ink-900">
-          🍪 Cookie e tecnologie simili
+        <h2 id="cookie-banner-title" className="flex items-center gap-2 text-base font-semibold text-ink-900">
+          <Cookie size={18} strokeWidth={2.2} aria-hidden /> Cookie e tecnologie simili
         </h2>
         <p id="cookie-banner-desc" className="mt-1 text-sm text-ink-600">
           Usiamo cookie tecnici (sempre attivi) e, previo tuo consenso, cookie funzionali,
@@ -101,7 +103,7 @@ export default function CookieBanner() {
           <button
             type="button"
             onClick={() => { rejectAll(); close(); }}
-            className="rounded-lg px-4 py-2 text-sm font-medium text-ink-700 ring-1 ring-cream-300 hover:bg-cream-50"
+            className="rounded-lg bg-ink-700 px-4 py-2 text-sm font-medium text-white hover:bg-ink-800"
           >
             Rifiuta tutto
           </button>
