@@ -8,6 +8,16 @@ import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
+/** Escape dei caratteri HTML per impedire XSS stored nell'email admin. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const Schema = z.object({
   name: z.string().trim().min(2, 'Nome troppo corto').max(120),
   email: z.string().trim().email('Email non valida'),
@@ -51,10 +61,10 @@ export async function POST(req: Request) {
   sendEmail({
     to: process.env.SUPPORT_EMAIL ?? 'support@mycity.it',
     subject: `[Contact] ${payload.subject} — ${payload.name}`,
-    html: `<p><strong>Da:</strong> ${payload.name} &lt;${payload.email}&gt;</p>
-           <p><strong>Soggetto:</strong> ${payload.subject}</p>
+    html: `<p><strong>Da:</strong> ${escapeHtml(payload.name)} &lt;${escapeHtml(payload.email)}&gt;</p>
+           <p><strong>Soggetto:</strong> ${escapeHtml(payload.subject)}</p>
            <hr>
-           <p>${payload.message.replace(/\n/g, '<br>')}</p>`,
+           <p>${escapeHtml(payload.message).replace(/\n/g, '<br>')}</p>`,
     replyTo: payload.email,
   }).catch(() => { /* noop */ });
 

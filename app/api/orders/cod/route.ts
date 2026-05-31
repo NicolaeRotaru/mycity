@@ -27,9 +27,9 @@ const DeliverySchema = z.object({
   zip: z.string().min(1).max(20),
   phone: z.string().min(1).max(40),
   notes: z.string().max(500).optional().nullable(),
-  lat: z.number().nullable().optional(),
-  lng: z.number().nullable().optional(),
-});
+  lat: z.number().min(-90).max(90).nullable().optional(),
+  lng: z.number().min(-180).max(180).nullable().optional(),
+}).refine((d) => !(d.lat === 0 && d.lng === 0), { message: 'Coordinate di consegna non valide' });
 
 const B2BSchema = z
   .object({

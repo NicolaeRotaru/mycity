@@ -1,7 +1,17 @@
 import type { NextRequest, NextResponse } from 'next/server';
 import { createClient, type User } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 import { ApiErrors } from './responses';
 import { rateLimit, getClientIp } from '@/lib/rate-limit';
+
+/** Confronto a tempo costante per secret (anti timing-attack). */
+function secretsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
 
 /**
  * Middleware riusabili per API routes.
@@ -177,7 +187,7 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
     const bearer = authHeader?.toLowerCase().startsWith('bearer ')
       ? authHeader.slice(7).trim()
       : null;
-    if (bearer !== expected) return ApiErrors.unauthorized();
+    if (!secretsMatch(bearer, expected)) return ApiErrors.unauthorized();
     return handler(req);
   };
 }
@@ -191,7 +201,7 @@ export function withInternalAuth(handler: (req: NextRequest) => Promise<NextResp
   return async (req: NextRequest): Promise<NextResponse> => {
     const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const provided = req.headers.get('x-internal-secret');
-    if (!expected || !provided || provided !== expected) {
+    if (!secretsMatch(provided, expected)) {
       return ApiErrors.forbidden();
     }
     return handler(req);
