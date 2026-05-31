@@ -21,7 +21,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
-import { Package } from 'lucide-react';
+import { Package, Radio, MapPin, PackageCheck, Bike, CircleCheck, Navigation, Phone, StickyNote, Banknote, Check } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 
 type OrderRow = {
@@ -140,7 +140,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
     qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
     if (result.ok) {
-      toast.success('✓ Ritiro confermato');
+      toast.success('Ritiro confermato');
       setVerifyOpen(null);
     }
     return result;
@@ -158,7 +158,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
     qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
     if (result.ok) {
-      toast.success('✓ Consegna confermata!');
+      toast.success('Consegna confermata!');
       stopSharing();
       setVerifyOpen(null);
       setTimeout(() => router.push('/rider'), 1000);
@@ -228,11 +228,11 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   // Azioni in base allo stato
   const actions: { label: string; nextStatus: OrderStatus; timestampField?: string; color: string }[] = [];
   if (order.delivery_status === 'ASSIGNED') {
-    actions.push({ label: '✋ Ho ritirato l\'ordine', nextStatus: 'PICKED_UP', timestampField: 'picked_up_at', color: 'bg-cyan-600 hover:bg-cyan-700' });
+    actions.push({ label: 'Ho ritirato l\'ordine', nextStatus: 'PICKED_UP', timestampField: 'picked_up_at', color: 'bg-cyan-600 hover:bg-cyan-700' });
   } else if (order.delivery_status === 'PICKED_UP') {
-    actions.push({ label: '🚚 In consegna al cliente', nextStatus: 'OUT_FOR_DELIVERY', color: 'bg-secondary-700 hover:bg-purple-700' });
+    actions.push({ label: 'In consegna al cliente', nextStatus: 'OUT_FOR_DELIVERY', color: 'bg-secondary-700 hover:bg-purple-700' });
   } else if (order.delivery_status === 'OUT_FOR_DELIVERY') {
-    actions.push({ label: '✅ Consegnato', nextStatus: 'DELIVERED', timestampField: 'delivered_at', color: 'bg-olive-600 hover:bg-olive-700' });
+    actions.push({ label: 'Consegnato', nextStatus: 'DELIVERED', timestampField: 'delivered_at', color: 'bg-olive-600 hover:bg-olive-700' });
   }
 
   // Destinazione corrente per il "Naviga"
@@ -274,8 +274,10 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       <div className={`rounded-xl p-5 border-2 ${sharing ? 'bg-olive-50 border-olive-300' : 'bg-accent-50 border-accent-300'}`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <p className="font-bold text-ink-900">
-              {sharing ? '📡 Posizione condivisa' : '📍 Condividi posizione'}
+            <p className="font-bold text-ink-900 flex items-center gap-1.5">
+              {sharing
+                ? <><Radio size={16} strokeWidth={2.2} aria-hidden /> Posizione condivisa</>
+                : <><MapPin size={16} strokeWidth={2.2} aria-hidden /> Condividi posizione</>}
             </p>
             <p className="text-sm text-ink-600">
               {sharing
@@ -299,9 +301,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       {order.delivery_status === 'ASSIGNED' && (
         <button
           onClick={() => setVerifyOpen('pickup')}
-          className="w-full bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+          className="w-full flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
         >
-          ✋ Conferma ritiro al negozio
+          <PackageCheck size={20} strokeWidth={2.2} aria-hidden /> Conferma ritiro al negozio
         </button>
       )}
       {order.delivery_status === 'ASSIGNED' && (
@@ -318,24 +320,24 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           <button
             onClick={() => transition.mutate({ newStatus: 'OUT_FOR_DELIVERY' })}
             disabled={transition.isPending}
-            className="w-full bg-secondary-700 hover:bg-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+            className="w-full flex items-center justify-center gap-2 bg-secondary-700 hover:bg-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
           >
-            🚚 Sto andando dal cliente
+            <Bike size={20} strokeWidth={2.2} aria-hidden /> Sto andando dal cliente
           </button>
           <button
             onClick={() => setVerifyOpen('delivery')}
-            className="w-full bg-olive-600 hover:bg-olive-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+            className="w-full flex items-center justify-center gap-2 bg-olive-600 hover:bg-olive-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
           >
-            ✅ Conferma consegna al cliente
+            <CircleCheck size={20} strokeWidth={2.2} aria-hidden /> Conferma consegna al cliente
           </button>
         </div>
       )}
       {order.delivery_status === 'OUT_FOR_DELIVERY' && (
         <button
           onClick={() => setVerifyOpen('delivery')}
-          className="w-full bg-olive-600 hover:bg-olive-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+          className="w-full flex items-center justify-center gap-2 bg-olive-600 hover:bg-olive-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
         >
-          ✅ Conferma consegna al cliente
+          <CircleCheck size={20} strokeWidth={2.2} aria-hidden /> Conferma consegna al cliente
         </button>
       )}
 
@@ -367,7 +369,8 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           rel="noopener noreferrer"
           fullWidth
           size="lg"
-        >🧭 Naviga su Google Maps</Button>
+          icon={Navigation}
+        >Naviga su Google Maps</Button>
       )}
 
       {/* NEGOZIO */}
@@ -376,8 +379,8 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         <p className="font-semibold text-ink-900">{order.seller?.store_name}</p>
         <p className="text-sm text-ink-700">{order.seller?.store_address}</p>
         {order.seller?.store_phone && (
-          <a href={`tel:${order.seller.store_phone}`} className="text-sm text-primary-700 hover:underline mt-1 inline-block">
-            📞 {order.seller.store_phone}
+          <a href={`tel:${order.seller.store_phone}`} className="text-sm text-primary-700 hover:underline mt-1 inline-flex items-center gap-1.5">
+            <Phone size={14} strokeWidth={2.2} aria-hidden /> {order.seller.store_phone}
           </a>
         )}
       </div>
@@ -388,12 +391,12 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         <p className="font-semibold text-ink-900">{order.delivery_full_name}</p>
         <p className="text-sm text-ink-700">{order.delivery_address}, {order.delivery_zip} {order.delivery_city}</p>
         {order.delivery_phone && (
-          <a href={`tel:${order.delivery_phone}`} className="text-sm text-primary-700 hover:underline mt-1 inline-block">
-            📞 {order.delivery_phone}
+          <a href={`tel:${order.delivery_phone}`} className="text-sm text-primary-700 hover:underline mt-1 inline-flex items-center gap-1.5">
+            <Phone size={14} strokeWidth={2.2} aria-hidden /> {order.delivery_phone}
           </a>
         )}
         {order.delivery_notes && (
-          <p className="text-sm text-ink-600 italic mt-2 bg-accent-50 p-2 rounded">📝 {order.delivery_notes}</p>
+          <p className="text-sm text-ink-600 italic mt-2 bg-accent-50 p-2 rounded flex items-start gap-1.5"><StickyNote size={14} className="shrink-0 mt-0.5" aria-hidden /> {order.delivery_notes}</p>
         )}
       </div>
 
@@ -426,7 +429,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         && !order.cash_confirmed_at && (
           <div className="bg-accent-50 border-2 border-accent-300 rounded-xl p-4 space-y-3">
             <div>
-              <p className="font-bold text-accent-900">💶 Conferma incasso</p>
+              <p className="font-bold text-accent-900 flex items-center gap-1.5"><Banknote size={16} strokeWidth={2.2} aria-hidden /> Conferma incasso</p>
               <p className="text-sm text-accent-800">
                 Conferma l&apos;importo ricevuto in contanti per chiudere l&apos;ordine. La foto è
                 facoltativa.
@@ -441,8 +444,8 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         )}
 
       {order.payment_method === 'cod' && order.cash_confirmed_at && (
-        <div className="bg-olive-50 border-2 border-olive-200 rounded-xl p-4 text-sm text-olive-900">
-          ✓ Incasso confermato il {new Date(order.cash_confirmed_at).toLocaleString('it-IT')}.
+        <div className="bg-olive-50 border-2 border-olive-200 rounded-xl p-4 text-sm text-olive-900 flex items-center gap-1.5">
+          <Check size={15} strokeWidth={2.5} className="shrink-0" aria-hidden /> Incasso confermato il {new Date(order.cash_confirmed_at).toLocaleString('it-IT')}.
         </div>
       )}
     </div>

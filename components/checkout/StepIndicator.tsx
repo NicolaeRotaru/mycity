@@ -18,7 +18,7 @@ type StepProps = {
 
 function Step({ num, label, active, done }: StepProps) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" aria-current={active ? 'step' : undefined}>
       <div
         className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
           done ? 'bg-olive-500 text-white' : active ? 'bg-primary-700 text-white' : 'bg-cream-200 text-ink-500'
