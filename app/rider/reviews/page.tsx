@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Star, Bike, Trophy, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -63,7 +64,7 @@ export default function RiderReviewsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-ink-900">⭐ Le tue recensioni</h1>
+        <h1 className="flex items-center gap-1.5 text-3xl font-extrabold text-ink-900"><Star size={18} strokeWidth={2.2} className="text-accent-400" aria-hidden /> Le tue recensioni</h1>
         <p className="text-sm text-ink-500">Cosa pensano i clienti delle tue consegne</p>
       </div>
 
@@ -71,7 +72,7 @@ export default function RiderReviewsPage() {
         <LoadingState />
       ) : reviews.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
-          <div className="text-5xl mb-3">🛵</div>
+          <Bike size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" aria-hidden />
           <p className="font-semibold text-ink-700">Nessuna recensione ancora</p>
           <p className="text-sm text-ink-500 mt-1">
             Dopo ogni consegna il cliente può lasciarti una valutazione. Più consegni, più feedback ricevi.
@@ -85,8 +86,8 @@ export default function RiderReviewsPage() {
               <Stars rating={stats.avg} />
               <p className="text-sm text-accent-800 mt-1">{stats.count} recensioni</p>
               {stats.avg >= 4.5 && (
-                <span className="inline-block mt-2 bg-accent-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                  🏆 Top rider
+                <span className="inline-flex items-center gap-1.5 mt-2 bg-accent-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                  <Trophy size={14} strokeWidth={2.2} aria-hidden /> Top rider
                 </span>
               )}
             </div>
@@ -154,7 +155,7 @@ export default function RiderReviewsPage() {
       )}
 
       <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-sm text-primary-900">
-        <h3 className="font-bold mb-2">💡 Come migliorare il rating</h3>
+        <h3 className="flex items-center gap-1.5 font-bold mb-2"><Lightbulb size={16} strokeWidth={2.2} aria-hidden /> Come migliorare il rating</h3>
         <ul className="space-y-1">
           <li>• Saluta sempre con un sorriso e mostra il volto</li>
           <li>• Avvisa via app quando sei a 2 minuti dalla consegna</li>

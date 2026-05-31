@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { apiErrorMessage } from '@/lib/errors';
+import { Check } from 'lucide-react';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
@@ -183,7 +184,7 @@ export default function RiderOnboardingPage() {
                       {d.label} {d.required && <span className="text-rose-600">*</span>}
                     </div>
                     <div className="text-xs text-ink-500 mt-0.5">{d.hint}</div>
-                    {uploaded && <div className="mt-1 text-xs text-olive-700">✓ Caricato</div>}
+                    {uploaded && <div className="mt-1 text-xs text-olive-700 flex items-center gap-1.5"><Check size={14} strokeWidth={2.2} aria-hidden /> Caricato</div>}
                   </div>
                   <label className="inline-flex cursor-pointer items-center rounded-lg bg-cream-100 px-3 py-2 text-sm font-medium text-ink-700 hover:bg-cream-200">
                     {uploading === d.kind ? tForms('uploading') : (uploaded ? tForms('replacePhoto') : tForms('uploadPhoto'))}

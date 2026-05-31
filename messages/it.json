@@ -68,6 +68,31 @@
     "payNow": "Paga ora",
     "totalLabel": "Totale"
   },
+  "search": {
+    "filters": "Filtri",
+    "sortBy": "Ordina per",
+    "category": "Categoria",
+    "allCategories": "Tutte le categorie",
+    "price": "Prezzo",
+    "minPrice": "Prezzo minimo",
+    "maxPrice": "Prezzo massimo",
+    "minRating": "Rating minimo",
+    "ratingAll": "Tutti",
+    "freeShipping": "Spedizione gratuita (≥ €30)",
+    "openNow": "Solo negozi aperti ora",
+    "reset": "Azzera",
+    "showResults": "Mostra risultati",
+    "resultsFor": "Risultati per «<hl>{q}</hl>»",
+    "allProducts": "Tutti i prodotti",
+    "sortedBy": "Ordinato per {label}",
+    "sort": {
+      "relevance": "Rilevanza",
+      "newest": "Più recenti",
+      "price_asc": "Prezzo crescente",
+      "price_desc": "Prezzo decrescente",
+      "rating": "Più recensiti"
+    }
+  },
   "marketing": {
     "tagline": "Il marketplace dei negozi di Piacenza",
     "subTagline": "Compra dai negozi sotto casa, ricevi a domicilio.",

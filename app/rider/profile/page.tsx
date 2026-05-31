@@ -9,6 +9,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Field';
+import { Bike } from 'lucide-react';
 
 export default function RiderProfilePage() {
   const qc = useQueryClient();
@@ -60,8 +61,8 @@ export default function RiderProfilePage() {
         <p className="text-sm text-ink-500">I tuoi dati di contatto, visibili al cliente.</p>
       </div>
 
-      <div className="bg-accent-50 border border-accent-200 rounded-lg p-4 text-accent-800 text-sm">
-        🛵 Account rider attivo · {profile?.email}
+      <div className="bg-accent-50 border border-accent-200 rounded-lg p-4 text-accent-800 text-sm flex items-center gap-1.5">
+        <Bike size={16} strokeWidth={2.2} aria-hidden /> Account rider attivo · {profile?.email}
       </div>
 
       <div className="bg-white border rounded-lg p-6 space-y-4">

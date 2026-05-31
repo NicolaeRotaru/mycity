@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
+import { Banknote, Camera } from 'lucide-react';
 
 type Props = {
   orderId: string;
@@ -82,9 +83,9 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full rounded-lg bg-accent-500 px-4 py-3 text-sm font-semibold text-white hover:bg-accent-600"
+        className="w-full rounded-lg bg-accent-500 px-4 py-3 text-sm font-semibold text-white hover:bg-accent-600 flex items-center justify-center gap-1.5"
       >
-        💶 Conferma incasso contanti
+        <Banknote size={16} strokeWidth={2.2} aria-hidden /> Conferma incasso contanti
       </button>
     );
   }
@@ -163,8 +164,10 @@ function PhotoSlot({
       <div className="mt-1 flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-cream-300 bg-cream-50">
         {url ? (
           <img src={url} alt="" loading="lazy" className="h-full w-full rounded-lg object-cover" />
+        ) : uploading ? (
+          <span className="text-xl text-ink-400">…</span>
         ) : (
-          <span className="text-xl text-ink-400">{uploading ? '…' : '📷'}</span>
+          <Camera size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden />
         )}
       </div>
       <input

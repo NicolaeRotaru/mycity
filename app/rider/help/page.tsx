@@ -1,16 +1,28 @@
 import Link from 'next/link';
+import {
+  Construction,
+  MapPin,
+  Banknote,
+  ShieldCheck,
+  Star,
+  Lightbulb,
+  Mail,
+  Phone,
+  MessageCircle,
+  type LucideIcon,
+} from 'lucide-react';
 
 export const metadata = {
   title: 'Centro rider · MyCity',
 };
 
-const TOPICS = [
+const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }[] }[] = [
   {
-    icon: '🚦',
+    icon: Construction,
     title: 'Inizio turno',
     items: [
       { q: 'Come ricevo le prime consegne?',
-        a: 'Vai online dalla pagina "Disponibilità" 🟢. Quando un ordine è pronto in zona riceverai una notifica push.' },
+        a: 'Vai online dalla pagina "Disponibilità". Quando un ordine è pronto in zona riceverai una notifica push.' },
       { q: 'Posso scegliere le consegne?',
         a: 'Sì. Dalla dashboard rider clicchi "Accetta" sulle consegne disponibili. Nessuna penalità se rifiuti.' },
       { q: 'Quante consegne posso fare in parallelo?',
@@ -18,7 +30,7 @@ const TOPICS = [
     ],
   },
   {
-    icon: '📍',
+    icon: MapPin,
     title: 'Durante la consegna',
     items: [
       { q: 'Come trovo il negozio e il cliente?',
@@ -30,7 +42,7 @@ const TOPICS = [
     ],
   },
   {
-    icon: '💶',
+    icon: Banknote,
     title: 'Guadagni e bonifici',
     items: [
       { q: 'Quando vengo pagato?',
@@ -42,7 +54,7 @@ const TOPICS = [
     ],
   },
   {
-    icon: '🛡️',
+    icon: ShieldCheck,
     title: 'Sicurezza e supporto',
     items: [
       { q: 'Sono assicurato?',
@@ -54,7 +66,7 @@ const TOPICS = [
     ],
   },
   {
-    icon: '⭐',
+    icon: Star,
     title: 'Rating e qualità',
     items: [
       { q: 'Cosa serve per essere "Top rider"?',
@@ -69,23 +81,25 @@ export default function RiderHelpPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-ink-900">💡 Centro rider</h1>
+        <h1 className="text-3xl font-extrabold text-ink-900 flex items-center gap-1.5">
+          <Lightbulb size={18} strokeWidth={2.2} aria-hidden /> Centro rider
+        </h1>
         <p className="text-sm text-ink-500">Guide pratiche per consegnare al meglio.</p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-3">
         <Link href="/contact" className="bg-gradient-to-br from-accent-500 to-orange-500 text-white rounded-xl p-5 hover:shadow-lg transition-all">
-          <div className="text-2xl mb-2">✉️</div>
+          <div className="mb-2"><Mail size={24} strokeWidth={2.2} aria-hidden /></div>
           <p className="font-bold">Contatta il supporto</p>
           <p className="text-xs text-accent-100 mt-1">Risposta entro 24h</p>
         </Link>
         <a href="tel:+390523000000" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-rose-300 transition-all">
-          <div className="text-2xl mb-2">📞</div>
+          <div className="mb-2"><Phone size={24} strokeWidth={2.2} aria-hidden /></div>
           <p className="font-bold text-ink-900">Emergenza</p>
           <p className="text-xs text-ink-500 mt-1">+39 0523 000000 · 24/7</p>
         </a>
         <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
-          <div className="text-2xl mb-2">💬</div>
+          <div className="mb-2"><MessageCircle size={24} strokeWidth={2.2} aria-hidden /></div>
           <p className="font-bold text-ink-900">WhatsApp rider</p>
           <p className="text-xs text-ink-500 mt-1">Lun-Dom 7-23</p>
         </a>
@@ -95,7 +109,7 @@ export default function RiderHelpPage() {
         {TOPICS.map((topic) => (
           <section key={topic.title} className="bg-white border rounded-xl p-5">
             <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2 text-lg">
-              <span className="text-2xl">{topic.icon}</span> {topic.title}
+              <topic.icon size={18} strokeWidth={2.2} aria-hidden /> {topic.title}
             </h2>
             <div className="space-y-3">
               {topic.items.map((it) => (

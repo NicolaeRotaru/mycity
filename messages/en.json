@@ -68,6 +68,31 @@
     "payNow": "Pay now",
     "totalLabel": "Total"
   },
+  "search": {
+    "filters": "Filters",
+    "sortBy": "Sort by",
+    "category": "Category",
+    "allCategories": "All categories",
+    "price": "Price",
+    "minPrice": "Minimum price",
+    "maxPrice": "Maximum price",
+    "minRating": "Minimum rating",
+    "ratingAll": "All",
+    "freeShipping": "Free shipping (≥ €30)",
+    "openNow": "Open shops only",
+    "reset": "Reset",
+    "showResults": "Show results",
+    "resultsFor": "Results for «<hl>{q}</hl>»",
+    "allProducts": "All products",
+    "sortedBy": "Sorted by {label}",
+    "sort": {
+      "relevance": "Relevance",
+      "newest": "Newest",
+      "price_asc": "Price: low to high",
+      "price_desc": "Price: high to low",
+      "rating": "Most reviewed"
+    }
+  },
   "marketing": {
     "tagline": "The marketplace of local shops in Piacenza",
     "subTagline": "Buy from shops nearby, get delivery to your door.",

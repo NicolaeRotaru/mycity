@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { CircleDot, Calendar, MapPin, Check, Plus, Save, Pause, Play } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 
@@ -117,7 +118,7 @@ export default function RiderAvailabilityPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-ink-900">🟢 Disponibilità</h1>
+        <h1 className="flex items-center gap-1.5 text-3xl font-extrabold text-ink-900"><CircleDot size={18} strokeWidth={2.2} className="text-olive-600" aria-hidden /> Disponibilità</h1>
         <p className="text-sm text-ink-500">Imposta quando e dove vuoi ricevere consegne.</p>
       </div>
 
@@ -147,20 +148,22 @@ export default function RiderAvailabilityPage() {
           <button
             type="button"
             onClick={() => save({ ...avail, online: !avail.online })}
-            className={`px-6 py-3 rounded-xl font-bold text-white text-base shadow transition-all ${
+            className={`flex items-center justify-center gap-1.5 px-6 py-3 rounded-xl font-bold text-white text-base shadow transition-all ${
               avail.online
                 ? 'bg-rose-500 hover:bg-rose-600'
                 : 'bg-olive-500 hover:bg-olive-600 hover:scale-105'
             }`}
           >
-            {avail.online ? '⏸ Vai offline' : '▶ Vai online'}
+            {avail.online
+              ? <><Pause size={16} strokeWidth={2.2} aria-hidden /> Vai offline</>
+              : <><Play size={16} strokeWidth={2.2} aria-hidden /> Vai online</>}
           </button>
         </div>
       </section>
 
       {/* Settimanale */}
       <section className="bg-white border rounded-xl p-5">
-        <h2 className="font-bold text-ink-900 mb-4">📅 Orari preferiti</h2>
+        <h2 className="flex items-center gap-1.5 font-bold text-ink-900 mb-4"><Calendar size={18} strokeWidth={2.2} aria-hidden /> Orari preferiti</h2>
         <p className="text-xs text-ink-500 mb-4">
           Indica quando preferisci lavorare. Riceverai notifiche solo in quegli orari (anche se sei offline manuale).
         </p>
@@ -212,7 +215,7 @@ export default function RiderAvailabilityPage() {
 
       {/* Zone preferite */}
       <section className="bg-white border rounded-xl p-5">
-        <h2 className="font-bold text-ink-900 mb-2">📍 Zone preferite</h2>
+        <h2 className="flex items-center gap-1.5 font-bold text-ink-900 mb-2"><MapPin size={18} strokeWidth={2.2} aria-hidden /> Zone preferite</h2>
         <p className="text-xs text-ink-500 mb-4">
           Riceverai prima le consegne in queste zone. Max 6. Lascia vuoto per ricevere ovunque.
         </p>
@@ -225,13 +228,13 @@ export default function RiderAvailabilityPage() {
                 key={z}
                 type="button"
                 onClick={() => toggleZone(z)}
-                className={`px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
                   active
                     ? 'bg-accent-500 text-white border-accent-500'
                     : 'bg-white text-ink-700 border-cream-300 hover:border-accent-400'
                 }`}
               >
-                {active ? '✓ ' : '+ '}{z}
+                {active ? <Check size={14} strokeWidth={2.2} aria-hidden /> : <Plus size={14} strokeWidth={2.2} aria-hidden />}{z}
               </button>
             );
           })}
@@ -264,8 +267,8 @@ export default function RiderAvailabilityPage() {
         )}
       </section>
 
-      <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 text-sm text-olive-900">
-        💾 Le preferenze sono salvate sul tuo profilo e sincronizzate su tutti i dispositivi.
+      <div className="flex items-center gap-1.5 bg-olive-50 border border-olive-200 rounded-xl p-4 text-sm text-olive-900">
+        <Save size={16} strokeWidth={2.2} aria-hidden /> Le preferenze sono salvate sul tuo profilo e sincronizzate su tutti i dispositivi.
       </div>
     </div>
   );

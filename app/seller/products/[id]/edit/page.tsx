@@ -18,6 +18,7 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { queryKeys } from '@/lib/queries/keys';
+import { Eye, AlertTriangle, Trash2, Save } from 'lucide-react';
 
 const Schema = z.object({
   name: z.string().min(3, 'Almeno 3 caratteri'),
@@ -36,6 +37,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   const qc = useQueryClient();
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
 
   // Carica il prodotto (con check di proprietà)
@@ -143,6 +145,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
           uploaded.push(data.publicUrl);
         }
         setImageUrls((prev) => [...prev, ...uploaded]);
+        setImageError(null);
         toast.success('Immagini caricate');
       } catch (err) {
         toast.error(friendlyError(err));
@@ -194,11 +197,22 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  const onValid = (form: FormData) => {
+    // Stessa "fabbrica della qualità" del nuovo annuncio: niente foto = non vende.
+    // Su modifica scatta solo se il venditore rimuove tutte le immagini.
+    if (imageUrls.length === 0) {
+      setImageError('Un prodotto senza foto non vende: aggiungi almeno una foto prima di salvare.');
+      document.getElementById('image-dropzone')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
+    update.mutate(form);
+  };
+
   if (isLoading) return <LoadingState />;
   if (error) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
-        <p className="font-bold mb-1">⚠️ Errore</p>
+        <p className="font-bold mb-1 flex items-center gap-1.5"><AlertTriangle size={16} aria-hidden /> Errore</p>
         <p className="text-sm mb-3">{error instanceof Error ? error.message : 'Errore sconosciuto'}</p>
         <Link href="/seller/products" className="text-sm font-semibold text-rose-700 hover:underline">
           ← Torna ai miei prodotti
@@ -216,8 +230,8 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
           </Link>
           <h1 className="text-2xl font-bold mt-1">Modifica prodotto</h1>
           {product?.status === 'sold' && (
-            <p className="text-xs text-accent-700 bg-accent-50 inline-block px-2 py-0.5 rounded mt-1">
-              ⚠ Attualmente segnato come esaurito — non è visibile ai clienti
+            <p className="text-xs text-accent-700 bg-accent-50 inline-flex items-center gap-1 px-2 py-0.5 rounded mt-1">
+              <AlertTriangle size={12} strokeWidth={2.4} aria-hidden /> Attualmente segnato come esaurito — non è visibile ai clienti
             </p>
           )}
         </div>
@@ -225,13 +239,13 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
           href={`/product/${id}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-sm bg-cream-100 hover:bg-cream-200 px-3 py-1.5 rounded font-semibold"
+          className="text-sm inline-flex items-center gap-1.5 bg-cream-100 hover:bg-cream-200 px-3 py-1.5 rounded font-semibold"
         >
-          👁 Vedi pubblico
+          <Eye size={15} strokeWidth={2.2} aria-hidden /> Anteprima cliente
         </Link>
       </div>
 
-      <form onSubmit={handleSubmit((d) => update.mutate(d))} className="bg-white border rounded-lg p-6 space-y-4">
+      <form onSubmit={handleSubmit(onValid)} className="bg-white border rounded-lg p-6 space-y-4">
         <Input
           label="Nome prodotto"
           {...register('name')}
@@ -290,12 +304,12 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium mb-1">Immagini</label>
+        <div id="image-dropzone">
+          <label className="block text-sm font-medium mb-1">Immagini <span className="text-ink-400 font-normal">— almeno 1, consigliate 3</span></label>
           <div
             {...getRootProps()}
             className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-              isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-primary-400'
+              imageError ? 'border-rose-300 bg-rose-50' : isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-primary-400'
             }`}
           >
             <input {...getInputProps()} />
@@ -327,6 +341,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
             </div>
           )}
           <p className="text-xs text-ink-400 mt-1">La prima foto è la copertina mostrata nelle liste.</p>
+          {imageError && <p className="text-sm text-rose-600 mt-1">{imageError}</p>}
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row gap-2 pt-4 border-t">
@@ -343,16 +358,16 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
               if (ok) removeProduct.mutate();
             }}
             disabled={removeProduct.isPending}
-            className="sm:w-auto px-4 py-3 rounded-lg font-semibold text-rose-700 bg-white border-2 border-rose-200 hover:bg-rose-50"
+            className="sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold text-rose-700 bg-white border-2 border-rose-200 hover:bg-rose-50"
           >
-            🗑 Elimina prodotto
+            <Trash2 size={16} aria-hidden /> Elimina prodotto
           </button>
           <button
             type="submit"
             disabled={update.isPending || uploading || (!isDirty && imageUrls.join('|') === (Array.isArray(product?.images) ? product.images : []).join('|') && JSON.stringify(attributes) === JSON.stringify(product?.attributes ?? {}))}
-            className="flex-1 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-40 text-white py-3 rounded-lg font-bold shadow"
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-40 text-white py-3 rounded-lg font-bold shadow"
           >
-            {update.isPending ? 'Salvataggio…' : '💾 Salva modifiche'}
+            <Save size={18} aria-hidden /> {update.isPending ? 'Salvataggio…' : 'Salva modifiche'}
           </button>
         </div>
       </form>
