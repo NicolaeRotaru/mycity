@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart } from 'lucide-react';
+import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flame, Package, ShieldCheck, Star } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -156,7 +156,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   if (!product.profiles?.is_approved) {
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
-        <div className="text-5xl mb-3">🚫</div>
+        <Ban size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" aria-hidden />
         <h1 className="text-xl font-bold text-ink-900 mb-2">Prodotto non disponibile</h1>
         <p className="text-sm text-ink-600 mb-5">
           Questo prodotto non è al momento acquistabile perché il negozio non è operativo.
@@ -272,7 +272,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               href={`/store/${product.profiles.id}`}
               className="inline-flex items-center gap-2 text-sm text-primary-700 hover:underline bg-primary-50 px-3 py-1.5 rounded-full"
             >
-              🏪 {product.profiles.store_name}
+              <Store size={14} strokeWidth={2.2} aria-hidden /> {product.profiles.store_name}
             </Link>
           )}
 
@@ -407,9 +407,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               {isOutOfStock ? (
                 <span className="text-secondary-700 font-bold">Esaurito</span>
               ) : isLowStock ? (
-                <span className="text-secondary-700 font-bold">🔥 Solo {stock} rimasti — affrettati!</span>
+                <span className="text-secondary-700 font-bold inline-flex items-center gap-1"><Flame size={13} strokeWidth={2.4} aria-hidden /> Solo {stock} rimasti</span>
               ) : (
-                <span className="text-olive-700 font-bold">✓ Disponibile · pronto per la consegna</span>
+                <span className="text-olive-700 font-bold inline-flex items-center gap-1"><Check size={13} strokeWidth={2.6} aria-hidden /> Disponibile · pronto per la consegna</span>
               )}
             </p>
 
@@ -457,13 +457,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               <ContactSellerButton
                 sellerId={sellerProfile?.id ?? product.seller_id}
                 className="w-full"
-                label="💬 Contatta il venditore"
+                label="Contatta il venditore"
               />
             )}
 
             <div className="pt-3 border-t border-surface-200 space-y-1.5 text-xs text-ink-500">
-              <p>📦 Venduto e consegnato da <strong className="text-ink-700">{product.profiles?.store_name}</strong></p>
-              <p>🔒 Compri sicuro: paghi solo quando arriva.</p>
+              <p className="flex items-center gap-1.5"><Package size={13} className="shrink-0" aria-hidden /> Venduto e consegnato da <strong className="text-ink-700">{product.profiles?.store_name}</strong></p>
+              <p className="flex items-center gap-1.5"><ShieldCheck size={13} className="shrink-0" aria-hidden /> Compri sicuro: paghi solo quando arriva.</p>
             </div>
           </div>
         </div>
@@ -533,7 +533,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         {/* Lista recensioni */}
         {reviews.length === 0 ? (
           <div className="bg-white border rounded-xl p-8 text-center">
-            <p className="text-4xl mb-2">⭐</p>
+            <Star size={40} strokeWidth={1.5} className="mx-auto text-ink-300 mb-2" aria-hidden />
             <p className="text-ink-600 font-medium">Nessuna recensione ancora</p>
             <p className="text-sm text-ink-400">Sii il primo a condividere la tua esperienza</p>
           </div>
@@ -549,7 +549,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     {/* Verified Purchase badge — Trust & Safety insight */}
                     {r.verified_purchase && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-olive-100 text-olive-800 px-2 py-0.5 rounded-full">
-                        ✓ Acquisto verificato
+                        <Check size={11} strokeWidth={3} aria-hidden /> Acquisto verificato
                       </span>
                     )}
                   </div>

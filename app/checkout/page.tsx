@@ -219,6 +219,18 @@ export default function CheckoutPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedAddresses]);
 
+  // Defer-the-wall: ripristina l'indirizzo digitato da ospite prima del login
+  // (salvato in handleSubmit), così non va perso dopo l'accesso.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('mc_checkout_draft');
+      if (!raw) return;
+      const draft = JSON.parse(raw) as Partial<typeof form>;
+      setForm((prev) => ({ ...prev, ...draft }));
+      sessionStorage.removeItem('mc_checkout_draft');
+    } catch { /* noop */ }
+  }, []);
+
   const applySavedAddress = (id: string) => {
     if (!id) return;
     const a = savedAddresses.find((x) => x.id === id);
@@ -471,10 +483,6 @@ export default function CheckoutPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!authUser) {
-      router.push('/sign-in?returnTo=/checkout');
-      return;
-    }
     const fieldErrors = validateAddress();
     setErrors(fieldErrors);
     const firstInvalid = (['fullName', 'address', 'city', 'zip', 'phone'] as const).find((k) => fieldErrors[k]);
@@ -489,6 +497,13 @@ export default function CheckoutPage() {
       return;
     }
     trackCheckoutStep('address', { city: form.city });
+    // Defer-the-wall: l'indirizzo si compila da ospiti; l'accesso è richiesto
+    // solo qui, al commit, salvando la bozza per ripristinarla al ritorno.
+    if (!authUser) {
+      try { sessionStorage.setItem('mc_checkout_draft', JSON.stringify(form)); } catch { /* noop */ }
+      router.push('/sign-in?returnTo=/checkout');
+      return;
+    }
     if (paymentMethod === 'card' && stripeAvailable) {
       payWithStripe.mutate();
     } else {
@@ -517,9 +532,11 @@ export default function CheckoutPage() {
       {!authUser && (
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
           <p className="text-sm text-olive-900">
-            <strong>Ci sei quasi!</strong> Accedi (bastano pochi secondi) e completiamo l'ordine — i tuoi articoli restano nel carrello, e paghi comodamente alla consegna.
+            <strong>Compila pure il tuo indirizzo qui sotto.</strong> Ti chiederemo di accedere solo al momento di confermare l&apos;ordine — i dati che inserisci restano salvati.
           </p>
-          <Button href="/sign-in?returnTo=/checkout" size="sm" variant="success">Accedi e continua</Button>
+          <Link href="/sign-in?returnTo=/checkout" className="text-sm font-semibold text-primary-700 hover:underline shrink-0">
+            Ho già un account →
+          </Link>
         </div>
       )}
 
