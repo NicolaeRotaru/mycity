@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Banknote, Landmark, Rocket } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -78,7 +79,9 @@ export default function RiderEarningsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-ink-900">💶 I tuoi guadagni</h1>
+        <h1 className="text-3xl font-extrabold text-ink-900 flex items-center gap-1.5">
+          <Banknote size={18} strokeWidth={2.2} aria-hidden /> I tuoi guadagni
+        </h1>
         <p className="text-sm text-ink-500">Tutto quello che hai incassato consegnando.</p>
       </div>
 
@@ -145,7 +148,7 @@ export default function RiderEarningsPage() {
       <section className="bg-white border rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="font-bold text-ink-900 mb-1 flex items-center gap-2">🏦 I tuoi compensi</h2>
+            <h2 className="font-bold text-ink-900 mb-1 flex items-center gap-2"><Landmark size={16} strokeWidth={2.2} aria-hidden /> I tuoi compensi</h2>
             <p className="text-sm text-ink-700">
               <strong>{formatPrice(paid)}</strong> già versati ·{' '}
               <strong>{formatPrice(pending)}</strong> in arrivo (consegne con carta).
@@ -161,7 +164,9 @@ export default function RiderEarningsPage() {
 
       {/* Tips */}
       <section className="bg-gradient-to-r from-primary-50 to-purple-50 border border-primary-200 rounded-xl p-5">
-        <h3 className="font-bold text-ink-900 mb-2">🚀 Guadagna di più</h3>
+        <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-1.5">
+          <Rocket size={16} strokeWidth={2.2} aria-hidden /> Guadagna di più
+        </h3>
         <ul className="text-sm text-ink-700 space-y-1.5">
           <li>• Tieni la disponibilità ON nei picchi (12-14 e 19-21)</li>
           <li>• Mantieni rating sopra 4.5★ → ricevi consegne prioritarie</li>
