@@ -60,13 +60,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       .eq('id', ret.order_id)
       .single();
 
-    if (isStripeConfigured() && order?.stripe_payment_intent) {
+    if (order?.stripe_payment_intent) {
+      // Ordine pagato con carta ma Stripe non configurato → NON marcare come rimborsato
+      // in silenzio: segnala l'errore (prima restava 'APPROVED' con buyer non rimborsato).
+      if (!isStripeConfigured()) {
+        return ApiErrors.unavailable('Stripe non configurato: impossibile emettere il rimborso ora.');
+      }
       try {
         const res = await refundOrder({
           orderId: ret.order_id,
           amountCents: body.refundAmountCents,
           reason: body.notes ?? 'requested_by_customer',
           metadata: { return_id: ret.id },
+          idempotencyKey: `return_${ret.id}`,
           notifyBuyer: true,
         });
         refundId = res.refundId;
@@ -77,9 +83,13 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         return ApiErrors.badGateway('Refund Stripe fallito: ' + (err instanceof Error ? err.message : 'unknown'));
       }
     }
+    // Ordine COD / senza payment_intent: nessun rimborso Stripe (il contante è gestito
+    // offline) → resta 'APPROVED'.
   }
 
-  const { error: updErr } = await admin
+  // Guard di stato atomico: solo UNA decisione passa (anti doppio-click).
+  // L'eventuale refund è già protetto dall'idempotencyKey lato Stripe.
+  const { data: updated, error: updErr } = await admin
     .from('returns')
     .update({
       status: newStatus,
@@ -90,9 +100,12 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       refund_id: refundId,
       refunded_at: refundedAt,
     })
-    .eq('id', params.id);
+    .eq('id', params.id)
+    .eq('status', 'REQUESTED')
+    .select('id');
 
   if (updErr) return ApiErrors.internal('Update fallito');
+  if (!updated || updated.length === 0) return ApiErrors.conflict("Reso già deciso da un'altra sessione");
 
   // Notifica buyer
   await admin.from('notifications').insert({
