@@ -339,6 +339,11 @@ export async function refundOrder(
     })
     .eq('id', order.id);
 
+  // Rimborso pieno → ordine annullato → ripristina lo stock (P0-4).
+  if (isFull) {
+    await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+  }
+
   if (opts.notifyBuyer) {
     try {
       const { data: ua } = await admin.auth.admin.getUserById(order.user_id);

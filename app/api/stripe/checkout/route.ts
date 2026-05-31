@@ -250,6 +250,22 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // Ricostruito per fugare drift da arrotondamento pro-rata.
   const expectedChargeCents = groupPersisted.reduce((s, g) => s + g.totalCents, 0);
 
+  // --- 4d. RISERVA ATOMICA DELLO STOCK (P0-4 anti-overselling).
+  // Decrementiamo PRIMA di prendere i soldi: se l'ultimo pezzo è già stato riservato
+  // da un altro buyer, qui falliamo con 409 e il cliente non paga merce inesistente.
+  // Lo stock viene ripristinato su scadenza checkout / sessione fallita / annullo / rimborso.
+  const stockItems = stripeGroups.flatMap((g) =>
+    g.items.map((it) => ({ product_id: it.productId, qty: it.quantity })),
+  );
+  const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
+  if (reserveErr) {
+    logger.warn('[stripe] reserve_stock fallita', { message: reserveErr.message });
+    return NextResponse.json(
+      { error: 'Alcuni articoli non sono più disponibili nelle quantità richieste.' },
+      { status: 409 },
+    );
+  }
+
   // --- 5. Inserisci pending_checkout (record-of-intent) PRIMA della session Stripe.
   const { data: pending, error: pendErr } = await admin
     .from('pending_checkouts')
@@ -278,6 +294,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   if (pendErr || !pending) {
     logger.error('[stripe] pending_checkout insert failed', pendErr);
+    await admin.rpc('restore_stock', { p_items: stockItems }); // rilascia la riserva
     return ApiErrors.internal('Errore nella preparazione del pagamento.');
   }
 
@@ -306,7 +323,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     return NextResponse.json({ id: session.id, url: session.url }, { status: 200 });
   } catch (e) {
     logger.error('[stripe] checkout creation failed', e);
-    // Marca il pending come CANCELED così non resta orphan.
+    // Rilascia la riserva di stock e marca il pending come CANCELED (no orphan).
+    await admin.rpc('restore_stock', { p_items: stockItems });
     await admin
       .from('pending_checkouts')
       .update({ status: 'CANCELED' })
