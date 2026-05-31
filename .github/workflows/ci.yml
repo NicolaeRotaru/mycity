@@ -41,3 +41,52 @@ jobs:
           # i NEXT_PUBLIC_* sopra sono placeholder solo per superare il build;
           # in produzione vengono dal hosting (Render). Mai mettere chiavi reali qui.
         run: npm run build
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      # Unit test puri (niente DB/network) + guardia integrita' file migration.
+      - name: Test
+        run: npm run test
+
+  integration-tests:
+    name: Integration tests (DB)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      # Test d'integrazione di sicurezza (RLS + grant EXECUTE su SECURITY DEFINER).
+      # Usano i secret REALI (niente placeholder): se non configurati, i test si
+      # auto-skippano (vedi hasEnv) e il job resta verde. Quando i secret ci sono,
+      # girano contro il DB e intercettano regressioni come una migration di
+      # lockdown non applicata.
+      - name: Integration tests
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npm run test:integration

@@ -2,19 +2,19 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Estensione dei test RLS: un client ANONIMO non deve poter leggere le tabelle
- * che contengono dati privati/sensibili. Complementa rls-policies.test.ts
- * (profiles/orders) allargando la copertura.
+ * Test d'INTEGRAZIONE (richiede un DB Supabase reale): un client ANONIMO non
+ * deve poter leggere le tabelle con dati privati/sensibili.
  *
- * Asserzione robusta: per ogni tabella va bene SIA un errore (RLS che nega)
- * SIA zero righe (RLS che filtra silenziosamente) — entrambi significano che
- * anon non accede ai dati. Fallisce solo se anon riesce a leggere righe.
+ * Asserzione robusta: per ogni tabella va bene SIA un errore (RLS che nega) SIA
+ * zero righe (RLS che filtra silenziosamente) — entrambi significano che anon
+ * non accede ai dati. Fallisce solo se anon riesce a leggere righe.
  *
- * Solo SELECT: nessuna mutazione. Si salta senza env Supabase.
+ * Solo SELECT: nessuna mutazione. Si salta senza env Supabase reali.
  */
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const hasEnv = !!(URL && ANON);
+// Salta anche sui placeholder del build CI, per non dare falsi verdi.
+const hasEnv = !!(URL && ANON) && !URL.includes('placeholder') && !ANON.includes('placeholder');
 
 // Tabelle che NON devono mai esporre righe a un anonimo.
 const PRIVATE_TABLES = [
