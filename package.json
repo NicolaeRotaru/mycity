@@ -29,7 +29,7 @@
     "postcss": "^8.5.15"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.32.1",
+    "@anthropic-ai/sdk": "^0.100.1",
     "@hookform/resolvers": "^3.3.0",
     "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.5.0",
