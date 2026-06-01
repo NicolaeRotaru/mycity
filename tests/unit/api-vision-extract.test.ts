@@ -36,7 +36,15 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { AiCallError } from '@/lib/ai/run';
 import { AiConfigError } from '@/lib/ai/client';
 
-const GOOD_TOOL = { name: 'Sedia', description: 'Sedia in legno', category_slug: 'casa', suggested_price_eur: 29.9 };
+const GOOD_TOOL = {
+  name: 'Sedia',
+  description: 'Sedia in legno',
+  category_slug: 'casa',
+  suggested_price_eur: 29.9,
+  image_quality: { score: 0.9, issues: [] },
+  alt_text: 'Sedia in legno chiaro',
+  policy_ok: true,
+};
 
 function makeReq(body: unknown): never {
   return new Request('http://localhost/api/vision/extract-product', {
@@ -85,7 +93,26 @@ describe('POST /api/vision/extract-product', () => {
       category_slug: 'casa',
       suggested_price: 29.9,
       attributes: {},
+      image_quality: { score: 0.9, issues: [] },
+      alt_text: 'Sedia in legno chiaro',
     });
+  });
+
+  it('blocca con 400 i prodotti vietati (policy_ok=false)', async () => {
+    runMessageMock.mockResolvedValue({ toolInput: { ...GOOD_TOOL, policy_ok: false, policy_reason: 'arma da fuoco' } });
+    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error.message).toMatch(/non può essere pubblicato/i);
+  });
+
+  it('le foto di bassa qualità NON bloccano (200 + image_quality/alt_text nel payload)', async () => {
+    runMessageMock.mockResolvedValue({ toolInput: { ...GOOD_TOOL, image_quality: { score: 0.2, issues: ['sfocata'] } } });
+    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.image_quality.score).toBe(0.2);
+    expect(json.alt_text).toBe('Sedia in legno chiaro');
   });
 
   it('normalizza gli attributi estratti (scarta stringhe vuote/whitespace)', async () => {

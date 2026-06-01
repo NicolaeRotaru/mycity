@@ -41,6 +41,10 @@ type ExtractInput = {
   category_slug: CategorySlug;
   suggested_price_eur: number;
   attributes?: Record<string, string>;
+  image_quality?: { score?: number; issues?: string[] };
+  alt_text?: string;
+  policy_ok?: boolean;
+  policy_reason?: string;
 };
 
 const EXTRACT_TOOL: Anthropic.Tool = {
@@ -91,8 +95,38 @@ const EXTRACT_TOOL: Anthropic.Tool = {
           ean: { type: 'string', description: 'Codice a barre EAN/GTIN (8-14 cifre), se leggibile sul retro o sull\'etichetta.' },
         },
       },
+      image_quality: {
+        type: 'object',
+        description: 'Valutazione della qualità della foto principale per la vendita online.',
+        properties: {
+          score: {
+            type: 'number',
+            description: 'Qualità complessiva da 0 (inutilizzabile) a 1 (ottima): nitidezza, luce, inquadratura, sfondo.',
+          },
+          issues: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Problemi rilevati. Es. "sfocata", "poca luce", "sfondo disordinato", "prodotto non centrato".',
+          },
+        },
+        required: ['score'],
+      },
+      alt_text: {
+        type: 'string',
+        description:
+          'Testo alternativo (alt) in italiano per la foto principale: descrive il prodotto in 5-15 parole per screen reader (accessibilità EAA).',
+      },
+      policy_ok: {
+        type: 'boolean',
+        description:
+          'false se il prodotto NON è ammesso sul marketplace (armi, droga, contraffazione, contenuti per adulti, animali vivi, farmaci da prescrizione). true negli altri casi.',
+      },
+      policy_reason: {
+        type: 'string',
+        description: 'Se policy_ok=false, motivo breve e oggettivo del blocco.',
+      },
     },
-    required: ['name', 'description', 'category_slug', 'suggested_price_eur'],
+    required: ['name', 'description', 'category_slug', 'suggested_price_eur', 'image_quality', 'alt_text', 'policy_ok'],
   },
 };
 
@@ -210,6 +244,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
   }
 
+  // Gate policy: blocca i prodotti vietati prima di compilare l'annuncio.
+  if (toolInput.policy_ok === false) {
+    const reason = toolInput.policy_reason?.trim();
+    return ApiErrors.invalidRequest(
+      reason
+        ? `Questo prodotto non può essere pubblicato su MyCity: ${reason}`
+        : 'Questo prodotto non può essere pubblicato su MyCity.',
+    );
+  }
+
   // Lookup category_id da slug
   let categoryId: string | null = null;
   try {
@@ -233,6 +277,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     }
   }
 
+  const score = toolInput.image_quality?.score;
+  const imageQuality =
+    typeof score === 'number'
+      ? { score, issues: Array.isArray(toolInput.image_quality?.issues) ? toolInput.image_quality!.issues : [] }
+      : null;
+
   return NextResponse.json({
     name: toolInput.name,
     description: toolInput.description,
@@ -240,5 +290,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     category_slug: toolInput.category_slug,
     suggested_price: toolInput.suggested_price_eur,
     attributes,
+    image_quality: imageQuality,
+    alt_text: typeof toolInput.alt_text === 'string' ? toolInput.alt_text.trim() : null,
   });
 });

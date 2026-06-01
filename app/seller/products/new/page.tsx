@@ -119,6 +119,8 @@ export default function NewProductPage() {
         setAttribute(targetKey, value);
       }
     }
+    // Alt-text accessibile (EAA): salvato in attributes, riusato negli <img>.
+    if (data.alt_text) setAttribute('alt_text', data.alt_text);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -332,7 +334,7 @@ export default function NewProductPage() {
               {imageUrls[0] ? (
                 <>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={imageUrls[0]} alt="" className="w-full h-full object-cover" />
+                  <img src={imageUrls[0]} alt={typeof attributes.alt_text === 'string' ? attributes.alt_text : ''} className="w-full h-full object-cover" />
                 </>
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-ink-300">

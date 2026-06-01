@@ -11,6 +11,8 @@ export type ExtractedProduct = {
   category_slug: string;
   suggested_price: number;
   attributes?: Record<string, string>;
+  image_quality?: { score: number; issues: string[] } | null;
+  alt_text?: string | null;
 };
 
 interface Props {
@@ -92,6 +94,12 @@ const PhotoFillButton = ({ onFilled }: Props) => {
         toast.success('Campi compilati. Seleziona manualmente la categoria.');
       } else {
         toast.success('Campi compilati. Controlla e modifica se serve.');
+      }
+      // Gate qualità foto (non bloccante): suggerisci di rifarla se è scadente.
+      const q = (data as ExtractedProduct).image_quality;
+      if (q && typeof q.score === 'number' && q.score < 0.5) {
+        const why = q.issues?.length ? ` (${q.issues.slice(0, 2).join(', ')})` : '';
+        toast(`Foto poco chiara${why}: valuta di rifarla con più luce e sfondo pulito.`, { icon: '📷' });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Estrazione fallita. Riprova.');
