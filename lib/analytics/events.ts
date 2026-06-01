@@ -124,6 +124,17 @@ export const trackOrderPlaced = (
 export const trackOrderCanceled = (orderId: string, reason?: string) =>
   track('order_canceled', { order_id: orderId, reason });
 
+// Home page: misura quale CTA/sezione della home porta avanti il funnel.
+export const trackHomeCtaClicked = (
+  ctaId: string,
+  props?: { location?: string; href?: string; variant?: string },
+) => track('home_cta_clicked', { cta_id: ctaId, ...props });
+
+// A/B testing: esposizione a una variante (la conversione si lega via gli
+// eventi di funnel già esistenti + le property `home_hero_variant` su PostHog).
+export const trackExperimentExposed = (experiment: string, variant: string) =>
+  track('experiment_exposed', { experiment, variant, [`${experiment}_variant`]: variant });
+
 // Engagement
 export const trackFavoriteAdded = (productId: string) =>
   track('favorite_added', { product_id: productId });

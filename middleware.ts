@@ -1,5 +1,13 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import {
+  EXPERIMENT_LIST,
+  assignVariant,
+  resolveVariant,
+  expCookieName,
+  expHeaderName,
+  EXP_COOKIE_MAX_AGE,
+} from '@/lib/experiments';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -88,8 +96,33 @@ export async function middleware(req: NextRequest) {
   const reqHeaders = new Headers(req.headers);
   reqHeaders.set('x-nonce', nonce);
 
+  // A/B testing: assegnazione stabile delle varianti. La variante esistente
+  // (cookie) viene riusata; quella nuova viene generata, propagata al render
+  // via header (corretta già al primo render, niente flicker) e persistita su
+  // cookie nella response. Additivo: non tocca il routing né l'auth.
+  const newAssignments: Array<{ cookie: string; variant: string }> = [];
+  for (const exp of EXPERIMENT_LIST) {
+    const existing = req.cookies.get(expCookieName(exp.key))?.value;
+    if (existing) {
+      reqHeaders.set(expHeaderName(exp.key), resolveVariant(exp, existing));
+    } else {
+      const variant = assignVariant(exp);
+      reqHeaders.set(expHeaderName(exp.key), variant);
+      if (exp.enabled) newAssignments.push({ cookie: expCookieName(exp.key), variant });
+    }
+  }
+
   const res = NextResponse.next({ request: { headers: reqHeaders } });
   res.headers.set('Content-Security-Policy', csp);
+  for (const a of newAssignments) {
+    res.cookies.set({
+      name: a.cookie,
+      value: a.variant,
+      maxAge: EXP_COOKIE_MAX_AGE,
+      path: '/',
+      sameSite: 'lax',
+    });
+  }
 
   // Perf: solo /admin, /seller, /rider richiedono sessione + ruolo. Per ogni
   // altra rotta (home, catalogo pubblico = ~90% del traffico) usciamo subito con
