@@ -53,15 +53,8 @@ export default function SellPage() {
         legal_residence_addr:  form.legalResidenceAddr,
         legal_residence_city:  form.legalResidenceCity,
         legal_residence_zip:   form.legalResidenceZip,
-        // Azienda
-        business_legal_name: form.businessLegalName,
-        business_vat_number: form.businessVatNumber.toUpperCase(),
-        business_form:       form.businessForm,
-        business_address:    form.businessAddress,
-        business_city:       form.businessCity,
-        business_zip:        form.businessZip,
-        business_pec:        form.businessPec || null,
-        business_sdi:        form.businessSdi ? form.businessSdi.toUpperCase() : null,
+        // Dati azienda (P.IVA, ragione sociale, ecc.) temporaneamente non raccolti
+        // in fase di iscrizione: le colonne restano null e verranno popolate dopo.
         // Vetrina
         store_name:          form.storeName,
         store_phone:         form.contactPhone,
@@ -142,14 +135,6 @@ export default function SellPage() {
           legalResidenceAddr: profile?.legal_residence_addr ?? profile?.address ?? '',
           legalResidenceCity: profile?.legal_residence_city ?? profile?.city ?? '',
           legalResidenceZip:  profile?.legal_residence_zip  ?? profile?.zip  ?? '',
-          businessLegalName: profile?.business_legal_name ?? '',
-          businessVatNumber: profile?.business_vat_number ?? '',
-          businessForm:      profile?.business_form ?? 'ditta_individuale',
-          businessAddress:   profile?.business_address ?? '',
-          businessCity:      profile?.business_city ?? '',
-          businessZip:       profile?.business_zip ?? '',
-          businessPec:       profile?.business_pec ?? '',
-          businessSdi:       profile?.business_sdi ?? '',
           storeName:         profile?.store_name ?? '',
           storeDescription:  profile?.store_description ?? '',
           billingIban:       profile?.billing_iban ?? '',

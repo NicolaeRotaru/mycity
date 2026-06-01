@@ -13,7 +13,7 @@ import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
-import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
+import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 import { useTranslations } from 'next-intl';
 
 /**
@@ -21,7 +21,8 @@ import { useTranslations } from 'next-intl';
  *
  * Differenze rispetto al vecchio VendorForm:
  *  - raccoglie dati anagrafici del titolare (richiesti per legge)
- *  - raccoglie dati azienda (P.IVA, ragione sociale, sede legale)
+ *  - i dati azienda (P.IVA, ragione sociale, sede legale) sono temporaneamente
+ *    disattivati: verranno raccolti più avanti nel percorso del venditore
  *  - richiede consensi espliciti a ToS, Privacy, accuratezza dati, addebito €50/mese
  *  - dopo l'invio NON attiva il negozio: parte la procedura di approvazione admin
  *
@@ -43,15 +44,8 @@ const SellerSchema = z.object({
   legalResidenceCity: z.string().min(2, 'Inserisci la città'),
   legalResidenceZip:  z.string().regex(/^[0-9]{5}$/, 'CAP non valido (5 cifre)'),
 
-  // Azienda
-  businessLegalName: z.string().min(2, 'Inserisci la ragione sociale'),
-  businessVatNumber: z.string().regex(/^[A-Z0-9]{8,15}$/i, 'P.IVA non valida'),
-  businessForm: z.enum(['ditta_individuale', 'srl', 'srls', 'snc', 'sas', 'spa', 'altro']),
-  businessAddress: z.string().min(3, 'Inserisci la sede legale'),
-  businessCity: z.string().min(2, 'Inserisci la città'),
-  businessZip: z.string().regex(/^[0-9]{5}$/, 'CAP non valido (5 cifre)'),
-  businessPec: z.string().email('PEC non valida').optional().or(z.literal('')),
-  businessSdi: z.string().regex(/^[A-Z0-9]{6,7}$/, 'Codice SDI non valido').optional().or(z.literal('')),
+  // NOTA: i dati azienda (ragione sociale, P.IVA, sede legale, PEC, SDI) sono
+  // temporaneamente disattivati nell'onboarding. Verranno raccolti più avanti.
 
   // Vetrina pubblica
   storeName: z.string().min(3, 'Nome del negozio (almeno 3 caratteri)'),
@@ -115,16 +109,6 @@ const Field = ({
   </div>
 );
 
-const BUSINESS_FORMS: { value: SchemaData['businessForm']; label: string }[] = [
-  { value: 'ditta_individuale', label: 'Ditta individuale / Libero professionista' },
-  { value: 'srl',               label: 'S.r.l.' },
-  { value: 'srls',              label: 'S.r.l.s.' },
-  { value: 'snc',               label: 'S.n.c.' },
-  { value: 'sas',               label: 'S.a.s.' },
-  { value: 'spa',               label: 'S.p.A.' },
-  { value: 'altro',             label: 'Altro' },
-];
-
 export default function SellerApplicationForm({ defaultValues, onSubmit, isLoading = false }: Props) {
   const tStates = useTranslations('states');
   const { register, handleSubmit, watch, formState: { errors } } = useForm<SchemaData>({
@@ -139,14 +123,6 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       legalResidenceAddr: defaultValues?.legalResidenceAddr ?? '',
       legalResidenceCity: defaultValues?.legalResidenceCity ?? '',
       legalResidenceZip:  defaultValues?.legalResidenceZip  ?? '',
-      businessLegalName: defaultValues?.businessLegalName ?? '',
-      businessVatNumber: defaultValues?.businessVatNumber ?? '',
-      businessForm:      defaultValues?.businessForm      ?? 'ditta_individuale',
-      businessAddress:   defaultValues?.businessAddress   ?? '',
-      businessCity:      defaultValues?.businessCity      ?? '',
-      businessZip:       defaultValues?.businessZip       ?? '',
-      businessPec:       defaultValues?.businessPec       ?? '',
-      businessSdi:       defaultValues?.businessSdi       ?? '',
       storeName:         defaultValues?.storeName         ?? '',
       storeDescription:  defaultValues?.storeDescription  ?? '',
       billingIban:       defaultValues?.billingIban       ?? '',
@@ -283,56 +259,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </div>
       </Section>
 
-      {/* STEP 3: Azienda */}
-      <Section step={3} title="Dati azienda" subtitle="Necessari per fatturazione ed obblighi fiscali">
-        <Select label="Forma giuridica" required {...register('businessForm')} error={errors.businessForm?.message}>
-          {BUSINESS_FORMS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-        </Select>
-        <Input
-          label="Ragione sociale"
-          required
-          placeholder="Es. Rossi Mario, Salumeria del Borgo S.r.l."
-          {...register('businessLegalName')}
-          error={errors.businessLegalName?.message}
-          hint="Nome completo dell'azienda come da visura camerale"
-        />
-        <Input
-          label="Partita IVA"
-          required
-          className="uppercase"
-          maxLength={15}
-          {...register('businessVatNumber')}
-          error={errors.businessVatNumber?.message}
-          hint="Italiana 11 cifre, oppure formato UE"
-        />
-        <Input label="Sede legale — Via" required placeholder="Via, numero civico" {...register('businessAddress')} error={errors.businessAddress?.message} />
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Input label="Città" required {...register('businessCity')} error={errors.businessCity?.message} />
-          <Input label="CAP" required inputMode="numeric" maxLength={5} {...register('businessZip')} error={errors.businessZip?.message} />
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Input
-            label="PEC"
-            type="email"
-            inputMode="email"
-            placeholder="negozio@pec.it"
-            {...register('businessPec')}
-            error={errors.businessPec?.message}
-            hint="Opzionale ma consigliata"
-          />
-          <Input
-            label="Codice SDI"
-            className="uppercase"
-            maxLength={7}
-            {...register('businessSdi')}
-            error={errors.businessSdi?.message}
-            hint="7 caratteri per fatturazione elettronica"
-          />
-        </div>
-      </Section>
-
-      {/* STEP 4: Vetrina */}
-      <Section step={4} title="La tua vetrina pubblica" subtitle="Quello che vedranno i clienti">
+      {/* STEP 3: Vetrina */}
+      <Section step={3} title="La tua vetrina pubblica" subtitle="Quello che vedranno i clienti">
         {/* Logo upload */}
         <Field label="Logo del negozio">
           <div className="flex items-center gap-4">
@@ -392,8 +320,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </Field>
       </Section>
 
-      {/* STEP 5: Pagamenti */}
-      <Section step={5} title="Pagamenti" subtitle="Come ricevi i guadagni e come ti addebitiamo l'abbonamento">
+      {/* STEP 4: Pagamenti */}
+      <Section step={4} title="Pagamenti" subtitle="Come ricevi i guadagni e come ti addebitiamo l'abbonamento">
         <Input
           label="IBAN per i bonifici dei tuoi incassi"
           className="uppercase font-mono text-xs"
@@ -413,8 +341,8 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </div>
       </Section>
 
-      {/* STEP 6: Consensi */}
-      <Section step={6} title="Consensi legali" subtitle="Obbligatori per attivare il negozio">
+      {/* STEP 5: Consensi */}
+      <Section step={5} title="Consensi legali" subtitle="Obbligatori per attivare il negozio">
         <Consent
           label={<>Ho letto e accetto i <Link href="/terms" target="_blank" className="text-primary-700 underline">Termini di servizio</Link> per venditori</>}
           register={register('acceptTos')}
@@ -426,7 +354,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           error={errors.acceptPrivacy?.message as string | undefined}
         />
         <Consent
-          label="Confermo che i dati anagrafici e aziendali forniti sono corretti e completi"
+          label="Confermo che i dati anagrafici forniti sono corretti e completi"
           register={register('acceptAccuracy')}
           error={errors.acceptAccuracy?.message as string | undefined}
         />
