@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import type { ReactNode } from 'react';
+import { headers } from 'next/headers';
 import { Store, Check, ShieldCheck, MapPin, ArrowRight, Heart, Sparkles, Gift, Banknote, Home as HomeIcon, Truck, RotateCcw } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import CategoryShowcase from '@/components/CategoryShowcase';
@@ -9,8 +10,53 @@ import NewsletterForm from '@/components/NewsletterForm';
 import DropOfDay from '@/components/home/DropOfDay';
 import HeroStoreCard from '@/components/home/HeroStoreCard';
 import HowItWorks from '@/components/home/HowItWorks';
+import HomeCtaLink from '@/components/home/HomeCtaLink';
+import ExperimentExposure from '@/components/home/ExperimentExposure';
 import MaybeSection from '@/components/home/MaybeSection';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
+import { EXPERIMENTS, expHeaderName, resolveVariant } from '@/lib/experiments';
+
+/**
+ * Contenuti dell'hero per variante (A/B test `home_hero`).
+ *  - A (controllo): claim "negozi veri" + ingresso alla scoperta.
+ *  - B (test): leva sul rischio-zero (paghi alla consegna) come gancio primario.
+ * Struttura identica: cambiano solo eyebrow, headline, sottotitolo e label CTA.
+ */
+const HERO_VARIANTS: Record<string, { eyebrow: string; headline: ReactNode; subhead: ReactNode; ctaPrimary: string }> = {
+  a: {
+    eyebrow: 'Il marketplace dei negozi di Piacenza',
+    headline: (
+      <>
+        I negozi <span className="text-primary-700 italic">veri</span> di Piacenza,<br />
+        ora a casa tua.
+      </>
+    ),
+    subhead: (
+      <>
+        Alimentari, abbigliamento, casa, elettronica: ordini dai commercianti
+        della tua via in pochi tap e <strong className="text-ink-900">paghi alla consegna</strong>.
+        A casa in 24-48h.
+      </>
+    ),
+    ctaPrimary: 'Inizia a esplorare',
+  },
+  b: {
+    eyebrow: 'Spesa, moda e casa · consegna a domicilio',
+    headline: (
+      <>
+        Ordini dai negozi di Piacenza.<br />
+        <span className="text-primary-700 italic">Paghi alla consegna.</span>
+      </>
+    ),
+    subhead: (
+      <>
+        Niente carta, nessun rischio: scegli dai commercianti della tua città e
+        paghi <strong className="text-ink-900">quando il rider arriva</strong>. A casa in 24-48h.
+      </>
+    ),
+    ctaPrimary: 'Scopri cosa c’è oggi',
+  },
+};
 
 // NB: ISR non applicabile. next-intl è cookie-based (getLocale/getMessages nel
 // root layout leggono i cookie) → tutte le rotte sono dinamiche per-request, e un
@@ -38,10 +84,18 @@ import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
  * promo, storia del giorno, sponsored) restano come componenti su disco ma NON
  * sono renderizzate qui: vanno riattivate quando il catalogo cresce.
  */
-export default function Home() {
+export default async function Home() {
+  // Variante hero assegnata dal middleware (header x-exp-home_hero); fallback al controllo.
+  const heroVariant = resolveVariant(
+    EXPERIMENTS.home_hero,
+    (await headers()).get(expHeaderName('home_hero')),
+  );
+  const hero = HERO_VARIANTS[heroVariant] ?? HERO_VARIANTS.a;
+
   return (
     <div className="bg-surface-50">
       <HomeRedirectGuard />
+      <ExperimentExposure experiment="home_hero" variant={heroVariant} />
 
       {/* HERO — canvas neutro pulito, accenti terracotta, headline serif */}
       <section className="relative overflow-hidden bg-gradient-to-b from-surface-0 to-surface-100">
@@ -54,51 +108,57 @@ export default function Home() {
             <div className="space-y-6">
               <span className="inline-flex items-center gap-1.5 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-primary-200">
                 <Sparkles size={14} strokeWidth={2.4} />
-                Il marketplace dei negozi di Piacenza
+                {hero.eyebrow}
               </span>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-[1.05] tracking-tight text-ink-900">
-                I negozi <span className="text-primary-700 italic">veri</span> di Piacenza,<br />
-                ora a casa tua.
+                {hero.headline}
               </h1>
               <p className="text-lg text-ink-600 max-w-xl leading-relaxed">
-                Alimentari, abbigliamento, casa, elettronica: ordini dai commercianti
-                della tua via in pochi tap e <strong className="text-ink-900">paghi alla consegna</strong>.
-                A casa in 24-48h.
+                {hero.subhead}
               </p>
 
               <div className="flex flex-wrap gap-3">
-                <Link
+                <HomeCtaLink
                   href="/categorie"
+                  ctaId="hero_primary"
+                  location="hero"
+                  variant={heroVariant}
                   className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-full font-semibold transition-colors shadow-warm"
                 >
-                  Inizia a esplorare
+                  {hero.ctaPrimary}
                   <ArrowRight size={18} strokeWidth={2.2} />
-                </Link>
-                <Link
+                </HomeCtaLink>
+                <HomeCtaLink
                   href="/stores"
+                  ctaId="hero_secondary"
+                  location="hero"
+                  variant={heroVariant}
                   className="inline-flex items-center gap-2 bg-white hover:bg-surface-100 text-ink-900 border border-surface-300 px-6 py-3 rounded-full font-semibold transition-colors"
                 >
                   <Store size={18} strokeWidth={2.2} />
                   Esplora i negozi
-                </Link>
+                </HomeCtaLink>
               </div>
 
               {/* Scorciatoie categorie: in fase lancio la scoperta batte la ricerca */}
               <div className="flex flex-wrap gap-2 pt-1">
                 {[
                   { slug: 'alimentari',    label: 'Alimentari' },
-                  { slug: 'abbigliamento', label: 'Abbigliamento' },
-                  { slug: 'casa-cucina',   label: 'Casa & Cucina' },
                   { slug: 'elettronica',   label: 'Elettronica' },
+                  { slug: 'abbigliamento', label: 'Abbigliamento' },
                   { slug: 'bellezza',      label: 'Bellezza' },
+                  { slug: 'casa',          label: 'Casa & Cucina' },
                 ].map((c) => (
-                  <Link
+                  <HomeCtaLink
                     key={c.slug}
                     href={`/category/${c.slug}`}
+                    ctaId={`hero_chip_${c.slug}`}
+                    location="hero_chips"
+                    variant={heroVariant}
                     className="inline-flex items-center bg-white text-ink-700 hover:text-primary-700 border border-cream-300 hover:border-primary-300 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
                   >
                     {c.label}
-                  </Link>
+                  </HomeCtaLink>
                 ))}
               </div>
 
@@ -157,9 +217,9 @@ export default function Home() {
                 Prodotti che vanno forte
               </h2>
             </div>
-            <Link href="/search" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
+            <HomeCtaLink href="/search" ctaId="products_see_all" location="popular_products" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
               Vedi tutto <ArrowRight size={16} strokeWidth={2.4} />
-            </Link>
+            </HomeCtaLink>
           </div>
           <ProductGrid limit={8} />
         </div>
@@ -209,9 +269,9 @@ export default function Home() {
             </h2>
             <p className="text-ink-500 text-sm mt-1">Ogni ordine aiuta un commerciante della tua città, non un colosso lontano.</p>
           </div>
-          <Link href="/stores" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
+          <HomeCtaLink href="/stores" ctaId="stores_see_all" location="nearby_stores" className="inline-flex items-center gap-1 text-primary-700 hover:text-primary-800 font-semibold text-sm">
             Tutti i negozi <ArrowRight size={16} strokeWidth={2.4} />
-          </Link>
+          </HomeCtaLink>
         </div>
         <StoreShowcase />
       </section>
@@ -251,13 +311,15 @@ export default function Home() {
               <span className="text-ink-300">Vendi online con zero commissioni.</span>
             </p>
           </div>
-          <Link
+          <HomeCtaLink
             href="/sell"
+            ctaId="seller_cta"
+            location="seller_band"
             className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-400 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-lg whitespace-nowrap"
           >
             <Store size={18} strokeWidth={2.4} />
             Diventa venditore
-          </Link>
+          </HomeCtaLink>
         </div>
       </section>
     </div>

@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { Store, ShoppingBag, Banknote, ArrowRight, type LucideIcon } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
+import HomeCtaLink from '@/components/home/HomeCtaLink';
 
 /**
  * Come funziona — 3 step per il nuovo visitatore.
@@ -84,13 +84,15 @@ export default function HowItWorks({ className }: { className?: string }) {
       </ol>
 
       <div className="flex justify-center mt-8">
-        <Link
+        <HomeCtaLink
           href="/categorie"
+          ctaId="howitworks_cta"
+          location="how_it_works"
           className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-full font-semibold transition-colors shadow-warm"
         >
           Inizia a esplorare
           <ArrowRight size={18} strokeWidth={2.2} />
-        </Link>
+        </HomeCtaLink>
       </div>
     </section>
   );
