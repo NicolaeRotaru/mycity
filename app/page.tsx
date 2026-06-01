@@ -7,14 +7,8 @@ import LiveActivityFeed from '@/components/LiveActivityFeed';
 import HomeRedirectGuard from '@/components/HomeRedirectGuard';
 import NewsletterForm from '@/components/NewsletterForm';
 import DropOfDay from '@/components/home/DropOfDay';
-import StoryOfDay from '@/components/home/StoryOfDay';
-import TrendingNow from '@/components/home/TrendingNow';
-import PromoDeals from '@/components/home/PromoDeals';
-import SponsoredCarousel from '@/components/SponsoredCarousel';
-import ShopOfMonthHero from '@/components/home/ShopOfMonthHero';
-import StoriesCarousel from '@/components/home/StoriesCarousel';
 import HeroStoreCard from '@/components/home/HeroStoreCard';
-import HomeEvents from '@/components/home/HomeEvents';
+import HowItWorks from '@/components/home/HowItWorks';
 import MaybeSection from '@/components/home/MaybeSection';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
 
@@ -25,19 +19,24 @@ import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
 // pubbliche, aggregazioni via RPC e immagini ottimizzate.
 
 /**
- * Homepage MyCity — "Mediterranean Modern" + edit del giorno.
+ * Homepage MyCity — "Mediterranean Modern", funnel-first per il PRIMO ORDINE
+ * di un nuovo visitatore. Pagina snella e gerarchica: niente sezioni che si
+ * sovrappongono o restano vuote in fase di lancio.
  *
- * Architettura del feed (top → bottom), funnel-first:
- *  1. Hero: claim + cutoff consegna + zero-rischio
- *  2. Drop del giorno (urgenza + countdown)
- *  3. Categorie (discoverability)
- *  4. Prodotti che vanno forte (catalogo: cuore della conversione)
- *  5. Live activity + "Perché MyCity" (FOMO + reassurance)
- *  6. Negozi vicini (orgoglio locale)
- *  7. Sezioni editoriali/promozionali (stories, negozio del mese, trending,
- *     promo, storia, sponsored) — sotto il funnel, si auto-nascondono se vuote
- *  8. Newsletter incentive
- *  9. CTA venditore (acquisizione supply)
+ * Architettura del feed (top → bottom):
+ *  1. Hero: claim locale + zero-rischio onesto + un CTA dominante + scorciatoie categorie
+ *  2. Come funziona (3 step: scegli → ordina → ricevi e paghi alla consegna)
+ *  3. Categorie (porta d'ingresso principale)
+ *  4. Drop del giorno (opzionale, urgenza singola offerta — si auto-nasconde)
+ *  5. Prodotti che vanno forte (catalogo: cuore della conversione)
+ *  6. Live activity + "Perché MyCity" (FOMO + reassurance)
+ *  7. Negozi vicini (orgoglio locale)
+ *  8. Newsletter incentive (€5 primo ordine)
+ *  9. CTA venditore (acquisizione supply, banda minima in fondo)
+ *
+ * NB: le sezioni editoriali/curate (stories, negozio del mese, eventi, trending,
+ * promo, storia del giorno, sponsored) restano come componenti su disco ma NON
+ * sono renderizzate qui: vanno riattivate quando il catalogo cresce.
  */
 export default function Home() {
   return (
@@ -55,21 +54,21 @@ export default function Home() {
             <div className="space-y-6">
               <span className="inline-flex items-center gap-1.5 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-primary-200">
                 <Sparkles size={14} strokeWidth={2.4} />
-                Il marketplace della tua città
+                Il marketplace dei negozi di Piacenza
               </span>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-serif font-bold leading-[1.05] tracking-tight text-ink-900">
-                Compra dai negozi<br />
-                <span className="text-primary-700 italic">veri</span> di Piacenza.
+                I negozi <span className="text-primary-700 italic">veri</span> di Piacenza,<br />
+                ora a casa tua.
               </h1>
               <p className="text-lg text-ink-600 max-w-xl leading-relaxed">
-                Alimentari, abbigliamento, casa, elettronica: tutto dai commercianti
-                della tua via. <strong className="text-ink-900">Paghi alla consegna</strong>,
-                ricevi a casa in 24-48h.
+                Alimentari, abbigliamento, casa, elettronica: ordini dai commercianti
+                della tua via in pochi tap e <strong className="text-ink-900">paghi alla consegna</strong>.
+                A casa in 24-48h.
               </p>
 
               <div className="flex flex-wrap gap-3">
                 <Link
-                  href="/search"
+                  href="/categorie"
                   className="inline-flex items-center gap-2 bg-primary-700 hover:bg-primary-800 text-white px-6 py-3 rounded-full font-semibold transition-colors shadow-warm"
                 >
                   Inizia a esplorare
@@ -84,21 +83,40 @@ export default function Home() {
                 </Link>
               </div>
 
+              {/* Scorciatoie categorie: in fase lancio la scoperta batte la ricerca */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {[
+                  { slug: 'alimentari',    label: 'Alimentari' },
+                  { slug: 'abbigliamento', label: 'Abbigliamento' },
+                  { slug: 'casa-cucina',   label: 'Casa & Cucina' },
+                  { slug: 'elettronica',   label: 'Elettronica' },
+                  { slug: 'bellezza',      label: 'Bellezza' },
+                ].map((c) => (
+                  <Link
+                    key={c.slug}
+                    href={`/category/${c.slug}`}
+                    className="inline-flex items-center bg-white text-ink-700 hover:text-primary-700 border border-cream-300 hover:border-primary-300 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+                  >
+                    {c.label}
+                  </Link>
+                ))}
+              </div>
+
               {/* Urgenza + zero-rischio above the fold */}
               <DeliveryCutoff variant="banner" className="max-w-sm" />
 
               <div className="flex flex-wrap gap-x-6 gap-y-2 pt-2 text-sm text-ink-600">
                 <span className="inline-flex items-center gap-1.5">
                   <Check size={16} strokeWidth={2.4} className="text-olive-600" />
-                  Spedizione gratis sopra €30
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Check size={16} strokeWidth={2.4} className="text-olive-600" />
-                  Reso entro 14 giorni
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Check size={16} strokeWidth={2.4} className="text-olive-600" />
                   Paghi alla consegna
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Check size={16} strokeWidth={2.4} className="text-olive-600" />
+                  Consegna in 24-48h
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Check size={16} strokeWidth={2.4} className="text-olive-600" />
+                  Account solo per confermare
                 </span>
               </div>
             </div>
@@ -109,10 +127,8 @@ export default function Home() {
         </div>
       </section>
 
-      {/* DROP DEL GIORNO — urgenza in cima al funnel */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
-        <DropOfDay />
-      </MaybeSection>
+      {/* COME FUNZIONA — toglie il freno #1 di chi non ci conosce */}
+      <HowItWorks />
 
       {/* CATEGORIE */}
       <section className="container mx-auto px-4 sm:px-6 py-12">
@@ -122,6 +138,11 @@ export default function Home() {
         </div>
         <CategoryShowcase />
       </section>
+
+      {/* DROP DEL GIORNO — gancio singola offerta, si auto-nasconde se assente */}
+      <MaybeSection className="container mx-auto px-4 sm:px-6 pb-2">
+        <DropOfDay />
+      </MaybeSection>
 
       {/* PRODOTTI POPOLARI — spinti in alto: sono il cuore della conversione */}
       <section className="bg-white border-y border-cream-300 py-12">
@@ -151,7 +172,7 @@ export default function Home() {
           <h3 className="font-serif font-bold text-ink-900 text-lg mb-4">Perché scegliere MyCity</h3>
           <ul className="space-y-3">
             {[
-              { Icon: Banknote, color: 'olive',     t: 'Paghi alla consegna',     d: 'Niente carta, niente registrazione obbligatoria.' },
+              { Icon: Banknote, color: 'olive',     t: 'Paghi alla consegna',     d: 'Niente carta: l’account serve solo per confermare l’ordine.' },
               { Icon: HomeIcon, color: 'primary',   t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
               { Icon: Truck,    color: 'accent',    t: 'Consegna in 24-48h',       d: 'Rider del territorio, percorsi brevi.' },
               { Icon: RotateCcw,color: 'secondary', t: 'Reso entro 14 giorni',    d: 'Cambi idea? Ti rimborsiamo senza domande.' },
@@ -195,44 +216,6 @@ export default function Home() {
         <StoreShowcase />
       </section>
 
-      {/* ───── Sezioni editoriali/promozionali: sotto il funnel principale.
-              Si auto-nascondono via MaybeSection quando non c'è contenuto. ───── */}
-
-      {/* STORIES NEGOZI (instagram-like, scadono 24h) */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 pt-6">
-        <StoriesCarousel />
-      </MaybeSection>
-
-      {/* NEGOZIO DEL MESE */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
-        <ShopOfMonthHero />
-      </MaybeSection>
-
-      {/* EVENTI (admin) */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
-        <HomeEvents />
-      </MaybeSection>
-
-      {/* TRENDING NOW */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
-        <TrendingNow />
-      </MaybeSection>
-
-      {/* PROMOZIONI — sconti attivi dei negozi */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
-        <PromoDeals />
-      </MaybeSection>
-
-      {/* STORIA DI OGGI */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-10">
-        <StoryOfDay />
-      </MaybeSection>
-
-      {/* SPONSORED — solo se ci sono listing attivi */}
-      <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
-        <SponsoredCarousel placement="home_top" />
-      </MaybeSection>
-
       {/* NEWSLETTER + REFERRAL */}
       <section className="bg-gradient-to-br from-accent-100 via-accent-50 to-cream-100 border-y border-cream-300">
         <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
@@ -256,52 +239,25 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA VENDITORE */}
+      {/* CTA VENDITORE — banda minima: non ruba attenzione al funnel acquirente */}
       <section className="bg-ink-900 text-white">
-        <div className="container mx-auto px-4 sm:px-6 py-16 md:py-20 grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-          <div className="space-y-5">
-            <span className="inline-flex items-center gap-1.5 bg-white/10 text-white px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-white/15">
-              <ShieldCheck size={14} strokeWidth={2.4} />
-              Per i venditori
+        <div className="container mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 w-10 h-10 rounded-full bg-white/10 ring-1 ring-white/15 flex items-center justify-center">
+              <ShieldCheck size={18} strokeWidth={2.4} className="text-accent-400" />
             </span>
-            <h2 className="text-3xl md:text-4xl font-serif font-bold leading-tight tracking-tight">
-              Hai un'attività?<br />
-              <span className="text-accent-400">Portala online</span> con MyCity.
-            </h2>
-            <p className="text-ink-300 text-base md:text-lg leading-relaxed">
-              Vetrina dedicata, prodotti illimitati, <strong className="text-white">zero commissioni</strong> sulle vendite.
-              Abbonamento mensile fisso, approvazione del team in 48 ore.
+            <p className="text-base md:text-lg">
+              <span className="font-serif font-bold">Hai un negozio a Piacenza?</span>{' '}
+              <span className="text-ink-300">Vendi online con zero commissioni.</span>
             </p>
-            <div className="flex flex-wrap gap-3 pt-2">
-              <Link
-                href="/sell"
-                className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-400 text-ink-900 px-6 py-3 rounded-full font-bold transition-colors shadow-lg"
-              >
-                <Store size={18} strokeWidth={2.4} />
-                Diventa venditore
-              </Link>
-              <Link
-                href="/stores"
-                className="inline-flex items-center gap-2 bg-transparent hover:bg-white/10 text-white border border-white/30 px-6 py-3 rounded-full font-semibold transition-colors"
-              >
-                Vedi chi vende già
-              </Link>
-            </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { n: '€50/mese', l: 'Abbonamento fisso, zero commissioni sul venduto' },
-              { n: '48h',      l: "Per l'approvazione del negozio" },
-              { n: '∞',        l: 'Prodotti pubblicabili' },
-              { n: 'IBAN',     l: 'Bonifico mensile dei tuoi incassi' },
-            ].map((s) => (
-              <div key={s.l} className="bg-white/5 ring-1 ring-white/10 rounded-xl p-5">
-                <div className="text-2xl md:text-3xl font-serif font-bold mb-2 text-accent-400">{s.n}</div>
-                <div className="text-xs text-ink-300 leading-snug">{s.l}</div>
-              </div>
-            ))}
-          </div>
+          <Link
+            href="/sell"
+            className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-400 text-ink-900 px-5 py-2.5 rounded-full font-bold transition-colors shadow-lg whitespace-nowrap"
+          >
+            <Store size={18} strokeWidth={2.4} />
+            Diventa venditore
+          </Link>
         </div>
       </section>
     </div>
