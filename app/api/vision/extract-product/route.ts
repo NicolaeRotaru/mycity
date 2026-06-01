@@ -1,10 +1,22 @@
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { env } from '@/lib/env';
+import { MODELS, AiConfigError } from '@/lib/ai/client';
+import { runMessage, AiCallError } from '@/lib/ai/run';
+
+/**
+ * Estrazione prodotto da foto (vision).
+ *
+ * Esperti senior consultati:
+ * - Marketplace PM: "Inserire un prodotto deve costare quasi zero sforzo."
+ * - Staff Eng: "Una sola via per le chiamate AI: runMessage (caching + telemetria)."
+ * - Trust & Safety: "Solo seller approvati. Rate limit aggressivo (Sonnet costa)."
+ */
 
 // Eseguito sempre lato server, mai bundled nel client.
 export const runtime = 'nodejs';
@@ -29,12 +41,12 @@ type ExtractInput = {
   suggested_price_eur: number;
 };
 
-const EXTRACT_TOOL = {
+const EXTRACT_TOOL: Anthropic.Tool = {
   name: 'extract_product',
   description:
     'Estrae i dettagli di un prodotto in vendita da un\'immagine. Usa sempre questo tool, non rispondere mai in testo libero.',
   input_schema: {
-    type: 'object' as const,
+    type: 'object',
     properties: {
       name: {
         type: 'string',
@@ -74,8 +86,7 @@ Linee guida:
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return ApiErrors.unavailable('Servizio AI non configurato sul server.');
+  if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato sul server.');
 
   // Rate limit: 10 chiamate / 5 min per utente (Anthropic costa)
   const rl = rateLimit({
@@ -109,12 +120,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
   }
 
-  const anthropic = new Anthropic({ apiKey });
-
   let toolInput: ExtractInput;
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+    const result = await runMessage<ExtractInput>({
+      feature: 'vision-extract',
+      model: MODELS.vision,
       max_tokens: 512,
       tools: [EXTRACT_TOOL],
       tool_choice: { type: 'tool', name: 'extract_product' },
@@ -136,17 +146,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       ],
     });
 
-    const toolBlock = response.content.find((b) => b.type === 'tool_use');
-    if (!toolBlock || toolBlock.type !== 'tool_use') {
-      logger.error('Anthropic non ha restituito un tool_use');
+    if (!result.toolInput) {
+      logger.error('Anthropic non ha restituito un tool_use', { feature: 'vision-extract' });
       return ApiErrors.badGateway('Risposta AI inattesa. Riprova.');
     }
-    toolInput = toolBlock.input as ExtractInput;
+    toolInput = result.toolInput;
   } catch (err) {
-    // Log solo lo status code, mai il messaggio raw (potrebbe contenere
+    // Log solo lo status, mai il messaggio raw (potrebbe contenere
     // frammenti della API key o dell'input).
-    const status = (err as { status?: number } | null)?.status;
-    logger.error('Errore chiamata Anthropic, status:', status);
+    if (err instanceof AiConfigError) return ApiErrors.unavailable('API key Anthropic non valida.');
+    const status = err instanceof AiCallError ? err.status : undefined;
+    logger.error('Errore chiamata Anthropic', { feature: 'vision-extract', status });
     if (status === 401) return ApiErrors.unavailable('API key Anthropic non valida.');
     if (status === 429) return ApiErrors.rateLimited(60);
     return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
