@@ -235,7 +235,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         {/* GALLERIA */}
         <div className="space-y-3">
           <div className="relative w-full aspect-square bg-surface-0 rounded-xl overflow-hidden border border-surface-200">
-            <Image src={sizedImage(images[activeImg], 'detail')} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-contain p-4" />
+            <Image src={sizedImage(images[activeImg], 'detail')} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-cover" />
             {isOutOfStock && (
               <Badge variant="soldout" size="md" className="absolute top-4 left-4">ESAURITO</Badge>
             )}
