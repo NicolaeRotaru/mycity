@@ -63,18 +63,25 @@ const PhotoFillButton = ({ onFilled }: Props) => {
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    // reset cosi' lo stesso file puo' essere ri-selezionato
+    const fileList = e.target.files;
+    // reset cosi' gli stessi file possono essere ri-selezionati
     if (e.target) e.target.value = '';
-    if (!file) return;
+    if (!fileList || fileList.length === 0) return;
+    // Max 4 foto (es. fronte + etichetta/retro). Riusa resizeImage (1024px JPEG).
+    const files = Array.from(fileList).slice(0, 4);
 
     setState('analyzing');
     try {
-      const { base64, mediaType } = await resizeImage(file);
+      const images = await Promise.all(
+        files.map(async (f) => {
+          const { base64, mediaType } = await resizeImage(f);
+          return { image_base64: base64, media_type: mediaType };
+        }),
+      );
       const res = await fetch('/api/vision/extract-product', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: base64, media_type: mediaType }),
+        body: JSON.stringify({ images }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -103,7 +110,7 @@ const PhotoFillButton = ({ onFilled }: Props) => {
           <span>Compila con una foto</span>
         </p>
         <p className="text-sm text-primary-100">
-          Scatta una foto del prodotto e l&apos;AI compila nome, descrizione, categoria e prezzo per te.
+          Scatta 2–4 foto (fronte + etichetta) e l&apos;AI compila nome, descrizione, categoria, prezzo e caratteristiche per te.
         </p>
       </div>
       <button
@@ -128,7 +135,7 @@ const PhotoFillButton = ({ onFilled }: Props) => {
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
+        multiple
         onChange={handleFile}
         className="hidden"
       />

@@ -30,6 +30,7 @@ export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
     { key: 'allergeni', label: 'Allergeni', type: 'text', placeholder: 'Es. Glutine, lattosio, frutta a guscio' },
     { key: 'ingredienti', label: 'Ingredienti principali', type: 'textarea', placeholder: 'Lista breve degli ingredienti' },
     { key: 'conservazione', label: 'Conservazione', type: 'select', options: ['Temperatura ambiente', 'Frigorifero', 'Freezer', 'Luogo fresco e asciutto'] },
+    { key: 'ean', label: 'Codice EAN', type: 'text', placeholder: '8001234567890' },
   ],
   abbigliamento: [
     { key: 'taglia', label: 'Taglia', type: 'select', options: ['XS', 'S', 'M', 'L', 'XL', 'XXL', '36', '38', '40', '42', '44', '46', '48', 'Unica'] },
@@ -56,6 +57,7 @@ export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
     { key: 'colore', label: 'Colore', type: 'text' },
     { key: 'memoria', label: 'Memoria / Storage', type: 'text', placeholder: 'Es. 128GB, 1TB' },
     { key: 'accessori', label: 'Accessori inclusi', type: 'text', placeholder: 'Es. Caricabatterie, custodia, cavo USB' },
+    { key: 'ean', label: 'Codice EAN', type: 'text', placeholder: '8001234567890' },
   ],
   libri: [
     { key: 'autore', label: 'Autore', type: 'text' },

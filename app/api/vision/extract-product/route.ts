@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -87,6 +88,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
           allergeni: { type: 'string', description: 'Allergeni (alimentari), se leggibili in etichetta.' },
           ingredienti: { type: 'string', description: 'Ingredienti principali (alimentari), se leggibili.' },
           scadenza: { type: 'string', description: 'Data di scadenza in formato ISO YYYY-MM-DD, se leggibile.' },
+          ean: { type: 'string', description: 'Codice a barre EAN/GTIN (8-14 cifre), se leggibile sul retro o sull\'etichetta.' },
         },
       },
     },
@@ -101,10 +103,26 @@ Linee guida:
 - Se l'immagine non mostra chiaramente un prodotto in vendita (es. e' un selfie, un panorama, un foglio bianco), chiama comunque il tool ma metti nome="Prodotto generico", descrizione vuota e categoria che ritieni piu' probabile.
 - Il prezzo suggerito deve essere realistico per il mercato italiano al dettaglio.
 - Descrizione in italiano, in tono neutro e informativo.
-- Compila l'oggetto attributes con le caratteristiche chiaramente visibili (marca, colore, taglia, materiale, peso/dimensioni, condizione; per gli alimentari anche origine, allergeni, ingredienti, scadenza). Ometti i campi non deducibili dalla foto: non inventare.`;
+- Compila l'oggetto attributes con le caratteristiche chiaramente visibili (marca, colore, taglia, materiale, peso/dimensioni, condizione; per gli alimentari anche origine, allergeni, ingredienti, scadenza). Ometti i campi non deducibili dalla foto: non inventare.
+- Se ricevi piu' foto, integrale: di solito una mostra il fronte e una il retro/etichetta. Leggi dall'etichetta marca, ingredienti, allergeni, peso e il codice a barre EAN quando presenti.`;
 
 // Validazione base64 (solo charset, no padding strict)
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+type MediaType = (typeof MEDIA_TYPES)[number];
+
+const ImageItem = z.object({
+  image_base64: z.string().min(1),
+  media_type: z.enum(MEDIA_TYPES),
+});
+
+// Accetta sia images[] (2-4 foto: fronte + etichetta) sia il payload singolo legacy.
+const BodySchema = z.object({
+  images: z.array(ImageItem).min(1).max(4).optional(),
+  image_base64: z.string().min(1).optional(),
+  media_type: z.enum(MEDIA_TYPES).optional(),
+});
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato sul server.');
@@ -118,27 +136,36 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   // Parsing + validazione body
-  let body: { image_base64?: string; media_type?: string };
+  let json: unknown;
   try {
-    body = await req.json();
+    json = await req.json();
   } catch {
     return ApiErrors.invalidRequest('Body JSON non valido.');
   }
-
-  const { image_base64, media_type } = body;
-  if (!image_base64 || typeof image_base64 !== 'string') {
-    return ApiErrors.invalidRequest('Campo image_base64 mancante.');
-  }
-  if (!media_type || !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(media_type)) {
+  const parsed = BodySchema.safeParse(json);
+  if (!parsed.success) {
+    // media_type non valido o struttura images[] errata
     return ApiErrors.invalidRequest('media_type deve essere image/jpeg, image/png, image/webp o image/gif.');
   }
-  if (!BASE64_RE.test(image_base64.slice(0, 4096))) {
-    return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
+
+  // Normalizza in una lista di immagini (images[] oppure singola legacy).
+  let images: { image_base64: string; media_type: MediaType }[];
+  if (parsed.data.images) {
+    images = parsed.data.images;
+  } else if (parsed.data.image_base64 && parsed.data.media_type) {
+    images = [{ image_base64: parsed.data.image_base64, media_type: parsed.data.media_type }];
+  } else {
+    return ApiErrors.invalidRequest('Campo image_base64 mancante.');
   }
 
-  // base64 ~= 4/3 byte raw, accettiamo fino a ~5 MB raw = ~7 MB base64.
-  if (image_base64.length > 7_500_000) {
-    return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+  for (const img of images) {
+    if (!BASE64_RE.test(img.image_base64.slice(0, 4096))) {
+      return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
+    }
+    // base64 ~= 4/3 byte raw, accettiamo fino a ~5 MB raw = ~7 MB base64.
+    if (img.image_base64.length > 7_500_000) {
+      return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+    }
   }
 
   let toolInput: ExtractInput;
@@ -153,15 +180,15 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         {
           role: 'user',
           content: [
-            {
-              type: 'image',
+            ...images.map((img) => ({
+              type: 'image' as const,
               source: {
-                type: 'base64',
-                media_type: media_type as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-                data: image_base64,
+                type: 'base64' as const,
+                media_type: img.media_type,
+                data: img.image_base64,
               },
-            },
-            { type: 'text', text: PROMPT_TEXT },
+            })),
+            { type: 'text' as const, text: PROMPT_TEXT },
           ],
         },
       ],

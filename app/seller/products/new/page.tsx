@@ -47,6 +47,7 @@ const AI_ATTR_TO_FIELD: Record<string, string> = {
   allergeni: 'allergeni',
   ingredienti: 'ingredienti',
   scadenza: 'scadenza',
+  ean: 'ean',
 };
 
 export default function NewProductPage() {

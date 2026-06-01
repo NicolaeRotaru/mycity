@@ -97,6 +97,35 @@ describe('POST /api/vision/extract-product', () => {
     expect(json.attributes).toEqual({ colore: 'Nero', marca: 'Ikea' });
   });
 
+  it('accetta images[] (2 foto) e invia N blocchi image + 1 testo', async () => {
+    const res = await POST(makeReq({
+      images: [
+        { image_base64: 'QUJD', media_type: 'image/jpeg' },
+        { image_base64: 'RUZH', media_type: 'image/png' },
+      ],
+    }));
+    expect(res.status).toBe(200);
+    const content = runMessageMock.mock.calls[0][0].messages[0].content;
+    expect(content.filter((b: { type: string }) => b.type === 'image')).toHaveLength(2);
+    expect(content.filter((b: { type: string }) => b.type === 'text')).toHaveLength(1);
+  });
+
+  it('400 se più di 4 foto', async () => {
+    const imgs = Array.from({ length: 5 }, () => ({ image_base64: 'QUJD', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ images: imgs }));
+    expect(res.status).toBe(400);
+  });
+
+  it('413 se una delle foto in images[] è troppo grande', async () => {
+    const res = await POST(makeReq({
+      images: [
+        { image_base64: 'QUJD', media_type: 'image/jpeg' },
+        { image_base64: 'A'.repeat(7_500_001), media_type: 'image/jpeg' },
+      ],
+    }));
+    expect(res.status).toBe(413);
+  });
+
   it('502 se manca il blocco tool_use', async () => {
     runMessageMock.mockResolvedValue({ toolInput: undefined });
     const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
