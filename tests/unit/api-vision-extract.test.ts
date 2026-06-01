@@ -84,7 +84,17 @@ describe('POST /api/vision/extract-product', () => {
       category_id: 'cat-1',
       category_slug: 'casa',
       suggested_price: 29.9,
+      attributes: {},
     });
+  });
+
+  it('normalizza gli attributi estratti (scarta stringhe vuote/whitespace)', async () => {
+    runMessageMock.mockResolvedValue({
+      toolInput: { ...GOOD_TOOL, attributes: { colore: 'Nero', materiale: '  ', marca: 'Ikea' } },
+    });
+    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const json = await res.json();
+    expect(json.attributes).toEqual({ colore: 'Nero', marca: 'Ikea' });
   });
 
   it('502 se manca il blocco tool_use', async () => {

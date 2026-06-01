@@ -39,6 +39,7 @@ type ExtractInput = {
   description: string;
   category_slug: CategorySlug;
   suggested_price_eur: number;
+  attributes?: Record<string, string>;
 };
 
 const EXTRACT_TOOL: Anthropic.Tool = {
@@ -69,6 +70,25 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         description:
           'Prezzo di vendita suggerito in euro, basato sul tipo di prodotto. Numero positivo con al massimo 2 decimali. Es. 3.50, 19.90, 145.',
       },
+      attributes: {
+        type: 'object',
+        description:
+          'Caratteristiche del prodotto chiaramente visibili in foto. Compila SOLO i campi deducibili con certezza; OMETTI del tutto gli altri (non inventare).',
+        properties: {
+          marca: { type: 'string', description: 'Marca / brand se visibile. Es. "Apple", "Barilla".' },
+          modello: { type: 'string', description: 'Modello, se indicato. Es. "iPhone 15 Pro".' },
+          colore: { type: 'string', description: 'Colore prevalente. Es. "Nero", "Blu navy".' },
+          taglia: { type: 'string', description: 'Taglia, se applicabile (abbigliamento/sport). Es. "M", "42".' },
+          materiale: { type: 'string', description: 'Materiale principale. Es. "Cotone 100%", "Legno di rovere".' },
+          peso: { type: 'string', description: 'Peso o quantità. Es. "500g", "1L", "6 pezzi".' },
+          dimensioni: { type: 'string', description: 'Dimensioni. Es. "60x40x30 cm".' },
+          condizione: { type: 'string', description: 'Stato / condizione. Es. "Nuovo", "Usato come nuovo".' },
+          origine: { type: 'string', description: 'Origine / provenienza (alimentari). Es. "Italia", "Sicilia".' },
+          allergeni: { type: 'string', description: 'Allergeni (alimentari), se leggibili in etichetta.' },
+          ingredienti: { type: 'string', description: 'Ingredienti principali (alimentari), se leggibili.' },
+          scadenza: { type: 'string', description: 'Data di scadenza in formato ISO YYYY-MM-DD, se leggibile.' },
+        },
+      },
     },
     required: ['name', 'description', 'category_slug', 'suggested_price_eur'],
   },
@@ -80,7 +100,8 @@ Linee guida:
 - Sii specifico ma sintetico: "Pomodori ciliegino" e' meglio di "Verdura".
 - Se l'immagine non mostra chiaramente un prodotto in vendita (es. e' un selfie, un panorama, un foglio bianco), chiama comunque il tool ma metti nome="Prodotto generico", descrizione vuota e categoria che ritieni piu' probabile.
 - Il prezzo suggerito deve essere realistico per il mercato italiano al dettaglio.
-- Descrizione in italiano, in tono neutro e informativo.`;
+- Descrizione in italiano, in tono neutro e informativo.
+- Compila l'oggetto attributes con le caratteristiche chiaramente visibili (marca, colore, taglia, materiale, peso/dimensioni, condizione; per gli alimentari anche origine, allergeni, ingredienti, scadenza). Ometti i campi non deducibili dalla foto: non inventare.`;
 
 // Validazione base64 (solo charset, no padding strict)
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -177,11 +198,20 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     // categoria opzionale: ok proseguire con null
   }
 
+  // Normalizza gli attributi: solo stringhe non vuote, trim.
+  const attributes: Record<string, string> = {};
+  if (toolInput.attributes && typeof toolInput.attributes === 'object') {
+    for (const [k, v] of Object.entries(toolInput.attributes)) {
+      if (typeof v === 'string' && v.trim()) attributes[k] = v.trim();
+    }
+  }
+
   return NextResponse.json({
     name: toolInput.name,
     description: toolInput.description,
     category_id: categoryId,
     category_slug: toolInput.category_slug,
     suggested_price: toolInput.suggested_price_eur,
+    attributes,
   });
 });

@@ -32,6 +32,23 @@ const Schema = z.object({
 
 type FormData = z.infer<typeof Schema>;
 
+// Mappa le chiavi attributo generiche estratte dalla foto sui key per-categoria
+// di lib/category-attributes (identità tranne condizione→stato).
+const AI_ATTR_TO_FIELD: Record<string, string> = {
+  marca: 'marca',
+  modello: 'modello',
+  colore: 'colore',
+  taglia: 'taglia',
+  materiale: 'materiale',
+  peso: 'peso',
+  dimensioni: 'dimensioni',
+  condizione: 'stato',
+  origine: 'origine',
+  allergeni: 'allergeni',
+  ingredienti: 'ingredienti',
+  scadenza: 'scadenza',
+};
+
 export default function NewProductPage() {
   const router = useRouter();
   const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -85,6 +102,21 @@ export default function NewProductPage() {
     }
     if (data.category_id) {
       setValue('category_id', data.category_id, { shouldValidate: true });
+    }
+    // Pre-compila gli attributi strutturati estratti, mappati sui campi della
+    // categoria (condizione→stato; per i select solo se il valore è un'opzione
+    // valida). Restano comunque editabili in AttributesFields.
+    if (data.attributes && data.category_id) {
+      const { fields } = getAttributesForCategory(categories, data.category_id);
+      for (const [aiKey, rawValue] of Object.entries(data.attributes)) {
+        const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+        if (!value) continue;
+        const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
+        const field = fields.find((f) => f.key === targetKey);
+        if (!field) continue;
+        if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
+        setAttribute(targetKey, value);
+      }
     }
   };
 

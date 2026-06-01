@@ -10,6 +10,7 @@ export type ExtractedProduct = {
   category_id: string | null;
   category_slug: string;
   suggested_price: number;
+  attributes?: Record<string, string>;
 };
 
 interface Props {
