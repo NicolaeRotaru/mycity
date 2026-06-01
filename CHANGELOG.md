@@ -8,7 +8,19 @@ maggiore resta a `0.x` finche' non c'e' PMF.
 
 ## [Unreleased]
 
+### Removed
+- **Pulizia codice morto**: rimosse le route mai chiamate `app/api/auth/{signin,signup}`
+  (signup/signin usano `supabase.auth` lato client con CAPTCHA nativo Supabase),
+  `app/api/stripe/payout` (ridondante: il cron `release-payouts` usa direttamente
+  `lib/stripe/payout`) e la pagina `app/status` (uptime mock, non linkata da nessuna parte).
+  Aggiornati/rimossi i test relativi.
+
 ### Added
+- **Audit log operativo** — `writeAudit` (`lib/audit.ts`) ora è invocato dalle mutation admin
+  (annulla ordine, elimina utente, risolvi dispute): `audit_logs` non è più sempre vuota e
+  `/admin/audit` mostra dati reali.
+- Pagine prima orfane collegate in `lib/account-menu.ts`: seller → Clienti, Recensioni;
+  rider → Storico, Recensioni; admin → Dispute, Audit log.
 - **Stripe multi-seller checkout** — il pagamento con carta supporta ora
   carrelli con prodotti da più negozi (era bloccato → forzava COD).
   - Migration 042: tabella `pending_checkouts` (record-of-intent),
@@ -48,6 +60,9 @@ maggiore resta a `0.x` finche' non c'e' PMF.
   lib/errors, lib/copy (87 test, 6 spec, ~860ms)
 
 ### Changed
+- **Export dati GDPR** ora server-side completo: `/profile/settings` chiama `/api/account/export`
+  (profilo, ordini buyer/seller/rider, recensioni, referral, notifiche) invece dell'export client
+  parziale che interrogava `orders.buyer_id` (colonna inesistente → export incompleto).
 - `lib/rate-limit.ts`: aggiunto `rateLimitAsync()` per Redis-backed, mantenuta
   `rateLimit()` sync per back-compat (25+ callsite invariati)
 - PWA service worker v2: stale-while-revalidate per immagini Supabase storage,
@@ -74,6 +89,8 @@ maggiore resta a `0.x` finche' non c'e' PMF.
   upgrade (breaking: params: Promise async, cookies async). Da pianificare.
 
 ### Documentation
+- `ANALISI_MARKETPLACE.md` riscritto: audit completo e verificato (codice + DB live + n8n),
+  inventario funzionale per ruolo e catalogo "non usato/inutile" in 5 tier.
 - README.md mantiene setup locale completo
 - docs/decisions.md, runbook.md, security-audit.md, dpa-vendors.md presenti
 - `.env.example` esteso a 35+ variabili documentate
