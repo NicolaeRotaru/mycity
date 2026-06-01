@@ -9,14 +9,15 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Textarea } from '@/components/ui/Field';
 import { apiErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
+import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
-const REASONS = [
-  { value: 'DAMAGED',           label: '📦 Prodotto danneggiato' },
-  { value: 'WRONG_ITEM',        label: '🔄 Prodotto sbagliato' },
-  { value: 'NOT_AS_DESCRIBED',  label: '⚠️ Non come descritto' },
-  { value: 'CHANGED_MIND',      label: '💭 Ho cambiato idea' },
-  { value: 'LATE',              label: '⏰ Consegna troppo in ritardo' },
-  { value: 'OTHER',             label: '✏️ Altro' },
+const REASONS: Array<{ value: string; label: string; icon: LucideIcon }> = [
+  { value: 'DAMAGED',           label: 'Prodotto danneggiato',          icon: Package },
+  { value: 'WRONG_ITEM',        label: 'Prodotto sbagliato',            icon: RefreshCw },
+  { value: 'NOT_AS_DESCRIBED',  label: 'Non come descritto',            icon: AlertTriangle },
+  { value: 'CHANGED_MIND',      label: 'Ho cambiato idea',              icon: MessageSquare },
+  { value: 'LATE',              label: 'Consegna troppo in ritardo',    icon: Clock },
+  { value: 'OTHER',             label: 'Altro',                         icon: Pencil },
 ];
 
 export default function NewReturnPage() {
@@ -107,7 +108,7 @@ export default function NewReturnPage() {
                 onChange={(e) => setReason(e.target.value)}
                 className="h-4 w-4 text-primary-700"
               />
-              <span className="text-sm">{r.label}</span>
+              <span className="text-sm inline-flex items-center gap-2"><r.icon size={15} strokeWidth={2.2} className="text-ink-500" aria-hidden /> {r.label}</span>
             </label>
           ))}
         </div>

@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ClipboardList } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
@@ -141,7 +141,7 @@ export default function OpenDisputePage(props: { params: Promise<{ id: string }>
         </div>
 
         <div className="bg-cream-100 rounded-lg p-3 text-xs text-ink-600">
-          <p>📋 <strong>Cosa succede dopo:</strong></p>
+          <p className="flex items-center gap-1.5"><ClipboardList size={14} strokeWidth={2.2} aria-hidden /> <strong>Cosa succede dopo:</strong></p>
           <ul className="list-disc list-inside mt-1 space-y-0.5">
             <li>Il team riceve il reclamo entro pochi minuti</li>
             <li>Contattiamo il venditore per la sua versione</li>

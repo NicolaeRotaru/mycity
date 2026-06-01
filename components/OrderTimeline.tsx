@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 
 type Props = {
   status: string;
@@ -24,7 +24,7 @@ export default function OrderTimeline(p: Props) {
   if (p.status === 'CANCELED') {
     return (
       <div className={`flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 ${p.className ?? ''}`}>
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-sm font-bold text-white">✕</span>
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-white"><X size={15} strokeWidth={3} aria-hidden /></span>
         <div>
           <p className="font-semibold text-rose-800">Ordine annullato</p>
           {fmt(p.canceledAt) && <p className="text-xs text-rose-600">{fmt(p.canceledAt)}</p>}

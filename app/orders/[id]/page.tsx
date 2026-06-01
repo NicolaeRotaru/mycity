@@ -27,7 +27,10 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
-import { Package } from 'lucide-react';
+import {
+  Package, CheckCircle2, Star, Repeat, Undo2, AlertTriangle, FileText,
+  Clock, XCircle, Check, MapPin, Phone, Store, Bike,
+} from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 
 type OrderRow = {
@@ -227,22 +230,24 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       </div>
       {isDelivered && (
         <div className="bg-olive-50 border-2 border-olive-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm text-olive-800 font-medium">
-            ✅ Ordine consegnato! Com'è andata?
+          <p className="text-sm text-olive-800 font-medium inline-flex items-center gap-1.5">
+            <CheckCircle2 size={16} strokeWidth={2.2} aria-hidden /> Ordine consegnato! Com'è andata?
           </p>
           <div className="flex gap-2 flex-wrap">
             <Link
               href={`/orders/${id}/review`}
-              className="bg-accent-400 hover:bg-accent-500 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm"
+              className="bg-accent-400 hover:bg-accent-500 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm inline-flex items-center gap-1.5"
             >
-              ⭐ Lascia recensione
+              <Star size={15} strokeWidth={2.2} aria-hidden /> Lascia recensione
             </Link>
-            <Button onClick={handleReorder} size="sm">🔁 Ripeti ordine</Button>
+            <Button onClick={handleReorder} size="sm">
+              <span className="inline-flex items-center gap-1.5"><Repeat size={15} strokeWidth={2.2} aria-hidden /> Ripeti ordine</span>
+            </Button>
             <Link
               href={`/orders/${id}/return`}
-              className="bg-white border border-cream-300 text-ink-700 hover:bg-cream-50 px-4 py-2 rounded-lg font-semibold text-sm"
+              className="bg-white border border-cream-300 text-ink-700 hover:bg-cream-50 px-4 py-2 rounded-lg font-semibold text-sm inline-flex items-center gap-1.5"
             >
-              ↩️ Richiedi reso
+              <Undo2 size={15} strokeWidth={2.2} aria-hidden /> Richiedi reso
             </Link>
             {order.seller_id && (
               <SubscribeFromOrderButton
@@ -260,18 +265,18 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             )}
             <Link
               href={`/orders/${id}/dispute`}
-              className="bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 px-4 py-2 rounded-lg font-semibold text-sm"
+              className="bg-white border border-rose-300 text-rose-700 hover:bg-rose-50 px-4 py-2 rounded-lg font-semibold text-sm inline-flex items-center gap-1.5"
             >
-              ⚠️ Apri reclamo
+              <AlertTriangle size={15} strokeWidth={2.2} aria-hidden /> Apri reclamo
             </Link>
             {order.invoice_pdf_url && (
               <a
                 href={order.invoice_pdf_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-white border border-cream-300 text-ink-700 hover:bg-cream-50 px-4 py-2 rounded-lg font-semibold text-sm"
+                className="bg-white border border-cream-300 text-ink-700 hover:bg-cream-50 px-4 py-2 rounded-lg font-semibold text-sm inline-flex items-center gap-1.5"
               >
-                📄 Scarica fattura
+                <FileText size={15} strokeWidth={2.2} aria-hidden /> Scarica fattura
               </a>
             )}
           </div>
@@ -280,8 +285,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       {/* ANNULLAMENTO (solo NEW) */}
       {isCancellable && (
         <div className="bg-accent-50 border-2 border-accent-200 rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm text-accent-900">
-            ⏳ <strong>In attesa di conferma del negozio.</strong> Puoi annullare l'ordine finché il negozio non lo accetta.
+          <p className="text-sm text-accent-900 flex items-start gap-1.5">
+            <Clock size={15} strokeWidth={2.2} className="mt-0.5 shrink-0" aria-hidden />
+            <span><strong>In attesa di conferma del negozio.</strong> Puoi annullare l'ordine finché il negozio non lo accetta.</span>
           </p>
           <button
             onClick={async () => {
@@ -296,15 +302,15 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
               if (ok) cancel.mutate();
             }}
             disabled={cancel.isPending}
-            className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap"
+            className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap inline-flex items-center gap-1.5"
           >
-            ❌ Annulla ordine
+            <XCircle size={15} strokeWidth={2.2} aria-hidden /> Annulla ordine
           </button>
         </div>
       )}
       {status === 'CANCELED' && (
-        <div className="bg-rose-50 border-2 border-rose-200 rounded-xl p-4 text-sm text-rose-800">
-          ❌ Questo ordine è stato annullato.
+        <div className="bg-rose-50 border-2 border-rose-200 rounded-xl p-4 text-sm text-rose-800 flex items-center gap-1.5">
+          <XCircle size={15} strokeWidth={2.2} aria-hidden /> Questo ordine è stato annullato.
         </div>
       )}
       {/* CODICE CONSEGNA (visibile quando rider sta arrivando) */}
@@ -317,9 +323,11 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 {deliveryCode.code}
               </p>
               <p className="text-sm text-olive-100">
-                {deliveryCode.verified_at
-                  ? '✓ Consegna confermata.'
-                  : 'Mostra questo codice (o il QR) al rider quando arriva. Senza questo codice, il rider non può chiudere la consegna.'}
+                {deliveryCode.verified_at ? (
+                  <span className="inline-flex items-center gap-1.5"><Check size={14} strokeWidth={3} aria-hidden /> Consegna confermata.</span>
+                ) : (
+                  'Mostra questo codice (o il QR) al rider quando arriva. Senza questo codice, il rider non può chiudere la consegna.'
+                )}
               </p>
             </div>
             <div className="bg-white p-2 rounded-lg shrink-0">
@@ -349,7 +357,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                         : 'bg-cream-200 text-ink-400'
                     }`}
                   >
-                    {past ? '✓' : i + 1}
+                    {past ? <Check size={16} strokeWidth={3} aria-hidden /> : i + 1}
                   </div>
                   <div className="flex-1 pt-1">
                     <p className={`text-sm inline-flex items-center gap-1.5 ${past || active ? 'font-semibold text-ink-900' : 'text-ink-400'}`}>
@@ -383,7 +391,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
           <div className="px-6 py-4 border-b border-cream-200 flex items-center justify-between flex-wrap gap-2">
             <div>
-              <h2 className="font-semibold text-ink-900">📍 Tracking in tempo reale</h2>
+              <h2 className="font-semibold text-ink-900 flex items-center gap-1.5"><MapPin size={16} strokeWidth={2.2} aria-hidden /> Tracking in tempo reale</h2>
               {order.rider_id && (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') ? (
                 <p className="text-sm text-olive-600">
                   ● Rider in movimento
@@ -412,13 +420,13 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
               {order.seller?.store_logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 (<img src={order.seller.store_logo} alt="" loading="lazy" className="w-full h-full object-cover" />)
-              ) : '🏪'}
+              ) : <Store size={20} className="text-ink-400" aria-hidden />}
             </div>
             <div className="min-w-0">
               <p className="font-semibold text-ink-900 truncate">{order.seller?.store_name ?? '—'}</p>
               {order.seller?.store_phone && (
-                <a href={`tel:${order.seller.store_phone}`} className="text-sm text-primary-700 hover:underline">
-                  📞 {order.seller.store_phone}
+                <a href={`tel:${order.seller.store_phone}`} className="text-sm text-primary-700 hover:underline inline-flex items-center gap-1.5">
+                  <Phone size={13} strokeWidth={2.2} aria-hidden /> {order.seller.store_phone}
                 </a>
               )}
             </div>
@@ -429,8 +437,8 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
           <h3 className="text-xs uppercase tracking-wide text-ink-500 font-semibold mb-2">Rider</h3>
           {order.rider_id ? (
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-full bg-accent-100 text-accent-600 flex items-center justify-center text-xl">
-                🛵
+              <div className="w-12 h-12 rounded-full bg-accent-100 text-accent-600 flex items-center justify-center">
+                <Bike size={22} strokeWidth={2} aria-hidden />
               </div>
               <div>
                 <p className="font-semibold text-ink-900">{order.rider?.full_name ?? 'Rider'}</p>
@@ -456,7 +464,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     (<img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />)
-                  ) : '📦'}
+                  ) : <Package size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-ink-900 truncate">{it.products?.name ?? 'Prodotto'}</p>
@@ -480,7 +488,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
           <p className="font-medium">{order.delivery_full_name}</p>
           <p>{order.delivery_address}</p>
           <p>{order.delivery_zip} {order.delivery_city}</p>
-          <p>📞 {order.delivery_phone}</p>
+          <p className="flex items-center gap-1.5"><Phone size={13} strokeWidth={2.2} aria-hidden /> {order.delivery_phone}</p>
           {order.delivery_notes && <p className="text-ink-500 italic mt-2">Note: {order.delivery_notes}</p>}
         </div>
       </div>

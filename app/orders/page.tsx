@@ -4,7 +4,7 @@ import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Package } from 'lucide-react';
+import { Package, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import EmptyState from '@/components/EmptyState';
@@ -137,7 +137,7 @@ export default function OrdersPage() {
                   {order.seller?.store_logo ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={order.seller.store_logo} alt="" loading="lazy" className="w-full h-full object-cover" />
-                  ) : '🏪'}
+                  ) : <Store size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="min-w-0">
                   <p className="font-semibold text-ink-900 truncate">
