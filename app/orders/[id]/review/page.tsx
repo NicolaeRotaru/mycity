@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
-import { Package } from 'lucide-react';
+import { Package, Store, Bike } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 
 const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
@@ -92,7 +92,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       }
     },
     onSuccess: () => {
-      toast.success('Grazie per la recensione! 🌟');
+      toast.success('Grazie per la recensione!');
       router.push(`/orders/${id}`);
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
@@ -119,7 +119,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
 
       <div className="bg-white border rounded-xl p-6 space-y-4">
         <div>
-          <p className="font-semibold text-ink-900">🏪 {order.seller?.store_name ?? 'Negozio'}</p>
+          <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={16} strokeWidth={2.2} aria-hidden /> {order.seller?.store_name ?? 'Negozio'}</p>
           <p className="text-xs text-ink-500 mb-3">Com'è stato il negozio? Qualità, packaging, prodotti.</p>
           <StarRating value={storeRating} onChange={setStoreRating} />
           <Textarea
@@ -136,7 +136,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
       {order.rider_id && (
         <div className="bg-white border rounded-xl p-6 space-y-4">
           <div>
-            <p className="font-semibold text-ink-900">🛵 {order.rider?.full_name ?? 'Il tuo rider'}</p>
+            <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Bike size={16} strokeWidth={2.2} aria-hidden /> {order.rider?.full_name ?? 'Il tuo rider'}</p>
             <p className="text-xs text-ink-500 mb-3">Com'è stato il rider? Puntualità, gentilezza.</p>
             <StarRating value={riderRating} onChange={setRiderRating} />
             <Textarea
