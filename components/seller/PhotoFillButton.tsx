@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage } from '@/lib/errors';
 
 export type ExtractedProduct = {
@@ -65,12 +66,13 @@ const PhotoFillButton = ({ onFilled }: Props) => {
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const fileList = e.target.files;
-    // reset cosi' gli stessi file possono essere ri-selezionati
-    if (e.target) e.target.value = '';
-    if (!fileList || fileList.length === 0) return;
+    const input = e.target;
+    // IMPORTANTE: leggere i file SUBITO. e.target.files è un FileList "live":
+    // azzerare input.value lo svuoterebbe. Il reset va fatto dopo (finally),
+    // così resta possibile ri-selezionare gli stessi file.
     // Max 4 foto (es. fronte + etichetta/retro). Riusa resizeImage (1024px JPEG).
-    const files = Array.from(fileList).slice(0, 4);
+    const files = Array.from(input.files ?? []).slice(0, 4);
+    if (files.length === 0) return;
 
     setState('analyzing');
     try {
@@ -80,9 +82,15 @@ const PhotoFillButton = ({ onFilled }: Props) => {
           return { image_base64: base64, media_type: mediaType };
         }),
       );
+      // La route /api/vision/extract-product è protetta (withSellerAuth): inviare
+      // il bearer token come gli altri pulsanti sensibili (vedi AIDescriptionButton).
+      const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/vision/extract-product', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({ images }),
       });
       const data = await res.json();
@@ -102,9 +110,13 @@ const PhotoFillButton = ({ onFilled }: Props) => {
         toast(`Foto poco chiara${why}: valuta di rifarla con più luce e sfondo pulito.`, { icon: '📷' });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Estrazione fallita. Riprova.');
+      const msg = err instanceof Error && err.message ? err.message : 'Estrazione fallita. Riprova.';
+      toast.error(msg);
     } finally {
       setState('idle');
+      // Reset qui (non prima della lettura): consente di ri-selezionare gli
+      // stessi file senza svuotare il FileList prima dell'uso.
+      input.value = '';
     }
   };
 
