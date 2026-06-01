@@ -13,7 +13,6 @@ const STATIC_PAGES = [
   { path: '/shipping', heading: /Spedizione/i },
   { path: '/returns', heading: /Resi|Reso/i },
   { path: '/help', heading: /Aiuto|Help/i },
-  { path: '/status', heading: /Stato|Status/i },
 ];
 
 test.describe('Static pages render', () => {

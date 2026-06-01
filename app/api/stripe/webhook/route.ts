@@ -201,7 +201,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const transferGroup = `mc_${pendingCheckoutId}`;
 
   // Recupera la latest_charge dal PaymentIntent per popolare stripe_charge_id
-  // (serve a /api/stripe/payout per usare source_transaction).
+  // (serve al rilascio payout per usare source_transaction).
   let stripeChargeId: string | null = null;
   if (paymentIntent) {
     try {
