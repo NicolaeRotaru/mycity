@@ -48,6 +48,14 @@ const AI_ATTR_TO_FIELD: Record<string, string> = {
   ingredienti: 'ingredienti',
   scadenza: 'scadenza',
   ean: 'ean',
+  // Libri
+  autore: 'autore',
+  editore: 'editore',
+  anno: 'anno',
+  pagine: 'pagine',
+  lingua: 'lingua',
+  isbn: 'isbn',
+  formato: 'formato',
 };
 
 export default function NewProductPage() {

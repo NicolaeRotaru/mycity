@@ -93,6 +93,18 @@ const EXTRACT_TOOL: Anthropic.Tool = {
           ingredienti: { type: 'string', description: 'Ingredienti principali (alimentari), se leggibili.' },
           scadenza: { type: 'string', description: 'Data di scadenza in formato ISO YYYY-MM-DD, se leggibile.' },
           ean: { type: 'string', description: 'Codice a barre EAN/GTIN (8-14 cifre), se leggibile sul retro o sull\'etichetta.' },
+          // Libri: deducibili da copertina, costa e retro.
+          autore: { type: 'string', description: 'Autore/i del libro (libri). Es. "Italo Calvino".' },
+          editore: { type: 'string', description: 'Casa editrice (libri). Es. "Einaudi", "Mondadori".' },
+          anno: { type: 'string', description: 'Anno di pubblicazione (libri), 4 cifre. Es. "2024".' },
+          pagine: { type: 'string', description: 'Numero di pagine (libri), solo cifre. Es. "320".' },
+          lingua: { type: 'string', description: 'Lingua del libro. Es. "Italiano", "Inglese".' },
+          isbn: { type: 'string', description: 'Codice ISBN (libri), 10 o 13 cifre, se leggibile. Es. "9788806221324".' },
+          formato: {
+            type: 'string',
+            enum: ['Brossura', 'Cartonato', 'Tascabile', 'Audiolibro', 'Ebook'],
+            description: 'Formato del libro, se deducibile. Deve essere ESATTAMENTE una di: Brossura, Cartonato, Tascabile, Audiolibro, Ebook.',
+          },
         },
       },
       image_quality: {
@@ -138,6 +150,7 @@ Linee guida:
 - Il prezzo suggerito deve essere realistico per il mercato italiano al dettaglio.
 - Descrizione in italiano, in tono neutro e informativo.
 - Compila l'oggetto attributes con le caratteristiche chiaramente visibili (marca, colore, taglia, materiale, peso/dimensioni, condizione; per gli alimentari anche origine, allergeni, ingredienti, scadenza). Ometti i campi non deducibili dalla foto: non inventare.
+- Se il prodotto e' un libro, usa come nome il titolo del libro e compila gli attributi del libro leggibili da copertina, costa e retro: autore, editore, anno (4 cifre), pagine (solo cifre), lingua, isbn (10 o 13 cifre dal codice a barre) e formato (esattamente: Brossura, Cartonato, Tascabile, Audiolibro o Ebook).
 - Se ricevi piu' foto, integrale: di solito una mostra il fronte e una il retro/etichetta. Leggi dall'etichetta marca, ingredienti, allergeni, peso e il codice a barre EAN quando presenti.`;
 
 // Validazione base64 (solo charset, no padding strict)
