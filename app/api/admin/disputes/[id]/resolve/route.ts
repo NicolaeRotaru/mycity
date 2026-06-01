@@ -6,6 +6,7 @@ import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { writeAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
@@ -97,6 +98,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
           : '✕ Reclamo respinto',
     body: body.notes,
     link: `/orders/${dispute.order_id}`,
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    action:
+      body.status === 'resolved_buyer'
+        ? 'dispute.resolve_buyer'
+        : body.status === 'resolved_seller'
+          ? 'dispute.resolve_seller'
+          : 'dispute.reject',
+    targetTable: 'disputes',
+    targetId: params.id,
+    metadata: { orderId: dispute.order_id, refundCents: body.refundCents ?? null, refundId },
   });
 
   return NextResponse.json({ ok: true, status: body.status, refundId }, { status: 200 });

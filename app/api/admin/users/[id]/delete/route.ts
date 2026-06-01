@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { withAdminAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { writeAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
@@ -103,6 +104,14 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
       { status: 500 },
     );
   }
+
+  await writeAudit({
+    actorId: caller.id,
+    action: 'user.delete',
+    targetTable: 'profiles',
+    targetId: targetId,
+    metadata: { role: targetProfile.role, name: targetProfile.store_name ?? targetProfile.full_name },
+  });
 
   return NextResponse.json({
     ok: true,

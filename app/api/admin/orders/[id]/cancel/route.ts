@@ -6,6 +6,7 @@ import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { writeAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
@@ -77,6 +78,14 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     title: '✕ Ordine annullato',
     body: refundId ? `${reason} · rimborso emesso` : reason,
     link: `/orders/${order.id}`,
+  });
+
+  await writeAudit({
+    actorId: user.id,
+    action: isPaidCard ? 'order.refund' : 'order.force_cancel',
+    targetTable: 'orders',
+    targetId: order.id,
+    metadata: { reason, refundId, paymentMethod: order.payment_method },
   });
 
   return NextResponse.json({ ok: true, refundId }, { status: 200 });

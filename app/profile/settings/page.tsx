@@ -179,25 +179,28 @@ export default function SettingsPage() {
 
   const handleDownloadData = async () => {
     if (!userId) return;
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    const { data: orders } = await supabase.from('orders').select('*').eq('buyer_id', userId);
-    const { data: addresses } = await supabase.from('user_addresses').select('*').eq('user_id', userId);
-    const payload = {
-      exported_at: new Date().toISOString(),
-      account: { email, user_id: userId },
-      profile,
-      orders,
-      addresses,
-      preferences: prefs,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `mycity-export-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Esportazione dati scaricata');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) throw new Error('Sessione scaduta, esegui di nuovo il login.');
+      // Export GDPR Art.20 lato server: completo (profilo, ordini come
+      // buyer/seller/rider, recensioni, referral, notifiche) e senza i bug
+      // delle query client. Vedi /api/account/export.
+      const res = await fetch('/api/account/export', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(extractError(await res.json().catch(() => ({})), 'Esportazione non riuscita'));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mycity-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Esportazione dati scaricata');
+    } catch (err) {
+      toast.error(friendlyError(err));
+    }
   };
 
   // Estrae il messaggio d'errore sia dal formato ApiErrors { error: { message } }

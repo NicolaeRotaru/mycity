@@ -2,7 +2,7 @@ import {
   User, Package, Heart, MapPin, Sparkles, Award, Gift, ListChecks, Megaphone,
   LayoutDashboard, TrendingUp, ShoppingCart, Camera, Euro, Bike, CircleDot,
   Settings, HelpCircle, Shield, Home, Users, ShoppingBag, Ticket, Crown,
-  Calendar, Coins, AlertTriangle, Headset, type LucideIcon,
+  Calendar, Coins, AlertTriangle, Headset, Star, Scale, ScrollText, History, type LucideIcon,
 } from 'lucide-react';
 
 /**
@@ -41,15 +41,19 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/seller/analytics', icon: TrendingUp, label: 'Analytics' },
       { href: '/seller/products', icon: Package, label: 'I miei prodotti' },
       { href: '/seller/orders', icon: ShoppingCart, label: 'Ordini ricevuti' },
+      { href: '/seller/customers', icon: Users, label: 'Clienti' },
       { href: '/seller/promotions', icon: Sparkles, label: 'Promozioni' },
       { href: '/seller/stories', icon: Camera, label: 'Storie' },
       { href: '/seller/earnings', icon: Euro, label: 'Guadagni' },
+      { href: '/seller/reviews', icon: Star, label: 'Recensioni' },
     );
   } else if (role === 'rider') {
     items.push(
       { href: '/rider', icon: Bike, label: 'Dashboard' },
       { href: '/rider/availability', icon: CircleDot, label: 'Disponibilità' },
       { href: '/rider/earnings', icon: Euro, label: 'Guadagni' },
+      { href: '/rider/history', icon: History, label: 'Storico' },
+      { href: '/rider/reviews', icon: Star, label: 'Recensioni' },
     );
   } else if (role === 'admin') {
     // Tutta la navigazione admin vive qui (menu "Tu"); sotto l'icona scudo
@@ -60,6 +64,7 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/admin/funnel', icon: TrendingUp, label: 'Funnel & Cohort' },
       { href: '/admin/users', icon: Users, label: 'Utenti' },
       { href: '/admin/orders', icon: ShoppingBag, label: 'Ordini' },
+      { href: '/admin/disputes', icon: Scale, label: 'Dispute' },
       { href: '/admin/products', icon: Package, label: 'Prodotti' },
       { href: '/admin/support-chat', icon: Headset, label: 'Chat assistenza' },
       { href: '/admin/coupons', icon: Ticket, label: 'Coupon' },
@@ -68,6 +73,7 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/admin/sponsored', icon: Megaphone, label: 'Sponsored' },
       { href: '/admin/cashback', icon: Coins, label: 'Cashback' },
       { href: '/admin/sos', icon: AlertTriangle, label: 'SOS Rider' },
+      { href: '/admin/audit', icon: ScrollText, label: 'Audit log' },
     );
   }
 
