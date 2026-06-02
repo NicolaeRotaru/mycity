@@ -25,7 +25,7 @@ const VARIANTS: Record<BadgeVariant, string> = {
   discount: 'bg-secondary-600 text-white uppercase tracking-wide',
   new:      'bg-olive-600 text-white uppercase tracking-wide',
   soldout:  'bg-ink-700 text-white uppercase tracking-wide',
-  lowstock: 'bg-secondary-500 text-white uppercase tracking-wide animate-pulse-soft',
+  lowstock: 'bg-secondary-500 text-white uppercase tracking-wide',
   free:     'bg-olive-50 text-olive-700',
   cod:      'bg-olive-50 text-olive-700',
   local:    'bg-primary-50 text-primary-700',

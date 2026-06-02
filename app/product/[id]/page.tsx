@@ -241,7 +241,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             )}
             {isLowStock && !isOutOfStock && (
               <Badge variant="lowstock" size="md" className="absolute top-4 left-4">
-                Solo {stock} rimasti
+                {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}
               </Badge>
             )}
           </div>
@@ -407,7 +407,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               {isOutOfStock ? (
                 <span className="text-secondary-700 font-bold">Esaurito</span>
               ) : isLowStock ? (
-                <span className="text-secondary-700 font-bold inline-flex items-center gap-1"><Flame size={13} strokeWidth={2.4} aria-hidden /> Solo {stock} rimasti</span>
+                <span className="text-secondary-700 font-bold inline-flex items-center gap-1"><Flame size={13} strokeWidth={2.4} aria-hidden /> {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}</span>
               ) : (
                 <span className="text-olive-700 font-bold inline-flex items-center gap-1"><Check size={13} strokeWidth={2.6} aria-hidden /> Disponibile · pronto per la consegna</span>
               )}

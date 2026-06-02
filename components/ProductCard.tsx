@@ -93,7 +93,7 @@ const ProductCard = ({
         {hasDiscount && <Badge variant="discount">-{discountPercent}%</Badge>}
         {isNew && <Badge variant="new">Nuovo</Badge>}
         {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}
-        {isLowStock && !isOutOfStock && <Badge variant="lowstock">Ultimi {stock}</Badge>}
+        {isLowStock && !isOutOfStock && <Badge variant="lowstock">{stock === 1 ? 'Ultimo pezzo' : `Ultimi ${stock}`}</Badge>}
       </div>
 
       {/* FOTO dominante (~3/5) */}
