@@ -3,8 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
-import StoreListRow from '@/components/StoreListRow';
-import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
+import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -203,9 +202,9 @@ export default function StoresPage() {
           <p className="font-semibold">Nessun negozio trovato con questi filtri.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((s) => (
-            <StoreListRow
+            <StorePreviewCard
               key={s.id}
               store={s}
               products={productsByStore[s.id] ?? []}
