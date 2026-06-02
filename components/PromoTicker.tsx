@@ -34,9 +34,9 @@ export default function PromoTicker() {
 
   return (
     <div className="border-b border-ink-800 bg-ink-900 text-xs text-ink-100 sm:text-sm">
-      <div className="container mx-auto flex flex-wrap items-center justify-center gap-x-5 gap-y-1 px-4 py-2 text-center">
+      <div className="container mx-auto flex items-center gap-x-4 overflow-x-auto scrollbar-hide whitespace-nowrap px-4 py-2 sm:justify-center sm:gap-x-5">
         {WEDGE.map(({ icon: Icon, text }) => (
-          <span key={text} className="flex items-center gap-1.5">
+          <span key={text} className="flex shrink-0 items-center gap-1.5">
             <Icon size={14} strokeWidth={2.2} className="text-accent-400" />
             <span className="font-medium">{text}</span>
           </span>
@@ -44,7 +44,7 @@ export default function PromoTicker() {
         {hasPromo && (
           <Link
             href="/promozioni"
-            className="ml-1 inline-flex items-center gap-1.5 rounded-full bg-accent-500 px-3 py-0.5 font-bold text-ink-900 transition-colors hover:bg-accent-400"
+            className="ml-1 inline-flex shrink-0 items-center gap-1.5 rounded-full bg-accent-500 px-3 py-0.5 font-bold text-ink-900 transition-colors hover:bg-accent-400"
           >
             <Tag size={13} strokeWidth={2.6} />
             Promozioni attive · Scopri

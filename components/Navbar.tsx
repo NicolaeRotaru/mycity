@@ -41,21 +41,9 @@ export default function Navbar() {
   const { favorites } = useFavorites();
   const favCount = favorites.size;
 
-  // Hide-on-scroll: la navbar si nasconde scrollando verso il basso e riappare
-  // salendo (più spazio utile, soprattutto su mobile). Sempre visibile in cima.
-  const [hidden, setHidden] = useState(false);
-  const lastY = useRef(0);
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY;
-      if (y < 80) setHidden(false);
-      else if (y > lastY.current + 6) setHidden(true);
-      else if (y < lastY.current - 6) setHidden(false);
-      lastY.current = y;
-    };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  // Header statico (non sticky): resta in cima alla pagina e scorre via con il
+  // contenuto invece di seguire lo scroll. Su mobile la navigazione persistente
+  // è affidata alla MobileTabBar in fondo.
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -86,7 +74,7 @@ export default function Navbar() {
   const showCategoryBar = !isProArea && !isSeller && !isRider && !isAdmin;
 
   return (
-    <header className={`sticky top-0 z-40 shadow-warm-sm transition-transform duration-300 ${hidden ? '-translate-y-full' : 'translate-y-0'}`}>
+    <header className="relative z-40 shadow-warm-sm">
       <PromoTicker />
 
       {/* MAIN — bg primary (terracotta), accenti accent (mustard) */}
