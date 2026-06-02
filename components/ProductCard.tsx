@@ -136,32 +136,33 @@ const ProductCard = ({
           {name}
         </h3>
 
-        <div className="mt-auto flex items-center gap-1.5 pt-1">
-          {hasDiscount ? (
-            <>
-              <span className="text-base font-extrabold text-secondary-600">{formatPrice(discountedPrice)}</span>
-              <span className="text-[11px] text-ink-400 line-through">{formatPrice(price)}</span>
-            </>
-          ) : (
-            <span className="text-base font-extrabold text-ink-900">{formatPrice(price)}</span>
+        <div className="mt-auto pt-1">
+          {freeShipping && (
+            <span className="mb-1 inline-flex w-fit items-center gap-0.5 rounded bg-olive-50 px-1.5 py-0.5 text-[10px] font-semibold text-olive-700">
+              <Truck size={10} strokeWidth={2.4} aria-hidden />
+              Sped. gratis
+            </span>
           )}
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={isOutOfStock}
-            aria-label={`Aggiungi ${name} al carrello`}
-            className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
-          >
-            <Plus size={16} strokeWidth={2.6} aria-hidden />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {hasDiscount ? (
+              <>
+                <span className="text-base font-extrabold text-secondary-600">{formatPrice(discountedPrice)}</span>
+                <span className="text-[11px] text-ink-400 line-through">{formatPrice(price)}</span>
+              </>
+            ) : (
+              <span className="text-base font-extrabold text-ink-900">{formatPrice(price)}</span>
+            )}
+            <button
+              type="button"
+              onClick={handleAdd}
+              disabled={isOutOfStock}
+              aria-label={`Aggiungi ${name} al carrello`}
+              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
+            >
+              <Plus size={16} strokeWidth={2.6} aria-hidden />
+            </button>
+          </div>
         </div>
-
-        {freeShipping && (
-          <span className="inline-flex w-fit items-center gap-0.5 rounded bg-olive-50 px-1.5 py-0.5 text-[10px] font-semibold text-olive-700">
-            <Truck size={10} strokeWidth={2.4} aria-hidden />
-            Sped. gratis
-          </span>
-        )}
       </div>
     </Link>
   );
