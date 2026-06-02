@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
-import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
+import StoreListRow from '@/components/StoreListRow';
+import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { haversineKm } from '@/lib/geo';
 import { queryKeys } from '@/lib/queries/keys';
 import { Button } from '@/components/ui/Button';
@@ -118,9 +119,9 @@ export default function NearMePage() {
         <p className="text-ink-500 mt-1">{ranked.length} negozi ordinati per distanza</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="space-y-3">
         {ranked.map(({ store, distance }) => (
-          <StorePreviewCard
+          <StoreListRow
             key={store.id}
             store={store}
             products={productsByStore[store.id] ?? []}

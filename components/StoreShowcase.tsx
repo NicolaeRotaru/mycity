@@ -60,14 +60,15 @@ const StoreShowcase = () => {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto scrollbar-hide px-4 pb-2 sm:-mx-6 sm:px-6">
       {stores.map((s) => (
-        <StorePreviewCard
-          key={s.id}
-          store={s}
-          products={productsByStore[s.id] ?? []}
-          reviews={reviewsByStore[s.id]}
-        />
+        <div key={s.id} className="w-64 shrink-0 snap-start">
+          <StorePreviewCard
+            store={s}
+            products={productsByStore[s.id] ?? []}
+            reviews={reviewsByStore[s.id]}
+          />
+        </div>
       ))}
     </div>
   );
