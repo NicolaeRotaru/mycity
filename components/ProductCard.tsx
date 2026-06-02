@@ -3,7 +3,7 @@
 import { memo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, Plus, Truck } from 'lucide-react';
+import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -93,7 +93,6 @@ const ProductCard = ({
         {hasDiscount && <Badge variant="discount">-{discountPercent}%</Badge>}
         {isNew && <Badge variant="new">Nuovo</Badge>}
         {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}
-        {isLowStock && !isOutOfStock && <Badge variant="lowstock">{stock === 1 ? 'Ultimo pezzo' : `Ultimi ${stock}`}</Badge>}
       </div>
 
       {/* FOTO dominante (~3/5) */}
@@ -137,11 +136,21 @@ const ProductCard = ({
         </h3>
 
         <div className="mt-auto pt-1">
-          {freeShipping && (
-            <span className="mb-1 inline-flex w-fit items-center gap-0.5 rounded bg-olive-50 px-1.5 py-0.5 text-[10px] font-semibold text-olive-700">
-              <Truck size={10} strokeWidth={2.4} aria-hidden />
-              Sped. gratis
-            </span>
+          {(freeShipping || (isLowStock && !isOutOfStock)) && (
+            <div className="mb-1 flex flex-wrap items-center gap-1">
+              {isLowStock && !isOutOfStock && (
+                <span className="inline-flex items-center gap-0.5 rounded bg-secondary-50 px-1.5 py-0.5 text-[10px] font-bold text-secondary-700">
+                  <Flame size={10} strokeWidth={2.4} aria-hidden />
+                  {stock === 1 ? 'Ultimo pezzo' : `Ultimi ${stock}`}
+                </span>
+              )}
+              {freeShipping && (
+                <span className="inline-flex items-center gap-0.5 rounded bg-olive-50 px-1.5 py-0.5 text-[10px] font-semibold text-olive-700">
+                  <Truck size={10} strokeWidth={2.4} aria-hidden />
+                  Sped. gratis
+                </span>
+              )}
+            </div>
           )}
           <div className="flex items-center gap-1.5">
             {hasDiscount ? (
