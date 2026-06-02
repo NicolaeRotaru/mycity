@@ -16,6 +16,8 @@ type Suggestion =
   | { kind: 'store'; id: string; name: string; logo: string | null }
   | { kind: 'category'; slug: string; name: string };
 
+const POPULAR = ['Coppa Piacentina', 'Olio EVO', 'Pane fresco', 'Vino dei Colli', 'Salumi', 'Formaggi'];
+
 type Props = {
   className?: string;
   placeholder?: string;
@@ -110,6 +112,23 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         name: c.name,
       }));
       return [...products, ...stores, ...cats];
+    },
+  });
+
+  // Stato-vuoto (zero-state): categorie principali per i suggerimenti rapidi
+  // a campo vuoto. Caricate solo quando il campo è a fuoco.
+  const { data: topCats = [] } = useQuery({
+    queryKey: ['search', 'zero-categories'],
+    enabled: open,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<{ slug: string; name: string }[]> => {
+      const { data } = await supabase
+        .from('categories')
+        .select('slug, name')
+        .is('parent_id', null)
+        .order('name')
+        .limit(8);
+      return (data ?? []) as { slug: string; name: string }[];
     },
   });
 
@@ -240,6 +259,41 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
                 </Link>
               </li>
             </ul>
+          )}
+        </div>
+      )}
+
+      {open && debounced.length < 2 && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl bg-white p-3 shadow-warm-lg ring-1 ring-ink-100">
+          <p className="px-1 pb-2 text-[11px] font-bold uppercase tracking-wide text-ink-400">Ricerche popolari</p>
+          <div className="flex flex-wrap gap-2">
+            {POPULAR.map((term) => (
+              <button
+                key={term}
+                type="button"
+                onClick={() => { router.push(`/search?q=${encodeURIComponent(term)}`); setOpen(false); }}
+                className="inline-flex items-center gap-1 rounded-full bg-cream-100 px-3 py-1.5 text-xs font-semibold text-ink-700 transition-colors hover:bg-cream-200"
+              >
+                <Search size={12} strokeWidth={2.4} aria-hidden /> {term}
+              </button>
+            ))}
+          </div>
+          {topCats.length > 0 && (
+            <>
+              <p className="px-1 pb-2 pt-3 text-[11px] font-bold uppercase tracking-wide text-ink-400">Sfoglia per categoria</p>
+              <div className="flex flex-wrap gap-2">
+                {topCats.slice(0, 8).map((c) => (
+                  <Link
+                    key={c.slug}
+                    href={`/category/${c.slug}`}
+                    onClick={() => setOpen(false)}
+                    className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-100"
+                  >
+                    <Tag size={12} strokeWidth={2.4} aria-hidden /> {c.name}
+                  </Link>
+                ))}
+              </div>
+            </>
           )}
         </div>
       )}

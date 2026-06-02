@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MapPin, ChevronDown } from 'lucide-react';
+import { MapPin, ChevronDown, X } from 'lucide-react';
 import { useLocalStorage } from '@/lib/hooks';
 
 const STORAGE_KEY = 'mc_delivery_location';
@@ -34,11 +34,25 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
     setOpen(false);
   };
 
+  // Prompt gentile, non bloccante: una volta sola suggeriamo di inserire
+  // l'indirizzo per vedere la disponibilità "oggi". Chiudibile e ricordato.
+  const [hint, setHint] = useState(false);
+  const dismissHint = () => {
+    setHint(false);
+    try { localStorage.setItem('mc_addr_hint', '1'); } catch { /* ignore */ }
+  };
+  useEffect(() => {
+    if (compact || typeof window === 'undefined') return;
+    if (localStorage.getItem('mc_addr_hint') === '1') return;
+    const t = setTimeout(() => setHint(true), 1400);
+    return () => clearTimeout(t);
+  }, [compact]);
+
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { setOpen((v) => !v); dismissHint(); }}
         className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-full text-xs font-medium ring-1 ring-white/15 transition-colors"
         title="Cambia indirizzo di consegna"
       >
@@ -54,6 +68,23 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
         )}
         <ChevronDown size={12} strokeWidth={2.4} className="opacity-70" />
       </button>
+
+      {hint && !open && (
+        <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl bg-white p-3 text-ink-900 shadow-warm-lg ring-1 ring-cream-300">
+          <button type="button" onClick={dismissHint} aria-label="Chiudi" className="absolute right-2 top-2 text-ink-300 hover:text-ink-600">
+            <X size={14} strokeWidth={2.4} />
+          </button>
+          <p className="pr-4 text-sm font-semibold">📍 Dove ti consegniamo?</p>
+          <p className="mt-1 text-xs text-ink-500">Inserisci il tuo indirizzo per vedere cosa puoi ricevere <strong>oggi</strong>.</p>
+          <button
+            type="button"
+            onClick={() => { dismissHint(); setOpen(true); }}
+            className="mt-2 w-full rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700"
+          >
+            Inserisci indirizzo
+          </button>
+        </div>
+      )}
 
       {open && (
         <>
