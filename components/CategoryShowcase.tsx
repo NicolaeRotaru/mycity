@@ -8,6 +8,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -39,11 +40,22 @@ const GRAD_MAP: Record<string, string> = {
   sport:          'from-olive-500 to-olive-700',
 };
 
-// Foto reali per categoria, per slug. Host ammessi dalla CSP: Supabase storage
-// o Pexels (images.pexels.com). Da riempire con le foto scelte: appaiono da
-// sole sopra il gradiente; se una manca o non carica, resta il gradiente.
-// (Vuoto per ora: vedi nota nel componente.)
-const IMG_MAP: Record<string, string> = {};
+// Foto per categoria (Pexels, host ammesso dalla CSP). Scelte "a stima" e NON
+// verificabili dalla sandbox: se un URL non carica resta il gradiente sotto.
+// Sostituibili in un attimo con foto proprie (URL Pexels o upload Supabase).
+const IMG_MAP: Record<string, string> = {
+  abbigliamento: 'https://images.pexels.com/photos/996329/pexels-photo-996329.jpeg',
+  alimentari:    'https://images.pexels.com/photos/1640777/pexels-photo-1640777.jpeg',
+  bellezza:      'https://images.pexels.com/photos/2587370/pexels-photo-2587370.jpeg',
+  'casa-cucina': 'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg',
+  casa:          'https://images.pexels.com/photos/1571460/pexels-photo-1571460.jpeg',
+  cucina:        'https://images.pexels.com/photos/2724748/pexels-photo-2724748.jpeg',
+  elettronica:   'https://images.pexels.com/photos/356056/pexels-photo-356056.jpeg',
+  giardino:      'https://images.pexels.com/photos/1005058/pexels-photo-1005058.jpeg',
+  giocattoli:    'https://images.pexels.com/photos/168866/pexels-photo-168866.jpeg',
+  libri:         'https://images.pexels.com/photos/159711/pexels-photo-159711.jpeg',
+  sport:         'https://images.pexels.com/photos/163403/pexels-photo-163403.jpeg',
+};
 
 const iconFor = (slug: string): LucideIcon => ICON_MAP[slug] ?? Tag;
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
@@ -88,7 +100,7 @@ const CategoryShowcase = () => {
             {img && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={img}
+                src={sizedImage(img, 'card')}
                 alt=""
                 aria-hidden
                 loading="lazy"
