@@ -86,7 +86,7 @@ const ProductCard = ({
   return (
     <Link
       href={`/product/${id}`}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border border-surface-200 bg-white transition-all duration-200 hover:-translate-y-1 hover:border-primary-200 hover:shadow-warm-lg"
+      className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-surface-200 bg-white transition-all duration-200 hover:-translate-y-1 hover:border-primary-200 hover:shadow-warm-lg"
     >
       {/* Badge in alto a sinistra */}
       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
