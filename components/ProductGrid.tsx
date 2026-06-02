@@ -24,9 +24,11 @@ interface Props {
   onlyOpenStores?: boolean;
   minRating?: number;
   sort?: SortOption;
+  /** Layout "rail" orizzontale scrollabile (per le righe curate della home). */
+  rail?: boolean;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance', rail }: Props) => {
   const { data: products = [], isLoading } = useQuery({
     queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort }),
     queryFn: async () => {
@@ -169,23 +171,39 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     );
   }
 
+  const renderCard = (p: Prod, i: number) => (
+    <ProductCard
+      id={p.id}
+      name={p.name}
+      description={p.description ?? ''}
+      price={Number(p.price)}
+      images={Array.isArray(p.images) ? p.images : []}
+      stock={p.stock ?? undefined}
+      createdAt={p.created_at}
+      storeName={p.profiles?.store_name ?? undefined}
+      sellerId={p.seller_id ?? undefined}
+      discountPercent={discountFor(p)}
+      priority={i < 4}
+    />
+  );
+
+  // Rail: riga orizzontale scrollabile (home). Bleed ai bordi del container.
+  if (rail) {
+    return (
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-4 pb-2 sm:-mx-6 sm:px-6">
+        {filtered.map((p, i) => (
+          <div key={p.id} className="w-40 shrink-0 snap-start sm:w-44">
+            {renderCard(p, i)}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
       {filtered.map((p, i) => (
-        <ProductCard
-          key={p.id}
-          id={p.id}
-          name={p.name}
-          description={p.description ?? ''}
-          price={Number(p.price)}
-          images={Array.isArray(p.images) ? p.images : []}
-          stock={p.stock ?? undefined}
-          createdAt={p.created_at}
-          storeName={p.profiles?.store_name ?? undefined}
-          sellerId={p.seller_id ?? undefined}
-          discountPercent={discountFor(p)}
-          priority={i < 4}
-        />
+        <div key={p.id}>{renderCard(p, i)}</div>
       ))}
     </div>
   );

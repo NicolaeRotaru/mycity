@@ -3,7 +3,7 @@
 import { memo, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Heart, ShoppingCart, Truck } from 'lucide-react';
+import { Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -30,8 +30,14 @@ interface ProductCardProps {
   priority?: boolean;
 }
 
+/**
+ * Card prodotto "compatta": la FOTO è l'elemento dominante (~3/5 della card),
+ * sotto un corpo essenziale (negozio · titolo · prezzo). Niente stelle vuote,
+ * niente bottone a tutta larghezza: un "+" discreto aggiunge al carrello.
+ * Pensata sia per la griglia verticale (catalogo) sia per le rail orizzontali (home).
+ */
 const ProductCard = ({
-  id, name, description, price, images, rating, reviewCount = 0,
+  id, name, price, images,
   stock, createdAt, storeName, sellerId, discountPercent, priority,
 }: ProductCardProps) => {
   const hasDiscount = !!discountPercent && discountPercent > 0;
@@ -74,13 +80,15 @@ const ProductCard = ({
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
   const isOutOfStock = stock === 0;
   const freeShipping = price >= FREE_SHIPPING_THRESHOLD;
+  // Iniziali del negozio per il mini-logo (modello negozi-first): "Salumeria Verdi" → "SV"
+  const initials = (storeName ?? '').trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
 
   return (
     <Link
       href={`/product/${id}`}
-      className="group bg-white border border-surface-200 rounded-2xl overflow-hidden hover:shadow-warm-lg hover:-translate-y-1 hover:border-primary-200 transition-all duration-200 flex flex-col relative"
+      className="group relative flex flex-col overflow-hidden rounded-2xl border border-surface-200 bg-white transition-all duration-200 hover:-translate-y-1 hover:border-primary-200 hover:shadow-warm-lg"
     >
-      {/* Badges in alto a sinistra */}
+      {/* Badge in alto a sinistra */}
       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
         {hasDiscount && <Badge variant="discount">-{discountPercent}%</Badge>}
         {isNew && <Badge variant="new">Nuovo</Badge>}
@@ -88,89 +96,72 @@ const ProductCard = ({
         {isLowStock && !isOutOfStock && <Badge variant="lowstock">Ultimi {stock}</Badge>}
       </div>
 
-      {/* Immagine + favorite button */}
-      <div className="relative w-full h-52 bg-surface-50 overflow-hidden">
+      {/* FOTO dominante (~3/5) */}
+      <div className="relative aspect-square w-full overflow-hidden bg-surface-50">
         <Image
           src={img}
           alt={name}
           fill
-          sizes="(min-width: 1024px) 240px, (min-width: 640px) 33vw, 50vw"
+          sizes="(min-width: 1024px) 220px, (min-width: 640px) 33vw, 45vw"
           priority={priority}
           loading={priority ? undefined : 'lazy'}
           unoptimized
-          className="object-cover group-hover:scale-110 transition-transform duration-300"
+          className="object-cover transition-transform duration-300 group-hover:scale-110"
         />
         <button
           type="button"
           onClick={handleFav}
           aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
-          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full bg-white/95 hover:bg-white shadow flex items-center justify-center transition-transform hover:scale-110"
+          className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 shadow transition-transform hover:scale-110 hover:bg-white"
         >
           <Heart
-            size={16}
+            size={14}
             strokeWidth={2}
-            className={`${isFav ? 'text-secondary-500 fill-secondary-500' : 'text-ink-400'} ${heartBeat ? 'animate-heart-beat' : ''}`}
+            className={`${isFav ? 'fill-secondary-500 text-secondary-500' : 'text-ink-400'} ${heartBeat ? 'animate-heart-beat' : ''}`}
           />
         </button>
       </div>
 
-      <div className="p-3 flex flex-col flex-1">
+      {/* Corpo compatto */}
+      <div className="flex flex-1 flex-col gap-1 p-2.5">
         {storeName && (
-          <p className="text-[11px] text-ink-400 uppercase tracking-wide truncate">
-            {storeName}
-          </p>
+          <div className="flex items-center gap-1.5">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[8px] font-bold text-white">
+              {initials}
+            </span>
+            <span className="truncate text-[10px] font-semibold text-ink-500">{storeName}</span>
+          </div>
         )}
-        <h3 className="font-semibold text-ink-800 line-clamp-2 mb-1 group-hover:text-primary-700 transition-colors">
+        <h3 className="line-clamp-2 min-h-[2.4em] text-xs font-semibold leading-snug text-ink-900 transition-colors group-hover:text-primary-700">
           {name}
         </h3>
 
-        {/* Rating */}
-        <div className="flex items-center gap-1 mb-1 text-xs">
-          <span className="text-accent-500">
-            {rating !== undefined && rating > 0
-              ? `${'★'.repeat(Math.round(rating))}${'☆'.repeat(5 - Math.round(rating))}`
-              : '☆☆☆☆☆'}
-          </span>
-          <span className="text-ink-400">({reviewCount})</span>
-        </div>
-
-        {description && (
-          <p className="text-ink-500 text-xs line-clamp-1 mb-2">{description}</p>
-        )}
-
-        <div className="mt-auto pt-2">
-          <div className="flex items-baseline gap-2 mb-2 flex-wrap">
-            {hasDiscount ? (
-              <>
-                <span className="text-xl font-bold text-secondary-700">{formatPrice(discountedPrice)}</span>
-                <span className="text-sm text-ink-400 line-through">{formatPrice(price)}</span>
-              </>
-            ) : (
-              <span className="text-xl font-bold text-ink-900">{formatPrice(price)}</span>
-            )}
-            {freeShipping && (
-              <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-olive-700 bg-olive-50 px-1.5 py-0.5 rounded">
-                <Truck size={10} strokeWidth={2.4} aria-hidden />
-                Sped. gratis
-              </span>
-            )}
-          </div>
+        <div className="mt-auto flex items-center gap-1.5 pt-1">
+          {hasDiscount ? (
+            <>
+              <span className="text-base font-extrabold text-secondary-600">{formatPrice(discountedPrice)}</span>
+              <span className="text-[11px] text-ink-400 line-through">{formatPrice(price)}</span>
+            </>
+          ) : (
+            <span className="text-base font-extrabold text-ink-900">{formatPrice(price)}</span>
+          )}
           <button
             type="button"
             onClick={handleAdd}
             disabled={isOutOfStock}
-            className="w-full inline-flex items-center justify-center gap-1.5 bg-primary-600 hover:bg-primary-700 active:scale-[0.98] disabled:bg-cream-200 disabled:text-ink-400 disabled:cursor-not-allowed disabled:active:scale-100 text-white text-[13px] font-semibold py-2.5 rounded-full shadow-sm hover:shadow-warm transition-all duration-150"
+            aria-label={`Aggiungi ${name} al carrello`}
+            className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
           >
-            {isOutOfStock ? (
-              'Non disponibile'
-            ) : (
-              <>
-                <ShoppingCart size={15} strokeWidth={2.4} aria-hidden />
-                Aggiungi
-              </>
-            )}
+            <Plus size={16} strokeWidth={2.6} aria-hidden />
           </button>
         </div>
+
+        {freeShipping && (
+          <span className="inline-flex w-fit items-center gap-0.5 rounded bg-olive-50 px-1.5 py-0.5 text-[10px] font-semibold text-olive-700">
+            <Truck size={10} strokeWidth={2.4} aria-hidden />
+            Sped. gratis
+          </span>
+        )}
       </div>
     </Link>
   );

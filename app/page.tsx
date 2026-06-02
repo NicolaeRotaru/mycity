@@ -221,7 +221,7 @@ export default async function Home() {
               Vedi tutto <ArrowRight size={16} strokeWidth={2.4} />
             </HomeCtaLink>
           </div>
-          <ProductGrid limit={8} />
+          <ProductGrid limit={12} rail />
         </div>
       </section>
 
