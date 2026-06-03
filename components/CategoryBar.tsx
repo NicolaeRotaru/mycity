@@ -121,11 +121,11 @@ const CategoryBar = () => {
       {/* Pannello mega-menu: fratello della riga scrollabile, ancorato al root
           `relative` senza overflow → non viene clippato. */}
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50">
+        <div className="pointer-events-none absolute left-0 right-0 top-full z-50">
           <div className="container mx-auto px-3 sm:px-4">
             <div
               role="menu"
-              className="mt-1 w-full max-w-[900px] rounded-2xl bg-white p-5 text-ink-800 shadow-warm-lg ring-1 ring-cream-300"
+              className="pointer-events-auto mt-1 w-full max-w-[900px] rounded-2xl bg-white p-5 text-ink-800 shadow-warm-lg ring-1 ring-cream-300"
             >
               <div className="mb-4 flex flex-wrap gap-2 border-b border-cream-200 pb-4">
                 <Link href="/stores" onClick={() => setOpen(false)} className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100">
