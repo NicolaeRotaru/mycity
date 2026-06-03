@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { SearchX } from 'lucide-react';
+import Link from 'next/link';
+import { ArrowRight, SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
 import { queryKeys } from '@/lib/queries/keys';
-import { SkeletonGrid } from './SkeletonCard';
+import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { trackSearchPerformed } from '@/lib/analytics/events';
 
@@ -26,9 +27,15 @@ interface Props {
   sort?: SortOption;
   /** Layout "rail" orizzontale scrollabile (per le righe curate della home). */
   rail?: boolean;
+  /** Modalità "sezione" (solo con `rail`): mostra un'intestazione "titolo + Vedi tutto"
+   *  sopra la rail e si auto-nasconde quando non ci sono prodotti. Usata nelle pagine
+   *  categoria-hub, una rail per sottocategoria. */
+  title?: string;
+  titleHref?: string;
+  seeAllHref?: string;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance', rail }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref }: Props) => {
   const { data: products = [], isLoading } = useQuery({
     queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort }),
     queryFn: async () => {
@@ -159,9 +166,53 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     trackSearchPerformed(term, prods.length);
   }, [search, isLoading, prods.length]);
 
-  if (isLoading) return <SkeletonGrid count={limit ?? 8} />;
+  // Sezione = rail con intestazione: si comporta come un blocco autonomo
+  // (titolo + "Vedi tutto") e scompare del tutto quando è vuota.
+  const isSection = !!rail && !!title;
+  const sectionHeader = title ? (
+    <div className="mb-4 flex items-end justify-between gap-4">
+      {titleHref ? (
+        <Link href={titleHref} className="group min-w-0">
+          <h2 className="truncate font-serif text-xl font-bold text-ink-900 transition-colors group-hover:text-primary-700 md:text-2xl">
+            {title}
+          </h2>
+        </Link>
+      ) : (
+        <h2 className="truncate font-serif text-xl font-bold text-ink-900 md:text-2xl">{title}</h2>
+      )}
+      {seeAllHref && (
+        <Link
+          href={seeAllHref}
+          className="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-primary-700 hover:text-primary-800"
+        >
+          Vedi tutto <ArrowRight size={16} strokeWidth={2.4} aria-hidden />
+        </Link>
+      )}
+    </div>
+  ) : null;
+
+  if (isLoading) {
+    // Sezione: intestazione + rail di skeleton, così la forma non cambia al load.
+    if (isSection) {
+      return (
+        <section>
+          {sectionHeader}
+          <div className="-mx-4 flex gap-3 overflow-hidden px-4 pb-2 sm:-mx-6 sm:px-6">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="w-40 shrink-0 sm:w-44">
+                <SkeletonCard />
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+    return <SkeletonGrid count={limit ?? 8} />;
+  }
 
   if (filtered.length === 0) {
+    // Le sezioni per-sottocategoria spariscono quando non hanno prodotti.
+    if (isSection) return null;
     return (
       <div className="text-center py-16 bg-white border border-cream-300 rounded-xl">
         <SearchX size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" />
@@ -187,9 +238,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     />
   );
 
-  // Rail: riga orizzontale scrollabile (home). Bleed ai bordi del container.
+  // Rail: riga orizzontale scrollabile (home + sezioni categoria). Bleed ai bordi.
   if (rail) {
-    return (
+    const railRow = (
       <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-4 pb-2 sm:-mx-6 sm:px-6">
         {filtered.map((p, i) => (
           <div key={p.id} className="w-40 shrink-0 snap-start sm:w-44">
@@ -197,6 +248,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
           </div>
         ))}
       </div>
+    );
+    if (!isSection) return railRow;
+    return (
+      <section>
+        {sectionHeader}
+        {railRow}
+      </section>
     );
   }
 

@@ -26,7 +26,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   });
 
   type SubcatRow = { id: string; slug: string; name: string; icon: string | null };
-  const { data: subcategories = [] } = useQuery({
+  const { data: subcategories = [], isLoading: subsLoading } = useQuery({
     queryKey: [...queryKeys.categories.all, 'sub', category?.id],
     queryFn: async (): Promise<SubcatRow[]> => {
       if (!category) return [];
@@ -43,6 +43,12 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
 
   if (isLoading) return <LoadingState />;
   if (!category) return <div className="container mx-auto p-8 text-center">Categoria non trovata.</div>;
+  // Per le categorie principali aspettiamo le sottocategorie prima di decidere
+  // hub vs griglia piatta, così non c'è un flash dal layout sbagliato.
+  if (category.parent_id === null && subsLoading) return <LoadingState />;
+
+  // Hub: categoria principale con sottocategorie → una rail scrollabile per ognuna.
+  const isHub = category.parent_id === null && subcategories.length > 0;
 
   // Schema.org BreadcrumbList JSON-LD (Home > Categoria) per rich results Google.
   const breadcrumbSchema = {
@@ -85,14 +91,30 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
         </section>
       )}
 
-      <section>
-        <h2 className="text-xl font-bold mb-4">Prodotti</h2>
-        {category.parent_id === null && subcategories.length > 0 ? (
-          <ProductGrid categoryIds={[category.id, ...subcategories.map((s) => s.id)]} />
-        ) : (
+      {isHub ? (
+        // Una rail per sottocategoria (titolo-link + "Vedi tutto"); le sottocategorie
+        // senza prodotti si auto-nascondono. In coda, eventuali prodotti agganciati
+        // direttamente alla categoria principale ("Altri prodotti").
+        <div className="space-y-10">
+          {subcategories.map((s) => (
+            <ProductGrid
+              key={s.id}
+              rail
+              limit={12}
+              categoryId={s.id}
+              title={s.name}
+              titleHref={`/category/${s.slug}`}
+              seeAllHref={`/category/${s.slug}`}
+            />
+          ))}
+          <ProductGrid rail limit={12} categoryId={category.id} title="Altri prodotti" />
+        </div>
+      ) : (
+        <section>
+          <h2 className="text-xl font-bold mb-4">Prodotti</h2>
           <ProductGrid categoryId={category.id} />
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
