@@ -4,17 +4,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useDropzone } from 'react-dropzone';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import PhotoFillButton, { ExtractedProduct } from '@/components/seller/PhotoFillButton';
+import ProductImagesField from '@/components/seller/ProductImagesField';
 import AttributesFields from '@/components/seller/AttributesFields';
 import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 import { friendlyError } from '@/lib/errors';
-import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { queryKeys } from '@/lib/queries/keys';
@@ -61,7 +60,6 @@ const AI_ATTR_TO_FIELD: Record<string, string> = {
 export default function NewProductPage() {
   const router = useRouter();
   const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [attributes, setAttributes] = useState<Record<string, unknown>>({});
 
@@ -130,65 +128,6 @@ export default function NewProductPage() {
     // Alt-text accessibile (EAA): salvato in attributes, riusato negli <img>.
     if (data.alt_text) setAttribute('alt_text', data.alt_text);
   };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png':  ['.png'],
-      'image/webp': ['.webp'],
-    },
-    maxSize: 5 * 1024 * 1024,           // 5 MB per file
-    maxFiles: 8,                          // max foto per upload
-    onDropRejected: (rejections) => {
-      const reason = rejections[0]?.errors[0]?.code;
-      if (reason === 'file-too-large')        toast.error('File troppo grande (max 5 MB)');
-      else if (reason === 'file-invalid-type') toast.error('Formato non supportato (solo JPG, PNG, WEBP)');
-      else if (reason === 'too-many-files')   toast.error('Massimo 8 foto per upload');
-      else                                     toast.error('File non valido');
-    },
-    onDrop: async (files) => {
-      setUploading(true);
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Non autenticato');
-
-        const uploaded: string[] = [];
-        for (const file of files) {
-          // Double-check lato client prima di committare a storage
-          if (file.size > 5 * 1024 * 1024) {
-            throw new Error(`File "${file.name}" troppo grande (max 5 MB)`);
-          }
-          if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-            throw new Error(`Formato non valido per "${file.name}"`);
-          }
-          // Sanitizza il nome file: niente path traversal, solo charset safe
-          const safeName = file.name
-            .toLowerCase()
-            .replace(/[^a-z0-9.\-_]/g, '_')
-            .slice(-80);
-          const ext = file.type.split('/')[1];
-          const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName || `img.${ext}`}`;
-          const { error } = await supabase.storage
-            .from('products')
-            .upload(path, file, {
-              cacheControl: '3600',
-              upsert: false,
-              contentType: file.type,
-            });
-          if (error) throw error;
-          const { data } = supabase.storage.from('products').getPublicUrl(path);
-          uploaded.push(data.publicUrl);
-        }
-        setImageUrls((prev) => [...prev, ...uploaded]);
-        setImageError(null);
-        toast.success('Immagini caricate');
-      } catch (err) {
-        toast.error(friendlyError(err));
-      } finally {
-        setUploading(false);
-      }
-    },
-  });
 
   const create = useMutation({
     mutationFn: async (form: FormData) => {
@@ -295,42 +234,15 @@ export default function NewProductPage() {
           />
         </div>
 
-        <div id="image-dropzone">
-          <label className="block text-sm font-medium mb-1">
-            Foto del prodotto <span className="text-ink-400 font-normal">— almeno 1, consigliate 3</span>
-          </label>
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-              imageError ? 'border-rose-300 bg-rose-50' : isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-primary-400'
-            }`}
-          >
-            <input {...getInputProps()} />
-            {uploading
-              ? <LoadingState variant="inline" />
-              : <p className="text-ink-500">Trascina qui le foto o clicca per selezionarle</p>
-            }
-          </div>
-          <p className="text-xs text-ink-400 mt-1">Luce naturale, sfondo pulito, prodotto centrato — è la prima cosa che convince chi compra.</p>
-          {imageError && <p className="text-sm text-rose-600 mt-1">{imageError}</p>}
-          {imageUrls.length > 0 && (
-            <div className="grid grid-cols-4 gap-2 mt-3">
-              {imageUrls.map((url, i) => (
-                <div key={url} className="relative aspect-square">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" loading="lazy" className="w-full h-full object-cover rounded" />
-                  <button
-                    type="button"
-                    onClick={() => setImageUrls((u) => u.filter((_, j) => j !== i))}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <ProductImagesField
+          value={imageUrls}
+          onChange={setImageUrls}
+          error={imageError}
+          onUploadSuccess={() => setImageError(null)}
+          label={<>Foto del prodotto <span className="text-ink-400 font-normal">— almeno 1, consigliate 3</span></>}
+          dropzoneHint="Trascina qui le foto o clicca per selezionarle"
+          hint="Luce naturale, sfondo pulito, prodotto centrato — è la prima cosa che convince chi compra."
+        />
 
         {/* ANTEPRIMA — come la vede il cliente, prima di pubblicare */}
         <div className="border-t pt-4 space-y-2">

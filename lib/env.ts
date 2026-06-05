@@ -49,6 +49,12 @@ export const env = {
   kycProvider: () => (readEnv('KYC_PROVIDER') ?? 'mock') as 'onfido' | 'jumio' | 'veriff' | 'mock',
   kycApiKey: () => readEnv('KYC_API_KEY'),
 
+  // Rimozione sfondo foto prodotto (provider esterno a pagamento).
+  // In produzione, se il provider reale non e' configurato, l'endpoint risponde 503.
+  bgRemovalProvider: () => (readEnv('BG_REMOVAL_PROVIDER') ?? 'mock') as 'removebg' | 'photoroom' | 'mock',
+  removeBgApiKey: () => readEnv('REMOVE_BG_API_KEY'),
+  photoroomApiKey: () => readEnv('PHOTOROOM_API_KEY'),
+
   // Sentry (error tracking) — solo wiring qui, attivazione separata
   sentryDsn: () => readEnv('NEXT_PUBLIC_SENTRY_DSN'),
 
