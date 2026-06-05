@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useDropzone } from 'react-dropzone';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import AttributesFields from '@/components/seller/AttributesFields';
+import ProductImagesField from '@/components/seller/ProductImagesField';
 import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { getAttributesForCategory } from '@/lib/category-attributes';
@@ -107,53 +107,6 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
       return next;
     });
   };
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'image/jpeg': ['.jpg', '.jpeg'],
-      'image/png':  ['.png'],
-      'image/webp': ['.webp'],
-    },
-    maxSize: 5 * 1024 * 1024,
-    maxFiles: 8,
-    onDropRejected: (rejections) => {
-      const reason = rejections[0]?.errors[0]?.code;
-      if (reason === 'file-too-large')          toast.error('File troppo grande (max 5 MB)');
-      else if (reason === 'file-invalid-type')  toast.error('Formato non supportato (JPG, PNG, WEBP)');
-      else if (reason === 'too-many-files')     toast.error('Massimo 8 foto per upload');
-      else                                       toast.error('File non valido');
-    },
-    onDrop: async (files) => {
-      setUploading(true);
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error('Non autenticato');
-        const uploaded: string[] = [];
-        for (const file of files) {
-          if (file.size > 5 * 1024 * 1024) throw new Error(`"${file.name}" troppo grande`);
-          if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-            throw new Error(`Formato non valido per "${file.name}"`);
-          }
-          const safeName = file.name.toLowerCase().replace(/[^a-z0-9.\-_]/g, '_').slice(-80);
-          const ext = file.type.split('/')[1];
-          const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName || `img.${ext}`}`;
-          const { error } = await supabase.storage
-            .from('products')
-            .upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
-          if (error) throw error;
-          const { data } = supabase.storage.from('products').getPublicUrl(path);
-          uploaded.push(data.publicUrl);
-        }
-        setImageUrls((prev) => [...prev, ...uploaded]);
-        setImageError(null);
-        toast.success('Immagini caricate');
-      } catch (err) {
-        toast.error(friendlyError(err));
-      } finally {
-        setUploading(false);
-      }
-    },
-  });
 
   const update = useMutation({
     mutationFn: async (form: FormData) => {
@@ -304,45 +257,17 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
           />
         </div>
 
-        <div id="image-dropzone">
-          <label className="block text-sm font-medium mb-1">Immagini <span className="text-ink-400 font-normal">— almeno 1, consigliate 3</span></label>
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
-              imageError ? 'border-rose-300 bg-rose-50' : isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-primary-400'
-            }`}
-          >
-            <input {...getInputProps()} />
-            {uploading
-              ? <LoadingState variant="inline" />
-              : <p className="text-ink-500">Trascina nuove foto o clicca per selezionarle</p>}
-          </div>
-          {imageUrls.length > 0 && (
-            <div className="grid grid-cols-4 gap-2 mt-3">
-              {imageUrls.map((url, i) => (
-                <div key={url} className="relative aspect-square">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" loading="lazy" className="w-full h-full object-cover rounded" />
-                  <button
-                    type="button"
-                    onClick={() => setImageUrls((u) => u.filter((_, j) => j !== i))}
-                    className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 text-xs"
-                    aria-label="Rimuovi immagine"
-                  >
-                    ×
-                  </button>
-                  {i === 0 && (
-                    <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded">
-                      Copertina
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-          <p className="text-xs text-ink-400 mt-1">La prima foto è la copertina mostrata nelle liste.</p>
-          {imageError && <p className="text-sm text-rose-600 mt-1">{imageError}</p>}
-        </div>
+        <ProductImagesField
+          value={imageUrls}
+          onChange={setImageUrls}
+          error={imageError}
+          onUploadingChange={setUploading}
+          onUploadSuccess={() => setImageError(null)}
+          label={<>Immagini <span className="text-ink-400 font-normal">— almeno 1, consigliate 3</span></>}
+          dropzoneHint="Trascina nuove foto o clicca per selezionarle"
+          hint="La prima foto è la copertina mostrata nelle liste."
+          showCoverBadge
+        />
 
         <div className="flex flex-col-reverse sm:flex-row gap-2 pt-4 border-t">
           <button
