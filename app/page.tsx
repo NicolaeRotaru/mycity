@@ -172,7 +172,7 @@ export default async function Home() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <Check size={16} strokeWidth={2.4} className="text-olive-600" />
-                  Consegna in 24-48h
+                  Oggi se disponibile · 24-48h negli altri casi
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <Check size={16} strokeWidth={2.4} className="text-olive-600" />
