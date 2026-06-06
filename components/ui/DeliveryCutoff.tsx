@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Bike } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { deliveryWindow, splitDuration, DEFAULT_CUTOFF_HOUR } from '@/lib/delivery';
+import { deliveryWindow, splitDuration, DEFAULT_CUTOFF_HOUR, EXPRESS_ETA_LABEL, STANDARD_ETA_LABEL } from '@/lib/delivery';
 
 /**
  * useDeliveryCutoff — countdown SSR-safe verso l'orario limite consegna.
@@ -30,16 +30,22 @@ export function useDeliveryCutoff(cutoffHour = DEFAULT_CUTOFF_HOUR) {
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /**
- * Mostra "🛵 Ordina entro 02:14:31 e arriva oggi" — urgenza onesta legata
- * alla consegna reale. Variante `banner` per blocchi in evidenza.
+ * Mostra la promessa di consegna a due velocità, legata alla disponibilità:
+ *  - `available` (prodotto a inventario e pronto): Express ~30-60 min, in giornata
+ *    entro il cutoff → "🛵 Ordina entro 02:14:31 e arriva oggi in 30-60 min".
+ *  - non disponibile / su ordinazione: Standard → "🛵 Consegna in 24-48h".
+ * Variante `banner` per blocchi in evidenza, `inline` per pagine prodotto.
  */
 export function DeliveryCutoff({
   cutoffHour = DEFAULT_CUTOFF_HOUR,
   variant = 'inline',
+  available = true,
   className,
 }: {
   cutoffHour?: number;
   variant?: 'inline' | 'banner';
+  /** Prodotto a inventario e pronto (stock > 0). false → Standard 24-48h. */
+  available?: boolean;
   className?: string;
 }) {
   const { hydrated, day, h, m, s } = useDeliveryCutoff(cutoffHour);
@@ -48,6 +54,15 @@ export function DeliveryCutoff({
   const timer = hydrated && day === 'oggi'
     ? <span className="font-mono font-bold tabular-nums">{pad(h)}:{pad(m)}:{pad(s)}</span>
     : null;
+
+  // Standard: prodotto non disponibile/su ordinazione → niente countdown fuorviante.
+  const content = !available ? (
+    <span>Consegna in <strong>{STANDARD_ETA_LABEL}</strong></span>
+  ) : day === 'oggi' && hydrated ? (
+    <span>Ordina entro {timer} e <strong>arriva oggi</strong> in {EXPRESS_ETA_LABEL}</span>
+  ) : (
+    <span>Arriva <strong>{day}</strong></span>
+  );
 
   if (variant === 'banner') {
     return (
@@ -58,11 +73,7 @@ export function DeliveryCutoff({
         )}
       >
         <Bike size={18} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-        {day === 'oggi' && hydrated ? (
-          <span>Ordina entro {timer} e <strong>arriva oggi</strong></span>
-        ) : (
-          <span>Ordina ora e <strong>arriva {day}</strong></span>
-        )}
+        {content}
       </div>
     );
   }
@@ -70,11 +81,7 @@ export function DeliveryCutoff({
   return (
     <span className={cn('inline-flex items-center gap-1.5 text-sm text-olive-700 font-medium', className)}>
       <Bike size={15} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-      {day === 'oggi' && hydrated ? (
-        <span>Ordina entro {timer} e arriva <strong>oggi</strong></span>
-      ) : (
-        <span>Arriva <strong>{day}</strong></span>
-      )}
+      {content}
     </span>
   );
 }
