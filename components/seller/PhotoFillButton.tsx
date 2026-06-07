@@ -21,11 +21,16 @@ export type ExtractedProduct = {
 
 interface Props {
   onFilled: (data: ExtractedProduct) => void;
+  /**
+   * Riceve le stesse foto analizzate, così il chiamante può usarle anche come
+   * immagini del prodotto (oltre che per l'estrazione AI). Opzionale.
+   */
+  onImages?: (files: File[]) => void;
 }
 
 type State = 'idle' | 'analyzing';
 
-const PhotoFillButton = ({ onFilled }: Props) => {
+const PhotoFillButton = ({ onFilled, onImages }: Props) => {
   const [state, setState] = useState<State>('idle');
   const [cameraOpen, setCameraOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +65,8 @@ const PhotoFillButton = ({ onFilled }: Props) => {
         throw new Error(apiErrorMessage(data, 'Errore sconosciuto'));
       }
       onFilled(data as ExtractedProduct);
+      // Le foto analizzate diventano (anche) immagini del prodotto.
+      onImages?.(list);
       if (!data.category_id) {
         toast.success('Campi compilati. Seleziona manualmente la categoria.');
       } else {

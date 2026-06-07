@@ -38,7 +38,6 @@ export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
     { key: 'colore', label: 'Colore', type: 'text', placeholder: 'Es. Nero, Blu navy, Verde militare' },
     { key: 'materiale', label: 'Materiale', type: 'text', placeholder: 'Es. Cotone 100%, Lana merino' },
     { key: 'vestibilita', label: 'Vestibilità', type: 'select', options: ['Slim', 'Regular', 'Oversize', 'Aderente'] },
-    { key: 'stato', label: 'Stato', type: 'select', options: ['Nuovo con etichetta', 'Nuovo senza etichetta', 'Come nuovo', 'Buone condizioni', 'Discrete condizioni'] },
     { key: 'lavaggio', label: 'Cura del capo', type: 'text', placeholder: 'Es. Lavaggio a mano, lavabile in lavatrice 30°' },
   ],
   casa: [
@@ -47,12 +46,10 @@ export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
     { key: 'materiale', label: 'Materiale', type: 'text', placeholder: 'Es. Legno di rovere, ceramica, vetro' },
     { key: 'colore', label: 'Colore', type: 'text' },
     { key: 'stile', label: 'Stile', type: 'select', options: ['Moderno', 'Classico', 'Industriale', 'Scandinavo', 'Rustico', 'Vintage'] },
-    { key: 'stato', label: 'Stato', type: 'select', options: ['Nuovo', 'Come nuovo', 'Buone condizioni', 'Da restaurare'] },
   ],
   elettronica: [
     { key: 'marca', label: 'Marca', type: 'text', placeholder: 'Es. Apple, Samsung, Sony' },
     { key: 'modello', label: 'Modello', type: 'text', placeholder: 'Es. iPhone 15 Pro, Galaxy S24' },
-    { key: 'stato', label: 'Stato', type: 'select', options: ['Nuovo sigillato', 'Nuovo aperto', 'Ricondizionato', 'Usato come nuovo', 'Usato buone condizioni'] },
     { key: 'garanzia_mesi', label: 'Garanzia (mesi)', type: 'number', placeholder: '24' },
     { key: 'colore', label: 'Colore', type: 'text' },
     { key: 'memoria', label: 'Memoria / Storage', type: 'text', placeholder: 'Es. 128GB, 1TB' },
@@ -67,7 +64,6 @@ export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
     { key: 'lingua', label: 'Lingua', type: 'text', placeholder: 'Italiano' },
     { key: 'isbn', label: 'ISBN', type: 'text', placeholder: '978-...' },
     { key: 'formato', label: 'Formato', type: 'select', options: ['Brossura', 'Cartonato', 'Tascabile', 'Audiolibro', 'Ebook'] },
-    { key: 'stato', label: 'Stato', type: 'select', options: ['Nuovo', 'Come nuovo', 'Buone condizioni', 'Discrete condizioni'] },
   ],
   giardino: [
     { key: 'tipo', label: 'Tipo prodotto', type: 'select', options: ['Pianta da interno', 'Pianta da esterno', 'Semi', 'Attrezzo', 'Vaso / Fioriera', 'Concime / Terriccio', 'Altro'] },
@@ -93,7 +89,6 @@ export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
     { key: 'colore', label: 'Colore', type: 'text' },
     { key: 'tipo_attivita', label: 'Attività', type: 'select', options: ['Running', 'Yoga', 'Palestra', 'Calcio', 'Tennis', 'Trekking', 'Ciclismo', 'Nuoto', 'Outdoor', 'Altro'] },
     { key: 'genere', label: 'Genere', type: 'select', options: ['Donna', 'Uomo', 'Unisex', 'Bambino'] },
-    { key: 'stato', label: 'Stato', type: 'select', options: ['Nuovo', 'Come nuovo', 'Buone condizioni'] },
     { key: 'materiale', label: 'Materiale', type: 'text', placeholder: 'Es. Poliestere tecnico, neoprene' },
   ],
 };

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import { Copy } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -138,6 +139,12 @@ export default function SellerProductsPage() {
                       >
                         Modifica
                       </Link>
+                      <Link
+                        href={`/seller/products/new?from=${p.id}`}
+                        className="text-ink-700 hover:underline"
+                      >
+                        Duplica
+                      </Link>
                       <button
                         onClick={() => toggleStatus.mutate({ id: p.id, status: p.status })}
                         className="text-ink-700 hover:underline"
@@ -194,6 +201,13 @@ export default function SellerProductsPage() {
                   >
                     {p.status === 'available' ? 'Disattiva' : 'Attiva'}
                   </button>
+                  <Link
+                    href={`/seller/products/new?from=${p.id}`}
+                    aria-label="Duplica"
+                    className="px-3 py-2 text-ink-700 bg-cream-100 rounded-lg"
+                  >
+                    <Copy size={16} aria-hidden />
+                  </Link>
                   <button
                     onClick={() => askDelete(p)}
                     aria-label="Elimina"
@@ -214,6 +228,7 @@ export default function SellerProductsPage() {
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   available: { label: 'In vendita', cls: 'bg-olive-100 text-olive-700' },
   sold:      { label: 'Esaurito',   cls: 'bg-cream-200 text-ink-700' },
+  draft:     { label: 'Bozza',      cls: 'bg-cream-200 text-ink-600' },
 };
 
 function StatusBadge({ status }: { status: string }) {

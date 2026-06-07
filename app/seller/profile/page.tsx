@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Zap } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import VendorForm, { VendorFormData } from '@/components/VendorForm';
 import { toast } from 'sonner';
@@ -52,6 +52,20 @@ export default function SellerProfilePage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  const updateExpress = useMutation({
+    mutationFn: async (value: boolean) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non autenticato');
+      const { error } = await supabase.from('profiles').update({ offers_express: value }).eq('id', user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.seller.profile });
+      toast.success('Preferenza Express aggiornata');
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
   if (isLoading) return <LoadingState />;
 
   return (
@@ -97,6 +111,27 @@ export default function SellerProfilePage() {
           onSubmit={(d) => update.mutate(d)}
           isLoading={update.isPending}
         />
+      </div>
+
+      {/* Consegna Express a livello negozio (default per i prodotti) */}
+      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
+        <label className="flex items-start justify-between gap-4 cursor-pointer">
+          <div>
+            <p className="font-bold text-ink-900 flex items-center gap-2">
+              <Zap size={18} strokeWidth={2.4} className="text-amber-500" aria-hidden /> Offro consegna Express
+            </p>
+            <p className="text-sm text-ink-500 mt-0.5">
+              Diventa il default per i tuoi prodotti (~30–60 min se disponibile). Puoi escludere singoli prodotti dalla loro scheda.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5 shrink-0 accent-amber-500"
+            checked={Boolean((profile as { offers_express?: boolean } | undefined)?.offers_express)}
+            disabled={updateExpress.isPending}
+            onChange={(e) => updateExpress.mutate(e.target.checked)}
+          />
+        </label>
       </div>
     </div>
   );
