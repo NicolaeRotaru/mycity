@@ -43,6 +43,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
   const [activeImg, setActiveImg] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
   const { isAuthenticated, profile } = useProfile();
   const { favorites, toggle: toggleFav } = useFavorites();
   const isFav = favorites.has(id);
@@ -245,12 +246,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         {/* GALLERIA */}
         <div className="space-y-3">
           <div className="relative w-full aspect-square bg-surface-0 rounded-xl overflow-hidden border border-surface-200">
-            <Image src={sizedImage(images[activeImg], 'detail')} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-cover" />
+            <Image src={sizedImage(images[activeImg], 'detail')} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-contain" />
+            <button
+              type="button"
+              onClick={() => setLightbox(true)}
+              aria-label="Ingrandisci foto"
+              className="absolute inset-0 z-[1] cursor-zoom-in"
+            />
             {isOutOfStock && (
-              <Badge variant="soldout" size="md" className="absolute top-4 left-4">ESAURITO</Badge>
+              <Badge variant="soldout" size="md" className="absolute top-4 left-4 z-[2]">ESAURITO</Badge>
             )}
             {isLowStock && !isOutOfStock && (
-              <Badge variant="lowstock" size="md" className="absolute top-4 left-4">
+              <Badge variant="lowstock" size="md" className="absolute top-4 left-4 z-[2]">
                 {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}
               </Badge>
             )}
@@ -268,12 +275,62 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     activeImg === i ? 'border-primary-600' : 'border-transparent hover:border-surface-300'
                   }`}
                 >
-                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-cover" />
+                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-contain" />
                 </button>
               ))}
             </div>
           )}
         </div>
+
+        {/* LIGHTBOX a schermo intero — vede la foto intera, con navigazione */}
+        {lightbox && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+            onClick={() => setLightbox(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Foto di ${product.name}`}
+          >
+            <button
+              type="button"
+              onClick={() => setLightbox(false)}
+              aria-label="Chiudi"
+              className="absolute top-4 right-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-2xl leading-none text-white hover:bg-white/25"
+            >
+              ×
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={sizedImage(images[activeImg], 'hero')}
+              alt={product.name}
+              className="max-h-[90vh] max-w-[95vw] object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setActiveImg((activeImg - 1 + images.length) % images.length); }}
+                  aria-label="Foto precedente"
+                  className="absolute left-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-3xl leading-none text-white hover:bg-white/25"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setActiveImg((activeImg + 1) % images.length); }}
+                  aria-label="Foto successiva"
+                  className="absolute right-3 top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/15 text-3xl leading-none text-white hover:bg-white/25"
+                >
+                  ›
+                </button>
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white">
+                  {activeImg + 1} / {images.length}
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* INFO */}
         <div className="space-y-4">
