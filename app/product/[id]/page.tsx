@@ -342,8 +342,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </p>
             </div>
 
-            {/* Urgenza onesta legata al cutoff reale di consegna */}
-            <DeliveryCutoff variant="inline" />
+            {/* Consegna a due velocità: Express se a inventario, altrimenti 24-48h */}
+            <DeliveryCutoff variant="inline" available={!isOutOfStock} />
 
             {/* Barra spedizione gratis reattiva alla quantità */}
             <FreeShippingProgress subtotal={price * quantity} />

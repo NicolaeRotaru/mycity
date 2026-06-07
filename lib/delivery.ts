@@ -7,6 +7,13 @@
 
 export const DEFAULT_CUTOFF_HOUR = 18;
 
+/** Consegna Express (prodotto a inventario e pronto): stima rider locale. */
+export const EXPRESS_ETA_MIN = 30;
+export const EXPRESS_ETA_MAX = 60;
+export const EXPRESS_ETA_LABEL = `${EXPRESS_ETA_MIN}-${EXPRESS_ETA_MAX} min`;
+/** Consegna Standard (non disponibile/su ordinazione): fallback onesto. */
+export const STANDARD_ETA_LABEL = '24-48h';
+
 export type DeliveryWindow = {
   /** Sei ancora in tempo per la consegna di oggi? */
   beforeCutoff: boolean;
@@ -35,6 +42,45 @@ export function deliveryWindow(nowMs: number, cutoffHour = DEFAULT_CUTOFF_HOUR):
   const cutoffTomorrow = new Date(cutoffToday);
   cutoffTomorrow.setDate(cutoffTomorrow.getDate() + 1);
   return { beforeCutoff: false, targetIso: cutoffTomorrow.toISOString(), day: 'domani' };
+}
+
+export type DeliverySpeed = 'express' | 'standard';
+
+export type DeliveryEstimate = {
+  /** 'express' = a inventario e pronto (~30-60 min); 'standard' = fallback 24-48h. */
+  speed: DeliverySpeed;
+  /** 'oggi'/'domani' per Express (legato al cutoff); null per Standard. */
+  day: 'oggi' | 'domani' | null;
+  /** Etichetta breve: 'oggi' | 'domani' | '24-48h'. */
+  label: string;
+  /** Dettaglio ETA (es. '30-60 min'); presente solo per Express in giornata. */
+  etaLabel?: string;
+};
+
+/**
+ * Consegna a due velocità — promessa ONESTA in base alla disponibilità.
+ *
+ * Se il prodotto è a inventario ed è pronto (`available`), il rider locale
+ * consegna in giornata (Express, ~30-60 min) entro il cutoff, domani dopo.
+ * Altrimenti la promessa è lo Standard 24-48h. Funzione pura, testabile.
+ */
+export function deliveryEstimate({
+  available,
+  nowMs,
+  cutoffHour = DEFAULT_CUTOFF_HOUR,
+}: {
+  available: boolean;
+  nowMs: number;
+  cutoffHour?: number;
+}): DeliveryEstimate {
+  if (!available) {
+    return { speed: 'standard', day: null, label: STANDARD_ETA_LABEL };
+  }
+  const win = deliveryWindow(nowMs, cutoffHour);
+  if (win.beforeCutoff) {
+    return { speed: 'express', day: 'oggi', label: 'oggi', etaLabel: EXPRESS_ETA_LABEL };
+  }
+  return { speed: 'express', day: 'domani', label: 'domani' };
 }
 
 /** Scompone una distanza in ms in {h, m, s} (mai negativa). */

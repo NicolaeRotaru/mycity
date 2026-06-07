@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deliveryWindow, splitDuration } from '@/lib/delivery';
+import { deliveryWindow, splitDuration, deliveryEstimate, EXPRESS_ETA_LABEL, STANDARD_ETA_LABEL } from '@/lib/delivery';
 
 /**
  * Unit test puri per lib/delivery — finestra di consegna same-day e cutoff.
@@ -39,6 +39,35 @@ describe('deliveryWindow', () => {
     const now = at(2026, 5, 30, 13, 0);
     expect(deliveryWindow(now, 12).day).toBe('domani');
     expect(deliveryWindow(now, 14).day).toBe('oggi');
+  });
+});
+
+describe('deliveryEstimate', () => {
+  it('non disponibile → Standard 24-48h, senza giorno/ETA', () => {
+    const now = at(2026, 5, 30, 10, 0);
+    const e = deliveryEstimate({ available: false, nowMs: now, cutoffHour: 18 });
+    expect(e.speed).toBe('standard');
+    expect(e.day).toBeNull();
+    expect(e.label).toBe(STANDARD_ETA_LABEL);
+    expect(e.etaLabel).toBeUndefined();
+  });
+
+  it('disponibile prima del cutoff → Express oggi, ETA 30-60 min', () => {
+    const now = at(2026, 5, 30, 10, 0); // prima delle 18
+    const e = deliveryEstimate({ available: true, nowMs: now, cutoffHour: 18 });
+    expect(e.speed).toBe('express');
+    expect(e.day).toBe('oggi');
+    expect(e.label).toBe('oggi');
+    expect(e.etaLabel).toBe(EXPRESS_ETA_LABEL);
+  });
+
+  it('disponibile dopo il cutoff → Express domani, senza ETA in minuti', () => {
+    const now = at(2026, 5, 30, 19, 0); // oltre le 18
+    const e = deliveryEstimate({ available: true, nowMs: now, cutoffHour: 18 });
+    expect(e.speed).toBe('express');
+    expect(e.day).toBe('domani');
+    expect(e.label).toBe('domani');
+    expect(e.etaLabel).toBeUndefined();
   });
 });
 
