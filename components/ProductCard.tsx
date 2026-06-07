@@ -26,6 +26,8 @@ interface ProductCardProps {
   sellerId?: string;
   /** Sconto promo attivo in percentuale (0-100): mostra prezzo barrato + badge. */
   discountPercent?: number;
+  /** Prezzo pieno barrato impostato dal venditore (compare_at_price). */
+  compareAtPrice?: number | null;
   /** true per le prime immagini above-the-fold (LCP): eager + fetchPriority alta. */
   priority?: boolean;
 }
@@ -38,10 +40,18 @@ interface ProductCardProps {
  */
 const ProductCard = ({
   id, name, price, images,
-  stock, createdAt, storeName, sellerId, discountPercent, priority,
+  stock, createdAt, storeName, sellerId, discountPercent, compareAtPrice, priority,
 }: ProductCardProps) => {
   const hasDiscount = !!discountPercent && discountPercent > 0;
   const discountedPrice = hasDiscount ? price * (1 - (discountPercent as number) / 100) : price;
+  // Prezzo pieno barrato del venditore (solo se non c'è già una promo attiva).
+  const compareValid = !hasDiscount && !!compareAtPrice && compareAtPrice > price;
+  const showStrike = hasDiscount || compareValid;
+  const bigPrice = hasDiscount ? discountedPrice : price;
+  const strikePrice = hasDiscount ? price : (compareValid ? (compareAtPrice as number) : 0);
+  const badgePct = hasDiscount
+    ? (discountPercent as number)
+    : (compareValid ? Math.round((1 - price / (compareAtPrice as number)) * 100) : 0);
   const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
   const img = sizedImage(rawImg, 'card');
   const { favorites, toggle } = useFavorites();
@@ -90,7 +100,7 @@ const ProductCard = ({
     >
       {/* Badge in alto a sinistra */}
       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
-        {hasDiscount && <Badge variant="discount">-{discountPercent}%</Badge>}
+        {showStrike && <Badge variant="discount">-{badgePct}%</Badge>}
         {isNew && <Badge variant="new">Nuovo</Badge>}
         {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}
       </div>
@@ -153,10 +163,10 @@ const ProductCard = ({
             </div>
           )}
           <div className="flex items-center gap-1.5">
-            {hasDiscount ? (
+            {showStrike ? (
               <>
-                <span className="text-base font-extrabold text-secondary-600">{formatPrice(discountedPrice)}</span>
-                <span className="text-[11px] text-ink-400 line-through">{formatPrice(price)}</span>
+                <span className="text-base font-extrabold text-secondary-600">{formatPrice(bigPrice)}</span>
+                <span className="text-[11px] text-ink-400 line-through">{formatPrice(strikePrice)}</span>
               </>
             ) : (
               <span className="text-base font-extrabold text-ink-900">{formatPrice(price)}</span>

@@ -14,6 +14,7 @@ import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
+import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
 import ContactSellerButton from '@/components/ContactSellerButton';
@@ -176,6 +177,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   const price = Number(product.price);
   const freeShipping = price >= FREE_SHIPPING_THRESHOLD;
+  // Prezzo pieno barrato + unità + condizione (campi di primo livello).
+  const compareAt = (product as { compare_at_price?: number | string | null }).compare_at_price;
+  const compareAtNum = compareAt != null ? Number(compareAt) : null;
+  const compareValid = compareAtNum != null && compareAtNum > price;
+  const comparePct = compareValid ? Math.round((1 - price / compareAtNum) * 100) : 0;
+  const unitRaw = (product as { unit?: string | null }).unit ?? null;
+  const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
+  const conditionRaw = (product as { condition?: string | null }).condition ?? null;
+  const conditionLabel = conditionRaw ? (CONDITION_LABELS[conditionRaw as ProductCondition] ?? conditionRaw) : null;
   const stock: number | undefined = product.stock ?? undefined;
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
   const isOutOfStock = stock === 0;
@@ -324,10 +334,24 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           </div>
 
           <div className="border-y border-surface-200 py-4 space-y-3">
-            <div className="flex items-baseline gap-3">
-              <span className="text-4xl font-extrabold text-ink-900">{formatPrice(price)}</span>
+            <div className="flex items-baseline gap-2 flex-wrap">
+              <span className="text-4xl font-extrabold text-ink-900">
+                {formatPrice(price)}
+                {unitSuffix && <span className="text-base font-semibold text-ink-400">{unitSuffix}</span>}
+              </span>
+              {compareValid && (
+                <>
+                  <span className="text-lg text-ink-400 line-through">{formatPrice(compareAtNum)}</span>
+                  <span className="text-sm font-bold text-secondary-600">-{comparePct}%</span>
+                </>
+              )}
               <span className="text-sm text-ink-400">IVA inclusa</span>
             </div>
+            {conditionLabel && (
+              <span className="inline-flex w-fit items-center rounded-full bg-cream-100 px-2.5 py-0.5 text-xs font-semibold text-ink-700">
+                Condizione: {conditionLabel}
+              </span>
+            )}
             {/* Ancoraggio prezzo + confronto media categoria (Behavioral Scientist) */}
             <div className="space-y-2">
               <ActivePromoBadge productId={id} basePrice={price} />

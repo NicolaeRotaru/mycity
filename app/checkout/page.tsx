@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AlertTriangle, Store } from 'lucide-react';
+import { AlertTriangle, Store, Zap } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { haversineKm, riderFee } from '@/lib/geo';
+import { isExpressEligible } from '@/lib/products/express';
 import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -142,13 +143,37 @@ export default function CheckoutPage() {
         .filter((it) => validIds.has(it.id) && it.quantity > (stockMap.get(it.id) ?? 0))
         .map((it) => ({ id: it.id, name: it.name, requested: it.quantity, available: stockMap.get(it.id) ?? 0 }));
 
-      return { groups: Array.from(sellerMap.values()), orphans: orphanItems, stockIssues };
+      const groupsArr = Array.from(sellerMap.values());
+
+      // Express (best-effort): query SEPARATA dal percorso critico. Se le colonne
+      // non esistono ancora (migrazione 071 non applicata) PostgREST ritorna
+      // errore→data null: nessun badge Express, ma il checkout NON si rompe.
+      let expressStores: string[] = [];
+      if (groupsArr.length > 0) {
+        const sellerIds = groupsArr.map((g) => g.sellerId);
+        const [{ data: exProducts }, { data: exSellers }] = await Promise.all([
+          supabase.from('products').select('id, express_enabled').in('id', cart.map((c) => c.id)),
+          supabase.from('profiles').select('id, offers_express').in('id', sellerIds),
+        ]);
+        if (exProducts && exSellers) {
+          const exMap = new Map<string, boolean | null>();
+          for (const p of exProducts) exMap.set(p.id, (p as { express_enabled?: boolean | null }).express_enabled ?? null);
+          const offersMap = new Map<string, boolean>();
+          for (const s of exSellers) offersMap.set(s.id, Boolean((s as { offers_express?: boolean }).offers_express));
+          expressStores = groupsArr
+            .filter((g) => offersMap.get(g.sellerId) && g.items.every((it) => isExpressEligible(exMap.get(it.id) ?? null, offersMap.get(g.sellerId) ?? false)))
+            .map((g) => g.storeName);
+        }
+      }
+
+      return { groups: groupsArr, orphans: orphanItems, stockIssues, expressStores };
     },
   });
 
   const groups = cartData?.groups ?? [];
   const orphans = useMemo(() => cartData?.orphans ?? [], [cartData]);
   const stockIssues = useMemo(() => cartData?.stockIssues ?? [], [cartData]);
+  const expressStores = useMemo(() => cartData?.expressStores ?? [], [cartData]);
 
   // Auto-rimozione degli articoli non più disponibili (id stale dopo re-seed,
   // prodotto rimosso/non-disponibile, venditore sospeso): li togliamo dal
@@ -575,6 +600,13 @@ export default function CheckoutPage() {
               )}
             </div>
           </label>
+
+          {expressStores.length > 0 && !pickupInStore && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+              <Zap size={16} className="shrink-0 mt-0.5 text-amber-500" aria-hidden />
+              <span><strong>Consegna Express disponibile</strong> (~30–60 min, se ci sono rider) per: {expressStores.join(', ')}. Altrimenti consegna standard 24–48h.</span>
+            </div>
+          )}
 
           <B2BInvoiceForm
             active={b2bActive}
