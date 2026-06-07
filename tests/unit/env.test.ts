@@ -10,6 +10,7 @@ const SNAPSHOT_KEYS = [
   'VAPID_SUBJECT',
   'SDI_PROVIDER',
   'KYC_PROVIDER',
+  'BG_REMOVAL_PROVIDER',
 ];
 
 describe('env', () => {
@@ -60,6 +61,11 @@ describe('env', () => {
   it('has default for kycProvider (mock)', () => {
     delete process.env.KYC_PROVIDER;
     expect(env.kycProvider()).toBe('mock');
+  });
+
+  it('has default for bgRemovalProvider (mock)', () => {
+    delete process.env.BG_REMOVAL_PROVIDER;
+    expect(env.bgRemovalProvider()).toBe('mock');
   });
 });
 

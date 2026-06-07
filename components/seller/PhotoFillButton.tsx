@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage } from '@/lib/errors';
+import { resizeImageToBase64 } from '@/lib/image-resize';
 
 export type ExtractedProduct = {
   name: string;
@@ -21,41 +22,6 @@ interface Props {
 }
 
 type State = 'idle' | 'analyzing';
-
-const MAX_DIMENSION = 1024;
-
-// Ridimensiona via canvas a max 1024x1024 mantenendo aspect ratio, ritorna base64 senza prefisso.
-async function resizeImage(file: File): Promise<{ base64: string; mediaType: string }> {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Lettura file fallita'));
-    reader.readAsDataURL(file);
-  });
-
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const i = new Image();
-    i.onload = () => resolve(i);
-    i.onerror = () => reject(new Error('Immagine non valida'));
-    i.src = dataUrl;
-  });
-
-  const ratio = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
-  const w = Math.round(img.width * ratio);
-  const h = Math.round(img.height * ratio);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Canvas non supportato');
-  ctx.drawImage(img, 0, 0, w, h);
-
-  // Forziamo JPEG: piu' piccolo del PNG e supportato da Claude.
-  const outDataUrl = canvas.toDataURL('image/jpeg', 0.85);
-  const base64 = outDataUrl.split(',')[1] ?? '';
-  return { base64, mediaType: 'image/jpeg' };
-}
 
 const PhotoFillButton = ({ onFilled }: Props) => {
   const [state, setState] = useState<State>('idle');
@@ -78,7 +44,7 @@ const PhotoFillButton = ({ onFilled }: Props) => {
     try {
       const images = await Promise.all(
         files.map(async (f) => {
-          const { base64, mediaType } = await resizeImage(f);
+          const { base64, mediaType } = await resizeImageToBase64(f);
           return { image_base64: base64, media_type: mediaType };
         }),
       );
