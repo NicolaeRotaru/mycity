@@ -2,9 +2,11 @@
 
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Camera, ImagePlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage } from '@/lib/errors';
 import { resizeImageToBase64 } from '@/lib/image-resize';
+import CameraCapture from '@/components/seller/CameraCapture';
 
 export type ExtractedProduct = {
   name: string;
@@ -25,25 +27,19 @@ type State = 'idle' | 'analyzing';
 
 const PhotoFillButton = ({ onFilled }: Props) => {
   const [state, setState] = useState<State>('idle');
+  const [cameraOpen, setCameraOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleClick = () => {
-    inputRef.current?.click();
-  };
-
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const input = e.target;
-    // IMPORTANTE: leggere i file SUBITO. e.target.files è un FileList "live":
-    // azzerare input.value lo svuoterebbe. Il reset va fatto dopo (finally),
-    // così resta possibile ri-selezionare gli stessi file.
-    // Max 4 foto (es. fronte + etichetta/retro). Riusa resizeImage (1024px JPEG).
-    const files = Array.from(input.files ?? []).slice(0, 4);
-    if (files.length === 0) return;
+  // Analisi condivisa: usata sia dallo scatto in-app sia dal caricamento galleria.
+  // Max 4 foto (es. fronte + etichetta/retro). Riusa resizeImageToBase64 (1024px JPEG).
+  const analyzeFiles = async (files: File[]) => {
+    const list = files.slice(0, 4);
+    if (list.length === 0) return;
 
     setState('analyzing');
     try {
       const images = await Promise.all(
-        files.map(async (f) => {
+        list.map(async (f) => {
           const { base64, mediaType } = await resizeImageToBase64(f);
           return { image_base64: base64, media_type: mediaType };
         }),
@@ -80,10 +76,15 @@ const PhotoFillButton = ({ onFilled }: Props) => {
       toast.error(msg);
     } finally {
       setState('idle');
-      // Reset qui (non prima della lettura): consente di ri-selezionare gli
-      // stessi file senza svuotare il FileList prima dell'uso.
-      input.value = '';
     }
+  };
+
+  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    // e.target.files è un FileList "live": copiarlo SUBITO in un array, poi
+    // azzerare input.value nel finally (così resta possibile ri-selezionare).
+    const files = Array.from(input.files ?? []);
+    void analyzeFiles(files).finally(() => { input.value = ''; });
   };
 
   const busy = state === 'analyzing';
@@ -96,27 +97,43 @@ const PhotoFillButton = ({ onFilled }: Props) => {
           <span>Compila con una foto</span>
         </p>
         <p className="text-sm text-primary-100">
-          Scatta 2–4 foto (fronte + etichetta) e l&apos;AI compila nome, descrizione, categoria, prezzo e caratteristiche per te.
+          Scatta o carica 2–4 foto (fronte + etichetta) e l&apos;AI compila nome, descrizione, categoria, prezzo e caratteristiche per te.
         </p>
       </div>
-      <button
-        type="button"
-        onClick={handleClick}
-        disabled={busy}
-        className="bg-white text-primary-800 hover:bg-primary-50 disabled:opacity-60 px-5 py-2.5 rounded-md font-semibold whitespace-nowrap shadow-md flex items-center gap-2"
-      >
-        {busy ? (
-          <>
-            <span className="inline-block w-4 h-4 border-2 border-indigo-700/30 border-t-indigo-700 rounded-full animate-spin" />
-            <span>Analizzo...</span>
-          </>
-        ) : (
-          <>
-            <span>📸</span>
-            <span>Scatta o carica</span>
-          </>
-        )}
-      </button>
+
+      <div className="flex items-center gap-2 w-full sm:w-auto">
+        {/* Scatto diretto: fotocamera in-app (fallback a fotocamera nativa). */}
+        <button
+          type="button"
+          onClick={() => setCameraOpen(true)}
+          disabled={busy}
+          className="flex-1 sm:flex-none bg-white text-primary-800 hover:bg-primary-50 disabled:opacity-60 px-4 py-2.5 rounded-md font-semibold whitespace-nowrap shadow-md flex items-center justify-center gap-2"
+        >
+          {busy ? (
+            <>
+              <span className="inline-block w-4 h-4 border-2 border-indigo-700/30 border-t-indigo-700 rounded-full animate-spin" />
+              <span>Analizzo...</span>
+            </>
+          ) : (
+            <>
+              <Camera size={18} strokeWidth={2.2} aria-hidden />
+              <span>Scatta foto</span>
+            </>
+          )}
+        </button>
+
+        {/* Caricamento dalla galleria (come prima, anche multi-foto). */}
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className="bg-white/15 hover:bg-white/25 text-white disabled:opacity-60 px-4 py-2.5 rounded-md font-semibold whitespace-nowrap flex items-center justify-center gap-2 ring-1 ring-white/40"
+        >
+          <ImagePlus size={18} strokeWidth={2.2} aria-hidden />
+          <span>Galleria</span>
+        </button>
+      </div>
+
       <input
         ref={inputRef}
         type="file"
@@ -124,6 +141,12 @@ const PhotoFillButton = ({ onFilled }: Props) => {
         multiple
         onChange={handleFile}
         className="hidden"
+      />
+
+      <CameraCapture
+        open={cameraOpen}
+        onClose={() => setCameraOpen(false)}
+        onCapture={(file) => { void analyzeFiles([file]); }}
       />
     </div>
   );
