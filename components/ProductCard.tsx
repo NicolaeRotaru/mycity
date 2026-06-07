@@ -115,7 +115,7 @@ const ProductCard = ({
           priority={priority}
           loading={priority ? undefined : 'lazy'}
           unoptimized
-          className="object-cover transition-transform duration-300 group-hover:scale-110"
+          className="object-contain transition-transform duration-300 group-hover:scale-110"
         />
         <button
           type="button"

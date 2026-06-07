@@ -120,7 +120,7 @@ export default function SellerProductsPage() {
                             fill
                             sizes="48px"
                             unoptimized
-                            className="object-cover rounded"
+                            className="object-contain rounded"
                           />
                         </div>
                         <Link href={`/product/${p.id}`} className="font-semibold hover:text-primary-700">
@@ -173,7 +173,7 @@ export default function SellerProductsPage() {
                       fill
                       sizes="64px"
                       unoptimized
-                      className="object-cover"
+                      className="object-contain"
                     />
                   </Link>
                   <div className="flex-1 min-w-0">
