@@ -31,7 +31,7 @@ function buildPexelsUrl(url: URL, sizePx: number): string {
   return url.toString();
 }
 
-function buildSupabaseStorageUrl(url: URL, sizePx: number): string {
+function buildSupabaseStorageUrl(url: URL, sizePx: number, square: boolean): string {
   // Le Image Transformations Supabase si usano sostituendo /object/public/
   // con /render/image/public/ e aggiungendo ?width=&quality=
   if (url.pathname.includes('/storage/v1/object/public/')) {
@@ -41,6 +41,11 @@ function buildSupabaseStorageUrl(url: URL, sizePx: number): string {
     );
   }
   url.searchParams.set('width', String(sizePx));
+  // Per le viste a griglia (thumb/card) forziamo un ritaglio QUADRATO, come
+  // fanno le foto demo Pexels (fit=crop): così le foto caricate dai negozi
+  // riempiono il riquadro aspect-square senza bande/letterbox. Per detail/hero
+  // NON impostiamo l'altezza, per mostrare l'intero prodotto nel dettaglio.
+  if (square) url.searchParams.set('height', String(sizePx));
   url.searchParams.set('quality', String(QUALITY));
   url.searchParams.set('resize', 'cover');
   return url.toString();
@@ -56,6 +61,10 @@ export function sizedImage(src: string | undefined | null, size: ImageSize): str
   if (src.startsWith('data:') || src.startsWith('blob:')) return src;
 
   const sizePx = SIZE_PX[size];
+  // Le miniature in griglia (catalogo, card negozio, righe-lista) vanno
+  // ritagliate quadrate per allinearsi al riquadro aspect-square; le viste
+  // grandi (detail/hero) preservano le proporzioni originali.
+  const square = size === 'thumb' || size === 'card';
 
   try {
     const url = new URL(src);
@@ -65,7 +74,7 @@ export function sizedImage(src: string | undefined | null, size: ImageSize): str
       return buildPexelsUrl(url, sizePx);
     }
     if (host.endsWith('.supabase.co')) {
-      return buildSupabaseStorageUrl(url, sizePx);
+      return buildSupabaseStorageUrl(url, sizePx, square);
     }
     // placehold.co usa il path per la dimensione, lasciamo stare
     return src;

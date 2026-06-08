@@ -81,6 +81,18 @@ describe('sizedImage - Supabase Storage URLs', () => {
     const url = sizedImage(src, 'thumb');
     expect(url).toContain('width=100');
   });
+
+  it('crops to a square (width+height) for grid sizes thumb/card', () => {
+    const src = 'https://abc.supabase.co/storage/v1/object/public/products/img.jpg';
+    expect(sizedImage(src, 'thumb')).toContain('height=100');
+    expect(sizedImage(src, 'card')).toContain('height=400');
+  });
+
+  it('preserves aspect ratio (width only, no height) for detail/hero', () => {
+    const src = 'https://abc.supabase.co/storage/v1/object/public/products/img.jpg';
+    expect(sizedImage(src, 'detail')).not.toContain('height=');
+    expect(sizedImage(src, 'hero')).not.toContain('height=');
+  });
 });
 
 describe('sizedImage - other hosts', () => {
