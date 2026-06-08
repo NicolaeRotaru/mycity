@@ -437,6 +437,34 @@ export function newId(): string {
   return raw.replace(/[^A-Za-z0-9_-]/g, '');
 }
 
+/** Genera uno slug kebab-case sicuro da un titolo (accenti rimossi, lunghezza limitata). */
+export function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, MAX_SLUG);
+}
+
+/** Crea una nuova pagina con slug unico derivato dal titolo (mai riservato/duplicato). */
+export function newPage(title: string, site: StoreSite): SitePage {
+  const taken = new Set(site.pages.map((p) => p.slug));
+  const base = slugify(title) || 'pagina';
+  let slug = base;
+  let n = 2;
+  while (taken.has(slug) || RESERVED_SLUGS.has(slug)) slug = `${base}-${n++}`;
+  return {
+    id: newId(),
+    slug,
+    title: title.trim().slice(0, MAX_PAGE_TITLE) || 'Pagina',
+    visibility: 'public',
+    seo: { noindex: false },
+    sections: [],
+  };
+}
+
 /** Crea una nuova sezione del tipo dato con config di default sensata (editor). */
 export function newSection(type: SectionType): SiteSection {
   const id = newId();

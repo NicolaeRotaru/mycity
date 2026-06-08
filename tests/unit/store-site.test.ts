@@ -12,7 +12,9 @@ import {
   resolveMenu,
   siteByteSize,
   newSection,
+  newPage,
   newId,
+  slugify,
   RESERVED_SLUGS,
   SECTION_TYPES,
   type StoreSite,
@@ -235,5 +237,36 @@ describe('helpers', () => {
     const id = newId();
     expect(id.length).toBeGreaterThan(0);
     expect(id).toMatch(/^[A-Za-z0-9_-]+$/);
+  });
+});
+
+describe('slugify / newPage (multi-page)', () => {
+  it('slugifies titles (accents, spaces, symbols)', () => {
+    expect(slugify('Chi Siamo')).toBe('chi-siamo');
+    expect(slugify('Offerte & Sconti!')).toBe('offerte-sconti');
+    expect(slugify('Città di Còmo')).toBe('citta-di-como');
+    expect(slugify('  ---weird---  ')).toBe('weird');
+  });
+
+  it('newPage derives a unique, non-reserved, valid slug', () => {
+    const site = defaultSite();
+    const p1 = newPage('Chi siamo', site);
+    expect(p1.slug).toBe('chi-siamo');
+    expect(p1.visibility).toBe('public');
+    expect(p1.sections).toEqual([]);
+
+    const site2 = { ...site, pages: [...site.pages, p1] };
+    expect(newPage('Chi siamo', site2).slug).toBe('chi-siamo-2');
+
+    expect(RESERVED_SLUGS.has(newPage('preview', site).slug)).toBe(false);
+  });
+
+  it('a site built with custom pages validates against the schema', () => {
+    let site = defaultSite();
+    site = { ...site, pages: [...site.pages, newPage('Chi siamo', site)] };
+    site = { ...site, pages: [...site.pages, newPage('Contatti', site)] };
+    expect(storeSiteSchema.safeParse(site).success).toBe(true);
+    expect(pageBySlug(site, 'chi-siamo')).toBeDefined();
+    expect(pageBySlug(site, 'contatti')).toBeDefined();
   });
 });

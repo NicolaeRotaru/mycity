@@ -1,76 +1,27 @@
 'use client';
 import { use, type CSSProperties } from 'react';
 
-import { useQuery } from '@tanstack/react-query';
 import { Megaphone } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
-import { normalizeCustomization, accentHex, announcementActive, socialLinks } from '@/lib/store-customization';
-import { normalizeSite, homePage, enabledSections } from '@/lib/store-site';
+import { announcementActive } from '@/lib/store-customization';
+import { homePage, enabledSections } from '@/lib/store-site';
 import SectionRenderer from '@/components/store-sections/SectionRenderer';
-import type {
-  SectionContext,
-  SectionPromo,
-  SectionReview,
-  StoreContextRow,
-} from '@/components/store-sections/SectionContext';
+import StoreNav from '@/components/store-sections/StoreNav';
+import { useStorePageData } from '@/components/store-sections/useStorePageData';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
-import { queryKeys } from '@/lib/queries/keys';
 
 export default function StorePage(props: { params: Promise<{ id: string }> }) {
-  const params = use(props.params);
-  const { id } = params;
+  const { id } = use(props.params);
+  const data = useStorePageData(id);
 
-  const { data: store, isLoading } = useQuery({
-    queryKey: queryKeys.stores.detail(id),
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, store_logo, store_hours, store_media, store_description, store_customization, store_site')
-        .eq('id', id)
-        .single();
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: reviews = [] } = useQuery({
-    queryKey: queryKeys.reviews.store(id),
-    queryFn: async (): Promise<SectionReview[]> => {
-      const { data } = await supabase
-        .from('store_reviews')
-        .select('id, rating, comment, created_at, seller_reply')
-        .eq('store_id', id)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      return (data ?? []) as SectionReview[];
-    },
-  });
-
-  const { data: promos = [] } = useQuery({
-    queryKey: queryKeys.promotions.byStore(id),
-    queryFn: async (): Promise<SectionPromo[]> => {
-      const nowIso = new Date().toISOString();
-      const { data } = await supabase
-        .from('seller_promotions')
-        .select('id, title, discount_percent, ends_at')
-        .eq('seller_id', id)
-        .eq('status', 'active')
-        .lte('starts_at', nowIso)
-        .gte('ends_at', nowIso)
-        .order('discount_percent', { ascending: false });
-      return (data ?? []) as SectionPromo[];
-    },
-  });
-
-  if (isLoading) {
+  if (data.isLoading) {
     return (
       <div className="container mx-auto px-4 py-16">
         <LoadingState />
       </div>
     );
   }
-  if (!store?.store_name || !store.is_approved) {
+  if (!data.approved || !data.ctx || !data.store) {
     return (
       <div className="container mx-auto px-4 py-16 text-center text-ink-500">
         Negozio non trovato.
@@ -78,26 +29,10 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     );
   }
 
-  // Personalizzazione (accent/annuncio/social) + sito multi-pagina (sezioni della home).
-  const custom = normalizeCustomization(store.store_customization);
-  const accent = accentHex(custom);
-  const socials = socialLinks(custom);
+  const { store, custom, accent, socials, reviews, site, ctx } = data;
   const showAnnouncement = announcementActive(custom);
-
-  const site = normalizeSite(store.store_site);
   const home = homePage(site);
   const sections = enabledSections(home);
-
-  const ctx: SectionContext = {
-    storeId: store.id,
-    store: store as unknown as StoreContextRow,
-    customization: custom,
-    accent,
-    reviews,
-    promos,
-    theme: site.theme,
-    site,
-  };
 
   // Schema.org LocalBusiness JSON-LD — critical per SEO local
   const localBusinessSchema = {
@@ -142,8 +77,10 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
       <Breadcrumb items={[
         { label: 'Home', href: '/' },
         { label: 'Negozi', href: '/stores' },
-        { label: store.store_name },
+        { label: store.store_name ?? 'Negozio' },
       ]} />
+
+      <StoreNav site={site} storeId={ctx.storeId} />
 
       {/* Banner annuncio (es. ferie / novità) — store-wide, sopra le sezioni */}
       {showAnnouncement && (

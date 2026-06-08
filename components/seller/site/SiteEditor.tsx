@@ -11,12 +11,15 @@ import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { normalizeSite, storeSiteSchema, homePage, type StoreSite, type SitePage } from '@/lib/store-site';
 import ThemePicker from './ThemePicker';
+import PageListEditor from './PageListEditor';
 import PageSectionsEditor from './PageSectionsEditor';
+import MenuEditor from './MenuEditor';
 
 /**
- * Editor del sito vetrina (Fase 1: tema + sezioni della home). Stato locale = StoreSite
- * di lavoro, sub-editor controllati, salvataggio via PUT /api/seller/site (validazione +
- * sanitizzazione server). Stesso pattern di VendorForm/seller/profile.
+ * Editor del sito vetrina: tema, pagine (multi-pagina), menu di navigazione e
+ * sezioni della pagina selezionata. Stato locale = StoreSite di lavoro, sub-editor
+ * controllati, salvataggio via PUT /api/seller/site (validazione + sanitizzazione
+ * server). Stesso pattern di VendorForm/seller/profile.
  */
 export default function SiteEditor() {
   const qc = useQueryClient();
@@ -34,6 +37,7 @@ export default function SiteEditor() {
 
   const initial = useMemo(() => (profile ? normalizeSite(profile.store_site) : null), [profile]);
   const [draft, setDraft] = useState<StoreSite | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const site = draft ?? initial;
 
   const save = useMutation({
@@ -65,22 +69,25 @@ export default function SiteEditor() {
   if (isLoading || !site) return <LoadingState />;
 
   const home = homePage(site);
-  const setHome = (next: SitePage) =>
-    setDraft({ ...site, pages: site.pages.map((p) => (p.id === home.id ? next : p)) });
+  const activePage = site.pages.find((p) => p.id === activeId) ?? home;
+  const setActivePage = (next: SitePage) =>
+    setDraft({ ...site, pages: site.pages.map((p) => (p.id === activePage.id ? next : p)) });
 
   return (
     <div className="space-y-6">
+      {/* Tema */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <h2 className="font-semibold text-ink-900 mb-1">Tema del sito</h2>
         <p className="text-sm text-ink-500 mb-4">Lo stile generale della tua vetrina.</p>
         <ThemePicker value={site.theme} onChange={(theme) => setDraft({ ...site, theme })} />
       </div>
 
+      {/* Pagine */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
           <div>
-            <h2 className="font-semibold text-ink-900">Sezioni della home</h2>
-            <p className="text-sm text-ink-500">Aggiungi, riordina, mostra/nascondi e configura i blocchi della tua vetrina.</p>
+            <h2 className="font-semibold text-ink-900">Pagine</h2>
+            <p className="text-sm text-ink-500">La home e le pagine extra (es. Chi siamo). Seleziona una pagina per modificarne le sezioni.</p>
           </div>
           {profile?.is_approved && profile?.id && (
             <Link
@@ -93,9 +100,26 @@ export default function SiteEditor() {
             </Link>
           )}
         </div>
-        <PageSectionsEditor page={home} onChange={setHome} />
+        <PageListEditor site={site} activeId={activePage.id} onSelect={setActiveId} onChange={setDraft} />
       </div>
 
+      {/* Sezioni della pagina attiva */}
+      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
+        <h2 className="font-semibold text-ink-900 mb-1">
+          Sezioni · <span className="text-primary-700">{activePage.title}</span>
+        </h2>
+        <p className="text-sm text-ink-500 mb-4">Aggiungi, riordina, mostra/nascondi e configura i blocchi di questa pagina.</p>
+        <PageSectionsEditor page={activePage} onChange={setActivePage} />
+      </div>
+
+      {/* Menu */}
+      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
+        <h2 className="font-semibold text-ink-900 mb-1">Menu di navigazione</h2>
+        <p className="text-sm text-ink-500 mb-4">Collega le pagine del tuo sito con un menu in cima alla vetrina.</p>
+        <MenuEditor site={site} onChange={setDraft} />
+      </div>
+
+      {/* Salva */}
       <div className="sticky bottom-4 flex justify-end">
         <button
           type="button"
