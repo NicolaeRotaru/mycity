@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { List, Map as MapIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StoreListRow from '@/components/StoreListRow';
+import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStoresMapLazy';
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { haversineKm } from '@/lib/geo';
 import { queryKeys } from '@/lib/queries/keys';
-import { Button } from '@/components/ui/Button';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -65,6 +65,8 @@ const fetchNearData = async () => {
 export default function NearMePage() {
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [permError, setPermError] = useState<string | null>(null);
+  const [view, setView] = useState<'list' | 'map'>('list');
+  const [radiusKm, setRadiusKm] = useState(5);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -83,53 +85,133 @@ export default function NearMePage() {
     queryFn: fetchNearData,
   });
 
-  const stores = data?.stores ?? [];
+  // Riferimento stabile (evita di ricalcolare i useMemo a ogni render quando data è undefined).
+  const stores = useMemo<Store[]>(() => data?.stores ?? [], [data]);
   const productsByStore = data?.productsByStore ?? {};
   const reviewsByStore = data?.reviewsByStore ?? {};
 
-  if (permError) {
-    return (
-      <div className="container mx-auto p-8 text-center space-y-4 max-w-md">
-        <p className="text-5xl">📍</p>
-        <p className="text-ink-700 font-semibold">{permError}</p>
-        <p className="text-ink-500 text-sm">Abilita la geolocalizzazione del browser per vedere i negozi più vicini.</p>
-        <Button href="/stores">Vedi tutti i negozi</Button>
-      </div>
-    );
-  }
+  // Calcola distanza (se abbiamo la posizione) e ordina per vicinanza.
+  const ranked = useMemo(
+    () =>
+      stores
+        .map((s) => ({
+          store: s,
+          distance:
+            pos && s.store_lat != null && s.store_lng != null
+              ? haversineKm(pos.lat, pos.lng, Number(s.store_lat), Number(s.store_lng))
+              : null,
+        }))
+        .sort((a, b) => {
+          if (a.distance == null) return b.distance == null ? 0 : 1;
+          if (b.distance == null) return -1;
+          return a.distance - b.distance;
+        }),
+    [stores, pos],
+  );
 
-  if (!pos || isLoading) {
+  // Con la posizione filtriamo per raggio; senza, mostriamo tutti i negozi.
+  const filtered = useMemo(
+    () => (pos ? ranked.filter((x) => x.distance != null && x.distance <= radiusKm) : ranked),
+    [ranked, pos, radiusKm],
+  );
+
+  const mapStores: NearbyStore[] = useMemo(
+    () =>
+      filtered
+        .filter((x) => x.store.store_lat != null && x.store.store_lng != null)
+        .map((x) => ({
+          id: x.store.id,
+          name: x.store.store_name,
+          lat: Number(x.store.store_lat),
+          lng: Number(x.store.store_lng),
+        })),
+    [filtered],
+  );
+
+  // Attendi i dati e l'esito della geolocalizzazione (posizione o errore).
+  if (isLoading || (!pos && !permError)) {
     return <div className="container mx-auto p-8 text-center text-ink-500">📡 Calcolo distanze…</div>;
   }
 
-  const ranked = stores
-    .map((s) => ({
-      store: s,
-      distance: s.store_lat && s.store_lng
-        ? haversineKm(pos.lat, pos.lng, Number(s.store_lat), Number(s.store_lng))
-        : null,
-    }))
-    .filter((x) => x.distance !== null)
-    .sort((a, b) => (a.distance as number) - (b.distance as number));
+  const toggleBtn = (target: 'list' | 'map', label: string, Icon: typeof List) => (
+    <button
+      type="button"
+      onClick={() => setView(target)}
+      aria-pressed={view === target}
+      className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+        view === target ? 'bg-primary-700 text-white shadow-warm-sm' : 'text-ink-600 hover:bg-cream-50'
+      }`}
+    >
+      <Icon size={16} strokeWidth={2.2} aria-hidden /> {label}
+    </button>
+  );
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-3xl sm:text-4xl font-extrabold text-ink-900">Vicino a te</h1>
-        <p className="text-ink-500 mt-1">{ranked.length} negozi ordinati per distanza</p>
+        <p className="text-ink-500 mt-1">
+          {filtered.length} {filtered.length === 1 ? 'negozio' : 'negozi'}
+          {pos ? ` entro ${radiusKm} km` : ' a Piacenza'}
+        </p>
       </div>
 
-      <div className="space-y-3">
-        {ranked.map(({ store, distance }) => (
-          <StoreListRow
-            key={store.id}
-            store={store}
-            products={productsByStore[store.id] ?? []}
-            reviews={reviewsByStore[store.id]}
-            distanceKm={distance}
-          />
-        ))}
+      {permError && (
+        <div className="mb-4 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-ink-700">
+          📍 {permError}. Mostriamo i negozi di Piacenza; abilita la geolocalizzazione per ordinarli per distanza e
+          filtrare per raggio.
+        </div>
+      )}
+
+      {/* Controlli: toggle Lista/Mappa + slider raggio */}
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="inline-flex w-fit rounded-xl border border-surface-200 bg-white p-1 shadow-card">
+          {toggleBtn('list', 'Lista', List)}
+          {toggleBtn('map', 'Mappa', MapIcon)}
+        </div>
+
+        {pos && (
+          <label className="flex items-center gap-3 text-sm text-ink-600">
+            <span className="whitespace-nowrap font-semibold">Raggio: {radiusKm} km</span>
+            <input
+              type="range"
+              min={1}
+              max={20}
+              step={1}
+              value={radiusKm}
+              onChange={(e) => setRadiusKm(Number(e.target.value))}
+              className="h-2 w-40 cursor-pointer accent-primary-600 sm:w-56"
+              aria-label="Raggio di ricerca in km"
+            />
+          </label>
+        )}
       </div>
+
+      {view === 'map' ? (
+        mapStores.length > 0 || pos ? (
+          <NearbyStoresMapLazy userPos={pos} stores={mapStores} radiusKm={radiusKm} />
+        ) : (
+          <div className="rounded-2xl border border-surface-200 bg-cream-50 p-8 text-center text-ink-500">
+            Nessun negozio con posizione da mostrare sulla mappa.
+          </div>
+        )
+      ) : filtered.length > 0 ? (
+        <div className="space-y-3">
+          {filtered.map(({ store, distance }) => (
+            <StoreListRow
+              key={store.id}
+              store={store}
+              products={productsByStore[store.id] ?? []}
+              reviews={reviewsByStore[store.id]}
+              distanceKm={distance}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-surface-200 bg-cream-50 p-8 text-center text-ink-500">
+          Nessun negozio entro {radiusKm} km. Aumenta il raggio per vederne di più.
+        </div>
+      )}
     </div>
   );
 }
