@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Zap } from 'lucide-react';
+import { ExternalLink, Zap, Palette } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import VendorForm, { VendorFormData } from '@/components/VendorForm';
 import { toast } from 'sonner';
@@ -76,15 +76,24 @@ export default function SellerProfilePage() {
           <p className="text-sm text-ink-500">Aggiorna i dati e personalizza la vetrina che vedono i clienti</p>
         </div>
         {profile?.is_approved && profile?.id && (
-          <Link
-            href={`/store/${profile.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-primary-300 text-ink-800 px-4 py-2 rounded-lg text-sm font-semibold shadow-warm-sm transition-colors"
-          >
-            <ExternalLink size={16} aria-hidden />
-            Vedi la tua vetrina
-          </Link>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Link
+              href="/seller/site"
+              className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-primary-300 text-ink-800 px-4 py-2 rounded-lg text-sm font-semibold shadow-warm-sm transition-colors"
+            >
+              <Palette size={16} aria-hidden />
+              Costruisci il sito
+            </Link>
+            <Link
+              href={`/store/${profile.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-primary-300 text-ink-800 px-4 py-2 rounded-lg text-sm font-semibold shadow-warm-sm transition-colors"
+            >
+              <ExternalLink size={16} aria-hidden />
+              Vedi la tua vetrina
+            </Link>
+          </div>
         )}
       </div>
 

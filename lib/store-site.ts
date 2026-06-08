@@ -129,8 +129,8 @@ const pageSlugSchema = z.union([
 
 /* ---- Target di una CTA / link ---- */
 const ctaTargetSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('category'), categorySlug: z.string().trim().min(1).max(80) }),
-  z.object({ kind: z.literal('product'), productId: z.string().uuid() }),
+  z.object({ kind: z.literal('category'), categorySlug: z.string().trim().min(1, 'Scegli una categoria').max(80) }),
+  z.object({ kind: z.literal('product'), productId: z.string().uuid('Scegli un prodotto') }),
   z.object({ kind: z.literal('page'), pageId: z.string().min(1).max(64) }),
   z.object({ kind: z.literal('external'), url: httpsUrlSchema }),
 ]);
@@ -170,7 +170,7 @@ const collectionSourceSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('category'),
-    categoryId: z.string().uuid(),
+    categoryId: z.string().uuid('Scegli una categoria'),
     limit: z.number().int().min(4).max(MAX_COLLECTION_PRODUCTS).default(12),
   }),
 ]);
