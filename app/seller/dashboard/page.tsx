@@ -229,6 +229,9 @@ export default function SellerDashboard() {
         <h2 className="font-bold mb-4">Azioni rapide</h2>
         <div className="flex flex-wrap gap-3">
           <Button href="/seller/products/new">➕ Aggiungi prodotto</Button>
+          <Link href="/seller/site" className="bg-white border-2 hover:border-primary-400 px-4 py-2.5 rounded-lg font-semibold">
+            🎨 Personalizza il sito
+          </Link>
           <Link href="/seller/orders" className="bg-white border-2 hover:border-primary-400 px-4 py-2.5 rounded-lg font-semibold">
             📦 Gestisci ordini
           </Link>

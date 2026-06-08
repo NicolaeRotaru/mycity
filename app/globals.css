@@ -151,3 +151,39 @@ h1, h2, h3, .font-serif-display {
   0%   { transform: translate(0, 0) rotate(0); opacity: 1; }
   100% { transform: var(--end-transform); opacity: 0; }
 }
+
+/* Testo ricco delle sezioni vetrina (blocco "richText"): stile dei soli tag
+ * consentiti dalla sanitizzazione (lib/sanitize-html.ts). */
+@layer components {
+  .store-richtext > * + * { @apply mt-2; }
+  .store-richtext h2 { @apply text-lg font-bold text-ink-900 mt-4 mb-1; }
+  .store-richtext h3 { @apply text-base font-semibold text-ink-900 mt-3 mb-1; }
+  .store-richtext ul { @apply list-disc pl-5; }
+  .store-richtext ol { @apply list-decimal pl-5; }
+  .store-richtext li { @apply mb-1; }
+  .store-richtext a { @apply text-primary-700 underline hover:text-primary-800; }
+  .store-richtext strong, .store-richtext b { @apply font-semibold; }
+  .store-richtext em, .store-richtext i { @apply italic; }
+  .store-richtext blockquote { @apply border-l-2 border-cream-300 pl-3 italic text-ink-600; }
+}
+
+/* ============================================================================
+ * Temi del sito vetrina — attivati da [data-theme] sul contenitore /store/[id]
+ * e /store/[id]/[slug]. 'classico' = default (nessun override). Regole plain
+ * (fuori da @layer) per vincere sulle utility per specificità. L'accent del
+ * negozio resta inline (--store-accent), quindi i temi non toccano il contrasto.
+ * ========================================================================== */
+
+/* Moderno: angoli netti, ombre minime */
+[data-theme='moderno'] .rounded-2xl { border-radius: 0.5rem; }
+[data-theme='moderno'] .rounded-xl  { border-radius: 0.375rem; }
+[data-theme='moderno'] .shadow-warm,
+[data-theme='moderno'] .shadow-warm-sm { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
+
+/* Caldo: superfici color crema al posto del bianco */
+[data-theme='caldo'] .bg-white { background-color: #FBF7F0; }
+
+/* Editoriale: titoli più serrati e testo più arioso, da rivista */
+[data-theme='editoriale'] h1,
+[data-theme='editoriale'] h2 { letter-spacing: -0.015em; }
+[data-theme='editoriale'] .store-richtext { font-size: 0.95rem; line-height: 1.75; }
