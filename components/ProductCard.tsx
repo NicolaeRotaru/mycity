@@ -105,8 +105,9 @@ const ProductCard = ({
         {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}
       </div>
 
-      {/* FOTO dominante (~3/5) */}
-      <div className="relative aspect-square w-full overflow-hidden bg-surface-50">
+      {/* FOTO dominante (~3/5) — object-cover su sfondo bianco: la foto riempie
+          il riquadro quadrato (come le demo), niente bande beige sulle foto dei negozi. */}
+      <div className="relative aspect-square w-full overflow-hidden bg-white">
         <Image
           src={img}
           alt={name}
@@ -115,7 +116,7 @@ const ProductCard = ({
           priority={priority}
           loading={priority ? undefined : 'lazy'}
           unoptimized
-          className="object-contain transition-transform duration-300 group-hover:scale-110"
+          className="object-cover transition-transform duration-300 group-hover:scale-110"
         />
         <button
           type="button"
