@@ -129,7 +129,7 @@ const pageSlugSchema = z.union([
 
 /* ---- Target di una CTA / link ---- */
 const ctaTargetSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('category'), categoryId: z.string().uuid() }),
+  z.object({ kind: z.literal('category'), categorySlug: z.string().trim().min(1).max(80) }),
   z.object({ kind: z.literal('product'), productId: z.string().uuid() }),
   z.object({ kind: z.literal('page'), pageId: z.string().min(1).max(64) }),
   z.object({ kind: z.literal('external'), url: httpsUrlSchema }),
@@ -398,6 +398,25 @@ export function resolveMenu(site: StoreSite, storeId: string): ResolvedMenuLink[
     }
   }
   return out;
+}
+
+/** href risolto di una CTA (banner). null se la pagina target non esiste. */
+export function ctaHref(target: CTATarget, storeId: string, site: StoreSite): string | null {
+  switch (target.kind) {
+    case 'external':
+      return target.url;
+    case 'product':
+      return `/product/${target.productId}`;
+    case 'category':
+      return `/category/${target.categorySlug}`;
+    case 'page': {
+      const p = pageById(site, target.pageId);
+      if (!p) return null;
+      return p.slug === '' ? `/store/${storeId}` : `/store/${storeId}/${p.slug}`;
+    }
+    default:
+      return null;
+  }
 }
 
 /** Dimensione serializzata del sito (per il guard anti-abuso). */
