@@ -890,6 +890,7 @@ export interface Database {
           link: string | null;
           is_read: boolean | null;
           created_at: string | null;
+          pushed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -899,6 +900,7 @@ export interface Database {
           link?: string | null;
           is_read?: boolean | null;
           created_at?: string | null;
+          pushed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -908,6 +910,7 @@ export interface Database {
           link?: string | null;
           is_read?: boolean | null;
           created_at?: string | null;
+          pushed_at?: string | null;
         };
         Relationships: [];
       };
@@ -917,18 +920,24 @@ export interface Database {
           code: string;
           verified_at: string | null;
           created_at: string | null;
+          attempts: number;
+          locked_until: string | null;
         };
         Insert: {
           order_id: string;
           code: string;
           verified_at?: string | null;
           created_at?: string | null;
+          attempts?: number;
+          locked_until?: string | null;
         };
         Update: {
           order_id?: string;
           code?: string;
           verified_at?: string | null;
           created_at?: string | null;
+          attempts?: number;
+          locked_until?: string | null;
         };
         Relationships: [];
       };
@@ -962,18 +971,24 @@ export interface Database {
           code: string;
           verified_at: string | null;
           created_at: string | null;
+          attempts: number;
+          locked_until: string | null;
         };
         Insert: {
           order_id: string;
           code: string;
           verified_at?: string | null;
           created_at?: string | null;
+          attempts?: number;
+          locked_until?: string | null;
         };
         Update: {
           order_id?: string;
           code?: string;
           verified_at?: string | null;
           created_at?: string | null;
+          attempts?: number;
+          locked_until?: string | null;
         };
         Relationships: [];
       };
@@ -994,6 +1009,7 @@ export interface Database {
           dispute_status: string | null;
           disputed_at: string | null;
           rider_payout_status: string | null;
+          refunded_amount_cents: number;
         };
         Insert: {
           id?: string;
@@ -1011,6 +1027,7 @@ export interface Database {
           dispute_status?: string | null;
           disputed_at?: string | null;
           rider_payout_status?: string | null;
+          refunded_amount_cents?: number;
         };
         Update: {
           id?: string;
@@ -1028,6 +1045,7 @@ export interface Database {
           dispute_status?: string | null;
           disputed_at?: string | null;
           rider_payout_status?: string | null;
+          refunded_amount_cents?: number;
         };
         Relationships: [];
       };
@@ -1214,6 +1232,7 @@ export interface Database {
           created_at: string | null;
           category_id: string | null;
           attributes: Json | null;
+          unit: string | null;
         };
         Insert: {
           id?: string;
@@ -1226,6 +1245,7 @@ export interface Database {
           created_at?: string | null;
           category_id?: string | null;
           attributes?: Json | null;
+          unit?: string | null;
         };
         Update: {
           id?: string;
@@ -1238,6 +1258,7 @@ export interface Database {
           created_at?: string | null;
           category_id?: string | null;
           attributes?: Json | null;
+          unit?: string | null;
         };
         Relationships: [];
       };
@@ -1267,6 +1288,10 @@ export interface Database {
           public_profile_enabled: boolean;
           deletion_requested_at: string | null;
           store_customization: Json;
+          rider_is_online: boolean;
+          notif_order_updates: boolean;
+          offers_express: boolean;
+          store_site: Json;
         };
         Insert: {
           id: string;
@@ -1293,6 +1318,10 @@ export interface Database {
           public_profile_enabled?: boolean;
           deletion_requested_at?: string | null;
           store_customization?: Json;
+          rider_is_online?: boolean;
+          notif_order_updates?: boolean;
+          offers_express?: boolean;
+          store_site?: Json;
         };
         Update: {
           id?: string;
@@ -1319,6 +1348,10 @@ export interface Database {
           public_profile_enabled?: boolean;
           deletion_requested_at?: string | null;
           store_customization?: Json;
+          rider_is_online?: boolean;
+          notif_order_updates?: boolean;
+          offers_express?: boolean;
+          store_site?: Json;
         };
         Relationships: [];
       };
@@ -1807,16 +1840,19 @@ export interface Database {
           event_id: string;
           type: string;
           processed_at: string | null;
+          processed: boolean;
         };
         Insert: {
           event_id: string;
           type: string;
           processed_at?: string | null;
+          processed?: boolean;
         };
         Update: {
           event_id?: string;
           type?: string;
           processed_at?: string | null;
+          processed?: boolean;
         };
         Relationships: [];
       };
