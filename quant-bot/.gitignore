@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Test / cache
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Segreti e dati
+.env
+.env.*
+!.env.example
+logs/
+*.log
+*.csv
+*.parquet
+data/

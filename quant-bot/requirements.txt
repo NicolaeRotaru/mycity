@@ -1,0 +1,15 @@
+# ============================================================
+#  quant-bot — dipendenze
+# ============================================================
+# Core runtime
+ccxt>=4.2.0            # exchange unificato (Bybit/Binance) + async_support + pro (ws)
+pandas>=2.0.0
+numpy>=1.24,<2.0       # pandas-ta 0.3.14b importa numpy.NaN (rotto su numpy>=2.0)
+pandas-ta>=0.3.14b0    # indicatori: EMA, RSI, ATR
+aiohttp>=3.9.0         # notifiche Telegram (webhook)
+
+# Backtest
+vectorbt>=0.26.0       # backtest vettoriale + metriche
+
+# Dev / test (opzionale)
+pytest>=8.0.0
