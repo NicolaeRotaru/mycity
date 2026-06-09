@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronUp, ChevronDown, ChevronRight, Eye, EyeOff, Trash2, Plus } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronRight, Eye, EyeOff, Trash2, Plus, Home, FileText } from 'lucide-react';
 import { newPage, MAX_PAGES, type StoreSite, type SitePage } from '@/lib/store-site';
 
 /**
@@ -51,9 +51,10 @@ export default function PageListEditor({
     <div className="space-y-2">
       {pages.map((p, i) => {
         const isHome = p.id === homeId;
+        const isHidden = p.visibility === 'hidden';
         return (
-          <div key={p.id} className="rounded-xl border border-cream-300 bg-white">
-            <div className="flex items-center gap-1.5 px-3 py-2.5">
+          <div key={p.id} className="group rounded-xl border border-cream-300 bg-white hover:border-primary-200 transition-colors">
+            <div className="flex items-center gap-2 px-2.5 py-2.5 sm:px-3">
               <div className="flex flex-col -my-1">
                 <button type="button" onClick={() => move(i, -1)} disabled={isHome || i <= 1} aria-label="Sposta su" className="p-0.5 text-ink-400 hover:text-ink-700 disabled:opacity-30">
                   <ChevronUp size={16} aria-hidden />
@@ -63,12 +64,17 @@ export default function PageListEditor({
                 </button>
               </div>
 
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${isHidden ? 'bg-cream-100 text-ink-400' : 'bg-primary-50 text-primary-700'}`}>
+                {isHome ? <Home size={16} aria-hidden /> : <FileText size={16} aria-hidden />}
+              </div>
+
               <button type="button" onClick={() => onOpen(p.id)} className="flex-1 min-w-0 text-left">
-                <span className="font-medium text-ink-900">{p.title}</span>
-                <span className="block text-xs text-ink-400 truncate">
-                  {isHome ? '/' : `/${p.slug}`}
-                  {p.visibility === 'hidden' && ' · nascosta'}
+                <span className="font-medium text-ink-900 flex items-center gap-1.5">
+                  <span className="truncate">{p.title}</span>
+                  {isHome && <span className="text-[10px] uppercase tracking-wide font-bold bg-primary-100 text-primary-700 rounded px-1.5 py-0.5 shrink-0">Home</span>}
+                  {isHidden && <span className="text-[10px] uppercase tracking-wide font-bold bg-cream-200 text-ink-500 rounded px-1.5 py-0.5 shrink-0">Nascosta</span>}
                 </span>
+                <span className="block text-xs text-ink-400 truncate">{isHome ? '/' : `/${p.slug}`}</span>
               </button>
 
               {!isHome && (
@@ -87,7 +93,7 @@ export default function PageListEditor({
                   <Trash2 size={16} aria-hidden />
                 </button>
               )}
-              <button type="button" onClick={() => onOpen(p.id)} aria-label="Apri e modifica la pagina" className="p-1.5 text-ink-400 hover:text-primary-700">
+              <button type="button" onClick={() => onOpen(p.id)} aria-label="Apri e modifica la pagina" className="p-1.5 text-ink-300 group-hover:text-primary-700 transition-colors">
                 <ChevronRight size={18} aria-hidden />
               </button>
             </div>
@@ -99,9 +105,10 @@ export default function PageListEditor({
         type="button"
         onClick={add}
         disabled={pages.length >= MAX_PAGES}
-        className="inline-flex items-center gap-2 bg-cream-100 text-ink-800 hover:bg-cream-200 disabled:opacity-50 px-4 py-2 rounded-lg text-sm font-semibold"
+        className="w-full inline-flex items-center justify-center gap-2 border-2 border-dashed border-cream-300 text-ink-700 hover:border-primary-300 hover:text-primary-700 disabled:opacity-50 disabled:hover:border-cream-300 disabled:hover:text-ink-700 px-4 py-3 rounded-xl text-sm font-semibold transition-colors"
       >
         <Plus size={16} aria-hidden /> Aggiungi pagina
+        <span className="text-ink-400 font-normal">({pages.length}/{MAX_PAGES})</span>
       </button>
     </div>
   );
