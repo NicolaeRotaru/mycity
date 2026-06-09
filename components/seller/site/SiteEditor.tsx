@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Save } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,25 +10,31 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
-import { normalizeSite, storeSiteSchema, homePage, type StoreSite, type SitePage } from '@/lib/store-site';
+import { normalizeSite, storeSiteSchema, type StoreSite, type SitePage } from '@/lib/store-site';
 import ThemePicker from './ThemePicker';
 import PageListEditor from './PageListEditor';
-import PageSectionsEditor from './PageSectionsEditor';
+import PageEditor from './PageEditor';
 import MenuEditor from './MenuEditor';
 
 /**
- * Editor del sito vetrina: tema, pagine (multi-pagina), menu di navigazione e
- * sezioni della pagina selezionata. Stato locale = StoreSite di lavoro, sub-editor
- * controllati, salvataggio via PUT /api/seller/site (validazione + sanitizzazione
- * server). Stesso pattern di VendorForm/seller/profile.
+ * Editor del sito vetrina a SCHERMATE separate:
+ *  - Panoramica: tema, lista pagine (apri/aggiungi/riordina/visibilità/elimina), menu.
+ *  - Pagina: si "entra" in una pagina (freccia indietro reale) per modificarne
+ *    impostazioni e sezioni.
  *
- * Ogni modifica passa da `commit` (bozza + flag "non salvato"). Dopo il salvataggio i
- * sub-editor vengono rimontati (savedTick) per chiudere i pannelli aperti e riportare
- * l'utente alla panoramica; un guard `beforeunload` avvisa se si lascia la pagina con
- * modifiche non salvate.
+ * La schermata attiva è guidata dal query param `?page=<id>`: così il tasto
+ * indietro del browser/telefono torna naturalmente alla panoramica. Tutte le
+ * modifiche restano in un'unica bozza locale (`draft`) e si pubblicano con
+ * "Salva sito" (PUT /api/seller/site). Dopo il salvataggio si torna alla
+ * panoramica; un guard `beforeunload` avvisa se si lascia l'editor con modifiche
+ * non salvate.
  */
 export default function SiteEditor() {
   const qc = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const editingId = searchParams.get('page');
 
   const { data: profile, isLoading } = useQuery({
     queryKey: queryKeys.seller.profile,
@@ -42,12 +49,8 @@ export default function SiteEditor() {
 
   const initial = useMemo(() => (profile ? normalizeSite(profile.store_site) : null), [profile]);
   const [draft, setDraft] = useState<StoreSite | null>(null);
-  const [activeId, setActiveId] = useState<string | null>(null);
   // dirty = bozza modificata ma non ancora salvata (guida l'avviso "uscire senza salvare?").
   const [dirty, setDirty] = useState(false);
-  // savedTick cambia a ogni salvataggio: rimonta i sub-editor (key) chiudendone i
-  // pannelli aperti, così dopo "Salva sito" si torna alla panoramica.
-  const [savedTick, setSavedTick] = useState(0);
   const site = draft ?? initial;
 
   // Ogni modifica dei sub-editor passa di qui: aggiorna la bozza e segna "non salvato".
@@ -56,8 +59,8 @@ export default function SiteEditor() {
     setDirty(true);
   };
 
-  // Avviso del browser se si esce (refresh/chiusura/navigazione esterna) con modifiche
-  // non salvate, per non perdere la bozza non ancora pubblicata.
+  // Avviso del browser se si esce (refresh/chiusura/navigazione esterna) con
+  // modifiche non salvate, per non perdere la bozza non ancora pubblicata.
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -88,10 +91,10 @@ export default function SiteEditor() {
     onSuccess: (saved) => {
       setDraft(saved);
       setDirty(false);
-      setSavedTick((t) => t + 1); // chiude i pannelli aperti => torni alla panoramica
       qc.invalidateQueries({ queryKey: queryKeys.seller.profile });
       if (profile?.id) qc.invalidateQueries({ queryKey: queryKeys.stores.detail(profile.id) });
       toast.success('Sito salvato!');
+      router.push(pathname); // torna alla panoramica
       if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     },
     onError: (e: unknown) => toast.error(friendlyError(e)),
@@ -99,11 +102,42 @@ export default function SiteEditor() {
 
   if (isLoading || !site) return <LoadingState />;
 
-  const home = homePage(site);
-  const activePage = site.pages.find((p) => p.id === activeId) ?? home;
-  const setActivePage = (next: SitePage) =>
-    commit({ ...site, pages: site.pages.map((p) => (p.id === activePage.id ? next : p)) });
+  const openPage = (id: string) => router.push(`${pathname}?page=${encodeURIComponent(id)}`);
+  const backToOverview = () => router.push(pathname);
+  const editing = editingId ? site.pages.find((p) => p.id === editingId) : undefined;
 
+  const setEditingPage = (next: SitePage) =>
+    commit({ ...site, pages: site.pages.map((p) => (p.id === next.id ? next : p)) });
+
+  const saveBar = (
+    <div className="sticky z-20 flex items-center justify-end gap-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
+      {dirty && (
+        <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 shadow-warm-sm">
+          Modifiche non salvate
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={() => save.mutate(site)}
+        disabled={save.isPending}
+        className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold shadow-warm-sm"
+      >
+        <Save size={18} aria-hidden /> {save.isPending ? 'Salvataggio…' : 'Salva sito'}
+      </button>
+    </div>
+  );
+
+  // ---- Schermata: editor di una pagina ----
+  if (editing) {
+    return (
+      <div className="space-y-6">
+        <PageEditor site={site} page={editing} onChange={setEditingPage} onBack={backToOverview} />
+        {saveBar}
+      </div>
+    );
+  }
+
+  // ---- Schermata: panoramica ----
   return (
     <div className="space-y-6">
       {/* Tema */}
@@ -118,7 +152,7 @@ export default function SiteEditor() {
         <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
           <div>
             <h2 className="font-semibold text-ink-900">Pagine</h2>
-            <p className="text-sm text-ink-500">La home e le pagine extra (es. Chi siamo). Seleziona una pagina per modificarne le sezioni.</p>
+            <p className="text-sm text-ink-500">La home e le pagine extra (es. Chi siamo). Tocca una pagina per modificarne impostazioni e sezioni.</p>
           </div>
           {profile?.is_approved && profile?.id && (
             <Link
@@ -131,16 +165,7 @@ export default function SiteEditor() {
             </Link>
           )}
         </div>
-        <PageListEditor key={savedTick} site={site} activeId={activePage.id} onSelect={setActiveId} onChange={commit} />
-      </div>
-
-      {/* Sezioni della pagina attiva */}
-      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
-        <h2 className="font-semibold text-ink-900 mb-1">
-          Sezioni · <span className="text-primary-700">{activePage.title}</span>
-        </h2>
-        <p className="text-sm text-ink-500 mb-4">Aggiungi, riordina, mostra/nascondi e configura i blocchi di questa pagina.</p>
-        <PageSectionsEditor key={`${activePage.id}-${savedTick}`} page={activePage} onChange={setActivePage} />
+        <PageListEditor site={site} onChange={commit} onOpen={openPage} />
       </div>
 
       {/* Menu */}
@@ -150,23 +175,7 @@ export default function SiteEditor() {
         <MenuEditor site={site} onChange={commit} />
       </div>
 
-      {/* Salva — sollevato sopra la MobileTabBar (md:hidden, ~60px + safe area)
-          così su mobile non resta nascosto dietro la barra di navigazione in basso. */}
-      <div className="sticky z-20 flex items-center justify-end gap-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
-        {dirty && (
-          <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 shadow-warm-sm">
-            Modifiche non salvate
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => save.mutate(site)}
-          disabled={save.isPending}
-          className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold shadow-warm-sm"
-        >
-          <Save size={18} aria-hidden /> {save.isPending ? 'Salvataggio…' : 'Salva sito'}
-        </button>
-      </div>
+      {saveBar}
     </div>
   );
 }
