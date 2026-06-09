@@ -190,7 +190,7 @@ function section<T extends HomeSectionType, C extends z.ZodTypeAny>(type: T, con
   });
 }
 
-const homeSectionSchema = z.discriminatedUnion('type', [
+export const homeSectionSchema = z.discriminatedUnion('type', [
   section('hero', heroConfig),
   section('howItWorks', emptyConfig),
   section('categories', categoriesConfig),

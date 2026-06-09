@@ -2,7 +2,8 @@ import {
   User, Package, Heart, MapPin, Sparkles, Award, Gift, ListChecks, Megaphone,
   LayoutDashboard, TrendingUp, ShoppingCart, Camera, Euro, Bike, CircleDot,
   Settings, HelpCircle, Shield, Home, Users, ShoppingBag, Ticket, Crown,
-  Calendar, Coins, AlertTriangle, Headset, Eye, LayoutTemplate, type LucideIcon,
+  Calendar, Coins, AlertTriangle, Headset, Eye, LayoutTemplate, Palette,
+  Zap, Tags, FileText, type LucideIcon,
 } from 'lucide-react';
 
 /**
@@ -57,15 +58,19 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
     items.push(
       { href: '/admin', icon: Shield, label: 'Dashboard admin' },
       { href: '/admin/home', icon: LayoutTemplate, label: 'Home builder' },
+      { href: '/admin/branding', icon: Palette, label: 'Aspetto' },
+      { href: '/admin/pages', icon: FileText, label: 'Pagine' },
       { href: '/admin/activity', icon: Eye, label: 'Sorveglianza' },
       { href: '/admin/today', icon: Home, label: 'Today' },
       { href: '/admin/funnel', icon: TrendingUp, label: 'Funnel & Cohort' },
       { href: '/admin/users', icon: Users, label: 'Utenti' },
       { href: '/admin/orders', icon: ShoppingBag, label: 'Ordini' },
       { href: '/admin/products', icon: Package, label: 'Prodotti' },
+      { href: '/admin/categories', icon: Tags, label: 'Categorie' },
       { href: '/admin/support-chat', icon: Headset, label: 'Chat assistenza' },
       { href: '/admin/coupons', icon: Ticket, label: 'Coupon' },
       { href: '/admin/shop-of-month', icon: Crown, label: 'Negozio mese' },
+      { href: '/admin/daily-drops', icon: Zap, label: 'Drop del giorno' },
       { href: '/admin/events', icon: Calendar, label: 'Eventi' },
       { href: '/admin/sponsored', icon: Megaphone, label: 'Sponsored' },
       { href: '/admin/cashback', icon: Coins, label: 'Cashback' },

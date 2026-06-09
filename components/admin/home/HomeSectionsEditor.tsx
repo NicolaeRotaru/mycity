@@ -12,12 +12,14 @@ import {
 } from '@/lib/home-site';
 import HomeSectionConfigForm from './HomeSectionConfigForm';
 
-function AddSectionMenu({ onAdd, disabled }: { onAdd: (t: HomeSectionType) => void; disabled: boolean }) {
+type GroupKey = 'struttura' | 'contenuto';
+
+function AddSectionMenu({ onAdd, disabled, allowed }: { onAdd: (t: HomeSectionType) => void; disabled: boolean; allowed: GroupKey[] }) {
   const [open, setOpen] = useState(false);
   const groups = [
-    { label: 'Struttura', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'struttura') },
-    { label: 'Contenuto', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'contenuto') },
-  ];
+    { key: 'struttura' as const, label: 'Struttura', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'struttura') },
+    { key: 'contenuto' as const, label: 'Contenuto', items: HOME_SECTION_CATALOG.filter((s) => s.group === 'contenuto') },
+  ].filter((g) => allowed.includes(g.key));
   return (
     <div className="relative">
       <button
@@ -52,8 +54,17 @@ function AddSectionMenu({ onAdd, disabled }: { onAdd: (t: HomeSectionType) => vo
   );
 }
 
-/** Lista ordinata delle sezioni della home: riordino, on/off, config, rimozione. */
-export default function HomeSectionsEditor({ sections, onChange }: { sections: HomeSection[]; onChange: (next: HomeSection[]) => void }) {
+/** Lista ordinata delle sezioni: riordino, on/off, config, rimozione. `groups` limita
+ *  i tipi aggiungibili (es. solo 'contenuto' per le pagine CMS). */
+export default function HomeSectionsEditor({
+  sections,
+  onChange,
+  groups = ['struttura', 'contenuto'],
+}: {
+  sections: HomeSection[];
+  onChange: (next: HomeSection[]) => void;
+  groups?: GroupKey[];
+}) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   const move = (i: number, dir: -1 | 1) => {
@@ -121,7 +132,7 @@ export default function HomeSectionsEditor({ sections, onChange }: { sections: H
         );
       })}
 
-      <AddSectionMenu onAdd={add} disabled={sections.length >= MAX_HOME_SECTIONS} />
+      <AddSectionMenu onAdd={add} disabled={sections.length >= MAX_HOME_SECTIONS} allowed={groups} />
     </div>
   );
 }

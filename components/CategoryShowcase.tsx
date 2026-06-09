@@ -61,7 +61,10 @@ const iconFor = (slug: string): LucideIcon => ICON_MAP[slug] ?? Tag;
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
 const imgFor = (slug: string): string | null => IMG_MAP[slug] ?? null;
 
-type CategoryRow = { id: string; slug: string; name: string; icon: string | null };
+type CategoryRow = {
+  id: string; slug: string; name: string; icon: string | null;
+  sort_order?: number | null; featured?: boolean | null;
+};
 
 /**
  * Tessere illustrate con foto reale per categoria (overlay scuro per la
@@ -72,13 +75,20 @@ const CategoryShowcase = () => {
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.showcase,
     queryFn: async (): Promise<CategoryRow[]> => {
+      // select('*') è resiliente alle colonne sort_order/featured (migration 076):
+      // se non esistono ancora, l'ordinamento ricade sul nome (comportamento storico).
       const { data, error } = await supabase
         .from('categories')
-        .select('id, slug, name, icon')
-        .is('parent_id', null)
-        .order('name');
+        .select('*')
+        .is('parent_id', null);
       if (error) throw error;
-      return (data ?? []) as CategoryRow[];
+      const rows = (data ?? []) as CategoryRow[];
+      rows.sort((a, b) =>
+        ((b.featured ? 1 : 0) - (a.featured ? 1 : 0)) ||
+        ((a.sort_order ?? 9999) - (b.sort_order ?? 9999)) ||
+        a.name.localeCompare(b.name),
+      );
+      return rows;
     },
   });
 

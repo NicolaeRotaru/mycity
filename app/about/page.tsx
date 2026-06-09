@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { loadPublishedCmsPage } from '@/lib/cms';
+import CmsPageView from '@/components/cms/CmsPageView';
 
 export const metadata = {
   title: 'Chi siamo · MyCity',
@@ -14,7 +16,12 @@ export const metadata = {
   },
 };
 
-export default function AboutPage() {
+export default async function AboutPage() {
+  // Se l'admin ha pubblicato una versione a blocchi di questa pagina, usala;
+  // altrimenti resta il contenuto predefinito qui sotto (nessuna regressione).
+  const cms = await loadPublishedCmsPage('about');
+  if (cms) return <CmsPageView page={cms} />;
+
   return (
     <div className="container mx-auto px-6 py-10 max-w-4xl">
       <div className="text-center mb-12">
