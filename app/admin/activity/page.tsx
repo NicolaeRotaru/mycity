@@ -34,7 +34,7 @@ type EventRow = {
   is_bot: boolean;
   metadata: Record<string, unknown> | null;
   created_at: string;
-  user: { full_name: string | null; email: string | null } | null;
+  user: { full_name: string | null; store_name: string | null; role: string | null } | null;
 };
 
 const CATEGORY_META: Record<string, { label: string; icon: typeof Eye; color: string }> = {
@@ -62,8 +62,14 @@ const SELECT = `
   id, category, event_type, action, summary, actor_id, user_id, anon_id, session_id,
   target_table, target_id, path, referrer, ip, user_agent, device_type, browser, os,
   country, city, is_bot, metadata, created_at,
-  user:profiles!activity_events_user_id_fkey ( full_name, email )
+  user:profiles!activity_events_user_id_fkey ( full_name, store_name, role )
 `;
+
+/** Etichetta leggibile per un utente loggato (profiles non espone l'email). */
+function userLabel(u: EventRow['user']): string | null {
+  if (!u) return null;
+  return u.full_name || u.store_name || (u.role ? `${u.role}` : null);
+}
 
 export default function AdminActivityPage() {
   const [tab, setTab] = useState<'feed' | 'visitors'>('feed');
@@ -170,7 +176,7 @@ export default function AdminActivityPage() {
       if (hideBots && r.is_bot) continue;
       const key = r.anon_id || r.ip || r.session_id || r.id;
       const existing = map.get(key);
-      const label = r.user?.full_name ?? r.user?.email ?? null;
+      const label = userLabel(r.user);
       if (!existing) {
         map.set(key, {
           key, ip: r.ip, device: r.device_type, browser: r.browser, os: r.os,
@@ -196,8 +202,7 @@ export default function AdminActivityPage() {
     return rows.filter((r) =>
       (r.ip ?? '').toLowerCase().includes(s) ||
       (r.anon_id ?? '').toLowerCase().includes(s) ||
-      (r.user?.email ?? '').toLowerCase().includes(s) ||
-      (r.user?.full_name ?? '').toLowerCase().includes(s) ||
+      (userLabel(r.user) ?? '').toLowerCase().includes(s) ||
       (r.summary ?? '').toLowerCase().includes(s) ||
       (r.path ?? '').toLowerCase().includes(s),
     );
@@ -407,7 +412,7 @@ function FeedRow({ row: r }: { row: EventRow }) {
   const meta = CATEGORY_META[r.category] ?? CATEGORY_META.system;
   const Icon = meta.icon;
   const DeviceIcon = r.device_type ? (DEVICE_ICON[r.device_type] ?? null) : null;
-  const who = r.user?.full_name ?? r.user?.email ?? (r.anon_id ? `Anonimo ${r.anon_id.slice(0, 6)}…` : 'sistema');
+  const who = userLabel(r.user) ?? (r.anon_id ? `Anonimo ${r.anon_id.slice(0, 6)}…` : 'sistema');
   return (
     <div className="px-4 py-3 hover:bg-cream-50 transition-colors">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
