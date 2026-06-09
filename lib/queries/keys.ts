@@ -122,6 +122,9 @@ export const queryKeys = {
     sos:                     ['admin', 'sos'] as const,
     disputes:                ['admin', 'disputes'] as const,
     audit:   (action?: string) => ['admin', 'audit', action ?? 'all'] as const,
+    activity: (filters: Record<string, unknown> = {}) =>
+                              ['admin', 'activity', filters] as const,
+    activitySummary:         ['admin', 'activity', 'summary'] as const,
     events:                  ['admin', 'events'] as const,
     products:                ['admin', 'products'] as const,
     support: (filter?: string) => ['admin', 'support', filter ?? 'all'] as const,

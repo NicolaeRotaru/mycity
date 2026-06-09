@@ -10,6 +10,7 @@ import ToastProvider from '@/components/providers/ToastProvider';
 import { ConfirmDialogHost } from '@/components/ConfirmDialog';
 import CookieBanner from '@/components/CookieBanner';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
+import ActivityTracker from '@/components/ActivityTracker';
 import DailyCheckIn from '@/components/DailyCheckIn';
 import WelcomeCreditBanner from '@/components/WelcomeCreditBanner';
 import CartCrossDeviceSync from '@/components/CartCrossDeviceSync';
@@ -132,6 +133,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </NextIntlClientProvider>
         <Suspense fallback={null}>
           <GoogleAnalytics />
+        </Suspense>
+        <Suspense fallback={null}>
+          <ActivityTracker />
         </Suspense>
         <Suspense fallback={null}>
           <PostHogProvider />

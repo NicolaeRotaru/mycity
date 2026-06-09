@@ -24,7 +24,8 @@ describe('writeAudit', () => {
       actorId: 'admin-1',
       action: 'user.approve',
     });
-    expect(insertMock).toHaveBeenCalledOnce();
+    // Due insert: audit_logs + mirror in activity_events (firehose sorveglianza)
+    expect(insertMock).toHaveBeenCalledTimes(2);
     const call = insertMock.mock.calls[0][0];
     expect(call).toMatchObject({
       actor_id: 'admin-1',
@@ -32,6 +33,12 @@ describe('writeAudit', () => {
       target_table: null,
       target_id: null,
       metadata: null,
+    });
+    // Il mirror finisce nel firehose con categoria "moderation"
+    expect(insertMock.mock.calls[1][0]).toMatchObject({
+      category: 'moderation',
+      event_type: 'user.approve',
+      actor_id: 'admin-1',
     });
   });
 
