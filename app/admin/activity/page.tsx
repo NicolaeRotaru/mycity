@@ -38,7 +38,7 @@ type EventRow = {
 };
 
 const CATEGORY_META: Record<string, { label: string; icon: typeof Eye; color: string }> = {
-  visitor:    { label: 'Visitatori',  icon: Globe,        color: 'sky' },
+  visitor:    { label: 'Visite',      icon: Globe,        color: 'sky' },
   auth:       { label: 'Accessi',     icon: LogIn,        color: 'violet' },
   commerce:   { label: 'Commercio',   icon: ShoppingBag,  color: 'emerald' },
   catalog:    { label: 'Catalogo',    icon: Package,      color: 'amber' },
@@ -209,7 +209,7 @@ export default function AdminActivityPage() {
   }, [rows, search]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       <div>
         <Link href="/admin" className="text-sm text-ink-500 hover:text-ink-800">← Dashboard admin</Link>
         <h1 className="text-3xl font-serif font-bold mt-2 text-ink-900 flex items-center gap-2">
@@ -225,7 +225,7 @@ export default function AdminActivityPage() {
       {/* KPI in tempo reale */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Kpi icon={Radio} label="Online ora" value={summary.online} color="emerald" hint="ultimi 5 min" />
-        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="sky" />
+        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="sky" hint="unici" />
         <Kpi icon={LogIn} label="Accessi 24h" value={summary.logins} color="violet" />
         <Kpi icon={Globe} label="Viste anonime" value={summary.anonViews} color="amber" />
         <Kpi icon={Activity} label="Viste loggati" value={summary.loggedInViews} color="indigo" />
@@ -265,11 +265,11 @@ export default function AdminActivityPage() {
               {Object.entries(summary.byDevice).sort((a, b) => b[1] - a[1]).map(([d, n]) => {
                 const Icon = DEVICE_ICON[d] ?? Monitor;
                 return (
-                  <li key={d} className="flex items-center justify-between text-sm">
-                    <span className="inline-flex items-center gap-1.5 text-ink-700 capitalize">
-                      <Icon size={14} aria-hidden /> {d}
+                  <li key={d} className="flex items-center justify-between text-sm gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-ink-700 capitalize min-w-0 truncate">
+                      <Icon size={14} className="shrink-0" aria-hidden /> {d}
                     </span>
-                    <span className="font-bold text-ink-900">{n}</span>
+                    <span className="font-bold text-ink-900 shrink-0">{n}</span>
                   </li>
                 );
               })}
@@ -281,7 +281,7 @@ export default function AdminActivityPage() {
             <ul className="space-y-1.5">
               {summary.topPaths.map(([p, n]) => (
                 <li key={p} className="flex items-center justify-between text-sm gap-2">
-                  <span className="text-ink-700 truncate">{p}</span>
+                  <span className="text-ink-700 truncate min-w-0">{p}</span>
                   <span className="font-bold text-ink-900 shrink-0">{n}</span>
                 </li>
               ))}
@@ -293,7 +293,7 @@ export default function AdminActivityPage() {
             <ul className="space-y-1.5">
               {summary.topIps.map(([ip, n]) => (
                 <li key={ip} className="flex items-center justify-between text-sm gap-2">
-                  <button onClick={() => { setSearch(ip); setTab('feed'); }} className="text-primary-700 hover:underline truncate font-mono text-xs">{ip}</button>
+                  <button onClick={() => { setSearch(ip); setTab('feed'); }} className="text-primary-700 hover:underline truncate min-w-0 font-mono text-xs text-left">{ip}</button>
                   <span className="font-bold text-ink-900 shrink-0">{n}</span>
                 </li>
               ))}
@@ -421,8 +421,8 @@ function FeedRow({ row: r }: { row: EventRow }) {
             <Icon size={13} className={`text-${meta.color}-700`} aria-hidden />
           </span>
           <div className="min-w-0">
-            <p className="font-semibold text-ink-900 text-sm">{r.summary ?? r.event_type}</p>
-            <p className="text-xs text-ink-500 flex items-center gap-1.5 flex-wrap">
+            <p className="font-semibold text-ink-900 text-sm break-words">{r.summary ?? r.event_type}</p>
+            <p className="text-xs text-ink-500 flex items-center gap-1.5 flex-wrap break-all">
               <span className="font-medium">{who}</span>
               {r.is_bot && <span className="px-1.5 rounded bg-cream-200 text-ink-500">bot</span>}
               {r.ip && <span className="font-mono">{r.ip}</span>}
