@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Store, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
+import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
 
 const SOCIALS = [
@@ -81,6 +82,7 @@ const SOCIALS = [
 const Footer = () => {
   const { isSeller, isRider, isAuthenticated } = useProfile();
   const isSellerArea = isSeller || isRider;
+  const branding = useBranding();
 
   return (
     <footer className="bg-ink-900 text-ink-300 mt-12">
@@ -110,10 +112,10 @@ const Footer = () => {
         {/* Brand + descrizione */}
         <div className="col-span-2 md:col-span-1">
           <h3 className="font-serif font-bold text-white mb-3 flex items-center gap-2 text-lg">
-            <span className="text-accent-400 text-xl">●</span> <span><span className="text-accent-400">My</span>City</span>
+            <span className="text-accent-400 text-xl">●</span> <span><span className="text-accent-400">{branding.wordmark.accent}</span>{branding.wordmark.rest}</span>
           </h3>
           <p className="text-sm text-ink-400 mb-4 leading-relaxed">
-            Il marketplace dei negozi di Piacenza. Compra dai commercianti locali, ricevi a casa in 24-48h.
+            {branding.footerTagline}
           </p>
           {/* Social icons */}
           <div className="flex flex-wrap gap-2">

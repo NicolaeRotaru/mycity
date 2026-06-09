@@ -115,6 +115,9 @@ export const queryKeys = {
   admin: {
     all:                     ['admin'] as const,
     home:                    ['admin', 'home'] as const,
+    branding:                ['admin', 'branding'] as const,
+    dailyDrops:              ['admin', 'daily-drops'] as const,
+    categories:              ['admin', 'categories'] as const,
     today:                   ['admin', 'today'] as const,
     stats:                   ['admin', 'stats'] as const,
     funnel:  (period: number)=> ['admin', 'funnel', period] as const,
@@ -219,6 +222,10 @@ export const queryKeys = {
     current:                 ['shop-of-month', 'current'] as const,
     leaderboard:             ['shop-of-month', 'leaderboard'] as const,
     page:                    ['shop-of-month-page'] as const,
+  },
+
+  branding: {
+    public:                  ['branding', 'public'] as const,
   },
 
   categories: {

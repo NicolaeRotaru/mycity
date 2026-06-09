@@ -14,6 +14,7 @@ import { useCartCount } from './hooks/useCartCount';
 import { useNotificationsCount } from './hooks/useNotificationsCount';
 import { useMessagesUnread } from './hooks/useMessagesUnread';
 import { useFavorites } from './hooks/useFavorites';
+import { useBranding } from './hooks/useBranding';
 import LocationPill from './LocationPill';
 import PromoTicker from './PromoTicker';
 import SearchBar from './SearchBar';
@@ -40,6 +41,7 @@ export default function Navbar() {
   const msgUnread = useMessagesUnread();
   const { favorites } = useFavorites();
   const favCount = favorites.size;
+  const branding = useBranding();
 
   // Header statico (non sticky): resta in cima alla pagina e scorre via con il
   // contenuto invece di seguire lo scroll. Su mobile la navigazione persistente
@@ -84,7 +86,7 @@ export default function Navbar() {
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center gap-4">
               <Link href="/" className="text-2xl font-serif font-bold tracking-tight whitespace-nowrap leading-none">
-                <span className="text-accent-300">My</span>City
+                <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <LocationPill />
               <div className="flex-1 max-w-2xl">
@@ -156,7 +158,7 @@ export default function Navbar() {
           <div className="container mx-auto px-3 py-2.5">
             <div className="flex items-center justify-between gap-2">
               <Link href="/" className="text-xl font-serif font-bold whitespace-nowrap leading-none">
-                <span className="text-accent-300">My</span>City
+                <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <LocationPill compact />
               {isAuthenticated && role === 'buyer' && (
