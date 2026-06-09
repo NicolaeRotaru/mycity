@@ -37,7 +37,23 @@ type Profile = {
   business_city: string | null;
   business_pec: string | null;
   created_at: string;
+  // Da auth.users via RPC admin_list_user_emails (solo admin):
+  email: string | null;
+  auth_phone: string | null;
+  last_sign_in_at: string | null;
+  email_confirmed_at: string | null;
 };
+
+/** Miglior etichetta identificativa per un utente. */
+function displayName(p: Profile): string {
+  return (
+    p.store_name ||
+    p.business_legal_name ||
+    p.full_name ||
+    p.email ||
+    `Utente ${p.id.slice(0, 6)}`
+  );
+}
 
 const ROLE_LABELS: Record<string, { label: string; color: string; emoji: string }> = {
   buyer:  { label: 'Acquirente', color: 'bg-primary-100 text-primary-800', emoji: '🛒' },
@@ -80,29 +96,55 @@ function AdminUsersPageInner() {
       `;
       const minimalSelect = `id, role, is_approved, store_name, full_name, phone, store_address, created_at`;
 
+      const emptyAuth = {
+        email: null, auth_phone: null, last_sign_in_at: null, email_confirmed_at: null,
+      };
+
+      let base: Profile[];
       const tryFull = await supabase
         .from('profiles')
         .select(fullSelect)
         .order('created_at', { ascending: false });
-      if (!tryFull.error) return (tryFull.data ?? []) as Profile[];
+      if (!tryFull.error) {
+        base = (tryFull.data ?? []).map((p: Record<string, unknown>) => ({ ...p, ...emptyAuth })) as Profile[];
+      } else {
+        logger.warn('admin/users: full select failed, fallback to minimal', { code: tryFull.error.code });
+        const min = await supabase
+          .from('profiles')
+          .select(minimalSelect)
+          .order('created_at', { ascending: false });
+        if (min.error) throw min.error;
+        base = (min.data ?? []).map((p: Record<string, unknown>) => ({
+          ...p,
+          approval_status: null,
+          approval_requested_at: null,
+          approved_at: null,
+          rejection_reason: null,
+          legal_first_name: null, legal_last_name: null, legal_fiscal_code: null,
+          business_legal_name: null, business_vat_number: null, business_form: null,
+          business_address: null, business_city: null, business_pec: null,
+          ...emptyAuth,
+        })) as Profile[];
+      }
 
-      logger.warn('admin/users: full select failed, fallback to minimal', { code: tryFull.error.code });
-      const min = await supabase
-        .from('profiles')
-        .select(minimalSelect)
-        .order('created_at', { ascending: false });
-      if (min.error) throw min.error;
-      // Riempi i campi mancanti con null per non rompere la tipizzazione
-      return (min.data ?? []).map((p: Record<string, unknown>) => ({
-        ...p,
-        approval_status: null,
-        approval_requested_at: null,
-        approved_at: null,
-        rejection_reason: null,
-        legal_first_name: null, legal_last_name: null, legal_fiscal_code: null,
-        business_legal_name: null, business_vat_number: null, business_form: null,
-        business_address: null, business_city: null, business_pec: null,
-      })) as Profile[];
+      // Email + ultimo accesso vivono in auth.users: li recuperiamo via RPC
+      // admin-only (migration 074). Best-effort: se la RPC non c'è, la pagina
+      // resta usabile senza email.
+      type AuthRow = {
+        id: string; email: string | null; phone: string | null;
+        last_sign_in_at: string | null; email_confirmed_at: string | null;
+      };
+      const { data: authRows, error: authErr } = await supabase.rpc('admin_list_user_emails');
+      if (!authErr && Array.isArray(authRows)) {
+        const byId = new Map<string, AuthRow>((authRows as AuthRow[]).map((a) => [a.id, a]));
+        base = base.map((p) => {
+          const a = byId.get(p.id);
+          return a
+            ? { ...p, email: a.email, auth_phone: a.phone, last_sign_in_at: a.last_sign_in_at, email_confirmed_at: a.email_confirmed_at }
+            : p;
+        });
+      }
+      return base;
     },
   });
 
@@ -248,9 +290,11 @@ function AdminUsersPageInner() {
       return (
         p.full_name?.toLowerCase().includes(s) ||
         p.store_name?.toLowerCase().includes(s) ||
+        p.email?.toLowerCase().includes(s) ||
         p.business_legal_name?.toLowerCase().includes(s) ||
         p.business_vat_number?.toLowerCase().includes(s) ||
-        p.phone?.includes(s)
+        p.phone?.includes(s) ||
+        p.auth_phone?.includes(s)
       );
     }
     return true;
@@ -384,10 +428,14 @@ function AdminUsersPageInner() {
               return (
                 <tr key={p.id} className="border-t hover:bg-cream-50">
                   <td className="p-3">
-                    <p className="font-semibold text-ink-900">
-                      {p.store_name ?? p.business_legal_name ?? p.full_name ?? '—'}
+                    <p className="font-semibold text-ink-900">{displayName(p)}</p>
+                    {p.email && <p className="text-xs text-ink-600 break-all">{p.email}</p>}
+                    <p className="text-xs text-ink-400">
+                      {(p.phone || p.auth_phone) && <span>{p.phone || p.auth_phone} · </span>}
+                      {p.last_sign_in_at
+                        ? `ultimo accesso ${formatDate(p.last_sign_in_at)}`
+                        : 'mai entrato'}
                     </p>
-                    <p className="text-xs text-ink-400 font-mono">{p.id.slice(0, 8)}…</p>
                   </td>
                   <td className="p-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}`}>
@@ -492,10 +540,11 @@ function AdminUsersPageInner() {
             <div key={p.id} className="bg-white border border-cream-300 rounded-xl p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-semibold text-ink-900 truncate">
-                    {p.store_name ?? p.business_legal_name ?? p.full_name ?? '—'}
-                  </p>
-                  <p className="text-xs text-ink-400 font-mono">{p.id.slice(0, 8)}…</p>
+                  <p className="font-semibold text-ink-900 truncate">{displayName(p)}</p>
+                  {p.email && <p className="text-xs text-ink-600 truncate">{p.email}</p>}
+                  {(p.phone || p.auth_phone) && (
+                    <p className="text-xs text-ink-400">{p.phone || p.auth_phone}</p>
+                  )}
                 </div>
                 <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}`}>
                   <span>{r.emoji}</span>{r.label}
@@ -506,6 +555,7 @@ function AdminUsersPageInner() {
                   <span className={`inline-block px-2 py-0.5 rounded-full font-semibold ${a.color}`}>{a.label}</span>
                 )}
                 <span>Iscritto il {formatDate(p.created_at)}</span>
+                {p.last_sign_in_at && <span>· Ultimo accesso {formatDate(p.last_sign_in_at)}</span>}
               </div>
               <div className="flex items-center gap-2 mt-3 pt-3 border-t border-cream-100 flex-wrap">
                 {isPending && (
@@ -653,6 +703,25 @@ function EditUserModal({
         }}
         className="space-y-4"
       >
+        <div className="bg-cream-50 border border-cream-200 rounded-lg p-3 text-xs space-y-1">
+          <div className="flex justify-between gap-2">
+            <span className="text-ink-500">Email</span>
+            <span className="text-ink-900 font-medium break-all text-right">{profile.email ?? '—'}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-ink-500">Email verificata</span>
+            <span className="text-ink-900">{profile.email_confirmed_at ? 'Sì' : 'No'}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-ink-500">Ultimo accesso</span>
+            <span className="text-ink-900">{profile.last_sign_in_at ? formatDate(profile.last_sign_in_at) : 'Mai'}</span>
+          </div>
+          <div className="flex justify-between gap-2">
+            <span className="text-ink-500">ID</span>
+            <span className="text-ink-400 font-mono break-all text-right">{profile.id}</span>
+          </div>
+        </div>
+
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wide text-ink-500 mb-2">Dati di contatto</h3>
           <div className="space-y-3">
@@ -732,10 +801,14 @@ function DetailPanel({
             <DetailRow label="Nome e cognome">
               {profile.legal_first_name} {profile.legal_last_name}
             </DetailRow>
+            <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
             <DetailRow label="Codice fiscale">
               <code>{profile.legal_fiscal_code ?? '—'}</code>
             </DetailRow>
-            <DetailRow label="Telefono">{profile.phone ?? '—'}</DetailRow>
+            <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
+            <DetailRow label="Ultimo accesso">
+              {profile.last_sign_in_at ? formatDate(profile.last_sign_in_at) : 'Mai'}
+            </DetailRow>
           </DetailGroup>
 
           <DetailGroup title="🧾 Azienda">
