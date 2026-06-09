@@ -114,6 +114,7 @@ export const queryKeys = {
 
   admin: {
     all:                     ['admin'] as const,
+    home:                    ['admin', 'home'] as const,
     today:                   ['admin', 'today'] as const,
     stats:                   ['admin', 'stats'] as const,
     funnel:  (period: number)=> ['admin', 'funnel', period] as const,
