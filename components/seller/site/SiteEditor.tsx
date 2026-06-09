@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Save } from 'lucide-react';
+import { ExternalLink, Save, Store, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -14,6 +14,7 @@ import { normalizeSite, storeSiteSchema, type StoreSite, type SitePage } from '@
 import ThemePicker from './ThemePicker';
 import PageListEditor from './PageListEditor';
 import PageEditor from './PageEditor';
+import StoreDetailsEditor from './StoreDetailsEditor';
 import MenuEditor from './MenuEditor';
 
 /**
@@ -35,13 +36,17 @@ export default function SiteEditor() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const editingId = searchParams.get('page');
+  const showDetails = searchParams.get('details') === '1';
 
+  // select('*'): servono store_site + le colonne vetrina (logo, nome, contatti, orari,
+  // personalizzazione) per la schermata "Dettagli negozio". Stessa shape e stessa
+  // queryKey della pagina /seller/profile, così la cache resta coerente.
   const { data: profile, isLoading } = useQuery({
     queryKey: queryKeys.seller.profile,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { data, error } = await supabase.from('profiles').select('id, is_approved, store_site').eq('id', user.id).single();
+      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       if (error) throw error;
       return data;
     },
@@ -103,6 +108,7 @@ export default function SiteEditor() {
   if (isLoading || !site) return <LoadingState />;
 
   const openPage = (id: string) => router.push(`${pathname}?page=${encodeURIComponent(id)}`);
+  const openDetails = () => router.push(`${pathname}?details=1`);
   const backToOverview = () => router.push(pathname);
   const editing = editingId ? site.pages.find((p) => p.id === editingId) : undefined;
 
@@ -127,6 +133,16 @@ export default function SiteEditor() {
     </div>
   );
 
+  // ---- Schermata: dettagli negozio (logo, nome, contatti, orari, aspetto) ----
+  // Ha un proprio salvataggio (VendorForm), quindi niente saveBar del sito.
+  if (showDetails && profile) {
+    return (
+      <div className="space-y-6">
+        <StoreDetailsEditor profile={profile} onBack={backToOverview} />
+      </div>
+    );
+  }
+
   // ---- Schermata: editor di una pagina ----
   if (editing) {
     return (
@@ -140,6 +156,24 @@ export default function SiteEditor() {
   // ---- Schermata: panoramica ----
   return (
     <div className="space-y-6">
+      {/* Dettagli negozio: logo, nome, copertina, descrizione, contatti, orari, aspetto */}
+      <button
+        type="button"
+        onClick={openDetails}
+        className="w-full text-left bg-white border border-cream-300 rounded-2xl shadow-warm p-6 hover:border-primary-300 transition-colors"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <Store size={20} className="text-primary-600 shrink-0 mt-0.5" aria-hidden />
+            <div className="min-w-0">
+              <h2 className="font-semibold text-ink-900">Dettagli negozio</h2>
+              <p className="text-sm text-ink-500">Logo, nome, copertina, descrizione, contatti, orari e personalizzazione.</p>
+            </div>
+          </div>
+          <ChevronRight size={20} className="text-ink-400 shrink-0" aria-hidden />
+        </div>
+      </button>
+
       {/* Tema */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <h2 className="font-semibold text-ink-900 mb-1">Tema del sito</h2>

@@ -4,14 +4,17 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Zap, Palette } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import VendorForm, { VendorFormData } from '@/components/VendorForm';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
-import { normalizeCustomization } from '@/lib/store-customization';
-import type { StoreHours } from '@/lib/store-hours';
 
+/**
+ * Profilo negozio = impostazioni PRIVATE/operative del venditore.
+ * Tutto ciò che si vede in vetrina (logo, nome, copertina, descrizione, contatti,
+ * orari, personalizzazione) si gestisce in "Costruisci il sito" (/seller/site →
+ * schermata "Dettagli negozio").
+ */
 export default function SellerProfilePage() {
   const qc = useQueryClient();
 
@@ -24,32 +27,6 @@ export default function SellerProfilePage() {
       if (error) throw error;
       return data;
     },
-  });
-
-  const update = useMutation({
-    mutationFn: async (form: VendorFormData) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
-      const { error } = await supabase.from('profiles').update({
-        store_name:          form.storeName,
-        store_phone:         form.storePhone,
-        store_address:       form.storeAddress,
-        store_lat:           form.storeLat,
-        store_lng:           form.storeLng,
-        store_logo:          form.storeLogo,
-        store_media:         form.storeMedia,
-        store_description:   form.storeDescription || null,
-        store_hours:         form.storeHours,
-        store_customization: form.storeCustomization,
-      }).eq('id', user.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.seller.profile });
-      qc.invalidateQueries({ queryKey: queryKeys.profile.auth });
-      toast.success('Profilo aggiornato!');
-    },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   const updateExpress = useMutation({
@@ -73,27 +50,18 @@ export default function SellerProfilePage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold font-serif text-ink-900">Profilo negozio</h1>
-          <p className="text-sm text-ink-500">Aggiorna i dati e personalizza la vetrina che vedono i clienti</p>
+          <p className="text-sm text-ink-500">Impostazioni private e operative del tuo negozio</p>
         </div>
         {profile?.is_approved && profile?.id && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              href="/seller/site"
-              className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-primary-300 text-ink-800 px-4 py-2 rounded-lg text-sm font-semibold shadow-warm-sm transition-colors"
-            >
-              <Palette size={16} aria-hidden />
-              Costruisci il sito
-            </Link>
-            <Link
-              href={`/store/${profile.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-primary-300 text-ink-800 px-4 py-2 rounded-lg text-sm font-semibold shadow-warm-sm transition-colors"
-            >
-              <ExternalLink size={16} aria-hidden />
-              Vedi la tua vetrina
-            </Link>
-          </div>
+          <Link
+            href={`/store/${profile.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-primary-300 text-ink-800 px-4 py-2 rounded-lg text-sm font-semibold shadow-warm-sm transition-colors"
+          >
+            <ExternalLink size={16} aria-hidden />
+            Vedi la tua vetrina
+          </Link>
         )}
       </div>
 
@@ -101,28 +69,27 @@ export default function SellerProfilePage() {
         ✅ Negozio attivo · I tuoi prodotti sono visibili nel marketplace
       </div>
 
+      {/* Aspetto e dati della vetrina → si gestiscono nel site builder */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
-        <VendorForm
-          defaultValues={{
-            storeName:        profile?.store_name        ?? '',
-            storePhone:       profile?.store_phone       ?? '',
-            storeAddress:     profile?.store_address     ?? '',
-            storeLat:         profile?.store_lat         ?? undefined,
-            storeLng:         profile?.store_lng         ?? undefined,
-            storeLogo:        profile?.store_logo        ?? null,
-            storeMedia:       Array.isArray(profile?.store_media) ? profile.store_media : [],
-            storeDescription: profile?.store_description ?? '',
-            storeHours:       (profile?.store_hours && typeof profile.store_hours === 'object' && !Array.isArray(profile.store_hours))
-                                ? (profile.store_hours as StoreHours)
-                                : {},
-            storeCustomization: normalizeCustomization(profile?.store_customization),
-          }}
-          onSubmit={(d) => update.mutate(d)}
-          isLoading={update.isPending}
-        />
+        <div className="flex items-start gap-3">
+          <Palette size={20} className="text-primary-600 shrink-0 mt-0.5" aria-hidden />
+          <div className="flex-1 min-w-0">
+            <p className="font-bold text-ink-900">Aspetto e dati della vetrina</p>
+            <p className="text-sm text-ink-500 mt-0.5">
+              Logo, nome, copertina, descrizione, contatti, orari e personalizzazione ora si
+              gestiscono in <span className="font-medium text-ink-700">Costruisci il sito</span> → Dettagli negozio.
+            </p>
+            <Link
+              href="/seller/site?details=1"
+              className="inline-flex items-center gap-2 mt-3 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+            >
+              <Palette size={16} aria-hidden /> Vai ai dettagli del negozio
+            </Link>
+          </div>
+        </div>
       </div>
 
-      {/* Consegna Express a livello negozio (default per i prodotti) */}
+      {/* Consegna Express a livello negozio (default per i prodotti) — impostazione operativa */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <label className="flex items-start justify-between gap-4 cursor-pointer">
           <div>
