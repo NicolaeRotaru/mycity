@@ -89,9 +89,13 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues }: Props) => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Non autenticato');
         const ext = file.name.split('.').pop() ?? 'png';
-        const path = `logos/${user.id}/${Date.now()}.${ext}`;
+        // Primo segmento = user.id: richiesto dalle RLS Storage del bucket `products`
+        // (read/update/delete filtrano su (storage.foldername(name))[1] = auth.uid()).
+        // upsert:false + path unico = nessun ON CONFLICT. Vedi seller/site/ImageUpload.tsx.
+        const path = `${user.id}/logos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const { error } = await supabase.storage.from('products').upload(path, file, {
-          upsert: true,
+          cacheControl: '3600',
+          upsert: false,
           contentType: file.type,
         });
         if (error) throw error;
