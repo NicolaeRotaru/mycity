@@ -38,7 +38,7 @@ type EventRow = {
 };
 
 const CATEGORY_META: Record<string, { label: string; icon: typeof Eye; color: string }> = {
-  visitor:    { label: 'Visitatori',  icon: Globe,        color: 'sky' },
+  visitor:    { label: 'Visite',      icon: Globe,        color: 'sky' },
   auth:       { label: 'Accessi',     icon: LogIn,        color: 'violet' },
   commerce:   { label: 'Commercio',   icon: ShoppingBag,  color: 'emerald' },
   catalog:    { label: 'Catalogo',    icon: Package,      color: 'amber' },
@@ -225,7 +225,7 @@ export default function AdminActivityPage() {
       {/* KPI in tempo reale */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Kpi icon={Radio} label="Online ora" value={summary.online} color="emerald" hint="ultimi 5 min" />
-        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="sky" />
+        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="sky" hint="unici" />
         <Kpi icon={LogIn} label="Accessi 24h" value={summary.logins} color="violet" />
         <Kpi icon={Globe} label="Viste anonime" value={summary.anonViews} color="amber" />
         <Kpi icon={Activity} label="Viste loggati" value={summary.loggedInViews} color="indigo" />
