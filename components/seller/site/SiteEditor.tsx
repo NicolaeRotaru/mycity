@@ -115,21 +115,26 @@ export default function SiteEditor() {
   const setEditingPage = (next: SitePage) =>
     commit({ ...site, pages: site.pages.map((p) => (p.id === next.id ? next : p)) });
 
+  // mr-16 su mobile: lascia libero l'angolo in basso a destra dove sta il FAB
+  // assistenza (SupportChatButton, fixed bottom-24 right-4), così non copre il
+  // bottone. Badge impilato sopra per non rubare larghezza.
   const saveBar = (
-    <div className="sticky z-20 flex items-center justify-end gap-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
-      {dirty && (
-        <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 shadow-warm-sm">
-          Modifiche non salvate
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={() => save.mutate(site)}
-        disabled={save.isPending}
-        className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold shadow-warm-sm"
-      >
-        <Save size={18} aria-hidden /> {save.isPending ? 'Salvataggio…' : 'Salva sito'}
-      </button>
+    <div className="sticky z-30 flex justify-end bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
+      <div className="flex flex-col items-end gap-2 mr-16 md:mr-0">
+        {dirty && (
+          <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 shadow-warm-sm">
+            Modifiche non salvate
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => save.mutate(site)}
+          disabled={save.isPending}
+          className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold shadow-warm-sm"
+        >
+          <Save size={18} aria-hidden /> {save.isPending ? 'Salvataggio…' : 'Salva sito'}
+        </button>
+      </div>
     </div>
   );
 
@@ -167,7 +172,7 @@ export default function SiteEditor() {
             <Store size={20} className="text-primary-600 shrink-0 mt-0.5" aria-hidden />
             <div className="min-w-0">
               <h2 className="font-semibold text-ink-900">Dettagli negozio</h2>
-              <p className="text-sm text-ink-500">Logo, nome, copertina, descrizione, contatti, orari e personalizzazione.</p>
+              <p className="text-sm text-ink-500">Logo, nome, copertina, descrizione e aspetto della vetrina.</p>
             </div>
           </div>
           <ChevronRight size={20} className="text-ink-400 shrink-0" aria-hidden />

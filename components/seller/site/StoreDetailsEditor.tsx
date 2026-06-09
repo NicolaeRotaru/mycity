@@ -34,20 +34,17 @@ type ProfileRow = {
 export default function StoreDetailsEditor({ profile, onBack }: { profile: ProfileRow; onBack: () => void }) {
   const qc = useQueryClient();
 
+  // Salva SOLO le colonne "branding" (vetrina). Telefono/indirizzo/orari stanno nel
+  // Profilo (StoreContactForm), quindi qui non si toccano.
   const update = useMutation({
     mutationFn: async (form: VendorFormData) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { error } = await supabase.from('profiles').update({
         store_name:          form.storeName,
-        store_phone:         form.storePhone,
-        store_address:       form.storeAddress,
-        store_lat:           form.storeLat,
-        store_lng:           form.storeLng,
         store_logo:          form.storeLogo,
         store_media:         form.storeMedia,
         store_description:   form.storeDescription || null,
-        store_hours:         form.storeHours,
         store_customization: form.storeCustomization,
       }).eq('id', user.id);
       if (error) throw error;
@@ -72,11 +69,12 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
 
       <div>
         <h2 className="text-xl font-bold font-serif text-ink-900">Dettagli negozio</h2>
-        <p className="text-sm text-ink-500">Logo, nome, copertina, descrizione, contatti, orari e aspetto della vetrina.</p>
+        <p className="text-sm text-ink-500">Logo, nome, copertina, descrizione e aspetto della vetrina. (Telefono, indirizzo e orari sono nel Profilo.)</p>
       </div>
 
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <VendorForm
+          mode="branding"
           defaultValues={{
             storeName:        profile.store_name        ?? '',
             storePhone:       profile.store_phone       ?? '',

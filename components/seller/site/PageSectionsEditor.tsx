@@ -30,7 +30,10 @@ function AddSectionMenu({ onAdd, disabled }: { onAdd: (t: SectionType) => void; 
         <Plus size={16} aria-hidden /> Aggiungi sezione
       </button>
       {open && !disabled && (
-        <div className="absolute z-20 mt-2 w-72 max-h-80 overflow-y-auto rounded-xl border border-cream-300 bg-white shadow-warm-lg p-2">
+        // Si apre verso l'alto (bottom-full) e sopra la barra "Salva" (z-40): il
+        // bottone è in fondo alla pagina, così il menu resta visibile e non finisce
+        // sotto la barra sticky di salvataggio.
+        <div className="absolute z-40 bottom-full mb-2 w-72 max-h-80 overflow-y-auto rounded-xl border border-cream-300 bg-white shadow-warm-lg p-2">
           {groups.map((g) => (
             <div key={g.label}>
               <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-ink-400">{g.label}</p>
