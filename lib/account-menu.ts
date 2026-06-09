@@ -2,7 +2,7 @@ import {
   User, Package, Heart, MapPin, Sparkles, Award, Gift, ListChecks, Megaphone,
   LayoutDashboard, TrendingUp, ShoppingCart, Camera, Euro, Bike, CircleDot,
   Settings, HelpCircle, Shield, Home, Users, ShoppingBag, Ticket, Crown,
-  Calendar, Coins, AlertTriangle, Headset, Eye, type LucideIcon,
+  Calendar, Coins, AlertTriangle, Headset, Eye, LayoutTemplate, type LucideIcon,
 } from 'lucide-react';
 
 /**
@@ -56,6 +56,7 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
     // resta solo la dashboard amministratore.
     items.push(
       { href: '/admin', icon: Shield, label: 'Dashboard admin' },
+      { href: '/admin/home', icon: LayoutTemplate, label: 'Home builder' },
       { href: '/admin/activity', icon: Eye, label: 'Sorveglianza' },
       { href: '/admin/today', icon: Home, label: 'Today' },
       { href: '/admin/funnel', icon: TrendingUp, label: 'Funnel & Cohort' },
