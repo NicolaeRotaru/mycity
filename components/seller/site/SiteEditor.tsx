@@ -119,8 +119,9 @@ export default function SiteEditor() {
         <MenuEditor site={site} onChange={setDraft} />
       </div>
 
-      {/* Salva */}
-      <div className="sticky bottom-4 flex justify-end">
+      {/* Salva — sollevato sopra la MobileTabBar (md:hidden, ~60px + safe area)
+          così su mobile non resta nascosto dietro la barra di navigazione in basso. */}
+      <div className="sticky z-20 flex justify-end bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
         <button
           type="button"
           onClick={() => save.mutate(site)}

@@ -36,6 +36,14 @@ const nextConfig = {
         hostname: '*.supabase.co',
         pathname: '/storage/v1/object/public/**',
       },
+      {
+        // sizedImage() riscrive gli URL storage verso la Image Transformation API
+        // (/render/image/public/…?width=). Senza questo pattern next/image — in
+        // modalità ottimizzata — rifiuta l'URL (400) e l'immagine resta rotta.
+        protocol: 'https',
+        hostname: '*.supabase.co',
+        pathname: '/storage/v1/render/image/public/**',
+      },
       { protocol: 'https', hostname: 'placehold.co' },
       { protocol: 'https', hostname: 'api.dicebear.com' },
       { protocol: 'https', hostname: 'api.iconify.design' },
