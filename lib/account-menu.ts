@@ -3,7 +3,7 @@ import {
   LayoutDashboard, TrendingUp, ShoppingCart, Camera, Euro, Bike, CircleDot,
   Settings, HelpCircle, Shield, Home, Users, ShoppingBag, Ticket, Crown,
   Calendar, Coins, AlertTriangle, Headset, Eye, LayoutTemplate, Palette,
-  Zap, type LucideIcon,
+  Zap, Tags, type LucideIcon,
 } from 'lucide-react';
 
 /**
@@ -65,6 +65,7 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/admin/users', icon: Users, label: 'Utenti' },
       { href: '/admin/orders', icon: ShoppingBag, label: 'Ordini' },
       { href: '/admin/products', icon: Package, label: 'Prodotti' },
+      { href: '/admin/categories', icon: Tags, label: 'Categorie' },
       { href: '/admin/support-chat', icon: Headset, label: 'Chat assistenza' },
       { href: '/admin/coupons', icon: Ticket, label: 'Coupon' },
       { href: '/admin/shop-of-month', icon: Crown, label: 'Negozio mese' },
