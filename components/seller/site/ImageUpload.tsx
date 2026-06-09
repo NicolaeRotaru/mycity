@@ -9,16 +9,23 @@ import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 
 /**
- * Carica un'immagine nel bucket storage 'products' sotto site/<uid>/... e ritorna
- * l'URL pubblico https. Stesso pattern del logo in VendorForm.
+ * Carica un'immagine nel bucket pubblico 'products' e ritorna l'URL pubblico https.
+ *
+ * Il path DEVE avere come primo segmento l'UID dell'utente: le policy RLS dello
+ * Storage su `products` filtrano read/update/delete su
+ * `(storage.foldername(name))[1] = auth.uid()`. Gli asset del sito vanno quindi in
+ * `<uid>/site/...` (sottocartella per raggruppare). `upsert:false` + path unico =
+ * nessun ON CONFLICT, così l'INSERT richiede solo il ruolo authenticated.
+ * Stesso pattern di lib/products/uploadImages.ts.
  */
 export async function uploadSiteImage(file: File): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Non autenticato');
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-  const path = `site/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const path = `${user.id}/site/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await supabase.storage.from('products').upload(path, file, {
-    upsert: true,
+    cacheControl: '3600',
+    upsert: false,
     contentType: file.type,
   });
   if (error) throw error;
