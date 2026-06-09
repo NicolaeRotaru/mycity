@@ -167,7 +167,7 @@ export default function SiteEditor() {
             <Store size={20} className="text-primary-600 shrink-0 mt-0.5" aria-hidden />
             <div className="min-w-0">
               <h2 className="font-semibold text-ink-900">Dettagli negozio</h2>
-              <p className="text-sm text-ink-500">Logo, nome, copertina, descrizione, contatti, orari e personalizzazione.</p>
+              <p className="text-sm text-ink-500">Logo, nome, copertina, descrizione e aspetto della vetrina.</p>
             </div>
           </div>
           <ChevronRight size={20} className="text-ink-400 shrink-0" aria-hidden />
