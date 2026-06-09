@@ -18,6 +18,15 @@ export default {
     './app/**/*.{js,ts,jsx,tsx}',
     './components/**/*.{js,ts,jsx,tsx}',
   ],
+  // Le dashboard admin (StatCard, /admin/activity) compongono classi colore in
+  // modo dinamico (`text-${color}-600`): il JIT non le rileva, quindi le mettiamo
+  // qui in safelist per garantirne il render.
+  safelist: [
+    {
+      pattern:
+        /(bg|text|border)-(sky|violet|emerald|amber|indigo|rose|slate|pink|blue)-(100|200|600|700)/,
+    },
+  ],
   theme: {
     extend: {
       colors: {

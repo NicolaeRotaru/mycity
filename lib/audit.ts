@@ -49,6 +49,20 @@ export async function writeAudit(entry: AuditEntry): Promise<void> {
       ip: entry.ip ?? null,
       user_agent: entry.userAgent ?? null,
     });
+    // Mirror nel firehose di sorveglianza così l'admin vede TUTTO in un posto
+    // solo (categoria "moderation"). Best-effort: non blocca la richiesta.
+    await supa.from('activity_events').insert({
+      category: 'moderation',
+      event_type: entry.action,
+      action: 'admin',
+      summary: `Azione admin: ${entry.action}`,
+      actor_id: entry.actorId,
+      target_table: entry.targetTable ?? null,
+      target_id: entry.targetId ?? null,
+      ip: entry.ip ?? null,
+      user_agent: entry.userAgent ?? null,
+      metadata: entry.metadata ?? null,
+    });
   } catch (err) {
     console.error('[audit] write failed:', err);
   }
