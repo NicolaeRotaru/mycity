@@ -67,7 +67,8 @@ function buildCsp(nonce: string, isDev: boolean): string {
     // <video srcObject=MediaStream> per la fotocamera in-app + blob URL anteprime.
     "media-src 'self' blob:",
     `connect-src 'self' https://${supaHost} wss://${supaHost} https://nominatim.openstreetmap.org https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`,
-    "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://connect.stripe.com",
+    // youtube-nocookie + vimeo: embed del blocco "video" della vetrina (VideoSection).
+    "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://connect.stripe.com https://www.youtube-nocookie.com https://player.vimeo.com",
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
