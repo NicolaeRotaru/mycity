@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { LoadError } from '@/components/admin/LoadError';
 import { Input, Select } from '@/components/ui/Field';
 import HomeSectionsEditor from '@/components/admin/home/HomeSectionsEditor';
 import { cmsPageSchema, cmsPageLabel, CMS_PAGES, type CmsPage } from '@/lib/cms-page';
@@ -20,7 +21,7 @@ export default function AdminCmsPageEditor() {
   const known = CMS_PAGES.find((p) => p.slug === slug);
   const qc = useQueryClient();
 
-  const { data: initial, isLoading } = useQuery({
+  const { data: initial, isLoading, error, refetch } = useQuery({
     queryKey: ['admin', 'cms', slug],
     enabled: !!slug,
     queryFn: async (): Promise<CmsPage> => {
@@ -75,6 +76,7 @@ export default function AdminCmsPageEditor() {
   if (!known) {
     return <p className="text-sm text-ink-500">Pagina non gestita.</p>;
   }
+  if (error && !draft) return <LoadError onRetry={() => refetch()} hint="Verifica che la migrazione del database 077_cms_pages sia applicata." />;
   if (isLoading || !page) return <LoadingState />;
 
   return (
