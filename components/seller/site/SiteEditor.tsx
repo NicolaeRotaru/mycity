@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ExternalLink, Save } from 'lucide-react';
@@ -20,6 +20,11 @@ import MenuEditor from './MenuEditor';
  * sezioni della pagina selezionata. Stato locale = StoreSite di lavoro, sub-editor
  * controllati, salvataggio via PUT /api/seller/site (validazione + sanitizzazione
  * server). Stesso pattern di VendorForm/seller/profile.
+ *
+ * Ogni modifica passa da `commit` (bozza + flag "non salvato"). Dopo il salvataggio i
+ * sub-editor vengono rimontati (savedTick) per chiudere i pannelli aperti e riportare
+ * l'utente alla panoramica; un guard `beforeunload` avvisa se si lascia la pagina con
+ * modifiche non salvate.
  */
 export default function SiteEditor() {
   const qc = useQueryClient();
@@ -38,7 +43,30 @@ export default function SiteEditor() {
   const initial = useMemo(() => (profile ? normalizeSite(profile.store_site) : null), [profile]);
   const [draft, setDraft] = useState<StoreSite | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // dirty = bozza modificata ma non ancora salvata (guida l'avviso "uscire senza salvare?").
+  const [dirty, setDirty] = useState(false);
+  // savedTick cambia a ogni salvataggio: rimonta i sub-editor (key) chiudendone i
+  // pannelli aperti, così dopo "Salva sito" si torna alla panoramica.
+  const [savedTick, setSavedTick] = useState(0);
   const site = draft ?? initial;
+
+  // Ogni modifica dei sub-editor passa di qui: aggiorna la bozza e segna "non salvato".
+  const commit = (next: StoreSite) => {
+    setDraft(next);
+    setDirty(true);
+  };
+
+  // Avviso del browser se si esce (refresh/chiusura/navigazione esterna) con modifiche
+  // non salvate, per non perdere la bozza non ancora pubblicata.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
 
   const save = useMutation({
     mutationFn: async (next: StoreSite) => {
@@ -59,9 +87,12 @@ export default function SiteEditor() {
     },
     onSuccess: (saved) => {
       setDraft(saved);
+      setDirty(false);
+      setSavedTick((t) => t + 1); // chiude i pannelli aperti => torni alla panoramica
       qc.invalidateQueries({ queryKey: queryKeys.seller.profile });
       if (profile?.id) qc.invalidateQueries({ queryKey: queryKeys.stores.detail(profile.id) });
       toast.success('Sito salvato!');
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' });
     },
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
@@ -71,7 +102,7 @@ export default function SiteEditor() {
   const home = homePage(site);
   const activePage = site.pages.find((p) => p.id === activeId) ?? home;
   const setActivePage = (next: SitePage) =>
-    setDraft({ ...site, pages: site.pages.map((p) => (p.id === activePage.id ? next : p)) });
+    commit({ ...site, pages: site.pages.map((p) => (p.id === activePage.id ? next : p)) });
 
   return (
     <div className="space-y-6">
@@ -79,7 +110,7 @@ export default function SiteEditor() {
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <h2 className="font-semibold text-ink-900 mb-1">Tema del sito</h2>
         <p className="text-sm text-ink-500 mb-4">Lo stile generale della tua vetrina.</p>
-        <ThemePicker value={site.theme} onChange={(theme) => setDraft({ ...site, theme })} />
+        <ThemePicker value={site.theme} onChange={(theme) => commit({ ...site, theme })} />
       </div>
 
       {/* Pagine */}
@@ -100,7 +131,7 @@ export default function SiteEditor() {
             </Link>
           )}
         </div>
-        <PageListEditor site={site} activeId={activePage.id} onSelect={setActiveId} onChange={setDraft} />
+        <PageListEditor key={savedTick} site={site} activeId={activePage.id} onSelect={setActiveId} onChange={commit} />
       </div>
 
       {/* Sezioni della pagina attiva */}
@@ -109,19 +140,24 @@ export default function SiteEditor() {
           Sezioni · <span className="text-primary-700">{activePage.title}</span>
         </h2>
         <p className="text-sm text-ink-500 mb-4">Aggiungi, riordina, mostra/nascondi e configura i blocchi di questa pagina.</p>
-        <PageSectionsEditor page={activePage} onChange={setActivePage} />
+        <PageSectionsEditor key={`${activePage.id}-${savedTick}`} page={activePage} onChange={setActivePage} />
       </div>
 
       {/* Menu */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <h2 className="font-semibold text-ink-900 mb-1">Menu di navigazione</h2>
         <p className="text-sm text-ink-500 mb-4">Collega le pagine del tuo sito con un menu in cima alla vetrina.</p>
-        <MenuEditor site={site} onChange={setDraft} />
+        <MenuEditor site={site} onChange={commit} />
       </div>
 
       {/* Salva — sollevato sopra la MobileTabBar (md:hidden, ~60px + safe area)
           così su mobile non resta nascosto dietro la barra di navigazione in basso. */}
-      <div className="sticky z-20 flex justify-end bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
+      <div className="sticky z-20 flex items-center justify-end gap-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
+        {dirty && (
+          <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 shadow-warm-sm">
+            Modifiche non salvate
+          </span>
+        )}
         <button
           type="button"
           onClick={() => save.mutate(site)}

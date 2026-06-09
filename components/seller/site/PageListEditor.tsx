@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, Eye, EyeOff, Trash2, Plus, Settings2, Pencil } from 'lucide-react';
+import { ChevronUp, ChevronDown, Eye, EyeOff, Trash2, Plus, Settings2, Pencil, ArrowLeft } from 'lucide-react';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 import {
   newPage,
@@ -106,6 +106,13 @@ export default function PageListEditor({
 
             {showSettings && (
               <div className="border-t border-cream-200 px-4 py-4 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setSettingsId(null)}
+                  className="inline-flex items-center gap-1.5 -ml-1 text-sm font-semibold text-ink-600 hover:text-ink-900"
+                >
+                  <ArrowLeft size={16} aria-hidden /> Torna alle pagine
+                </button>
                 <Input label="Titolo" value={p.title} maxLength={60} onChange={(e) => setPage(p.id, { title: e.target.value })} />
                 {!isHome && (
                   <>
