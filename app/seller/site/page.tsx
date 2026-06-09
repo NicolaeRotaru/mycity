@@ -1,6 +1,8 @@
 'use client';
 
+import { Suspense } from 'react';
 import SiteEditor from '@/components/seller/site/SiteEditor';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerSitePage() {
   return (
@@ -12,7 +14,9 @@ export default function SellerSitePage() {
           (testo, banner, collezioni di prodotti, galleria, video, FAQ…).
         </p>
       </div>
-      <SiteEditor />
+      <Suspense fallback={<LoadingState />}>
+        <SiteEditor />
+      </Suspense>
     </div>
   );
 }
