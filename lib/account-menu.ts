@@ -3,7 +3,7 @@ import {
   LayoutDashboard, TrendingUp, ShoppingCart, Camera, Euro, Bike, CircleDot,
   Settings, HelpCircle, Shield, Home, Users, ShoppingBag, Ticket, Crown,
   Calendar, Coins, AlertTriangle, Headset, Eye, LayoutTemplate, Palette,
-  Zap, Tags, type LucideIcon,
+  Zap, Tags, FileText, type LucideIcon,
 } from 'lucide-react';
 
 /**
@@ -59,6 +59,7 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/admin', icon: Shield, label: 'Dashboard admin' },
       { href: '/admin/home', icon: LayoutTemplate, label: 'Home builder' },
       { href: '/admin/branding', icon: Palette, label: 'Aspetto' },
+      { href: '/admin/pages', icon: FileText, label: 'Pagine' },
       { href: '/admin/activity', icon: Eye, label: 'Sorveglianza' },
       { href: '/admin/today', icon: Home, label: 'Today' },
       { href: '/admin/funnel', icon: TrendingUp, label: 'Funnel & Cohort' },
