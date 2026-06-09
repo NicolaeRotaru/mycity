@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { LoadError } from '@/components/admin/LoadError';
 import { normalizeHomeSite, homeSiteSchema, type HomeSite } from '@/lib/home-site';
 import HomeSectionsEditor from '@/components/admin/home/HomeSectionsEditor';
 
@@ -35,7 +36,7 @@ function prepareForSave(site: HomeSite): HomeSite {
 export default function AdminHomePage() {
   const qc = useQueryClient();
 
-  const { data: initial, isLoading } = useQuery({
+  const { data: initial, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.admin.home,
     queryFn: async () => {
       const { data, error } = await supabase.from('site_settings').select('home_site').eq('id', 1).maybeSingle();
@@ -86,6 +87,7 @@ export default function AdminHomePage() {
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
+  if (error && !draft) return <LoadError onRetry={() => refetch()} hint="Verifica che la migrazione del database 075_site_settings sia applicata." />;
   if (isLoading || !site) return <LoadingState />;
 
   return (

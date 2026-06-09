@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { LoadError } from '@/components/admin/LoadError';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import {
   normalizeBranding, brandingSchema, wedgeIcon, WEDGE_ICON_KEYS, MAX_WEDGE_ITEMS, type Branding,
@@ -23,7 +24,7 @@ const ICON_LABELS: Record<string, string> = {
 export default function AdminBrandingPage() {
   const qc = useQueryClient();
 
-  const { data: initial, isLoading } = useQuery({
+  const { data: initial, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.admin.branding,
     queryFn: async (): Promise<Branding> => {
       const { data, error } = await supabase.from('site_settings').select('branding').eq('id', 1).maybeSingle();
@@ -71,6 +72,7 @@ export default function AdminBrandingPage() {
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
+  if (error && !draft) return <LoadError onRetry={() => refetch()} hint="Verifica che la migrazione del database 075_site_settings sia applicata." />;
   if (isLoading || !b) return <LoadingState />;
 
   const items = b.announcement.items;
