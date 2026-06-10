@@ -417,6 +417,7 @@ export default function ProductForm({
         product={chatSnapshot}
         attributeSchema={attrFields}
         topCategories={topCategories.map((c) => ({ name: c.name, slug: c.slug }))}
+        imageUrls={imageUrls}
         onApplyPatch={applyPatch}
       />
 

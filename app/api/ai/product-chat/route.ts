@@ -8,39 +8,47 @@ import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 
 /**
- * Assistente AI in chat per modificare la scheda prodotto.
+ * Assistente AI agentico per la scheda prodotto.
  *
- * Il seller chatta in italiano ("metti il prezzo a 4,90", "aggiungi il tag
- * regalo", "togli la marca") e il modello restituisce un PATCH dei soli campi
- * da cambiare + una risposta conversazionale. Il client applica il patch allo
- * stato del form: l'utente rivede e salva (human-in-the-loop, niente scrittura
- * DB da qui).
+ * Il seller chatta in italiano. L'assistente VEDE le foto del prodotto, può
+ * CERCARE sul web (server tool web_search) per capire qual è il prodotto reale,
+ * le specifiche tipiche o un prezzo equo, ragiona, risponde a domande e — quando
+ * opportuno — chiama lo strumento "edit_product" per proporre le modifiche. Il
+ * client applica il patch allo stato del form: l'utente rivede e salva
+ * (human-in-the-loop, niente scrittura DB da qui).
  *
  * Esperti senior consultati:
- * - Prompt Engineer: "Lo stato del prodotto è DATO → va in `messages`, mai nel
- *   system. Tool forzato = output deterministico (reply + patch)."
- * - Finance: "Haiku per cost-efficacy, cap aggressivo per utente."
+ * - Prompt Engineer: "Foto + stato prodotto + conversazione sono DATO → vanno
+ *   in `messages`, mai nel system. tool_choice auto = il modello sceglie se
+ *   cercare, chattare o proporre modifiche."
+ * - Finance: "Sonnet + web search costano: cap aggressivo e max_uses limitato."
  * - Security: "Solo seller approvati. Nessun campo libero finisce nel DB senza
  *   passare dalla validazione del form."
  */
 
 export const runtime = 'nodejs';
 
-// Istruzioni stabili → cacheabili. I dati del prodotto e la conversazione
+// Istruzioni stabili → cacheabili. Foto, dati del prodotto e conversazione
 // vanno in `messages` come DATO (confine netto = anti prompt-injection).
-const SYSTEM = `Sei l'assistente di "MyCity Piacenza" che aiuta un venditore a sistemare la scheda di un suo prodotto, conversando in italiano.
+const SYSTEM = `Sei l'assistente di "MyCity Piacenza" che aiuta un venditore a costruire e correggere la scheda di un suo prodotto. Conversi in italiano, in modo caldo, concreto e onesto. Sei come un assistente Claude generale, ma specializzato su QUESTO prodotto.
 
-Hai sempre davanti lo stato attuale del prodotto (in formato JSON), gli slug delle categorie disponibili e l'elenco degli attributi validi per la categoria corrente. Usa SEMPRE lo strumento "edit_product".
+Hai a disposizione:
+- le foto reali del prodotto (quando presenti): guardale per capire di che oggetto si tratta;
+- lo stato attuale della scheda (JSON), gli slug delle categorie disponibili e gli attributi validi per la categoria corrente;
+- lo strumento "web_search" per cercare online: usalo quando devi identificare il prodotto reale, trovare specifiche/caratteristiche tipiche, un prezzo di mercato equo, o verificare un dato. Spesso il compilatore automatico sbaglia prodotto (stesso nome, azienda diversa): incrocia foto + ricerca per capire qual è davvero.
 
-Regole:
-- In "patch" inserisci SOLO i campi che vanno cambiati rispetto allo stato attuale. Lascia fuori tutto il resto.
+Come lavori:
+- Puoi ragionare, fare domande, dare consigli e spiegare cosa vedi/trovi. Cita brevemente cosa hai scoperto online.
+- Quando vuoi CAMBIARE uno o più campi della scheda, chiama SEMPRE lo strumento "edit_product" (non descrivere solo a parole le modifiche). Puoi accompagnarlo con un breve testo che spiega cosa hai cambiato e perché.
+- Se la richiesta è ambigua o ti servono dettagli, NON modificare: chiedi chiarimenti a parole.
+
+Regole per "edit_product":
+- In "patch" inserisci SOLO i campi che cambiano rispetto allo stato attuale.
 - Per TOGLIERE un valore: usa null per gli scalari (compare_at_price, condition) e "attributes_remove" per gli attributi.
-- "tags" è la lista COMPLETA desiderata (ricostruiscila partendo da quella attuale per aggiungere o rimuovere).
-- "attributes" imposta/aggiorna gli attributi indicati; usa SOLO le chiavi presenti nell'elenco degli attributi validi e, per i campi a scelta multipla, SOLO le opzioni elencate.
-- "category_slug" deve essere uno degli slug forniti; "subcategory_name" è il nome della sottocategoria (verrà abbinato dal sistema).
-- Prezzi in euro come numero (es. 4.90). Non inventare dati non richiesti.
-- Se la richiesta è ambigua o servono dettagli, NON modificare nulla: lascia "patch" vuoto e fai una domanda di chiarimento in "reply".
-- "reply" è sempre una risposta breve, calda e concreta in italiano che spiega cosa hai cambiato o cosa ti serve. Niente emoji.`;
+- "tags" è la lista COMPLETA desiderata (ricostruiscila partendo da quella attuale per aggiungere o togliere).
+- "attributes" usa SOLO le chiavi dell'elenco degli attributi validi e, per i campi a scelta, SOLO le opzioni elencate.
+- "category_slug" deve essere uno degli slug forniti; "subcategory_name" è il nome della sottocategoria.
+- Prezzi in euro come numero (es. 4.90). Niente emoji.`;
 
 const EDIT_TOOL: Anthropic.Tool = {
   name: 'edit_product',
@@ -129,7 +137,18 @@ type ProductChatBody = {
   product?: ProductSnapshot;
   attributeSchema?: AttributeSchemaField[];
   topCategories?: { name: string; slug: string }[];
+  imageUrls?: string[];
 };
+
+/** Server tool gestito da Anthropic: esegue le ricerche dentro la stessa call. */
+const WEB_SEARCH_TOOL: Anthropic.WebSearchTool20250305 = {
+  type: 'web_search_20250305',
+  name: 'web_search',
+  max_uses: 5,
+  user_location: { type: 'approximate', country: 'IT' },
+};
+
+const MAX_IMAGES = 4;
 
 type EditProductInput = {
   reply?: string;
@@ -142,8 +161,8 @@ const MAX_CONTENT = 2000; // cap per messaggio
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
 
-  // Rate limit: 40 messaggi / ora per utente (chat multi-turno).
-  const rl = rateLimit({ key: `ai-product-chat:${user.id}`, max: 40, windowMs: 60 * 60_000 });
+  // Rate limit: 25 messaggi / ora per utente (Sonnet + web search costano).
+  const rl = rateLimit({ key: `ai-product-chat:${user.id}`, max: 25, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let body: ProductChatBody;
@@ -174,6 +193,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const product = body.product && typeof body.product === 'object' ? body.product : {};
   const attributeSchema = Array.isArray(body.attributeSchema) ? body.attributeSchema : [];
   const topCategories = Array.isArray(body.topCategories) ? body.topCategories : [];
+  const imageUrls = (Array.isArray(body.imageUrls) ? body.imageUrls : [])
+    .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u))
+    .slice(0, MAX_IMAGES);
 
   // Blocco-contesto come DATO (in `messages`), mai come istruzioni (system).
   const attrLines = attributeSchema
@@ -182,7 +204,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       return `- ${f.key} (${f.type ?? 'text'})${opts}`;
     })
     .join('\n');
-  const contextBlock = `Stato attuale del prodotto (JSON):
+  const contextText = `${imageUrls.length ? 'Le immagini qui sopra sono le foto reali di questo prodotto: usale per identificarlo.\n\n' : ''}Stato attuale del prodotto (JSON):
 ${JSON.stringify(product, null, 2)}
 
 Categorie di primo livello disponibili (slug):
@@ -191,34 +213,45 @@ ${topCategories.map((c) => `- ${c.slug} (${c.name})`).join('\n') || '- (nessuna)
 Attributi validi per la categoria attuale:
 ${attrLines || '- (nessuno)'}`;
 
+  // Foto + testo come content block del primo messaggio utente.
+  const contextContent: Anthropic.ContentBlockParam[] = [
+    ...imageUrls.map(
+      (url): Anthropic.ImageBlockParam => ({
+        type: 'image',
+        source: { type: 'url', url },
+      }),
+    ),
+    { type: 'text', text: contextText },
+  ];
+
   const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: contextBlock },
+    { role: 'user', content: contextContent },
     {
       role: 'assistant',
-      content: 'Ricevuto, ho la scheda prodotto davanti. Dimmi cosa vuoi modificare.',
+      content: 'Ricevuto, ho la scheda prodotto e le foto davanti. Dimmi cosa vuoi fare.',
     },
     ...history.map((m) => ({ role: m.role, content: m.content })),
   ];
 
   try {
-    const { toolInput } = await runMessage<EditProductInput>({
+    const { text, toolInput } = await runMessage<EditProductInput>({
       feature: 'ai-product-chat',
-      model: MODELS.fast,
-      max_tokens: 700,
+      model: MODELS.smart,
+      max_tokens: 2048,
       system: SYSTEM,
       messages,
-      tools: [EDIT_TOOL],
-      tool_choice: { type: 'tool', name: 'edit_product' },
+      tools: [WEB_SEARCH_TOOL, EDIT_TOOL],
+      tool_choice: { type: 'auto' },
     });
 
-    if (!toolInput) return ApiErrors.badGateway('Risposta AI inattesa. Riprova.');
-
+    // reply = prosa del modello; se ha solo chiamato il tool, usa il suo reply.
     const reply =
-      typeof toolInput.reply === 'string' && toolInput.reply.trim()
+      text ||
+      (typeof toolInput?.reply === 'string' && toolInput.reply.trim()
         ? toolInput.reply.trim()
-        : 'Fatto.';
+        : 'Fatto.');
     const patch =
-      toolInput.patch && typeof toolInput.patch === 'object' ? toolInput.patch : {};
+      toolInput?.patch && typeof toolInput.patch === 'object' ? toolInput.patch : {};
 
     return NextResponse.json({ reply, patch });
   } catch (err) {
