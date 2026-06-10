@@ -66,17 +66,20 @@ type Props = {
   product: ProductChatSnapshot;
   attributeSchema: AttributeField[];
   topCategories: { name: string; slug: string }[];
+  /** URL pubblici delle foto del prodotto: l'AI le guarda per identificarlo. */
+  imageUrls: string[];
   onApplyPatch: (patch: ProductEditPatch) => string[];
   disabled?: boolean;
 };
 
 const WELCOME =
-  "Ciao! Dimmi come sistemare la scheda: prezzo, descrizione, categoria, marca, tag… Scrivi pure in modo naturale.";
+  "Ciao! Posso guardare le foto e cercare online per capire qual è davvero il prodotto, poi sistemare la scheda: nome, descrizione, prezzo, categoria, attributi, tag… Scrivi pure in modo naturale.";
 
 export default function ProductChatAssistant({
   product,
   attributeSchema,
   topCategories,
+  imageUrls,
   onApplyPatch,
   disabled = false,
 }: Props) {
@@ -112,7 +115,7 @@ export default function ProductChatAssistant({
           'content-type': 'application/json',
           authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ history, product, attributeSchema, topCategories }),
+        body: JSON.stringify({ history, product, attributeSchema, topCategories, imageUrls }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));

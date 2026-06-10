@@ -34,8 +34,11 @@ export type RunMessageArgs = {
    */
   system?: string | SystemBlock[];
   messages: Anthropic.MessageParam[];
-  /** Tool schema opzionale; l'ultimo tool riceve cache_control ephemeral. */
-  tools?: Anthropic.Tool[];
+  /**
+   * Tool schema opzionali (custom e/o server tool come web_search). L'ultimo
+   * tool *custom* (con `input_schema`) riceve cache_control ephemeral.
+   */
+  tools?: Anthropic.ToolUnion[];
   tool_choice?: Anthropic.MessageCreateParams['tool_choice'];
 };
 
@@ -71,11 +74,22 @@ function buildSystem(system: RunMessageArgs['system']): string | SystemBlock[] |
   );
 }
 
-/** Applica cache_control ephemeral all'ultimo tool (schema stabile riusabile). */
-function withToolCache(tools: Anthropic.Tool[] | undefined): Anthropic.Tool[] | undefined {
+/**
+ * Applica cache_control ephemeral all'ultimo tool *custom* (con `input_schema`):
+ * schema stabile riusabile. I server tool (es. web_search) non vengono cacheati
+ * qui per non spostare il breakpoint di cache su una definizione gestita da Anthropic.
+ */
+function withToolCache(
+  tools: Anthropic.ToolUnion[] | undefined,
+): Anthropic.ToolUnion[] | undefined {
   if (!tools || tools.length === 0) return tools;
+  let lastCustom = -1;
+  tools.forEach((t, i) => {
+    if ('input_schema' in t) lastCustom = i;
+  });
+  if (lastCustom === -1) return tools;
   return tools.map((t, i) =>
-    i === tools.length - 1 ? { ...t, cache_control: { type: 'ephemeral' } } : t,
+    i === lastCustom ? { ...t, cache_control: { type: 'ephemeral' } } : t,
   );
 }
 
