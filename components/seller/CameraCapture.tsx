@@ -151,7 +151,13 @@ export default function CameraCapture({ open, onClose, onCapture }: Props) {
             <video ref={videoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
             {/* Riquadro guida: bordo chiaro + alone scuro intorno */}
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div className="h-[78%] w-[78%] rounded-lg border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+              <div className="relative h-[78%] w-[78%] rounded-lg border-2 border-white/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]">
+                {/* Griglia (regola dei terzi): aiuta a centrare e raddrizzare il prodotto */}
+                <div className="absolute inset-y-0 left-1/3 w-px bg-white/30" />
+                <div className="absolute inset-y-0 left-2/3 w-px bg-white/30" />
+                <div className="absolute inset-x-0 top-1/3 h-px bg-white/30" />
+                <div className="absolute inset-x-0 top-2/3 h-px bg-white/30" />
+              </div>
             </div>
             {!ready && (
               <div className="absolute inset-0 flex items-center justify-center text-sm text-white/80">
