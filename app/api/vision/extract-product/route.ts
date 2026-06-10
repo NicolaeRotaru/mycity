@@ -47,6 +47,7 @@ type ExtractInput = {
   alt_text?: string;
   policy_ok?: boolean;
   policy_reason?: string;
+  confidence?: number;
 };
 
 const EXTRACT_TOOL: Anthropic.Tool = {
@@ -150,10 +151,29 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         type: 'string',
         description: 'Se policy_ok=false, motivo breve e oggettivo del blocco.',
       },
+      confidence: {
+        type: 'number',
+        description:
+          'Quanto sei sicuro dell\'IDENTITÀ del prodotto (cosa è esattamente, e marca/modello quando rilevanti), da 0 (incerto) a 1 (certo). Abbassala sotto 0.7 se: lo stesso nome potrebbe appartenere a prodotti di aziende diverse, non riesci a leggere con certezza marca/modello dalla foto, o il prezzo di mercato ti è poco chiaro.',
+      },
     },
-    required: ['name', 'description', 'category_slug', 'suggested_price_eur', 'image_quality', 'alt_text', 'policy_ok'],
+    required: ['name', 'description', 'category_slug', 'suggested_price_eur', 'image_quality', 'alt_text', 'policy_ok', 'confidence'],
   },
 };
+
+/**
+ * Server tool gestito da Anthropic: esegue le ricerche dentro la stessa call.
+ * Usato solo nel secondo passaggio di verifica, quando la confidenza è bassa.
+ */
+const WEB_SEARCH_TOOL: Anthropic.WebSearchTool20250305 = {
+  type: 'web_search_20250305',
+  name: 'web_search',
+  max_uses: 3,
+  user_location: { type: 'approximate', country: 'IT' },
+};
+
+/** Sotto questa confidenza facciamo un secondo passaggio con ricerca web. */
+const CONFIDENCE_THRESHOLD = 0.7;
 
 const PROMPT_TEXT = `Sei un assistente per un marketplace locale italiano chiamato MyCity. Analizza la foto del prodotto allegata e compila i campi del nuovo annuncio chiamando il tool extract_product.
 
@@ -167,7 +187,8 @@ Linee guida:
 - Compila l'oggetto attributes con le caratteristiche chiaramente visibili (marca, colore, taglia, materiale, peso/dimensioni, condizione; per gli alimentari anche origine, allergeni, ingredienti, scadenza). Ometti i campi non deducibili dalla foto: non inventare.
 - Se il prodotto e' un libro, usa come nome il titolo del libro e compila gli attributi del libro leggibili da copertina, costa e retro: autore, editore, anno (4 cifre), pagine (solo cifre), lingua, isbn (10 o 13 cifre dal codice a barre) e formato (esattamente: Brossura, Cartonato, Tascabile, Audiolibro o Ebook).
 - Proponi sempre la sottocategoria piu' adatta (campo subcategory) e da 3 a 8 tag/parole chiave di ricerca (campo tags), anche quando non sono scritti in foto ma sono chiaramente deducibili dal tipo di prodotto.
-- Se ricevi piu' foto, integrale: di solito una mostra il fronte e una il retro/etichetta. Leggi dall'etichetta marca, ingredienti, allergeni, peso e il codice a barre EAN quando presenti.`;
+- Se ricevi piu' foto, integrale: di solito una mostra il fronte e una il retro/etichetta. Leggi dall'etichetta marca, ingredienti, allergeni, peso e il codice a barre EAN quando presenti.
+- Imposta il campo confidence in modo onesto: quanto sei sicuro dell'identità del prodotto. Abbassala sotto 0.7 se lo stesso nome potrebbe appartenere a prodotti di aziende diverse, se non leggi con certezza marca/modello, o se il prezzo di mercato non ti è chiaro: in quel caso il sistema farà una verifica online.`;
 
 // Validazione base64 (solo charset, no padding strict)
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -231,6 +252,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     }
   }
 
+  // Blocchi immagine riusati sia per l'estrazione che per l'eventuale verifica.
+  const imageBlocks = images.map((img) => ({
+    type: 'image' as const,
+    source: {
+      type: 'base64' as const,
+      media_type: img.media_type,
+      data: img.image_base64,
+    },
+  }));
+
   let toolInput: ExtractInput;
   try {
     const result = await runMessage<ExtractInput>({
@@ -242,17 +273,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       messages: [
         {
           role: 'user',
-          content: [
-            ...images.map((img) => ({
-              type: 'image' as const,
-              source: {
-                type: 'base64' as const,
-                media_type: img.media_type,
-                data: img.image_base64,
-              },
-            })),
-            { type: 'text' as const, text: PROMPT_TEXT },
-          ],
+          content: [...imageBlocks, { type: 'text' as const, text: PROMPT_TEXT }],
         },
       ],
     });
@@ -271,6 +292,66 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     if (status === 401) return ApiErrors.unavailable('API key Anthropic non valida.');
     if (status === 429) return ApiErrors.rateLimited(60);
     return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
+  }
+
+  // Secondo passaggio (solo quando serve): se il modello è poco sicuro
+  // dell'identità del prodotto, lascia che cerchi sul web per correggersi.
+  // Lo stesso nome può appartenere a prodotti di aziende diverse: la sola
+  // foto non basta a distinguerli, la ricerca sì.
+  const isGeneric = /prodotto generico/i.test(toolInput.name ?? '');
+  const needsVerification =
+    !isGeneric &&
+    toolInput.policy_ok !== false &&
+    typeof toolInput.confidence === 'number' &&
+    toolInput.confidence < CONFIDENCE_THRESHOLD;
+
+  if (needsVerification) {
+    const verifyPrompt = `Hai estratto questi dati dalle foto con BASSA confidenza (${toolInput.confidence}):
+${JSON.stringify(
+      {
+        name: toolInput.name,
+        description: toolInput.description,
+        category_slug: toolInput.category_slug,
+        subcategory: toolInput.subcategory,
+        suggested_price_eur: toolInput.suggested_price_eur,
+        attributes: toolInput.attributes,
+      },
+      null,
+      2,
+    )}
+
+Usa lo strumento web_search per IDENTIFICARE con certezza il prodotto reale mostrato nelle foto: lo stesso nome può appartenere a prodotti/aziende diverse, quindi incrocia ciò che vedi (forma, etichetta, marca, modello, eventuale codice a barre) con la ricerca. Verifica anche un prezzo di mercato italiano realistico. Poi richiama SEMPRE extract_product con i dati CORRETTI e una confidence aggiornata. Se la ricerca conferma i dati, richiamali invariati.`;
+
+    try {
+      const verify = await runMessage<ExtractInput>({
+        feature: 'vision-extract-verify',
+        model: MODELS.vision,
+        max_tokens: 1024,
+        tools: [WEB_SEARCH_TOOL, EXTRACT_TOOL],
+        tool_choice: { type: 'auto' },
+        messages: [
+          {
+            role: 'user',
+            content: [...imageBlocks, { type: 'text' as const, text: verifyPrompt }],
+          },
+        ],
+      });
+      if (verify.toolInput) {
+        logger.info('vision-extract verifica web applicata', {
+          before: toolInput.confidence,
+          after: verify.toolInput.confidence,
+        });
+        toolInput = verify.toolInput;
+      }
+    } catch (err) {
+      // Verifica best-effort: se la ricerca web fallisce, teniamo l'estrazione
+      // iniziale invece di far fallire tutto l'inserimento.
+      const status = err instanceof AiCallError ? err.status : undefined;
+      logger.warn('vision-extract verifica web fallita, uso estrazione iniziale', {
+        feature: 'vision-extract-verify',
+        status,
+      });
+    }
   }
 
   // Gate policy: blocca i prodotti vietati prima di compilare l'annuncio.
