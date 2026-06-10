@@ -7,6 +7,10 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
 import { Eye, Image as ImageIcon, ScanLine, Trash2, Save, FileText, Zap } from 'lucide-react';
 import PhotoFillButton, { ExtractedProduct } from '@/components/seller/PhotoFillButton';
+import ProductChatAssistant, {
+  type ProductChatSnapshot,
+  type ProductEditPatch,
+} from '@/components/seller/ProductChatAssistant';
 import ProductImagesField from '@/components/seller/ProductImagesField';
 import AttributesFields from '@/components/seller/AttributesFields';
 import BarcodeScanner from '@/components/seller/BarcodeScanner';
@@ -26,6 +30,7 @@ import {
   UNIT_SUFFIX,
   CONDITION_LABELS,
   PRODUCT_CONDITIONS,
+  PRODUCT_UNITS,
   type ProductUnit,
   type ProductCondition,
   type ProductFormValues,
@@ -232,6 +237,136 @@ export default function ProductForm({
     if (data.alt_text) setAttribute('alt_text', data.alt_text);
   };
 
+  // ---- Assistente AI in chat ------------------------------------------------
+  // Snapshot dei campi correnti (DATO inviato al modello).
+  const chatSnapshot: ProductChatSnapshot = {
+    name: watch('name') ?? '',
+    description: watch('description') ?? '',
+    price: Number(watch('price')) || null,
+    compareAtPrice: Number(watch('compareAtPrice')) || null,
+    unit,
+    condition,
+    stock: unlimitedStock ? null : Number(watch('stock')) || null,
+    unlimitedStock,
+    categorySlug: categories.find((c) => c.id === currentTopId)?.slug ?? null,
+    subcategoryName:
+      currentCategoryId && currentCategoryId !== currentTopId
+        ? categories.find((c) => c.id === currentCategoryId)?.name ?? null
+        : null,
+    tags,
+    attributes,
+    status,
+  };
+
+  // Risolve slug categoria (+ nome sottocategoria) → category_id, riusando la
+  // logica a due livelli del form. Ritorna '' se lo slug non esiste.
+  const resolveCategoryId = (slug: string, subName?: string): string => {
+    const top = categories.find((c) => !c.parent_id && c.slug === slug);
+    if (!top) return '';
+    if (subName) {
+      const norm = subName.trim().toLowerCase();
+      const sub = categories.find(
+        (c) => c.parent_id === top.id && c.name.toLowerCase() === norm,
+      );
+      if (sub) return sub.id;
+    }
+    return top.id;
+  };
+
+  // Applica un patch dell'AI allo stato del form. Ritorna le etichette dei
+  // campi modificati (per il feedback in chat). Stesse regole di handleExtracted.
+  const applyPatch = (patch: ProductEditPatch): string[] => {
+    const changed: string[] = [];
+
+    if (typeof patch.name === 'string' && patch.name.trim()) {
+      setValue('name', patch.name.trim(), { shouldValidate: true });
+      changed.push('nome');
+    }
+    if (typeof patch.description === 'string' && patch.description.trim()) {
+      setValue('description', patch.description.trim(), { shouldValidate: true });
+      changed.push('descrizione');
+    }
+    if (typeof patch.price === 'number' && patch.price > 0) {
+      setValue('price', patch.price as unknown as number, { shouldValidate: true });
+      changed.push('prezzo');
+    }
+    if ('compare_at_price' in patch) {
+      if (patch.compare_at_price == null) {
+        setValue('compareAtPrice', undefined as unknown as number, { shouldValidate: true });
+      } else if (typeof patch.compare_at_price === 'number' && patch.compare_at_price > 0) {
+        setValue('compareAtPrice', patch.compare_at_price as unknown as number, { shouldValidate: true });
+      }
+      changed.push('prezzo pieno');
+    }
+    if (patch.unit && (PRODUCT_UNITS as readonly string[]).includes(patch.unit)) {
+      setUnit(patch.unit as ProductUnit);
+      changed.push('unità');
+    }
+    if ('condition' in patch) {
+      if (patch.condition == null) setCondition('');
+      else setCondition(normalizeCondition(String(patch.condition)));
+      changed.push('condizione');
+    }
+    if (patch.unlimited_stock === true) {
+      setUnlimitedStock(true);
+      changed.push('disponibilità');
+    } else if (typeof patch.stock === 'number' && patch.stock >= 0) {
+      setUnlimitedStock(false);
+      setValue('stock', Math.trunc(patch.stock) as unknown as number, { shouldValidate: true });
+      changed.push('disponibilità');
+    }
+
+    // Categoria → risolvi slug/sottocategoria su category_id.
+    let effectiveCategoryId = currentCategoryId;
+    if (patch.category_slug) {
+      const resolved = resolveCategoryId(patch.category_slug, patch.subcategory_name);
+      if (resolved) {
+        setValue('category_id', resolved, { shouldValidate: true });
+        effectiveCategoryId = resolved;
+        changed.push('categoria');
+      }
+    }
+
+    if (Array.isArray(patch.tags)) {
+      const next: string[] = [];
+      for (const raw of patch.tags) {
+        const t = String(raw).trim().toLowerCase().replace(/,+$/, '');
+        if (t && !next.includes(t) && next.length < 15) next.push(t);
+      }
+      setTags(next);
+      changed.push('tag');
+    }
+
+    // Attributi: valida contro i campi della categoria EFFETTIVA (post-cambio).
+    if (patch.attributes && typeof patch.attributes === 'object') {
+      const { fields } = getAttributesForCategory(categories, effectiveCategoryId);
+      for (const [aiKey, rawValue] of Object.entries(patch.attributes)) {
+        const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+        if (!value) continue;
+        const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
+        const field = fields.find((f) => f.key === targetKey);
+        if (!field) continue;
+        if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
+        setAttribute(targetKey, value);
+        changed.push(field.label);
+      }
+    }
+    if (Array.isArray(patch.attributes_remove)) {
+      for (const key of patch.attributes_remove) {
+        const targetKey = AI_ATTR_TO_FIELD[key] ?? key;
+        setAttribute(targetKey, '');
+        changed.push(`rimosso ${targetKey}`);
+      }
+    }
+
+    if (mode === 'edit' && patch.status && ['available', 'draft', 'sold'].includes(patch.status)) {
+      setStatus(patch.status);
+      changed.push('stato');
+    }
+
+    return changed;
+  };
+
   // ---- Tag ------------------------------------------------------------------
   const addTag = (raw: string) => {
     const t = raw.trim().replace(/,+$/, '').toLowerCase();
@@ -277,6 +412,13 @@ export default function ProductForm({
   return (
     <div className="space-y-6">
       <PhotoFillButton onFilled={handleExtracted} onImages={(files) => void handlePhotoImages(files)} />
+
+      <ProductChatAssistant
+        product={chatSnapshot}
+        attributeSchema={attrFields}
+        topCategories={topCategories.map((c) => ({ name: c.name, slug: c.slug }))}
+        onApplyPatch={applyPatch}
+      />
 
       <form onSubmit={makeSubmit(primaryIntent)} className="bg-white border rounded-lg p-6 space-y-4">
         <Input
