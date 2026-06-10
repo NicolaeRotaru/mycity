@@ -12,9 +12,13 @@ export type ExtractedProduct = {
   name: string;
   description: string;
   category_id: string | null;
+  /** Sottocategoria figlia riconosciuta dall'AI (se combacia con una esistente). */
+  subcategory_id?: string | null;
   category_slug: string;
   suggested_price: number;
   attributes?: Record<string, string>;
+  /** Parole chiave di ricerca suggerite dall'AI. */
+  tags?: string[];
   image_quality?: { score: number; issues: string[] } | null;
   alt_text?: string | null;
 };

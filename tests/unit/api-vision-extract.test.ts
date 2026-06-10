@@ -90,9 +90,11 @@ describe('POST /api/vision/extract-product', () => {
       name: 'Sedia',
       description: 'Sedia in legno',
       category_id: 'cat-1',
+      subcategory_id: null,
       category_slug: 'casa',
       suggested_price: 29.9,
       attributes: {},
+      tags: [],
       image_quality: { score: 0.9, issues: [] },
       alt_text: 'Sedia in legno chiaro',
     });

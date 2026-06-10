@@ -23,6 +23,11 @@ interface Props {
   maxPrice?: number;
   minPrice?: number;
   onlyOpenStores?: boolean;
+  /** Mostra solo prodotti in promo (promozione attiva del negozio) o scontati
+   *  (prezzo pieno barrato > prezzo attuale). */
+  onlyPromo?: boolean;
+  /** Mostra solo prodotti disponibili (stock illimitato o > 0). */
+  onlyInStock?: boolean;
   minRating?: number;
   sort?: SortOption;
   /** Layout "rail" orizzontale scrollabile (per le righe curate della home). */
@@ -35,14 +40,14 @@ interface Props {
   seeAllHref?: string;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref }: Props) => {
   const { data: products = [], isLoading } = useQuery({
-    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, minRating, sort }),
+    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
     queryFn: async () => {
       let q = supabase
         .from('products')
         .select(`
-          id, name, description, price, images, stock, created_at, seller_id, category_id,
+          id, name, description, price, compare_at_price, images, stock, created_at, seller_id, category_id,
           profiles!products_seller_id_fkey!inner ( store_name, store_hours, is_approved )
         `)
         .eq('status', 'available')
@@ -75,6 +80,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // Carica rating aggregato per i prodotti visibili (per filtro/ordinamento per rating)
   type Prod = {
     id: string; name: string; description: string | null; price: string | number;
+    compare_at_price: string | number | null;
     images: string[] | null; stock: number | null; created_at: string;
     seller_id: string | null; category_id: string | null;
     profiles?: { store_name: string | null; is_approved?: boolean; store_hours?: unknown } | null;
@@ -96,6 +102,21 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         map[r.product_id] = { avg: Number(r.avg), count: Number(r.count) };
       }
       return map;
+    },
+  });
+
+  // Filtro "Promozione": insieme degli id prodotto con una promozione attiva del
+  // negozio. Riusa la RPC active_promo_products (SECURITY INVOKER → rispetta RLS).
+  // I prodotti col solo prezzo barrato (compare_at_price) vengono gestiti più sotto
+  // senza query extra.
+  const { data: promoIds = new Set<string>() } = useQuery<Set<string>>({
+    queryKey: queryKeys.promotions.active,
+    enabled: !!onlyPromo,
+    staleTime: 60_000,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data } = await supabase.rpc('active_promo_products', { p_limit: 200 });
+      const rows = (data ?? []) as Array<{ product_id: string }>;
+      return new Set(rows.map((r) => r.product_id));
     },
   });
 
@@ -144,6 +165,16 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     if (minRating !== undefined && minRating > 0) {
       arr = arr.filter((p) => (ratings[p.id]?.avg ?? 0) >= minRating);
     }
+    if (onlyPromo) {
+      arr = arr.filter((p) => {
+        const cmp = p.compare_at_price != null ? Number(p.compare_at_price) : 0;
+        const discounted = cmp > Number(p.price);
+        return promoIds.has(p.id) || discounted;
+      });
+    }
+    if (onlyInStock) {
+      arr = arr.filter((p) => p.stock == null || p.stock > 0);
+    }
     if (sort === 'rating') {
       arr = [...arr].sort((a, b) => {
         const ra = ratings[a.id]?.avg ?? 0;
@@ -152,7 +183,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       });
     }
     return arr;
-  }, [prods, onlyOpenStores, minRating, ratings, sort]);
+  }, [prods, onlyOpenStores, minRating, ratings, sort, onlyPromo, onlyInStock, promoIds]);
 
   // Funnel: emette `search_performed` (PostHog + GA4) quando una ricerca
   // testuale si risolve. Solo in contesto ricerca (prop `search` valorizzata),
