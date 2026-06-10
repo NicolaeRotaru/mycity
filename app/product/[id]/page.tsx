@@ -521,7 +521,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               {optionGroups.map((g) => (
                 <div key={g.name}>
                   <p className="text-sm font-semibold text-ink-700 mb-1.5">
-                    {g.name}
+                    {findLabelForKey(g.name)}
                     {selectedOptions[g.name] && (
                       <span className="ml-1.5 font-normal text-ink-500">· {selectedOptions[g.name]}</span>
                     )}
