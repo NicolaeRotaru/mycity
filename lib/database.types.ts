@@ -1026,6 +1026,8 @@ export interface Database {
           product_id: string | null;
           quantity: number;
           unit_price: number;
+          variant_id: string | null;
+          variant_label: string | null;
         };
         Insert: {
           id?: string;
@@ -1033,6 +1035,8 @@ export interface Database {
           product_id?: string | null;
           quantity: number;
           unit_price: number;
+          variant_id?: string | null;
+          variant_label?: string | null;
         };
         Update: {
           id?: string;
@@ -1040,6 +1044,38 @@ export interface Database {
           product_id?: string | null;
           quantity?: number;
           unit_price?: number;
+          variant_id?: string | null;
+          variant_label?: string | null;
+        };
+        Relationships: [];
+      };
+      product_variants: {
+        Row: {
+          id: string;
+          product_id: string;
+          options: Json;
+          label: string;
+          stock: number;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          options?: Json;
+          label?: string;
+          stock?: number;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          options?: Json;
+          label?: string;
+          stock?: number;
+          position?: number;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -1311,6 +1347,7 @@ export interface Database {
           category_id: string | null;
           attributes: Json | null;
           unit: string | null;
+          has_variants: boolean | null;
         };
         Insert: {
           id?: string;
@@ -1324,6 +1361,7 @@ export interface Database {
           category_id?: string | null;
           attributes?: Json | null;
           unit?: string | null;
+          has_variants?: boolean | null;
         };
         Update: {
           id?: string;
@@ -1337,6 +1375,7 @@ export interface Database {
           category_id?: string | null;
           attributes?: Json | null;
           unit?: string | null;
+          has_variants?: boolean | null;
         };
         Relationships: [];
       };

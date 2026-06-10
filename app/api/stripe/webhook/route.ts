@@ -132,7 +132,15 @@ export async function POST(req: NextRequest) {
 type PendingGroup = {
   sellerId: string;
   storeName: string;
-  items: Array<{ productId: string; name: string; quantity: number; unitAmountCents: number; imageUrl?: string }>;
+  items: Array<{
+    productId: string;
+    name: string;
+    quantity: number;
+    unitAmountCents: number;
+    imageUrl?: string;
+    variantId?: string | null;
+    variantLabel?: string | null;
+  }>;
   subtotalCents: number;
   shippingCents: number;
   couponPortionCents: number;
@@ -272,6 +280,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       product_id: it.productId,
       quantity: it.quantity,
       unit_price: it.unitAmountCents / 100,
+      variant_id: it.variantId ?? null,
+      variant_label: it.variantLabel ?? null,
     }));
     const { error: itemsErr } = await admin.from('order_items').insert(orderItemsRows);
     if (itemsErr) {
@@ -576,7 +586,9 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
     .single();
   if (!pending || pending.status !== 'PENDING') return;
   const groups = (pending.groups as PendingGroup[]) ?? [];
-  const items = groups.flatMap((g) => (g.items ?? []).map((it) => ({ product_id: it.productId, qty: it.quantity })));
+  const items = groups.flatMap((g) =>
+    (g.items ?? []).map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
+  );
   if (items.length > 0) await admin.rpc('restore_stock', { p_items: items });
   await admin.from('pending_checkouts').update({ status: 'EXPIRED' }).eq('id', pid);
 }

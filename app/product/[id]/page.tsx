@@ -15,6 +15,8 @@ import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
+import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
+import { loadProductVariants } from '@/lib/products/persistVariants';
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
 import ContactSellerButton from '@/components/ContactSellerButton';
@@ -41,6 +43,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const router = useRouter();
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
   // Carosello: contenitore scroll-snap della foto principale + swipe nel lightbox.
@@ -64,6 +67,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       if (error) throw error;
       return data;
     },
+  });
+
+  // Varianti (taglie/colori): caricate a parte, alimentano i selettori opzione.
+  const { data: variants = [] } = useQuery({
+    queryKey: ['product-variants', id],
+    queryFn: () => loadProductVariants(id),
   });
 
   type ReviewRow = {
@@ -197,13 +206,28 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
   const conditionRaw = (product as { condition?: string | null }).condition ?? null;
   const conditionLabel = conditionRaw ? (CONDITION_LABELS[conditionRaw as ProductCondition] ?? conditionRaw) : null;
-  const stock: number | undefined = product.stock ?? undefined;
+  // Varianti: i selettori derivano dalle varianti; la disponibilità mostrata è
+  // quella della variante selezionata (o del prodotto se non ci sono varianti).
+  const hasVariants = Boolean((product as { has_variants?: boolean }).has_variants) || variants.length > 0;
+  const optionGroups = hasVariants ? deriveOptionGroups(variants) : [];
+  const allOptionsChosen = optionGroups.length > 0 && optionGroups.every((g) => selectedOptions[g.name]);
+  const selectedVariant = allOptionsChosen ? findVariant(variants, selectedOptions) : null;
+  const needsVariantChoice = hasVariants && !selectedVariant;
+
+  const stock: number | undefined = hasVariants
+    ? (selectedVariant ? selectedVariant.stock : undefined)
+    : (product.stock ?? undefined);
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
   const isOutOfStock = stock === 0;
+  const canAdd = !isOutOfStock && !needsVariantChoice;
 
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
 
   const handleAdd = () => {
+    if (needsVariantChoice) {
+      toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di aggiungere`);
+      return;
+    }
     addToCart({
       id: product.id,
       name: product.name,
@@ -212,8 +236,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       quantity,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
       storeName: sellerProfile?.store_name ?? undefined,
+      variantId: selectedVariant?.id,
+      variantLabel: selectedVariant?.label,
     });
-    toast.success(`${product.name} aggiunto al carrello`, { duration: 2000 });
+    toast.success(
+      `${product.name}${selectedVariant ? ` (${selectedVariant.label})` : ''} aggiunto al carrello`,
+      { duration: 2000 },
+    );
   };
 
   const productSchema = {
@@ -486,6 +515,53 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <FreeShippingProgress subtotal={price * quantity} />
           </div>
 
+          {/* SELETTORE VARIANTI (taglie/colori) */}
+          {hasVariants && optionGroups.length > 0 && (
+            <div className="space-y-3">
+              {optionGroups.map((g) => (
+                <div key={g.name}>
+                  <p className="text-sm font-semibold text-ink-700 mb-1.5">
+                    {g.name}
+                    {selectedOptions[g.name] && (
+                      <span className="ml-1.5 font-normal text-ink-500">· {selectedOptions[g.name]}</span>
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {g.values.map((val) => {
+                      const active = selectedOptions[g.name] === val;
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setSelectedOptions((prev) => ({ ...prev, [g.name]: val }))}
+                          aria-pressed={active}
+                          className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition ${
+                            active
+                              ? 'border-primary-600 bg-primary-50 text-primary-800'
+                              : 'border-surface-300 bg-white text-ink-700 hover:border-primary-300'
+                          }`}
+                        >
+                          {val}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {needsVariantChoice ? (
+                <p className="text-xs text-ink-500">
+                  Scegli {optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} per vedere la disponibilità.
+                </p>
+              ) : selectedVariant && selectedVariant.stock === 0 ? (
+                <p className="text-xs font-semibold text-secondary-700">Variante esaurita — prova un&apos;altra combinazione.</p>
+              ) : selectedVariant && selectedVariant.stock <= LOW_STOCK_THRESHOLD ? (
+                <p className="text-xs font-semibold text-secondary-700">
+                  {selectedVariant.stock === 1 ? 'Ultimo pezzo' : `Solo ${selectedVariant.stock} rimasti`} per «{selectedVariant.label}».
+                </p>
+              ) : null}
+            </div>
+          )}
+
           <div>
             <h3 className="font-bold text-sm uppercase tracking-wide text-ink-500 mb-2">Descrizione</h3>
             <p className="text-ink-700 leading-relaxed whitespace-pre-line">{product.description}</p>
@@ -574,10 +650,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               size="lg"
               fullWidth
               onClick={handleAdd}
-              disabled={isOutOfStock}
-              icon={isOutOfStock ? undefined : ShoppingCart}
+              disabled={!canAdd}
+              icon={canAdd ? ShoppingCart : undefined}
             >
-              {isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
+              {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
             </Button>
 
             <Link
@@ -738,7 +814,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       </section>
 
       {/* Sticky CTA mobile */}
-      <StickyAddToCart price={price} available={!isOutOfStock} onAdd={handleAdd} note="Paghi alla consegna" />
+      <StickyAddToCart price={price} available={canAdd} onAdd={handleAdd} note="Paghi alla consegna" />
 
       {/* Tracking view (side-effect only) */}
       <ProductViewTracker
