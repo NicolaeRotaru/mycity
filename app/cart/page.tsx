@@ -71,7 +71,7 @@ export default function CartPage() {
           <FreeShippingProgress subtotal={total} />
 
           {items.map((item) => (
-            <div key={item.id} className="bg-white border rounded-xl p-4 flex gap-4 hover:shadow-md transition-shadow">
+            <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border rounded-xl p-4 flex gap-4 hover:shadow-md transition-shadow">
               <div className="relative w-24 h-24 bg-cream-100 rounded-lg shrink-0 overflow-hidden">
                 <Image
                   src={sizedImage(item.image ?? 'https://placehold.co/200x200/eef2ff/6366f1?text=Foto', 'thumb')}
@@ -89,6 +89,9 @@ export default function CartPage() {
                 >
                   {item.name}
                 </Link>
+                {item.variantLabel && (
+                  <p className="text-xs font-semibold text-ink-500">{item.variantLabel}</p>
+                )}
                 <p className="text-xs text-olive-600 font-semibold flex items-center gap-1">
                   <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Spedizione 24-48h
                 </p>
@@ -97,21 +100,21 @@ export default function CartPage() {
                     <div className="flex items-center border rounded-lg">
                       <button
                         type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                        onClick={() => updateQuantity(item.id, item.quantity - 1, item.variantId)}
                         aria-label="Diminuisci quantità"
                         className="w-8 h-8 hover:bg-cream-100 rounded-l-lg"
                       >−</button>
                       <span className="w-8 text-center font-semibold">{item.quantity}</span>
                       <button
                         type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                        onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
                         aria-label="Aumenta quantità"
                         className="w-8 h-8 hover:bg-cream-100 rounded-r-lg"
                       >+</button>
                     </div>
                     <button
                       type="button"
-                      onClick={() => removeFromCart(item.id)}
+                      onClick={() => removeFromCart(item.id, item.variantId)}
                       className="text-ink-400 hover:text-red-600 text-sm ml-2 flex items-center gap-1"
                     >
                       <Trash2 size={15} aria-hidden /> Rimuovi

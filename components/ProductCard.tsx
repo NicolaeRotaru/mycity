@@ -28,6 +28,8 @@ interface ProductCardProps {
   discountPercent?: number;
   /** Prezzo pieno barrato impostato dal venditore (compare_at_price). */
   compareAtPrice?: number | null;
+  /** Il prodotto ha varianti (taglie/colori): l'aggiunta rapida porta alla scheda. */
+  hasVariants?: boolean;
   /** true per le prime immagini above-the-fold (LCP): eager + fetchPriority alta. */
   priority?: boolean;
 }
@@ -40,7 +42,7 @@ interface ProductCardProps {
  */
 const ProductCard = ({
   id, name, price, images,
-  stock, createdAt, storeName, sellerId, discountPercent, compareAtPrice, priority,
+  stock, createdAt, storeName, sellerId, discountPercent, compareAtPrice, hasVariants, priority,
 }: ProductCardProps) => {
   const hasDiscount = !!discountPercent && discountPercent > 0;
   const discountedPrice = hasDiscount ? price * (1 - (discountPercent as number) / 100) : price;
@@ -59,6 +61,9 @@ const ProductCard = ({
   const [heartBeat, setHeartBeat] = useState(false);
 
   const handleAdd = (e: React.MouseEvent) => {
+    // Con varianti non si può scegliere taglia/colore dalla card: lascia che il
+    // click porti alla scheda prodotto (non blocchiamo la navigazione del Link).
+    if (hasVariants) return;
     e.preventDefault();
     e.stopPropagation();
     addToCart({ id, name, price, image: img, sellerId, storeName });
@@ -176,7 +181,7 @@ const ProductCard = ({
               type="button"
               onClick={handleAdd}
               disabled={isOutOfStock}
-              aria-label={`Aggiungi ${name} al carrello`}
+              aria-label={hasVariants ? `Scegli le opzioni di ${name}` : `Aggiungi ${name} al carrello`}
               className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
             >
               <Plus size={16} strokeWidth={2.6} aria-hidden />

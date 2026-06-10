@@ -13,6 +13,7 @@ export const runtime = 'nodejs';
 const ItemSchema = z.object({
   productId: z.string().uuid(),
   quantity: z.number().int().positive().max(99),
+  variantId: z.string().uuid().nullable().optional(),
 });
 
 const GroupSchema = z.object({
@@ -86,7 +87,7 @@ export const POST = withAuthRateLimit(
     const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
     const { data: products, error: prodErr } = await supa
       .from('products')
-      .select('id, name, price, seller_id, stock, status')
+      .select('id, name, price, seller_id, stock, status, has_variants')
       .in('id', allProductIds);
 
     if (prodErr || !products || products.length === 0) {
@@ -94,6 +95,26 @@ export const POST = withAuthRateLimit(
     }
     if (products.length !== allProductIds.length) {
       return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
+    }
+
+    // --- 1b. Carica le varianti richieste (stock/label/owner) per validarle.
+    const allVariantIds = body.groups.flatMap((g) =>
+      g.items.map((i) => i.variantId).filter(Boolean) as string[],
+    );
+    const variantMap = new Map<string, { id: string; product_id: string; label: string; stock: number }>();
+    if (allVariantIds.length > 0) {
+      const { data: vrows } = await supa
+        .from('product_variants')
+        .select('id, product_id, label, stock')
+        .in('id', allVariantIds);
+      for (const v of vrows ?? []) {
+        variantMap.set(v.id as string, {
+          id: v.id as string,
+          product_id: v.product_id as string,
+          label: (v.label as string) ?? '',
+          stock: (v.stock as number) ?? 0,
+        });
+      }
     }
 
     // --- 2. Coordinate negozio (per spedizione distanza-based).
@@ -109,11 +130,12 @@ export const POST = withAuthRateLimit(
 
     // --- 3. Valida ogni gruppo + calcola subtotale per gruppo dal DB.
     const subtotalPerGroupCents: number[] = [];
-    const itemsPerGroupCents: Array<Array<{ productId: string; quantity: number; unitCents: number }>> = [];
+    type CodItem = { productId: string; quantity: number; unitCents: number; variantId: string | null; variantLabel: string | null };
+    const itemsPerGroupCents: Array<Array<CodItem>> = [];
 
     for (const g of body.groups) {
       let groupSubtotalCents = 0;
-      const items: Array<{ productId: string; quantity: number; unitCents: number }> = [];
+      const items: Array<CodItem> = [];
       for (const it of g.items) {
         const p = products.find((x) => x.id === it.productId);
         if (!p) return ApiErrors.notFound(`Prodotto ${it.productId} non trovato`);
@@ -123,14 +145,35 @@ export const POST = withAuthRateLimit(
         if (p.status !== 'available') {
           return ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`);
         }
-        if (typeof p.stock === 'number' && p.stock < it.quantity) {
+        // Varianti: prodotto con varianti richiede una variante valida; lo stock
+        // controllato è quello della variante.
+        const hasVariants = Boolean((p as { has_variants?: boolean }).has_variants);
+        let variantId: string | null = null;
+        let variantLabel: string | null = null;
+        if (hasVariants) {
+          if (!it.variantId) {
+            return ApiErrors.invalidRequest(`Scegli un'opzione (es. taglia/colore) per ${p.name}.`);
+          }
+          const v = variantMap.get(it.variantId);
+          if (!v || v.product_id !== p.id) {
+            return ApiErrors.invalidRequest(`Variante non valida per ${p.name}.`);
+          }
+          if (v.stock < it.quantity) {
+            return NextResponse.json(
+              { error: `Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.` },
+              { status: 409 },
+            );
+          }
+          variantId = v.id;
+          variantLabel = v.label;
+        } else if (typeof p.stock === 'number' && p.stock < it.quantity) {
           return NextResponse.json(
             { error: `Stock insufficiente per ${p.name} (${p.stock} disponibili).` },
             { status: 409 },
           );
         }
         const unitCents = Math.round(Number(p.price) * 100);
-        items.push({ productId: p.id, quantity: it.quantity, unitCents });
+        items.push({ productId: p.id, quantity: it.quantity, unitCents, variantId, variantLabel });
         groupSubtotalCents += unitCents * it.quantity;
       }
       subtotalPerGroupCents.push(groupSubtotalCents);
@@ -181,7 +224,12 @@ export const POST = withAuthRateLimit(
       const totalCents = Math.max(0, subtotal + shipping - discountCents);
 
       // RISERVA ATOMICA DELLO STOCK del gruppo PRIMA di creare l'ordine (P0-4).
-      const groupStockItems = itemsPerGroupCents[i].map((it) => ({ product_id: it.productId, qty: it.quantity }));
+      // Con variante, la riserva scala lo stock della variante.
+      const groupStockItems = itemsPerGroupCents[i].map((it) => ({
+        product_id: it.productId,
+        variant_id: it.variantId,
+        qty: it.quantity,
+      }));
       const { error: resErr } = await admin.rpc('reserve_stock', { p_items: groupStockItems });
       if (resErr) {
         logger.warn('[cod] reserve_stock fallita', { sellerId: g.sellerId, message: resErr.message });
@@ -227,6 +275,8 @@ export const POST = withAuthRateLimit(
         product_id: it.productId,
         quantity: it.quantity,
         unit_price: it.unitCents / 100,
+        variant_id: it.variantId,
+        variant_label: it.variantLabel,
       }));
       const { error: itemsErr } = await admin.from('order_items').insert(itemsRows);
       if (itemsErr) {

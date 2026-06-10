@@ -13,6 +13,7 @@ import ProductChatAssistant, {
 } from '@/components/seller/ProductChatAssistant';
 import ProductImagesField from '@/components/seller/ProductImagesField';
 import AttributesFields from '@/components/seller/AttributesFields';
+import VariantsEditor from '@/components/seller/VariantsEditor';
 import BarcodeScanner from '@/components/seller/BarcodeScanner';
 import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { Button } from '@/components/ui/Button';
@@ -40,6 +41,7 @@ import {
   expressEnabledToMode,
   modeToExpressEnabled,
 } from '@/lib/products/express';
+import { type ProductVariant, totalVariantStock } from '@/lib/products/variants';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -57,6 +59,7 @@ export interface ProductInitialValues {
   tags?: string[];
   expressEnabled?: boolean | null;
   status?: string;
+  variants?: ProductVariant[];
 }
 
 export type ProductPayload = ReturnType<typeof buildProductPayload>;
@@ -66,7 +69,10 @@ interface ProductFormProps {
   categories: Category[];
   initialValues?: ProductInitialValues;
   submitting?: boolean;
-  onSubmit: (payload: ProductPayload, ctx: { intent: 'publish' | 'draft' | 'save' }) => void;
+  onSubmit: (
+    payload: ProductPayload,
+    ctx: { intent: 'publish' | 'draft' | 'save'; variants: ProductVariant[] },
+  ) => void;
   onDelete?: () => void;
   deleting?: boolean;
   productId?: string;
@@ -131,7 +137,9 @@ export default function ProductForm({
   const [unlimitedStock, setUnlimitedStock] = useState<boolean>(initialValues?.stock === null);
   const [expressMode, setExpressMode] = useState<ExpressMode>(expressEnabledToMode(initialValues?.expressEnabled));
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
+  const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
   const [scanOpen, setScanOpen] = useState(false);
+  const hasVariants = variants.length > 0;
 
   // ---- Categoria a due livelli (il DB ha già parent_id) ---------------------
   const currentCategoryId = watch('category_id') || '';
@@ -394,10 +402,13 @@ export default function ProductForm({
         condition,
         tags,
         expressEnabled: modeToExpressEnabled(expressMode),
-        unlimitedStock,
+        // Con varianti lo stock prodotto è la SOMMA delle varianti (e mai illimitato):
+        // viene comunque riallineato dal trigger DB dopo l'insert delle varianti.
+        unlimitedStock: hasVariants ? false : unlimitedStock,
         status: finalStatus,
       });
-      onSubmit(payload, { intent });
+      if (hasVariants) payload.stock = totalVariantStock(variants);
+      onSubmit(payload, { intent, variants });
     });
 
   // ---- Anteprima prezzo -----------------------------------------------------
@@ -481,24 +492,31 @@ export default function ProductForm({
           </Select>
         </div>
 
-        {/* Disponibilità + illimitato */}
-        <div className="grid grid-cols-2 gap-4 items-start">
-          <Input
-            label="Disponibilità (pezzi)"
-            type="number"
-            inputMode="numeric"
-            disabled={unlimitedStock}
-            {...register('stock')}
-            error={typeof errors.stock?.message === 'string' ? errors.stock.message : undefined}
-          />
-          <div className="pt-7">
-            <Checkbox
-              label="Disponibilità illimitata"
-              checked={unlimitedStock}
-              onChange={(e) => setUnlimitedStock(e.target.checked)}
+        {/* Disponibilità + illimitato — nascosto quando ci sono varianti
+            (la disponibilità è gestita per variante, vedi sotto). */}
+        {hasVariants ? (
+          <p className="rounded-lg bg-cream-50 px-3 py-2.5 text-sm text-ink-600">
+            Disponibilità gestita per variante (totale: <strong>{totalVariantStock(variants)} pezzi</strong>).
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <Input
+              label="Disponibilità (pezzi)"
+              type="number"
+              inputMode="numeric"
+              disabled={unlimitedStock}
+              {...register('stock')}
+              error={typeof errors.stock?.message === 'string' ? errors.stock.message : undefined}
             />
+            <div className="pt-7">
+              <Checkbox
+                label="Disponibilità illimitata"
+                checked={unlimitedStock}
+                onChange={(e) => setUnlimitedStock(e.target.checked)}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Categoria + sottocategoria (a due livelli) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -545,6 +563,9 @@ export default function ProductForm({
             categoryLabel={topCategoryLabel}
           />
         </div>
+
+        {/* Varianti (taglie/colori) con disponibilità per combinazione */}
+        <VariantsEditor value={variants} onChange={setVariants} categorySlug={topSlug} />
 
         {/* Tag / parole chiave */}
         <div className="border-t pt-4">
