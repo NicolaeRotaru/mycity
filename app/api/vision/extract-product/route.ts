@@ -59,7 +59,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
       name: {
         type: 'string',
         description:
-          'Nome del prodotto in italiano, breve (3-50 caratteri). Es. "Pomodori ciliegino bio" o "Cuffie Bluetooth wireless".',
+          'Nome del prodotto in italiano, breve (3-50 caratteri). Deve indicare l\'OGGETTO FISICO realmente mostrato in foto (cosa È), non il marchio/logo/testo stampato sopra di esso. Es. "Pomodori ciliegino bio", "Cuffie Bluetooth wireless", "Porta tovaglioli in metallo". Un porta-tovaglioli con il logo di un caffè resta un porta-tovaglioli, non caffè.',
       },
       description: {
         type: 'string',
@@ -118,7 +118,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         type: 'array',
         items: { type: 'string' },
         description:
-          'Da 3 a 8 parole chiave brevi in italiano (lowercase, una o due parole ciascuna) con cui un cliente cercherebbe questo prodotto. Es. per un libro di strategia: ["crescita personale", "strategia", "saggistica", "potere"]. Non ripetere il nome esatto del prodotto; usa termini di ricerca utili.',
+          'Da 3 a 8 parole chiave brevi in italiano (lowercase, una o due parole ciascuna) con cui un cliente cercherebbe questo prodotto. Devono descrivere l\'OGGETTO REALE e le sue caratteristiche fisiche (tipo di oggetto, materiale, uso, stanza/contesto), NON il marchio o il logo stampato sopra. La prima parola chiave deve essere il tipo di oggetto. Es. per un porta-tovaglioli in metallo con un logo: ["porta tovaglioli", "tovaglioli", "metallo", "cucina", "tavola"], NON ["caffè", "espresso", "grani"]. Es. per un libro di strategia: ["crescita personale", "strategia", "saggistica", "potere"]. Non ripetere il nome esatto del prodotto; usa termini di ricerca utili.',
       },
       image_quality: {
         type: 'object',
@@ -158,6 +158,8 @@ const EXTRACT_TOOL: Anthropic.Tool = {
 const PROMPT_TEXT = `Sei un assistente per un marketplace locale italiano chiamato MyCity. Analizza la foto del prodotto allegata e compila i campi del nuovo annuncio chiamando il tool extract_product.
 
 Linee guida:
+- PRIMA REGOLA: identifica l'OGGETTO FISICO realmente mostrato in foto (cosa È, qual è la sua funzione), NON il marchio, il logo, l'etichetta o il testo stampato sopra di esso. Esempi: un porta-tovaglioli con il logo di una marca di caffè è un porta-tovaglioli (casa/cucina), non caffè e non una bevanda; una tazza con scritto "tè" è una tazza; una shopper con un logo è una borsa. Distingui sempre il prodotto dal branding/decorazione che riporta. Usa il marchio solo per il campo attributes.marca, mai per decidere cosa sia l'oggetto.
+- Coerenza: nome, categoria, sottocategoria e tag devono descrivere tutti lo STESSO oggetto reale. Scegli la categoria in base alla funzione dell'oggetto (es. un porta-tovaglioli va in "casa"), non in base al brand stampato.
 - Sii specifico ma sintetico: "Pomodori ciliegino" e' meglio di "Verdura".
 - Se l'immagine non mostra chiaramente un prodotto in vendita (es. e' un selfie, un panorama, un foglio bianco), chiama comunque il tool ma metti nome="Prodotto generico", descrizione vuota e categoria che ritieni piu' probabile.
 - Il prezzo suggerito deve essere realistico per il mercato italiano al dettaglio.
