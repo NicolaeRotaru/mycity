@@ -76,6 +76,11 @@ CREATE TRIGGER trg_sync_product_variant_rollup
   AFTER INSERT OR UPDATE OR DELETE ON public.product_variants
   FOR EACH ROW EXECUTE FUNCTION public.sync_product_variant_rollup();
 
+-- Funzione di trigger: mai esposta come RPC. Si revoca anche da PUBLIC (il
+-- grant di default), altrimenti anon/authenticated la erediterebbero comunque.
+-- Il trigger continua a scattare a prescindere (gira come definer).
+REVOKE ALL ON FUNCTION public.sync_product_variant_rollup() FROM PUBLIC, anon, authenticated;
+
 -- 5. reserve/restore stock: variant-aware (retro-compatibili) ----------------
 -- Quando l'item ha variant_id, decrementa/ripristina la variante (il trigger
 -- riallinea products.stock). Senza variant_id, comportamento identico a 062.
