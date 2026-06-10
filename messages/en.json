@@ -80,6 +80,8 @@
     "ratingAll": "All",
     "freeShipping": "Free shipping (≥ €30)",
     "openNow": "Open shops only",
+    "promotion": "On promotion only",
+    "inStock": "In stock only",
     "reset": "Reset",
     "showResults": "Show results",
     "resultsFor": "Results for «<hl>{q}</hl>»",

@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, TrendingUp, X } from 'lucide-react';
+import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, TrendingUp, X, Tag, PackageCheck } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { useQuery } from '@tanstack/react-query';
@@ -23,6 +23,8 @@ function SearchInner() {
   const [categoryId, setCategoryId] = useState<string>('');
   const [onlyOpenStores, setOnlyOpenStores] = useState(false);
   const [freeShipping, setFreeShipping] = useState(false);
+  const [onlyPromo, setOnlyPromo] = useState(false);
+  const [onlyInStock, setOnlyInStock] = useState(false);
   const [minRating, setMinRating] = useState<number>(0);
   const [sort, setSort] = useState<SortOption>('relevance');
 
@@ -44,6 +46,8 @@ function SearchInner() {
     setMinPrice(0);
     setOnlyOpenStores(false);
     setFreeShipping(false);
+    setOnlyPromo(false);
+    setOnlyInStock(false);
     setMinRating(0);
     setSort('relevance');
   };
@@ -92,6 +96,8 @@ function SearchInner() {
     maxPrice < 500 && 'prezzo max',
     onlyOpenStores && 'aperti',
     freeShipping && 'spedizione gratis',
+    onlyPromo && 'promozione',
+    onlyInStock && 'disponibili',
     minRating > 0 && `rating ${minRating}+`,
     sort !== 'relevance' && 'ordinamento',
   ].filter(Boolean).length;
@@ -196,6 +202,26 @@ function SearchInner() {
         <label className="flex items-center gap-2 text-sm cursor-pointer">
           <input
             type="checkbox"
+            checked={onlyPromo}
+            onChange={(e) => setOnlyPromo(e.target.checked)}
+            className="accent-primary-600"
+          />
+          <Tag size={14} strokeWidth={2.2} className="text-secondary-600" />
+          <span>{t('promotion')}</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
+            checked={onlyInStock}
+            onChange={(e) => setOnlyInStock(e.target.checked)}
+            className="accent-primary-600"
+          />
+          <PackageCheck size={14} strokeWidth={2.2} className="text-olive-600" />
+          <span>{t('inStock')}</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm cursor-pointer">
+          <input
+            type="checkbox"
             checked={onlyOpenStores}
             onChange={(e) => setOnlyOpenStores(e.target.checked)}
             className="accent-primary-600"
@@ -235,12 +261,17 @@ function SearchInner() {
       <button
         ref={filterTriggerRef}
         onClick={() => setFiltersOpen(true)}
-        className="md:hidden flex items-center justify-center gap-2 w-full bg-white border border-cream-300 rounded-xl py-2.5 font-semibold text-ink-800 shadow-warm"
+        aria-label={t('filters')}
+        className={`md:hidden flex items-center justify-center gap-2 w-full rounded-full py-3 font-bold shadow-warm transition-colors ${
+          activeFilters > 0
+            ? 'bg-primary-600 text-white hover:bg-primary-700'
+            : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
+        }`}
       >
-        <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
-        {t('filters')}
+        <Filter size={17} strokeWidth={2.4} className={activeFilters > 0 ? 'text-white' : 'text-primary-600'} />
+        <span>{t('filters')}</span>
         {activeFilters > 0 && (
-          <span className="bg-primary-600 text-white text-[10px] font-bold rounded-full px-1.5 py-0.5 leading-none">
+          <span className="bg-white text-primary-700 text-[11px] font-extrabold rounded-full min-w-[1.25rem] px-1.5 py-0.5 leading-none">
             {activeFilters}
           </span>
         )}
@@ -305,6 +336,8 @@ function SearchInner() {
           maxPrice={maxPrice < 500 ? maxPrice : undefined}
           minPrice={minPrice > 0 ? minPrice : (freeShipping ? 30 : undefined)}
           onlyOpenStores={onlyOpenStores}
+          onlyPromo={onlyPromo}
+          onlyInStock={onlyInStock}
           minRating={minRating > 0 ? minRating : undefined}
           sort={sort}
         />

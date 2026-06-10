@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import { getCart, saveCart, type CartItem } from '@/lib/cart';
+import { getCart, saveCart, CART_UPDATED_AT_KEY, type CartItem } from '@/lib/cart';
 
 /**
  * Sincronizza il carrello locale (localStorage) con il cloud (Supabase) quando
@@ -22,7 +22,8 @@ import { getCart, saveCart, type CartItem } from '@/lib/cart';
  *
  * Componente invisibile, side-effect only. Mountato in app/layout.tsx.
  */
-const LAST_UPDATED_KEY = 'cart_updated_at';
+// Stessa chiave usata da lib/cart.ts (bump ad ogni mutazione locale).
+const LAST_UPDATED_KEY = CART_UPDATED_AT_KEY;
 
 function getLocalUpdatedAt(): number {
   if (typeof window === 'undefined') return 0;
@@ -111,10 +112,24 @@ export default function CartCrossDeviceSync() {
     };
     window.addEventListener('cart:updated', onCartUpdate);
 
+    // Flush immediato se l'utente lascia/chiude la pagina entro il debounce:
+    // così una rimozione non si perde (e non riappare al login successivo).
+    const flush = () => {
+      if (!debounceId) return;
+      clearTimeout(debounceId);
+      debounceId = null;
+      if (userId) syncUp(userId, getCart());
+    };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+
     return () => {
       stopped = true;
       sub.subscription.unsubscribe();
       window.removeEventListener('cart:updated', onCartUpdate);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
       if (debounceId) clearTimeout(debounceId);
     };
   }, []);

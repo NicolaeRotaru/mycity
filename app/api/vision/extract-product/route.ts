@@ -39,8 +39,10 @@ type ExtractInput = {
   name: string;
   description: string;
   category_slug: CategorySlug;
+  subcategory?: string;
   suggested_price_eur: number;
   attributes?: Record<string, string>;
+  tags?: string[];
   image_quality?: { score?: number; issues?: string[] };
   alt_text?: string;
   policy_ok?: boolean;
@@ -69,6 +71,11 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         enum: [...CATEGORY_SLUGS],
         description:
           'La categoria del marketplace piu\' adatta. Deve essere ESATTAMENTE una di: alimentari, abbigliamento, casa, elettronica, libri, giardino, bellezza, sport.',
+      },
+      subcategory: {
+        type: 'string',
+        description:
+          'Nome della sottocategoria piu\' adatta dentro la categoria scelta, in italiano e per esteso. Es. per libri "Saggistica", "Romanzi", "Crescita personale"; per elettronica "Smartphone", "Audio". Lascia vuoto se non sei sicuro: il server prova a far corrispondere il testo a una sottocategoria esistente.',
       },
       suggested_price_eur: {
         type: 'number',
@@ -106,6 +113,12 @@ const EXTRACT_TOOL: Anthropic.Tool = {
             description: 'Formato del libro, se deducibile. Deve essere ESATTAMENTE una di: Brossura, Cartonato, Tascabile, Audiolibro, Ebook.',
           },
         },
+      },
+      tags: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Da 3 a 8 parole chiave brevi in italiano (lowercase, una o due parole ciascuna) con cui un cliente cercherebbe questo prodotto. Es. per un libro di strategia: ["crescita personale", "strategia", "saggistica", "potere"]. Non ripetere il nome esatto del prodotto; usa termini di ricerca utili.',
       },
       image_quality: {
         type: 'object',
@@ -151,6 +164,7 @@ Linee guida:
 - Descrizione in italiano, in tono neutro e informativo.
 - Compila l'oggetto attributes con le caratteristiche chiaramente visibili (marca, colore, taglia, materiale, peso/dimensioni, condizione; per gli alimentari anche origine, allergeni, ingredienti, scadenza). Ometti i campi non deducibili dalla foto: non inventare.
 - Se il prodotto e' un libro, usa come nome il titolo del libro e compila gli attributi del libro leggibili da copertina, costa e retro: autore, editore, anno (4 cifre), pagine (solo cifre), lingua, isbn (10 o 13 cifre dal codice a barre) e formato (esattamente: Brossura, Cartonato, Tascabile, Audiolibro o Ebook).
+- Proponi sempre la sottocategoria piu' adatta (campo subcategory) e da 3 a 8 tag/parole chiave di ricerca (campo tags), anche quando non sono scritti in foto ma sono chiaramente deducibili dal tipo di prodotto.
 - Se ricevi piu' foto, integrale: di solito una mostra il fronte e una il retro/etichetta. Leggi dall'etichetta marca, ingredienti, allergeni, peso e il codice a barre EAN quando presenti.`;
 
 // Validazione base64 (solo charset, no padding strict)
@@ -267,17 +281,35 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     );
   }
 
-  // Lookup category_id da slug
+  // Lookup category_id da slug + eventuale sottocategoria.
+  // - categoryId: categoria di primo livello (sempre, se trovata).
+  // - subcategoryId: sottocategoria figlia il cui nome/slug combacia col testo
+  //   libero proposto dall'AT (toolInput.subcategory). Solo per auto-selezione.
   let categoryId: string | null = null;
+  let subcategoryId: string | null = null;
   try {
     const supa = await getServerSupabase();
-    const { data } = await supa
+    const { data: top } = await supa
       .from('categories')
       .select('id')
       .eq('slug', toolInput.category_slug)
       .is('parent_id', null)
       .single();
-    categoryId = data?.id ?? null;
+    categoryId = top?.id ?? null;
+
+    const wanted = typeof toolInput.subcategory === 'string' ? normalizeLabel(toolInput.subcategory) : '';
+    if (categoryId && wanted) {
+      const { data: subs } = await supa
+        .from('categories')
+        .select('id, name, slug')
+        .eq('parent_id', categoryId);
+      const match = (subs ?? []).find((s) => {
+        const name = normalizeLabel(s.name ?? '');
+        const slug = normalizeLabel((s.slug ?? '').replace(/-/g, ' '));
+        return name === wanted || slug === wanted || name.includes(wanted) || wanted.includes(name);
+      });
+      subcategoryId = match?.id ?? null;
+    }
   } catch {
     // categoria opzionale: ok proseguire con null
   }
@@ -296,14 +328,38 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       ? { score, issues: Array.isArray(toolInput.image_quality?.issues) ? toolInput.image_quality!.issues : [] }
       : null;
 
+  // Tag: stringhe brevi, lowercase, deduplicate, max 8.
+  const tags: string[] = [];
+  if (Array.isArray(toolInput.tags)) {
+    for (const raw of toolInput.tags) {
+      if (typeof raw !== 'string') continue;
+      const t = raw.trim().toLowerCase().replace(/[,]+$/, '');
+      if (t && t.length <= 30 && !tags.includes(t)) tags.push(t);
+      if (tags.length >= 8) break;
+    }
+  }
+
   return NextResponse.json({
     name: toolInput.name,
     description: toolInput.description,
     category_id: categoryId,
+    subcategory_id: subcategoryId,
     category_slug: toolInput.category_slug,
     suggested_price: toolInput.suggested_price_eur,
     attributes,
+    tags,
     image_quality: imageQuality,
     alt_text: typeof toolInput.alt_text === 'string' ? toolInput.alt_text.trim() : null,
   });
 });
+
+// Normalizza un'etichetta per il confronto: minuscolo, senza accenti,
+// punteggiatura ridotta a spazi e spazi collassati.
+function normalizeLabel(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}

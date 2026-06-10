@@ -11,6 +11,16 @@ export type CartItem = {
 };
 
 const KEY = 'cart';
+// Timestamp dell'ultima modifica LOCALE del carrello. Condiviso con
+// CartCrossDeviceSync: il merge cloud↔locale usa "il più recente vince", quindi
+// ogni mutazione locale (aggiunta/rimozione/svuota) deve avanzare questo orologio,
+// altrimenti un carrello cloud stale può "resuscitare" item rimossi al login.
+export const CART_UPDATED_AT_KEY = 'cart_updated_at';
+
+const bumpUpdatedAt = () => {
+  if (typeof window === 'undefined') return;
+  try { localStorage.setItem(CART_UPDATED_AT_KEY, String(Date.now())); } catch { /* noop */ }
+};
 
 export const getCart = (): CartItem[] => {
   if (typeof window === 'undefined') return [];
@@ -24,6 +34,7 @@ export const getCart = (): CartItem[] => {
 export const saveCart = (items: CartItem[]) => {
   if (typeof window === 'undefined') return;
   localStorage.setItem(KEY, JSON.stringify(items));
+  bumpUpdatedAt();
   window.dispatchEvent(new Event('cart:updated'));
 };
 
@@ -58,6 +69,7 @@ export const updateQuantity = (id: string, quantity: number) => {
 export const clearCart = () => {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(KEY);
+  bumpUpdatedAt();
   window.dispatchEvent(new Event('cart:updated'));
 };
 

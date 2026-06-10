@@ -194,7 +194,21 @@ export default function ProductForm({
     if (data.suggested_price && data.suggested_price > 0) {
       setValue('price', data.suggested_price as unknown as number, { shouldValidate: true });
     }
-    if (data.category_id) setValue('category_id', data.category_id, { shouldValidate: true });
+    // Se l'AI ha riconosciuto una sottocategoria figlia, selezionala: resolveTop
+    // ricava da sola la categoria di primo livello. Altrimenti resta sul top.
+    const resolvedCategory = data.subcategory_id ?? data.category_id;
+    if (resolvedCategory) setValue('category_id', resolvedCategory, { shouldValidate: true });
+    // Tag/parole chiave suggeriti: uniti ai correnti, dedupe, max 15.
+    if (Array.isArray(data.tags) && data.tags.length > 0) {
+      setTags((prev) => {
+        const next = [...prev];
+        for (const raw of data.tags!) {
+          const t = String(raw).trim().toLowerCase().replace(/,+$/, '');
+          if (t && !next.includes(t) && next.length < 15) next.push(t);
+        }
+        return next;
+      });
+    }
     if (data.attributes) {
       const cond = data.attributes['condizione'];
       if (typeof cond === 'string') {

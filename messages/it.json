@@ -80,6 +80,8 @@
     "ratingAll": "Tutti",
     "freeShipping": "Spedizione gratuita (≥ €30)",
     "openNow": "Solo negozi aperti ora",
+    "promotion": "Solo in promozione",
+    "inStock": "Solo disponibili",
     "reset": "Azzera",
     "showResults": "Mostra risultati",
     "resultsFor": "Risultati per «<hl>{q}</hl>»",
