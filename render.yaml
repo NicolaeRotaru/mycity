@@ -6,6 +6,13 @@
 # Per applicare: aprire Render dashboard → New → Blueprint → select repo
 # → questo file viene parsato automaticamente.
 
+# Preview environment automatici per ogni PR. NB: la vecchia sintassi a livello
+# service (previewsEnabled / previewsExpireAfterDays) è DEPRECATA da Render e fa
+# fallire il parsing del Blueprint ("field not found in type file.Service").
+# Va usata questa sezione `previews` a livello root.
+previews:
+  generation: automatic
+
 services:
   - type: web
     name: mycity-marketplace
@@ -20,8 +27,6 @@ services:
     # (ritorna 503 se degradato). NON usare "/" : la home può rispondere 200
     # con dati cached anche a DB irraggiungibile, mascherando un outage.
     healthCheckPath: /api/health
-    previewsEnabled: true # PR preview deploy
-    previewsExpireAfterDays: 7
     envVars:
       - key: NODE_ENV
         value: production
