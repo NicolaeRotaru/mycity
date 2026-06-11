@@ -32,9 +32,18 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
   if (error) return ApiErrors.internal(error.message);
 
   const candidates = (data ?? []) as Array<{ user_id: string; email: string; full_name: string | null; cart_data: unknown; cart_total: number }>;
-  let sent = 0, errors = 0;
+  let sent = 0, errors = 0, skipped = 0;
 
   for (const c of candidates) {
+    // Consenso: l'email di recupero carrello è marketing → inviala solo a chi
+    // ha dato consenso (email_marketing). Senza consenso: marca come gestito
+    // così il cron non riprova ad ogni giro.
+    const { data: prof } = await supa.from('profiles').select('email_marketing').eq('id', c.user_id).single();
+    if (!prof?.email_marketing) {
+      skipped++;
+      await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+      continue;
+    }
     const itemsList = Array.isArray(c.cart_data)
       ? (c.cart_data as Array<{ quantity?: number; name?: string }>).slice(0, 5).map((i) => `<li>${i.quantity ?? 1}× ${escapeHtml(i.name ?? 'Prodotto')}</li>`).join('')
       : '';
@@ -58,7 +67,7 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, errors, candidates: candidates.length });
+  return NextResponse.json({ ok: true, sent, skipped, errors, candidates: candidates.length });
 });
 
 export const POST = handler;
