@@ -67,19 +67,32 @@ export default function CheckoutPage() {
       // e verrà rimosso dal carrello a valle.
       const lookupMap = new Map<string, string>(); // productId → seller_id (fonte: DB)
       const stockMap = new Map<string, number>();  // productId → stock disponibile (DB)
+      const hasVariantsMap = new Map<string, boolean>(); // productId → ha varianti
       const validIds = new Set<string>();
 
       if (cart.length > 0) {
         const { data: products, error: pErr } = await supabase
           .from('products')
-          .select('id, seller_id, stock')
+          .select('id, seller_id, stock, has_variants')
           .in('id', cart.map((c) => c.id));
         if (pErr) throw pErr;
         for (const p of products ?? []) {
           validIds.add(p.id);
           if (p.seller_id) lookupMap.set(p.id, p.seller_id);
           stockMap.set(p.id, p.stock ?? 0);
+          hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
         }
+      }
+
+      // Stock per variante (per gli articoli con variante scelta).
+      const variantStock = new Map<string, number>();
+      const variantIds = cart.map((c) => c.variantId).filter(Boolean) as string[];
+      if (variantIds.length > 0) {
+        const { data: vs } = await supabase
+          .from('product_variants')
+          .select('id, stock')
+          .in('id', variantIds);
+        for (const v of vs ?? []) variantStock.set(v.id as string, (v.stock as number) ?? 0);
       }
 
       const sellerInfo = new Map<string, { name: string; lat: number | null; lng: number | null }>();
@@ -137,11 +150,19 @@ export default function CheckoutPage() {
         sellerMap.get(sellerId)!.items.push(item);
       }
 
-      // Articoli la cui quantità supera lo stock disponibile (verifica al checkout,
-      // non solo lato API): blocca l'ordine e segnala invece di fallire dopo.
+      // Disponibilità per riga: stock della variante se presente, altrimenti del
+      // prodotto. Blocca e segnala invece di fallire dopo.
+      const availableFor = (it: CartItem) =>
+        it.variantId ? (variantStock.get(it.variantId) ?? 0) : (stockMap.get(it.id) ?? 0);
       const stockIssues = cart
-        .filter((it) => validIds.has(it.id) && it.quantity > (stockMap.get(it.id) ?? 0))
-        .map((it) => ({ id: it.id, name: it.name, requested: it.quantity, available: stockMap.get(it.id) ?? 0 }));
+        .filter((it) => validIds.has(it.id) && it.quantity > availableFor(it))
+        .map((it) => ({ id: it.id, name: it.name, requested: it.quantity, available: availableFor(it) }));
+
+      // Articoli con varianti ma senza variante scelta (es. aggiunti da una card):
+      // vanno completati nella scheda prodotto prima di ordinare.
+      const variantIssues = cart
+        .filter((it) => validIds.has(it.id) && hasVariantsMap.get(it.id) && !it.variantId)
+        .map((it) => ({ id: it.id, name: it.name }));
 
       const groupsArr = Array.from(sellerMap.values());
 
@@ -166,13 +187,14 @@ export default function CheckoutPage() {
         }
       }
 
-      return { groups: groupsArr, orphans: orphanItems, stockIssues, expressStores };
+      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, expressStores };
     },
   });
 
   const groups = cartData?.groups ?? [];
   const orphans = useMemo(() => cartData?.orphans ?? [], [cartData]);
   const stockIssues = useMemo(() => cartData?.stockIssues ?? [], [cartData]);
+  const variantIssues = useMemo(() => cartData?.variantIssues ?? [], [cartData]);
   const expressStores = useMemo(() => cartData?.expressStores ?? [], [cartData]);
 
   // Auto-rimozione degli articoli non più disponibili (id stale dopo re-seed,
@@ -356,7 +378,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           groups: groups.map((g) => ({
             sellerId: g.sellerId,
-            items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity })),
+            items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity, variantId: it.variantId ?? null })),
           })),
           delivery: {
             fullName: form.fullName,
@@ -433,7 +455,7 @@ export default function CheckoutPage() {
       // Costruisci payload groups con shipping per gruppo (pre-coupon).
       const apiGroups = groups.map((g) => ({
         sellerId: g.sellerId,
-        items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity })),
+        items: g.items.map((it) => ({ productId: it.id, quantity: it.quantity, variantId: it.variantId ?? null })),
         shippingCents: appliedCoupon?.freeShipping ? 0 : Math.round(shippingFor(g) * 100),
       }));
 
@@ -519,6 +541,10 @@ export default function CheckoutPage() {
     }
     if (stockIssues.length > 0) {
       toast.error('Alcuni articoli superano la disponibilità: riduci le quantità nel carrello.');
+      return;
+    }
+    if (variantIssues.length > 0) {
+      toast.error('Scegli le opzioni (taglia/colore) per alcuni articoli prima di ordinare.');
       return;
     }
     trackCheckoutStep('address', { city: form.city });
@@ -659,6 +685,16 @@ export default function CheckoutPage() {
             </div>
           )}
 
+          {variantIssues.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+              <span>
+                <strong>Scegli le opzioni</strong> (taglia/colore) per: {variantIssues.map((v) => v.name).join(', ')}.{' '}
+                Apri il prodotto, seleziona la variante e aggiungilo di nuovo al carrello.
+              </span>
+            </div>
+          )}
+
           {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
             <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
@@ -700,7 +736,7 @@ export default function CheckoutPage() {
               total={grandTotal}
               isCheckingOut={isCheckingOut}
               paymentMethod={paymentMethod}
-              disabled={groups.length === 0 || stockIssues.length > 0}
+              disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}
             />
           </div>
         </div>

@@ -9,6 +9,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError } from '@/lib/ai/run';
+import { CATEGORY_ATTRIBUTES } from '@/lib/category-attributes';
 
 /**
  * Estrazione prodotto da foto (vision).
@@ -39,12 +40,15 @@ type ExtractInput = {
   name: string;
   description: string;
   category_slug: CategorySlug;
+  subcategory?: string;
   suggested_price_eur: number;
   attributes?: Record<string, string>;
+  tags?: string[];
   image_quality?: { score?: number; issues?: string[] };
   alt_text?: string;
   policy_ok?: boolean;
   policy_reason?: string;
+  confidence?: number;
 };
 
 const EXTRACT_TOOL: Anthropic.Tool = {
@@ -57,7 +61,7 @@ const EXTRACT_TOOL: Anthropic.Tool = {
       name: {
         type: 'string',
         description:
-          'Nome del prodotto in italiano, breve (3-50 caratteri). Es. "Pomodori ciliegino bio" o "Cuffie Bluetooth wireless".',
+          'Nome del prodotto in italiano, breve (3-50 caratteri). Deve indicare l\'OGGETTO FISICO realmente mostrato in foto (cosa È), non il marchio/logo/testo stampato sopra di esso. Es. "Pomodori ciliegino bio", "Cuffie Bluetooth wireless", "Porta tovaglioli in metallo". Un porta-tovaglioli con il logo di un caffè resta un porta-tovaglioli, non caffè.',
       },
       description: {
         type: 'string',
@@ -70,6 +74,11 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         description:
           'La categoria del marketplace piu\' adatta. Deve essere ESATTAMENTE una di: alimentari, abbigliamento, casa, elettronica, libri, giardino, bellezza, sport.',
       },
+      subcategory: {
+        type: 'string',
+        description:
+          'Nome della sottocategoria piu\' adatta dentro la categoria scelta, in italiano e per esteso. Es. per libri "Saggistica", "Romanzi", "Crescita personale"; per elettronica "Smartphone", "Audio". Lascia vuoto se non sei sicuro: il server prova a far corrispondere il testo a una sottocategoria esistente.',
+      },
       suggested_price_eur: {
         type: 'number',
         description:
@@ -78,34 +87,14 @@ const EXTRACT_TOOL: Anthropic.Tool = {
       attributes: {
         type: 'object',
         description:
-          'Caratteristiche del prodotto chiaramente visibili in foto. Compila SOLO i campi deducibili con certezza; OMETTI del tutto gli altri (non inventare).',
-        properties: {
-          marca: { type: 'string', description: 'Marca / brand se visibile. Es. "Apple", "Barilla".' },
-          modello: { type: 'string', description: 'Modello, se indicato. Es. "iPhone 15 Pro".' },
-          colore: { type: 'string', description: 'Colore prevalente. Es. "Nero", "Blu navy".' },
-          taglia: { type: 'string', description: 'Taglia, se applicabile (abbigliamento/sport). Es. "M", "42".' },
-          materiale: { type: 'string', description: 'Materiale principale. Es. "Cotone 100%", "Legno di rovere".' },
-          peso: { type: 'string', description: 'Peso o quantità. Es. "500g", "1L", "6 pezzi".' },
-          dimensioni: { type: 'string', description: 'Dimensioni. Es. "60x40x30 cm".' },
-          condizione: { type: 'string', description: 'Stato / condizione. Es. "Nuovo", "Usato come nuovo".' },
-          origine: { type: 'string', description: 'Origine / provenienza (alimentari). Es. "Italia", "Sicilia".' },
-          allergeni: { type: 'string', description: 'Allergeni (alimentari), se leggibili in etichetta.' },
-          ingredienti: { type: 'string', description: 'Ingredienti principali (alimentari), se leggibili.' },
-          scadenza: { type: 'string', description: 'Data di scadenza in formato ISO YYYY-MM-DD, se leggibile.' },
-          ean: { type: 'string', description: 'Codice a barre EAN/GTIN (8-14 cifre), se leggibile sul retro o sull\'etichetta.' },
-          // Libri: deducibili da copertina, costa e retro.
-          autore: { type: 'string', description: 'Autore/i del libro (libri). Es. "Italo Calvino".' },
-          editore: { type: 'string', description: 'Casa editrice (libri). Es. "Einaudi", "Mondadori".' },
-          anno: { type: 'string', description: 'Anno di pubblicazione (libri), 4 cifre. Es. "2024".' },
-          pagine: { type: 'string', description: 'Numero di pagine (libri), solo cifre. Es. "320".' },
-          lingua: { type: 'string', description: 'Lingua del libro. Es. "Italiano", "Inglese".' },
-          isbn: { type: 'string', description: 'Codice ISBN (libri), 10 o 13 cifre, se leggibile. Es. "9788806221324".' },
-          formato: {
-            type: 'string',
-            enum: ['Brossura', 'Cartonato', 'Tascabile', 'Audiolibro', 'Ebook'],
-            description: 'Formato del libro, se deducibile. Deve essere ESATTAMENTE una di: Brossura, Cartonato, Tascabile, Audiolibro, Ebook.',
-          },
-        },
+          'Caratteristiche del prodotto deducibili dalle foto, come coppie chiave→valore (testo). DOPO aver scelto category_slug, usa ESCLUSIVAMENTE le chiavi previste per quella categoria (vedi "Attributi per categoria" nel prompt) e compila TUTTE quelle deducibili dalle foto, incluse quelle leggibili sul retro/etichetta. Per i campi con valori elencati usa ESATTAMENTE uno di quei valori; per i sì/no usa "true"/"false". Ometti ciò che non è deducibile: non inventare.',
+        additionalProperties: { type: 'string' },
+      },
+      tags: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Da 3 a 8 parole chiave brevi in italiano (lowercase, una o due parole ciascuna) con cui un cliente cercherebbe questo prodotto. Devono descrivere l\'OGGETTO REALE e le sue caratteristiche fisiche (tipo di oggetto, materiale, uso, stanza/contesto), NON il marchio o il logo stampato sopra. La prima parola chiave deve essere il tipo di oggetto. Es. per un porta-tovaglioli in metallo con un logo: ["porta tovaglioli", "tovaglioli", "metallo", "cucina", "tavola"], NON ["caffè", "espresso", "grani"]. Es. per un libro di strategia: ["crescita personale", "strategia", "saggistica", "potere"]. Non ripetere il nome esatto del prodotto; usa termini di ricerca utili.',
       },
       image_quality: {
         type: 'object',
@@ -137,21 +126,63 @@ const EXTRACT_TOOL: Anthropic.Tool = {
         type: 'string',
         description: 'Se policy_ok=false, motivo breve e oggettivo del blocco.',
       },
+      confidence: {
+        type: 'number',
+        description:
+          'Quanto sei sicuro dell\'IDENTITÀ del prodotto (cosa è esattamente, e marca/modello quando rilevanti), da 0 (incerto) a 1 (certo). Abbassala sotto 0.7 se: lo stesso nome potrebbe appartenere a prodotti di aziende diverse, non riesci a leggere con certezza marca/modello dalla foto, o il prezzo di mercato ti è poco chiaro.',
+      },
     },
-    required: ['name', 'description', 'category_slug', 'suggested_price_eur', 'image_quality', 'alt_text', 'policy_ok'],
+    required: ['name', 'description', 'category_slug', 'suggested_price_eur', 'image_quality', 'alt_text', 'policy_ok', 'confidence'],
   },
 };
+
+/**
+ * Server tool gestito da Anthropic: esegue le ricerche dentro la stessa call.
+ * Usato solo nel secondo passaggio di verifica, quando la confidenza è bassa.
+ */
+const WEB_SEARCH_TOOL: Anthropic.WebSearchTool20250305 = {
+  type: 'web_search_20250305',
+  name: 'web_search',
+  max_uses: 3,
+  user_location: { type: 'approximate', country: 'IT' },
+};
+
+/** Sotto questa confidenza facciamo un secondo passaggio con ricerca web. */
+const CONFIDENCE_THRESHOLD = 0.7;
+
+// Riferimento chiavi attributo per categoria, generato dallo schema condiviso:
+// così il modello compila gli stessi campi del form (incluse le tendine) usando
+// esattamente le chiavi e i valori ammessi.
+const ATTR_REFERENCE = Object.entries(CATEGORY_ATTRIBUTES)
+  .map(([slug, fields]) => {
+    const parts = fields.map((f) => {
+      if (f.type === 'select' && f.options?.length) return `${f.key} (uno tra: ${f.options.join(' | ')})`;
+      if (f.type === 'checkbox') return `${f.key} (true/false)`;
+      if (f.type === 'number') return `${f.key} (numero)`;
+      if (f.type === 'date') return `${f.key} (data AAAA-MM-GG)`;
+      return f.key;
+    });
+    return `- ${slug}: ${parts.join(', ')}`;
+  })
+  .join('\n');
 
 const PROMPT_TEXT = `Sei un assistente per un marketplace locale italiano chiamato MyCity. Analizza la foto del prodotto allegata e compila i campi del nuovo annuncio chiamando il tool extract_product.
 
 Linee guida:
+- PRIMA REGOLA: identifica l'OGGETTO FISICO realmente mostrato in foto (cosa È, qual è la sua funzione), NON il marchio, il logo, l'etichetta o il testo stampato sopra di esso. Esempi: un porta-tovaglioli con il logo di una marca di caffè è un porta-tovaglioli (casa/cucina), non caffè e non una bevanda; una tazza con scritto "tè" è una tazza; una shopper con un logo è una borsa. Distingui sempre il prodotto dal branding/decorazione che riporta. Usa il marchio solo per il campo attributes.marca, mai per decidere cosa sia l'oggetto.
+- Coerenza: nome, categoria, sottocategoria e tag devono descrivere tutti lo STESSO oggetto reale. Scegli la categoria in base alla funzione dell'oggetto (es. un porta-tovaglioli va in "casa"), non in base al brand stampato.
 - Sii specifico ma sintetico: "Pomodori ciliegino" e' meglio di "Verdura".
 - Se l'immagine non mostra chiaramente un prodotto in vendita (es. e' un selfie, un panorama, un foglio bianco), chiama comunque il tool ma metti nome="Prodotto generico", descrizione vuota e categoria che ritieni piu' probabile.
 - Il prezzo suggerito deve essere realistico per il mercato italiano al dettaglio.
 - Descrizione in italiano, in tono neutro e informativo.
-- Compila l'oggetto attributes con le caratteristiche chiaramente visibili (marca, colore, taglia, materiale, peso/dimensioni, condizione; per gli alimentari anche origine, allergeni, ingredienti, scadenza). Ometti i campi non deducibili dalla foto: non inventare.
+- Compila l'oggetto attributes nel modo PIÙ COMPLETO possibile: dopo aver scelto la categoria, riempi TUTTE le chiavi di quella categoria che riesci a dedurre dalle foto (anche quelle a tendina, scegliendo esattamente uno dei valori ammessi — es. per bellezza tipo_prodotto="Maschera"). Non lasciare vuoto un campo se l'informazione è leggibile o chiaramente deducibile. Ometti solo ciò che davvero non è ricavabile: non inventare.
 - Se il prodotto e' un libro, usa come nome il titolo del libro e compila gli attributi del libro leggibili da copertina, costa e retro: autore, editore, anno (4 cifre), pagine (solo cifre), lingua, isbn (10 o 13 cifre dal codice a barre) e formato (esattamente: Brossura, Cartonato, Tascabile, Audiolibro o Ebook).
-- Se ricevi piu' foto, integrale: di solito una mostra il fronte e una il retro/etichetta. Leggi dall'etichetta marca, ingredienti, allergeni, peso e il codice a barre EAN quando presenti.`;
+- Proponi sempre la sottocategoria piu' adatta (campo subcategory) e da 3 a 8 tag/parole chiave di ricerca (campo tags), anche quando non sono scritti in foto ma sono chiaramente deducibili dal tipo di prodotto.
+- FOTO MULTIPLE: la prima foto è di solito il fronte (nome, marca, "faccia" del prodotto); le altre mostrano spesso il retro o l'etichetta. INTEGRA tutte le foto come un unico prodotto: leggi dal retro/etichetta ingredienti, valori nutrizionali, allergeni, peso/volume, scadenza, composizione/materiale, specifiche tecniche e il codice a barre EAN, e usali per compilare i campi mancanti.
+- Imposta il campo confidence in modo onesto: quanto sei sicuro dell'identità del prodotto. Abbassala sotto 0.7 se lo stesso nome potrebbe appartenere a prodotti di aziende diverse, se non leggi con certezza marca/modello, o se il prezzo di mercato non ti è chiaro: in quel caso il sistema farà una verifica online.
+
+Attributi per categoria (usa SOLO le chiavi della categoria scelta; per i campi "uno tra" scegli esattamente uno dei valori elencati):
+${ATTR_REFERENCE}`;
 
 // Validazione base64 (solo charset, no padding strict)
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -215,6 +246,16 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     }
   }
 
+  // Blocchi immagine riusati sia per l'estrazione che per l'eventuale verifica.
+  const imageBlocks = images.map((img) => ({
+    type: 'image' as const,
+    source: {
+      type: 'base64' as const,
+      media_type: img.media_type,
+      data: img.image_base64,
+    },
+  }));
+
   let toolInput: ExtractInput;
   try {
     const result = await runMessage<ExtractInput>({
@@ -226,17 +267,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       messages: [
         {
           role: 'user',
-          content: [
-            ...images.map((img) => ({
-              type: 'image' as const,
-              source: {
-                type: 'base64' as const,
-                media_type: img.media_type,
-                data: img.image_base64,
-              },
-            })),
-            { type: 'text' as const, text: PROMPT_TEXT },
-          ],
+          content: [...imageBlocks, { type: 'text' as const, text: PROMPT_TEXT }],
         },
       ],
     });
@@ -257,6 +288,66 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
   }
 
+  // Secondo passaggio (solo quando serve): se il modello è poco sicuro
+  // dell'identità del prodotto, lascia che cerchi sul web per correggersi.
+  // Lo stesso nome può appartenere a prodotti di aziende diverse: la sola
+  // foto non basta a distinguerli, la ricerca sì.
+  const isGeneric = /prodotto generico/i.test(toolInput.name ?? '');
+  const needsVerification =
+    !isGeneric &&
+    toolInput.policy_ok !== false &&
+    typeof toolInput.confidence === 'number' &&
+    toolInput.confidence < CONFIDENCE_THRESHOLD;
+
+  if (needsVerification) {
+    const verifyPrompt = `Hai estratto questi dati dalle foto con BASSA confidenza (${toolInput.confidence}):
+${JSON.stringify(
+      {
+        name: toolInput.name,
+        description: toolInput.description,
+        category_slug: toolInput.category_slug,
+        subcategory: toolInput.subcategory,
+        suggested_price_eur: toolInput.suggested_price_eur,
+        attributes: toolInput.attributes,
+      },
+      null,
+      2,
+    )}
+
+Usa lo strumento web_search per IDENTIFICARE con certezza il prodotto reale mostrato nelle foto: lo stesso nome può appartenere a prodotti/aziende diverse, quindi incrocia ciò che vedi (forma, etichetta, marca, modello, eventuale codice a barre) con la ricerca. Verifica anche un prezzo di mercato italiano realistico. Poi richiama SEMPRE extract_product con i dati CORRETTI e una confidence aggiornata. Se la ricerca conferma i dati, richiamali invariati.`;
+
+    try {
+      const verify = await runMessage<ExtractInput>({
+        feature: 'vision-extract-verify',
+        model: MODELS.vision,
+        max_tokens: 1024,
+        tools: [WEB_SEARCH_TOOL, EXTRACT_TOOL],
+        tool_choice: { type: 'auto' },
+        messages: [
+          {
+            role: 'user',
+            content: [...imageBlocks, { type: 'text' as const, text: verifyPrompt }],
+          },
+        ],
+      });
+      if (verify.toolInput) {
+        logger.info('vision-extract verifica web applicata', {
+          before: toolInput.confidence,
+          after: verify.toolInput.confidence,
+        });
+        toolInput = verify.toolInput;
+      }
+    } catch (err) {
+      // Verifica best-effort: se la ricerca web fallisce, teniamo l'estrazione
+      // iniziale invece di far fallire tutto l'inserimento.
+      const status = err instanceof AiCallError ? err.status : undefined;
+      logger.warn('vision-extract verifica web fallita, uso estrazione iniziale', {
+        feature: 'vision-extract-verify',
+        status,
+      });
+    }
+  }
+
   // Gate policy: blocca i prodotti vietati prima di compilare l'annuncio.
   if (toolInput.policy_ok === false) {
     const reason = toolInput.policy_reason?.trim();
@@ -267,17 +358,35 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     );
   }
 
-  // Lookup category_id da slug
+  // Lookup category_id da slug + eventuale sottocategoria.
+  // - categoryId: categoria di primo livello (sempre, se trovata).
+  // - subcategoryId: sottocategoria figlia il cui nome/slug combacia col testo
+  //   libero proposto dall'AT (toolInput.subcategory). Solo per auto-selezione.
   let categoryId: string | null = null;
+  let subcategoryId: string | null = null;
   try {
     const supa = await getServerSupabase();
-    const { data } = await supa
+    const { data: top } = await supa
       .from('categories')
       .select('id')
       .eq('slug', toolInput.category_slug)
       .is('parent_id', null)
       .single();
-    categoryId = data?.id ?? null;
+    categoryId = top?.id ?? null;
+
+    const wanted = typeof toolInput.subcategory === 'string' ? normalizeLabel(toolInput.subcategory) : '';
+    if (categoryId && wanted) {
+      const { data: subs } = await supa
+        .from('categories')
+        .select('id, name, slug')
+        .eq('parent_id', categoryId);
+      const match = (subs ?? []).find((s) => {
+        const name = normalizeLabel(s.name ?? '');
+        const slug = normalizeLabel((s.slug ?? '').replace(/-/g, ' '));
+        return name === wanted || slug === wanted || name.includes(wanted) || wanted.includes(name);
+      });
+      subcategoryId = match?.id ?? null;
+    }
   } catch {
     // categoria opzionale: ok proseguire con null
   }
@@ -296,14 +405,38 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       ? { score, issues: Array.isArray(toolInput.image_quality?.issues) ? toolInput.image_quality!.issues : [] }
       : null;
 
+  // Tag: stringhe brevi, lowercase, deduplicate, max 8.
+  const tags: string[] = [];
+  if (Array.isArray(toolInput.tags)) {
+    for (const raw of toolInput.tags) {
+      if (typeof raw !== 'string') continue;
+      const t = raw.trim().toLowerCase().replace(/[,]+$/, '');
+      if (t && t.length <= 30 && !tags.includes(t)) tags.push(t);
+      if (tags.length >= 8) break;
+    }
+  }
+
   return NextResponse.json({
     name: toolInput.name,
     description: toolInput.description,
     category_id: categoryId,
+    subcategory_id: subcategoryId,
     category_slug: toolInput.category_slug,
     suggested_price: toolInput.suggested_price_eur,
     attributes,
+    tags,
     image_quality: imageQuality,
     alt_text: typeof toolInput.alt_text === 'string' ? toolInput.alt_text.trim() : null,
   });
 });
+
+// Normalizza un'etichetta per il confronto: minuscolo, senza accenti,
+// punteggiatura ridotta a spazi e spazi collassati.
+function normalizeLabel(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}

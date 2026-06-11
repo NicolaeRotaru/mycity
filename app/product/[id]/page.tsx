@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, use } from 'react';
+import { useState, use, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -15,6 +15,8 @@ import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
+import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
+import { loadProductVariants } from '@/lib/products/persistVariants';
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
 import ContactSellerButton from '@/components/ContactSellerButton';
@@ -23,7 +25,6 @@ import ProductQA from '@/components/ProductQA';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import StickyAddToCart from '@/components/StickyAddToCart';
 import SimilarProducts from '@/components/SimilarProducts';
-import PriceComparison from '@/components/PriceComparison';
 import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
@@ -42,8 +43,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const router = useRouter();
   const qc = useQueryClient();
   const [quantity, setQuantity] = useState(1);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  // Carosello: contenitore scroll-snap della foto principale + swipe nel lightbox.
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number | null>(null);
   const { isAuthenticated, profile } = useProfile();
   const { favorites, toggle: toggleFav } = useFavorites();
   const isFav = favorites.has(id);
@@ -62,6 +67,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       if (error) throw error;
       return data;
     },
+  });
+
+  // Varianti (taglie/colori): caricate a parte, alimentano i selettori opzione.
+  const { data: variants = [] } = useQuery({
+    queryKey: ['product-variants', id],
+    queryFn: () => loadProductVariants(id),
   });
 
   type ReviewRow = {
@@ -135,6 +146,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     },
   });
 
+  // Quando si chiude il lightbox (dove si naviga con frecce/swipe), riallinea
+  // il carosello principale alla foto corrente.
+  useEffect(() => {
+    if (lightbox) return;
+    const el = galleryRef.current;
+    if (el) el.scrollTo({ left: activeImg * el.clientWidth, behavior: 'auto' });
+  }, [lightbox, activeImg]);
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-6 py-8">
@@ -187,13 +206,28 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const unitSuffix = unitRaw && unitRaw !== 'pezzo' ? (UNIT_SUFFIX[unitRaw as ProductUnit] ?? '') : '';
   const conditionRaw = (product as { condition?: string | null }).condition ?? null;
   const conditionLabel = conditionRaw ? (CONDITION_LABELS[conditionRaw as ProductCondition] ?? conditionRaw) : null;
-  const stock: number | undefined = product.stock ?? undefined;
+  // Varianti: i selettori derivano dalle varianti; la disponibilità mostrata è
+  // quella della variante selezionata (o del prodotto se non ci sono varianti).
+  const hasVariants = Boolean((product as { has_variants?: boolean }).has_variants) || variants.length > 0;
+  const optionGroups = hasVariants ? deriveOptionGroups(variants) : [];
+  const allOptionsChosen = optionGroups.length > 0 && optionGroups.every((g) => selectedOptions[g.name]);
+  const selectedVariant = allOptionsChosen ? findVariant(variants, selectedOptions) : null;
+  const needsVariantChoice = hasVariants && !selectedVariant;
+
+  const stock: number | undefined = hasVariants
+    ? (selectedVariant ? selectedVariant.stock : undefined)
+    : (product.stock ?? undefined);
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
   const isOutOfStock = stock === 0;
+  const canAdd = !isOutOfStock && !needsVariantChoice;
 
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
 
   const handleAdd = () => {
+    if (needsVariantChoice) {
+      toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di aggiungere`);
+      return;
+    }
     addToCart({
       id: product.id,
       name: product.name,
@@ -202,8 +236,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       quantity,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
       storeName: sellerProfile?.store_name ?? undefined,
+      variantId: selectedVariant?.id,
+      variantLabel: selectedVariant?.label,
     });
-    toast.success(`${product.name} aggiunto al carrello`, { duration: 2000 });
+    toast.success(
+      `${product.name}${selectedVariant ? ` (${selectedVariant.label})` : ''} aggiunto al carrello`,
+      { duration: 2000 },
+    );
   };
 
   const productSchema = {
@@ -243,16 +282,39 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       ]} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-[1fr_1fr_320px] gap-6">
-        {/* GALLERIA */}
+        {/* GALLERIA — carosello scorrevole (swipe/scroll orizzontale) */}
         <div className="space-y-3">
-          <div className="relative w-full aspect-square bg-surface-0 rounded-xl overflow-hidden border border-surface-200">
-            <Image src={sizedImage(images[activeImg], 'detail')} alt={product.name} fill priority sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw" unoptimized className="object-contain" />
-            <button
-              type="button"
-              onClick={() => setLightbox(true)}
-              aria-label="Ingrandisci foto"
-              className="absolute inset-0 z-[1] cursor-zoom-in"
-            />
+          <div className="relative w-full aspect-square rounded-xl overflow-hidden border border-surface-200">
+            <div
+              ref={galleryRef}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (!el.clientWidth) return;
+                const idx = Math.round(el.scrollLeft / el.clientWidth);
+                if (idx !== activeImg && idx >= 0 && idx < images.length) setActiveImg(idx);
+              }}
+              className="flex h-full w-full snap-x snap-mandatory overflow-x-auto scrollbar-hide bg-surface-0"
+            >
+              {images.map((img, i) => (
+                <div key={i} className="relative h-full w-full shrink-0 snap-center">
+                  <Image
+                    src={sizedImage(img, 'detail')}
+                    alt={i === 0 ? product.name : `${product.name} — foto ${i + 1}`}
+                    fill
+                    priority={i === 0}
+                    sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw"
+                    unoptimized
+                    className="object-contain"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLightbox(true)}
+                    aria-label="Ingrandisci foto"
+                    className="absolute inset-0 z-[1] cursor-zoom-in"
+                  />
+                </div>
+              ))}
+            </div>
             {isOutOfStock && (
               <Badge variant="soldout" size="md" className="absolute top-4 left-4 z-[2]">ESAURITO</Badge>
             )}
@@ -261,6 +323,17 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}
               </Badge>
             )}
+            {/* Pallini indicatore (mobile) */}
+            {images.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 z-[2] flex -translate-x-1/2 gap-1.5 sm:hidden">
+                {images.map((_, i) => (
+                  <span
+                    key={i}
+                    className={`h-1.5 rounded-full transition-all ${activeImg === i ? 'w-4 bg-primary-600' : 'w-1.5 bg-white/70 ring-1 ring-surface-300'}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
           {images.length > 1 && (
             <div className="grid grid-cols-5 gap-2">
@@ -268,7 +341,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <button
                   key={i}
                   type="button"
-                  onClick={() => setActiveImg(i)}
+                  onClick={() => {
+                    setActiveImg(i);
+                    const el = galleryRef.current;
+                    if (el) el.scrollTo({ left: i * el.clientWidth, behavior: 'smooth' });
+                  }}
                   aria-label={`Mostra foto ${i + 1}`}
                   aria-pressed={activeImg === i}
                   className={`relative aspect-square bg-surface-50 rounded-lg overflow-hidden border-2 transition ${
@@ -287,6 +364,17 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           <div
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
             onClick={() => setLightbox(false)}
+            onTouchStart={(e) => { touchStartX.current = e.touches[0]?.clientX ?? null; }}
+            onTouchEnd={(e) => {
+              const start = touchStartX.current;
+              touchStartX.current = null;
+              if (start == null || images.length < 2) return;
+              const dx = (e.changedTouches[0]?.clientX ?? start) - start;
+              if (Math.abs(dx) < 40) return;
+              setActiveImg((prev) =>
+                dx < 0 ? (prev + 1) % images.length : (prev - 1 + images.length) % images.length,
+              );
+            }}
             role="dialog"
             aria-modal="true"
             aria-label={`Foto di ${product.name}`}
@@ -409,11 +497,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 Condizione: {conditionLabel}
               </span>
             )}
-            {/* Ancoraggio prezzo + confronto media categoria (Behavioral Scientist) */}
-            <div className="space-y-2">
-              <ActivePromoBadge productId={id} basePrice={price} />
-              <PriceComparison productId={id} categoryId={product.category_id ?? null} currentPrice={price} />
-            </div>
+            {/* Promo attiva del negozio (prezzo barrato + nuovo prezzo) */}
+            <ActivePromoBadge productId={id} basePrice={price} />
 
             {/* Zero rischio: la leva più forte di questo marketplace (COD) */}
             <div className="flex items-center gap-2.5 rounded-lg bg-olive-50 border border-olive-200 px-3 py-2.5">
@@ -426,9 +511,56 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             {/* Consegna a due velocità: Express se a inventario, altrimenti 24-48h */}
             <DeliveryCutoff variant="inline" available={!isOutOfStock} />
 
-            {/* Barra spedizione gratis reattiva alla quantità */}
+            {/* Barra spedizione gratis reattiva alla quantità — versione leggera */}
             <FreeShippingProgress subtotal={price * quantity} />
           </div>
+
+          {/* SELETTORE VARIANTI (taglie/colori) */}
+          {hasVariants && optionGroups.length > 0 && (
+            <div className="space-y-3">
+              {optionGroups.map((g) => (
+                <div key={g.name}>
+                  <p className="text-sm font-semibold text-ink-700 mb-1.5">
+                    {findLabelForKey(g.name)}
+                    {selectedOptions[g.name] && (
+                      <span className="ml-1.5 font-normal text-ink-500">· {selectedOptions[g.name]}</span>
+                    )}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {g.values.map((val) => {
+                      const active = selectedOptions[g.name] === val;
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setSelectedOptions((prev) => ({ ...prev, [g.name]: val }))}
+                          aria-pressed={active}
+                          className={`min-w-[2.5rem] rounded-lg border-2 px-3 py-1.5 text-sm font-semibold transition ${
+                            active
+                              ? 'border-primary-600 bg-primary-50 text-primary-800'
+                              : 'border-surface-300 bg-white text-ink-700 hover:border-primary-300'
+                          }`}
+                        >
+                          {val}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {needsVariantChoice ? (
+                <p className="text-xs text-ink-500">
+                  Scegli {optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} per vedere la disponibilità.
+                </p>
+              ) : selectedVariant && selectedVariant.stock === 0 ? (
+                <p className="text-xs font-semibold text-secondary-700">Variante esaurita — prova un&apos;altra combinazione.</p>
+              ) : selectedVariant && selectedVariant.stock <= LOW_STOCK_THRESHOLD ? (
+                <p className="text-xs font-semibold text-secondary-700">
+                  {selectedVariant.stock === 1 ? 'Ultimo pezzo' : `Solo ${selectedVariant.stock} rimasti`} per «{selectedVariant.label}».
+                </p>
+              ) : null}
+            </div>
+          )}
 
           <div>
             <h3 className="font-bold text-sm uppercase tracking-wide text-ink-500 mb-2">Descrizione</h3>
@@ -461,18 +593,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </div>
             )}
 
-          {/* Trust signals — COD e orgoglio locale in testa */}
-          <div className="grid grid-cols-2 gap-3 pt-2">
+          {/* Trust signals — riga leggera, senza box, per non distrarre dalla CTA */}
+          <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-xs text-ink-500">
             {[
               { Icon: Banknote, label: 'Paghi alla consegna' },
-              { Icon: Store, label: 'Sostieni i negozi di Piacenza' },
+              { Icon: Store, label: 'Negozi di Piacenza' },
               { Icon: Bike, label: 'Consegna oggi o domani' },
               { Icon: RotateCcw, label: 'Reso entro 14 giorni' },
             ].map((t) => (
-              <div key={t.label} className="flex items-center gap-2 text-xs text-ink-700 bg-surface-50 border border-surface-200 rounded-lg px-3 py-2">
-                <t.Icon size={18} strokeWidth={2.2} className="text-primary-600 shrink-0" aria-hidden />
-                <span className="font-medium">{t.label}</span>
-              </div>
+              <span key={t.label} className="inline-flex items-center gap-1.5">
+                <t.Icon size={14} strokeWidth={2} className="text-ink-400 shrink-0" aria-hidden />
+                {t.label}
+              </span>
             ))}
           </div>
         </div>
@@ -493,9 +625,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <span className="text-olive-700 font-bold inline-flex items-center gap-1"><Check size={13} strokeWidth={2.6} aria-hidden /> Disponibile · pronto per la consegna</span>
               )}
             </p>
-
-            {/* Urgenza al momento della decisione */}
-            {!isOutOfStock && <DeliveryCutoff variant="inline" />}
 
             <div className="flex items-center gap-3 pt-2">
               <label className="text-sm font-medium">Q.tà:</label>
@@ -521,10 +650,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               size="lg"
               fullWidth
               onClick={handleAdd}
-              disabled={isOutOfStock}
-              icon={isOutOfStock ? undefined : ShoppingCart}
+              disabled={!canAdd}
+              icon={canAdd ? ShoppingCart : undefined}
             >
-              {isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
+              {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
             </Button>
 
             <Link
@@ -685,7 +814,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       </section>
 
       {/* Sticky CTA mobile */}
-      <StickyAddToCart price={price} available={!isOutOfStock} onAdd={handleAdd} note="Paghi alla consegna" />
+      <StickyAddToCart price={price} available={canAdd} onAdd={handleAdd} note="Paghi alla consegna" />
 
       {/* Tracking view (side-effect only) */}
       <ProductViewTracker
