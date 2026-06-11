@@ -4,6 +4,7 @@ import { sendEmail } from '@/lib/email/client';
 import { requireSupabaseService } from '@/lib/env';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { escapeHtml } from '@/lib/html-escape';
 
 /**
  * Cron endpoint per inviare email "Hai dimenticato qualcosa" agli utenti
@@ -35,13 +36,13 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
 
   for (const c of candidates) {
     const itemsList = Array.isArray(c.cart_data)
-      ? (c.cart_data as Array<{ quantity?: number; name?: string }>).slice(0, 5).map((i) => `<li>${i.quantity ?? 1}× ${i.name ?? 'Prodotto'}</li>`).join('')
+      ? (c.cart_data as Array<{ quantity?: number; name?: string }>).slice(0, 5).map((i) => `<li>${i.quantity ?? 1}× ${escapeHtml(i.name ?? 'Prodotto')}</li>`).join('')
       : '';
     const first = c.full_name?.split(' ')[0] ?? '';
     const res = await sendEmail({
       to: c.email,
       subject: 'Hai dimenticato qualcosa nel carrello',
-      html: `<p>Ciao ${first},</p>
+      html: `<p>Ciao ${escapeHtml(first)},</p>
              <p>Il tuo carrello (€${Number(c.cart_total).toFixed(2)}) ti aspetta.</p>
              ${itemsList ? `<ul>${itemsList}</ul>` : ''}
              <p><a href="https://mycity-marketplace.com/cart" style="background:#C0492C;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Completa l&apos;acquisto →</a></p>
