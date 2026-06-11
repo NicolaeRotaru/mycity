@@ -1,4 +1,4 @@
--- 080_notifications_best_effort_in_order_rpc.sql
+-- 083_notifications_best_effort_in_order_rpc.sql
 --
 -- FIX affidabilità (avanzamento ordine bloccato da una notifica).
 -- In verify_pickup_code / verify_delivery_code (063) l'INSERT in `notifications`

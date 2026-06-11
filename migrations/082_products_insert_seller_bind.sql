@@ -1,4 +1,4 @@
--- 079_products_insert_seller_bind.sql
+-- 082_products_insert_seller_bind.sql
 --
 -- FIX integrità/sicurezza (attribution spoofing).
 -- La policy INSERT su products verificava SOLO che il chiamante fosse un seller

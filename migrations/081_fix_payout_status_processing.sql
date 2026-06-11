@@ -1,4 +1,4 @@
--- 078_fix_payout_status_processing.sql
+-- 081_fix_payout_status_processing.sql
 --
 -- FIX CRITICO (blocco payout venditori).
 -- lib/stripe/payout.ts esegue come claim atomico:
