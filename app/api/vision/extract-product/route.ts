@@ -9,6 +9,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError } from '@/lib/ai/run';
+import { CATEGORY_ATTRIBUTES } from '@/lib/category-attributes';
 
 /**
  * Estrazione prodotto da foto (vision).
@@ -86,34 +87,8 @@ const EXTRACT_TOOL: Anthropic.Tool = {
       attributes: {
         type: 'object',
         description:
-          'Caratteristiche del prodotto chiaramente visibili in foto. Compila SOLO i campi deducibili con certezza; OMETTI del tutto gli altri (non inventare).',
-        properties: {
-          marca: { type: 'string', description: 'Marca / brand se visibile. Es. "Apple", "Barilla".' },
-          modello: { type: 'string', description: 'Modello, se indicato. Es. "iPhone 15 Pro".' },
-          colore: { type: 'string', description: 'Colore prevalente. Es. "Nero", "Blu navy".' },
-          taglia: { type: 'string', description: 'Taglia, se applicabile (abbigliamento/sport). Es. "M", "42".' },
-          materiale: { type: 'string', description: 'Materiale principale. Es. "Cotone 100%", "Legno di rovere".' },
-          peso: { type: 'string', description: 'Peso o quantità. Es. "500g", "1L", "6 pezzi".' },
-          dimensioni: { type: 'string', description: 'Dimensioni. Es. "60x40x30 cm".' },
-          condizione: { type: 'string', description: 'Stato / condizione. Es. "Nuovo", "Usato come nuovo".' },
-          origine: { type: 'string', description: 'Origine / provenienza (alimentari). Es. "Italia", "Sicilia".' },
-          allergeni: { type: 'string', description: 'Allergeni (alimentari), se leggibili in etichetta.' },
-          ingredienti: { type: 'string', description: 'Ingredienti principali (alimentari), se leggibili.' },
-          scadenza: { type: 'string', description: 'Data di scadenza in formato ISO YYYY-MM-DD, se leggibile.' },
-          ean: { type: 'string', description: 'Codice a barre EAN/GTIN (8-14 cifre), se leggibile sul retro o sull\'etichetta.' },
-          // Libri: deducibili da copertina, costa e retro.
-          autore: { type: 'string', description: 'Autore/i del libro (libri). Es. "Italo Calvino".' },
-          editore: { type: 'string', description: 'Casa editrice (libri). Es. "Einaudi", "Mondadori".' },
-          anno: { type: 'string', description: 'Anno di pubblicazione (libri), 4 cifre. Es. "2024".' },
-          pagine: { type: 'string', description: 'Numero di pagine (libri), solo cifre. Es. "320".' },
-          lingua: { type: 'string', description: 'Lingua del libro. Es. "Italiano", "Inglese".' },
-          isbn: { type: 'string', description: 'Codice ISBN (libri), 10 o 13 cifre, se leggibile. Es. "9788806221324".' },
-          formato: {
-            type: 'string',
-            enum: ['Brossura', 'Cartonato', 'Tascabile', 'Audiolibro', 'Ebook'],
-            description: 'Formato del libro, se deducibile. Deve essere ESATTAMENTE una di: Brossura, Cartonato, Tascabile, Audiolibro, Ebook.',
-          },
-        },
+          'Caratteristiche del prodotto deducibili dalle foto, come coppie chiave→valore (testo). DOPO aver scelto category_slug, usa ESCLUSIVAMENTE le chiavi previste per quella categoria (vedi "Attributi per categoria" nel prompt) e compila TUTTE quelle deducibili dalle foto, incluse quelle leggibili sul retro/etichetta. Per i campi con valori elencati usa ESATTAMENTE uno di quei valori; per i sì/no usa "true"/"false". Ometti ciò che non è deducibile: non inventare.',
+        additionalProperties: { type: 'string' },
       },
       tags: {
         type: 'array',
@@ -175,6 +150,22 @@ const WEB_SEARCH_TOOL: Anthropic.WebSearchTool20250305 = {
 /** Sotto questa confidenza facciamo un secondo passaggio con ricerca web. */
 const CONFIDENCE_THRESHOLD = 0.7;
 
+// Riferimento chiavi attributo per categoria, generato dallo schema condiviso:
+// così il modello compila gli stessi campi del form (incluse le tendine) usando
+// esattamente le chiavi e i valori ammessi.
+const ATTR_REFERENCE = Object.entries(CATEGORY_ATTRIBUTES)
+  .map(([slug, fields]) => {
+    const parts = fields.map((f) => {
+      if (f.type === 'select' && f.options?.length) return `${f.key} (uno tra: ${f.options.join(' | ')})`;
+      if (f.type === 'checkbox') return `${f.key} (true/false)`;
+      if (f.type === 'number') return `${f.key} (numero)`;
+      if (f.type === 'date') return `${f.key} (data AAAA-MM-GG)`;
+      return f.key;
+    });
+    return `- ${slug}: ${parts.join(', ')}`;
+  })
+  .join('\n');
+
 const PROMPT_TEXT = `Sei un assistente per un marketplace locale italiano chiamato MyCity. Analizza la foto del prodotto allegata e compila i campi del nuovo annuncio chiamando il tool extract_product.
 
 Linee guida:
@@ -184,11 +175,14 @@ Linee guida:
 - Se l'immagine non mostra chiaramente un prodotto in vendita (es. e' un selfie, un panorama, un foglio bianco), chiama comunque il tool ma metti nome="Prodotto generico", descrizione vuota e categoria che ritieni piu' probabile.
 - Il prezzo suggerito deve essere realistico per il mercato italiano al dettaglio.
 - Descrizione in italiano, in tono neutro e informativo.
-- Compila l'oggetto attributes con le caratteristiche chiaramente visibili (marca, colore, taglia, materiale, peso/dimensioni, condizione; per gli alimentari anche origine, allergeni, ingredienti, scadenza). Ometti i campi non deducibili dalla foto: non inventare.
+- Compila l'oggetto attributes nel modo PIÙ COMPLETO possibile: dopo aver scelto la categoria, riempi TUTTE le chiavi di quella categoria che riesci a dedurre dalle foto (anche quelle a tendina, scegliendo esattamente uno dei valori ammessi — es. per bellezza tipo_prodotto="Maschera"). Non lasciare vuoto un campo se l'informazione è leggibile o chiaramente deducibile. Ometti solo ciò che davvero non è ricavabile: non inventare.
 - Se il prodotto e' un libro, usa come nome il titolo del libro e compila gli attributi del libro leggibili da copertina, costa e retro: autore, editore, anno (4 cifre), pagine (solo cifre), lingua, isbn (10 o 13 cifre dal codice a barre) e formato (esattamente: Brossura, Cartonato, Tascabile, Audiolibro o Ebook).
 - Proponi sempre la sottocategoria piu' adatta (campo subcategory) e da 3 a 8 tag/parole chiave di ricerca (campo tags), anche quando non sono scritti in foto ma sono chiaramente deducibili dal tipo di prodotto.
-- Se ricevi piu' foto, integrale: di solito una mostra il fronte e una il retro/etichetta. Leggi dall'etichetta marca, ingredienti, allergeni, peso e il codice a barre EAN quando presenti.
-- Imposta il campo confidence in modo onesto: quanto sei sicuro dell'identità del prodotto. Abbassala sotto 0.7 se lo stesso nome potrebbe appartenere a prodotti di aziende diverse, se non leggi con certezza marca/modello, o se il prezzo di mercato non ti è chiaro: in quel caso il sistema farà una verifica online.`;
+- FOTO MULTIPLE: la prima foto è di solito il fronte (nome, marca, "faccia" del prodotto); le altre mostrano spesso il retro o l'etichetta. INTEGRA tutte le foto come un unico prodotto: leggi dal retro/etichetta ingredienti, valori nutrizionali, allergeni, peso/volume, scadenza, composizione/materiale, specifiche tecniche e il codice a barre EAN, e usali per compilare i campi mancanti.
+- Imposta il campo confidence in modo onesto: quanto sei sicuro dell'identità del prodotto. Abbassala sotto 0.7 se lo stesso nome potrebbe appartenere a prodotti di aziende diverse, se non leggi con certezza marca/modello, o se il prezzo di mercato non ti è chiaro: in quel caso il sistema farà una verifica online.
+
+Attributi per categoria (usa SOLO le chiavi della categoria scelta; per i campi "uno tra" scegli esattamente uno dei valori elencati):
+${ATTR_REFERENCE}`;
 
 // Validazione base64 (solo charset, no padding strict)
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;

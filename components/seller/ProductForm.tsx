@@ -79,6 +79,8 @@ interface ProductFormProps {
   ) => void;
   onDelete?: () => void;
   deleting?: boolean;
+  /** create: scarta la bozza in corso (svuota l'autosalvataggio e torna indietro). */
+  onDiscard?: () => void;
   productId?: string;
   sellerOffersExpress?: boolean;
   /** create: chiave localStorage per l'autosalvataggio della bozza. */
@@ -102,6 +104,7 @@ export default function ProductForm({
   onSubmit,
   onDelete,
   deleting = false,
+  onDiscard,
   productId,
   sellerOffersExpress = false,
   autosaveKey,
@@ -268,13 +271,26 @@ export default function ProductForm({
         const { fields } = getAttributesForCategory(categories, data.category_id);
         for (const [aiKey, rawValue] of Object.entries(data.attributes)) {
           if (aiKey === 'condizione') continue; // ora è campo di primo livello
-          const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+          const value =
+            typeof rawValue === 'string'
+              ? rawValue.trim()
+              : typeof rawValue === 'number'
+                ? String(rawValue)
+                : '';
           if (!value) continue;
           const targetKey = AI_ATTR_TO_FIELD[aiKey] ?? aiKey;
           const field = fields.find((f) => f.key === targetKey);
           if (!field) continue;
-          if (field.type === 'select' && !(field.options ?? []).includes(value)) continue;
-          setAttribute(targetKey, value);
+          if (field.type === 'select') {
+            // Match insensibile a maiuscole → valore canonico dell'opzione.
+            const opt = (field.options ?? []).find((o) => o.toLowerCase() === value.toLowerCase());
+            if (!opt) continue;
+            setAttribute(targetKey, opt);
+          } else if (field.type === 'checkbox') {
+            setAttribute(targetKey, /^(true|1|s[iì]|yes|vero)$/i.test(value));
+          } else {
+            setAttribute(targetKey, value);
+          }
         }
       }
     }
@@ -740,6 +756,16 @@ export default function ProductForm({
             >
               <FileText size={16} aria-hidden /> Salva come bozza
             </button>
+            {onDiscard && (
+              <button
+                type="button"
+                onClick={onDiscard}
+                disabled={busy}
+                className="sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold text-rose-700 bg-white border-2 border-rose-200 hover:bg-rose-50 disabled:opacity-50"
+              >
+                <Trash2 size={16} aria-hidden /> Elimina
+              </button>
+            )}
           </div>
         ) : (
           <div className="flex flex-col gap-3 pt-2 border-t">
