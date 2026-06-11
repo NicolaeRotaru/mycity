@@ -1,4 +1,4 @@
-# Render config — Preview deploy su PR + production.
+# Render config — Production (web) + Preview deploy su PR.
 #
 # Esperti: SRE: "Preview deploy = staging gratis per ogni PR.
 # Catch regression PRIMA di merge."
@@ -62,134 +62,21 @@ services:
       - key: NEXT_PUBLIC_WHATSAPP_NUMBER
         sync: false
 
-  # ===========================================================================
-  # CRON JOBS — tutti versionati qui (IaC) così sono riproducibili dal Blueprint.
-  #
-  # Prima solo `release-payouts` era definito: gli altri 6 dipendevano da uno
-  # scheduler esterno (cron-job.org) non versionato. Se quello non era
-  # configurato: lo stock dei checkout scaduti non veniva mai liberato, le
-  # cancellazioni account GDPR (Art. 17) non venivano eseguite, e gli alert
-  # operativi non partivano. Ora sono parte dell'infrastruttura.
-  #
-  # COSTO/TRADE-OFF: ogni `type: cron` è un servizio Render a sé (plan starter
-  # ~$7/mese → ~$42/mese per i 6 aggiuntivi). In alternativa, si possono
-  # disabilitare questi blocchi e schedularli su cron-job.org (free) facendo
-  # POST agli stessi endpoint con `Authorization: Bearer $CRON_SECRET`
-  # (vedi docs/runbook.md). L'importante è che girino: non lasciarli senza
-  # scheduler. Cadenze allineate a README.md.
-  # ===========================================================================
-
-  # Rilascia i payout ai venditori a consegna +3gg (claw-back via reversal per
-  # rimborsi tardivi). Giornaliero alle 03:00 UTC.
-  - type: cron
-    name: mycity-release-payouts
-    runtime: node
-    plan: starter
-    region: frankfurt
-    branch: main
-    schedule: "0 3 * * *"
-    buildCommand: npm ci
-    startCommand: 'curl -fsS --retry 3 --retry-delay 30 -X POST -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/release-payouts"'
-    envVars:
-      - key: CRON_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_APP_URL
-        value: https://mycity-marketplace.com
-
-  # Hard-delete account dopo 7gg di cooldown (GDPR Art. 17). Giornaliero 04:00.
-  - type: cron
-    name: mycity-process-deletions
-    runtime: node
-    plan: starter
-    region: frankfurt
-    branch: main
-    schedule: "0 4 * * *"
-    buildCommand: npm ci
-    startCommand: 'curl -fsS --retry 3 --retry-delay 30 -X POST -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/process-deletions"'
-    envVars:
-      - key: CRON_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_APP_URL
-        value: https://mycity-marketplace.com
-
-  # Processa email_queue (welcome, tutorial, re-engagement, win-back). Ogni 10 min.
-  - type: cron
-    name: mycity-send-emails
-    runtime: node
-    plan: starter
-    region: frankfurt
-    branch: main
-    schedule: "*/10 * * * *"
-    buildCommand: npm ci
-    startCommand: 'curl -fsS --retry 3 --retry-delay 30 -X POST -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/send-emails"'
-    envVars:
-      - key: CRON_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_APP_URL
-        value: https://mycity-marketplace.com
-
-  # Invia le push web in coda. Ogni 5 min (tempestività notifiche).
-  - type: cron
-    name: mycity-send-push
-    runtime: node
-    plan: starter
-    region: frankfurt
-    branch: main
-    schedule: "*/5 * * * *"
-    buildCommand: npm ci
-    startCommand: 'curl -fsS --retry 3 --retry-delay 30 -X POST -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/send-push"'
-    envVars:
-      - key: CRON_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_APP_URL
-        value: https://mycity-marketplace.com
-
-  # Marca EXPIRED i pending_checkouts Stripe non pagati entro 2h e LIBERA lo
-  # stock riservato. Ogni 30 min.
-  - type: cron
-    name: mycity-expire-checkouts
-    runtime: node
-    plan: starter
-    region: frankfurt
-    branch: main
-    schedule: "*/30 * * * *"
-    buildCommand: npm ci
-    startCommand: 'curl -fsS --retry 3 --retry-delay 30 -X POST -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/expire-checkouts"'
-    envVars:
-      - key: CRON_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_APP_URL
-        value: https://mycity-marketplace.com
-
-  # Email "Hai dimenticato qualcosa" ai carrelli abbandonati 4h+. Ogni ora.
-  - type: cron
-    name: mycity-abandoned-carts
-    runtime: node
-    plan: starter
-    region: frankfurt
-    branch: main
-    schedule: "0 * * * *"
-    buildCommand: npm ci
-    startCommand: 'curl -fsS --retry 3 --retry-delay 30 -X POST -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/abandoned-carts"'
-    envVars:
-      - key: CRON_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_APP_URL
-        value: https://mycity-marketplace.com
-
-  # Alert operativi: ordini bloccati, payout falliti, KYC pending, mismatch COD.
-  # Ogni 15 min.
-  - type: cron
-    name: mycity-operational-alerts
-    runtime: node
-    plan: starter
-    region: frankfurt
-    branch: main
-    schedule: "*/15 * * * *"
-    buildCommand: npm ci
-    startCommand: 'curl -fsS --retry 3 --retry-delay 30 -X POST -H "Authorization: Bearer $CRON_SECRET" "$NEXT_PUBLIC_APP_URL/api/cron/operational-alerts"'
-    envVars:
-      - key: CRON_SECRET
-        sync: false
-      - key: NEXT_PUBLIC_APP_URL
-        value: https://mycity-marketplace.com
+# =============================================================================
+# CRON JOBS — gestiti ESTERNAMENTE su cron-job.org (GRATIS), non come Render
+# cron service (a pagamento). Ogni job fa un POST autenticato all'endpoint, con
+# header:  Authorization: Bearer <CRON_SECRET>   (lo stesso valore impostato
+# qui sopra nel web service). Senza scheduler questi cron NON girano.
+#
+# Endpoint (POST) + cadenza consigliata:
+#   https://mycity-marketplace.com/api/cron/release-payouts     1×/giorno 03:00
+#   https://mycity-marketplace.com/api/cron/process-deletions   1×/giorno 04:00
+#   https://mycity-marketplace.com/api/cron/send-emails         ogni 10 min
+#   https://mycity-marketplace.com/api/cron/send-push           ogni 5 min
+#   https://mycity-marketplace.com/api/cron/expire-checkouts    ogni 30 min
+#   https://mycity-marketplace.com/api/cron/abandoned-carts     ogni 1 ora
+#   https://mycity-marketplace.com/api/cron/operational-alerts  ogni 15 min
+#
+# Per riportarli su Render come servizi a pagamento, reintrodurre blocchi
+# `- type: cron` (vedi storico git per il template).
+# =============================================================================
