@@ -69,7 +69,7 @@ services:
 # qui sopra nel web service). Senza scheduler questi cron NON girano.
 #
 # Endpoint (POST) + cadenza consigliata:
-#   https://mycity-marketplace.com/api/cron/release-payouts     1×/giorno 03:00
+#   https://mycity-marketplace.com/api/cron/release-payouts     ogni 15 min  (paga il seller ~1h dopo la consegna)
 #   https://mycity-marketplace.com/api/cron/process-deletions   1×/giorno 04:00
 #   https://mycity-marketplace.com/api/cron/send-emails         ogni 10 min
 #   https://mycity-marketplace.com/api/cron/send-push           ogni 5 min

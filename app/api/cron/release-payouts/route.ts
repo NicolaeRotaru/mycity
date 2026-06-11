@@ -7,21 +7,23 @@ import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
-const HOLD_DAYS = 1;
+const HOLD_HOURS = 1;
 const BATCH_LIMIT = 200;
 const OPEN_RETURN_STATUSES = ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'];
 const OPEN_DISPUTE_STATUSES = ['open', 'under_review'];
 
 /**
  * Cron: rilascia automaticamente i payout SCT ai venditori per gli ordini
- * consegnati da almeno HOLD_DAYS giorno. Policy: consegna +24h, con claw-back
+ * consegnati da almeno HOLD_HOURS ora. Policy: consegna +1h, con claw-back
  * via reversal per rimborsi/recessi tardivi (vedi lib/stripe/payout.ts).
+ * NB: hold breve = il venditore incassa quasi subito, ma piu' resi/recessi
+ * cadono DOPO il payout e richiedono claw-back (rischio saldo Connect negativo).
  *
  * Eleggibilità (filtri SQL, coperti da orders_payout_release_idx):
  *   payout_status IN ('HELD','PENDING_SELLER_ONBOARDING')
  *   AND payment_method = 'card'        (i COD non passano da Stripe)
  *   AND delivery_status = 'DELIVERED'
- *   AND delivered_at <= now() - 24h
+ *   AND delivered_at <= now() - 1h
  *   AND dispute_status IS NULL         (nessun chargeback Stripe aperto)
  * Esclusioni applicative: ordini con un reso aperto o una dispute interna
  * aperta vengono saltati (i fondi restano HELD).
@@ -30,7 +32,8 @@ const OPEN_DISPUTE_STATUSES = ['open', 'under_review'];
  * Best-effort per ordine: un transfer fallito non blocca il batch; il giro
  * successivo riprende i rimanenti (limit BATCH_LIMIT per esecuzione).
  *
- * Setup esterno (giornaliero basta per un gate di +3gg):
+ * Setup esterno (gate +1h → schedula frequente, es. ogni 15 min, per pagare
+ * il venditore entro ~1h dalla consegna):
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
  *     https://yourapp.com/api/cron/release-payouts
  */
@@ -40,7 +43,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   }
 
   const admin = getAdminSupabase();
-  const cutoffIso = new Date(Date.now() - HOLD_DAYS * 86_400_000).toISOString();
+  const cutoffIso = new Date(Date.now() - HOLD_HOURS * 3_600_000).toISOString();
 
   const { data: candidates, error } = await admin
     .from('orders')
