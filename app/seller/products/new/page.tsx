@@ -13,6 +13,8 @@ import { trackProductPublished } from '@/lib/analytics/events';
 import { loadAutosave, clearAutosave } from '@/lib/hooks/useFormAutosave';
 import { modeToExpressEnabled, type ExpressMode } from '@/lib/products/express';
 import type { ProductUnit, ProductCondition } from '@/lib/products/schema';
+import { type ProductVariant } from '@/lib/products/variants';
+import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
 
 const AUTOSAVE_KEY = 'mc_new_product_draft';
 
@@ -101,6 +103,13 @@ function NewProductInner() {
     },
   });
 
+  // Duplica: carica anche le varianti del prodotto sorgente (id azzerati → nuove).
+  const { data: sourceVariants = [] } = useQuery({
+    queryKey: ['duplicate-variants', fromId],
+    enabled: !!fromId,
+    queryFn: () => loadProductVariants(fromId!),
+  });
+
   const initialValues: ProductInitialValues | undefined = useMemo(() => {
     if (fromId) {
       if (!source) return undefined;
@@ -119,13 +128,14 @@ function NewProductInner() {
         tags: Array.isArray(s.tags) ? (s.tags as string[]) : [],
         expressEnabled: (s.express_enabled as boolean | null) ?? null,
         status: 'draft',
+        variants: sourceVariants.map((v) => ({ ...v, id: undefined })),
       };
     }
     return snapshotToInitial(loadAutosave<Snapshot>(AUTOSAVE_KEY) ?? {});
-  }, [fromId, source]);
+  }, [fromId, source, sourceVariants]);
 
   const create = useMutation({
-    mutationFn: async ({ payload }: { payload: ProductPayload }) => {
+    mutationFn: async ({ payload, variants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
@@ -134,6 +144,7 @@ function NewProductInner() {
         .select('id')
         .single();
       if (error) throw error;
+      if (variants.length > 0) await saveProductVariants(data.id as string, variants);
       return { id: data.id as string, sellerId: user.id, status: payload.status };
     },
     onSuccess: ({ id, sellerId, status }) => {
@@ -159,7 +170,7 @@ function NewProductInner() {
           submitting={create.isPending}
           sellerOffersExpress={offersExpress}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
-          onSubmit={(payload) => create.mutate({ payload })}
+          onSubmit={(payload, ctx) => create.mutate({ payload, variants: ctx.variants })}
         />
       )}
     </div>

@@ -40,6 +40,12 @@ import {
   expressEnabledToMode,
   modeToExpressEnabled,
 } from '@/lib/products/express';
+import {
+  type ProductVariant,
+  totalVariantStock,
+  reconcileVariants,
+  deriveOptionGroups,
+} from '@/lib/products/variants';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -57,6 +63,7 @@ export interface ProductInitialValues {
   tags?: string[];
   expressEnabled?: boolean | null;
   status?: string;
+  variants?: ProductVariant[];
 }
 
 export type ProductPayload = ReturnType<typeof buildProductPayload>;
@@ -66,7 +73,10 @@ interface ProductFormProps {
   categories: Category[];
   initialValues?: ProductInitialValues;
   submitting?: boolean;
-  onSubmit: (payload: ProductPayload, ctx: { intent: 'publish' | 'draft' | 'save' }) => void;
+  onSubmit: (
+    payload: ProductPayload,
+    ctx: { intent: 'publish' | 'draft' | 'save'; variants: ProductVariant[] },
+  ) => void;
   onDelete?: () => void;
   deleting?: boolean;
   productId?: string;
@@ -131,7 +141,14 @@ export default function ProductForm({
   const [unlimitedStock, setUnlimitedStock] = useState<boolean>(initialValues?.stock === null);
   const [expressMode, setExpressMode] = useState<ExpressMode>(expressEnabledToMode(initialValues?.expressEnabled));
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
+  const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
+  // Assi di variante attivi (chiave campo → valori). Ricostruiti dalle varianti
+  // esistenti in modifica; in creazione partono vuoti.
+  const [variantAxes, setVariantAxes] = useState<Record<string, string[]>>(() =>
+    Object.fromEntries(deriveOptionGroups(initialValues?.variants ?? []).map((g) => [g.name, g.values])),
+  );
   const [scanOpen, setScanOpen] = useState(false);
+  const hasVariants = variants.length > 0;
 
   // ---- Categoria a due livelli (il DB ha già parent_id) ---------------------
   const currentCategoryId = watch('category_id') || '';
@@ -164,6 +181,33 @@ export default function ProductForm({
       return next;
     });
   };
+
+  // ---- Varianti (assi inline dentro le caratteristiche) ---------------------
+  // Rigenera le combinazioni dagli assi, preservando lo stock già inserito.
+  const applyAxes = (next: Record<string, string[]>) => {
+    setVariantAxes(next);
+    const order = attrFields.map((f) => f.key);
+    const types = Object.entries(next)
+      .filter(([, vals]) => vals.length > 0)
+      .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+      .map(([name, values]) => ({ name, values }));
+    setVariants((cur) => reconcileVariants(types, cur));
+  };
+  const toggleVariantAxis = (key: string, on: boolean) => {
+    const next = { ...variantAxes };
+    if (on) {
+      next[key] = next[key] ?? [];
+      setAttribute(key, ''); // la caratteristica ora varia per variante
+    } else {
+      delete next[key];
+    }
+    applyAxes(next);
+  };
+  const setAxisValues = (key: string, values: string[]) => applyAxes({ ...variantAxes, [key]: values });
+  const setVariantStock = (idx: number, stock: number) =>
+    setVariants((prev) =>
+      prev.map((v, i) => (i === idx ? { ...v, stock: Math.max(0, Math.trunc(stock || 0)) } : v)),
+    );
 
   // ---- Autosave (solo creazione) -------------------------------------------
   const watched = watch();
@@ -394,10 +438,13 @@ export default function ProductForm({
         condition,
         tags,
         expressEnabled: modeToExpressEnabled(expressMode),
-        unlimitedStock,
+        // Con varianti lo stock prodotto è la SOMMA delle varianti (e mai illimitato):
+        // viene comunque riallineato dal trigger DB dopo l'insert delle varianti.
+        unlimitedStock: hasVariants ? false : unlimitedStock,
         status: finalStatus,
       });
-      onSubmit(payload, { intent });
+      if (hasVariants) payload.stock = totalVariantStock(variants);
+      onSubmit(payload, { intent, variants });
     });
 
   // ---- Anteprima prezzo -----------------------------------------------------
@@ -481,24 +528,31 @@ export default function ProductForm({
           </Select>
         </div>
 
-        {/* Disponibilità + illimitato */}
-        <div className="grid grid-cols-2 gap-4 items-start">
-          <Input
-            label="Disponibilità (pezzi)"
-            type="number"
-            inputMode="numeric"
-            disabled={unlimitedStock}
-            {...register('stock')}
-            error={typeof errors.stock?.message === 'string' ? errors.stock.message : undefined}
-          />
-          <div className="pt-7">
-            <Checkbox
-              label="Disponibilità illimitata"
-              checked={unlimitedStock}
-              onChange={(e) => setUnlimitedStock(e.target.checked)}
+        {/* Disponibilità + illimitato — nascosto quando ci sono varianti
+            (la disponibilità è gestita per variante, vedi sotto). */}
+        {hasVariants ? (
+          <p className="rounded-lg bg-cream-50 px-3 py-2.5 text-sm text-ink-600">
+            Disponibilità gestita per variante (totale: <strong>{totalVariantStock(variants)} pezzi</strong>).
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 items-start">
+            <Input
+              label="Disponibilità (pezzi)"
+              type="number"
+              inputMode="numeric"
+              disabled={unlimitedStock}
+              {...register('stock')}
+              error={typeof errors.stock?.message === 'string' ? errors.stock.message : undefined}
             />
+            <div className="pt-7">
+              <Checkbox
+                label="Disponibilità illimitata"
+                checked={unlimitedStock}
+                onChange={(e) => setUnlimitedStock(e.target.checked)}
+              />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Categoria + sottocategoria (a due livelli) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -543,7 +597,41 @@ export default function ProductForm({
             values={attributes}
             onChange={setAttribute}
             categoryLabel={topCategoryLabel}
+            variantAxes={variantAxes}
+            onToggleVariant={toggleVariantAxis}
+            onAxisValuesChange={setAxisValues}
           />
+
+          {/* Disponibilità per variante: appare quando un campo è stato reso
+              "varianti" qui sopra. Resta dentro la sezione Caratteristiche. */}
+          {variants.length > 0 && (
+            <div className="rounded-lg border border-cream-300 overflow-hidden">
+              <div className="flex items-center justify-between bg-cream-50 px-3 py-2 text-xs font-semibold text-ink-600">
+                <span>Variante</span>
+                <span>Disponibilità</span>
+              </div>
+              <div className="divide-y divide-cream-200">
+                {variants.map((v, idx) => (
+                  <div key={v.label || idx} className="flex items-center justify-between gap-3 px-3 py-2">
+                    <span className="text-sm font-medium text-ink-800">{v.label || '—'}</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      value={v.stock}
+                      onChange={(e) => setVariantStock(idx, Number(e.target.value))}
+                      aria-label={`Disponibilità ${v.label}`}
+                      className="w-24 rounded-lg border border-cream-300 px-2 py-1 text-sm text-right focus:border-primary-300 focus:outline-none focus:ring-1 focus:ring-primary-200"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between bg-cream-50 px-3 py-2 text-sm font-semibold text-ink-700">
+                <span>Totale</span>
+                <span>{totalVariantStock(variants)} pezzi</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Tag / parole chiave */}

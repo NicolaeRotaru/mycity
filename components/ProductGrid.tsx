@@ -47,7 +47,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       let q = supabase
         .from('products')
         .select(`
-          id, name, description, price, compare_at_price, images, stock, created_at, seller_id, category_id,
+          id, name, description, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id,
           profiles!products_seller_id_fkey!inner ( store_name, store_hours, is_approved )
         `)
         .eq('status', 'available')
@@ -81,7 +81,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   type Prod = {
     id: string; name: string; description: string | null; price: string | number;
     compare_at_price: string | number | null;
-    images: string[] | null; stock: number | null; created_at: string;
+    images: string[] | null; stock: number | null; has_variants?: boolean | null; created_at: string;
     seller_id: string | null; category_id: string | null;
     profiles?: { store_name: string | null; is_approved?: boolean; store_hours?: unknown } | null;
   };
@@ -265,6 +265,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       storeName={p.profiles?.store_name ?? undefined}
       sellerId={p.seller_id ?? undefined}
       discountPercent={discountFor(p)}
+      hasVariants={p.has_variants ?? false}
       priority={i < 4}
     />
   );

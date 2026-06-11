@@ -12,6 +12,8 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { normalizeCondition, type ProductCondition, type ProductUnit } from '@/lib/products/schema';
+import { type ProductVariant } from '@/lib/products/variants';
+import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
 import { AlertTriangle } from 'lucide-react';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
@@ -39,6 +41,11 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     },
   });
 
+  const { data: variants = [], isLoading: variantsLoading } = useQuery({
+    queryKey: [...queryKeys.seller.product(id), 'variants'],
+    queryFn: () => loadProductVariants(id),
+  });
+
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.form,
     queryFn: async (): Promise<Category[]> => {
@@ -59,11 +66,14 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   });
 
   const update = useMutation({
-    mutationFn: async (payload: ProductPayload) => {
+    mutationFn: async ({ payload, variants: nextVariants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
       const { error } = await supabase.from('products').update(payload).eq('id', id).eq('seller_id', user.id);
       if (error) throw error;
+      // Sincronizza le varianti (insert/update/delete); il trigger DB riallinea
+      // products.stock e has_variants.
+      await saveProductVariants(id, nextVariants);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
@@ -90,7 +100,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading) return <LoadingState />;
+  if (isLoading || variantsLoading) return <LoadingState />;
   if (error || !product) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-rose-900 max-w-2xl">
@@ -119,6 +129,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     tags: Array.isArray(product.tags) ? (product.tags as string[]) : [],
     expressEnabled: (product.express_enabled as boolean | null) ?? null,
     status: (product.status as string) ?? 'available',
+    variants,
   };
 
   const status = product.status as string;
@@ -148,7 +159,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         deleting={removeProduct.isPending}
         productId={id}
         sellerOffersExpress={offersExpress}
-        onSubmit={(payload) => update.mutate(payload)}
+        onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants })}
         onDelete={async () => {
           const ok = await confirmDialog({
             title: 'Eliminare il prodotto?',

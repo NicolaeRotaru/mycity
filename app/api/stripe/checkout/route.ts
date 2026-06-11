@@ -15,6 +15,7 @@ export const runtime = 'nodejs';
 const ItemSchema = z.object({
   productId: z.string().uuid(),
   quantity: z.number().int().positive().max(99),
+  variantId: z.string().uuid().nullable().optional(),
 });
 
 const GroupSchema = z.object({
@@ -94,7 +95,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
   const { data: products, error: prodErr } = await supa
     .from('products')
-    .select('id, name, price, images, seller_id, stock, status')
+    .select('id, name, price, images, seller_id, stock, status, has_variants')
     .in('id', allProductIds);
 
   if (prodErr || !products || products.length === 0) {
@@ -102,6 +103,26 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   }
   if (products.length !== allProductIds.length) {
     return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
+  }
+
+  // Varianti richieste: stock/label/owner per la validazione e lo snapshot.
+  const allVariantIds = body.groups.flatMap((g) =>
+    g.items.map((i) => i.variantId).filter(Boolean) as string[],
+  );
+  const variantMap = new Map<string, { id: string; product_id: string; label: string; stock: number }>();
+  if (allVariantIds.length > 0) {
+    const { data: vrows } = await supa
+      .from('product_variants')
+      .select('id, product_id, label, stock')
+      .in('id', allVariantIds);
+    for (const v of vrows ?? []) {
+      variantMap.set(v.id as string, {
+        id: v.id as string,
+        product_id: v.product_id as string,
+        label: (v.label as string) ?? '',
+        stock: (v.stock as number) ?? 0,
+      });
+    }
   }
 
   // --- 2. Carica i seller (per storeName nei line_items Stripe).
@@ -119,15 +140,20 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   }
 
   // --- 3. Validazioni per ogni gruppo + costruzione line items per Stripe.
-  const stripeGroups: Array<{
-    sellerId: string;
-    storeName: string;
-    items: Array<{ productId: string; name: string; quantity: number; unitAmountCents: number; imageUrl?: string }>;
-  }> = [];
+  type StripeItem = {
+    productId: string;
+    name: string;
+    quantity: number;
+    unitAmountCents: number;
+    imageUrl?: string;
+    variantId?: string | null;
+    variantLabel?: string | null;
+  };
+  const stripeGroups: Array<{ sellerId: string; storeName: string; items: Array<StripeItem> }> = [];
   const subtotalPerGroupCents: number[] = [];
 
   for (const g of body.groups) {
-    const stripeItems: Array<{ productId: string; name: string; quantity: number; unitAmountCents: number; imageUrl?: string }> = [];
+    const stripeItems: Array<StripeItem> = [];
     let groupSubtotalCents = 0;
 
     for (const it of g.items) {
@@ -145,7 +171,27 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       if (p.status !== 'available') {
         return ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`);
       }
-      if (typeof p.stock === 'number' && p.stock < it.quantity) {
+
+      const hasVariants = Boolean((p as { has_variants?: boolean }).has_variants);
+      let variantId: string | null = null;
+      let variantLabel: string | null = null;
+      if (hasVariants) {
+        if (!it.variantId) {
+          return ApiErrors.invalidRequest(`Scegli un'opzione (es. taglia/colore) per ${p.name}.`);
+        }
+        const v = variantMap.get(it.variantId);
+        if (!v || v.product_id !== p.id) {
+          return ApiErrors.invalidRequest(`Variante non valida per ${p.name}.`);
+        }
+        if (v.stock < it.quantity) {
+          return NextResponse.json(
+            { error: `Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.` },
+            { status: 409 },
+          );
+        }
+        variantId = v.id;
+        variantLabel = v.label;
+      } else if (typeof p.stock === 'number' && p.stock < it.quantity) {
         return NextResponse.json(
           { error: `Stock insufficiente per ${p.name} (${p.stock} disponibili).` },
           { status: 409 },
@@ -156,10 +202,12 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       const cover = Array.isArray(p.images) ? p.images[0] : null;
       stripeItems.push({
         productId: p.id,
-        name: p.name,
+        name: variantLabel ? `${p.name} (${variantLabel})` : p.name,
         quantity: it.quantity,
         unitAmountCents: unitCents,
         imageUrl: typeof cover === 'string' ? cover : undefined,
+        variantId,
+        variantLabel,
       });
       groupSubtotalCents += unitCents * it.quantity;
     }
@@ -255,7 +303,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // da un altro buyer, qui falliamo con 409 e il cliente non paga merce inesistente.
   // Lo stock viene ripristinato su scadenza checkout / sessione fallita / annullo / rimborso.
   const stockItems = stripeGroups.flatMap((g) =>
-    g.items.map((it) => ({ product_id: it.productId, qty: it.quantity })),
+    g.items.map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
   );
   const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
   if (reserveErr) {
