@@ -6,6 +6,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
+import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
@@ -171,6 +172,18 @@ function NewProductInner() {
           sellerOffersExpress={offersExpress}
           autosaveKey={fromId ? undefined : AUTOSAVE_KEY}
           onSubmit={(payload, ctx) => create.mutate({ payload, variants: ctx.variants })}
+          onDiscard={async () => {
+            const ok = await confirmDialog({
+              title: 'Eliminare questo prodotto?',
+              message: 'I dati inseriti per questo nuovo prodotto verranno persi.',
+              confirmLabel: 'Sì, elimina',
+              danger: true,
+              icon: '🗑️',
+            });
+            if (!ok) return;
+            clearAutosave(AUTOSAVE_KEY);
+            router.push('/seller/products');
+          }}
         />
       )}
     </div>
