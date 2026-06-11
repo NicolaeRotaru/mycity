@@ -15,6 +15,8 @@ export const runtime = 'nodejs';
  *   qualcosa = early warning."
  * - Operations: "Tre red flag: ordini stuck >1h, rider fermo >30min con ordine,
  *   cash COD non riconciliato del giorno precedente."
+ * - SRE (dedup): "Senza memoria, ad ogni run re-invii lo stesso alert → alert
+ *   fatigue. Cooldown per (tipo+entità) via operational_alert_log."
  *
  * Setup cron esterno (cron-job.org, Render):
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
@@ -23,10 +25,16 @@ export const runtime = 'nodejs';
  */
 
 type AlertRow = {
+  // Chiave stabile per il dedup: <TIPO>|<id entità>. NON deve contenere parti
+  // variabili (es. "da N minuti"), altrimenti il cooldown non aggancia.
+  key: string;
   type: string;
   detail: string;
   url?: string;
 };
+
+// Non re-notifichiamo la stessa (tipo+entità) entro questa finestra.
+const COOLDOWN_HOURS = 6;
 
 export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
   const admin = getAdminSupabase();
@@ -44,11 +52,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   for (const o of stuckNew ?? []) {
     const seller = (o as { profiles?: { store_name?: string } | null }).profiles;
+    const id = (o as { id: string }).id;
     const minutesStuck = Math.floor((Date.now() - new Date((o as { created_at: string }).created_at).getTime()) / 60_000);
     alerts.push({
+      key: `ORDER_STUCK_NEW|${id}`,
       type: 'ORDER_STUCK_NEW',
-      detail: `Ordine #${(o as { id: string }).id.slice(0, 8)} da ${seller?.store_name ?? 'unknown'} bloccato in NEW da ${minutesStuck} min`,
-      url: `/admin/orders/${(o as { id: string }).id}`,
+      detail: `Ordine #${id.slice(0, 8)} da ${seller?.store_name ?? 'unknown'} bloccato in NEW da ${minutesStuck} min`,
+      url: `/admin/orders/${id}`,
     });
   }
 
@@ -63,11 +73,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   for (const o of stuckRiders ?? []) {
     const rider = (o as { profiles?: { full_name?: string } | null }).profiles;
+    const id = (o as { id: string }).id;
     const minutes = Math.floor((Date.now() - new Date((o as { picked_up_at: string }).picked_up_at).getTime()) / 60_000);
     alerts.push({
+      key: `RIDER_STUCK|${id}`,
       type: 'RIDER_STUCK',
-      detail: `Rider ${rider?.full_name ?? 'unknown'} con ordine #${(o as { id: string }).id.slice(0, 8)} in consegna da ${minutes} min`,
-      url: `/admin/orders/${(o as { id: string }).id}`,
+      detail: `Rider ${rider?.full_name ?? 'unknown'} con ordine #${id.slice(0, 8)} in consegna da ${minutes} min`,
+      url: `/admin/orders/${id}`,
     });
   }
 
@@ -85,10 +97,12 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   for (const o of codMissing ?? []) {
     const rider = (o as { profiles?: { full_name?: string } | null }).profiles;
+    const id = (o as { id: string }).id;
     alerts.push({
+      key: `COD_NOT_CONFIRMED|${id}`,
       type: 'COD_NOT_CONFIRMED',
-      detail: `Ordine COD #${(o as { id: string }).id.slice(0, 8)} consegnato ma cash non confermato (rider: ${rider?.full_name ?? 'unknown'})`,
-      url: `/admin/orders/${(o as { id: string }).id}`,
+      detail: `Ordine COD #${id.slice(0, 8)} consegnato ma cash non confermato (rider: ${rider?.full_name ?? 'unknown'})`,
+      url: `/admin/orders/${id}`,
     });
   }
 
@@ -103,10 +117,12 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     .limit(20);
 
   for (const p of kycPending ?? []) {
+    const id = (p as { id: string }).id;
     alerts.push({
+      key: `KYC_PENDING_TOO_LONG|${id}`,
       type: 'KYC_PENDING_TOO_LONG',
       detail: `Seller ${(p as { store_name?: string }).store_name ?? 'unknown'} in KYC PENDING da >48h`,
-      url: `/admin/users?id=${(p as { id: string }).id}`,
+      url: `/admin/users?id=${id}`,
     });
   }
 
@@ -121,6 +137,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   for (const o of payoutStuck ?? []) {
     const r = o as { id: string; payout_status: string | null; rider_payout_status: string | null };
     alerts.push({
+      key: `PAYOUT_STUCK|${r.id}`,
       type: 'PAYOUT_STUCK',
       detail: `Ordine #${r.id.slice(0, 8)} payout anomalo (seller=${r.payout_status}, rider=${r.rider_payout_status}) da >1h`,
       url: `/admin/orders/${r.id}`,
@@ -137,10 +154,12 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     .limit(10);
   for (const o of stalledAssigned ?? []) {
     const rider = (o as { profiles?: { full_name?: string } | null }).profiles;
+    const id = (o as { id: string }).id;
     alerts.push({
+      key: `DELIVERY_STALLED|${id}`,
       type: 'DELIVERY_STALLED',
-      detail: `Ordine #${(o as { id: string }).id.slice(0, 8)} ASSIGNED a ${rider?.full_name ?? 'rider'} ma non ritirato da >30min`,
-      url: `/admin/orders/${(o as { id: string }).id}`,
+      detail: `Ordine #${id.slice(0, 8)} ASSIGNED a ${rider?.full_name ?? 'rider'} ma non ritirato da >30min`,
+      url: `/admin/orders/${id}`,
     });
   }
 
@@ -154,6 +173,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   for (const m of mismatches ?? []) {
     const mm = m as { rider_id: string; for_date: string; expected_cents: number; collected_cents: number };
     alerts.push({
+      key: `COD_MISMATCH|${mm.rider_id}|${mm.for_date}`,
       type: 'COD_MISMATCH',
       detail: `Riconciliazione COD rider ${mm.rider_id.slice(0, 8)} del ${mm.for_date}: atteso €${(mm.expected_cents / 100).toFixed(2)} vs incassato €${(mm.collected_cents / 100).toFixed(2)}`,
       url: '/admin/orders',
@@ -164,13 +184,34 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     return NextResponse.json({ ok: true, alerts: 0, message: 'No anomalies detected' });
   }
 
-  // Notifica admin via email + notification in-app
+  // Dedup: scarta gli alert la cui (tipo+entità) è già stata notificata entro
+  // il cooldown. Evita di re-inviare lo stesso avviso ad ogni run (alert fatigue).
+  const cutoff = new Date(Date.now() - COOLDOWN_HOURS * 60 * 60_000).toISOString();
+  const keys = alerts.map((a) => a.key);
+  const { data: recent } = await admin
+    .from('operational_alert_log')
+    .select('alert_key')
+    .in('alert_key', keys)
+    .gte('last_sent_at', cutoff);
+  const recentSet = new Set((recent ?? []).map((r: { alert_key: string }) => r.alert_key));
+  const fresh = alerts.filter((a) => !recentSet.has(a.key));
+
+  if (fresh.length === 0) {
+    return NextResponse.json({
+      ok: true,
+      alerts: alerts.length,
+      fresh: 0,
+      message: 'Anomalie presenti ma già notificate di recente (cooldown attivo)',
+    });
+  }
+
+  // Notifica admin via email + notification in-app (solo per gli alert "freschi")
   const adminEmail = process.env.SUPPORT_EMAIL ?? 'admin@mycity.it';
   const body = `
     <h2>⚠️ Alert operational MyCity</h2>
-    <p>Rilevate <strong>${alerts.length}</strong> anomalie:</p>
+    <p>Rilevate <strong>${fresh.length}</strong> nuove anomalie:</p>
     <ul>
-      ${alerts.map((a) => `<li><strong>[${a.type}]</strong> ${a.detail}${a.url ? ` <a href="${process.env.NEXT_PUBLIC_APP_URL}${a.url}">[apri]</a>` : ''}</li>`).join('\n')}
+      ${fresh.map((a) => `<li><strong>[${a.type}]</strong> ${a.detail}${a.url ? ` <a href="${process.env.NEXT_PUBLIC_APP_URL}${a.url}">[apri]</a>` : ''}</li>`).join('\n')}
     </ul>
     <p style="color:#666;font-size:12px">Generato automaticamente dal cron operational-alerts.</p>
   `;
@@ -178,7 +219,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   try {
     await sendEmail({
       to: adminEmail,
-      subject: `[MyCity Alert] ${alerts.length} anomalie operative`,
+      subject: `[MyCity Alert] ${fresh.length} anomalie operative`,
       html: body,
     });
   } catch (err) {
@@ -190,16 +231,25 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   if (admins && admins.length > 0) {
     const notifications = admins.map((a: { id: string }) => ({
       user_id: a.id,
-      title: `⚠️ ${alerts.length} alert operativi`,
-      body: alerts.slice(0, 3).map((al) => al.detail).join('; '),
+      title: `⚠️ ${fresh.length} alert operativi`,
+      body: fresh.slice(0, 3).map((al) => al.detail).join('; '),
       link: '/admin/today',
     }));
     await admin.from('notifications').insert(notifications);
   }
 
+  // Registra l'invio per il cooldown (upsert: aggiorna last_sent_at se esiste).
+  await admin
+    .from('operational_alert_log')
+    .upsert(
+      fresh.map((a) => ({ alert_key: a.key, last_sent_at: new Date().toISOString() })),
+      { onConflict: 'alert_key' },
+    );
+
   return NextResponse.json({
     ok: true,
     alerts: alerts.length,
-    details: alerts,
+    fresh: fresh.length,
+    details: fresh,
   });
 });
