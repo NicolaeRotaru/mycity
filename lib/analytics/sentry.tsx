@@ -61,7 +61,11 @@ export async function setSentryUser(userId: string, email?: string) {
   if (!DSN) return;
   const Sentry = await import('@sentry/nextjs').catch(() => null);
   if (!Sentry) return;
-  Sentry.setUser({ id: userId, email });
+  // PII: NON inviamo l'email (dato personale) a Sentry, processore terzo —
+  // coerente con sendDefaultPii:false lato server. Solo l'id per correlare gli
+  // eventi. Il parametro `email` resta nella firma per compatibilità callsite.
+  void email;
+  Sentry.setUser({ id: userId });
 }
 
 export default function SentryProvider() {
