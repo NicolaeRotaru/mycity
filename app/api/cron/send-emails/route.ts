@@ -58,6 +58,10 @@ const TEMPLATES: Record<string, { subject: string; html: (data: EmailTemplateDat
   },
 };
 
+// Template relazionali/onboarding (welcome, tutorial): esenti dal consenso
+// marketing — l'utente che si iscrive li attende. Gli altri sono marketing.
+const TRANSACTIONAL_TEMPLATES = new Set(['welcome', 'tutorial_day2']);
+
 function jsonError(status: number, message: string) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -107,9 +111,10 @@ async function processBatch(supa: any, batch: { id: string; user_id: string; tem
     }
     // Lookup utente email + preferenza marketing
     const { data: userProfile } = await supa.from('profiles').select('id, full_name, email_marketing').eq('id', row.user_id).single();
-    // Opt-out marketing (GDPR): i template in coda sono lifecycle/marketing →
-    // inviamo solo a chi ha dato consenso, altrimenti annulliamo dalla coda.
-    if (!userProfile?.email_marketing) {
+    // welcome/tutorial = onboarding relazionale → partono sempre. Gli altri
+    // (promo / re-engagement / win-back) sono marketing → solo con consenso.
+    const isMarketing = !TRANSACTIONAL_TEMPLATES.has(row.template);
+    if (isMarketing && !userProfile?.email_marketing) {
       skipped++;
       await supa.from('email_queue').update({ cancelled_at: new Date().toISOString() }).eq('id', row.id);
       continue;
