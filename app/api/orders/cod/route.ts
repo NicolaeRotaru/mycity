@@ -8,7 +8,7 @@ import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingCentsFor } from '@/lib/shipping';
 import { sendEmail } from '@/lib/email/client';
-import { orderConfirmedBuyerTemplate } from '@/lib/email/templates';
+import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 
 export const runtime = 'nodejs';
 
@@ -307,6 +307,25 @@ export const POST = withAuthRateLimit(
         body: `Ordine #${order.id.slice(0, 6).toUpperCase()} · €${(totalCents / 100).toFixed(2)} · pagamento alla consegna`,
         link: `/seller/orders/${order.id}`,
       });
+
+      // Email al venditore (oltre alla notifica) — per la carta parte dal webhook,
+      // per il COD va inviata qui. Best-effort.
+      try {
+        const { data: sellerAuth } = await admin.auth.admin.getUserById(g.sellerId);
+        const sellerEmail = sellerAuth?.user?.email;
+        if (sellerEmail) {
+          const itemsCount = g.items.reduce((s, it) => s + it.quantity, 0);
+          const t = newOrderSellerTemplate({
+            sellerName: null,
+            orderId: order.id,
+            total: totalCents / 100,
+            itemsCount,
+          });
+          await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+        }
+      } catch (e) {
+        logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: order.id, e });
+      }
 
       // Conferma al BUYER — notifica in-app + email (best-effort: un errore qui
       // non deve far fallire la creazione dell'ordine). Per gli ordini con carta
