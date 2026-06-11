@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { hasConsent } from '@/lib/consent';
 
 /**
  * Beacon di sorveglianza (lato "Grande Fratello" admin).
@@ -17,9 +18,10 @@ import { supabase } from '@/lib/supabase/client';
  * all'unload) con fallback a fetch keepalive. credentials:'include' → la route
  * vede la sessione e associa l'utente loggato.
  *
- * Questo log interno di sicurezza è di prima parte e indipendente dal consenso
- * analytics di terze parti (GA4/PostHog), coerentemente con lib/consent.ts che
- * classifica sessione/sicurezza come "necessary".
+ * GATE CONSENSO: il beacon parte SOLO se l'utente ha prestato consenso
+ * "analytics" (hasConsent('analytics')). La profilazione cross-session tramite
+ * il cookie persistente `mc_vid` non è un cookie tecnico/necessario, quindi
+ * richiede consenso preventivo (art. 122 Codice Privacy / linee guida Garante).
  */
 
 type TrackPayload = {
@@ -48,6 +50,10 @@ function getSessionId(): string | undefined {
 
 function send(payload: TrackPayload) {
   if (typeof window === 'undefined') return;
+  // Gate consenso: nessun tracking comportamentale (incl. il cookie mc_vid
+  // impostato dalla route) senza opt-in "analytics". hasConsent() legge lo stato
+  // live, quindi il tracking riprende da solo appena l'utente accetta.
+  if (!hasConsent('analytics')) return;
   const body = JSON.stringify({ ...payload, session_id: payload.session_id ?? getSessionId() });
   try {
     if (navigator.sendBeacon) {

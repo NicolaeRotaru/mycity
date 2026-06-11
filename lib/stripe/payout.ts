@@ -91,12 +91,18 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
 
   // Claim atomico: solo UNA esecuzione concorrente passa da HELD/PENDING a PROCESSING.
   // Elimina il doppio payout quando il cron si sovrappone o coincide col trigger manuale.
-  const { data: claimed } = await admin
+  const { data: claimed, error: claimErr } = await admin
     .from('orders')
     .update({ payout_status: 'PROCESSING' })
     .eq('id', order.id)
     .in('payout_status', ['HELD', 'PENDING_SELLER_ONBOARDING'])
     .select('id');
+  if (claimErr) {
+    // Un errore DB qui (es. violazione di constraint) NON va mascherato da no-op:
+    // i fondi resterebbero bloccati in HELD in silenzio. Logga (→ Sentry) e segnala.
+    logger.error('[stripe] payout seller: claim update fallito', claimErr);
+    return { ok: false, code: 'TRANSFER_FAILED', reason: `Claim payout fallito: ${claimErr.message}` };
+  }
   if (!claimed || claimed.length === 0) {
     return { ok: false, code: 'BAD_STATE', reason: 'Payout già in lavorazione o completato, no-op' };
   }
@@ -167,12 +173,17 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   }
 
   // Claim atomico anche per il compenso rider (no doppio transfer da race).
-  const { data: claimed } = await admin
+  const { data: claimed, error: claimErr } = await admin
     .from('orders')
     .update({ rider_payout_status: 'PROCESSING' })
     .eq('id', order.id)
     .or('rider_payout_status.is.null,rider_payout_status.in.(HELD,PENDING_RIDER_ONBOARDING,FAILED)')
     .select('id');
+  if (claimErr) {
+    // Vedi releaseOrderPayout: un errore DB non va mascherato da no-op silenzioso.
+    logger.error('[stripe] payout rider: claim update fallito', claimErr);
+    return { ok: false, code: 'TRANSFER_FAILED', reason: `Claim payout rider fallito: ${claimErr.message}` };
+  }
   if (!claimed || claimed.length === 0) {
     return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già in lavorazione o versato, no-op' };
   }
