@@ -134,7 +134,8 @@ async function processBatch(supa: any, batch: { id: string; user_id: string; tem
       await supa.from('email_queue').update({ sent_at: new Date().toISOString() }).eq('id', row.id);
     } else {
       errors++;
-      // Lascia in queue per retry, ma marca tentativo (via metadata)
+      // Invio fallito: rilascia il claim così il prossimo run può ritentare.
+      await supa.from('email_queue').update({ claimed_at: null }).eq('id', row.id);
     }
   }
   return NextResponse.json({ ok: true, sent, skipped, errors, total: batch.length });
