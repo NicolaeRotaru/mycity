@@ -186,6 +186,7 @@ export const queryKeys = {
     availability:            ['rider', 'availability'] as const,
     earnings:                ['rider', 'earnings'] as const,
     orders:                  ['rider', 'orders'] as const,
+    pref:                    ['rider', 'pref'] as const,
     activeOrder:             ['rider', 'active-order'] as const,
     order:   (id: string)    => ['rider', 'order', id] as const,
     profile:                 ['rider', 'profile'] as const,

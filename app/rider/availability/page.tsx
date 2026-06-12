@@ -165,7 +165,8 @@ export default function RiderAvailabilityPage() {
       <section className="bg-white border rounded-xl p-5">
         <h2 className="flex items-center gap-1.5 font-bold text-ink-900 mb-4"><Calendar size={18} strokeWidth={2.2} aria-hidden /> Orari preferiti</h2>
         <p className="text-xs text-ink-500 mb-4">
-          Indica quando preferisci lavorare. Riceverai notifiche solo in quegli orari (anche se sei offline manuale).
+          Indica le tue fasce orarie preferite: è un promemoria per organizzarti. Per ricevere
+          consegne ricordati di metterti <strong>online</strong> qui sopra.
         </p>
         <div className="space-y-2">
           {DAYS.map((d) => {

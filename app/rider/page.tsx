@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Store, Package, ChefHat, Clock } from 'lucide-react';
+import { Store, Package, ChefHat, Clock, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import {
@@ -60,11 +60,39 @@ export default function RiderDashboardPage() {
     staleTime: 15_000,
   });
 
+  // Preferenze del rider: online/offline e zone preferite (dalla pagina Disponibilità).
+  const { data: pref } = useQuery({
+    queryKey: queryKeys.rider.pref,
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { online: false, zones: [] as string[] };
+      const { data } = await supabase
+        .from('profiles')
+        .select('rider_is_online, rider_zones')
+        .eq('id', user.id)
+        .single();
+      return { online: !!data?.rider_is_online, zones: (data?.rider_zones as string[] | null) ?? [] };
+    },
+    staleTime: 30_000,
+  });
+  const online = pref?.online ?? false;
+  const zones = pref?.zones ?? [];
+
+  // Priorità per zona: gli ordini che cadono in una zona preferita vanno PRIMA
+  // (la disponibilità promette "riceverai prima le consegne in queste zone").
+  const inPreferredZone = (o: { delivery_address: string | null; delivery_city: string | null }) => {
+    if (zones.length === 0) return false;
+    const hay = `${o.delivery_address ?? ''} ${o.delivery_city ?? ''}`.toLowerCase();
+    return zones.some((z) => hay.includes(z.toLowerCase()));
+  };
+  const byZone = <T extends { delivery_address: string | null; delivery_city: string | null }>(a: T, b: T) =>
+    (inPreferredZone(b) ? 1 : 0) - (inPreferredZone(a) ? 1 : 0);
+
   // Gli ordini annullati (CANCELED) non sono consegne attive: restano visibili
   // solo a buyer (proprietario) e admin, non al rider.
   const myActive   = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED' && o.delivery_status !== 'CANCELED');
-  const available  = orders.filter((o) => !o.rider_id && o.delivery_status === 'READY');
-  const inPrep     = orders.filter((o) => !o.rider_id && o.delivery_status === 'ACCEPTED');
+  const available  = orders.filter((o) => !o.rider_id && o.delivery_status === 'READY').sort(byZone);
+  const inPrep     = orders.filter((o) => !o.rider_id && o.delivery_status === 'ACCEPTED').sort(byZone);
 
   const claim = useMutation({
     mutationFn: async (orderId: string) => {
@@ -101,6 +129,20 @@ export default function RiderDashboardPage() {
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
+  const goOnline = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non autenticato');
+      const { error } = await supabase.from('profiles').update({ rider_is_online: true }).eq('id', user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.rider.pref });
+      toast.success('Sei online! Ora ricevi le consegne disponibili.');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -151,6 +193,23 @@ export default function RiderDashboardPage() {
         )}
       </section>
 
+      {!online ? (
+        <section className="bg-gradient-to-br from-olive-50 to-teal-50 border-2 border-olive-200 rounded-2xl p-8 text-center">
+          <p className="text-xl font-extrabold text-ink-900 mb-1">Sei offline</p>
+          <p className="text-sm text-ink-600 mb-4">Vai online per vedere e accettare le consegne disponibili.</p>
+          <button
+            onClick={() => goOnline.mutate()}
+            disabled={goOnline.isPending}
+            className="inline-flex items-center gap-2 bg-olive-500 hover:bg-olive-600 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-bold shadow"
+          >
+            <Play size={16} strokeWidth={2.2} aria-hidden /> Vai online
+          </button>
+          <p className="mt-3 text-xs text-ink-500">
+            Gestisci orari e zone nella pagina <Link href="/rider/availability" className="text-olive-700 underline">Disponibilità</Link>.
+          </p>
+        </section>
+      ) : (
+       <>
       {/* ORDINI DISPONIBILI */}
       <section>
         <h2 className="font-bold text-ink-900 mb-3">Ordini disponibili ({available.length})</h2>
@@ -239,6 +298,8 @@ export default function RiderDashboardPage() {
             ))}
           </div>
         </section>
+      )}
+      </>
       )}
     </div>
   );
