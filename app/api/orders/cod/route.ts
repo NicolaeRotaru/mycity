@@ -7,6 +7,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingCentsFor } from '@/lib/shipping';
+import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 
@@ -91,6 +92,10 @@ export const POST = withAuthRateLimit(
       return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
     }
 
+    // Sconti promo attivi (per prodotto): il cliente paga il prezzo scontato che
+    // vede, non il prezzo pieno. Stessa fonte del badge "In promo -X%".
+    const discountMap = await fetchActiveDiscounts(supa, allProductIds);
+
     // --- 1b. Carica le varianti richieste (stock/label/owner) per validarle.
     const allVariantIds = body.groups.flatMap((g) =>
       g.items.map((i) => i.variantId).filter(Boolean) as string[],
@@ -166,7 +171,7 @@ export const POST = withAuthRateLimit(
             { status: 409 },
           );
         }
-        const unitCents = Math.round(Number(p.price) * 100);
+        const unitCents = discountedUnitCents(p.price, discountMap.get(p.id) ?? 0);
         items.push({ productId: p.id, quantity: it.quantity, unitCents, variantId, variantLabel });
         groupSubtotalCents += unitCents * it.quantity;
       }
