@@ -1,7 +1,10 @@
 'use client';
 import { use, type CSSProperties } from 'react';
 
-import { Megaphone } from 'lucide-react';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { Megaphone, PencilLine } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
 import { announcementActive } from '@/lib/store-customization';
 import { homePage, enabledSections } from '@/lib/store-site';
 import SectionRenderer from '@/components/store-sections/SectionRenderer';
@@ -13,6 +16,14 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 export default function StorePage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
   const data = useStorePageData(id);
+
+  // Identità del visitatore: se è il proprietario del negozio mostriamo una
+  // scorciatoia per modificare la vetrina (stesso pattern delle pagine custom).
+  const { data: viewerId } = useQuery({
+    queryKey: ['store-viewer-uid'],
+    queryFn: async () => (await supabase.auth.getUser()).data.user?.id ?? null,
+    staleTime: 60_000,
+  });
 
   if (data.isLoading) {
     return (
@@ -30,6 +41,7 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
   }
 
   const { store, custom, accent, socials, reviews, site, ctx } = data;
+  const isOwner = Boolean(viewerId && viewerId === store.id);
   const showAnnouncement = announcementActive(custom);
   const home = homePage(site);
   const sections = enabledSections(home);
@@ -74,11 +86,21 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
       />
-      <Breadcrumb items={[
-        { label: 'Home', href: '/' },
-        { label: 'Negozi', href: '/stores' },
-        { label: store.store_name ?? 'Negozio' },
-      ]} />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <Breadcrumb items={[
+          { label: 'Home', href: '/' },
+          { label: 'Negozi', href: '/stores' },
+          { label: store.store_name ?? 'Negozio' },
+        ]} />
+        {isOwner && (
+          <Link
+            href="/seller/site"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 shadow-warm-sm transition-colors hover:border-primary-300 hover:text-primary-700"
+          >
+            <PencilLine size={15} strokeWidth={2.2} aria-hidden /> Modifica vetrina
+          </Link>
+        )}
+      </div>
 
       <StoreNav site={site} storeId={ctx.storeId} />
 
