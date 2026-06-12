@@ -183,6 +183,7 @@ const Footer = () => {
             </li>
             <li><Link href="/shipping" className="hover:text-white transition-colors">Spedizioni</Link></li>
             <li><Link href="/returns" className="hover:text-white transition-colors">Resi e rimborsi</Link></li>
+            <li><Link href="/status" className="hover:text-white transition-colors">Stato servizi</Link></li>
             {isAuthenticated && (
               <li><Link href="/profile/settings" className="hover:text-white transition-colors">Impostazioni account</Link></li>
             )}
