@@ -1,10 +1,8 @@
 import type { ReactNode } from 'react';
 import { headers } from 'next/headers';
-import { redirect } from 'next/navigation';
-import HomeRedirectGuard from '@/components/HomeRedirectGuard';
 import ExperimentExposure from '@/components/home/ExperimentExposure';
 import HomeSectionRenderer, { type HeroDefaults } from '@/components/home-sections/HomeSectionRenderer';
-import { getServerSupabase, getCurrentUserWithProfile } from '@/lib/supabase/server';
+import { getServerSupabase } from '@/lib/supabase/server';
 import { normalizeHomeSite, homeEnabledSections } from '@/lib/home-site';
 import { EXPERIMENTS, expHeaderName, resolveVariant } from '@/lib/experiments';
 
@@ -75,30 +73,13 @@ async function loadHomeSite() {
   }
 }
 
-// Mappa ruolo → home dedicata. Mirror di HomeRedirectGuard, ma eseguito
-// lato server così chi ha un ruolo non riceve MAI l'HTML della home buyer
-// (niente flash del marketplace prima del redirect).
-const ROLE_HOME: Record<string, string> = {
-  admin: '/admin',
-  seller: '/seller/dashboard',
-  rider: '/rider',
-};
-
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<{ as?: string }>;
-}) {
-  // Redirect server-side per ruolo PRIMA di renderizzare la home buyer.
-  // Eccezione: ?as=buyer (menu "Home marketplace") = vuole esplicitamente il
-  // marketplace da cliente. Se i cookie di sessione non bastano (es. login solo
-  // client-side), HomeRedirectGuard resta come fallback lato client.
-  const asBuyer = (await searchParams).as === 'buyer';
-  if (!asBuyer) {
-    const session = await getCurrentUserWithProfile();
-    const dest = session?.profile?.role ? ROLE_HOME[session.profile.role] : undefined;
-    if (dest) redirect(dest);
-  }
+export default async function Home() {
+  // Home del marketplace, visibile a TUTTI — inclusi admin/seller/rider, che
+  // possono così sfogliare e navigare il marketplace come un cliente. Nessun
+  // redirect per ruolo qui: l'atterraggio sulla dashboard dopo il login è già
+  // gestito dalla pagina di sign-in (dest = /admin · /seller/dashboard · /rider),
+  // e per tornare alla propria area resta sempre il pulsante dedicato in navbar
+  // (scudo/negozio/bici) e il menu account.
 
   // Variante hero assegnata dal middleware (header x-exp-home_hero); fallback al controllo.
   const heroVariant = resolveVariant(
@@ -112,7 +93,6 @@ export default async function Home({
 
   return (
     <div className="bg-surface-50">
-      <HomeRedirectGuard />
       <ExperimentExposure experiment="home_hero" variant={heroVariant} />
       <HomeSectionRenderer sections={sections} heroVariant={heroVariant} heroDefaults={heroDefaults} />
     </div>

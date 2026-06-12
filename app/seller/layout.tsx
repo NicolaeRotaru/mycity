@@ -60,7 +60,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
               🏪 Diventa venditore
             </Link>
             <Link
-              href={isRider ? '/rider' : '/?as=buyer'}
+              href={isRider ? '/rider' : '/'}
               className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold"
             >
               ← Torna alla mia area
@@ -87,7 +87,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             <Link href="/contact" className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-bold shadow">
               ✉️ Contatta il supporto
             </Link>
-            <Link href="/?as=buyer" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
+            <Link href="/" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
               🏠 Vai al marketplace
             </Link>
           </div>
@@ -114,7 +114,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
             <Button href="/sell">✏️ Ripresenta la richiesta</Button>
-            <Button href="/?as=buyer" variant="secondary">🏠 Vai al marketplace</Button>
+            <Button href="/" variant="secondary">🏠 Vai al marketplace</Button>
           </div>
         </div>
       </div>
@@ -135,7 +135,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
             <Button href="/sell" variant="secondary">✏️ Modifica richiesta</Button>
-            <Button href="/?as=buyer">🏠 Vai al marketplace</Button>
+            <Button href="/">🏠 Vai al marketplace</Button>
             <Button href="/contact" variant="secondary">✉️ Contatti</Button>
           </div>
         </div>

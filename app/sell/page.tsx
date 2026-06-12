@@ -169,7 +169,7 @@ function PendingNotice({ requestedAt }: { requestedAt: string | null }) {
         Nel frattempo puoi continuare a comprare normalmente.
       </p>
       <div className="flex flex-wrap gap-2 justify-center text-sm">
-        <Button href="/?as=buyer">🏠 Continua a comprare</Button>
+        <Button href="/">🏠 Continua a comprare</Button>
         <Link href="/contact" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
           ✉️ Contatta il supporto
         </Link>

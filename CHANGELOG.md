@@ -55,6 +55,12 @@ maggiore resta a `0.x` finche' non c'e' PMF.
 - `next.config.js`: aggiunto `experimental.instrumentationHook: true` +
   wrap condizionale con `withSentryConfig` se DSN settato
 - queryKeys factory: tutti i 191 callsite inline migrate (0 inline restanti)
+- Home `/`: rimosso il redirect forzato per ruolo (admin/seller/rider) — ora
+  possono visualizzare e navigare il marketplace come un cliente (niente più
+  "flash" della home buyer prima del rimbalzo in dashboard). L'atterraggio sulla
+  dashboard dopo il login resta gestito dalla pagina di sign-in; la CategoryBar
+  è ora visibile anche a loro nelle aree pubbliche. Rimossi `HomeRedirectGuard`
+  e il param `?as=buyer` (non più necessari).
 
 ### Fixed
 - Migration 035: rimosso `WHERE expires_at > now()` da indici parziali

@@ -68,12 +68,14 @@ export default function Navbar() {
     userEmail?.split('@')[0] ??
     'utente';
 
-  // CategoryBar mostrata solo per buyer/guest in aree pubbliche (no /seller, /rider, /admin)
+  // CategoryBar = aiuto alla navigazione del marketplace: mostrata in tutte le
+  // aree pubbliche (anche ad admin/seller/rider che stanno sfogliando il
+  // marketplace), nascosta solo nelle aree "mestiere" (/seller, /rider, /admin).
   const isProArea =
     !!pathname?.startsWith('/seller') ||
     !!pathname?.startsWith('/rider') ||
     !!pathname?.startsWith('/admin');
-  const showCategoryBar = !isProArea && !isSeller && !isRider && !isAdmin;
+  const showCategoryBar = !isProArea;
 
   return (
     <header className="relative z-40 shadow-warm-sm">
