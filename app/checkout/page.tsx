@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/Button';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
-import { B2BInvoiceForm } from '@/components/checkout/B2BInvoiceForm';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
@@ -297,11 +296,6 @@ export default function CheckoutPage() {
   // Ritiro in negozio (-10%, no spedizione)
   const [pickupInStore, setPickupInStore] = useState(false);
 
-  // B2B: ordinare per la mia azienda → fattura elettronica
-  // Esperti: Finance Manager + Trust&Safety: P.IVA + SDI obbligatori se attivo.
-  // SDI o PEC per fatturazione elettronica italiana.
-  const [b2bActive, setB2bActive] = useState(false);
-  const [b2bForm, setB2bForm] = useState({ company_name: '', vat_number: '', sdi_code: '', pec: '' });
 
   // Pagamento: 'cod' = contanti alla consegna (sempre disponibile);
   // 'card' = Stripe Checkout, disponibile solo se la sitewide publishable
@@ -392,12 +386,6 @@ export default function CheckoutPage() {
           },
           couponCode: appliedCoupon?.coupon.code ?? null,
           pickupInStore,
-          b2b: b2bActive && b2bForm.company_name && b2bForm.vat_number ? {
-            company_name: b2bForm.company_name.trim(),
-            vat_number: b2bForm.vat_number.trim().toUpperCase(),
-            sdi_code: b2bForm.sdi_code.trim().toUpperCase() || null,
-            pec: b2bForm.pec.trim().toLowerCase() || null,
-          } : null,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -481,12 +469,6 @@ export default function CheckoutPage() {
           couponDiscountCents,
           pickupDiscountCents,
           pickupInStore,
-          b2b: b2bActive && b2bForm.company_name && b2bForm.vat_number ? {
-            company_name: b2bForm.company_name.trim(),
-            vat_number: b2bForm.vat_number.trim().toUpperCase(),
-            sdi_code: b2bForm.sdi_code.trim().toUpperCase() || null,
-            pec: b2bForm.pec.trim().toLowerCase() || null,
-          } : null,
         }),
       });
       const data = await res.json();
@@ -634,12 +616,6 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          <B2BInvoiceForm
-            active={b2bActive}
-            onToggle={setB2bActive}
-            form={b2bForm}
-            onChange={setB2bForm}
-          />
 
           <PaymentMethodSelector
             value={paymentMethod}

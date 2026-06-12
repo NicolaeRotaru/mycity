@@ -34,22 +34,11 @@ const DeliverySchema = z.object({
   lng: z.number().min(-180).max(180).nullable().optional(),
 }).refine((d) => !(d.lat === 0 && d.lng === 0), { message: 'Coordinate di consegna non valide' });
 
-const B2BSchema = z
-  .object({
-    company_name: z.string().min(1).max(200),
-    vat_number: z.string().min(1).max(40),
-    sdi_code: z.string().max(20).optional().nullable(),
-    pec: z.string().email().max(200).optional().nullable(),
-  })
-  .nullable()
-  .optional();
-
 const Body = z.object({
   groups: z.array(GroupSchema).min(1).max(10),
   delivery: DeliverySchema,
   couponCode: z.string().max(40).optional().nullable(),
   pickupInStore: z.boolean().default(false),
-  b2b: B2BSchema,
 });
 
 /**
@@ -283,21 +272,6 @@ export const POST = withAuthRateLimit(
       const { error: itemsErr } = await admin.from('order_items').insert(itemsRows);
       if (itemsErr) {
         logger.error(itemsErr, { context: 'cod-order-items-insert', orderId: order.id });
-      }
-
-      // B2B: dettaglio fattura elettronica (se attivato)
-      if (body.b2b && body.b2b.company_name && body.b2b.vat_number) {
-        const { error: bErr } = await admin.from('business_orders').insert({
-          order_id: order.id,
-          company_name: body.b2b.company_name,
-          vat_number: body.b2b.vat_number,
-          sdi_code: body.b2b.sdi_code ?? null,
-          pec: body.b2b.pec ?? null,
-          invoice_required: true,
-        });
-        if (bErr && !bErr.message.includes('does not exist')) {
-          logger.warn('business_orders insert failed', { message: bErr.message });
-        }
       }
 
       // Notifica in-app al venditore — nuovo ordine COD ricevuto
