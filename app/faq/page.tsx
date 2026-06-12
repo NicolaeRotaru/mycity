@@ -20,10 +20,6 @@ const SECTIONS: Section[] = [
         a: 'Sì. Il carrello supporta più venditori: alla conferma viene creato un ordine separato per ciascun negozio, ognuno con la propria spedizione e gestione.',
       },
       {
-        q: 'Cos\'è un gruppo d\'acquisto?',
-        a: <>I gruppi d&apos;acquisto sono offerte a tempo: quando un numero minimo di persone aderisce, tutti ricevono lo sconto. Scopri le offerte attive nella sezione <Link href="/groups" className="text-primary-700 underline">Gruppi d&apos;acquisto</Link>.</>,
-      },
-      {
         q: 'Posso annullare un ordine?',
         a: 'Sì, finché il venditore non l\'ha preso in carico. Vai su “I miei ordini”, apri l\'ordine e clicca su “Annulla”.',
       },

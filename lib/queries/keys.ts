@@ -254,11 +254,6 @@ export const queryKeys = {
                               ['sponsored', placement, categorySlug ?? null] as const,
   },
 
-  subscriptions: {
-    all:                     ['subscriptions'] as const,
-    byUser:  (uid: string)   => ['subscriptions', uid] as const,
-  },
-
   achievements: {
     all:                     ['achievements'] as const,
     allList:                 ['achievements-all'] as const,

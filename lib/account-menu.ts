@@ -2,7 +2,7 @@ import {
   User, Package, Heart, MapPin, Sparkles, Award, Gift, ListChecks, Megaphone,
   LayoutDashboard, TrendingUp, ShoppingCart, Camera, Euro, Bike, CircleDot,
   Settings, HelpCircle, Shield, Home, Users, ShoppingBag, Ticket, Crown,
-  Calendar, Coins, AlertTriangle, Headset, Eye, LayoutTemplate, Palette,
+  Calendar, AlertTriangle, Headset, Eye, LayoutTemplate, Palette,
   Zap, Tags, FileText, type LucideIcon,
 } from 'lucide-react';
 
@@ -73,7 +73,6 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/admin/daily-drops', icon: Zap, label: 'Drop del giorno' },
       { href: '/admin/events', icon: Calendar, label: 'Eventi' },
       { href: '/admin/sponsored', icon: Megaphone, label: 'Sponsored' },
-      { href: '/admin/cashback', icon: Coins, label: 'Cashback' },
       { href: '/admin/sos', icon: AlertTriangle, label: 'SOS Rider' },
     );
   }
