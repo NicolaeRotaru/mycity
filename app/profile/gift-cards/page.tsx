@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Gift, Send, ArrowLeft, Copy } from 'lucide-react';
+import { Gift, Send, ArrowLeft, Copy, Wallet, Ticket } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
@@ -29,22 +29,16 @@ type GiftCard = {
 
 const AMOUNTS = [10, 25, 50, 100];
 
-function randomCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s = 'MC-';
-  for (let i = 0; i < 12; i++) s += chars[Math.floor(Math.random() * chars.length)];
-  return s;
-}
-
 export default function GiftCardsPage() {
   const router = useRouter();
   const qc = useQueryClient();
   const [userId, setUserId] = useState<string | null>(null);
-  const [tab, setTab] = useState<'buy' | 'mine'>('buy');
+  const [tab, setTab] = useState<'buy' | 'redeem' | 'mine'>('buy');
   const [amount, setAmount] = useState(25);
   const [recipientName, setRecipientName] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [redeemCode, setRedeemCode] = useState('');
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -52,6 +46,28 @@ export default function GiftCardsPage() {
       setUserId(data.user.id);
     });
   }, [router]);
+
+  // Esito ritorno da Stripe (?giftcard=success|canceled).
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search).get('giftcard');
+    if (p === 'success') {
+      toast.success('Pagamento riuscito! La gift card è in arrivo al destinatario.');
+      setTab('mine');
+      window.history.replaceState({}, '', '/profile/gift-cards');
+    } else if (p === 'canceled') {
+      toast.info('Pagamento annullato.');
+      window.history.replaceState({}, '', '/profile/gift-cards');
+    }
+  }, []);
+
+  const { data: balanceCents = 0 } = useQuery({
+    queryKey: queryKeys.wallet.byUser(userId ?? ''),
+    enabled: !!userId,
+    queryFn: async (): Promise<number> => {
+      const { data } = await supabase.from('profiles').select('wallet_balance_cents').eq('id', userId!).single();
+      return (data?.wallet_balance_cents as number) ?? 0;
+    },
+  });
 
   const { data: cards = [] } = useQuery({
     queryKey: queryKeys.giftCards.byUser(userId ?? ''),
@@ -66,33 +82,57 @@ export default function GiftCardsPage() {
     },
   });
 
-  const create = useMutation({
+  // Acquisto: paga con carta via Stripe, poi il webhook crea la carta e invia il codice.
+  const buy = useMutation({
     mutationFn: async () => {
       if (!recipientName.trim() || !recipientEmail.trim()) throw new Error('Compila nome e email destinatario');
-      const code = randomCode();
-      const cents = amount * 100;
-      const { error } = await supabase.from('gift_cards').insert({
-        code,
-        amount_cents: cents,
-        balance_cents: cents,
-        buyer_id: userId,
-        recipient_name: recipientName.trim(),
-        recipient_email: recipientEmail.trim(),
-        message: message.trim() || null,
+      const res = await fetch('/api/gift-cards/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amountEuro: amount,
+          recipientName: recipientName.trim(),
+          recipientEmail: recipientEmail.trim(),
+          message: message.trim() || null,
+        }),
       });
-      if (error) throw error;
-      return { code, cents };
+      const json = await res.json();
+      if (!res.ok || !json.url) throw new Error(json.error || 'Errore nel pagamento');
+      window.location.href = json.url as string; // redirect a Stripe Checkout
     },
-    onSuccess: ({ code }) => {
-      toast.success(`Gift card creata! Codice: ${code}`);
-      setRecipientName(''); setRecipientEmail(''); setMessage('');
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
+  // Riscatto: il codice diventa credito MyCity spendibile.
+  const redeem = useMutation({
+    mutationFn: async () => {
+      const code = redeemCode.trim();
+      if (!code) throw new Error('Inserisci il codice');
+      const { data, error } = await supabase.rpc('redeem_gift_card', { p_code: code });
+      if (error) throw error;
+      return (data as { credited_cents?: number })?.credited_cents ?? 0;
+    },
+    onSuccess: (cents) => {
+      toast.success(`Riscattata! +${formatPrice(cents / 100)} di credito`);
+      setRedeemCode('');
+      qc.invalidateQueries({ queryKey: queryKeys.wallet.all });
       qc.invalidateQueries({ queryKey: queryKeys.giftCards.all });
-      setTab('mine');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (!userId) return <LoadingState />;
+
+  const TabBtn = ({ id, label }: { id: typeof tab; label: string }) => (
+    <button
+      onClick={() => setTab(id)}
+      className={`px-4 py-2 font-semibold text-sm border-b-2 -mb-px ${
+        tab === id ? 'border-primary-600 text-primary-700' : 'border-transparent text-ink-500'
+      }`}
+    >
+      {label}
+    </button>
+  );
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-3xl space-y-6">
@@ -107,29 +147,27 @@ export default function GiftCardsPage() {
         <p className="text-sm text-ink-500 mt-1">Regala buoni spesa ai tuoi cari. Spendibili nei negozi di Piacenza.</p>
       </div>
 
+      {/* Saldo credito */}
+      <div className="bg-gradient-to-br from-primary-700 to-secondary-700 text-white rounded-2xl p-5 shadow-warm flex items-center gap-4">
+        <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+          <Wallet size={24} />
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wider opacity-80">Il tuo credito MyCity</p>
+          <p className="text-3xl font-serif font-extrabold">{formatPrice(balanceCents / 100)}</p>
+        </div>
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-2 border-b border-cream-300">
-        <button
-          onClick={() => setTab('buy')}
-          className={`px-4 py-2 font-semibold text-sm border-b-2 -mb-px ${
-            tab === 'buy' ? 'border-primary-600 text-primary-700' : 'border-transparent text-ink-500'
-          }`}
-        >
-          Regala
-        </button>
-        <button
-          onClick={() => setTab('mine')}
-          className={`px-4 py-2 font-semibold text-sm border-b-2 -mb-px ${
-            tab === 'mine' ? 'border-primary-600 text-primary-700' : 'border-transparent text-ink-500'
-          }`}
-        >
-          Le mie gift card ({cards.length})
-        </button>
+        <TabBtn id="buy" label="Regala" />
+        <TabBtn id="redeem" label="Riscatta" />
+        <TabBtn id="mine" label={`Le mie gift card (${cards.length})`} />
       </div>
 
       {tab === 'buy' && (
         <form
-          onSubmit={(e) => { e.preventDefault(); create.mutate(); }}
+          onSubmit={(e) => { e.preventDefault(); buy.mutate(); }}
           className="bg-white border border-cream-300 rounded-2xl p-6 space-y-5 shadow-warm"
         >
           {/* Importo */}
@@ -179,18 +217,42 @@ export default function GiftCardsPage() {
           />
 
           <div className="bg-accent-50 border border-accent-200 rounded-lg p-3 text-sm text-ink-700">
-            <p><strong>Come funziona:</strong> generi un codice univoco da inviare al destinatario. Lui lo riscatta su MyCity e ha credito di €{amount} per 2 anni.</p>
+            <p><strong>Come funziona:</strong> paghi €{amount} con carta; inviamo subito un codice al destinatario via email. Lui lo riscatta su MyCity e ottiene €{amount} di credito (valido 2 anni).</p>
           </div>
 
           <Button
             type="submit"
-            loading={create.isPending}
+            loading={buy.isPending}
             disabled={!recipientName.trim() || !recipientEmail.trim()}
             fullWidth
             size="lg"
             icon={Send}
           >
-            Regala €{amount}
+            Paga €{amount} e regala
+          </Button>
+        </form>
+      )}
+
+      {tab === 'redeem' && (
+        <form
+          onSubmit={(e) => { e.preventDefault(); redeem.mutate(); }}
+          className="bg-white border border-cream-300 rounded-2xl p-6 space-y-5 shadow-warm"
+        >
+          <div className="flex items-center gap-2 text-ink-900">
+            <Ticket size={20} className="text-primary-600" />
+            <h2 className="font-serif font-bold text-lg">Riscatta un codice</h2>
+          </div>
+          <p className="text-sm text-ink-600">Hai ricevuto una gift card? Inserisci il codice: il valore diventa credito spendibile sul tuo account.</p>
+          <Input
+            label="Codice gift card"
+            type="text"
+            value={redeemCode}
+            onChange={(e) => setRedeemCode(e.target.value.toUpperCase())}
+            placeholder="MC-XXXXXXXXXXXX"
+            autoComplete="off"
+          />
+          <Button type="submit" loading={redeem.isPending} disabled={!redeemCode.trim()} fullWidth size="lg" icon={Wallet}>
+            Riscatta
           </Button>
         </form>
       )}

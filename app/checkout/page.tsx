@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AlertTriangle, Store, Zap } from 'lucide-react';
+import { AlertTriangle, Store, Zap, Wallet } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/Button';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
-import { B2BInvoiceForm } from '@/components/checkout/B2BInvoiceForm';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
@@ -242,6 +241,16 @@ export default function CheckoutPage() {
     },
   });
 
+  // Credito MyCity (gift card / punti convertiti) — spendibile sugli ordini COD.
+  const { data: walletCents = 0 } = useQuery({
+    queryKey: queryKeys.wallet.byUser(authUser?.id ?? ''),
+    enabled: !!authUser?.id,
+    queryFn: async (): Promise<number> => {
+      const { data } = await supabase.from('profiles').select('wallet_balance_cents').eq('id', authUser!.id).single();
+      return (data?.wallet_balance_cents as number) ?? 0;
+    },
+  });
+
   const [form, setForm] = useState<AddressForm & { lat: number | null; lng: number | null }>({
     fullName: '', address: '', city: 'Piacenza', zip: '29121', phone: '', notes: '',
     lat: null, lng: null,
@@ -297,11 +306,9 @@ export default function CheckoutPage() {
   // Ritiro in negozio (-10%, no spedizione)
   const [pickupInStore, setPickupInStore] = useState(false);
 
-  // B2B: ordinare per la mia azienda → fattura elettronica
-  // Esperti: Finance Manager + Trust&Safety: P.IVA + SDI obbligatori se attivo.
-  // SDI o PEC per fatturazione elettronica italiana.
-  const [b2bActive, setB2bActive] = useState(false);
-  const [b2bForm, setB2bForm] = useState({ company_name: '', vat_number: '', sdi_code: '', pec: '' });
+  // Usa il credito MyCity (opt-in, default sì): applicato solo agli ordini COD.
+  const [useCredit, setUseCredit] = useState(true);
+
 
   // Pagamento: 'cod' = contanti alla consegna (sempre disponibile);
   // 'card' = Stripe Checkout, disponibile solo se la sitewide publishable
@@ -341,6 +348,11 @@ export default function CheckoutPage() {
   const grandShipping = appliedCoupon?.freeShipping ? 0 : groups.reduce((s, g) => s + shippingFor(g), 0);
   const discount = appliedCoupon?.discount ?? 0;
   const grandTotal = Math.max(0, grandSubtotal + grandShipping - discount - pickupDiscount);
+  const walletEuro = (walletCents ?? 0) / 100;
+  // Il credito si applica solo agli ordini COD in questo flusso (la carta passa da
+  // Stripe, dove il credito arriverà più avanti). Mai più del totale dell'ordine.
+  const creditApplied = paymentMethod === 'cod' && useCredit ? Math.min(walletEuro, grandTotal) : 0;
+  const finalTotal = Math.max(0, grandTotal - creditApplied);
 
   const placeOrders = useMutation({
     mutationFn: async () => {
@@ -392,12 +404,7 @@ export default function CheckoutPage() {
           },
           couponCode: appliedCoupon?.coupon.code ?? null,
           pickupInStore,
-          b2b: b2bActive && b2bForm.company_name && b2bForm.vat_number ? {
-            company_name: b2bForm.company_name.trim(),
-            vat_number: b2bForm.vat_number.trim().toUpperCase(),
-            sdi_code: b2bForm.sdi_code.trim().toUpperCase() || null,
-            pec: b2bForm.pec.trim().toLowerCase() || null,
-          } : null,
+          useCredit,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -481,12 +488,6 @@ export default function CheckoutPage() {
           couponDiscountCents,
           pickupDiscountCents,
           pickupInStore,
-          b2b: b2bActive && b2bForm.company_name && b2bForm.vat_number ? {
-            company_name: b2bForm.company_name.trim(),
-            vat_number: b2bForm.vat_number.trim().toUpperCase(),
-            sdi_code: b2bForm.sdi_code.trim().toUpperCase() || null,
-            pec: b2bForm.pec.trim().toLowerCase() || null,
-          } : null,
         }),
       });
       const data = await res.json();
@@ -634,12 +635,6 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          <B2BInvoiceForm
-            active={b2bActive}
-            onToggle={setB2bActive}
-            form={b2bForm}
-            onChange={setB2bForm}
-          />
 
           <PaymentMethodSelector
             value={paymentMethod}
@@ -647,6 +642,24 @@ export default function CheckoutPage() {
             stripeAvailable={stripeAvailable}
             multiSeller={groups.length > 1}
           />
+
+          {/* Credito MyCity — solo COD in questo flusso */}
+          {paymentMethod === 'cod' && walletEuro > 0 && (
+            <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-cream-300 bg-white cursor-pointer hover:border-primary-200">
+              <input
+                type="checkbox"
+                checked={useCredit}
+                onChange={(e) => setUseCredit(e.target.checked)}
+                className="mt-1 w-4 h-4 accent-primary-600"
+              />
+              <div className="flex-1">
+                <p className="font-bold text-ink-900 flex items-center gap-2"><Wallet size={16} aria-hidden /> Usa il mio credito MyCity</p>
+                <p className="text-sm text-ink-600 mt-0.5">
+                  Hai {formatPrice(walletEuro)} di credito.{creditApplied > 0 ? ` Applicati ${formatPrice(creditApplied)} a questo ordine.` : ''}
+                </p>
+              </div>
+            </label>
+          )}
 
           {/* RIEPILOGO PER NEGOZIO */}
           {groups.length > 1 && (
@@ -733,7 +746,8 @@ export default function CheckoutPage() {
               shipping={grandShipping}
               pickupDiscount={pickupDiscount}
               couponDiscount={discount}
-              total={grandTotal}
+              creditApplied={creditApplied}
+              total={finalTotal}
               isCheckingOut={isCheckingOut}
               paymentMethod={paymentMethod}
               disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}

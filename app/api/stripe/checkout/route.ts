@@ -9,6 +9,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingCentsFor } from '@/lib/shipping';
+import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 
 export const runtime = 'nodejs';
 
@@ -105,6 +106,10 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
   }
 
+  // Sconti promo attivi (per prodotto): il cliente deve pagare il prezzo scontato
+  // mostrato dal badge "In promo -X%", non il prezzo pieno. Fonte autorevole DB.
+  const discountMap = await fetchActiveDiscounts(supa, allProductIds);
+
   // Varianti richieste: stock/label/owner per la validazione e lo snapshot.
   const allVariantIds = body.groups.flatMap((g) =>
     g.items.map((i) => i.variantId).filter(Boolean) as string[],
@@ -198,7 +203,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         );
       }
 
-      const unitCents = Math.round(Number(p.price) * 100);
+      const unitCents = discountedUnitCents(p.price, discountMap.get(p.id) ?? 0);
       const cover = Array.isArray(p.images) ? p.images[0] : null;
       stripeItems.push({
         productId: p.id,

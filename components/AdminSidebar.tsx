@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, TrendingUp, LayoutDashboard, Users, ShoppingBag, Package,
-  Ticket, Crown, Calendar, Megaphone, Coins, AlertTriangle, Shield, Headset,
+  Ticket, Crown, Calendar, Megaphone, AlertTriangle, Shield, Headset,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -20,7 +20,6 @@ const links: { href: string; label: string; icon: LucideIcon }[] = [
   { href: '/admin/shop-of-month',  label: 'Negozio mese',   icon: Crown },
   { href: '/admin/events',         label: 'Eventi',         icon: Calendar },
   { href: '/admin/sponsored',      label: 'Sponsored',      icon: Megaphone },
-  { href: '/admin/cashback',       label: 'Cashback',       icon: Coins },
   { href: '/admin/sos',            label: 'SOS Rider',      icon: AlertTriangle },
 ];
 

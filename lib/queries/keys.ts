@@ -105,6 +105,11 @@ export const queryKeys = {
     byUser:  (uid: string)   => ['gift-cards', uid] as const,
   },
 
+  wallet: {
+    all:                     ['wallet'] as const,
+    byUser:  (uid: string)   => ['wallet', uid] as const,
+  },
+
   referrals: {
     all:                     ['referrals'] as const,
     mine:                    ['my-referral'] as const,
@@ -181,6 +186,7 @@ export const queryKeys = {
     availability:            ['rider', 'availability'] as const,
     earnings:                ['rider', 'earnings'] as const,
     orders:                  ['rider', 'orders'] as const,
+    pref:                    ['rider', 'pref'] as const,
     activeOrder:             ['rider', 'active-order'] as const,
     order:   (id: string)    => ['rider', 'order', id] as const,
     profile:                 ['rider', 'profile'] as const,
@@ -252,11 +258,6 @@ export const queryKeys = {
   sponsored: {
     placement: (placement: string, categorySlug?: string | null) =>
                               ['sponsored', placement, categorySlug ?? null] as const,
-  },
-
-  subscriptions: {
-    all:                     ['subscriptions'] as const,
-    byUser:  (uid: string)   => ['subscriptions', uid] as const,
   },
 
   achievements: {

@@ -1,11 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { createHmac } from 'node:crypto';
 import type Stripe from 'stripe';
 import { getStripe, computeApplicationFeeCents } from '@/lib/stripe/client';
 import { reverseOrderTransfer, applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
-import { orderConfirmedBuyerTemplate, newOrderSellerTemplate, refundIssuedTemplate } from '@/lib/email/templates';
+import { orderConfirmedBuyerTemplate, newOrderSellerTemplate, refundIssuedTemplate, giftCardRecipientTemplate, giftCardBuyerTemplate } from '@/lib/email/templates';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -76,7 +77,14 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        await handleCheckoutCompleted(session);
+        // Flussi separati dagli ordini (nessun pending_checkout).
+        if (session.metadata?.kind === 'gift_card') {
+          await handleGiftCardPurchase(session);
+        } else if (session.metadata?.kind === 'sponsored') {
+          await handleSponsoredPurchase(session);
+        } else {
+          await handleCheckoutCompleted(session);
+        }
         break;
       }
       case 'charge.refunded': {
@@ -364,6 +372,137 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       link: `/seller/orders/${created.orderId}`,
     });
   }
+}
+
+/**
+ * Codice gift card DETERMINISTICO dalla session id: HMAC(session.id) con il
+ * webhook secret, in base32 senza caratteri ambigui. Vantaggi:
+ *  - idempotenza: una re-delivery del webhook produce lo stesso codice → la PK
+ *    su `code` rende il secondo insert un no-op (niente carte doppie).
+ *  - non indovinabile: serve il secret del server per ricostruirlo.
+ */
+function giftCardCodeForSession(sessionId: string): string {
+  const secret = env.stripeWebhookSecret() ?? 'mycity-giftcard';
+  const digest = createHmac('sha256', secret).update(sessionId).digest();
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 32 simboli, niente 0/O/1/I
+  let s = '';
+  for (let i = 0; i < 12; i++) s += alphabet[digest[i] % 32];
+  return `MC-${s}`;
+}
+
+/**
+ * Pagamento gift card riuscito → crea la riga `gift_cards` (server-side, service
+ * role) e invia il codice al destinatario + conferma al buyer. Best-effort sulle
+ * email; idempotente sul codice (PK).
+ */
+async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
+  const admin = getAdminSupabase();
+  const m = session.metadata ?? {};
+  const amountCents = parseInt(m.amount_cents ?? '0', 10);
+  const buyerId = m.buyer_id || null;
+  const recipientName = m.recipient_name || null;
+  const recipientEmail = m.recipient_email || null;
+  const message = m.message || null;
+
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    logger.error('[stripe] gift_card senza amount valido', { sessionId: session.id });
+    return;
+  }
+
+  const code = giftCardCodeForSession(session.id);
+  const { error } = await admin.from('gift_cards').insert({
+    code,
+    amount_cents: amountCents,
+    balance_cents: amountCents,
+    buyer_id: buyerId,
+    recipient_name: recipientName,
+    recipient_email: recipientEmail,
+    message,
+  });
+
+  if (error) {
+    if (error.code === '23505') {
+      // Webhook ri-eseguito: carta già creata (e email già inviate). No-op.
+      logger.info('[stripe] gift_card già creata per questa sessione, skip', { sessionId: session.id });
+      return;
+    }
+    logger.error(error, { context: 'stripe-gift-card-insert', sessionId: session.id });
+    return;
+  }
+
+  const amountEuro = amountCents / 100;
+
+  // Nome mittente per l'email al destinatario (best-effort).
+  let senderName: string | null = null;
+  if (buyerId) {
+    const { data: prof } = await admin.from('profiles').select('full_name').eq('id', buyerId).single();
+    senderName = prof?.full_name ?? null;
+  }
+
+  if (recipientEmail) {
+    const t = giftCardRecipientTemplate({ code, amountEuro, senderName, message });
+    await sendEmail({ to: recipientEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_recipient' }] });
+  }
+
+  const buyerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+  if (buyerEmail) {
+    const t = giftCardBuyerTemplate({ code, amountEuro, recipientName });
+    await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_buyer' }] });
+  }
+}
+
+/**
+ * Pagamento sponsorizzazione riuscito → crea la `sponsored_listing` attiva
+ * (server-side, service role). Idempotente sullo stripe_session_id.
+ */
+async function handleSponsoredPurchase(session: Stripe.Checkout.Session) {
+  const admin = getAdminSupabase();
+  const m = session.metadata ?? {};
+  const sellerId = m.seller_id || null;
+  const productId = m.product_id || null;
+  const days = parseInt(m.days ?? '0', 10);
+  const placement = m.placement || 'search_top';
+  const amountCents = parseInt(m.amount_cents ?? '0', 10);
+
+  if (!sellerId || !productId || !Number.isFinite(days) || days <= 0) {
+    logger.error('[stripe] sponsored metadata incompleti', { sessionId: session.id });
+    return;
+  }
+
+  const today = new Date();
+  const end = new Date(today.getTime() + days * 86_400_000);
+  const startStr = today.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+  const perDay = days > 0 ? Math.round(amountCents / days) : amountCents;
+
+  const { error } = await admin.from('sponsored_listings').insert({
+    product_id: productId,
+    seller_id: sellerId,
+    placement,
+    category_slug: null,
+    start_date: startStr,
+    end_date: endStr,
+    daily_budget_cents: perDay,
+    spent_cents: amountCents,
+    status: 'active',
+    stripe_session_id: session.id,
+  });
+
+  if (error) {
+    if (error.code === '23505') {
+      logger.info('[stripe] sponsored già creata per questa sessione, skip', { sessionId: session.id });
+      return;
+    }
+    logger.error(error, { context: 'stripe-sponsored-insert', sessionId: session.id });
+    return;
+  }
+
+  await admin.from('notifications').insert({
+    user_id: sellerId,
+    title: '✨ Sponsorizzazione attiva',
+    body: `Il tuo prodotto è "In primo piano" nella ricerca fino al ${endStr}.`,
+    link: '/seller/promote',
+  });
 }
 
 async function handleChargeRefunded(charge: Stripe.Charge) {

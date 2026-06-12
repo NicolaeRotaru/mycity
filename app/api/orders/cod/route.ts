@@ -7,6 +7,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingCentsFor } from '@/lib/shipping';
+import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 
@@ -34,22 +35,14 @@ const DeliverySchema = z.object({
   lng: z.number().min(-180).max(180).nullable().optional(),
 }).refine((d) => !(d.lat === 0 && d.lng === 0), { message: 'Coordinate di consegna non valide' });
 
-const B2BSchema = z
-  .object({
-    company_name: z.string().min(1).max(200),
-    vat_number: z.string().min(1).max(40),
-    sdi_code: z.string().max(20).optional().nullable(),
-    pec: z.string().email().max(200).optional().nullable(),
-  })
-  .nullable()
-  .optional();
-
 const Body = z.object({
   groups: z.array(GroupSchema).min(1).max(10),
   delivery: DeliverySchema,
   couponCode: z.string().max(40).optional().nullable(),
   pickupInStore: z.boolean().default(false),
-  b2b: B2BSchema,
+  // Opt-in: usa il credito MyCity (gift card / punti convertiti) per scalare il
+  // totale. L'importo applicato è deciso SERVER-SIDE (addebito atomico), mai dal client.
+  useCredit: z.boolean().default(false),
 });
 
 /**
@@ -98,6 +91,10 @@ export const POST = withAuthRateLimit(
     if (products.length !== allProductIds.length) {
       return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
     }
+
+    // Sconti promo attivi (per prodotto): il cliente paga il prezzo scontato che
+    // vede, non il prezzo pieno. Stessa fonte del badge "In promo -X%".
+    const discountMap = await fetchActiveDiscounts(supa, allProductIds);
 
     // --- 1b. Carica le varianti richieste (stock/label/owner) per validarle.
     const allVariantIds = body.groups.flatMap((g) =>
@@ -174,7 +171,7 @@ export const POST = withAuthRateLimit(
             { status: 409 },
           );
         }
-        const unitCents = Math.round(Number(p.price) * 100);
+        const unitCents = discountedUnitCents(p.price, discountMap.get(p.id) ?? 0);
         items.push({ productId: p.id, quantity: it.quantity, unitCents, variantId, variantLabel });
         groupSubtotalCents += unitCents * it.quantity;
       }
@@ -223,7 +220,7 @@ export const POST = withAuthRateLimit(
       const couponPortionCents = Math.round(couponDiscountCents * portion);
       const pickupPortionCents = Math.round(pickupDiscountCents * portion);
       const discountCents = couponPortionCents + pickupPortionCents;
-      const totalCents = Math.max(0, subtotal + shipping - discountCents);
+      const grossTotalCents = Math.max(0, subtotal + shipping - discountCents);
 
       // RISERVA ATOMICA DELLO STOCK del gruppo PRIMA di creare l'ordine (P0-4).
       // Con variante, la riserva scala lo stock della variante.
@@ -241,6 +238,24 @@ export const POST = withAuthRateLimit(
         );
       }
 
+      // Credito MyCity (opt-in): addebito atomico fino a coprire il totale del
+      // gruppo. Speso greedy gruppo-per-gruppo; se l'ordine fallisce, si storna.
+      let walletAppliedCents = 0;
+      if (body.useCredit && grossTotalCents > 0) {
+        const { data: applied, error: wErr } = await admin.rpc('wallet_debit', {
+          p_user: user.id,
+          p_max_cents: grossTotalCents,
+          p_reason: 'order_cod',
+          p_ref: null,
+        });
+        if (wErr) {
+          logger.warn('[cod] wallet_debit fallita', { sellerId: g.sellerId, message: wErr.message });
+        } else {
+          walletAppliedCents = typeof applied === 'number' ? applied : 0;
+        }
+      }
+      const totalCents = Math.max(0, grossTotalCents - walletAppliedCents);
+
       const { data: order, error: orderErr } = await admin
         .from('orders')
         .insert({
@@ -249,6 +264,7 @@ export const POST = withAuthRateLimit(
           total_price: totalCents / 100,
           shipping_cost: shipping / 100,
           discount_amount: discountCents / 100,
+          wallet_applied_cents: walletAppliedCents,
           coupon_code: validatedCouponCode,
           pickup_in_store: body.pickupInStore,
           payment_method: 'cod',
@@ -268,6 +284,15 @@ export const POST = withAuthRateLimit(
 
       if (orderErr || !order) {
         await admin.rpc('restore_stock', { p_items: groupStockItems }); // rilascia la riserva del gruppo fallito
+        if (walletAppliedCents > 0) {
+          // Storna il credito addebitato per un ordine che non è stato creato.
+          await admin.rpc('wallet_credit', {
+            p_user: user.id,
+            p_cents: walletAppliedCents,
+            p_reason: 'order_cod_refund',
+            p_ref: null,
+          });
+        }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
         return ApiErrors.internal('Errore nella creazione ordine.');
       }
@@ -283,21 +308,6 @@ export const POST = withAuthRateLimit(
       const { error: itemsErr } = await admin.from('order_items').insert(itemsRows);
       if (itemsErr) {
         logger.error(itemsErr, { context: 'cod-order-items-insert', orderId: order.id });
-      }
-
-      // B2B: dettaglio fattura elettronica (se attivato)
-      if (body.b2b && body.b2b.company_name && body.b2b.vat_number) {
-        const { error: bErr } = await admin.from('business_orders').insert({
-          order_id: order.id,
-          company_name: body.b2b.company_name,
-          vat_number: body.b2b.vat_number,
-          sdi_code: body.b2b.sdi_code ?? null,
-          pec: body.b2b.pec ?? null,
-          invoice_required: true,
-        });
-        if (bErr && !bErr.message.includes('does not exist')) {
-          logger.warn('business_orders insert failed', { message: bErr.message });
-        }
       }
 
       // Notifica in-app al venditore — nuovo ordine COD ricevuto

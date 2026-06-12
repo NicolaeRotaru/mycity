@@ -168,3 +168,40 @@ export function refundIssuedTemplate(args: { orderId: string; amount: number; re
     text: `Rimborso di €${args.amount.toFixed(2)} emesso. Dettaglio: ${orderUrl}`,
   };
 }
+
+export function giftCardRecipientTemplate(args: { code: string; amountEuro: number; senderName?: string | null; message?: string | null }) {
+  const redeemUrl = `${appUrl()}/profile/gift-cards`;
+  const from = args.senderName?.trim() ? escapeHtml(args.senderName.trim()) : 'Qualcuno';
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">🎁 Hai ricevuto una gift card</h1>
+    <p style="margin:0 0 12px;line-height:1.6"><strong>${from}</strong> ti ha regalato una gift card MyCity da <strong>€${args.amountEuro.toFixed(2)}</strong>, spendibile nei negozi di Piacenza.</p>
+    ${args.message?.trim() ? `<p style="margin:0 0 16px;padding:12px 16px;background:#f1f5f9;border-radius:8px;font-style:italic;color:#334155">«${escapeHtml(args.message.trim())}»</p>` : ''}
+    <p style="margin:0 0 8px;color:#64748b">Il tuo codice</p>
+    <p style="margin:0 0 20px;font-family:monospace;font-size:24px;font-weight:700;letter-spacing:2px;color:${BRAND_COLOR}">${escapeHtml(args.code)}</p>
+    <p style="margin:0 0 12px;line-height:1.6">Accedi a MyCity, vai su <strong>Gift Card</strong> e inserisci il codice: il credito verrà aggiunto al tuo account.</p>
+    <p style="margin:24px 0">${btn(redeemUrl, 'Riscatta ora')}</p>
+    <p style="margin:0;font-size:13px;color:#64748b">La gift card è valida 2 anni dall'acquisto.</p>
+  `;
+  return {
+    subject: `🎁 ${from} ti ha regalato €${args.amountEuro.toFixed(2)} su ${BRAND}`,
+    html: shell('Hai ricevuto una gift card', body),
+    text: `${from} ti ha regalato una gift card MyCity da €${args.amountEuro.toFixed(2)}. Codice: ${args.code}. Riscattalo su ${redeemUrl}`,
+  };
+}
+
+export function giftCardBuyerTemplate(args: { code: string; amountEuro: number; recipientName?: string | null }) {
+  const url = `${appUrl()}/profile/gift-cards`;
+  const to = args.recipientName?.trim() ? escapeHtml(args.recipientName.trim()) : 'il destinatario';
+  const body = `
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Gift card acquistata ✓</h1>
+    <p style="margin:0 0 12px;line-height:1.6">Grazie! La tua gift card da <strong>€${args.amountEuro.toFixed(2)}</strong> per <strong>${to}</strong> è pronta e gli abbiamo inviato il codice via email.</p>
+    <p style="margin:0 0 8px;color:#64748b">Codice (in caso voglia condividerlo tu)</p>
+    <p style="margin:0 0 20px;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:2px;color:${BRAND_COLOR}">${escapeHtml(args.code)}</p>
+    <p style="margin:24px 0">${btn(url, 'Le mie gift card')}</p>
+  `;
+  return {
+    subject: `Gift card da €${args.amountEuro.toFixed(2)} acquistata — ${BRAND}`,
+    html: shell('Gift card acquistata', body),
+    text: `Gift card da €${args.amountEuro.toFixed(2)} acquistata per ${to}. Codice: ${args.code}.`,
+  };
+}

@@ -148,24 +148,27 @@ function AdminUsersPageInner() {
     },
   });
 
+  // Moderazione via route server-side (audit log + niente update client-side
+  // diretti su profiles). La notifica all'utente è inviata dal server.
+  const moderateUser = async (
+    id: string,
+    action: 'approve' | 'reject' | 'reactivate' | 'suspend',
+    reason?: string,
+  ) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Sessione scaduta');
+    const res = await fetch(`/api/admin/users/${id}/moderate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action, reason }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(apiErrorMessage(body, 'Operazione fallita'));
+  };
+
   const approve = useMutation({
-    mutationFn: async (id: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from('profiles').update({
-        approval_status: 'approved',
-        is_approved: true,
-        approved_at: new Date().toISOString(),
-        approved_by: user?.id,
-        rejection_reason: null,
-      }).eq('id', id);
-      if (error) throw error;
-      await supabase.from('notifications').insert({
-        user_id: id,
-        title: '✅ Negozio approvato',
-        body: 'Il tuo negozio è stato approvato! Ora puoi accedere alla dashboard e pubblicare prodotti.',
-        link: '/seller/dashboard',
-      });
-    },
+    mutationFn: (id: string) => moderateUser(id, 'approve'),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
@@ -175,20 +178,7 @@ function AdminUsersPageInner() {
   });
 
   const reject = useMutation({
-    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
-      const { error } = await supabase.from('profiles').update({
-        approval_status: 'rejected',
-        is_approved: false,
-        rejection_reason: reason,
-      }).eq('id', id);
-      if (error) throw error;
-      await supabase.from('notifications').insert({
-        user_id: id,
-        title: '❌ Richiesta non approvata',
-        body: `La tua richiesta non è stata approvata. Motivo: ${reason}`,
-        link: '/sell',
-      });
-    },
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => moderateUser(id, 'reject', reason),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       toast.success(tAdmin('requestRejected'));
@@ -197,21 +187,7 @@ function AdminUsersPageInner() {
   });
 
   const reactivate = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('profiles').update({
-        is_approved: true,
-        approval_status: 'approved',
-        rejection_reason: null,
-        approved_at: new Date().toISOString(),
-      }).eq('id', id);
-      if (error) throw error;
-      await supabase.from('notifications').insert({
-        user_id: id,
-        title: '✅ Negozio riattivato',
-        body: 'Il tuo negozio è di nuovo operativo. Puoi tornare a vendere su MyCity.',
-        link: '/seller/dashboard',
-      });
-    },
+    mutationFn: (id: string) => moderateUser(id, 'reactivate'),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       qc.invalidateQueries({ queryKey: queryKeys.admin.stats });
@@ -242,20 +218,7 @@ function AdminUsersPageInner() {
   });
 
   const suspend = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from('profiles').update({
-        is_approved: false,
-        approval_status: 'suspended',
-        rejection_reason: null,
-      }).eq('id', id);
-      if (error) throw error;
-      await supabase.from('notifications').insert({
-        user_id: id,
-        title: '⏸️ Negozio sospeso',
-        body: 'Il tuo negozio è stato temporaneamente sospeso da un amministratore. Contatta il supporto per chiarimenti.',
-        link: '/contact',
-      });
-    },
+    mutationFn: (id: string) => moderateUser(id, 'suspend'),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.users() });
       toast.success(tAdmin('storeSuspended'));

@@ -75,9 +75,9 @@ vi.mock('@/lib/supabase/server', () => {
     }
     return { insert: () => Promise.resolve({ error: null }) };
   });
-  const rpc = vi.fn(() => Promise.resolve({ error: null }));
+  const rpc = vi.fn(() => Promise.resolve({ data: 0, error: null }));
   return {
-    getServerSupabase: vi.fn(() => ({ from: serverFrom })),
+    getServerSupabase: vi.fn(() => ({ from: serverFrom, rpc })),
     getAdminSupabase: vi.fn(() => ({ from: adminFrom, rpc })),
   };
 });

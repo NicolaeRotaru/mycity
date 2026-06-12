@@ -16,6 +16,8 @@ type Props = {
   shipping: number;
   pickupDiscount: number;
   couponDiscount: number;
+  /** Credito MyCity applicato (gift card / punti convertiti), in euro. */
+  creditApplied?: number;
   total: number;
   isCheckingOut: boolean;
   paymentMethod: 'cod' | 'card';
@@ -29,6 +31,7 @@ export function OrderSummary({
   shipping,
   pickupDiscount,
   couponDiscount,
+  creditApplied = 0,
   total,
   isCheckingOut,
   paymentMethod,
@@ -60,6 +63,12 @@ export function OrderSummary({
           <div className="flex justify-between text-olive-700">
             <span>Sconto codice</span>
             <span className="font-semibold">−{formatPrice(couponDiscount)}</span>
+          </div>
+        )}
+        {creditApplied > 0 && (
+          <div className="flex justify-between text-olive-700">
+            <span>Credito MyCity</span>
+            <span className="font-semibold">−{formatPrice(creditApplied)}</span>
           </div>
         )}
         <div className="flex justify-between pt-2 border-t font-bold text-lg">
