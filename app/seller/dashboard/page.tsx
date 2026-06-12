@@ -220,7 +220,7 @@ export default function SellerDashboard() {
       </NavGroup>
 
       {/* ===== Health score + crescita ===== */}
-      <div className="grid lg:grid-cols-2 gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start min-w-0">
         <SellerHealthScore />
         <div className="bg-white border border-cream-300 rounded-2xl p-6 shadow-warm">
           <h2 className="font-serif text-xl font-bold text-ink-900 flex items-center gap-2">
