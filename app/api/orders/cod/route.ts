@@ -39,6 +39,9 @@ const Body = z.object({
   delivery: DeliverySchema,
   couponCode: z.string().max(40).optional().nullable(),
   pickupInStore: z.boolean().default(false),
+  // Opt-in: usa il credito MyCity (gift card / punti convertiti) per scalare il
+  // totale. L'importo applicato è deciso SERVER-SIDE (addebito atomico), mai dal client.
+  useCredit: z.boolean().default(false),
 });
 
 /**
@@ -212,7 +215,7 @@ export const POST = withAuthRateLimit(
       const couponPortionCents = Math.round(couponDiscountCents * portion);
       const pickupPortionCents = Math.round(pickupDiscountCents * portion);
       const discountCents = couponPortionCents + pickupPortionCents;
-      const totalCents = Math.max(0, subtotal + shipping - discountCents);
+      const grossTotalCents = Math.max(0, subtotal + shipping - discountCents);
 
       // RISERVA ATOMICA DELLO STOCK del gruppo PRIMA di creare l'ordine (P0-4).
       // Con variante, la riserva scala lo stock della variante.
@@ -230,6 +233,24 @@ export const POST = withAuthRateLimit(
         );
       }
 
+      // Credito MyCity (opt-in): addebito atomico fino a coprire il totale del
+      // gruppo. Speso greedy gruppo-per-gruppo; se l'ordine fallisce, si storna.
+      let walletAppliedCents = 0;
+      if (body.useCredit && grossTotalCents > 0) {
+        const { data: applied, error: wErr } = await admin.rpc('wallet_debit', {
+          p_user: user.id,
+          p_max_cents: grossTotalCents,
+          p_reason: 'order_cod',
+          p_ref: null,
+        });
+        if (wErr) {
+          logger.warn('[cod] wallet_debit fallita', { sellerId: g.sellerId, message: wErr.message });
+        } else {
+          walletAppliedCents = typeof applied === 'number' ? applied : 0;
+        }
+      }
+      const totalCents = Math.max(0, grossTotalCents - walletAppliedCents);
+
       const { data: order, error: orderErr } = await admin
         .from('orders')
         .insert({
@@ -238,6 +259,7 @@ export const POST = withAuthRateLimit(
           total_price: totalCents / 100,
           shipping_cost: shipping / 100,
           discount_amount: discountCents / 100,
+          wallet_applied_cents: walletAppliedCents,
           coupon_code: validatedCouponCode,
           pickup_in_store: body.pickupInStore,
           payment_method: 'cod',
@@ -257,6 +279,15 @@ export const POST = withAuthRateLimit(
 
       if (orderErr || !order) {
         await admin.rpc('restore_stock', { p_items: groupStockItems }); // rilascia la riserva del gruppo fallito
+        if (walletAppliedCents > 0) {
+          // Storna il credito addebitato per un ordine che non è stato creato.
+          await admin.rpc('wallet_credit', {
+            p_user: user.id,
+            p_cents: walletAppliedCents,
+            p_reason: 'order_cod_refund',
+            p_ref: null,
+          });
+        }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
         return ApiErrors.internal('Errore nella creazione ordine.');
       }

@@ -105,6 +105,11 @@ export const queryKeys = {
     byUser:  (uid: string)   => ['gift-cards', uid] as const,
   },
 
+  wallet: {
+    all:                     ['wallet'] as const,
+    byUser:  (uid: string)   => ['wallet', uid] as const,
+  },
+
   referrals: {
     all:                     ['referrals'] as const,
     mine:                    ['my-referral'] as const,

@@ -3,10 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { Sparkles, Flame, Trophy, Gift, ChevronRight } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Sparkles, Flame, Trophy, Gift, ChevronRight, Wallet } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
+import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import {
   fetchLoyaltyAccount,
   TIER_META,
@@ -28,6 +32,7 @@ const REASON_LABEL: Record<string, string> = {
   streak_100_days:  'Streak 100 giorni',
   referral_bonus:   'Referral amico',
   redeem:           'Sconto applicato',
+  redeem_credit:    'Convertiti in credito',
 };
 
 export default function LoyaltyPage() {
@@ -64,6 +69,32 @@ export default function LoyaltyPage() {
     },
   });
 
+  const qc = useQueryClient();
+
+  const { data: walletCents = 0 } = useQuery<number>({
+    queryKey: queryKeys.wallet.byUser(userId ?? ''),
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data } = await supabase.from('profiles').select('wallet_balance_cents').eq('id', userId!).single();
+      return (data?.wallet_balance_cents as number) ?? 0;
+    },
+  });
+
+  const convert = useMutation({
+    mutationFn: async (pts: number) => {
+      const { data, error } = await supabase.rpc('convert_loyalty_to_credit', { p_points: pts });
+      if (error) throw error;
+      return (data as { credited_cents?: number })?.credited_cents ?? 0;
+    },
+    onSuccess: (cents) => {
+      toast.success(`Convertiti in ${formatPrice(cents / 100)} di credito!`);
+      qc.invalidateQueries({ queryKey: queryKeys.loyalty.accountByUser(userId!) });
+      qc.invalidateQueries({ queryKey: queryKeys.loyalty.txsByUser(userId!) });
+      qc.invalidateQueries({ queryKey: queryKeys.wallet.all });
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
   if (!userId) return <LoadingState />;
 
   const points = account?.points_balance ?? 0;
@@ -74,6 +105,8 @@ export default function LoyaltyPage() {
   const tierMeta = TIER_META[tier];
   const next = nextTier(lifetime, tier);
   const eurValue = pointsToEurValue(points);
+  const convertiblePoints = Math.floor(points / 100) * 100;
+  const convertibleEuro = (convertiblePoints / 100) * 5;
 
   // Progress bar verso prossimo livello
   const currentThreshold = tierMeta.threshold;
@@ -128,6 +161,25 @@ export default function LoyaltyPage() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Converti punti in credito spendibile */}
+      <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
+        <div className="flex items-center gap-2 mb-1">
+          <Wallet size={20} className="text-primary-600" />
+          <h2 className="font-serif font-bold text-lg text-ink-900">Converti in credito</h2>
+        </div>
+        <p className="text-sm text-ink-600 mb-3">
+          {POINTS_REDEEM_RATE} punti = €5 di credito MyCity, spendibile negli ordini con pagamento alla consegna.
+          {walletCents > 0 && <> Hai già <strong>{formatPrice(walletCents / 100)}</strong> di credito.</>}
+        </p>
+        {convertiblePoints >= 100 ? (
+          <Button onClick={() => convert.mutate(convertiblePoints)} loading={convert.isPending} icon={Wallet}>
+            Converti {convertiblePoints} punti in {formatPrice(convertibleEuro)}
+          </Button>
+        ) : (
+          <p className="text-sm text-ink-400">Ti servono almeno 100 punti per convertire.</p>
+        )}
       </div>
 
       {/* Streak card */}
