@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Save, ArrowLeft, LayoutTemplate } from 'lucide-react';
+import { ExternalLink, Save, ArrowLeft, LayoutTemplate, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -47,9 +47,15 @@ export default function AdminHomePage() {
 
   const [draft, setDraft] = useState<HomeSite | null>(null);
   const [dirty, setDirty] = useState(false);
+  // Ultima versione persistita (caricata o salvata): base per "Annulla modifiche".
+  const [baseline, setBaseline] = useState<HomeSite | null>(null);
   const site = draft ?? initial ?? null;
 
   const commit = (next: HomeSite) => { setDraft(next); setDirty(true); };
+  const revert = () => { setDraft(baseline); setDirty(false); };
+
+  // Inizializza la baseline al primo caricamento della home.
+  useEffect(() => { if (initial && !baseline) setBaseline(initial); }, [initial, baseline]);
 
   // Avviso del browser se si esce con modifiche non salvate.
   useEffect(() => {
@@ -79,6 +85,7 @@ export default function AdminHomePage() {
     },
     onSuccess: (saved) => {
       setDraft(saved);
+      setBaseline(saved);
       setDirty(false);
       qc.invalidateQueries({ queryKey: queryKeys.admin.home });
       toast.success('Home salvata! Le modifiche sono pubbliche.');
@@ -135,14 +142,26 @@ export default function AdminHomePage() {
               Modifiche non salvate
             </span>
           )}
-          <button
-            type="button"
-            onClick={() => save.mutate(site)}
-            disabled={save.isPending}
-            className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold shadow-warm-sm"
-          >
-            <Save size={18} aria-hidden /> {save.isPending ? 'Salvataggio…' : 'Salva'}
-          </button>
+          <div className="flex items-center gap-2">
+            {dirty && (
+              <button
+                type="button"
+                onClick={revert}
+                disabled={save.isPending}
+                className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-ink-300 disabled:opacity-50 text-ink-700 px-4 py-3 rounded-lg font-semibold shadow-warm-sm"
+              >
+                <Undo2 size={18} aria-hidden /> Annulla modifiche
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => save.mutate(site)}
+              disabled={save.isPending}
+              className="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white px-6 py-3 rounded-lg font-semibold shadow-warm-sm"
+            >
+              <Save size={18} aria-hidden /> {save.isPending ? 'Salvataggio…' : 'Salva'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

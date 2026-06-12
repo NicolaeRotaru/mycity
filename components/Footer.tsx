@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Store, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen } from 'lucide-react';
+import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
@@ -86,28 +86,6 @@ const Footer = () => {
 
   return (
     <footer className="bg-ink-900 text-ink-300 mt-12">
-      {/* CTA banner finale — visibile solo a buyer/guest, mai a chi è già seller
-          o in attesa di approvazione */}
-      {!isSellerArea && (
-        <div className="bg-gradient-to-r from-primary-700 via-primary-600 to-secondary-700">
-          <div className="container mx-auto px-6 py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-white">
-            <div>
-              <h3 className="text-xl md:text-2xl font-serif font-bold">Hai un'attività nella tua città?</h3>
-              <p className="text-cream-100 text-sm">
-                Apri il tuo negozio professionale su MyCity. Abbonamento mensile, niente commissioni sulle vendite, approvazione in 48h.
-              </p>
-            </div>
-            <Link
-              href={isAuthenticated ? '/sell' : '/sign-up?returnTo=/sell'}
-              className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-400 text-ink-900 px-7 py-3 rounded-full font-bold whitespace-nowrap shadow-lg hover:scale-105 transition-all"
-            >
-              <Store size={18} strokeWidth={2.4} />
-              Diventa venditore
-            </Link>
-          </div>
-        </div>
-      )}
-
       <div className={`container mx-auto px-6 py-12 grid grid-cols-2 ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-2 md:col-span-1">

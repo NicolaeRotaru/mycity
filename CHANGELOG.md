@@ -9,6 +9,13 @@ maggiore resta a `0.x` finche' non c'e' PMF.
 ## [Unreleased]
 
 ### Added
+- **Home builder** — più controllo e rete di sicurezza sull'editor della home:
+  - Hero: interruttore "Mostra le scorciatoie alle categorie" (off = nascoste,
+    dato che esiste già la sezione "Categorie").
+  - Ogni sezione ha "Ripristina predefiniti" (azzera i contenuti personalizzati
+    della sezione; sulla Hero ripristina il testo della variante A/B).
+  - "Annulla modifiche" nella barra di salvataggio: scarta le modifiche non
+    salvate e torna all'ultima versione pubblicata.
 - **Stripe multi-seller checkout** — il pagamento con carta supporta ora
   carrelli con prodotti da più negozi (era bloccato → forzava COD).
   - Migration 042: tabella `pending_checkouts` (record-of-intent),
@@ -48,6 +55,8 @@ maggiore resta a `0.x` finche' non c'e' PMF.
   lib/errors, lib/copy (87 test, 6 spec, ~860ms)
 
 ### Changed
+- Footer: rimossa la banda CTA "Diventa venditore" (ridondante con la sezione
+  "CTA venditore" della home; resta il link "Vendi su MyCity" nella colonna Azienda).
 - `lib/rate-limit.ts`: aggiunto `rateLimitAsync()` per Redis-backed, mantenuta
   `rateLimit()` sync per back-compat (25+ callsite invariati)
 - PWA service worker v2: stale-while-revalidate per immagini Supabase storage,

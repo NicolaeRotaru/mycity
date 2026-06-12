@@ -109,6 +109,10 @@ const heroConfig = z
     headline: shortText(200),
     subhead: shortText(320),
     ctaLabel: shortText(40),
+    // Scorciatoie alle categorie sotto la hero: visibili quando assente/true
+    // (retro-compat). Optional (non .default) così i literal HomeSite restano
+    // validi; renderer ed editor trattano "diverso da false" come visibile.
+    showChips: z.boolean().optional(),
   })
   .default({});
 
