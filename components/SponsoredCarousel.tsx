@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
@@ -62,6 +63,16 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
     },
   });
 
+  // Tracciamento impression: una volta per campagna mostrata (best-effort).
+  const impressedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const it of items) {
+      if (impressedRef.current.has(it.id)) continue;
+      impressedRef.current.add(it.id);
+      void supabase.rpc('track_sponsored_impression', { p_id: it.id });
+    }
+  }, [items]);
+
   if (items.length === 0) return null;
 
   return (
@@ -81,6 +92,7 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
             <Link
               key={it.id}
               href={`/product/${p.id}`}
+              onClick={() => { void supabase.rpc('track_sponsored_click', { p_id: it.id }); }}
               className="shrink-0 w-32 sm:w-36 snap-start bg-white border border-cream-200 rounded-xl overflow-hidden card-hover"
             >
               <div className="relative aspect-square bg-cream-100">

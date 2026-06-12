@@ -43,6 +43,7 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/seller/products', icon: Package, label: 'I miei prodotti' },
       { href: '/seller/orders', icon: ShoppingCart, label: 'Ordini ricevuti' },
       { href: '/seller/promotions', icon: Sparkles, label: 'Promozioni' },
+      { href: '/seller/promote', icon: Megaphone, label: 'Sponsorizza' },
       { href: '/seller/stories', icon: Camera, label: 'Storie' },
       { href: '/seller/earnings', icon: Euro, label: 'Guadagni' },
     );

@@ -77,9 +77,11 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        // Acquisto gift card: flusso separato dagli ordini (nessun pending_checkout).
+        // Flussi separati dagli ordini (nessun pending_checkout).
         if (session.metadata?.kind === 'gift_card') {
           await handleGiftCardPurchase(session);
+        } else if (session.metadata?.kind === 'sponsored') {
+          await handleSponsoredPurchase(session);
         } else {
           await handleCheckoutCompleted(session);
         }
@@ -447,6 +449,60 @@ async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
     const t = giftCardBuyerTemplate({ code, amountEuro, recipientName });
     await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text, tags: [{ name: 'template', value: 'gift_card_buyer' }] });
   }
+}
+
+/**
+ * Pagamento sponsorizzazione riuscito → crea la `sponsored_listing` attiva
+ * (server-side, service role). Idempotente sullo stripe_session_id.
+ */
+async function handleSponsoredPurchase(session: Stripe.Checkout.Session) {
+  const admin = getAdminSupabase();
+  const m = session.metadata ?? {};
+  const sellerId = m.seller_id || null;
+  const productId = m.product_id || null;
+  const days = parseInt(m.days ?? '0', 10);
+  const placement = m.placement || 'search_top';
+  const amountCents = parseInt(m.amount_cents ?? '0', 10);
+
+  if (!sellerId || !productId || !Number.isFinite(days) || days <= 0) {
+    logger.error('[stripe] sponsored metadata incompleti', { sessionId: session.id });
+    return;
+  }
+
+  const today = new Date();
+  const end = new Date(today.getTime() + days * 86_400_000);
+  const startStr = today.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+  const perDay = days > 0 ? Math.round(amountCents / days) : amountCents;
+
+  const { error } = await admin.from('sponsored_listings').insert({
+    product_id: productId,
+    seller_id: sellerId,
+    placement,
+    category_slug: null,
+    start_date: startStr,
+    end_date: endStr,
+    daily_budget_cents: perDay,
+    spent_cents: amountCents,
+    status: 'active',
+    stripe_session_id: session.id,
+  });
+
+  if (error) {
+    if (error.code === '23505') {
+      logger.info('[stripe] sponsored già creata per questa sessione, skip', { sessionId: session.id });
+      return;
+    }
+    logger.error(error, { context: 'stripe-sponsored-insert', sessionId: session.id });
+    return;
+  }
+
+  await admin.from('notifications').insert({
+    user_id: sellerId,
+    title: '✨ Sponsorizzazione attiva',
+    body: `Il tuo prodotto è "In primo piano" nella ricerca fino al ${endStr}.`,
+    link: '/seller/promote',
+  });
 }
 
 async function handleChargeRefunded(charge: Stripe.Charge) {
