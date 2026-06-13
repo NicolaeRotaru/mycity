@@ -4,15 +4,16 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Home, Search, MessageCircle, ShoppingCart, User, Package, Bike, Shield, type LucideIcon } from 'lucide-react';
+import { Home, Search, MessageCircle, ShoppingCart, User, Package, Bike, Shield, Plus, Eye, Headset, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
 import { useMessagesUnread } from './hooks/useMessagesUnread';
 import MobileAccountSheet from './MobileAccountSheet';
+import SupportChatModal from './SupportChatModal';
 import type { MenuRole } from '@/lib/account-menu';
 
-type Tab = { href: string; icon: LucideIcon; label: string; badge?: number; isAccount?: boolean; exact?: boolean };
+type Tab = { href: string; icon: LucideIcon; label: string; badge?: number; isAccount?: boolean; isSupport?: boolean; exact?: boolean };
 
 /**
  * Bottom tab bar mobile — feel "app nativa" (Glovo, Deliveroo, Just Eat).
@@ -28,11 +29,12 @@ type Tab = { href: string; icon: LucideIcon; label: string; badge?: number; isAc
 export default function MobileTabBar() {
   const pathname = usePathname() ?? '';
   const router = useRouter();
-  const { profile, userEmail, isAuthenticated, isSeller, isRider, isAdmin } = useProfile();
+  const { profile, userEmail, isAuthenticated, isSeller, isRider, isAdmin, isBuyer } = useProfile();
   const cartCount = useCartCount();
   const msgUnread = useMessagesUnread();
   const t = useTranslations('nav');
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
 
   // Hide in auth flow + thread chat
   if (
@@ -51,15 +53,15 @@ export default function MobileTabBar() {
       { href: '/admin/users',    icon: User,          label: t('users') },
       { href: '/admin/orders',   icon: Package,       label: t('orders') },
       { href: '/messages',       icon: MessageCircle, label: t('messages'), badge: msgUnread },
-      { href: '/profile',        icon: User,          label: t('me'), isAccount: true },
+      { href: '/admin/activity', icon: Eye,           label: t('surveillance') },
     ];
   } else if (isSeller) {
     tabs = [
-      { href: '/seller/dashboard', icon: Home,          label: t('home'), exact: true },
-      { href: '/seller/products',  icon: Package,       label: t('products') },
-      { href: '/seller/orders',    icon: ShoppingCart,  label: t('orders') },
-      { href: '/messages',         icon: MessageCircle, label: t('messages'), badge: msgUnread },
-      { href: '/seller/profile',   icon: User,          label: t('me'), isAccount: true },
+      { href: '/seller/dashboard',    icon: Home,          label: t('home'), exact: true },
+      { href: '/seller/products',     icon: Package,       label: t('products') },
+      { href: '/seller/products/new', icon: Plus,          label: t('addProduct') },
+      { href: '/messages',            icon: MessageCircle, label: t('messages'), badge: msgUnread },
+      { href: '/seller/orders',       icon: ShoppingCart,  label: t('orders') },
     ];
   } else if (isRider) {
     tabs = [
@@ -71,11 +73,11 @@ export default function MobileTabBar() {
     ];
   } else if (isAuthenticated) {
     tabs = [
-      { href: '/',          icon: Home,          label: t('home') },
-      { href: '/search',    icon: Search,        label: t('search') },
-      { href: '/cart',      icon: ShoppingCart,  label: t('cart'), badge: cartCount },
-      { href: '/messages',  icon: MessageCircle, label: t('messages'), badge: msgUnread },
-      { href: '/profile',   icon: User,          label: t('me'), isAccount: true },
+      { href: '/',          icon: Home,         label: t('home') },
+      { href: '#support',   icon: Headset,      label: t('support'), isSupport: true },
+      { href: '/cart',      icon: ShoppingCart, label: t('cart'), badge: cartCount },
+      { href: '/search',    icon: Search,       label: t('search') },
+      { href: '/profile',   icon: User,         label: t('me'), isAccount: true },
     ];
   } else {
     tabs = [
@@ -138,7 +140,11 @@ export default function MobileTabBar() {
       >
         <ul className="flex items-stretch justify-around">
           {tabs.map((tab) => {
-            const active = tab.isAccount ? (sheetOpen || isActive(tab.href, tab.exact)) : isActive(tab.href, tab.exact);
+            const active = tab.isAccount
+              ? (sheetOpen || isActive(tab.href, tab.exact))
+              : tab.isSupport
+                ? supportOpen
+                : isActive(tab.href, tab.exact);
             return (
               <li key={tab.href} className="flex-1">
                 {tab.isAccount ? (
@@ -148,6 +154,16 @@ export default function MobileTabBar() {
                     className={tabClass(active)}
                     aria-haspopup="dialog"
                     aria-expanded={sheetOpen}
+                  >
+                    {renderInner(tab, active)}
+                  </button>
+                ) : tab.isSupport ? (
+                  <button
+                    type="button"
+                    onClick={() => setSupportOpen(true)}
+                    className={tabClass(active)}
+                    aria-haspopup="dialog"
+                    aria-expanded={supportOpen}
                   >
                     {renderInner(tab, active)}
                   </button>
@@ -162,6 +178,22 @@ export default function MobileTabBar() {
         </ul>
       </nav>
 
+      {/* "Tu" flottante per seller/admin (la tab è stata sostituita da una funzione). */}
+      {(isSeller || isAdmin) && (
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          aria-label={t('me')}
+          aria-haspopup="dialog"
+          aria-expanded={sheetOpen}
+          className={`md:hidden fixed right-4 z-40 w-14 h-14 rounded-full bg-white text-ink-700 shadow-warm-lg ring-1 ring-ink-100 flex items-center justify-center hover:bg-cream-50 transition-colors ${
+            isSeller ? 'bottom-44' : 'bottom-24'
+          }`}
+        >
+          <User size={24} strokeWidth={2.2} />
+        </button>
+      )}
+
       <MobileAccountSheet
         open={sheetOpen}
         onClose={() => setSheetOpen(false)}
@@ -170,6 +202,11 @@ export default function MobileTabBar() {
         storeLogo={profile?.store_logo ?? null}
         onSignOut={handleSignOut}
       />
+
+      {/* Assistenza per il buyer: aperta dalla tab "Assistenza" nella barra. */}
+      {isBuyer && (
+        <SupportChatModal open={supportOpen} onClose={() => setSupportOpen(false)} role="buyer" />
+      )}
     </>
   );
 }

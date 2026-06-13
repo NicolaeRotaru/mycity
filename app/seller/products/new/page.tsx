@@ -1,11 +1,12 @@
 'use client';
 
-import { Suspense, useMemo } from 'react';
+import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
+import ImportFromUrlBox, { type ImportResult } from '@/components/products/ImportFromUrlBox';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
@@ -61,6 +62,8 @@ function NewProductInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromId = searchParams.get('from');
+  const [imported, setImported] = useState<ImportResult | null>(null);
+  const [importNonce, setImportNonce] = useState(0);
 
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.form,
@@ -112,6 +115,22 @@ function NewProductInner() {
   });
 
   const initialValues: ProductInitialValues | undefined = useMemo(() => {
+    if (imported) {
+      return {
+        name: imported.name,
+        description: imported.description,
+        price: imported.suggested_price ?? undefined,
+        unit: 'pezzo',
+        condition: null,
+        stock: 1,
+        category_id: imported.subcategory_id ?? imported.category_id ?? '',
+        images: imported.image_urls,
+        attributes: imported.attributes,
+        tags: imported.tags,
+        expressEnabled: null,
+        status: 'available',
+      };
+    }
     if (fromId) {
       if (!source) return undefined;
       const s = source;
@@ -133,15 +152,32 @@ function NewProductInner() {
       };
     }
     return snapshotToInitial(loadAutosave<Snapshot>(AUTOSAVE_KEY) ?? {});
-  }, [fromId, source, sourceVariants]);
+  }, [imported, fromId, source, sourceVariants]);
 
   const create = useMutation({
     mutationFn: async ({ payload, variants }: { payload: ProductPayload; variants: ProductVariant[] }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      const external = imported
+        ? {
+            external_source_url: imported.external.source_url,
+            external_marketplace: imported.external.marketplace,
+            external_data: {
+              price: imported.external.price,
+              currency: imported.external.currency,
+              delivery_min_days: imported.external.delivery_min_days,
+              delivery_max_days: imported.external.delivery_max_days,
+              delivery_label: imported.external.delivery_label,
+              availability: imported.external.availability,
+              source_title: imported.external.source_title,
+              fetched_at: imported.external.fetched_at,
+            },
+            external_synced_at: new Date().toISOString(),
+          }
+        : {};
       const { data, error } = await supabase
         .from('products')
-        .insert({ ...payload, seller_id: user.id })
+        .insert({ ...payload, seller_id: user.id, ...external })
         .select('id')
         .single();
       if (error) throw error;
@@ -161,10 +197,20 @@ function NewProductInner() {
     <div className="max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold">{fromId ? 'Duplica prodotto' : 'Nuovo prodotto'}</h1>
 
+      {!fromId && (
+        <ImportFromUrlBox
+          onImported={(data) => {
+            setImported(data);
+            setImportNonce((n) => n + 1);
+          }}
+        />
+      )}
+
       {fromId && loadingSource ? (
         <LoadingState />
       ) : (
         <ProductForm
+          key={importNonce}
           mode="create"
           categories={categories}
           initialValues={initialValues}

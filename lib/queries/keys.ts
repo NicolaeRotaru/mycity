@@ -44,6 +44,7 @@ export const queryKeys = {
     similar: (id: string, categoryId?: string | null, sellerId?: string | null) =>
                               [...queryKeys.products.all, 'similar', id, categoryId ?? null, sellerId ?? null] as const,
     activeDiscount: (id: string) => ['product-active-discount', id] as const,
+    external: (id: string)   => ['product-external', id] as const,
   },
 
   stores: {
@@ -136,6 +137,8 @@ export const queryKeys = {
     activitySummary:         ['admin', 'activity', 'summary'] as const,
     events:                  ['admin', 'events'] as const,
     products:                ['admin', 'products'] as const,
+    product: (id: string)    => ['admin', 'product', id] as const,
+    sellersForm:             ['admin', 'sellers-form'] as const,
     support: (filter?: string) => ['admin', 'support', filter ?? 'all'] as const,
     sponsored: (filter?: string) => ['admin', 'sponsored', filter ?? 'all'] as const,
     shopOfMonth: (month: string) => ['admin', 'shop-of-month', month] as const,
