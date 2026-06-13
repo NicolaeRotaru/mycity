@@ -94,11 +94,14 @@ export default function ProductImagesField({
       'image/png': ['.png'],
       'image/webp': ['.webp'],
     },
-    maxSize: 5 * 1024 * 1024,
+    // Limite generoso: le foto oltre i 5 MB vengono ricompresse lato client in
+    // fase di upload (vedi uploadProductImages), non rifiutate. Qui blocchiamo
+    // solo i file abnormi che non avrebbe senso provare a comprimere.
+    maxSize: 30 * 1024 * 1024,
     maxFiles,
     onDropRejected: (rejections) => {
       const reason = rejections[0]?.errors[0]?.code;
-      if (reason === 'file-too-large') toast.error('File troppo grande (max 5 MB)');
+      if (reason === 'file-too-large') toast.error('File troppo grande (max 30 MB)');
       else if (reason === 'file-invalid-type') toast.error('Formato non supportato (solo JPG, PNG, WEBP)');
       else if (reason === 'too-many-files') toast.error(`Massimo ${maxFiles} foto per upload`);
       else toast.error('File non valido');
