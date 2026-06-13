@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronUp, ChevronDown, Eye, EyeOff, Trash2, Plus } from 'lucide-react';
+import { ChevronUp, ChevronDown, Eye, EyeOff, Trash2, Plus, RotateCcw } from 'lucide-react';
 import {
   homeSectionLabel,
   newHomeSection,
@@ -77,6 +77,11 @@ export default function HomeSectionsEditor({
   const toggle = (i: number) => onChange(sections.map((s, k) => (k === i ? { ...s, enabled: !s.enabled } : s)));
   const remove = (i: number) => onChange(sections.filter((_, k) => k !== i));
   const setSection = (i: number, s: HomeSection) => onChange(sections.map((x, k) => (k === i ? s : x)));
+  const resetSection = (i: number) => {
+    const cur = sections[i];
+    const fresh = newHomeSection(cur.type);
+    setSection(i, { ...fresh, id: cur.id, enabled: cur.enabled } as HomeSection);
+  };
   const add = (t: HomeSectionType) => {
     if (sections.length >= MAX_HOME_SECTIONS) return;
     const s = newHomeSection(t);
@@ -124,8 +129,15 @@ export default function HomeSectionsEditor({
               </button>
             </div>
             {isOpen && (
-              <div className="border-t border-cream-200 px-4 py-4">
+              <div className="border-t border-cream-200 px-4 py-4 space-y-4">
                 <HomeSectionConfigForm section={s} onChange={(ns) => setSection(i, ns)} />
+                <button
+                  type="button"
+                  onClick={() => { if (window.confirm('Ripristinare i contenuti predefiniti di questa sezione? I testi personalizzati verranno cancellati.')) resetSection(i); }}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-500 hover:text-primary-700 transition-colors"
+                >
+                  <RotateCcw size={14} aria-hidden /> Ripristina predefiniti
+                </button>
               </div>
             )}
           </div>

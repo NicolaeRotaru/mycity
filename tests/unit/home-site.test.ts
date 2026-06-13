@@ -105,6 +105,27 @@ describe('banner / link safety', () => {
   });
 });
 
+describe('hero chips toggle', () => {
+  const mkHero = (config: object) =>
+    homeSiteSchema.safeParse({ sections: [{ id: 'h', type: 'hero', config }] });
+
+  it('keeps chips visible by default (showChips not false when omitted)', () => {
+    const out = mkHero({ headline: 'Ciao' });
+    expect(out.success).toBe(true);
+    if (out.success) {
+      expect((out.data.sections[0].config as { showChips?: boolean }).showChips).not.toBe(false);
+    }
+  });
+
+  it('accepts showChips=false (hide category shortcuts)', () => {
+    const out = mkHero({ showChips: false });
+    expect(out.success).toBe(true);
+    if (out.success) {
+      expect((out.data.sections[0].config as { showChips?: boolean }).showChips).toBe(false);
+    }
+  });
+});
+
 describe('limits', () => {
   it('rejects more than MAX_HOME_SECTIONS sections', () => {
     const sections = Array.from({ length: 25 }, (_, i) => ({ id: `s${i}`, type: 'howItWorks', config: {} }));

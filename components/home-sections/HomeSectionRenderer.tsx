@@ -83,6 +83,7 @@ function HomeBlock({
       const headline: ReactNode = c.headline ? c.headline : heroDefaults.headline;
       const subhead: ReactNode = c.subhead ? c.subhead : heroDefaults.subhead;
       const ctaPrimary = c.ctaLabel || heroDefaults.ctaPrimary;
+      const showChips = c.showChips !== false;
       return (
         <section className="relative overflow-hidden bg-gradient-to-b from-surface-0 to-surface-100">
           <div aria-hidden className="absolute -top-20 -right-20 w-[500px] h-[500px] rounded-full bg-primary-200/40 blur-3xl" />
@@ -122,20 +123,22 @@ function HomeBlock({
                   </HomeCtaLink>
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {HERO_CHIPS.map((cat) => (
-                    <HomeCtaLink
-                      key={cat.slug}
-                      href={`/category/${cat.slug}`}
-                      ctaId={`hero_chip_${cat.slug}`}
-                      location="hero_chips"
-                      variant={heroVariant}
-                      className="inline-flex items-center bg-white text-ink-700 hover:text-primary-700 border border-cream-300 hover:border-primary-300 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
-                    >
-                      {cat.label}
-                    </HomeCtaLink>
-                  ))}
-                </div>
+                {showChips && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {HERO_CHIPS.map((cat) => (
+                      <HomeCtaLink
+                        key={cat.slug}
+                        href={`/category/${cat.slug}`}
+                        ctaId={`hero_chip_${cat.slug}`}
+                        location="hero_chips"
+                        variant={heroVariant}
+                        className="inline-flex items-center bg-white text-ink-700 hover:text-primary-700 border border-cream-300 hover:border-primary-300 px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
+                      >
+                        {cat.label}
+                      </HomeCtaLink>
+                    ))}
+                  </div>
+                )}
 
                 <DeliveryCutoff variant="banner" className="max-w-sm" />
 

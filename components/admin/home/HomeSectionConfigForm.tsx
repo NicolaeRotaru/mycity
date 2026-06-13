@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Trash2 } from 'lucide-react';
-import { Input, Textarea, Select } from '@/components/ui/Field';
+import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { ImageUrlField } from '@/components/ImageUrlField';
 import type { HomeSection } from '@/lib/home-site';
 
@@ -70,6 +70,11 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
           <Textarea label="Titolo" value={c.headline ?? ''} rows={2} maxLength={200} onChange={(e) => set({ headline: e.target.value })} />
           <Textarea label="Sottotitolo" value={c.subhead ?? ''} rows={3} maxLength={320} onChange={(e) => set({ subhead: e.target.value })} />
           <Input label="Testo pulsante principale" value={c.ctaLabel ?? ''} maxLength={40} onChange={(e) => set({ ctaLabel: e.target.value })} />
+          <Checkbox
+            checked={c.showChips !== false}
+            onChange={(e) => set({ showChips: e.target.checked })}
+            label={<>Mostra le scorciatoie alle categorie sotto la hero <span className="text-ink-400">(c&apos;è già la sezione &ldquo;Categorie&rdquo;)</span></>}
+          />
         </div>
       );
     }
