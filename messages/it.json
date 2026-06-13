@@ -74,6 +74,7 @@
   "search": {
     "filters": "Filtri",
     "sortBy": "Ordina per",
+    "sortShort": "Ordina",
     "category": "Categoria",
     "allCategories": "Tutte le categorie",
     "price": "Prezzo",

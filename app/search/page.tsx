@@ -1,8 +1,8 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState, type RefObject } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, TrendingUp, X, Tag, PackageCheck } from 'lucide-react';
+import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, ArrowDownWideNarrow, TrendingUp, X, Tag, PackageCheck, Check } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { useQuery } from '@tanstack/react-query';
@@ -12,6 +12,50 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 
 type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating';
+
+const SORT_OPTIONS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'rating'];
+
+// Bottom-sheet mobile: scroll-lock + Esc, focus-trap e ritorno del focus al
+// trigger alla chiusura (WCAG 2.1.2 / 2.4.3). Condiviso tra pannello filtri e ordina.
+function useBottomSheetA11y(
+  open: boolean,
+  sheetRef: RefObject<HTMLDivElement | null>,
+  triggerRef: RefObject<HTMLButtonElement | null>,
+  onClose: () => void,
+) {
+  useEffect(() => {
+    if (!open) return;
+    const trigger = triggerRef.current;
+    const focusables = () =>
+      sheetRef.current
+        ? Array.from(
+            sheetRef.current.querySelectorAll<HTMLElement>(
+              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ),
+          ).filter((el) => el.offsetParent !== null)
+        : [];
+    // All'apertura sposta il focus dentro al pannello.
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const els = focusables();
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+      trigger?.focus();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+}
 
 function SearchInner() {
   const params = useSearchParams();
@@ -56,39 +100,14 @@ function SearchInner() {
   const sheetRef = useRef<HTMLDivElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
 
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortSheetRef = useRef<HTMLDivElement>(null);
+  const sortTriggerRef = useRef<HTMLButtonElement>(null);
+
   // Mobile bottom-sheet: scroll-lock + Esc, PIÙ focus-trap nel pannello e
-  // ritorno del focus al bottone "Filtri" alla chiusura (WCAG 2.1.2 / 2.4.3).
-  useEffect(() => {
-    if (!filtersOpen) return;
-    const trigger = filterTriggerRef.current;
-    const focusables = () =>
-      sheetRef.current
-        ? Array.from(
-            sheetRef.current.querySelectorAll<HTMLElement>(
-              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          ).filter((el) => el.offsetParent !== null)
-        : [];
-    // All'apertura sposta il focus dentro al pannello.
-    focusables()[0]?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { setFiltersOpen(false); return; }
-      if (e.key !== 'Tab') return;
-      const els = focusables();
-      if (els.length === 0) return;
-      const first = els[0];
-      const last = els[els.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-      trigger?.focus();
-    };
-  }, [filtersOpen]);
+  // ritorno del focus al bottone trigger alla chiusura (WCAG 2.1.2 / 2.4.3).
+  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false));
+  useBottomSheetA11y(sortOpen, sortSheetRef, sortTriggerRef, () => setSortOpen(false));
 
   const activeFilters = [
     categoryId && 'categoria',
@@ -257,25 +276,36 @@ function SearchInner() {
         {filterControls}
       </aside>
 
-      {/* MOBILE: bottone che apre il pannello a scomparsa */}
-      <button
-        ref={filterTriggerRef}
-        onClick={() => setFiltersOpen(true)}
-        aria-label={t('filters')}
-        className={`md:hidden flex items-center justify-center gap-2 w-full rounded-full py-3 font-bold shadow-warm transition-colors ${
-          activeFilters > 0
-            ? 'bg-primary-600 text-white hover:bg-primary-700'
-            : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
-        }`}
-      >
-        <Filter size={17} strokeWidth={2.4} className={activeFilters > 0 ? 'text-white' : 'text-primary-600'} />
-        <span>{t('filters')}</span>
-        {activeFilters > 0 && (
-          <span className="bg-white text-primary-700 text-[11px] font-extrabold rounded-full min-w-[1.25rem] px-1.5 py-0.5 leading-none">
-            {activeFilters}
-          </span>
-        )}
-      </button>
+      {/* MOBILE: azioni "Ordina" + "Filtri", compatte e allineate a destra */}
+      <div className="md:hidden flex items-center justify-end gap-2">
+        <button
+          ref={sortTriggerRef}
+          onClick={() => setSortOpen(true)}
+          aria-label={t('sortBy')}
+          className="inline-flex items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3 py-1.5 text-sm font-semibold text-ink-700 shadow-sm hover:bg-cream-50 transition-colors"
+        >
+          <ArrowDownWideNarrow size={15} strokeWidth={2.2} className="text-ink-500" />
+          <span>{t('sortShort')}</span>
+        </button>
+        <button
+          ref={filterTriggerRef}
+          onClick={() => setFiltersOpen(true)}
+          aria-label={t('filters')}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors ${
+            activeFilters > 0
+              ? 'bg-primary-600 text-white hover:bg-primary-700'
+              : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
+          }`}
+        >
+          <Filter size={15} strokeWidth={2.4} className={activeFilters > 0 ? 'text-white' : 'text-primary-600'} />
+          <span>{t('filters')}</span>
+          {activeFilters > 0 && (
+            <span className="bg-white text-primary-700 text-[10px] font-extrabold rounded-full min-w-[1.1rem] px-1 py-0.5 leading-none">
+              {activeFilters}
+            </span>
+          )}
+        </button>
+      </div>
 
       {/* MOBILE: bottom-sheet filtri */}
       {filtersOpen && (
@@ -312,6 +342,39 @@ function SearchInner() {
               >
                 {t('showResults')}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOBILE: bottom-sheet ordinamento */}
+      {sortOpen && (
+        <div className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={t('sortBy')}>
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSortOpen(false)} />
+          <div ref={sortSheetRef} className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] flex flex-col pb-safe">
+            <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-cream-200 rounded-t-2xl">
+              <h2 className="font-serif font-bold text-ink-900 flex items-center gap-2">
+                <ArrowDownWideNarrow size={16} strokeWidth={2.2} className="text-primary-600" />
+                {t('sortBy')}
+              </h2>
+              <button onClick={() => setSortOpen(false)} aria-label={ta('close')} className="text-ink-400 hover:text-ink-700 p-1">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-2 py-2">
+              {SORT_OPTIONS.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => { setSort(opt); setSortOpen(false); }}
+                  aria-pressed={sort === opt}
+                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    sort === opt ? 'bg-primary-50 text-primary-700' : 'text-ink-700 hover:bg-cream-50'
+                  }`}
+                >
+                  <span>{t(`sort.${opt}`)}</span>
+                  {sort === opt && <Check size={16} className="text-primary-600" />}
+                </button>
+              ))}
             </div>
           </div>
         </div>
