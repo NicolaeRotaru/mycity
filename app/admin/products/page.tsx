@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { Plus } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -18,6 +20,8 @@ type Row = {
   stock: number | null;
   status: string;
   images: string[] | null;
+  external_marketplace: string | null;
+  external_synced_at: string | null;
   seller: { store_name: string | null } | null;
   categories: { name: string | null } | null;
 };
@@ -33,7 +37,7 @@ export default function AdminProductsPage() {
       const { data, error } = await supabase
         .from('products')
         .select(`
-          id, name, price, stock, status, images,
+          id, name, price, stock, status, images, external_marketplace, external_synced_at,
           seller:profiles!products_seller_id_fkey ( store_name ),
           categories ( name )
         `)
@@ -71,13 +75,21 @@ export default function AdminProductsPage() {
           <h1 className="text-2xl font-bold text-ink-900">Prodotti</h1>
           <p className="text-sm text-ink-500">{filtered.length} di {products.length}</p>
         </div>
-        <input
-          type="search"
-          placeholder="Cerca prodotto o negozio…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="border rounded-lg px-3 py-1.5 text-sm w-full sm:w-64"
-        />
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <input
+            type="search"
+            placeholder="Cerca prodotto o negozio…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm flex-1 sm:w-64"
+          />
+          <Link
+            href="/admin/products/new"
+            className="inline-flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap"
+          >
+            <Plus size={16} aria-hidden /> Nuovo
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
@@ -106,7 +118,16 @@ export default function AdminProductsPage() {
                           <img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />
                         )}
                       </div>
-                      <span className="font-medium text-ink-900">{p.name}</span>
+                      <div className="min-w-0">
+                        <Link href={`/admin/products/${p.id}/edit`} className="font-medium text-ink-900 hover:text-primary-700 hover:underline block truncate">
+                          {p.name}
+                        </Link>
+                        {p.external_marketplace && (
+                          <span className="inline-block mt-0.5 rounded-full bg-accent-100 text-accent-700 px-1.5 py-0.5 text-[10px] font-semibold uppercase">
+                            import · {p.external_marketplace}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="p-3 text-ink-700">{p.seller?.store_name ?? '—'}</td>
@@ -123,21 +144,29 @@ export default function AdminProductsPage() {
                     </span>
                   </td>
                   <td className="p-3">
-                    <button
-                      onClick={async () => {
-                        const ok = await confirmDialog({
-                          title: 'Eliminare il prodotto?',
-                          message: `"${p.name}" verrà rimosso definitivamente.`,
-                          confirmLabel: tConfirm('yesDelete'),
-                          danger: true,
-                          icon: '🗑️',
-                        });
-                        if (ok) remove.mutate(p.id);
-                      }}
-                      className="text-xs bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded"
-                    >
-                      Elimina
-                    </button>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Link
+                        href={`/admin/products/${p.id}/edit`}
+                        className="text-xs bg-cream-100 hover:bg-cream-200 text-ink-700 px-2 py-1 rounded"
+                      >
+                        Modifica
+                      </Link>
+                      <button
+                        onClick={async () => {
+                          const ok = await confirmDialog({
+                            title: 'Eliminare il prodotto?',
+                            message: `"${p.name}" verrà rimosso definitivamente.`,
+                            confirmLabel: tConfirm('yesDelete'),
+                            danger: true,
+                            icon: '🗑️',
+                          });
+                          if (ok) remove.mutate(p.id);
+                        }}
+                        className="text-xs bg-rose-100 hover:bg-rose-200 text-rose-700 px-2 py-1 rounded"
+                      >
+                        Elimina
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

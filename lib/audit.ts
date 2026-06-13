@@ -15,6 +15,8 @@ export type AuditAction =
   | 'user.suspend'
   | 'user.reactivate'
   | 'user.delete'
+  | 'product.create'
+  | 'product.update'
   | 'product.hide'
   | 'product.show'
   | 'order.refund'

@@ -58,7 +58,10 @@
     "users": "Utenti",
     "products": "Prodotti",
     "history": "Storico",
-    "availability": "Online"
+    "availability": "Online",
+    "addProduct": "Inserisci",
+    "surveillance": "Sorveglianza",
+    "support": "Assistenza"
   },
   "checkout": {
     "title": "Checkout",

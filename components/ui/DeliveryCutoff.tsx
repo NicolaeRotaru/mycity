@@ -40,12 +40,15 @@ export function DeliveryCutoff({
   cutoffHour = DEFAULT_CUTOFF_HOUR,
   variant = 'inline',
   available = true,
+  externalDeliveryLabel,
   className,
 }: {
   cutoffHour?: number;
   variant?: 'inline' | 'banner';
   /** Prodotto a inventario e pronto (stock > 0). false → Standard 24-48h. */
   available?: boolean;
+  /** Prodotto importato da marketplace: mostra il tempo di consegna esterno. */
+  externalDeliveryLabel?: string | null;
   className?: string;
 }) {
   const { hydrated, day, h, m, s } = useDeliveryCutoff(cutoffHour);
@@ -55,8 +58,10 @@ export function DeliveryCutoff({
     ? <span className="font-mono font-bold tabular-nums">{pad(h)}:{pad(m)}:{pad(s)}</span>
     : null;
 
-  // Standard: prodotto non disponibile/su ordinazione → niente countdown fuorviante.
-  const content = !available ? (
+  // Prodotto importato: il tempo di consegna è quello indicato dal marketplace.
+  const content = externalDeliveryLabel ? (
+    <span>Consegna in <strong>{externalDeliveryLabel}</strong></span>
+  ) : !available ? (
     <span>Consegna in <strong>{STANDARD_ETA_LABEL}</strong></span>
   ) : day === 'oggi' && hydrated ? (
     <span>Ordina entro {timer} e <strong>arriva oggi</strong> in {EXPRESS_ETA_LABEL}</span>

@@ -32,6 +32,7 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
+import { useExternalProduct } from '@/components/hooks/useExternalProduct';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { SocialProof } from '@/components/ui/SocialProof';
 import { friendlyError } from '@/lib/errors';
@@ -73,6 +74,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const { data: variants = [] } = useQuery({
     queryKey: ['product-variants', id],
     queryFn: () => loadProductVariants(id),
+  });
+
+  // Prodotto importato da marketplace: tempo di consegna esterno in tempo reale
+  // (snapshot in cache + refresh in background lato server).
+  const external = useExternalProduct(id, {
+    hasExternal: !!(product as { external_source_url?: string | null } | undefined)?.external_source_url,
   });
 
   type ReviewRow = {
@@ -508,8 +515,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               </p>
             </div>
 
-            {/* Consegna a due velocità: Express se a inventario, altrimenti 24-48h */}
-            <DeliveryCutoff variant="inline" available={!isOutOfStock} />
+            {/* Consegna: marketplace esterno se importato, altrimenti Express/Standard */}
+            <DeliveryCutoff variant="inline" available={!isOutOfStock} externalDeliveryLabel={external?.delivery_label} />
 
             {/* Barra spedizione gratis reattiva alla quantità — versione leggera */}
             <FreeShippingProgress subtotal={price * quantity} />

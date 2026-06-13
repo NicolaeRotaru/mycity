@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Store, Bike, LogOut, X } from 'lucide-react';
 import { getAccountMenuItems, type MenuRole } from '@/lib/account-menu';
+import { useCloseOnBack } from './hooks/useCloseOnBack';
 
 type Props = {
   open: boolean;
@@ -21,6 +22,9 @@ type Props = {
  * Si apre dalla tab "Io" della MobileTabBar, per tutti i ruoli.
  */
 export default function MobileAccountSheet({ open, onClose, role, displayName, storeLogo, onSignOut }: Props) {
+  // Tasto "indietro" di sistema (es. Samsung): chiude solo il drawer, niente navigazione.
+  useCloseOnBack(open, onClose);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
