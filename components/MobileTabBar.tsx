@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Home, Search, MessageCircle, ShoppingCart, User, Package, Bike, Shield, Plus, Eye, Headset, type LucideIcon } from 'lucide-react';
+import { Home, Search, MessageCircle, ShoppingCart, User, Package, Bike, Shield, Plus, Eye, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
@@ -74,9 +74,9 @@ export default function MobileTabBar() {
   } else if (isAuthenticated) {
     tabs = [
       { href: '/',          icon: Home,         label: t('home') },
-      { href: '/orders',    icon: Package,      label: t('orders') },
+      { href: '/search',    icon: Search,       label: t('search') },
       { href: '/cart',      icon: ShoppingCart, label: t('cart'), badge: cartCount },
-      { href: '#support',   icon: Headset,      label: t('support'), isSupport: true },
+      { href: '/orders',    icon: Package,      label: t('orders') },
       { href: '/profile',   icon: User,         label: t('me'), isAccount: true },
     ];
   } else {
