@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 
 /**
  * Chiude un overlay (drawer/modale) con il tasto "indietro" di sistema invece
@@ -11,15 +11,28 @@ import { useEffect, useRef } from 'react';
  * Se l'overlay viene chiuso dall'UI (X / backdrop / Escape) mentre la entry
  * sintetica è ancora in cima, la rimuove con `history.back()` per non lasciare
  * voci spurie nella cronologia.
+ *
+ * Ritorna un ref `navigating`: chi consuma l'hook lo imposta a `true` PRIMA di
+ * far partire una navigazione (es. click su una voce di menu) e poi chiama
+ * `onClose()`. In quel caso la pulizia NON esegue `history.back()`: quel back
+ * genererebbe un `popstate` che l'App Router di Next interpreta come "torna
+ * indietro", annullando la navigazione appena avviata (è il motivo per cui i
+ * pulsanti del menu non funzionavano, mentre "Esci" sì: naviga in modo
+ * asincrono, ben dopo il back).
  */
-export function useCloseOnBack(open: boolean, onClose: () => void) {
+export function useCloseOnBack(
+  open: boolean,
+  onClose: () => void,
+): MutableRefObject<boolean> {
   const pushedRef = useRef(false);
+  const navigatingRef = useRef(false);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open || typeof window === 'undefined') return;
 
+    navigatingRef.current = false;
     window.history.pushState({ __overlay: true }, '');
     pushedRef.current = true;
 
@@ -32,18 +45,17 @@ export function useCloseOnBack(open: boolean, onClose: () => void) {
 
     return () => {
       window.removeEventListener('popstate', onPop);
-      // Chiusura via UI (X / backdrop / Escape): la entry sintetica è ancora in
-      // cima → rimuovila con un back. Ma se nel frattempo è avvenuta una
-      // navigazione (click su un link del menu), sopra la entry sintetica c'è
-      // già la nuova pagina: un back qui annullerebbe quella navigazione. Lo
-      // rileviamo perché lo state corrente non è più quello sintetico.
       if (pushedRef.current) {
         pushedRef.current = false;
-        const state = window.history.state as { __overlay?: boolean } | null;
-        if (state?.__overlay) {
+        // Chiusura via UI (X / backdrop / Escape): rimuovi la entry sintetica.
+        // Se invece stiamo navigando, lascia stare: il back annullerebbe la
+        // navigazione del link.
+        if (!navigatingRef.current) {
           window.history.back();
         }
       }
     };
   }, [open]);
+
+  return navigatingRef;
 }

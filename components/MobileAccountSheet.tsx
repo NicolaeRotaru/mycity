@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { Store, Bike, LogOut, X } from 'lucide-react';
 import { getAccountMenuItems, type MenuRole } from '@/lib/account-menu';
 import { useCloseOnBack } from './hooks/useCloseOnBack';
@@ -22,8 +23,21 @@ type Props = {
  * Si apre dalla tab "Io" della MobileTabBar, per tutti i ruoli.
  */
 export default function MobileAccountSheet({ open, onClose, role, displayName, storeLogo, onSignOut }: Props) {
+  const router = useRouter();
   // Tasto "indietro" di sistema (es. Samsung): chiude solo il drawer, niente navigazione.
-  useCloseOnBack(open, onClose);
+  const navigatingRef = useCloseOnBack(open, onClose);
+
+  // Navigazione esplicita: segnala a useCloseOnBack che stiamo navigando (così
+  // la chiusura non fa un history.back che annullerebbe la navigazione), poi
+  // chiude il drawer e naviga via router.
+  const handleNavigate = (e: React.MouseEvent, href: string) => {
+    // Lascia che cmd/ctrl/shift-click o tasto centrale aprano in una nuova scheda.
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    navigatingRef.current = true;
+    onClose();
+    router.push(href);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -82,7 +96,7 @@ export default function MobileAccountSheet({ open, onClose, role, displayName, s
               <li key={it.href}>
                 <Link
                   href={it.href}
-                  onClick={onClose}
+                  onClick={(e) => handleNavigate(e, it.href)}
                   className="flex items-center gap-3 px-4 py-3 text-sm text-ink-800 hover:bg-cream-100"
                 >
                   <Icon size={18} strokeWidth={2.2} className="text-ink-500 shrink-0" aria-hidden />
