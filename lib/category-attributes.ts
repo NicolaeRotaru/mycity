@@ -145,6 +145,19 @@ export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
 };
 
 /**
+ * Mappa le chiavi attributo generiche estratte/proposte dall'AI sulle key
+ * per-categoria. Sorgente unica, riusata da ProductForm (apply lato form) e
+ * dal resolver server-side del patch AI (lib/products/aiPatch).
+ */
+export const AI_ATTR_TO_FIELD: Record<string, string> = {
+  marca: 'marca', modello: 'modello', colore: 'colore', taglia: 'taglia',
+  materiale: 'materiale', peso: 'peso', dimensioni: 'dimensioni',
+  origine: 'origine', allergeni: 'allergeni', ingredienti: 'ingredienti',
+  scadenza: 'scadenza', ean: 'ean', autore: 'autore', editore: 'editore',
+  anno: 'anno', pagine: 'pagine', lingua: 'lingua', isbn: 'isbn', formato: 'formato',
+};
+
+/**
  * Cerca la label umana per una chiave attributo, scorrendo tutte le categorie.
  * Se non trova match, ripiega su un titlecase della chiave.
  */
