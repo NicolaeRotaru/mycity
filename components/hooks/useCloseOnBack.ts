@@ -32,10 +32,17 @@ export function useCloseOnBack(open: boolean, onClose: () => void) {
 
     return () => {
       window.removeEventListener('popstate', onPop);
-      // Chiusura via UI: la entry sintetica è ancora presente → rimuovila.
+      // Chiusura via UI (X / backdrop / Escape): la entry sintetica è ancora in
+      // cima → rimuovila con un back. Ma se nel frattempo è avvenuta una
+      // navigazione (click su un link del menu), sopra la entry sintetica c'è
+      // già la nuova pagina: un back qui annullerebbe quella navigazione. Lo
+      // rileviamo perché lo state corrente non è più quello sintetico.
       if (pushedRef.current) {
         pushedRef.current = false;
-        window.history.back();
+        const state = window.history.state as { __overlay?: boolean } | null;
+        if (state?.__overlay) {
+          window.history.back();
+        }
       }
     };
   }, [open]);

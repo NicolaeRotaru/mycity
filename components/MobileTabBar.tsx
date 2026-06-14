@@ -74,9 +74,9 @@ export default function MobileTabBar() {
   } else if (isAuthenticated) {
     tabs = [
       { href: '/',          icon: Home,         label: t('home') },
-      { href: '#support',   icon: Headset,      label: t('support'), isSupport: true },
+      { href: '/orders',    icon: Package,      label: t('orders') },
       { href: '/cart',      icon: ShoppingCart, label: t('cart'), badge: cartCount },
-      { href: '/search',    icon: Search,       label: t('search') },
+      { href: '#support',   icon: Headset,      label: t('support'), isSupport: true },
       { href: '/profile',   icon: User,         label: t('me'), isAccount: true },
     ];
   } else {
