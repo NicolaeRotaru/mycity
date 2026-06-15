@@ -15,13 +15,13 @@ type Role = 'buyer' | 'seller' | 'rider';
 
 const ROLES: { value: Role; emoji: string; title: string; subtitle: string; color: string }[] = [
   { value: 'buyer',  emoji: '🛒', title: 'Acquirente', subtitle: 'Compra dai negozi locali',  color: 'indigo' },
-  { value: 'seller', emoji: '🏪', title: 'Venditore',  subtitle: 'Vendi i tuoi prodotti',     color: 'pink' },
+  { value: 'seller', emoji: '🏪', title: 'Venditore',  subtitle: 'Vendi i tuoi prodotti',     color: 'red' },
   { value: 'rider',  emoji: '🛵', title: 'Rider',      subtitle: 'Consegna ordini',           color: 'amber' },
 ];
 
 const colorClasses: Record<string, { border: string; bg: string; btn: string }> = {
   indigo: { border: 'border-indigo-500 bg-primary-50', bg: 'bg-primary-50 border-primary-200 text-primary-800', btn: 'bg-primary-700 hover:bg-primary-800' },
-  pink:   { border: 'border-pink-500 bg-secondary-50',     bg: 'bg-secondary-50 border-secondary-200 text-secondary-800',     btn: 'bg-pink-500 hover:bg-pink-600' },
+  red:    { border: 'border-secondary-600 bg-secondary-50', bg: 'bg-secondary-50 border-secondary-200 text-secondary-800',     btn: 'bg-secondary-600 hover:bg-secondary-700' },
   amber:  { border: 'border-accent-500 bg-accent-50',   bg: 'bg-accent-50 border-accent-200 text-accent-800',   btn: 'bg-accent-500 hover:bg-accent-600' },
 };
 
