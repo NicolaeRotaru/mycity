@@ -2,7 +2,7 @@ import type { NextRequest, NextResponse } from 'next/server';
 import { createClient, type User } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'node:crypto';
 import { ApiErrors } from './responses';
-import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 
 /** Confronto a tempo costante per secret (anti timing-attack). */
 function secretsMatch(a: string | null | undefined, b: string | null | undefined): boolean {

@@ -346,6 +346,19 @@ export async function refundOrder(
       throw new Error('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
     }
     const ref = opts.idempotencyKey ?? `cod_refund_${order.id}_${safeAmountCents}`;
+
+    // Claw-back del transfer al venditore se il COD era GIÀ stato pagato (il payout
+    // COD — slice 3 — fa un transfer dal saldo piattaforma). DEVE avvenire anche
+    // per i COD: senza, un rimborso dopo il payout sarebbe una doppia uscita
+    // (venditore pagato + buyer accreditato). Idempotente: reverseOrderTransfer è
+    // no-op se l'ordine non è TRANSFERRED o è già stato stornato.
+    const sellerNet = order.seller_payout_cents ?? 0;
+    const sellerShare =
+      orderTotalCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / orderTotalCents), sellerNet) : 0;
+    const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
+    const wasTransferred = order.payout_status === 'TRANSFERRED';
+
+    // Accredito wallet del buyer (idempotente via unique index su ref).
     const { error: wErr } = await admin.rpc('wallet_credit', {
       p_user: order.user_id,
       p_cents: safeAmountCents,
@@ -355,26 +368,28 @@ export async function refundOrder(
     if (wErr) {
       // 23505 = unique_violation → già accreditato per questo ref: idempotente.
       if ((wErr as { code?: string }).code === '23505') {
-        return { refundId: `wallet:${ref}`, reversedCents: 0 };
+        return { refundId: `wallet:${ref}`, reversedCents };
       }
       throw new Error(`refundOrder COD: accredito wallet fallito: ${wErr.message}`);
     }
 
+    // NB: NON marchiamo delivery_status='CANCELED' per i COD: la consegna è
+    // avvenuta e il contante incassato dal rider resta dovuto/riconciliato (lo
+    // marcheremmo fuori dall'expected della riconciliazione). Il rimborso è
+    // riflesso da payment_status + dal claw-back del payout.
     await admin
       .from('orders')
       .update({
         refunded_amount_cents: newRefundedTotal,
         payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
-        ...(isFull
-          ? { payout_status: 'REFUNDED', delivery_status: 'CANCELED', canceled_at: new Date().toISOString() }
-          : {}),
+        ...(isFull ? { payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED' } : {}),
       })
       .eq('id', order.id);
 
     if (isFull) await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
     await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts);
 
-    return { refundId: `wallet:${ref}`, reversedCents: 0 };
+    return { refundId: `wallet:${ref}`, reversedCents };
   }
 
   // --- Carta: refund reale Stripe + claw-back del transfer se già pagato.
