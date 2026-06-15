@@ -12,8 +12,8 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 
-const PER_DAY_EUR = 0.7; // €4,90 / 7 giorni
-const DURATIONS = [7, 14, 30];
+const PER_WEEK_EUR = 4.99;
+const DURATIONS = [1, 2, 4]; // settimane
 
 type Product = { id: string; name: string; price: number | string; images: string[] | null; status: string };
 type Campaign = {
@@ -29,7 +29,7 @@ type Campaign = {
 
 export default function SellerPromotePage() {
   const [selected, setSelected] = useState<string | null>(null);
-  const [days, setDays] = useState(7);
+  const [weeks, setWeeks] = useState(1);
   const [paying, setPaying] = useState(false);
 
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function SellerPromotePage() {
     },
   });
 
-  const price = days * PER_DAY_EUR;
+  const price = weeks * PER_WEEK_EUR;
 
   const pay = async () => {
     if (!selected) { toast.error('Scegli un prodotto da sponsorizzare'); return; }
@@ -79,7 +79,7 @@ export default function SellerPromotePage() {
       const res = await fetch('/api/sponsored/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: selected, days }),
+        body: JSON.stringify({ productId: selected, weeks }),
       });
       const json = await res.json();
       if (!res.ok || !json.url) throw new Error(json.error || 'Errore nel pagamento');
@@ -100,7 +100,7 @@ export default function SellerPromotePage() {
           Metti in primo piano
         </h1>
         <p className="text-sm text-ink-500 mt-1">
-          Fai apparire un tuo prodotto nel carosello <strong>&laquo;In primo piano&raquo;</strong> della ricerca. €4,90 / 7 giorni.
+          Fai apparire un tuo prodotto nel carosello <strong>&laquo;In primo piano&raquo;</strong> della ricerca. €4,99 / settimana.
         </p>
       </header>
 
@@ -142,17 +142,17 @@ export default function SellerPromotePage() {
       <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm space-y-4">
         <h2 className="font-semibold text-ink-900">2. Durata</h2>
         <div className="grid grid-cols-3 gap-2 max-w-md">
-          {DURATIONS.map((d) => (
+          {DURATIONS.map((w) => (
             <button
-              key={d}
+              key={w}
               type="button"
-              onClick={() => setDays(d)}
+              onClick={() => setWeeks(w)}
               className={`py-3 rounded-xl font-bold border-2 transition-colors ${
-                days === d ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-ink-900 border-cream-300 hover:border-primary-300'
+                weeks === w ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-ink-900 border-cream-300 hover:border-primary-300'
               }`}
             >
-              {d} giorni
-              <span className="block text-xs font-semibold opacity-80">{formatPrice(d * PER_DAY_EUR)}</span>
+              {w} {w === 1 ? 'settimana' : 'settimane'}
+              <span className="block text-xs font-semibold opacity-80">{formatPrice(w * PER_WEEK_EUR)}</span>
             </button>
           ))}
         </div>

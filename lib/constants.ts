@@ -6,6 +6,12 @@ export const NEW_PRODUCT_DAYS = 14;
 export const SHIPPING_PER_ORDER = 4.9;
 /** Sconto percentuale per ritiro in negozio. */
 export const PICKUP_DISCOUNT_PERCENT = 10;
+/**
+ * Fee di consegna trattenuta dalla piattaforma (in centesimi) su ogni ordine
+ * con consegna a domicilio. NON si applica ai ritiri in negozio. La incassa
+ * MyCity: non finisce nel payout del venditore né nel compenso del rider.
+ */
+export const PLATFORM_DELIVERY_FEE_CENTS = 300;
 
 // Riferimenti per icone (nomi lucide-react). Componenti li importano e
 // renderizzano per evitare di sparare emoji nelle UI strutturali.

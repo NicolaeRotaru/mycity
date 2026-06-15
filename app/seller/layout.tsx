@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { SubscriptionBanner } from '@/components/seller/SubscriptionBanner';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -50,7 +51,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           <p className="text-sm text-ink-500 mb-6 max-w-md mx-auto">
             Se hai un'attività e vuoi vendere su MyCity puoi inviare la richiesta. Approvazione entro 48h,
-            poi avrai una vetrina dedicata, abbonamento mensile, niente commissioni sulle vendite.
+            poi avrai una vetrina dedicata. Abbonamento €50/mese e commissione del 10% sulle vendite.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm">
             <Link
@@ -154,6 +155,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-6xl">
+      {isSeller && <SubscriptionBanner status={profile?.subscription_status} />}
       <main>{children}</main>
     </div>
   );

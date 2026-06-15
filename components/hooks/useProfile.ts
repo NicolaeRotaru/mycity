@@ -17,6 +17,7 @@ export type Profile = {
   store_logo: string | null;
   full_name: string | null;
   email: string | null;
+  subscription_status: string | null;
 };
 
 export const useProfile = () => {
@@ -51,7 +52,7 @@ export const useProfile = () => {
       if (!userId) return null;
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, role, is_approved, store_name, store_logo, full_name')
+        .select('id, role, is_approved, store_name, store_logo, full_name, subscription_status')
         .eq('id', userId)
         .single();
       if (error) return null;

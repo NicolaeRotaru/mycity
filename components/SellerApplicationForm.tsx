@@ -199,13 +199,13 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       <div className="bg-gradient-to-r from-primary-600 via-purple-600 to-pink-600 text-white rounded-2xl p-6">
         <h1 className="text-2xl md:text-3xl font-extrabold mb-1">🏪 Diventa venditore business</h1>
         <p className="text-primary-100 text-sm leading-relaxed">
-          Vetrina dedicata, prodotti illimitati, niente commissioni per vendita.
-          <strong className="text-white"> Abbonamento €50/mese</strong>, attivo solo dopo approvazione del nostro team.
+          Vetrina dedicata, prodotti illimitati.
+          <strong className="text-white"> Abbonamento €50/mese</strong> e commissione del 10% sulle vendite, attivi solo dopo approvazione del nostro team.
         </p>
         <ul className="text-xs text-primary-100 mt-3 space-y-1">
           <li>✓ Vetrina pubblica con logo, copertina, descrizione</li>
           <li>✓ Pubblica prodotti illimitati e gestisci ordini da dashboard</li>
-          <li>✓ Pagamento mensile, niente commissioni sulle vendite</li>
+          <li>✓ Abbonamento €50/mese + commissione del 10% sulle vendite</li>
           <li>✓ Bonifico settimanale su IBAN per i tuoi incassi</li>
         </ul>
       </div>

@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
-import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { shippingCentsFor } from '@/lib/shipping';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
@@ -220,7 +220,10 @@ export const POST = withAuthRateLimit(
       const couponPortionCents = Math.round(couponDiscountCents * portion);
       const pickupPortionCents = Math.round(pickupDiscountCents * portion);
       const discountCents = couponPortionCents + pickupPortionCents;
-      const grossTotalCents = Math.max(0, subtotal + shipping - discountCents);
+      // Fee di consegna piattaforma (€3): solo per consegna a domicilio, mai per
+      // ritiro in negozio. Il cliente la paga in contanti insieme all'ordine.
+      const deliveryFeeCents = body.pickupInStore ? 0 : PLATFORM_DELIVERY_FEE_CENTS;
+      const grossTotalCents = Math.max(0, subtotal + shipping + deliveryFeeCents - discountCents);
 
       // RISERVA ATOMICA DELLO STOCK del gruppo PRIMA di creare l'ordine (P0-4).
       // Con variante, la riserva scala lo stock della variante.
@@ -263,6 +266,7 @@ export const POST = withAuthRateLimit(
           seller_id: g.sellerId,
           total_price: totalCents / 100,
           shipping_cost: shipping / 100,
+          delivery_fee_cents: deliveryFeeCents,
           discount_amount: discountCents / 100,
           wallet_applied_cents: walletAppliedCents,
           coupon_code: validatedCouponCode,
