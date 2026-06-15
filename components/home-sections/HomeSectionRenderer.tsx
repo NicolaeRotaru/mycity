@@ -88,7 +88,7 @@ function HomeBlock({
         <section className="relative overflow-hidden bg-gradient-to-b from-surface-0 to-surface-100">
           <div aria-hidden className="absolute -top-20 -right-20 w-[500px] h-[500px] rounded-full bg-primary-200/40 blur-3xl" />
           <div aria-hidden className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-accent-200/40 blur-3xl" />
-          <div className="container mx-auto px-4 sm:px-6 py-12 md:py-20 relative">
+          <div className="container mx-auto px-4 sm:px-6 py-6 md:py-10 relative">
             <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-10 items-center">
               <div className="space-y-6">
                 <span className="inline-flex items-center gap-1.5 bg-primary-100 text-primary-800 px-3 py-1 rounded-full text-xs font-semibold tracking-wide ring-1 ring-primary-200">
@@ -173,8 +173,8 @@ function HomeBlock({
     case 'categories': {
       const c = section.config;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-12">
-          <div className="text-center mb-8">
+        <section className="container mx-auto px-4 sm:px-6 py-6">
+          <div className="text-center mb-5">
             <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">
               {c.heading || 'Cosa cerchi oggi?'}
             </h2>
@@ -199,9 +199,9 @@ function HomeBlock({
     case 'popularProducts': {
       const c = section.config;
       return (
-        <section className="bg-white border-y border-cream-300 py-12">
+        <section className="bg-white border-y border-cream-300 py-6">
           <div className="container mx-auto px-4 sm:px-6">
-            <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
+            <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
               <div>
                 <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
                   <Heart size={14} strokeWidth={2.4} />
@@ -228,7 +228,7 @@ function HomeBlock({
         ? c.bullets.map((b) => ({ Icon: Check, color: 'primary' as const, t: b.title, d: b.desc }))
         : DEFAULT_TRUST_BULLETS;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-10 grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6">
+        <section className="container mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6">
           <LiveActivityFeed />
           <div className="bg-white border border-cream-300 rounded-2xl p-6 shadow-warm">
             <h3 className="font-serif font-bold text-ink-900 text-lg mb-4">
@@ -256,8 +256,8 @@ function HomeBlock({
     case 'nearbyStores': {
       const c = section.config;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-12">
-          <div className="flex justify-between items-end mb-6 gap-4 flex-wrap">
+        <section className="container mx-auto px-4 sm:px-6 py-6">
+          <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
             <div>
               <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
                 <MapPin size={14} strokeWidth={2.4} />
@@ -284,7 +284,7 @@ function HomeBlock({
       const c = section.config;
       return (
         <section className="bg-gradient-to-br from-accent-100 via-accent-50 to-cream-100 border-y border-cream-300">
-          <div className="container mx-auto px-4 sm:px-6 py-12 md:py-16 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div className="container mx-auto px-4 sm:px-6 py-6 md:py-8 grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
             <div>
               <span className="inline-flex items-center gap-1.5 bg-white/80 text-primary-800 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ring-1 ring-primary-200">
                 <Gift size={14} strokeWidth={2.4} />
@@ -314,7 +314,7 @@ function HomeBlock({
       const c = section.config;
       return (
         <section className="bg-ink-900 text-white">
-          <div className="container mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="container mx-auto px-4 sm:px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <span className="shrink-0 w-10 h-10 rounded-full bg-white/10 ring-1 ring-white/15 flex items-center justify-center">
                 <ShieldCheck size={18} strokeWidth={2.4} className="text-accent-400" />
@@ -340,15 +340,15 @@ function HomeBlock({
 
     /* ----------------------------------------------- SEZIONI EDITORIALI (dormienti) */
     case 'shopOfMonth':
-      return <div className="container mx-auto px-4 sm:px-6 py-6"><ShopOfMonthHero /></div>;
+      return <div className="container mx-auto px-4 sm:px-6 py-4"><ShopOfMonthHero /></div>;
     case 'stories':
-      return <div className="container mx-auto px-4 sm:px-6 py-6"><StoriesCarousel /></div>;
+      return <div className="container mx-auto px-4 sm:px-6 py-4"><StoriesCarousel /></div>;
     case 'events':
-      return <div className="container mx-auto px-4 sm:px-6 py-6"><HomeEvents /></div>;
+      return <div className="container mx-auto px-4 sm:px-6 py-4"><HomeEvents /></div>;
     case 'promo':
-      return <div className="container mx-auto px-4 sm:px-6 py-6"><PromoDeals /></div>;
+      return <div className="container mx-auto px-4 sm:px-6 py-4"><PromoDeals /></div>;
     case 'trending':
-      return <div className="container mx-auto px-4 sm:px-6 py-6"><TrendingNow /></div>;
+      return <div className="container mx-auto px-4 sm:px-6 py-4"><TrendingNow /></div>;
 
     /* ----------------------------------------------------- BLOCCHI DI CONTENUTO */
     case 'richText': {
@@ -357,7 +357,7 @@ function HomeBlock({
       const clean = sanitizeRichText(c.body);
       if (!heading && !clean) return null;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-8">
+        <section className="container mx-auto px-4 sm:px-6 py-5">
           <div className="bg-white border border-cream-300 rounded-2xl p-6 max-w-4xl mx-auto">
             {heading && <h2 className="text-xl sm:text-2xl font-bold font-serif text-ink-900 mb-3">{heading}</h2>}
             {clean && (
@@ -378,7 +378,7 @@ function HomeBlock({
       const external = !!href && /^https?:\/\//i.test(href);
       const ctaClass = 'inline-flex items-center gap-1.5 rounded-full bg-primary-700 hover:bg-primary-800 text-white px-5 py-2.5 text-sm font-semibold shadow-warm transition-transform hover:-translate-y-0.5';
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-8">
+        <section className="container mx-auto px-4 sm:px-6 py-5">
           <div className="relative w-full h-56 sm:h-72 overflow-hidden rounded-2xl border border-cream-300 shadow-warm">
             <Image src={sizedImage(c.imageUrl, 'hero')} alt={c.heading ?? ''} fill sizes="(max-width: 768px) 100vw, 1024px" className="object-cover" />
             {overlayClass && <div className={`absolute inset-0 ${overlayClass}`} aria-hidden />}
@@ -403,7 +403,7 @@ function HomeBlock({
       const items = c.items ?? [];
       if (items.length === 0) return null;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-8">
+        <section className="container mx-auto px-4 sm:px-6 py-5">
           {c.heading && <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mb-4 text-center">{c.heading}</h2>}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-4xl mx-auto">
             {items.map((it, i) => (
@@ -423,7 +423,7 @@ function HomeBlock({
         ? `https://www.youtube-nocookie.com/embed/${c.videoId}`
         : `https://player.vimeo.com/video/${c.videoId}`;
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-8">
+        <section className="container mx-auto px-4 sm:px-6 py-5">
           {c.heading && <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mb-4 text-center">{c.heading}</h2>}
           <div className="relative w-full aspect-video overflow-hidden rounded-2xl border border-cream-300 bg-black max-w-4xl mx-auto">
             <iframe
