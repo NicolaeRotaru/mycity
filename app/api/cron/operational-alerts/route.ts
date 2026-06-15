@@ -3,6 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { staleCrons, type CronHeartbeat } from '@/lib/cron-health';
 
 export const runtime = 'nodejs';
 
@@ -177,6 +178,18 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       type: 'COD_MISMATCH',
       detail: `Riconciliazione COD rider ${mm.rider_id.slice(0, 8)} del ${mm.for_date}: atteso €${(mm.expected_cents / 100).toFixed(2)} vs incassato €${(mm.collected_cents / 100).toFixed(2)}`,
       url: '/admin/orders',
+    });
+  }
+
+  // 8) Dead-man's switch: cron critici che hanno smesso di girare (audit 🟠-25).
+  // I heartbeat sono scritti da withCronAuth; qui segnaliamo chi supera la soglia.
+  const { data: heartbeats } = await admin.from('cron_heartbeats').select('name, last_run_at');
+  for (const c of staleCrons((heartbeats ?? []) as CronHeartbeat[], Date.now())) {
+    alerts.push({
+      key: `CRON_STALE|${c.name}`,
+      type: 'CRON_STALE',
+      detail: `Cron "${c.name}" fermo da ${c.staleMin} min (soglia ${c.thresholdMin}): scheduler o deploy down?`,
+      url: '/admin/today',
     });
   }
 

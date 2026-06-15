@@ -176,6 +176,25 @@ export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: Generic
 }
 
 /**
+ * Heartbeat best-effort del cron (audit 🟠-25): registra l'ultima esecuzione in
+ * cron_heartbeats, così operational-alerts può accorgersi se un cron SMETTE di
+ * girare (dead-man's switch). Trasparente per tutti i cron (passano da qui).
+ * Tutto in try/catch fire-and-forget: non deve MAI far fallire il cron.
+ */
+async function recordCronHeartbeat(req: NextRequest): Promise<void> {
+  try {
+    const name = new URL(req.url).pathname.split('/').filter(Boolean).pop();
+    if (!name) return;
+    const { getAdminSupabase } = await import('@/lib/supabase/server');
+    await getAdminSupabase()
+      .from('cron_heartbeats')
+      .upsert({ name, last_run_at: new Date().toISOString() }, { onConflict: 'name' });
+  } catch {
+    /* best-effort: il heartbeat non deve mai bloccare o far fallire il cron. */
+  }
+}
+
+/**
  * Wrapper: richiede CRON_SECRET nell'header Authorization.
  * Per endpoint chiamati da cron esterni (cron-job.org, Vercel cron).
  */
@@ -188,6 +207,7 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
       ? authHeader.slice(7).trim()
       : null;
     if (!secretsMatch(bearer, expected)) return ApiErrors.unauthorized();
+    void recordCronHeartbeat(req); // dead-man's switch (🟠-25), best-effort
     return handler(req);
   };
 }
