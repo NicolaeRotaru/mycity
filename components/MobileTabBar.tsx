@@ -92,6 +92,15 @@ export default function MobileTabBar() {
   const isActive = (href: string, exact?: boolean) =>
     href === '/' || exact ? pathname === href : pathname === href || pathname.startsWith(href + '/');
 
+  // Tra le tab che combaciano col path, tiene attiva solo la più specifica
+  // (href più lungo). Evita che una rotta padre (/seller/products) resti
+  // evidenziata su una figlia con tab propria (/seller/products/new).
+  const matchedHref = tabs.reduce<string | null>(
+    (best, tab) =>
+      isActive(tab.href, tab.exact) && (!best || tab.href.length > best.length) ? tab.href : best,
+    null,
+  );
+
   const role: MenuRole = isAdmin ? 'admin' : isSeller ? 'seller' : isRider ? 'rider' : isAuthenticated ? 'buyer' : null;
   const displayName =
     profile?.full_name?.split(' ')[0] ??
@@ -140,11 +149,12 @@ export default function MobileTabBar() {
       >
         <ul className="flex items-stretch justify-around">
           {tabs.map((tab) => {
+            const pathActive = isActive(tab.href, tab.exact) && tab.href === matchedHref;
             const active = tab.isAccount
-              ? (sheetOpen || isActive(tab.href, tab.exact))
+              ? (sheetOpen || pathActive)
               : tab.isSupport
                 ? supportOpen
-                : isActive(tab.href, tab.exact);
+                : pathActive;
             return (
               <li key={tab.href} className="flex-1">
                 {tab.isAccount ? (
