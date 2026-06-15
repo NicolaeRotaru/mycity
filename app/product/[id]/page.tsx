@@ -311,7 +311,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     priority={i === 0}
                     sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw"
                     unoptimized
-                    className="object-contain"
+                    className="object-cover"
                   />
                   <button
                     type="button"
@@ -359,7 +359,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     activeImg === i ? 'border-primary-600' : 'border-transparent hover:border-surface-300'
                   }`}
                 >
-                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-contain" />
+                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-cover" />
                 </button>
               ))}
             </div>
