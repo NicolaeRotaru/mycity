@@ -195,11 +195,13 @@ const ImageItem = z.object({
   media_type: z.enum(MEDIA_TYPES),
 });
 
-// Accetta sia images[] (2-4 foto: fronte + etichetta) sia il payload singolo legacy.
+// Accetta images[] (2-4 foto: fronte + etichetta), il payload singolo legacy,
+// oppure image_urls[] (foto già caricate su storage: le usa la chat Assistenza).
 const BodySchema = z.object({
   images: z.array(ImageItem).min(1).max(4).optional(),
   image_base64: z.string().min(1).optional(),
   media_type: z.enum(MEDIA_TYPES).optional(),
+  image_urls: z.array(z.string().url()).min(1).max(4).optional(),
 });
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
@@ -226,35 +228,39 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.invalidRequest('media_type deve essere image/jpeg, image/png, image/webp o image/gif.');
   }
 
-  // Normalizza in una lista di immagini (images[] oppure singola legacy).
-  let images: { image_base64: string; media_type: MediaType }[];
-  if (parsed.data.images) {
-    images = parsed.data.images;
-  } else if (parsed.data.image_base64 && parsed.data.media_type) {
-    images = [{ image_base64: parsed.data.image_base64, media_type: parsed.data.media_type }];
-  } else {
-    return ApiErrors.invalidRequest('Campo image_base64 mancante.');
-  }
-
-  for (const img of images) {
-    if (!BASE64_RE.test(img.image_base64.slice(0, 4096))) {
-      return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
-    }
-    // base64 ~= 4/3 byte raw, accettiamo fino a ~5 MB raw = ~7 MB base64.
-    if (img.image_base64.length > 7_500_000) {
-      return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
-    }
-  }
-
   // Blocchi immagine riusati sia per l'estrazione che per l'eventuale verifica.
-  const imageBlocks = images.map((img) => ({
-    type: 'image' as const,
-    source: {
-      type: 'base64' as const,
-      media_type: img.media_type,
-      data: img.image_base64,
-    },
-  }));
+  // Tre sorgenti: image_urls[] (foto su storage), images[] o singola legacy (base64).
+  let imageBlocks: Anthropic.ImageBlockParam[];
+  if (parsed.data.image_urls) {
+    const urls = parsed.data.image_urls.filter((u) => /^https?:\/\//i.test(u));
+    if (urls.length === 0) return ApiErrors.invalidRequest('image_urls non valido.');
+    imageBlocks = urls.map((url) => ({ type: 'image', source: { type: 'url', url } }));
+  } else {
+    // Normalizza in una lista di immagini base64 (images[] oppure singola legacy).
+    let images: { image_base64: string; media_type: MediaType }[];
+    if (parsed.data.images) {
+      images = parsed.data.images;
+    } else if (parsed.data.image_base64 && parsed.data.media_type) {
+      images = [{ image_base64: parsed.data.image_base64, media_type: parsed.data.media_type }];
+    } else {
+      return ApiErrors.invalidRequest('Campo image_base64 mancante.');
+    }
+
+    for (const img of images) {
+      if (!BASE64_RE.test(img.image_base64.slice(0, 4096))) {
+        return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
+      }
+      // base64 ~= 4/3 byte raw, accettiamo fino a ~5 MB raw = ~7 MB base64.
+      if (img.image_base64.length > 7_500_000) {
+        return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+      }
+    }
+
+    imageBlocks = images.map((img) => ({
+      type: 'image',
+      source: { type: 'base64', media_type: img.media_type, data: img.image_base64 },
+    }));
+  }
 
   let toolInput: ExtractInput;
   try {
