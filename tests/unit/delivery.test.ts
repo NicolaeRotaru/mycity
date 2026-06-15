@@ -43,7 +43,7 @@ describe('deliveryWindow', () => {
 });
 
 describe('deliveryEstimate', () => {
-  it('non disponibile → Standard 24-48h, senza giorno/ETA', () => {
+  it('non disponibile → Standard 2-3 giorni, senza giorno/ETA', () => {
     const now = at(2026, 5, 30, 10, 0);
     const e = deliveryEstimate({ available: false, nowMs: now, cutoffHour: 18 });
     expect(e.speed).toBe('standard');

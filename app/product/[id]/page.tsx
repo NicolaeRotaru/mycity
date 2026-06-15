@@ -16,6 +16,7 @@ import ProductGrid from '@/components/ProductGrid';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
 import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
+import { isExpressEligible } from '@/lib/products/express';
 import { loadProductVariants } from '@/lib/products/persistVariants';
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
@@ -63,7 +64,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     queryKey: queryKeys.products.detail(id),
     queryFn: async () => {
       const { data, error } = await supabase.from('products').select(`
-        *, categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved )
+        *, categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express )
       `).eq('id', id).single();
       if (error) throw error;
       return data;
@@ -229,6 +230,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const canAdd = !isOutOfStock && !needsVariantChoice;
 
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
+  // Idoneità alla consegna veloce (30-60 min): override prodotto + Express del negozio.
+  const expressEligible = isExpressEligible(
+    product.express_enabled as boolean | null,
+    (sellerProfile as { offers_express?: boolean | null } | null)?.offers_express,
+  );
 
   const handleAdd = () => {
     if (needsVariantChoice) {
@@ -516,7 +522,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             </div>
 
             {/* Consegna: marketplace esterno se importato, altrimenti Express/Standard */}
-            <DeliveryCutoff variant="inline" available={!isOutOfStock} externalDeliveryLabel={external?.delivery_label} />
+            <DeliveryCutoff variant="inline" available={!isOutOfStock && expressEligible} externalDeliveryLabel={external?.delivery_label} />
 
             {/* Barra spedizione gratis reattiva alla quantità — versione leggera */}
             <FreeShippingProgress subtotal={price * quantity} />
