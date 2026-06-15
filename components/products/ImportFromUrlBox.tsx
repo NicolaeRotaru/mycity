@@ -47,15 +47,52 @@ const MARKETPLACE_OPTIONS = [
  * Amazon/eBay/… e Claude + web_search recuperano tutti i dati identici, incluso
  * il tempo di consegna. Usato sia nel form seller che in quello admin.
  */
-export default function ImportFromUrlBox({ onImported }: { onImported: (data: ImportResult) => void }) {
+export default function ImportFromUrlBox({
+  onImported,
+  sellerId,
+}: {
+  onImported: (data: ImportResult) => void;
+  /** Negozio di destinazione (solo admin): dove ri-ospitare le foto. */
+  sellerId?: string;
+}) {
   const [query, setQuery] = useState('');
   const [marketplace, setMarketplace] = useState('');
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState<'idle' | 'fetching' | 'photos'>('idle');
+
+  /**
+   * Ri-ospita le foto importate sul nostro storage (niente hotlink). Best-effort:
+   * se l'endpoint fallisce o copia solo alcune foto, si prosegue con quelle
+   * disponibili (peggio: si ricade sugli URL originali).
+   */
+  const rehostPhotos = async (urls: string[], token?: string): Promise<string[]> => {
+    if (urls.length === 0) return urls;
+    try {
+      const res = await fetch('/api/products/rehost-images', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(token ? { authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ image_urls: urls.slice(0, 10), ...(sellerId ? { seller_id: sellerId } : {}) }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.error?.message ?? 'Copia foto non riuscita');
+      const rehosted = (body?.data?.urls as string[]) ?? [];
+      const failed = (body?.data?.failed as unknown[])?.length ?? 0;
+      if (failed > 0) toast(`${failed} foto non copiate: usate quelle disponibili.`);
+      return rehosted.length > 0 ? rehosted : urls;
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Foto non copiate sul nostro storage.');
+      return urls;
+    }
+  };
 
   const run = async () => {
     const q = query.trim();
     if (q.length < 3 || loading) return;
     setLoading(true);
+    setStep('fetching');
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch('/api/marketplace/import-fetch', {
@@ -70,12 +107,17 @@ export default function ImportFromUrlBox({ onImported }: { onImported: (data: Im
       if (!res.ok) {
         throw new Error(body?.error?.message ?? 'Import non riuscito');
       }
-      onImported(body.data as ImportResult);
+      const data = body.data as ImportResult;
+      // Copia le foto del marketplace sul nostro storage prima di precompilare.
+      setStep('photos');
+      const ownedUrls = await rehostPhotos(data.image_urls, session?.access_token);
+      onImported({ ...data, image_urls: ownedUrls });
       toast.success('Dati importati: controlla e pubblica');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Errore durante l\'import');
     } finally {
       setLoading(false);
+      setStep('idle');
     }
   };
 
@@ -113,6 +155,9 @@ export default function ImportFromUrlBox({ onImported }: { onImported: (data: Im
           Importa
         </Button>
       </div>
+      {step === 'photos' && (
+        <p className="text-xs text-primary-700">Copia foto in corso…</p>
+      )}
     </div>
   );
 }
