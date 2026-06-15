@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Sparkles, Loader2, Wand2, FileText, ShieldCheck, Languages, ArrowLeft, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
+import CatalogCopilot from '@/components/seller/CatalogCopilot';
 
 /**
  * Operazioni AI su TUTTO il catalogo (Batch API, asincrona, -50%). Il venditore
@@ -223,6 +224,10 @@ export default function CatalogAiBatchPage() {
           )}
         </div>
       )}
+
+      <div className="border-t border-cream-200 pt-6">
+        <CatalogCopilot />
+      </div>
     </div>
   );
 }
