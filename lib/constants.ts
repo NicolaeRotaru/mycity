@@ -13,6 +13,16 @@ export const PICKUP_DISCOUNT_PERCENT = 10;
  */
 export const PLATFORM_DELIVERY_FEE_CENTS = 300;
 
+/**
+ * Commissione marketplace in basis point (1000 = 10.00%) trattenuta da MyCity
+ * su ogni vendita. Sorgente unica e client-safe: la importano sia il calcolo
+ * del payout Stripe (lib/stripe/client → computeApplicationFeeCents) sia
+ * l'economia mostrata al venditore (net-to-seller in lib/products/economics).
+ * Vive qui — e non in lib/stripe/client (server-only, importa l'SDK Stripe) —
+ * così è usabile anche dai componenti client senza trascinare Stripe nel bundle.
+ */
+export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
+
 // Riferimenti per icone (nomi lucide-react). Componenti li importano e
 // renderizzano per evitare di sparare emoji nelle UI strutturali.
 export const VALUE_PROPS = [

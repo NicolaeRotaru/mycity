@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import { env } from '@/lib/env';
+import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 
 let _stripe: Stripe | null = null;
 
@@ -256,9 +257,10 @@ export async function createConnectLoginLink(accountId: string): Promise<{ url: 
 /**
  * Calcola la commissione marketplace (10% del totale, IVA esclusa
  * — semplificazione MVP). Da raffinare quando lo schema commissioni
- * diventa configurabile per seller/categoria.
+ * diventa configurabile per seller/categoria. La costante è centralizzata in
+ * lib/constants (client-safe) e qui ri-esportata per compatibilità.
  */
-export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
+export { MARKETPLACE_FEE_BPS };
 
 export function computeApplicationFeeCents(amountCents: number): number {
   return Math.round((amountCents * MARKETPLACE_FEE_BPS) / 10000);
