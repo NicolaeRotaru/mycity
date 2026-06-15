@@ -54,8 +54,8 @@ const CIRCLE: Record<Step['color'], string> = {
 
 export default function HowItWorks({ className }: { className?: string }) {
   return (
-    <section className={className ?? 'container mx-auto px-4 sm:px-6 py-12'}>
-      <div className="text-center mb-8">
+    <section className={className ?? 'container mx-auto px-4 sm:px-6 py-6'}>
+      <div className="text-center mb-5">
         <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
           Semplice e senza pensieri
         </span>
@@ -83,7 +83,7 @@ export default function HowItWorks({ className }: { className?: string }) {
         ))}
       </ol>
 
-      <div className="flex justify-center mt-8">
+      <div className="flex justify-center mt-6">
         <HomeCtaLink
           href="/categorie"
           ctaId="howitworks_cta"
