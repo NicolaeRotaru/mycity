@@ -615,7 +615,7 @@ export default function CheckoutPage() {
                 className="mt-1 w-4 h-4 accent-olive-600"
               />
               <div className="flex-1">
-                <p className="font-bold text-ink-900 flex items-center gap-2"><Store size={16} aria-hidden /> Ritira tu in negozio — risparmia {PICKUP_DISCOUNT_PERCENT}%</p>
+                <p className="font-bold text-ink-900 flex items-center gap-2"><Store size={16} aria-hidden /> Ritira tu in negozio — salta la fila</p>
                 <p className="text-sm text-ink-600 mt-0.5">
                   Niente spedizione, sconto subito. Vai tu al negozio quando l'ordine è pronto.
                 </p>

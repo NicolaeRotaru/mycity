@@ -258,6 +258,25 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     );
   };
 
+  const handleBuyNow = () => {
+    if (needsVariantChoice) {
+      toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di continuare`);
+      return;
+    }
+    addToCart({
+      id: product.id,
+      name: product.name,
+      price,
+      image: images[0],
+      quantity,
+      sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
+      storeName: sellerProfile?.store_name ?? undefined,
+      variantId: selectedVariant?.id,
+      variantLabel: selectedVariant?.label,
+    });
+    router.push('/checkout');
+  };
+
   const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -669,12 +688,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               {needsVariantChoice ? 'Scegli le opzioni' : isOutOfStock ? 'Non disponibile' : 'Aggiungi al carrello'}
             </Button>
 
-            <Link
-              href="/cart"
-              className="block w-full text-center bg-ink-900 hover:bg-ink-800 text-white py-3 rounded-lg font-bold"
+            <button
+              type="button"
+              onClick={handleBuyNow}
+              disabled={!canAdd}
+              className="block w-full text-center bg-ink-900 hover:bg-ink-800 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-bold"
             >
               Compra ora · paghi alla consegna
-            </Link>
+            </button>
 
             {(sellerProfile?.id ?? product.seller_id) && (
               <ContactSellerButton
