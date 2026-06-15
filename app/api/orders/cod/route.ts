@@ -300,6 +300,9 @@ export const POST = withAuthRateLimit(
           delivery_fee_cents: deliveryFeeCents,
           application_fee_cents: codFeeCents,
           seller_payout_cents: codSellerPayoutCents,
+          // In attesa della rimessa contanti del rider (un admin la conferma →
+          // confirm_cod_remittance → 'HELD' → payout venditore in slice 3).
+          payout_status: 'AWAITING_REMITTANCE',
           discount_amount: discountCents / 100,
           wallet_applied_cents: walletAppliedCents,
           coupon_code: validatedCouponCode,
