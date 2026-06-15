@@ -62,11 +62,15 @@ export default function ImportFromUrlBox({
 
   /**
    * Ri-ospita le foto importate sul nostro storage (niente hotlink). Best-effort:
-   * se l'endpoint fallisce o copia solo alcune foto, si prosegue con quelle
-   * disponibili (peggio: si ricade sugli URL originali).
+   * se l'endpoint copia solo alcune foto si prosegue con quelle disponibili.
+   *
+   * IMPORTANTE: non si ripiega mai sugli URL originali del marketplace. Quegli
+   * URL (specie su Amazon) spesso non sono scaricabili e nel browser appaiono
+   * come immagini rotte: meglio nessuna foto — e un avviso ad aggiungerle a mano
+   * — che dei placeholder rotti nel form.
    */
   const rehostPhotos = async (urls: string[], token?: string): Promise<string[]> => {
-    if (urls.length === 0) return urls;
+    if (urls.length === 0) return [];
     try {
       const res = await fetch('/api/products/rehost-images', {
         method: 'POST',
@@ -80,11 +84,15 @@ export default function ImportFromUrlBox({
       if (!res.ok) throw new Error(body?.error?.message ?? 'Copia foto non riuscita');
       const rehosted = (body?.data?.urls as string[]) ?? [];
       const failed = (body?.data?.failed as unknown[])?.length ?? 0;
-      if (failed > 0) toast(`${failed} foto non copiate: usate quelle disponibili.`);
-      return rehosted.length > 0 ? rehosted : urls;
+      if (rehosted.length === 0) {
+        toast('Non siamo riusciti a recuperare le foto dal marketplace: aggiungile a mano.');
+      } else if (failed > 0) {
+        toast(`${failed} foto non copiate: usate quelle disponibili.`);
+      }
+      return rehosted;
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Foto non copiate sul nostro storage.');
-      return urls;
+      toast(e instanceof Error ? e.message : 'Foto non copiate: aggiungile a mano.');
+      return [];
     }
   };
 
