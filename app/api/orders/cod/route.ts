@@ -8,6 +8,7 @@ import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { shippingCentsFor } from '@/lib/shipping';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
+import { computeApplicationFeeCents, computeSellerPayoutCents } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
@@ -277,6 +278,18 @@ export const POST = withAuthRateLimit(
       }
       const totalCents = Math.max(0, grossTotalCents - walletAppliedCents);
 
+      // 🔴-1 settlement COD: registra commissione (10% del valore di vendita
+      // LORDO, prima del wallet) e netto venditore (lordo - commissione - fee
+      // consegna - spedizione), come per gli ordini carta. Il pagamento al
+      // venditore — gated sulla rimessa contanti del rider — avverrà a parte:
+      // qui si registrano solo gli importi (lo stato payout resta il default).
+      const codFeeCents = computeApplicationFeeCents(grossTotalCents);
+      const codSellerPayoutCents = computeSellerPayoutCents({
+        totalCents: grossTotalCents,
+        deliveryFeeCents,
+        shippingCents: shipping,
+      });
+
       const { data: order, error: orderErr } = await admin
         .from('orders')
         .insert({
@@ -285,6 +298,8 @@ export const POST = withAuthRateLimit(
           total_price: totalCents / 100,
           shipping_cost: shipping / 100,
           delivery_fee_cents: deliveryFeeCents,
+          application_fee_cents: codFeeCents,
+          seller_payout_cents: codSellerPayoutCents,
           discount_amount: discountCents / 100,
           wallet_applied_cents: walletAppliedCents,
           coupon_code: validatedCouponCode,

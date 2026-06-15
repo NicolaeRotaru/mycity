@@ -43,3 +43,24 @@ describe('computeSellerPayoutCents', () => {
     expect(computeSellerPayoutCents({ totalCents: 100, deliveryFeeCents: 300, shippingCents: 1000 })).toBe(0);
   });
 });
+
+/**
+ * Settlement COD (🔴-1): su un ordine in contanti, commissione e netto venditore
+ * si calcolano sul VALORE DI VENDITA LORDO (subtotale + spedizione + fee − sconto),
+ * indipendentemente dal credito wallet usato dal buyer (che è denaro della
+ * piattaforma e riduce solo il CONTANTE incassato, non il valore della vendita).
+ */
+describe('settlement COD: split sul lordo', () => {
+  it('le 4 quote sommano al lordo (rider=spedizione, piattaforma=fee+commissione)', () => {
+    // Lordo €113 = merce €100 + spedizione €10 + fee consegna €3.
+    const grossCents = 11300;
+    const deliveryFeeCents = 300;
+    const shippingCents = 1000;
+
+    const fee = computeApplicationFeeCents(grossCents);
+    const sellerPayout = computeSellerPayoutCents({ totalCents: grossCents, deliveryFeeCents, shippingCents });
+
+    expect(sellerPayout + fee + deliveryFeeCents + shippingCents).toBe(grossCents);
+    expect(sellerPayout).toBe(grossCents - fee - deliveryFeeCents - shippingCents);
+  });
+});
