@@ -17,7 +17,7 @@ import BarcodeScanner from '@/components/seller/BarcodeScanner';
 import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
-import { getAttributesForCategory } from '@/lib/category-attributes';
+import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
@@ -86,15 +86,6 @@ interface ProductFormProps {
   /** create: chiave localStorage per l'autosalvataggio della bozza. */
   autosaveKey?: string;
 }
-
-// Mappa le chiavi attributo generiche estratte dall'AI sui key per-categoria.
-const AI_ATTR_TO_FIELD: Record<string, string> = {
-  marca: 'marca', modello: 'modello', colore: 'colore', taglia: 'taglia',
-  materiale: 'materiale', peso: 'peso', dimensioni: 'dimensioni',
-  origine: 'origine', allergeni: 'allergeni', ingredienti: 'ingredienti',
-  scadenza: 'scadenza', ean: 'ean', autore: 'autore', editore: 'editore',
-  anno: 'anno', pagine: 'pagine', lingua: 'lingua', isbn: 'isbn', formato: 'formato',
-};
 
 export default function ProductForm({
   mode,

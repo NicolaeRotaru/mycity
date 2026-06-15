@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Headset, X, Send } from 'lucide-react';
+import { Headset, X, Send, Sparkles, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useCloseOnBack } from './hooks/useCloseOnBack';
+import SupportProductAssistant from './SupportProductAssistant';
 
 type SupportRole = 'buyer' | 'seller' | 'rider' | 'default';
 
@@ -32,10 +33,18 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
   const router = useRouter();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  // 'menu' = scelta argomento; 'ai' = assistente prodotti AI (solo seller).
+  const [view, setView] = useState<'menu' | 'ai'>('menu');
 
   useCloseOnBack(open, onClose);
 
+  // Riparti sempre dal menu quando il modale si riapre.
+  useEffect(() => {
+    if (open) setView('menu');
+  }, [open]);
+
   const presets = PRESETS[role] ?? PRESETS.default;
+  const canUseAi = role === 'seller';
 
   const start = async (message: string) => {
     const body = message.trim();
@@ -77,53 +86,83 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
       aria-label="Assistenza MyCity"
     >
       <div
-        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-warm-lg"
+        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-warm-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="bg-primary-600 text-white px-5 py-4 rounded-t-2xl flex items-center justify-between">
+        <div className="bg-primary-600 text-white px-5 py-4 flex items-center justify-between">
           <h2 className="font-bold flex items-center gap-2">
-            <Headset size={20} strokeWidth={2.2} /> Assistenza MyCity
+            {view === 'ai' ? (
+              <>
+                <button onClick={() => setView('menu')} aria-label="Indietro" className="-ml-1">
+                  <ChevronLeft size={20} strokeWidth={2.4} />
+                </button>
+                <Sparkles size={18} strokeWidth={2.2} /> Assistente prodotti
+              </>
+            ) : (
+              <>
+                <Headset size={20} strokeWidth={2.2} /> Assistenza MyCity
+              </>
+            )}
           </h2>
           <button onClick={onClose} aria-label="Chiudi"><X size={20} /></button>
         </div>
 
-        <div className="p-5 space-y-4">
-          <p className="text-sm text-ink-600">Come possiamo aiutarti? Scegli un argomento o scrivici.</p>
-          <div className="flex flex-col gap-2">
-            {presets.map((p) => (
-              <button
-                key={p}
-                onClick={() => start(p)}
-                disabled={sending}
-                className="text-left text-sm font-medium bg-cream-50 hover:bg-cream-100 border border-cream-200 rounded-xl px-4 py-3 disabled:opacity-50 transition-colors"
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+        {view === 'ai' ? (
+          <SupportProductAssistant />
+        ) : (
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-ink-600">Come possiamo aiutarti? Scegli un argomento o scrivici.</p>
 
-          <form
-            onSubmit={(e) => { e.preventDefault(); start(text); }}
-            className="flex items-end gap-2 pt-2 border-t border-cream-200"
-          >
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={2}
-              maxLength={4000}
-              placeholder="Scrivi qui la tua richiesta…"
-              className="flex-1 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
-            />
-            <button
-              type="submit"
-              disabled={sending || !text.trim()}
-              aria-label="Invia"
-              className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg p-2.5 shrink-0"
+            {canUseAi && (
+              <button
+                onClick={() => setView('ai')}
+                className="w-full text-left rounded-xl border border-secondary-200 bg-secondary-50 px-4 py-3 transition-colors hover:bg-secondary-100"
+              >
+                <span className="flex items-center gap-2 text-sm font-semibold text-secondary-800">
+                  <Sparkles size={16} strokeWidth={2.4} /> Modifica un prodotto con l&apos;AI
+                </span>
+                <span className="mt-0.5 block text-xs text-ink-500">
+                  Scrivi o manda una foto: trovo il prodotto e lo aggiorno per te.
+                </span>
+              </button>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {presets.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => start(p)}
+                  disabled={sending}
+                  className="text-left text-sm font-medium bg-cream-50 hover:bg-cream-100 border border-cream-200 rounded-xl px-4 py-3 disabled:opacity-50 transition-colors"
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            <form
+              onSubmit={(e) => { e.preventDefault(); start(text); }}
+              className="flex items-end gap-2 pt-2 border-t border-cream-200"
             >
-              <Send size={18} strokeWidth={2.2} />
-            </button>
-          </form>
-        </div>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={2}
+                maxLength={4000}
+                placeholder="Scrivi qui la tua richiesta…"
+                className="flex-1 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+              />
+              <button
+                type="submit"
+                disabled={sending || !text.trim()}
+                aria-label="Invia"
+                className="bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg p-2.5 shrink-0"
+              >
+                <Send size={18} strokeWidth={2.2} />
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
