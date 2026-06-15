@@ -74,6 +74,7 @@ services:
 #   https://mycity-marketplace.com/api/cron/send-emails         ogni 10 min
 #   https://mycity-marketplace.com/api/cron/send-push           ogni 5 min
 #   https://mycity-marketplace.com/api/cron/expire-checkouts    ogni 30 min
+#   https://mycity-marketplace.com/api/cron/expire-stale-orders ogni 30 min  (annulla+rimborsa gli ordini NEW non accettati oltre 3h)
 #   https://mycity-marketplace.com/api/cron/abandoned-carts     ogni 1 ora
 #   https://mycity-marketplace.com/api/cron/operational-alerts  ogni 15 min
 #
