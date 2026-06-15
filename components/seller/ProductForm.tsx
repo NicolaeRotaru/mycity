@@ -13,6 +13,7 @@ import ProductChatAssistant, {
 } from '@/components/seller/ProductChatAssistant';
 import ImproveAllPanel from '@/components/seller/ImproveAllPanel';
 import QuickAiTools from '@/components/seller/QuickAiTools';
+import VoiceProductButton from '@/components/seller/VoiceProductButton';
 import ProductImagesField from '@/components/seller/ProductImagesField';
 import AttributesFields from '@/components/seller/AttributesFields';
 import BarcodeScanner from '@/components/seller/BarcodeScanner';
@@ -505,6 +506,12 @@ export default function ProductForm({
   return (
     <div className="space-y-6">
       <PhotoFillButton onFilled={handleExtracted} onImages={(files) => void handlePhotoImages(files)} />
+
+      <VoiceProductButton
+        attributeSchema={attrFields}
+        topCategories={topCategories.map((c) => ({ name: c.name, slug: c.slug }))}
+        onApplyPatch={applyPatch}
+      />
 
       <ImproveAllPanel
         product={chatSnapshot}

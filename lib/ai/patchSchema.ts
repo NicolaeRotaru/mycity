@@ -20,6 +20,8 @@ export const PRODUCT_PATCH_PROPERTIES: Record<string, unknown> = {
     enum: ['nuovo', 'usato', 'ricondizionato', null],
     description: 'null per "non specificata".',
   },
+  stock: { type: 'number', description: 'Disponibilità in pezzi.' },
+  unlimited_stock: { type: 'boolean', description: 'true per disponibilità illimitata.' },
   category_slug: { type: 'string', description: 'Slug della categoria di primo livello.' },
   subcategory_name: { type: 'string', description: 'Nome della sottocategoria (opzionale).' },
   tags: {
