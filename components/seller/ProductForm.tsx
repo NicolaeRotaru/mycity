@@ -12,6 +12,7 @@ import ProductChatAssistant, {
   type ProductEditPatch,
 } from '@/components/seller/ProductChatAssistant';
 import ImproveAllPanel from '@/components/seller/ImproveAllPanel';
+import QuickAiTools from '@/components/seller/QuickAiTools';
 import ProductImagesField from '@/components/seller/ProductImagesField';
 import AttributesFields from '@/components/seller/AttributesFields';
 import BarcodeScanner from '@/components/seller/BarcodeScanner';
@@ -474,6 +475,15 @@ export default function ProductForm({
       <PhotoFillButton onFilled={handleExtracted} onImages={(files) => void handlePhotoImages(files)} />
 
       <ImproveAllPanel
+        product={chatSnapshot}
+        attributeSchema={attrFields}
+        topCategories={topCategories.map((c) => ({ name: c.name, slug: c.slug }))}
+        imageUrls={imageUrls}
+        onApplyPatch={applyPatch}
+        disabled={!(watch('name') ?? '').trim() && imageUrls.length === 0}
+      />
+
+      <QuickAiTools
         product={chatSnapshot}
         attributeSchema={attrFields}
         topCategories={topCategories.map((c) => ({ name: c.name, slug: c.slug }))}
