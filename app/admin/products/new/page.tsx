@@ -132,6 +132,7 @@ export default function AdminNewProductPage() {
       </Select>
 
       <ImportFromUrlBox
+        sellerId={sellerId}
         onImported={(data) => {
           setImported(data);
           setImportNonce((n) => n + 1);

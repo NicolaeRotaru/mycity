@@ -13,7 +13,6 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackProductPublished } from '@/lib/analytics/events';
 import { loadAutosave, clearAutosave } from '@/lib/hooks/useFormAutosave';
-import { modeToExpressEnabled, type ExpressMode } from '@/lib/products/express';
 import type { ProductUnit, ProductCondition } from '@/lib/products/schema';
 import { type ProductVariant } from '@/lib/products/variants';
 import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
@@ -34,7 +33,7 @@ type Snapshot = {
   tags?: string[];
   unit?: ProductUnit;
   condition?: ProductCondition | '';
-  expressMode?: ExpressMode;
+  fastDelivery?: boolean;
   unlimitedStock?: boolean;
 };
 
@@ -53,7 +52,7 @@ function snapshotToInitial(s: Snapshot): ProductInitialValues | undefined {
     images: Array.isArray(s.imageUrls) ? s.imageUrls : [],
     attributes: s.attributes ?? {},
     tags: Array.isArray(s.tags) ? s.tags : [],
-    expressEnabled: modeToExpressEnabled(s.expressMode ?? 'inherit'),
+    expressEnabled: s.fastDelivery ?? null,
     status: 'available',
   };
 }

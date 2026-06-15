@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Eye, Image as ImageIcon, ScanLine, Trash2, Save, FileText, Zap } from 'lucide-react';
+import { Eye, Image as ImageIcon, ScanLine, Trash2, Save, FileText, Bike, Truck } from 'lucide-react';
 import PhotoFillButton, { ExtractedProduct } from '@/components/seller/PhotoFillButton';
 import ProductChatAssistant, {
   type ProductChatSnapshot,
@@ -18,6 +18,7 @@ import AIDescriptionButton from '@/components/AIDescriptionButton';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
+import { cn } from '@/lib/cn';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
@@ -35,11 +36,6 @@ import {
   type ProductCondition,
   type ProductFormValues,
 } from '@/lib/products/schema';
-import {
-  type ExpressMode,
-  expressEnabledToMode,
-  modeToExpressEnabled,
-} from '@/lib/products/express';
 import {
   type ProductVariant,
   totalVariantStock,
@@ -133,7 +129,16 @@ export default function ProductForm({
   const [unit, setUnit] = useState<ProductUnit>((initialValues?.unit as ProductUnit) ?? 'pezzo');
   const [condition, setCondition] = useState<ProductCondition | ''>((initialValues?.condition as ProductCondition) ?? '');
   const [unlimitedStock, setUnlimitedStock] = useState<boolean>(initialValues?.stock === null);
-  const [expressMode, setExpressMode] = useState<ExpressMode>(expressEnabledToMode(initialValues?.expressEnabled));
+  // Tempo di consegna (scelta binaria): true = consegna veloce 30-60 min
+  // (express_enabled = true), false = spedizione 2-3 giorni (express_enabled = false).
+  // Un valore storico null ("eredita") viene risolto sul default del negozio.
+  const [fastDelivery, setFastDelivery] = useState<boolean>(
+    initialValues?.expressEnabled === true
+      ? true
+      : initialValues?.expressEnabled === false
+        ? false
+        : sellerOffersExpress,
+  );
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
   const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
   // Assi di variante attivi (chiave campo → valori). Ricostruiti dalle varianti
@@ -206,8 +211,8 @@ export default function ProductForm({
   // ---- Autosave (solo creazione) -------------------------------------------
   const watched = watch();
   const snapshot = useMemo(
-    () => ({ ...watched, imageUrls, attributes, tags, unit, condition, expressMode, unlimitedStock }),
-    [watched, imageUrls, attributes, tags, unit, condition, expressMode, unlimitedStock],
+    () => ({ ...watched, imageUrls, attributes, tags, unit, condition, fastDelivery, unlimitedStock }),
+    [watched, imageUrls, attributes, tags, unit, condition, fastDelivery, unlimitedStock],
   );
   useFormAutosave(autosaveKey ?? 'mc_product_unused', snapshot, {
     enabled: mode === 'create' && !!autosaveKey,
@@ -444,7 +449,7 @@ export default function ProductForm({
         unit,
         condition,
         tags,
-        expressEnabled: modeToExpressEnabled(expressMode),
+        expressEnabled: fastDelivery,
         // Con varianti lo stock prodotto è la SOMMA delle varianti (e mai illimitato):
         // viene comunque riallineato dal trigger DB dopo l'insert delle varianti.
         unlimitedStock: hasVariants ? false : unlimitedStock,
@@ -666,29 +671,52 @@ export default function ProductForm({
           <p className="text-xs text-ink-400 mt-1">Invio o virgola per aggiungere. Aiutano i clienti a trovarti.</p>
         </div>
 
-        {/* Express */}
-        {(sellerOffersExpress || expressMode !== 'inherit') && (
-          <div className="border-t pt-4">
-            <p className="text-sm font-medium text-ink-700 mb-1 inline-flex items-center gap-1.5">
-              <Zap size={14} strokeWidth={2.4} className="text-amber-500" aria-hidden /> Consegna Express
-            </p>
-            <Select
-              aria-label="Consegna Express"
-              value={expressMode}
-              onChange={(e) => setExpressMode(e.target.value as ExpressMode)}
+        {/* Tempo di consegna — scelta binaria sempre visibile */}
+        <div className="border-t pt-4">
+          <p className="text-sm font-medium text-ink-700 mb-2">Tempo di consegna</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setFastDelivery(true)}
+              aria-pressed={fastDelivery}
+              className={cn(
+                'flex items-start gap-2.5 rounded-lg border-2 p-3 text-left transition',
+                fastDelivery
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-cream-300 bg-white hover:border-primary-300',
+              )}
             >
-              <option value="inherit">Eredita dal negozio {sellerOffersExpress ? '(attivo)' : '(non attivo)'}</option>
-              <option value="yes">Sì, disponibile per Express</option>
-              <option value="no">No, escludi questo prodotto</option>
-            </Select>
-            {!sellerOffersExpress && (
-              <p className="text-xs text-ink-400 mt-1">
-                Attiva l&apos;Express per tutto il negozio dal{' '}
-                <Link href="/seller/profile" className="text-primary-700 hover:underline">profilo negozio</Link>.
-              </p>
-            )}
+              <Bike size={18} strokeWidth={2.2} className="mt-0.5 shrink-0 text-primary-600" aria-hidden />
+              <span>
+                <span className="block text-sm font-semibold text-ink-800">Consegna veloce</span>
+                <span className="block text-xs text-ink-500">30-60 min · rider locale</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFastDelivery(false)}
+              aria-pressed={!fastDelivery}
+              className={cn(
+                'flex items-start gap-2.5 rounded-lg border-2 p-3 text-left transition',
+                !fastDelivery
+                  ? 'border-primary-500 bg-primary-50'
+                  : 'border-cream-300 bg-white hover:border-primary-300',
+              )}
+            >
+              <Truck size={18} strokeWidth={2.2} className="mt-0.5 shrink-0 text-ink-500" aria-hidden />
+              <span>
+                <span className="block text-sm font-semibold text-ink-800">Spedizione</span>
+                <span className="block text-xs text-ink-500">2-3 giorni</span>
+              </span>
+            </button>
           </div>
-        )}
+          {fastDelivery && !sellerOffersExpress && (
+            <p className="text-xs text-ink-400 mt-1.5">
+              La consegna veloce richiede l&apos;Express attivo per il negozio: attivalo dal{' '}
+              <Link href="/seller/profile" className="text-primary-700 hover:underline">profilo negozio</Link>.
+            </p>
+          )}
+        </div>
 
         <ProductImagesField
           value={imageUrls}

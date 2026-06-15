@@ -33,7 +33,7 @@ const pad = (n: number) => String(n).padStart(2, '0');
  * Mostra la promessa di consegna a due velocità, legata alla disponibilità:
  *  - `available` (prodotto a inventario e pronto): Express ~30-60 min, in giornata
  *    entro il cutoff → "🛵 Ordina entro 02:14:31 e arriva oggi in 30-60 min".
- *  - non disponibile / su ordinazione: Standard → "🛵 Consegna in 24-48h".
+ *  - non disponibile / su ordinazione: Standard → "🛵 Consegna in 2-3 giorni".
  * Variante `banner` per blocchi in evidenza, `inline` per pagine prodotto.
  */
 export function DeliveryCutoff({
@@ -45,7 +45,7 @@ export function DeliveryCutoff({
 }: {
   cutoffHour?: number;
   variant?: 'inline' | 'banner';
-  /** Prodotto a inventario e pronto (stock > 0). false → Standard 24-48h. */
+  /** Prodotto a inventario e pronto (stock > 0). false → Standard 2-3 giorni. */
   available?: boolean;
   /** Prodotto importato da marketplace: mostra il tempo di consegna esterno. */
   externalDeliveryLabel?: string | null;

@@ -11,8 +11,8 @@ export const DEFAULT_CUTOFF_HOUR = 18;
 export const EXPRESS_ETA_MIN = 30;
 export const EXPRESS_ETA_MAX = 60;
 export const EXPRESS_ETA_LABEL = `${EXPRESS_ETA_MIN}-${EXPRESS_ETA_MAX} min`;
-/** Consegna Standard (non disponibile/su ordinazione): fallback onesto. */
-export const STANDARD_ETA_LABEL = '24-48h';
+/** Consegna Standard (spedizione/su ordinazione): fallback onesto. */
+export const STANDARD_ETA_LABEL = '2-3 giorni';
 
 export type DeliveryWindow = {
   /** Sei ancora in tempo per la consegna di oggi? */
@@ -47,11 +47,11 @@ export function deliveryWindow(nowMs: number, cutoffHour = DEFAULT_CUTOFF_HOUR):
 export type DeliverySpeed = 'express' | 'standard';
 
 export type DeliveryEstimate = {
-  /** 'express' = a inventario e pronto (~30-60 min); 'standard' = fallback 24-48h. */
+  /** 'express' = a inventario e pronto (~30-60 min); 'standard' = fallback 2-3 giorni. */
   speed: DeliverySpeed;
   /** 'oggi'/'domani' per Express (legato al cutoff); null per Standard. */
   day: 'oggi' | 'domani' | null;
-  /** Etichetta breve: 'oggi' | 'domani' | '24-48h'. */
+  /** Etichetta breve: 'oggi' | 'domani' | '2-3 giorni'. */
   label: string;
   /** Dettaglio ETA (es. '30-60 min'); presente solo per Express in giornata. */
   etaLabel?: string;
@@ -62,7 +62,7 @@ export type DeliveryEstimate = {
  *
  * Se il prodotto è a inventario ed è pronto (`available`), il rider locale
  * consegna in giornata (Express, ~30-60 min) entro il cutoff, domani dopo.
- * Altrimenti la promessa è lo Standard 24-48h. Funzione pura, testabile.
+ * Altrimenti la promessa è lo Standard 2-3 giorni. Funzione pura, testabile.
  */
 export function deliveryEstimate({
   available,
