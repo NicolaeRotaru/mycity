@@ -2,7 +2,7 @@ import type { NextRequest, NextResponse } from 'next/server';
 import { createClient, type User } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'node:crypto';
 import { ApiErrors } from './responses';
-import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 
 /** Confronto a tempo costante per secret (anti timing-attack). */
 function secretsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -111,7 +111,7 @@ export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandl
   return async (req: NextRequest): Promise<NextResponse> => {
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
-    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
     return handler({ user: auth.user, profile: auth.profile, req });
   };
@@ -143,7 +143,7 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
       return ApiErrors.forbidden('Solo seller approvati o admin');
     }
-    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
     return handler({ user: auth.user, profile: auth.profile, req });
   };
@@ -169,7 +169,7 @@ export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: Generic
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
-    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
     return handler({ user: auth.user, profile: auth.profile, req });
   };

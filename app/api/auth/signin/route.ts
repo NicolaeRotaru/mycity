@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/supabase/client';
-import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -11,7 +11,7 @@ const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 export async function POST(request: Request) {
   // Rate limit per IP: 10 tentativi / 5 min (anti brute-force)
   const ip = getClientIp(request);
-  const rl = rateLimit({ key: `signin:${ip}`, max: 10, windowMs: 5 * 60_000 });
+  const rl = await rateLimitAsync({ key: `signin:${ip}`, max: 10, windowMs: 5 * 60_000 });
   if (!rl.allowed) {
     return ApiErrors.rateLimited(rl.retryAfterSec, 'Troppi tentativi di accesso. Riprova tra qualche minuto.');
   }

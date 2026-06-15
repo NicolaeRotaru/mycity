@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -48,7 +48,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   // 2) Rate limit: 15 chiamate / 5 min per utente (ogni rimozione ha un costo).
-  const rl = rateLimit({ key: `bg-remove:${user.id}`, max: 15, windowMs: 5 * 60_000 });
+  const rl = await rateLimitAsync({ key: `bg-remove:${user.id}`, max: 15, windowMs: 5 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   // 3) Body + validazione

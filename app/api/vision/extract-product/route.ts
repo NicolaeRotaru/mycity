@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -208,7 +208,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato sul server.');
 
   // Rate limit: 10 chiamate / 5 min per utente (Anthropic costa)
-  const rl = rateLimit({
+  const rl = await rateLimitAsync({
     key: `vision:${user.id}`,
     max: 10,
     windowMs: 5 * 60_000,

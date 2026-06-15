@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
@@ -36,7 +36,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
 
   // Rate limit: 20 calls / giorno per utente
-  const rl = rateLimit({
+  const rl = await rateLimitAsync({
     key: `ai-desc:${user.id}`,
     max: 20,
     windowMs: 24 * 60 * 60_000,

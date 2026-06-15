@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { rateLimit, getClientIp, __resetRateLimitBuckets } from '@/lib/rate-limit';
+import { rateLimit, rateLimitAsync, getClientIp, __resetRateLimitBuckets } from '@/lib/rate-limit';
 
 /**
  * Unit test per lib/rate-limit (in-memory sliding window).
@@ -71,6 +71,31 @@ describe('rateLimit - basic allow/deny', () => {
   it('limit field reflects max param', () => {
     const result = rateLimit({ key: `test-limit-${Math.random()}`, max: 42, windowMs: 1000 });
     expect(result.limit).toBe(42);
+  });
+});
+
+describe('rateLimitAsync - distribuito con fallback in-memory', () => {
+  beforeEach(() => {
+    __resetRateLimitBuckets();
+  });
+
+  // In CI/test UPSTASH non e' configurato → rateLimitAsync ricade su in-memory.
+  // Garantisce che il path async NON sia mai fail-open: applica comunque il limite.
+  it('applica il limite anche senza Redis (mai fail-open)', async () => {
+    const key = `test-async-deny-${Math.random()}`;
+    for (let i = 0; i < 3; i++) {
+      expect((await rateLimitAsync({ key, max: 3, windowMs: 60_000 })).allowed).toBe(true);
+    }
+    const denied = await rateLimitAsync({ key, max: 3, windowMs: 60_000 });
+    expect(denied.allowed).toBe(false);
+    expect(denied.retryAfterSec).toBeGreaterThan(0);
+  });
+
+  it('condivide lo stato con il bucket in-memory sulla stessa chiave (fallback)', async () => {
+    const key = `test-async-shared-${Math.random()}`;
+    rateLimit({ key, max: 2, windowMs: 60_000 });
+    rateLimit({ key, max: 2, windowMs: 60_000 });
+    expect((await rateLimitAsync({ key, max: 2, windowMs: 60_000 })).allowed).toBe(false);
   });
 });
 
