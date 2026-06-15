@@ -10,6 +10,8 @@ import {
   X,
   RefreshCw,
   Pencil,
+  PackagePlus,
+  AlertTriangle,
 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -33,6 +35,22 @@ import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
 
 type Proposal = { productId: string; patch: AiProductPatch; product: ProductSnapshot };
 
+/** Bozza estratta dalle foto (risposta di /api/vision/extract-product). */
+type ExtractedDraft = {
+  name: string;
+  description: string;
+  category_id: string | null;
+  subcategory_id: string | null;
+  category_slug: string | null;
+  suggested_price: number | null;
+  attributes: Record<string, string>;
+  tags: string[];
+  image_quality: { score: number; issues: string[] } | null;
+  alt_text: string | null;
+};
+
+type NewDraft = { draft: ExtractedDraft; imageUrls: string[] };
+
 type Msg = {
   role: 'user' | 'assistant';
   content: string;
@@ -42,6 +60,10 @@ type Msg = {
   proposal?: Proposal;
   /** true quando la proposta è stata applicata. */
   applied?: boolean;
+  /** Bozza di nuovo prodotto proposta dalle foto (solo nei turni assistant). */
+  newDraft?: NewDraft;
+  /** true quando la bozza è stata creata. */
+  created?: boolean;
 };
 
 const MAX_IMAGES = 4;
@@ -53,7 +75,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const WELCOME =
-  "Ciao! Dimmi quale prodotto vuoi sistemare — scrivi il nome o mandami una foto e lo trovo io nel tuo catalogo. Poi posso cambiare prezzo, disponibilità, descrizione, categoria, tag…";
+  "Ciao! Dimmi quale prodotto vuoi sistemare — scrivi il nome o mandami una foto e lo trovo io nel tuo catalogo. Oppure mandami le foto di un prodotto NUOVO e lo inserisco io: compilo nome, prezzo, categoria, descrizione e tag.";
 
 /** Riepilogo umano delle modifiche proposte, prima→dopo dove possibile. */
 function describePatch(patch: AiProductPatch, product: ProductSnapshot): string[] {
@@ -93,6 +115,8 @@ export default function SupportProductAssistant() {
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false); // estrazione dalle foto in corso
+  const [creatingIndex, setCreatingIndex] = useState<number | null>(null); // insert in corso
   const [focused, setFocused] = useState<ProductSnapshot | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -218,6 +242,101 @@ export default function SupportProductAssistant() {
     setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, proposal: undefined } : m)));
   };
 
+  // Crea un nuovo prodotto dalle SOLE foto: estrae i campi con l'AI (vision) e
+  // propone una bozza da confermare.
+  const createFromPhotos = async () => {
+    if (creating || loading) return;
+    const imgs = Array.from(new Set([...sessionImages, ...pending])).slice(-MAX_IMAGES);
+    if (imgs.length === 0) {
+      toast.error('Allega prima una foto del prodotto.');
+      return;
+    }
+    setMessages((prev) => [
+      ...prev,
+      { role: 'user', content: 'Crea un nuovo prodotto da queste foto.', images: imgs },
+    ]);
+    setPending([]);
+    setCreating(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast.error('Sessione scaduta');
+        return;
+      }
+      const res = await fetch('/api/vision/extract-product', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ image_urls: imgs }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(apiErrorMessage(json, 'Non riesco a leggere le foto'));
+
+      const draft = json as ExtractedDraft;
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Ho letto le foto: sembra "${draft.name}". Ho preparato una bozza — controllala e creala quando vuoi.`,
+          newDraft: { draft, imageUrls: imgs },
+        },
+      ]);
+    } catch (err) {
+      toast.error(friendlyError(err));
+      setMessages((prev) => [
+        ...prev,
+        { role: 'assistant', content: 'Non sono riuscito a leggere le foto. Riprova con scatti più nitidi.' },
+      ]);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const confirmCreate = async (index: number, nd: NewDraft) => {
+    if (creatingIndex !== null) return;
+    setCreatingIndex(index);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast.error('Sessione scaduta');
+        return;
+      }
+      const res = await fetch('/api/ai/catalog-create', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ imageUrls: nd.imageUrls, draft: nd.draft }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(apiErrorMessage(json, 'Errore'));
+
+      const product = json.product as ProductSnapshot;
+      setFocused(product);
+      setSessionImages([]); // le foto erano del nuovo prodotto, non del contesto chat
+      setMessages((prev) => [
+        ...prev.map((m, i) => (i === index ? { ...m, created: true } : m)),
+        {
+          role: 'assistant',
+          content:
+            'Bozza creata: è nascosta ai clienti finché non la pubblichi. Vuoi pubblicarla ("pubblica") o cambiare qualcosa?',
+        },
+      ]);
+      toast.success('Bozza prodotto creata');
+    } catch (err) {
+      toast.error(friendlyError(err));
+    } finally {
+      setCreatingIndex(null);
+    }
+  };
+
+  const dismissDraft = (index: number) => {
+    setMessages((prev) => prev.map((m, i) => (i === index ? { ...m, newDraft: undefined } : m)));
+  };
+
   return (
     <div className="flex flex-col h-[70vh] sm:h-[60vh]">
       {/* Prodotto in focus */}
@@ -332,10 +451,77 @@ export default function SupportProductAssistant() {
                   )}
                 </div>
               )}
+
+              {/* Card bozza nuovo prodotto */}
+              {m.newDraft && (
+                <div className="rounded-xl border border-secondary-200 bg-white p-3 shadow-warm">
+                  <div className="mb-2 flex items-center gap-2">
+                    {m.newDraft.imageUrls[0] ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.newDraft.imageUrls[0]} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-lg bg-cream-200" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-ink-800">{m.newDraft.draft.name}</p>
+                      <p className="text-xs text-ink-500">
+                        {m.newDraft.draft.suggested_price != null ? formatPrice(m.newDraft.draft.suggested_price) : 's.p.'}
+                        {m.newDraft.draft.category_slug ? ` · ${m.newDraft.draft.category_slug}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  {m.newDraft.draft.description && (
+                    <p className="mb-2 line-clamp-3 text-sm text-ink-600">{m.newDraft.draft.description}</p>
+                  )}
+                  {m.newDraft.draft.tags.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1">
+                      {m.newDraft.draft.tags.slice(0, 8).map((t) => (
+                        <span key={t} className="rounded-full bg-cream-100 px-2 py-0.5 text-xs text-ink-600">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {m.newDraft.draft.image_quality && m.newDraft.draft.image_quality.score < 0.4 && (
+                    <p className="mb-2 flex items-center gap-1.5 text-xs text-accent-700">
+                      <AlertTriangle size={13} strokeWidth={2.4} aria-hidden /> Foto di bassa qualità: valuta uno scatto migliore.
+                    </p>
+                  )}
+                  {m.created ? (
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
+                      <Check size={15} strokeWidth={2.6} aria-hidden /> Bozza creata
+                    </p>
+                  ) : (
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => confirmCreate(i, m.newDraft!)}
+                        disabled={creatingIndex !== null}
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+                      >
+                        {creatingIndex === i ? (
+                          <Loader2 size={15} className="animate-spin" aria-hidden />
+                        ) : (
+                          <PackagePlus size={15} strokeWidth={2.4} aria-hidden />
+                        )}
+                        Crea bozza
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => dismissDraft(i)}
+                        disabled={creatingIndex !== null}
+                        className="inline-flex items-center justify-center gap-1 rounded-lg border border-cream-300 px-3 py-2 text-sm font-semibold text-ink-700 hover:bg-cream-100 disabled:opacity-50"
+                      >
+                        <X size={15} aria-hidden /> Annulla
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}
-        {loading && (
+        {(loading || creating) && (
           <div className="flex justify-start">
             <div className="rounded-2xl rounded-bl-sm bg-cream-100 px-3 py-2 text-sm text-ink-500">
               <Loader2 size={14} className="animate-spin" strokeWidth={2.4} aria-hidden />
@@ -347,22 +533,33 @@ export default function SupportProductAssistant() {
       {/* Composer */}
       <div className="border-t border-cream-200 p-2">
         {pending.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {pending.map((url) => (
-              <div key={url} className="relative">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="h-14 w-14 rounded-lg object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setPending((prev) => prev.filter((u) => u !== url))}
-                  aria-label="Rimuovi foto"
-                  className="absolute -right-1.5 -top-1.5 rounded-full bg-ink-800 p-0.5 text-white"
-                >
-                  <X size={12} aria-hidden />
-                </button>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {pending.map((url) => (
+                <div key={url} className="relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="h-14 w-14 rounded-lg object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setPending((prev) => prev.filter((u) => u !== url))}
+                    aria-label="Rimuovi foto"
+                    className="absolute -right-1.5 -top-1.5 rounded-full bg-ink-800 p-0.5 text-white"
+                  >
+                    <X size={12} aria-hidden />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => void createFromPhotos()}
+              disabled={creating || loading}
+              className="mb-2 inline-flex items-center gap-1.5 rounded-lg border border-secondary-200 bg-secondary-50 px-3 py-1.5 text-xs font-semibold text-secondary-800 hover:bg-secondary-100 disabled:opacity-50"
+            >
+              {creating ? <Loader2 size={13} className="animate-spin" aria-hidden /> : <PackagePlus size={13} strokeWidth={2.4} aria-hidden />}
+              Crea nuovo prodotto da queste foto
+            </button>
+          </>
         )}
         <div className="flex items-end gap-2">
           <input
@@ -376,7 +573,7 @@ export default function SupportProductAssistant() {
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            disabled={uploading || loading}
+            disabled={uploading || loading || creating}
             aria-label="Allega foto"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-cream-300 text-ink-600 hover:bg-cream-100 disabled:opacity-50"
           >
@@ -398,7 +595,7 @@ export default function SupportProductAssistant() {
           <button
             type="button"
             onClick={() => void send()}
-            disabled={loading || uploading || (!input.trim() && pending.length === 0)}
+            disabled={loading || uploading || creating || (!input.trim() && pending.length === 0)}
             aria-label="Invia"
             className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-40"
           >
