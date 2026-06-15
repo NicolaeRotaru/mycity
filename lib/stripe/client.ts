@@ -263,3 +263,27 @@ export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
 export function computeApplicationFeeCents(amountCents: number): number {
   return Math.round((amountCents * MARKETPLACE_FEE_BPS) / 10000);
 }
+
+/**
+ * Netto del venditore per UN ordine (centesimi interi). Fonte di verità UNICA
+ * dello split del denaro: webhook e backfill la usano entrambi, così non possono
+ * divergere.
+ *
+ * Il totale pagato dal buyer si scompone in quote che non si sovrappongono:
+ *   commissione piattaforma (10%) + fee di consegna trattenuta dalla piattaforma
+ *   + compenso del rider (= la spedizione, versata SEPARATAMENTE al rider via
+ *   releaseRiderPayout) + netto venditore.
+ * La spedizione NON fa parte del netto venditore: spetta al rider. Senza questa
+ * sottrazione verrebbe pagata due volte (al seller dentro il netto e al rider).
+ *
+ * Invariante: sellerPayout + applicationFee + deliveryFee + shipping === total
+ */
+export function computeSellerPayoutCents(args: {
+  totalCents: number;
+  deliveryFeeCents: number;
+  shippingCents: number;
+}): number {
+  const { totalCents, deliveryFeeCents, shippingCents } = args;
+  const fee = computeApplicationFeeCents(totalCents);
+  return Math.max(0, totalCents - fee - deliveryFeeCents - shippingCents);
+}
