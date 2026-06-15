@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -24,7 +24,7 @@ const Schema = z.object({
  */
 export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   const ip = getClientIp(req);
-  const rl = rateLimit({ key: `support:start:${ip}`, max: 20, windowMs: 60_000 });
+  const rl = await rateLimitAsync({ key: `support:start:${ip}`, max: 20, windowMs: 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;

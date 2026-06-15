@@ -81,7 +81,14 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
 
-  const { error: updErr } = await admin
+  // Guard atomico contro la "doppia cassa": solo il PRIMO writer (con
+  // cash_confirmed_at ancora NULL) vince. Il check a riga ~63 è solo un fast-path
+  // UX: NON è atomico (TOCTOU tra la lettura e la scrittura). La condizione
+  // .is('cash_confirmed_at', null) sposta la guardia nel DB — il row-lock di
+  // Postgres serializza due conferme concorrenti e la seconda non matcha più
+  // (0 righe), così non può sovrascrivere cash_collected_cents/le prove.
+  // Stesso pattern del claim payout in lib/stripe/payout.ts.
+  const { data: claimed, error: updErr } = await admin
     .from('orders')
     .update({
       cash_collected_cents: body.cashCollectedCents,
@@ -91,9 +98,16 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
       cash_confirmed_at: now.toISOString(),
       cash_collected_by: user.id,
     })
-    .eq('id', body.orderId);
+    .eq('id', body.orderId)
+    .eq('rider_id', user.id)
+    .is('cash_confirmed_at', null)
+    .select('id');
 
   if (updErr) return ApiErrors.internal('Update fallito');
+  if (!claimed || claimed.length === 0) {
+    // Un'altra conferma concorrente ha già vinto la corsa.
+    return ApiErrors.conflict("Incasso gia' confermato");
+  }
 
   // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).
   await upsertReconciliation(admin, user.id, today);

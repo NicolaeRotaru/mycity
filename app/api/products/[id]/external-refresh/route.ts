@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { apiSuccess, ApiErrors } from '@/lib/api/responses';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import {
   fetchExternalSnapshot,
@@ -82,7 +82,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   }
 
   // Gate in-memory (cheap) + lock in Postgres (cross-instance) per il debounce.
-  const gate = rateLimit({ key: `ext-refresh:${id}`, max: 1, windowMs: 30 * 60_000 });
+  const gate = await rateLimitAsync({ key: `ext-refresh:${id}`, max: 1, windowMs: 30 * 60_000 });
   if (gate.allowed) {
     const admin = getAdminSupabase();
     const { data: claimed } = await admin

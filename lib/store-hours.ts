@@ -26,6 +26,35 @@ export function isOpenNow(intervals?: HoursInterval[], now: Date = new Date()): 
   });
 }
 
+/**
+ * "Adesso" in ora locale italiana (Europe/Rome). Gli orari negozio sono in ora
+ * locale IT; il server gira in UTC, quindi per i confronti server-side dobbiamo
+ * riportare l'istante all'orologio da parete italiano (così l'enforcement al
+ * checkout coincide con ciò che l'utente vede nel filtro "aperti ora").
+ */
+export function romeNow(base: Date = new Date()): Date {
+  return new Date(base.toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+}
+
+/**
+ * True se il negozio ha orari CONFIGURATI ed è chiuso in questo momento.
+ *
+ * NULL-safe per non penalizzare i venditori: se `store_hours` è assente, non un
+ * oggetto, o non ha alcun giorno con intervalli (orari mai impostati davvero),
+ * ritorna false → nessun blocco. Blocca solo quando il venditore ha impostato
+ * orari reali ed è chiuso adesso.
+ */
+export function isStoreClosedForOrder(storeHours: unknown, now: Date = romeNow()): boolean {
+  if (!storeHours || typeof storeHours !== 'object') return false;
+  const hours = storeHours as StoreHours;
+  const configured = DAY_KEYS.some(
+    (k) => Array.isArray(hours[k]) && (hours[k] as HoursInterval[]).length > 0,
+  );
+  if (!configured) return false;
+  const todayKey = DAY_KEYS[now.getDay()];
+  return !isOpenNow(hours[todayKey], now);
+}
+
 export function formatToday(intervals?: HoursInterval[], now: Date = new Date()): string {
   if (!intervals || intervals.length === 0) return 'Chiuso oggi';
 

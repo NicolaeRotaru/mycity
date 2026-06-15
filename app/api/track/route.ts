@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { getCurrentUser } from '@/lib/supabase/server';
 import { recordActivity, type ActivityCategory } from '@/lib/activity';
 import { parseUserAgent } from '@/lib/user-agent';
@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   const ip = getClientIp(request);
 
   // anti-flood: un client non deve poter riempire la tabella
-  const rl = rateLimit({ key: `track:${ip}`, max: 120, windowMs: 60_000 });
+  const rl = await rateLimitAsync({ key: `track:${ip}`, max: 120, windowMs: 60_000 });
   if (!rl.allowed) return noContent();
 
   let body: { event_type?: unknown; path?: unknown; referrer?: unknown; session_id?: unknown; metadata?: unknown };

@@ -22,6 +22,23 @@ function toCtx(ctx: unknown): Record<string, unknown> | undefined {
   return { value: ctx };
 }
 
+/**
+ * Cattura server-side affidabile per gli errori di API/cron/webhook.
+ *
+ * Usa il SDK @sentry/nextjs già inizializzato da sentry.server.config.ts (via
+ * instrumentation), con rilevamento DSN COERENTE col server (NEXT_PUBLIC_SENTRY_DSN
+ * *o* SENTRY_DSN). Non passa dal wrapper `'use client'` (lib/analytics/sentry):
+ * così un errore notturno del cron release-payouts o del webhook Stripe non viene
+ * perso silenziosamente solo perché in prod è configurato SENTRY_DSN e non quello
+ * pubblico. (Invariante: "si misura" — i fallimenti di soldi/consegna sono visibili.)
+ */
+async function captureServerError(err: unknown, ctx?: Record<string, unknown>): Promise<void> {
+  const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN;
+  if (!dsn) return;
+  const Sentry = await import('@sentry/nextjs').catch(() => null);
+  Sentry?.captureException(err, ctx ? { extra: ctx } : undefined);
+}
+
 export const logger = {
   info: (msg: string, ctx?: LogContext) => {
     if (process.env.NODE_ENV !== 'production') {
@@ -39,6 +56,13 @@ export const logger = {
     if (process.env.NODE_ENV !== 'production') {
       console.error('[error]', err, ctx ?? '');
     }
-    captureError(err, toCtx(ctx));
+    const c = toCtx(ctx);
+    if (typeof window === 'undefined') {
+      // Server (API/cron/webhook): cattura diretta sul SDK server già init'd.
+      void captureServerError(err, c);
+    } else {
+      // Client: wrapper lazy esistente (init Sentry browser al primo errore).
+      void captureError(err, c);
+    }
   },
 };

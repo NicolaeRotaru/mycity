@@ -52,7 +52,16 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   // Rimborso reale solo se risolto a favore del buyer con un importo.
   if (body.status === 'resolved_buyer' && body.refundCents) {
-    if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
+    // refundOrder gestisce sia il refund Stripe (carta + claw-back) sia
+    // l'accredito sul wallet (COD, 🟠-18). Il blocco su Stripe-non-configurato
+    // vale SOLO per gli ordini carta: un rimborso COD non usa Stripe.
+    const { data: ord } = await admin
+      .from('orders')
+      .select('stripe_payment_intent, payment_method')
+      .eq('id', dispute.order_id)
+      .single();
+    const isCard = !!ord?.stripe_payment_intent;
+    if (isCard && !isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
     try {
       const res = await refundOrder({
         orderId: dispute.order_id,
@@ -65,7 +74,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       refundId = res.refundId;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
-      return ApiErrors.badGateway('Rimborso Stripe fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+      return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
     }
   }
 

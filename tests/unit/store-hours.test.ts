@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isOpenNow,
+  isStoreClosedForOrder,
   formatToday,
   streetFromAddress,
   DAY_KEYS,
@@ -44,6 +45,34 @@ describe('streetFromAddress', () => {
 
   it('trims whitespace', () => {
     expect(streetFromAddress('  Via Roma 1  , Piacenza')).toBe('Via Roma 1');
+  });
+});
+
+describe('isStoreClosedForOrder (enforcement checkout COD)', () => {
+  // mkDate → mercoledì (2026-05-27), DAY_KEYS[getDay()] = 'wed'.
+  const wed10 = mkDate(10);
+  const wed22 = mkDate(22);
+
+  it('NON blocca se gli orari non sono configurati (NULL-safe)', () => {
+    expect(isStoreClosedForOrder(null, wed10)).toBe(false);
+    expect(isStoreClosedForOrder(undefined, wed10)).toBe(false);
+    expect(isStoreClosedForOrder({}, wed10)).toBe(false);
+    expect(isStoreClosedForOrder({ wed: [] }, wed10)).toBe(false); // tutti vuoti = non configurato
+  });
+
+  it('blocca se configurato e chiuso adesso (fuori fascia)', () => {
+    const hours = { mon: [['09:00', '18:00']], wed: [['09:00', '13:00']] };
+    expect(isStoreClosedForOrder(hours, wed22)).toBe(true);
+  });
+
+  it('blocca nel giorno di chiusura (oggi vuoto, altri giorni configurati)', () => {
+    const hours = { mon: [['09:00', '18:00']], wed: [] };
+    expect(isStoreClosedForOrder(hours, wed10)).toBe(true);
+  });
+
+  it('NON blocca se aperto adesso', () => {
+    const hours = { wed: [['09:00', '13:00'], ['15:00', '19:00']] };
+    expect(isStoreClosedForOrder(hours, wed10)).toBe(false);
   });
 });
 

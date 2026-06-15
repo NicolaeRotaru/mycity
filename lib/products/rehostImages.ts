@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadImages';
+import { safeImageFetch } from '@/lib/net/ssrf-guard';
 
 /**
  * Ri-ospita su storage le immagini importate da un marketplace.
@@ -73,15 +74,10 @@ export async function rehostImageUrls(
 
   for (const url of candidates) {
     try {
-      const res = await fetch(url, {
-        signal: AbortSignal.timeout(timeoutMs),
-        headers: {
-          // Alcuni CDN rifiutano la UA di default di fetch.
-          'user-agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-          accept: 'image/avif,image/webp,image/png,image/jpeg,*/*',
-        },
-      });
+      // Fetch SSRF-safe: blocca IP interni/metadata e i redirect verso
+      // destinazioni interne (un singolo URL malevolo viene segnalato in
+      // `failed`, fail-soft, senza far fallire l'intero import).
+      const res = await safeImageFetch(url, { timeoutMs });
       if (!res.ok) {
         failed.push({ url, reason: `HTTP ${res.status}` });
         continue;

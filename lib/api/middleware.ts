@@ -2,7 +2,7 @@ import type { NextRequest, NextResponse } from 'next/server';
 import { createClient, type User } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'node:crypto';
 import { ApiErrors } from './responses';
-import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 
 /** Confronto a tempo costante per secret (anti timing-attack). */
 function secretsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -111,7 +111,7 @@ export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandl
   return async (req: NextRequest): Promise<NextResponse> => {
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
-    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
     return handler({ user: auth.user, profile: auth.profile, req });
   };
@@ -143,7 +143,7 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
       return ApiErrors.forbidden('Solo seller approvati o admin');
     }
-    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
     return handler({ user: auth.user, profile: auth.profile, req });
   };
@@ -169,10 +169,29 @@ export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: Generic
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
-    const rl = rateLimit({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
+    const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
     return handler({ user: auth.user, profile: auth.profile, req });
   };
+}
+
+/**
+ * Heartbeat best-effort del cron (audit 🟠-25): registra l'ultima esecuzione in
+ * cron_heartbeats, così operational-alerts può accorgersi se un cron SMETTE di
+ * girare (dead-man's switch). Trasparente per tutti i cron (passano da qui).
+ * Tutto in try/catch fire-and-forget: non deve MAI far fallire il cron.
+ */
+async function recordCronHeartbeat(req: NextRequest): Promise<void> {
+  try {
+    const name = new URL(req.url).pathname.split('/').filter(Boolean).pop();
+    if (!name) return;
+    const { getAdminSupabase } = await import('@/lib/supabase/server');
+    await getAdminSupabase()
+      .from('cron_heartbeats')
+      .upsert({ name, last_run_at: new Date().toISOString() }, { onConflict: 'name' });
+  } catch {
+    /* best-effort: il heartbeat non deve mai bloccare o far fallire il cron. */
+  }
 }
 
 /**
@@ -188,6 +207,7 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
       ? authHeader.slice(7).trim()
       : null;
     if (!secretsMatch(bearer, expected)) return ApiErrors.unauthorized();
+    void recordCronHeartbeat(req); // dead-man's switch (🟠-25), best-effort
     return handler(req);
   };
 }

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { env } from '@/lib/env';
 import { AiConfigError } from '@/lib/ai/client';
@@ -27,7 +27,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato sul server.');
 
   // Rate limit aggressivo: ogni chiamata usa Sonnet + web_search.
-  const rl = rateLimit({ key: `import-fetch:${user.id}`, max: 15, windowMs: 5 * 60_000 });
+  const rl = await rateLimitAsync({ key: `import-fetch:${user.id}`, max: 15, windowMs: 5 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;

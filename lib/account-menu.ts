@@ -66,6 +66,7 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/admin/funnel', icon: TrendingUp, label: 'Funnel & Cohort' },
       { href: '/admin/users', icon: Users, label: 'Utenti' },
       { href: '/admin/orders', icon: ShoppingBag, label: 'Ordini' },
+      { href: '/admin/cod-remittance', icon: Euro, label: 'Rimesse COD' },
       { href: '/admin/products', icon: Package, label: 'Prodotti' },
       { href: '/admin/categories', icon: Tags, label: 'Categorie' },
       { href: '/admin/support-chat', icon: Headset, label: 'Chat assistenza' },

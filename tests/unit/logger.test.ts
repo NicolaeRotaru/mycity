@@ -4,10 +4,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 vi.mock('@/lib/analytics/sentry', () => ({
   captureError: vi.fn(),
 }));
+vi.mock('@sentry/nextjs', () => ({
+  captureException: vi.fn(),
+}));
 
 import { logger } from '@/lib/logger';
 import { captureError } from '@/lib/analytics/sentry';
+import * as SentryNext from '@sentry/nextjs';
 const captureMock = vi.mocked(captureError);
+const captureExceptionMock = vi.mocked(SentryNext.captureException);
 
 function setNodeEnv(value: string) {
   vi.stubEnv('NODE_ENV', value);
@@ -54,30 +59,57 @@ describe('logger', () => {
     });
   });
 
-  describe('error', () => {
-    it('captures error to Sentry always', () => {
+  // Server-side (test env = node): logger.error cattura direttamente sul SDK
+  // server (@sentry/nextjs), NON sul wrapper 'use client'. DSN coerente col
+  // server config (NEXT_PUBLIC_SENTRY_DSN o SENTRY_DSN).
+  describe('error (cattura server-side)', () => {
+    const DSN = 'https://x@o1.ingest.sentry.io/1';
+
+    it('inoltra a Sentry con il ctx in extra (anche con solo SENTRY_DSN)', async () => {
       setNodeEnv('production');
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', '');
+      vi.stubEnv('SENTRY_DSN', DSN);
       const err = new Error('boom');
       logger.error(err, { userId: 'u1' });
-      expect(captureMock).toHaveBeenCalledWith(err, { userId: 'u1' });
+      await vi.waitFor(() =>
+        expect(captureExceptionMock).toHaveBeenCalledWith(err, { extra: { userId: 'u1' } }),
+      );
+      // Server NON passa dal wrapper client.
+      expect(captureMock).not.toHaveBeenCalled();
     });
 
-    it('also logs to console in dev', () => {
+    it('logga anche su console in dev', async () => {
       setNodeEnv('development');
-      const err = new Error('boom');
-      logger.error(err);
+      vi.stubEnv('SENTRY_DSN', DSN);
+      logger.error(new Error('boom'));
       expect(consoleSpy.error).toHaveBeenCalled();
-      expect(captureMock).toHaveBeenCalledOnce();
+      await vi.waitFor(() => expect(captureExceptionMock).toHaveBeenCalledOnce());
     });
 
-    it('handles string ctx by wrapping in { detail }', () => {
+    it('normalizza ctx stringa in { detail } dentro extra', async () => {
+      vi.stubEnv('SENTRY_DSN', DSN);
       logger.error(new Error('x'), 'extra context');
-      expect(captureMock).toHaveBeenCalledWith(expect.any(Error), { detail: 'extra context' });
+      await vi.waitFor(() =>
+        expect(captureExceptionMock).toHaveBeenCalledWith(expect.any(Error), {
+          extra: { detail: 'extra context' },
+        }),
+      );
     });
 
-    it('passes undefined ctx when none provided', () => {
+    it('passa extra undefined quando non c\'è ctx', async () => {
+      vi.stubEnv('SENTRY_DSN', DSN);
       logger.error(new Error('x'));
-      expect(captureMock).toHaveBeenCalledWith(expect.any(Error), undefined);
+      await vi.waitFor(() =>
+        expect(captureExceptionMock).toHaveBeenCalledWith(expect.any(Error), undefined),
+      );
+    });
+
+    it('no-op se nessun DSN configurato', async () => {
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', '');
+      vi.stubEnv('SENTRY_DSN', '');
+      logger.error(new Error('x'));
+      await new Promise((r) => setTimeout(r, 20));
+      expect(captureExceptionMock).not.toHaveBeenCalled();
     });
   });
 });

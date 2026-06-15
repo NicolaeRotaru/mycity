@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { resolveAiPatch, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
@@ -26,7 +26,7 @@ export const runtime = 'nodejs';
 type ApplyBody = { productId?: string; patch?: AiProductPatch };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
-  const rl = rateLimit({ key: `ai-catalog-apply:${user.id}`, max: 60, windowMs: 60 * 60_000 });
+  const rl = await rateLimitAsync({ key: `ai-catalog-apply:${user.id}`, max: 60, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let body: ApplyBody;

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createHmac } from 'node:crypto';
 import type Stripe from 'stripe';
-import { getStripe, computeApplicationFeeCents } from '@/lib/stripe/client';
+import { getStripe, computeApplicationFeeCents, computeSellerPayoutCents } from '@/lib/stripe/client';
 import { reverseOrderTransfer, applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
@@ -251,9 +251,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   for (const g of groups) {
     const deliveryFeeCents = g.deliveryFeeCents ?? 0;
     const feeCents = computeApplicationFeeCents(g.totalCents);
-    // La fee di consegna è trattenuta dalla piattaforma: la scaliamo dal payout
-    // del venditore (oltre alla commissione marketplace).
-    const payoutCents = g.totalCents - feeCents - deliveryFeeCents;
+    // Split del denaro in un'unica funzione pura. Dal netto del venditore scaliamo
+    // la commissione, la fee di consegna trattenuta dalla piattaforma E la
+    // spedizione (g.shippingCents): quest'ultima è versata a parte al rider come
+    // compenso di consegna (releaseRiderPayout). Senza sottrarla, la spedizione
+    // verrebbe pagata due volte (al seller nel netto e al rider).
+    const payoutCents = computeSellerPayoutCents({
+      totalCents: g.totalCents,
+      deliveryFeeCents,
+      shippingCents: g.shippingCents,
+    });
 
     const { data: order, error: orderErr } = await admin
       .from('orders')

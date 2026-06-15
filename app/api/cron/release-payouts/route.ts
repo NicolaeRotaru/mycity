@@ -61,18 +61,19 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   }
 
   const ids = (candidates ?? []).map((o) => o.id as string);
-  if (ids.length === 0) {
-    return NextResponse.json({ ok: true, released: 0, skipped: 0, failed: 0 }, { status: 200 });
-  }
 
   // Escludi ordini con un reso aperto o una dispute interna aperta.
+  // NB: niente early-return su ids vuoto — i pass rider e COD qui sotto devono
+  // girare COMUNQUE (prima, zero payout carta-seller faceva saltare anche quelli).
   const blocked = new Set<string>();
-  const [openReturns, openDisputes] = await Promise.all([
-    admin.from('returns').select('order_id').in('order_id', ids).in('status', OPEN_RETURN_STATUSES),
-    admin.from('disputes').select('order_id').in('order_id', ids).in('status', OPEN_DISPUTE_STATUSES),
-  ]);
-  for (const r of openReturns.data ?? []) blocked.add(r.order_id as string);
-  for (const d of openDisputes.data ?? []) blocked.add(d.order_id as string);
+  if (ids.length > 0) {
+    const [openReturns, openDisputes] = await Promise.all([
+      admin.from('returns').select('order_id').in('order_id', ids).in('status', OPEN_RETURN_STATUSES),
+      admin.from('disputes').select('order_id').in('order_id', ids).in('status', OPEN_DISPUTE_STATUSES),
+    ]);
+    for (const r of openReturns.data ?? []) blocked.add(r.order_id as string);
+    for (const d of openDisputes.data ?? []) blocked.add(d.order_id as string);
+  }
 
   let released = 0;
   let skipped = 0;
@@ -125,14 +126,57 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     }
   }
 
-  if (released > 0 || failed > 0 || riderReleased > 0 || riderFailed > 0) {
+  // --- PAYOUT VENDITORE COD (🔴-1 slice 3) ---
+  // Ordini COD in 'HELD': lo stato è HELD SOLO dopo che un admin ha confermato la
+  // rimessa contanti del rider (confirm_cod_remittance), quindi "paga dopo rimessa"
+  // è già garantito. Stesso rail dei card: releaseOrderPayout fa un transfer dal
+  // saldo piattaforma (senza source_transaction, perché non c'è charge Stripe).
+  let codReleased = 0;
+  let codSkipped = 0;
+  let codFailed = 0;
+  const { data: codCands } = await admin
+    .from('orders')
+    .select('id')
+    .eq('payout_status', 'HELD')
+    .eq('payment_method', 'cod')
+    .eq('delivery_status', 'DELIVERED')
+    .is('dispute_status', null)
+    .limit(BATCH_LIMIT);
+  const codIds = (codCands ?? []).map((o) => o.id as string);
+  if (codIds.length > 0) {
+    const codBlocked = new Set<string>();
+    const [codReturns, codDisputes] = await Promise.all([
+      admin.from('returns').select('order_id').in('order_id', codIds).in('status', OPEN_RETURN_STATUSES),
+      admin.from('disputes').select('order_id').in('order_id', codIds).in('status', OPEN_DISPUTE_STATUSES),
+    ]);
+    for (const r of codReturns.data ?? []) codBlocked.add(r.order_id as string);
+    for (const d of codDisputes.data ?? []) codBlocked.add(d.order_id as string);
+
+    for (const id of codIds) {
+      if (codBlocked.has(id)) {
+        codSkipped++;
+        continue;
+      }
+      try {
+        const res = await releaseOrderPayout(id);
+        if (res.ok) codReleased++;
+        else if (res.code === 'SELLER_NOT_READY' || res.code === 'BAD_STATE') codSkipped++;
+        else codFailed++;
+      } catch (e) {
+        logger.error('[cron] release COD payout failed', { id, e });
+        codFailed++;
+      }
+    }
+  }
+
+  if (released > 0 || failed > 0 || riderReleased > 0 || riderFailed > 0 || codReleased > 0 || codFailed > 0) {
     logger.info(
-      `[cron] release-payouts: seller released=${released} skipped=${skipped} failed=${failed} · rider released=${riderReleased} skipped=${riderSkipped} failed=${riderFailed}`,
+      `[cron] release-payouts: seller released=${released} skipped=${skipped} failed=${failed} · rider released=${riderReleased} skipped=${riderSkipped} failed=${riderFailed} · cod released=${codReleased} skipped=${codSkipped} failed=${codFailed}`,
     );
   }
 
   return NextResponse.json(
-    { ok: true, released, skipped, failed, riderReleased, riderSkipped, riderFailed },
+    { ok: true, released, skipped, failed, riderReleased, riderSkipped, riderFailed, codReleased, codSkipped, codFailed },
     { status: 200 },
   );
 });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/supabase/client';
-import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { env } from '@/lib/env';
 import { ApiErrors } from '@/lib/api/responses';
@@ -12,7 +12,7 @@ const EMAIL_RE = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
 export async function POST(request: Request) {
   // Rate limit: 5 / ora per IP (anti spam account)
   const ip = getClientIp(request);
-  const rl = rateLimit({ key: `signup:${ip}`, max: 5, windowMs: 60 * 60_000 });
+  const rl = await rateLimitAsync({ key: `signup:${ip}`, max: 5, windowMs: 60 * 60_000 });
   if (!rl.allowed) {
     return ApiErrors.rateLimited(rl.retryAfterSec, 'Troppe registrazioni da questo indirizzo. Riprova più tardi.');
   }

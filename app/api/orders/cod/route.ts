@@ -7,6 +7,8 @@ import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { shippingCentsFor } from '@/lib/shipping';
+import { isStoreClosedForOrder } from '@/lib/store-hours';
+import { computeApplicationFeeCents, computeSellerPayoutCents } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
@@ -120,11 +122,28 @@ export const POST = withAuthRateLimit(
     const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
     const { data: sellers } = await supa
       .from('profiles')
-      .select('id, store_lat, store_lng')
+      .select('id, store_name, store_lat, store_lng, store_hours')
       .in('id', sellerIds);
     const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
     for (const s of sellers ?? []) {
       sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
+    }
+
+    // --- 2b. Orari negozio: niente consegna a domicilio verso un negozio CHIUSO
+    // adesso (il rider andrebbe a vuoto — lo scenario "ordine alle 3 di notte").
+    // Solo se il venditore ha orari configurati (NULL-safe). Il ritiro in negozio
+    // è esente: il cliente passa durante gli orari di apertura.
+    if (!body.pickupInStore) {
+      for (const s of sellers ?? []) {
+        if (isStoreClosedForOrder(s.store_hours)) {
+          return NextResponse.json(
+            {
+              error: `${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`,
+            },
+            { status: 409 },
+          );
+        }
+      }
     }
 
     // --- 3. Valida ogni gruppo + calcola subtotale per gruppo dal DB.
@@ -259,6 +278,18 @@ export const POST = withAuthRateLimit(
       }
       const totalCents = Math.max(0, grossTotalCents - walletAppliedCents);
 
+      // 🔴-1 settlement COD: registra commissione (10% del valore di vendita
+      // LORDO, prima del wallet) e netto venditore (lordo - commissione - fee
+      // consegna - spedizione), come per gli ordini carta. Il pagamento al
+      // venditore — gated sulla rimessa contanti del rider — avverrà a parte:
+      // qui si registrano solo gli importi (lo stato payout resta il default).
+      const codFeeCents = computeApplicationFeeCents(grossTotalCents);
+      const codSellerPayoutCents = computeSellerPayoutCents({
+        totalCents: grossTotalCents,
+        deliveryFeeCents,
+        shippingCents: shipping,
+      });
+
       const { data: order, error: orderErr } = await admin
         .from('orders')
         .insert({
@@ -267,6 +298,11 @@ export const POST = withAuthRateLimit(
           total_price: totalCents / 100,
           shipping_cost: shipping / 100,
           delivery_fee_cents: deliveryFeeCents,
+          application_fee_cents: codFeeCents,
+          seller_payout_cents: codSellerPayoutCents,
+          // In attesa della rimessa contanti del rider (un admin la conferma →
+          // confirm_cod_remittance → 'HELD' → payout venditore in slice 3).
+          payout_status: 'AWAITING_REMITTANCE',
           discount_amount: discountCents / 100,
           wallet_applied_cents: walletAppliedCents,
           coupon_code: validatedCouponCode,
