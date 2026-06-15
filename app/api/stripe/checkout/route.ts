@@ -7,7 +7,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
-import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { shippingCentsFor } from '@/lib/shipping';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 
@@ -273,6 +273,13 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     ? Math.round(grandSubtotalCents * (PICKUP_DISCOUNT_PERCENT / 100))
     : 0;
 
+  // 4c-bis. Fee di consegna piattaforma: PLATFORM_DELIVERY_FEE_CENTS per ogni
+  // gruppo (= una consegna fisica per venditore). Zero per il ritiro in negozio.
+  // La incassa MyCity: viene scalata dal payout del venditore nel webhook.
+  const deliveryFeePerGroupCents = stripeGroups.map(() =>
+    body.pickupInStore ? 0 : PLATFORM_DELIVERY_FEE_CENTS,
+  );
+
   // Clamp difensivo finale: lo sconto totale non può superare (subtotale+spedizione-1c).
   const totalDiscountCents = Math.min(
     couponDiscountCents + pickupDiscountCents,
@@ -282,17 +289,22 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const groupPersisted = stripeGroups.map((g, i) => {
     const subtotal = subtotalPerGroupCents[i];
     const shipping = shippingPerGroupCents[i];
+    const deliveryFeeCents = deliveryFeePerGroupCents[i];
     // Quota proporzionale del coupon globale rispetto al subtotale del gruppo
     const portion = grandSubtotalCents > 0 ? subtotal / grandSubtotalCents : 0;
     const couponPortionCents = Math.round(couponDiscountCents * portion);
     const pickupPortionCents = Math.round(pickupDiscountCents * portion);
-    const totalCents = Math.max(0, subtotal + shipping - couponPortionCents - pickupPortionCents);
+    const totalCents = Math.max(
+      0,
+      subtotal + shipping + deliveryFeeCents - couponPortionCents - pickupPortionCents,
+    );
     return {
       sellerId: g.sellerId,
       storeName: g.storeName,
       items: g.items,
       subtotalCents: subtotal,
       shippingCents: shipping,
+      deliveryFeeCents,
       couponPortionCents,
       pickupPortionCents,
       totalCents,
@@ -360,6 +372,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       pendingCheckoutId: pending.id,
       groups: stripeGroups,
       shippingPerGroupCents,
+      deliveryFeePerGroupCents,
       totalDiscountCents,
       buyerEmail: user.email,
       buyerUserId: user.id,

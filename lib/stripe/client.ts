@@ -59,6 +59,8 @@ export type CreateCheckoutInput = {
   groups: CheckoutGroup[];
   /** Spedizione per ciascun gruppo, in centesimi. Stesso ordine di `groups`. */
   shippingPerGroupCents: number[];
+  /** Fee di consegna piattaforma per ciascun gruppo, in centesimi. Stesso ordine di `groups`. */
+  deliveryFeePerGroupCents: number[];
   /** Sconto totale (coupon + ritiro in negozio) da applicare in Checkout, in centesimi. */
   totalDiscountCents: number;
   buyerEmail: string;
@@ -94,6 +96,9 @@ export async function createMultiSellerCheckoutSession(
   if (input.groups.length !== input.shippingPerGroupCents.length) {
     throw new Error('createMultiSellerCheckoutSession: shippingPerGroupCents non allineato a groups');
   }
+  if (input.groups.length !== input.deliveryFeePerGroupCents.length) {
+    throw new Error('createMultiSellerCheckoutSession: deliveryFeePerGroupCents non allineato a groups');
+  }
 
   const stripe = getStripe();
 
@@ -124,6 +129,20 @@ export async function createMultiSellerCheckoutSession(
           product_data: {
             name: `Spedizione — ${g.storeName}`,
             metadata: { seller_id: g.sellerId, kind: 'shipping' },
+          },
+        },
+      });
+    }
+    const deliveryFeeCents = input.deliveryFeePerGroupCents[i];
+    if (deliveryFeeCents > 0) {
+      lineItems.push({
+        quantity: 1,
+        price_data: {
+          currency: 'eur',
+          unit_amount: deliveryFeeCents,
+          product_data: {
+            name: `Costo di consegna — ${g.storeName}`,
+            metadata: { seller_id: g.sellerId, kind: 'delivery_fee' },
           },
         },
       });
@@ -235,11 +254,11 @@ export async function createConnectLoginLink(accountId: string): Promise<{ url: 
 }
 
 /**
- * Calcola la commissione marketplace (8% del totale, IVA esclusa
+ * Calcola la commissione marketplace (10% del totale, IVA esclusa
  * — semplificazione MVP). Da raffinare quando lo schema commissioni
  * diventa configurabile per seller/categoria.
  */
-export const MARKETPLACE_FEE_BPS = 800; // 8.00%
+export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
 
 export function computeApplicationFeeCents(amountCents: number): number {
   return Math.round((amountCents * MARKETPLACE_FEE_BPS) / 10000);

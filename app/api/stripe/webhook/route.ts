@@ -26,6 +26,8 @@ export const dynamic = 'force-dynamic';
  *                                  cron) + auto-reversal se già pagato + alert admin
  *  - charge.dispute.closed       → won: sblocca; lost: annulla l'ordine
  *  - account.updated             → aggiorna stato Connect del seller
+ *  - customer.subscription.*     → sincronizza l'abbonamento venditore (€50/mese)
+ *  - invoice.payment_failed      → abbonamento venditore past_due + alert
  *
  * Sicurezza:
  *  - Verifica firma con STRIPE_WEBHOOK_SECRET (constructEvent).
@@ -82,6 +84,8 @@ export async function POST(req: NextRequest) {
           await handleGiftCardPurchase(session);
         } else if (session.metadata?.kind === 'sponsored') {
           await handleSponsoredPurchase(session);
+        } else if (session.metadata?.kind === 'seller_subscription') {
+          await handleSellerSubscription(session);
         } else {
           await handleCheckoutCompleted(session);
         }
@@ -103,6 +107,15 @@ export async function POST(req: NextRequest) {
       case 'account.updated': {
         const acct = event.data.object as Stripe.Account;
         await handleAccountUpdated(acct);
+        break;
+      }
+      case 'customer.subscription.updated':
+      case 'customer.subscription.deleted': {
+        await handleSubscriptionChanged(event.data.object as Stripe.Subscription);
+        break;
+      }
+      case 'invoice.payment_failed': {
+        await handleInvoicePaymentFailed(event.data.object as Stripe.Invoice);
         break;
       }
       case 'transfer.reversed': {
@@ -151,6 +164,7 @@ type PendingGroup = {
   }>;
   subtotalCents: number;
   shippingCents: number;
+  deliveryFeeCents?: number;
   couponPortionCents: number;
   pickupPortionCents: number;
   totalCents: number;
@@ -235,8 +249,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   // Crea N ordini, uno per gruppo
   for (const g of groups) {
+    const deliveryFeeCents = g.deliveryFeeCents ?? 0;
     const feeCents = computeApplicationFeeCents(g.totalCents);
-    const payoutCents = g.totalCents - feeCents;
+    // La fee di consegna è trattenuta dalla piattaforma: la scaliamo dal payout
+    // del venditore (oltre alla commissione marketplace).
+    const payoutCents = g.totalCents - feeCents - deliveryFeeCents;
 
     const { data: order, error: orderErr } = await admin
       .from('orders')
@@ -245,6 +262,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         seller_id: g.sellerId,
         total_price: g.totalCents / 100,
         shipping_cost: g.shippingCents / 100,
+        delivery_fee_cents: deliveryFeeCents,
         discount_amount: (g.couponPortionCents + g.pickupPortionCents) / 100,
         coupon_code: couponCode,
         pickup_in_store: pickupInStore,
@@ -503,6 +521,103 @@ async function handleSponsoredPurchase(session: Stripe.Checkout.Session) {
     body: `Il tuo prodotto è "In primo piano" nella ricerca fino al ${endStr}.`,
     link: '/seller/promote',
   });
+}
+
+/** Mappa lo stato Stripe della subscription sul nostro enum profili. */
+function mapSubscriptionStatus(status: Stripe.Subscription.Status): 'active' | 'past_due' | 'canceled' {
+  switch (status) {
+    case 'active':
+    case 'trialing':
+      return 'active';
+    case 'past_due':
+    case 'unpaid':
+    case 'incomplete':
+      return 'past_due';
+    default: // canceled, incomplete_expired
+      return 'canceled';
+  }
+}
+
+/**
+ * Checkout abbonamento venditore riuscito (mode=subscription). Salva i
+ * riferimenti Stripe Customer/Subscription sul profilo e attiva l'abbonamento.
+ * Idempotente: una re-delivery riscrive gli stessi valori.
+ */
+async function handleSellerSubscription(session: Stripe.Checkout.Session) {
+  const admin = getAdminSupabase();
+  const sellerId = session.metadata?.seller_id || null;
+  const customerId = typeof session.customer === 'string' ? session.customer : (session.customer?.id ?? null);
+  const subscriptionId = typeof session.subscription === 'string'
+    ? session.subscription
+    : (session.subscription?.id ?? null);
+
+  if (!sellerId || !subscriptionId) {
+    logger.error('[stripe] seller_subscription metadata incompleti', { sessionId: session.id });
+    return;
+  }
+
+  // Recupera periodo di rinnovo (best-effort).
+  let renewsAt: string | null = null;
+  try {
+    const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+    if (sub.current_period_end) renewsAt = new Date(sub.current_period_end * 1000).toISOString();
+  } catch (e) {
+    logger.warn('[stripe] retrieve subscription per renews_at fallita', e);
+  }
+
+  await admin
+    .from('profiles')
+    .update({
+      stripe_customer_id: customerId,
+      stripe_subscription_id: subscriptionId,
+      subscription_status: 'active',
+      subscription_renews_at: renewsAt,
+    })
+    .eq('id', sellerId);
+
+  await admin.from('notifications').insert({
+    user_id: sellerId,
+    title: '✅ Abbonamento attivo',
+    body: 'Il tuo abbonamento venditore (€50/mese) è attivo. Grazie!',
+    link: '/seller/dashboard',
+  });
+}
+
+/**
+ * customer.subscription.updated / .deleted → sincronizza subscription_status e
+ * subscription_renews_at sul profilo del venditore (lookup per subscription id).
+ */
+async function handleSubscriptionChanged(sub: Stripe.Subscription) {
+  const admin = getAdminSupabase();
+  const status = mapSubscriptionStatus(sub.status);
+  const renewsAt = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+  await admin
+    .from('profiles')
+    .update({ subscription_status: status, subscription_renews_at: renewsAt })
+    .eq('stripe_subscription_id', sub.id);
+}
+
+/**
+ * invoice.payment_failed → la carta del venditore è stata rifiutata: marca
+ * l'abbonamento past_due (lookup per customer id) e avvisa il venditore.
+ */
+async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
+  const customerId = typeof invoice.customer === 'string' ? invoice.customer : (invoice.customer?.id ?? null);
+  if (!customerId) return;
+  const admin = getAdminSupabase();
+  const { data: rows } = await admin
+    .from('profiles')
+    .update({ subscription_status: 'past_due' })
+    .eq('stripe_customer_id', customerId)
+    .select('id');
+  for (const r of rows ?? []) {
+    await admin.from('notifications').insert({
+      user_id: r.id,
+      title: '⚠️ Pagamento abbonamento non riuscito',
+      body: 'Non siamo riusciti ad addebitare l’abbonamento mensile. Aggiorna il metodo di pagamento.',
+      link: '/seller/dashboard',
+    });
+  }
 }
 
 async function handleChargeRefunded(charge: Stripe.Charge) {

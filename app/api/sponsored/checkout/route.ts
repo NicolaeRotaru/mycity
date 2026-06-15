@@ -14,15 +14,15 @@ export const runtime = 'nodejs';
  * pagamento REALE via Stripe. La campagna si attiva SOLO dopo il pagamento
  * (webhook, metadata.kind=sponsored): niente più auto-attivazione gratuita.
  *
- * Prezzo: €4,90 / 7 giorni = €0,70/giorno. Durate ammesse: 7, 14, 30 giorni.
+ * Prezzo: €4,99 / settimana. Durate ammesse: 1, 2, 4 settimane.
  * Rate limit: 15 / 10 min per utente.
  */
-const SPONSORED_PER_DAY_CENTS = 70;
-const ALLOWED_DAYS = [7, 14, 30];
+const SPONSORED_PER_WEEK_CENTS = 499;
+const ALLOWED_WEEKS = [1, 2, 4];
 
 const Body = z.object({
   productId: z.string().uuid(),
-  days: z.number().int().refine((v) => ALLOWED_DAYS.includes(v), 'Durata non valida'),
+  weeks: z.number().int().refine((v) => ALLOWED_WEEKS.includes(v), 'Durata non valida'),
 });
 
 export const POST = withAuthRateLimit(
@@ -49,7 +49,10 @@ export const POST = withAuthRateLimit(
       return ApiErrors.invalidRequest('Il prodotto deve essere in vendita per sponsorizzarlo.');
     }
 
-    const amountCents = body.days * SPONSORED_PER_DAY_CENTS;
+    const amountCents = body.weeks * SPONSORED_PER_WEEK_CENTS;
+    // Il webhook (handleSponsoredPurchase) resta day-based: convertiamo le
+    // settimane in giorni per il calcolo di start_date/end_date.
+    const days = body.weeks * 7;
     const stripe = getStripe();
 
     try {
@@ -64,7 +67,7 @@ export const POST = withAuthRateLimit(
               currency: 'eur',
               unit_amount: amountCents,
               product_data: {
-                name: `Sponsorizzazione "In primo piano" · ${body.days} giorni`,
+                name: `Sponsorizzazione "In primo piano" · ${body.weeks} ${body.weeks === 1 ? 'settimana' : 'settimane'}`,
                 description: product.name,
               },
             },
@@ -74,7 +77,7 @@ export const POST = withAuthRateLimit(
           kind: 'sponsored',
           seller_id: user.id,
           product_id: product.id,
-          days: String(body.days),
+          days: String(days),
           placement: 'search_top',
           amount_cents: String(amountCents),
         },
