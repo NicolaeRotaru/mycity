@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
 import ImportFromUrlBox, { type ImportResult } from '@/components/products/ImportFromUrlBox';
+import BulkPhotoCreate from '@/components/seller/BulkPhotoCreate';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
@@ -197,12 +198,15 @@ function NewProductInner() {
       <h1 className="text-2xl font-bold">{fromId ? 'Duplica prodotto' : 'Nuovo prodotto'}</h1>
 
       {!fromId && (
-        <ImportFromUrlBox
-          onImported={(data) => {
-            setImported(data);
-            setImportNonce((n) => n + 1);
-          }}
-        />
+        <>
+          <BulkPhotoCreate onCreated={() => router.push('/seller/products')} />
+          <ImportFromUrlBox
+            onImported={(data) => {
+              setImported(data);
+              setImportNonce((n) => n + 1);
+            }}
+          />
+        </>
       )}
 
       {fromId && loadingSource ? (
