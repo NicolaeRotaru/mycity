@@ -292,18 +292,38 @@ export interface RefundOrderOpts {
  * NON usata dal webhook charge.refunded (lì il refund è già Stripe-initiated:
  * basta reverseOrderTransfer + sync DB).
  */
+/** Email best-effort di rimborso al buyer (riusata dal path carta e da quello COD). */
+async function notifyRefundBuyer(
+  admin: ReturnType<typeof getAdminSupabase>,
+  userId: string,
+  orderId: string,
+  amountCents: number,
+  opts: RefundOrderOpts,
+): Promise<void> {
+  if (!opts.notifyBuyer) return;
+  try {
+    const { data: ua } = await admin.auth.admin.getUserById(userId);
+    const buyerEmail = ua?.user?.email;
+    if (buyerEmail) {
+      const t = refundIssuedTemplate({ orderId, amount: amountCents / 100, reason: opts.reason ?? null });
+      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
+    }
+  } catch (e) {
+    logger.warn('[refundOrder] invio email buyer fallito', e);
+  }
+}
+
 export async function refundOrder(
   opts: RefundOrderOpts,
 ): Promise<{ refundId: string; reversedCents: number }> {
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_payout_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents')
+    .select('id, user_id, total_price, seller_payout_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method')
     .eq('id', opts.orderId)
     .single();
 
   if (error || !order) throw new Error('refundOrder: ordine non trovato');
-  if (!order.stripe_payment_intent) throw new Error('refundOrder: ordine senza payment_intent (non pagabile via Stripe)');
 
   // Clamp di sicurezza: mai rimborsare più del totale dell'ordine (in multi-seller
   // la charge è condivisa: un clamp per-ordine evita di prosciugare i fondi degli altri seller).
@@ -311,6 +331,53 @@ export async function refundOrder(
   const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents));
   if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
 
+  // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
+  const newRefundedTotal = (order.refunded_amount_cents ?? 0) + safeAmountCents;
+  const isFull = newRefundedTotal >= orderTotalCents;
+
+  // --- COD (🟠-18): nessuna charge Stripe → accredito sul wallet del buyer.
+  // Idempotente: ref stabile (idempotencyKey del chiamante, es. return_<id>) +
+  // unique index parziale su wallet_ledger(ref) WHERE reason='cod_refund'. Un
+  // secondo tentativo (doppio-click su reso/dispute) è un no-op: niente doppio
+  // accredito. Il contante è già stato incassato dal rider → il buyer viene
+  // ristorato in credito spendibile, non in contanti.
+  if (!order.stripe_payment_intent) {
+    if (order.payment_method !== 'cod') {
+      throw new Error('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
+    }
+    const ref = opts.idempotencyKey ?? `cod_refund_${order.id}_${safeAmountCents}`;
+    const { error: wErr } = await admin.rpc('wallet_credit', {
+      p_user: order.user_id,
+      p_cents: safeAmountCents,
+      p_reason: 'cod_refund',
+      p_ref: ref,
+    });
+    if (wErr) {
+      // 23505 = unique_violation → già accreditato per questo ref: idempotente.
+      if ((wErr as { code?: string }).code === '23505') {
+        return { refundId: `wallet:${ref}`, reversedCents: 0 };
+      }
+      throw new Error(`refundOrder COD: accredito wallet fallito: ${wErr.message}`);
+    }
+
+    await admin
+      .from('orders')
+      .update({
+        refunded_amount_cents: newRefundedTotal,
+        payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+        ...(isFull
+          ? { payout_status: 'REFUNDED', delivery_status: 'CANCELED', canceled_at: new Date().toISOString() }
+          : {}),
+      })
+      .eq('id', order.id);
+
+    if (isFull) await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+    await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts);
+
+    return { refundId: `wallet:${ref}`, reversedCents: 0 };
+  }
+
+  // --- Carta: refund reale Stripe + claw-back del transfer se già pagato.
   const stripe = getStripe();
   const refund = await stripe.refunds.create(
     {
@@ -331,10 +398,6 @@ export async function refundOrder(
 
   const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
 
-  // Aggiorna stato ordine. payment_status ora distingue REFUNDED (pieno) da
-  // PARTIALLY_REFUNDED (parziale) invece di sovraccaricare 'FAILED'.
-  const newRefundedTotal = (order.refunded_amount_cents ?? 0) + safeAmountCents;
-  const isFull = newRefundedTotal >= orderTotalCents;
   const wasTransferred = order.payout_status === 'TRANSFERRED';
   await admin
     .from('orders')
@@ -357,18 +420,7 @@ export async function refundOrder(
     await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
   }
 
-  if (opts.notifyBuyer) {
-    try {
-      const { data: ua } = await admin.auth.admin.getUserById(order.user_id);
-      const buyerEmail = ua?.user?.email;
-      if (buyerEmail) {
-        const t = refundIssuedTemplate({ orderId: order.id, amount: safeAmountCents / 100, reason: opts.reason ?? null });
-        await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
-      }
-    } catch (e) {
-      logger.warn('[refundOrder] invio email buyer fallito', e);
-    }
-  }
+  await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts);
 
   return { refundId: refund.id, reversedCents };
 }

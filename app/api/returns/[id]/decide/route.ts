@@ -53,19 +53,24 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let newStatus: string = body.decision;
 
   if (body.decision === 'APPROVED' && body.refundAmountCents) {
-    // Refund reale + claw-back del transfer se il venditore era già pagato.
     const { data: order } = await admin
       .from('orders')
-      .select('stripe_payment_intent')
+      .select('stripe_payment_intent, payment_method')
       .eq('id', ret.order_id)
       .single();
 
-    if (order?.stripe_payment_intent) {
-      // Ordine pagato con carta ma Stripe non configurato → NON marcare come rimborsato
-      // in silenzio: segnala l'errore (prima restava 'APPROVED' con buyer non rimborsato).
-      if (!isStripeConfigured()) {
-        return ApiErrors.unavailable('Stripe non configurato: impossibile emettere il rimborso ora.');
-      }
+    const isCard = !!order?.stripe_payment_intent;
+    const isCod = !isCard && order?.payment_method === 'cod';
+
+    // Carta ma Stripe non configurato → NON marcare come rimborsato in silenzio.
+    if (isCard && !isStripeConfigured()) {
+      return ApiErrors.unavailable('Stripe non configurato: impossibile emettere il rimborso ora.');
+    }
+
+    if (isCard || isCod) {
+      // refundOrder gestisce sia il refund reale Stripe (carta + claw-back) sia
+      // l'accredito sul wallet del buyer (COD, 🟠-18: il contante è già stato
+      // incassato dal rider). Idempotente via idempotencyKey return_<id>.
       try {
         const res = await refundOrder({
           orderId: ret.order_id,
@@ -80,11 +85,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         newStatus = 'REFUNDED';
       } catch (err) {
         logger.error('[returns] refund failed', err);
-        return ApiErrors.badGateway('Refund Stripe fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+        return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
       }
     }
-    // Ordine COD / senza payment_intent: nessun rimborso Stripe (il contante è gestito
-    // offline) → resta 'APPROVED'.
   }
 
   // Guard di stato atomico: solo UNA decisione passa (anti doppio-click).
