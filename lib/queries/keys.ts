@@ -148,6 +148,7 @@ export const queryKeys = {
     coupons:                 ['admin', 'coupons'] as const,
     orders:                  ['admin', 'orders'] as const,
     disputes2: (filter?: string) => ['admin', 'disputes', filter ?? 'all'] as const,
+    codRemittances:          ['admin', 'cod-remittances'] as const,
   },
 
   seller: {
