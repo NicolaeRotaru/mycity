@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
 import { cn } from '@/lib/cn';
+import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
@@ -423,6 +424,37 @@ export default function ProductForm({
     }
 
     return changed;
+  };
+
+  // ---- Codice a barre → lookup AI -------------------------------------------
+  // Alla scansione imposta l'EAN (come prima) e, in più, prova a identificare il
+  // prodotto online per precompilare la scheda. Best-effort: se fallisce, resta
+  // almeno l'EAN. Il patch viene applicato allo stato del form (l'utente rivede).
+  const handleBarcodeDetected = async (code: string) => {
+    setAttribute('ean', code);
+    const tid = toast.loading('Cerco il prodotto dal codice EAN…');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { toast.dismiss(tid); return; }
+      const res = await fetch('/api/ai/barcode-lookup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          ean: code,
+          attributeSchema: attrFields,
+          topCategories: topCategories.map((c) => ({ name: c.name, slug: c.slug })),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.found && json.patch) {
+        const changed = applyPatch(json.patch as ProductEditPatch);
+        toast.success(changed.length ? 'Compilato dal codice EAN — controlla e salva' : 'Codice EAN salvato', { id: tid });
+      } else {
+        toast('Codice EAN salvato. Non ho trovato il prodotto online: compila a mano.', { id: tid });
+      }
+    } catch {
+      toast.dismiss(tid);
+    }
   };
 
   // ---- Tag ------------------------------------------------------------------
@@ -850,7 +882,7 @@ export default function ProductForm({
       <BarcodeScanner
         open={scanOpen}
         onClose={() => setScanOpen(false)}
-        onDetected={(code) => setAttribute('ean', code)}
+        onDetected={(code) => void handleBarcodeDetected(code)}
       />
     </div>
   );
