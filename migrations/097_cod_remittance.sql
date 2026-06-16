@@ -60,6 +60,10 @@ BEGIN
     RAISE EXCEPTION 'forbidden' USING errcode = '42501';
   END IF;
 
+  -- Abilita la scrittura del campo protetto payout_status (guard 061), come le
+  -- altre RPC del backend. La GUC è transaction-local.
+  PERFORM set_config('mycity.allow_order_write', '1', true);
+
   UPDATE public.orders
     SET payout_status = 'HELD'
   WHERE rider_id = p_rider

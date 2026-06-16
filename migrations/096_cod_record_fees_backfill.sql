@@ -20,16 +20,24 @@
 --
 -- Idempotente: ricalcola da campi immutabili, solo dove non ancora valorizzato.
 
-UPDATE public.orders o
-SET
-  application_fee_cents = round((round(o.total_price * 100) + COALESCE(o.wallet_applied_cents, 0)) * 0.10)::int,
-  seller_payout_cents = GREATEST(0,
-        (round(o.total_price * 100) + COALESCE(o.wallet_applied_cents, 0))
-        - round((round(o.total_price * 100) + COALESCE(o.wallet_applied_cents, 0)) * 0.10)
-        - COALESCE(o.delivery_fee_cents, 0)
-        - round(COALESCE(o.shipping_cost, 0) * 100))::int
-WHERE o.payment_method = 'cod'
-  AND COALESCE(o.application_fee_cents, 0) = 0
-  AND COALESCE(o.seller_payout_cents, 0) = 0;
+-- NB: enforce_order_update_rules (061) congela i campi protetti dell'ordine e
+-- rifiuta l'UPDATE come ruolo postgres (42501). Si usa lo stesso bypass delle RPC
+-- del backend (061/063): la GUC transaction-local mycity.allow_order_write='1'.
+DO $$
+BEGIN
+  PERFORM set_config('mycity.allow_order_write', '1', true);
+
+  UPDATE public.orders o
+  SET
+    application_fee_cents = round((round(o.total_price * 100) + COALESCE(o.wallet_applied_cents, 0)) * 0.10)::int,
+    seller_payout_cents = GREATEST(0,
+          (round(o.total_price * 100) + COALESCE(o.wallet_applied_cents, 0))
+          - round((round(o.total_price * 100) + COALESCE(o.wallet_applied_cents, 0)) * 0.10)
+          - COALESCE(o.delivery_fee_cents, 0)
+          - round(COALESCE(o.shipping_cost, 0) * 100))::int
+  WHERE o.payment_method = 'cod'
+    AND COALESCE(o.application_fee_cents, 0) = 0
+    AND COALESCE(o.seller_payout_cents, 0) = 0;
+END $$;
 
 NOTIFY pgrst, 'reload schema';
