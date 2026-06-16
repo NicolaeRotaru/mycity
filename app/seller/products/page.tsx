@@ -82,6 +82,9 @@ export default function SellerProductsPage() {
       <div className="flex justify-between items-center flex-wrap gap-3">
         <h1 className="text-2xl font-serif font-bold text-ink-900">I tuoi prodotti</h1>
         <div className="flex gap-2 flex-wrap">
+          <Link href="/seller/products/ai-batch" className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm">
+            <span>✨</span> AI sul catalogo
+          </Link>
           <Link href="/seller/products/import" className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm">
             <span>📥</span> Importa CSV
           </Link>

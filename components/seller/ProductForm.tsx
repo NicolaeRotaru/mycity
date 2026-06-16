@@ -5,12 +5,15 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from 'sonner';
-import { Eye, Image as ImageIcon, ScanLine, Trash2, Save, FileText, Bike, Truck } from 'lucide-react';
+import { Eye, Image as ImageIcon, ScanLine, Trash2, Save, FileText, Bike, Truck, Wand2, ArrowUpDown, Loader2 } from 'lucide-react';
 import PhotoFillButton, { ExtractedProduct } from '@/components/seller/PhotoFillButton';
 import ProductChatAssistant, {
   type ProductChatSnapshot,
   type ProductEditPatch,
 } from '@/components/seller/ProductChatAssistant';
+import ImproveAllPanel from '@/components/seller/ImproveAllPanel';
+import QuickAiTools from '@/components/seller/QuickAiTools';
+import VoiceProductButton from '@/components/seller/VoiceProductButton';
 import ProductImagesField from '@/components/seller/ProductImagesField';
 import AttributesFields from '@/components/seller/AttributesFields';
 import BarcodeScanner from '@/components/seller/BarcodeScanner';
@@ -19,6 +22,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
 import { cn } from '@/lib/cn';
+import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
@@ -147,6 +151,8 @@ export default function ProductForm({
     Object.fromEntries(deriveOptionGroups(initialValues?.variants ?? []).map((g) => [g.name, g.values])),
   );
   const [scanOpen, setScanOpen] = useState(false);
+  const [aiVariantsBusy, setAiVariantsBusy] = useState(false);
+  const [aiPhotosBusy, setAiPhotosBusy] = useState(false);
   const hasVariants = variants.length > 0;
 
   // ---- Categoria a due livelli (il DB ha già parent_id) ---------------------
@@ -423,6 +429,108 @@ export default function ProductForm({
     return changed;
   };
 
+  // ---- Codice a barre → lookup AI -------------------------------------------
+  // Alla scansione imposta l'EAN (come prima) e, in più, prova a identificare il
+  // prodotto online per precompilare la scheda. Best-effort: se fallisce, resta
+  // almeno l'EAN. Il patch viene applicato allo stato del form (l'utente rivede).
+  const handleBarcodeDetected = async (code: string) => {
+    setAttribute('ean', code);
+    const tid = toast.loading('Cerco il prodotto dal codice EAN…');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { toast.dismiss(tid); return; }
+      const res = await fetch('/api/ai/barcode-lookup', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          ean: code,
+          attributeSchema: attrFields,
+          topCategories: topCategories.map((c) => ({ name: c.name, slug: c.slug })),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.found && json.patch) {
+        const changed = applyPatch(json.patch as ProductEditPatch);
+        toast.success(changed.length ? 'Compilato dal codice EAN — controlla e salva' : 'Codice EAN salvato', { id: tid });
+      } else {
+        toast('Codice EAN salvato. Non ho trovato il prodotto online: compila a mano.', { id: tid });
+      }
+    } catch {
+      toast.dismiss(tid);
+    }
+  };
+
+  // ---- Varianti AI ----------------------------------------------------------
+  // Propone gli assi di variante (es. Taglia, Colore) e li applica al sistema
+  // varianti del form. L'utente rivede le combinazioni e imposta lo stock.
+  const variantableFields = useMemo(() => attrFields.filter((f) => f.variantable), [attrFields]);
+  const handleSuggestVariants = async () => {
+    if (variantableFields.length === 0) {
+      toast('Questa categoria non ha campi che diventano varianti.');
+      return;
+    }
+    setAiVariantsBusy(true);
+    const tid = toast.loading('Cerco le varianti adatte…');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { toast.dismiss(tid); return; }
+      const res = await fetch('/api/ai/variants', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({
+          product: chatSnapshot,
+          imageUrls,
+          variantableFields: variantableFields.map((f) => ({ key: f.key, label: f.label, type: f.type, options: f.options })),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.axes) && json.axes.length > 0) {
+        const next = { ...variantAxes };
+        for (const a of json.axes as { key: string; values: string[] }[]) next[a.key] = a.values;
+        applyAxes(next);
+        toast.success(`Proposte ${json.axes.length} varianti — controlla le combinazioni e lo stock`, { id: tid });
+      } else {
+        toast('Nessuna variante sensata per questo prodotto.', { id: tid });
+      }
+    } catch (err) {
+      toast.dismiss(tid);
+      toast.error(friendlyError(err));
+    } finally {
+      setAiVariantsBusy(false);
+    }
+  };
+
+  // ---- Ordine foto AI -------------------------------------------------------
+  // Riordina le immagini mettendo per prima la copertina migliore.
+  const handleOrderPhotos = async () => {
+    if (imageUrls.length < 2) return;
+    setAiPhotosBusy(true);
+    const tid = toast.loading('Scelgo copertina e ordine…');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { toast.dismiss(tid); return; }
+      const res = await fetch('/api/vision/photo-order', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ imageUrls }),
+      });
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.order)) {
+        const reordered = (json.order as number[]).map((i) => imageUrls[i]).filter((u): u is string => !!u);
+        if (reordered.length === imageUrls.length) setImageUrls(reordered);
+        const tip = Array.isArray(json.tips) && json.tips.length ? ` Consiglio: ${json.tips[0]}` : '';
+        toast.success(`Foto riordinate, copertina scelta.${tip}`, { id: tid });
+      } else {
+        toast.dismiss(tid);
+      }
+    } catch (err) {
+      toast.dismiss(tid);
+      toast.error(friendlyError(err));
+    } finally {
+      setAiPhotosBusy(false);
+    }
+  };
+
   // ---- Tag ------------------------------------------------------------------
   const addTag = (raw: string) => {
     const t = raw.trim().replace(/,+$/, '').toLowerCase();
@@ -471,6 +579,30 @@ export default function ProductForm({
   return (
     <div className="space-y-6">
       <PhotoFillButton onFilled={handleExtracted} onImages={(files) => void handlePhotoImages(files)} />
+
+      <VoiceProductButton
+        attributeSchema={attrFields}
+        topCategories={topCategories.map((c) => ({ name: c.name, slug: c.slug }))}
+        onApplyPatch={applyPatch}
+      />
+
+      <ImproveAllPanel
+        product={chatSnapshot}
+        attributeSchema={attrFields}
+        topCategories={topCategories.map((c) => ({ name: c.name, slug: c.slug }))}
+        imageUrls={imageUrls}
+        onApplyPatch={applyPatch}
+        disabled={!(watch('name') ?? '').trim() && imageUrls.length === 0}
+      />
+
+      <QuickAiTools
+        product={chatSnapshot}
+        attributeSchema={attrFields}
+        topCategories={topCategories.map((c) => ({ name: c.name, slug: c.slug }))}
+        imageUrls={imageUrls}
+        onApplyPatch={applyPatch}
+        disabled={!(watch('name') ?? '').trim() && imageUrls.length === 0}
+      />
 
       <ProductChatAssistant
         product={chatSnapshot}
@@ -604,6 +736,17 @@ export default function ProductForm({
               <ScanLine size={16} strokeWidth={2.2} aria-hidden /> Scansiona codice EAN
             </button>
           )}
+          {variantableFields.length > 0 && (
+            <button
+              type="button"
+              onClick={() => void handleSuggestVariants()}
+              disabled={aiVariantsBusy}
+              className="inline-flex items-center gap-2 rounded-lg border border-secondary-200 bg-secondary-50 px-3 py-2 text-sm font-semibold text-secondary-800 hover:bg-secondary-100 disabled:opacity-50"
+            >
+              {aiVariantsBusy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Wand2 size={16} strokeWidth={2.2} aria-hidden />}
+              Suggerisci varianti con l&apos;AI
+            </button>
+          )}
           <AttributesFields
             fields={attrFields}
             values={attributes}
@@ -730,6 +873,18 @@ export default function ProductForm({
           showCoverBadge
         />
 
+        {imageUrls.length >= 2 && (
+          <button
+            type="button"
+            onClick={() => void handleOrderPhotos()}
+            disabled={aiPhotosBusy}
+            className="inline-flex items-center gap-2 rounded-lg border border-secondary-200 bg-secondary-50 px-3 py-2 text-sm font-semibold text-secondary-800 hover:bg-secondary-100 disabled:opacity-50"
+          >
+            {aiPhotosBusy ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <ArrowUpDown size={16} strokeWidth={2.2} aria-hidden />}
+            Ordina foto e scegli la copertina con l&apos;AI
+          </button>
+        )}
+
         {/* ANTEPRIMA */}
         <div className="border-t pt-4 space-y-2">
           <h2 className="text-sm font-semibold text-ink-500 flex items-center gap-1.5">
@@ -830,7 +985,7 @@ export default function ProductForm({
       <BarcodeScanner
         open={scanOpen}
         onClose={() => setScanOpen(false)}
-        onDetected={(code) => setAttribute('ean', code)}
+        onDetected={(code) => void handleBarcodeDetected(code)}
       />
     </div>
   );

@@ -77,6 +77,7 @@ services:
 #   https://mycity-marketplace.com/api/cron/expire-stale-orders ogni 30 min  (annulla+rimborsa gli ordini NEW non accettati oltre 3h)
 #   https://mycity-marketplace.com/api/cron/abandoned-carts     ogni 1 ora
 #   https://mycity-marketplace.com/api/cron/operational-alerts  ogni 15 min
+#   https://mycity-marketplace.com/api/cron/external-price-alerts  ogni 1 ora  (riprezzo/stock prodotti importati)
 #
 # Per riportarli su Render come servizi a pagamento, reintrodurre blocchi
 # `- type: cron` (vedi storico git per il template).
