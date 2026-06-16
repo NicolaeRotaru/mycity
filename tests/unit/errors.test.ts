@@ -122,6 +122,20 @@ describe('friendlyError - security (no leaks)', () => {
     const err = { message: 'a'.repeat(200) };
     expect(friendlyError(err)).toMatch(/Qualcosa non ha funzionato/);
   });
+
+  it('falls back for multi-line messages (stack trace)', () => {
+    const err = { message: 'Errore imprevisto\n    at handler (/app/route.ts:42)' };
+    expect(friendlyError(err)).toMatch(/Qualcosa non ha funzionato/);
+  });
+
+  it('preserves user-facing API messages longer than 100 chars (es. negozio chiuso)', () => {
+    // Regressione: un cap a 100 char scartava questo messaggio del checkout COD
+    // mostrando il generico, nascondendo all'utente il vero motivo (negozio chiuso).
+    const msg =
+      'Pane Quotidiano è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.';
+    expect(msg.length).toBeGreaterThan(100);
+    expect(friendlyError(new Error(msg))).toBe(msg);
+  });
 });
 
 describe('friendlyError - string input', () => {

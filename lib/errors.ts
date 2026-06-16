@@ -63,7 +63,19 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         .replace(/\b[A-Z_]+\s*=\s*[^\s,]+/g, '')
         .replace(/\(.*?\)/g, '')
         .trim();
-      if (cleaned.length > 0 && cleaned.length < 100 && /^[a-zA-ZÀ-ſ]/.test(cleaned)) {
+      // Le righe multiple sono un segnale forte di stack trace → scarta.
+      // Il limite di lunghezza scarta i dump tecnici ma deve lasciar passare i
+      // messaggi user-facing dei nostri endpoint (es. "<negozio> è chiuso in
+      // questo momento. Riprova durante gli orari di apertura…", ~115 char):
+      // con un cap a 100 venivano sostituiti dal generico, nascondendo il vero
+      // motivo all'utente. 200 copre le frasi UI legittime, i veri stack trace
+      // restano più lunghi.
+      if (
+        cleaned.length > 0 &&
+        cleaned.length < 200 &&
+        !cleaned.includes('\n') &&
+        /^[a-zA-ZÀ-ſ]/.test(cleaned)
+      ) {
         return cleaned;
       }
     }
