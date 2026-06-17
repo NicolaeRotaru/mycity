@@ -29,7 +29,7 @@ import { cn } from '@/lib/cn';
 const CONTROL_BASE =
   'w-full rounded-lg border bg-white text-base text-ink-900 placeholder:text-ink-400 transition-colors focus:outline-none focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed';
 const CONTROL_OK = 'border-cream-300 focus-visible:ring-primary-400 focus-visible:border-primary-400';
-const CONTROL_ERR = 'border-rose-400 focus-visible:ring-rose-400 focus-visible:border-rose-400';
+const CONTROL_ERR = 'border-secondary-400 focus-visible:ring-secondary-400 focus-visible:border-secondary-400';
 const PAD = 'px-3 py-2.5';
 
 type FieldShellProps = {
@@ -53,7 +53,7 @@ export function Field({ id, label, required, hint, error, className, labelAction
           {label ? (
             <label htmlFor={id} className="block text-sm font-medium text-ink-700">
               {label}
-              {required && <span className="text-rose-600" aria-hidden> *</span>}
+              {required && <span className="text-secondary-600" aria-hidden> *</span>}
             </label>
           ) : (
             <span />
@@ -66,7 +66,7 @@ export function Field({ id, label, required, hint, error, className, labelAction
         <p id={`${id}-hint`} className="text-xs text-ink-500">{hint}</p>
       )}
       {error && (
-        <p id={`${id}-error`} className="text-xs font-medium text-rose-600">{error}</p>
+        <p id={`${id}-error`} className="text-xs font-medium text-secondary-600">{error}</p>
       )}
     </div>
   );
@@ -229,7 +229,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         {label && <span>{label}</span>}
       </label>
       {error && (
-        <p id={`${fieldId}-error`} className="text-xs font-medium text-rose-600 mt-1">{error}</p>
+        <p id={`${fieldId}-error`} className="text-xs font-medium text-secondary-600 mt-1">{error}</p>
       )}
     </div>
   );
