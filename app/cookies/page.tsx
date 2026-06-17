@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { openConsentBanner } from '@/components/CookieBanner';
+import { Cookie } from 'lucide-react';
 
 const VERSION = '2.0';
 const EFFECTIVE_DATE = '24 maggio 2026';
@@ -78,9 +79,9 @@ export default function CookiesPage() {
           <button
             type="button"
             onClick={openConsentBanner}
-            className="mt-2 inline-flex rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800"
+            className="mt-2 inline-flex items-center gap-2 rounded-lg bg-primary-700 px-4 py-2 text-sm font-medium text-white hover:bg-primary-800"
           >
-            🍪 Apri preferenze cookie
+            <Cookie size={18} aria-hidden /> Apri preferenze cookie
           </button>
           <p className="mt-3 text-sm">
             In alternativa puoi disabilitare i cookie dalle impostazioni del browser:

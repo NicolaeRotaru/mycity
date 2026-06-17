@@ -10,7 +10,7 @@ export type OrderStatus =
 
 export type PaymentStatus = 'PAID' | 'FAILED' | 'PENDING';
 
-// Icone Lucide standardizzate (sostituiscono ORDER_STATUS_EMOJI legacy).
+// Icone Lucide standardizzate (la vecchia mappa emoji legacy e' stata rimossa).
 // Esperti: "Emoji + Lucide mixati distruggono brand coherence. Lucide-only."
 import {
   Clock, ChefHat, Package, Bike, Hand, Truck, CheckCircle2, XCircle,
@@ -37,17 +37,6 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   OUT_FOR_DELIVERY: 'In consegna',
   DELIVERED:        'Consegnato',
   CANCELED:         'Annullato',
-};
-
-export const ORDER_STATUS_EMOJI: Record<OrderStatus, string> = {
-  NEW:              '⏳',
-  ACCEPTED:         '👨‍🍳',
-  READY:            '📦',
-  ASSIGNED:         '🛵',
-  PICKED_UP:        '✋',
-  OUT_FOR_DELIVERY: '🚚',
-  DELIVERED:        '✅',
-  CANCELED:         '❌',
 };
 
 export const ORDER_STATUS_COLOR: Record<OrderStatus, { bg: string; text: string; ring: string }> = {

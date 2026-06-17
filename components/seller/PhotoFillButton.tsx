@@ -80,7 +80,7 @@ const PhotoFillButton = ({ onFilled, onImages }: Props) => {
       const q = (data as ExtractedProduct).image_quality;
       if (q && typeof q.score === 'number' && q.score < 0.5) {
         const why = q.issues?.length ? ` (${q.issues.slice(0, 2).join(', ')})` : '';
-        toast(`Foto poco chiara${why}: valuta di rifarla con più luce e sfondo pulito.`, { icon: '📷' });
+        toast(`Foto poco chiara${why}: valuta di rifarla con più luce e sfondo pulito.`, { icon: <Camera size={16} /> });
       }
     } catch (err) {
       const msg = err instanceof Error && err.message ? err.message : 'Estrazione fallita. Riprova.';
@@ -104,7 +104,7 @@ const PhotoFillButton = ({ onFilled, onImages }: Props) => {
     <div className="bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
       <div className="flex-1">
         <p className="font-bold text-base sm:text-lg flex items-center gap-2">
-          <span>📷</span>
+          <Camera size={20} aria-hidden />
           <span>Compila con una foto</span>
         </p>
         <p className="text-sm text-primary-100">

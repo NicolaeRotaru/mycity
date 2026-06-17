@@ -3,6 +3,11 @@
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  ShoppingCart, Store, Bike, Shield, AlertTriangle, Clock, Trash2,
+  PauseCircle, PlayCircle, User, ReceiptText,
+  X, CheckCircle2, type LucideIcon,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatDate } from '@/lib/format';
@@ -55,11 +60,11 @@ function displayName(p: Profile): string {
   );
 }
 
-const ROLE_LABELS: Record<string, { label: string; color: string; emoji: string }> = {
-  buyer:  { label: 'Acquirente', color: 'bg-primary-100 text-primary-800', emoji: '🛒' },
-  seller: { label: 'Venditore',  color: 'bg-secondary-100 text-secondary-700',     emoji: '🏪' },
-  rider:  { label: 'Rider',      color: 'bg-accent-100 text-accent-700',   emoji: '🛵' },
-  admin:  { label: 'Admin',      color: 'bg-rose-100 text-rose-700',     emoji: '🛡️' },
+const ROLE_LABELS: Record<string, { label: string; color: string; icon: LucideIcon }> = {
+  buyer:  { label: 'Acquirente', color: 'bg-primary-100 text-primary-800', icon: ShoppingCart },
+  seller: { label: 'Venditore',  color: 'bg-secondary-100 text-secondary-700',     icon: Store },
+  rider:  { label: 'Rider',      color: 'bg-accent-100 text-accent-700',   icon: Bike },
+  admin:  { label: 'Admin',      color: 'bg-rose-100 text-rose-700',     icon: Shield },
 };
 
 const APPROVAL_LABELS: Record<string, { label: string; color: string }> = {
@@ -270,7 +275,10 @@ function AdminUsersPageInner() {
   if (error) {
     return (
       <div className="bg-rose-50 border border-rose-200 rounded-xl p-6 text-sm text-rose-900">
-        <p className="font-bold mb-1">⚠️ Errore nel caricamento utenti</p>
+        <p className="font-bold mb-1 flex items-center gap-1.5">
+          <AlertTriangle size={16} strokeWidth={2.2} className="text-rose-600 shrink-0" aria-hidden />
+          Errore nel caricamento utenti
+        </p>
         <p className="mb-2">{error instanceof Error ? error.message : 'Errore sconosciuto'}</p>
         <p className="text-xs">
           Se non l'hai ancora fatto, verifica di avere applicato le migration più recenti su Supabase
@@ -320,9 +328,10 @@ function AdminUsersPageInner() {
         {pendingCount > 0 && filter !== 'pending' && (
           <button
             onClick={() => setFilter('pending')}
-            className="bg-accent-100 hover:bg-accent-200 text-accent-900 px-4 py-2 rounded-lg font-semibold text-sm"
+            className="inline-flex items-center gap-1.5 bg-accent-100 hover:bg-accent-200 text-accent-900 px-4 py-2 rounded-lg font-semibold text-sm"
           >
-            ⏳ {pendingCount} richieste in attesa
+            <Clock size={16} strokeWidth={2.2} aria-hidden />
+            {pendingCount} richieste in attesa
           </button>
         )}
         </div>
@@ -377,7 +386,7 @@ function AdminUsersPageInner() {
                     : search
                       ? `Nessun risultato per "${search}"`
                       : filter === 'pending'
-                        ? 'Nessuna richiesta in attesa di approvazione 🎉'
+                        ? 'Nessuna richiesta in attesa di approvazione'
                         : `Nessun utente con ruolo "${filter}"`}
                 </td>
               </tr>
@@ -402,7 +411,7 @@ function AdminUsersPageInner() {
                   </td>
                   <td className="p-3">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}`}>
-                      <span>{r.emoji}</span>{r.label}
+                      <r.icon size={14} strokeWidth={2.2} aria-hidden />{r.label}
                     </span>
                   </td>
                   <td className="p-3">
@@ -433,7 +442,7 @@ function AdminUsersPageInner() {
                               confirmLabel: tConfirm('yesSuspend'),
                               cancelLabel: tActions('cancel'),
                               danger: true,
-                              icon: '⏸️',
+                              icon: PauseCircle,
                             });
                             if (ok) suspend.mutate(p.id);
                           }}
@@ -450,7 +459,7 @@ function AdminUsersPageInner() {
                               message: `${p.store_name ?? 'Il venditore'} tornerà operativo immediatamente e riceverà una notifica.`,
                               confirmLabel: tConfirm('yesReactivate'),
                               cancelLabel: tActions('cancel'),
-                              icon: '▶️',
+                              icon: PlayCircle,
                             });
                             if (ok) reactivate.mutate(p.id);
                           }}
@@ -468,7 +477,7 @@ function AdminUsersPageInner() {
                               message: `${name} verrà rimosso da auth.users e il profilo anonimizzato. L'utente non potrà più accedere. Gli ordini storici restano per obblighi fiscali. Azione irreversibile.`,
                               confirmLabel: tConfirm('yesDelete'),
                               danger: true,
-                              icon: '🗑️',
+                              icon: Trash2,
                             });
                             if (ok) deleteAccount.mutate(p.id);
                           }}
@@ -510,7 +519,7 @@ function AdminUsersPageInner() {
                   )}
                 </div>
                 <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${r.color}`}>
-                  <span>{r.emoji}</span>{r.label}
+                  <r.icon size={14} strokeWidth={2.2} aria-hidden />{r.label}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap text-xs text-ink-500">
@@ -535,7 +544,7 @@ function AdminUsersPageInner() {
                       const ok = await confirmDialog({
                         title: 'Sospendere il negozio?',
                         message: `${p.store_name ?? 'Il venditore'} non potrà più operare finché non lo riattiverai.`,
-                        confirmLabel: tConfirm('yesSuspend'), cancelLabel: tActions('cancel'), danger: true, icon: '⏸️',
+                        confirmLabel: tConfirm('yesSuspend'), cancelLabel: tActions('cancel'), danger: true, icon: PauseCircle,
                       });
                       if (ok) suspend.mutate(p.id);
                     }}
@@ -550,7 +559,7 @@ function AdminUsersPageInner() {
                       const ok = await confirmDialog({
                         title: 'Riattivare il negozio?',
                         message: `${p.store_name ?? 'Il venditore'} tornerà operativo immediatamente.`,
-                        confirmLabel: tConfirm('yesReactivate'), cancelLabel: tActions('cancel'), icon: '▶️',
+                        confirmLabel: tConfirm('yesReactivate'), cancelLabel: tActions('cancel'), icon: PlayCircle,
                       });
                       if (ok) reactivate.mutate(p.id);
                     }}
@@ -566,14 +575,14 @@ function AdminUsersPageInner() {
                       const ok = await confirmDialog({
                         title: 'Eliminare definitivamente?',
                         message: `${name} verrà rimosso da auth.users e il profilo anonimizzato. Azione irreversibile.`,
-                        confirmLabel: tConfirm('yesDelete'), danger: true, icon: '🗑️',
+                        confirmLabel: tConfirm('yesDelete'), danger: true, icon: Trash2,
                       });
                       if (ok) deleteAccount.mutate(p.id);
                     }}
                     aria-label="Elimina"
                     className="px-3 py-2 text-rose-700 bg-rose-50 rounded-lg"
                   >
-                    🗑️
+                    <Trash2 size={16} strokeWidth={2.2} aria-hidden />
                   </button>
                 )}
               </div>
@@ -596,7 +605,7 @@ function AdminUsersPageInner() {
                 message: `Stai cambiando il ruolo di questo utente in "${ROLE_LABELS[patch.role]?.label ?? patch.role}". ${patch.role === 'admin' ? 'Avrà accesso completo al pannello admin.' : ''} Confermi?`,
                 confirmLabel: 'Sì, cambia ruolo',
                 danger: patch.role === 'admin',
-                icon: '🛡️',
+                icon: Shield,
               });
               if (!ok) return;
             }
@@ -720,8 +729,9 @@ function EditUserModal({
             <option value="admin">Admin</option>
           </select>
           {role !== profile.role && (
-            <p className="mt-1 text-xs text-accent-700">
-              ⚠️ Stai cambiando il ruolo: ti verrà chiesta conferma al salvataggio.
+            <p className="mt-1 text-xs text-accent-700 flex items-center gap-1.5">
+              <AlertTriangle size={14} strokeWidth={2.2} className="shrink-0" aria-hidden />
+              Stai cambiando il ruolo: ti verrà chiesta conferma al salvataggio.
             </p>
           )}
         </div>
@@ -755,12 +765,12 @@ function DetailPanel({
         </div>
 
         <div className="p-5 space-y-5 text-sm">
-          <DetailGroup title="🏪 Vetrina">
+          <DetailGroup title="Vetrina" icon={Store}>
             <DetailRow label="Nome negozio">{profile.store_name ?? '—'}</DetailRow>
             <DetailRow label="Indirizzo negozio">{profile.store_address ?? '—'}</DetailRow>
           </DetailGroup>
 
-          <DetailGroup title="👤 Titolare">
+          <DetailGroup title="Titolare" icon={User}>
             <DetailRow label="Nome e cognome">
               {profile.legal_first_name} {profile.legal_last_name}
             </DetailRow>
@@ -774,7 +784,7 @@ function DetailPanel({
             </DetailRow>
           </DetailGroup>
 
-          <DetailGroup title="🧾 Azienda">
+          <DetailGroup title="Azienda" icon={ReceiptText}>
             <DetailRow label="Ragione sociale">{profile.business_legal_name ?? '—'}</DetailRow>
             <DetailRow label="P.IVA"><code>{profile.business_vat_number ?? '—'}</code></DetailRow>
             <DetailRow label="Forma giuridica">{profile.business_form ?? '—'}</DetailRow>
@@ -788,15 +798,15 @@ function DetailPanel({
         <div className="sticky bottom-0 bg-white border-t px-5 py-4 flex gap-3">
           <button
             onClick={onReject}
-            className="flex-1 px-4 py-3 rounded-lg border-2 border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg border-2 border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold"
           >
-            ❌ Rifiuta
+            <X size={18} strokeWidth={2.2} aria-hidden /> Rifiuta
           </button>
           <button
             onClick={onApprove}
-            className="flex-1 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md"
           >
-            ✅ Approva
+            <CheckCircle2 size={18} strokeWidth={2.2} aria-hidden /> Approva
           </button>
         </div>
       </div>
@@ -804,10 +814,13 @@ function DetailPanel({
   );
 }
 
-function DetailGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function DetailGroup({ title, icon: Icon, children }: { title: string; icon: LucideIcon; children: React.ReactNode }) {
   return (
     <div>
-      <h3 className="font-bold text-ink-900 mb-2">{title}</h3>
+      <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-1.5">
+        <Icon size={16} strokeWidth={2.2} className="text-primary-700" aria-hidden />
+        {title}
+      </h3>
       <div className="bg-cream-50 rounded-lg divide-y">{children}</div>
     </div>
   );

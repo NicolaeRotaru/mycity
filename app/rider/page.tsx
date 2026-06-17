@@ -147,13 +147,13 @@ export default function RiderDashboardPage() {
       // Notifiche buyer + seller
       notify({
         userId: data.user_id,
-        title: '🛵 Un rider ha preso il tuo ordine',
+        title: 'Un rider ha preso il tuo ordine',
         body: `Sta andando al negozio per ritirarlo`,
         link: `/orders/${data.id}`,
       });
       notify({
         userId: data.seller_id,
-        title: '🛵 Rider in arrivo',
+        title: 'Rider in arrivo',
         body: `Un rider sta venendo a ritirare l'ordine #${data.id.slice(0, 6).toUpperCase()}`,
         link: `/seller/orders/${data.id}`,
       });

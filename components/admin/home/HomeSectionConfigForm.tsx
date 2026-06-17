@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, CheckCircle2 } from 'lucide-react';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { ImageUrlField } from '@/components/ImageUrlField';
 import type { HomeSection } from '@/lib/home-site';
@@ -39,7 +39,7 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
     <div className="space-y-3">
       <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
       <Input label="Link YouTube o Vimeo" value={url} onChange={(e) => onInput(e.target.value)} error={err ?? undefined} placeholder="https://youtu.be/… oppure https://vimeo.com/…" />
-      {c.videoId && <p className="text-xs text-olive-700">✓ Video {c.provider} riconosciuto.</p>}
+      {c.videoId && <p className="text-xs text-olive-700 inline-flex items-center gap-1"><CheckCircle2 size={14} aria-hidden /> Video {c.provider} riconosciuto.</p>}
     </div>
   );
 }

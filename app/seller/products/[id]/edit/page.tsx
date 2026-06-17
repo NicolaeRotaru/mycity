@@ -14,7 +14,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { normalizeCondition, type ProductCondition, type ProductUnit } from '@/lib/products/schema';
 import { type ProductVariant } from '@/lib/products/variants';
 import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -166,7 +166,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
             message: `"${product.name as string}" verrà rimosso dal tuo catalogo. L'azione è irreversibile.`,
             confirmLabel: 'Sì, elimina',
             danger: true,
-            icon: '🗑️',
+            icon: Trash2,
           });
           if (ok) removeProduct.mutate();
         }}

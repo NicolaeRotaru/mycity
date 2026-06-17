@@ -63,7 +63,7 @@ function CatRow({ cat, tops, onDone }: { cat: Cat; tops: Cat[]; onDone: () => vo
       <div className="flex flex-wrap items-end gap-2">
         <Input label="Nome" containerClassName="flex-1 min-w-[140px]" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
         <Input label="Slug" containerClassName="w-40" value={slug} maxLength={60} onChange={(e) => setSlug(e.target.value)} />
-        <Input label="Icona" containerClassName="w-20" value={icon} maxLength={8} placeholder="🍎" onChange={(e) => setIcon(e.target.value)} />
+        <Input label="Icona" containerClassName="w-20" value={icon} maxLength={8} placeholder="Emoji" onChange={(e) => setIcon(e.target.value)} />
         <Select label="Genitore" containerClassName="w-44" value={parentId} onChange={(e) => setParentId(e.target.value)}>
           <option value="">— Principale —</option>
           {tops.filter((t) => t.id !== cat.id).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -134,7 +134,7 @@ export default function AdminCategoriesPage() {
       {/* Crea nuova */}
       <form onSubmit={(e) => { e.preventDefault(); create.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-4 flex flex-wrap items-end gap-2">
         <Input label="Nuova categoria" containerClassName="flex-1 min-w-[160px]" value={newName} maxLength={60} placeholder="Es: Animali" onChange={(e) => setNewName(e.target.value)} />
-        <Input label="Icona" containerClassName="w-20" value={newIcon} maxLength={8} placeholder="🐾" onChange={(e) => setNewIcon(e.target.value)} />
+        <Input label="Icona" containerClassName="w-20" value={newIcon} maxLength={8} placeholder="Emoji" onChange={(e) => setNewIcon(e.target.value)} />
         <Select label="Genitore" containerClassName="w-44" value={newParent} onChange={(e) => setNewParent(e.target.value)}>
           <option value="">— Principale —</option>
           {tops.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Mail } from 'lucide-react';
 import { supabase, auth } from '@/lib/supabase/client';
 import { useTranslations } from 'next-intl';
 
@@ -34,8 +35,8 @@ export default function VerifyEmailPage() {
     <div className="mx-auto max-w-md p-6">
       <div className="rounded-2xl bg-white p-8 shadow ring-1 ring-cream-300">
         <div className="text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-50 text-3xl">
-            ✉️
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+            <Mail size={28} strokeWidth={2.2} aria-hidden />
           </div>
           <h1 className="mt-4 text-2xl font-semibold text-ink-900">
             {verified ? 'Email verificata' : 'Verifica la tua email'}

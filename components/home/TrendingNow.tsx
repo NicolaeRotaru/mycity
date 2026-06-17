@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, ArrowRight, Flame } from 'lucide-react';
+import { TrendingUp, ArrowRight, Flame, ShoppingBag, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
@@ -138,7 +138,7 @@ export default function TrendingNow() {
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (
-                  <div className="absolute inset-0 flex items-center justify-center text-5xl text-cream-300">🛍️</div>
+                  <div className="absolute inset-0 flex items-center justify-center text-cream-300"><ShoppingBag size={44} aria-hidden /></div>
                 )}
                 {/* Rank badge per i primi 3 */}
                 {i < 3 && (
@@ -152,8 +152,8 @@ export default function TrendingNow() {
                   </div>
                 )}
                 {it.view_count > 5 && (
-                  <div className="absolute bottom-2 right-2 bg-ink-900/80 backdrop-blur text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                    👀 {it.view_count}
+                  <div className="absolute bottom-2 right-2 bg-ink-900/80 backdrop-blur text-white text-[10px] font-semibold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                    <Eye size={12} aria-hidden /> {it.view_count}
                   </div>
                 )}
               </div>

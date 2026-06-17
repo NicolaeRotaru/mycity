@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Zap, Palette } from 'lucide-react';
+import { ExternalLink, Zap, Palette, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -89,8 +89,8 @@ export default function SellerProfilePage() {
         )}
       </div>
 
-      <div className="bg-olive-50 border border-olive-200 rounded-lg p-4 text-olive-800 text-sm">
-        ✅ Negozio attivo · I tuoi prodotti sono visibili nel marketplace
+      <div className="bg-olive-50 border border-olive-200 rounded-lg p-4 text-olive-800 text-sm flex items-center gap-2">
+        <CheckCircle2 size={16} aria-hidden className="shrink-0" /> Negozio attivo · I tuoi prodotti sono visibili nel marketplace
       </div>
 
       {/* Contatti & orari */}

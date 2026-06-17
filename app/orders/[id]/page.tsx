@@ -28,7 +28,7 @@ import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import {
   Package, CheckCircle2, Star, Repeat, Undo2, AlertTriangle, FileText,
-  Clock, XCircle, Check, MapPin, Phone, Store, Bike,
+  Clock, XCircle, Check, MapPin, Phone, Store, Bike, Trash2,
 } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -282,7 +282,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                 confirmLabel: 'Sì, annulla ordine',
                 cancelLabel: 'No, mantieni',
                 danger: true,
-                icon: '🗑️',
+                icon: Trash2,
               });
               if (ok) cancel.mutate();
             }}

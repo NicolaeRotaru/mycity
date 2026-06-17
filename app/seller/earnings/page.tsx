@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
+import { Euro, Landmark, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -121,7 +122,7 @@ export default function SellerEarningsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-ink-900">💶 Guadagni</h1>
+        <h1 className="text-3xl font-extrabold text-ink-900 flex items-center gap-2"><Euro size={28} className="text-primary-600" aria-hidden /> Guadagni</h1>
         <p className="text-sm text-ink-500">Importi reali dai tuoi ordini e stato dei bonifici.</p>
       </div>
 
@@ -176,7 +177,7 @@ export default function SellerEarningsPage() {
       <section className="bg-gradient-to-br from-olive-50 to-teal-50 border border-olive-200 rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="font-bold text-olive-900 mb-1 flex items-center gap-2">🏦 Bonifici</h2>
+            <h2 className="font-bold text-olive-900 mb-1 flex items-center gap-2"><Landmark size={20} className="text-olive-600" aria-hidden /> Bonifici</h2>
             <p className="text-sm text-olive-800">
               <strong>{formatPrice(paidCents / 100)}</strong> già versati ·{' '}
               <strong>{formatPrice(heldCents / 100)}</strong> in attesa di liquidazione.
@@ -233,7 +234,7 @@ export default function SellerEarningsPage() {
 
       {/* Info commissioni */}
       <details className="bg-cream-50 border rounded-xl">
-        <summary className="cursor-pointer p-4 font-semibold text-ink-700">ℹ️ Come funziona la commissione?</summary>
+        <summary className="cursor-pointer p-4 font-semibold text-ink-700 flex items-center gap-2"><Info size={16} className="text-ink-500" aria-hidden /> Come funziona la commissione?</summary>
         <div className="px-4 pb-4 text-sm text-ink-600 space-y-2">
           <p>
             Su MyCity paghi <strong>solo l&apos;8% del venduto</strong> realmente concluso (non rimborsi, non ordini annullati).

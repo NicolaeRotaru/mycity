@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Sparkles, Loader2, Wand2, FileText, ShieldCheck, Languages, ArrowLeft, Check } from 'lucide-react';
+import { Sparkles, Loader2, Wand2, FileText, ShieldCheck, Languages, ArrowLeft, Check, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import CatalogCopilot from '@/components/seller/CatalogCopilot';
@@ -197,8 +197,8 @@ export default function CatalogAiBatchPage() {
               <li key={r.product_id} className="flex gap-2 border-b border-cream-100 py-1 last:border-0">
                 {isModerate ? (
                   r.flagged
-                    ? <span className="text-rose-600">⚠︎ {r.reason ?? 'Da rivedere'}</span>
-                    : <span className="text-emerald-600">✓ ok</span>
+                    ? <span className="inline-flex items-center gap-1.5 text-rose-600"><AlertTriangle size={14} aria-hidden /> {r.reason ?? 'Da rivedere'}</span>
+                    : <span className="inline-flex items-center gap-1.5 text-emerald-600"><Check size={14} strokeWidth={2.4} aria-hidden /> ok</span>
                 ) : (
                   <span>{r.summary ?? (r.patch && Object.keys(r.patch).length ? 'Modifiche proposte' : 'Nessuna modifica')}</span>
                 )}

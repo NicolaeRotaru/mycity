@@ -86,10 +86,10 @@ describe('TIER_META', () => {
     expect(TIER_META.platinum.threshold).toBe(5000);
   });
 
-  it('each tier has label, emoji, color', () => {
+  it('each tier has label, icon, color', () => {
     for (const tier of ['bronze', 'silver', 'gold', 'platinum'] as const) {
       expect(TIER_META[tier].label).toBeTruthy();
-      expect(TIER_META[tier].emoji).toBeTruthy();
+      expect(TIER_META[tier].icon).toBeDefined();
       expect(TIER_META[tier].color).toMatch(/^text-/);
     }
   });

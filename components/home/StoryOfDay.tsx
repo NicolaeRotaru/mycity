@@ -61,7 +61,7 @@ export default function StoryOfDay() {
               className="object-cover"
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center text-6xl">📖</div>
+            <div className="absolute inset-0 flex items-center justify-center text-cream-400"><BookOpen size={56} aria-hidden /></div>
           )}
           {story.seller?.store_name && (
             <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur rounded-full px-3 py-1.5 flex items-center gap-2 shadow-warm">

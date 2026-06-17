@@ -44,8 +44,10 @@ export default function DailyCheckIn() {
         toast.custom(
           () => (
             <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-4 flex items-start gap-3 max-w-sm">
-              <div className={`text-3xl ${isMilestone ? 'animate-heart-beat' : ''}`}>
-                {isMilestone ? '🏆' : '🔥'}
+              <div className={isMilestone ? 'animate-heart-beat' : ''}>
+                {isMilestone
+                  ? <Trophy size={28} className="text-accent-500" aria-hidden />
+                  : <Flame size={28} className="text-primary-600" aria-hidden />}
               </div>
               <div className="flex-1">
                 <p className="font-semibold text-ink-900">
