@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyCity — Design System (deck)</title>
+<link rel="stylesheet" href="../styles.css">
+<style>
+  :root { --slideW: 1920px; --slideH: 1080px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #14110f; overflow: hidden; }
+  .stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  .deck { width: var(--slideW); height: var(--slideH); position: relative; transform-origin: center center; }
+
+  .slide { position: absolute; inset: 0; width: var(--slideW); height: var(--slideH); display: none; flex-direction: column; overflow: hidden; background: var(--cream-100); padding: 96px 110px; }
+  .slide.active { display: flex; }
+
+  .eyebrow { display: inline-flex; align-items: center; gap: 12px; font-family: var(--font-sans); font-size: 24px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary-700); }
+  h1 { font-family: var(--font-serif); font-weight: 800; color: var(--ink-900); letter-spacing: -0.01em; line-height: 1.02; margin: 0; }
+  h2 { font-family: var(--font-serif); font-weight: 800; color: var(--ink-900); letter-spacing: -0.01em; line-height: 1.05; margin: 0; font-size: 76px; }
+  p { font-family: var(--font-sans); color: var(--ink-700); margin: 0; }
+  .lead { font-size: 34px; line-height: 1.5; color: var(--ink-600); }
+
+  /* slide number + footer */
+  .foot { position: absolute; bottom: 48px; left: 110px; right: 110px; display: flex; align-items: center; justify-content: space-between; font-family: var(--font-sans); font-size: 22px; color: var(--ink-400); }
+  .foot .wm { font-family: var(--font-serif); font-weight: 800; }
+  .foot .wm i { color: var(--accent-500); font-style: normal; }
+
+  /* nav (hidden in export) */
+  .nav { position: fixed; bottom: 28px; right: 36px; display: flex; gap: 10px; z-index: 50; }
+  .nav button { width: 52px; height: 52px; border-radius: 999px; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 22px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .nav button:hover { background: rgba(255,255,255,.28); }
+
+  /* ---- cover ---- */
+  .cover { background: linear-gradient(160deg, #FEFCF8, var(--cream-200)); align-items: flex-start; justify-content: center; }
+  .cover .blob { position: absolute; border-radius: 50%; filter: blur(90px); }
+  .cover .wordmark { font-family: var(--font-serif); font-weight: 800; font-size: 188px; line-height: 1; letter-spacing: -4px; }
+  .cover .wordmark .my { color: var(--accent-500); }
+  .cover .wordmark .city { color: var(--ink-900); }
+
+  .chips { display: flex; gap: 0; border-radius: 20px; overflow: hidden; box-shadow: var(--shadow-warm); }
+  .chips .c { width: 150px; height: 92px; }
+
+  /* color rows */
+  .ramp { display: grid; grid-template-columns: 200px 1fr; align-items: center; gap: 28px; margin-bottom: 22px; }
+  .ramp .lbl { font-family: var(--font-sans); font-weight: 700; font-size: 26px; color: var(--ink-800); }
+  .ramp .lbl small { display: block; font-family: var(--font-mono); font-weight: 400; font-size: 18px; color: var(--ink-400); }
+  .ramp .stops { display: grid; grid-template-columns: repeat(7, 1fr); border-radius: 14px; overflow: hidden; box-shadow: var(--shadow-warm-sm); }
+  .ramp .stops .s { height: 76px; }
+
+  /* type specimen */
+  .typegrid { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; flex: 1; align-content: center; }
+  .spec { background: #fff; border: 1px solid var(--cream-300); border-radius: 28px; padding: 48px; box-shadow: var(--shadow-warm-sm); }
+  .spec .tag { font-family: var(--font-sans); font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-400); margin-bottom: 22px; }
+  .spec .big-serif { font-family: var(--font-serif); font-weight: 800; font-size: 92px; line-height: 1; color: var(--ink-900); letter-spacing: -0.01em; }
+  .spec .big-sans { font-family: var(--font-sans); font-weight: 800; font-size: 80px; line-height: 1; color: var(--ink-900); }
+  .spec .meta { font-family: var(--font-mono); font-size: 22px; color: var(--ink-500); margin-top: 28px; }
+
+  /* components */
+  .compwrap { display: flex; flex-direction: column; gap: 34px; flex: 1; justify-content: center; }
+  .complabel { font-family: var(--font-sans); font-size: 22px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-400); margin-bottom: 16px; }
+  .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  .btn { font-family: var(--font-sans); font-weight: 600; font-size: 26px; padding: 18px 30px; border-radius: 14px; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 10px; }
+  .btn.primary { background: var(--primary-700); color: #fff; }
+  .btn.accent { background: var(--accent-400); color: var(--ink-900); }
+  .btn.secondary { background: #fff; color: var(--ink-900); border-color: var(--cream-300); }
+  .btn.ghost { background: transparent; color: var(--primary-700); }
+  .badge { font-family: var(--font-sans); font-weight: 600; font-size: 22px; padding: 8px 16px; border-radius: 10px; }
+  .pill { font-family: var(--font-sans); font-weight: 600; font-size: 22px; padding: 8px 20px; border-radius: 999px; box-shadow: inset 0 0 0 2px currentColor; display: inline-flex; align-items: center; gap: 8px; }
+  .pill .dot { width: 12px; height: 12px; border-radius: 50%; background: currentColor; }
+  .ccard { background: #fff; border: 1px solid var(--cream-300); border-radius: 20px; padding: 28px 32px; box-shadow: var(--shadow-warm); width: 360px; }
+  .ccard h4 { font-family: var(--font-serif); font-size: 30px; font-weight: 700; color: var(--ink-900); margin: 0 0 8px; }
+  .ccard p { font-size: 22px; color: var(--ink-500); }
+
+  /* surfaces 2x2 */
+  .surfaces { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; flex: 1; align-content: center; }
+  .surf { background: #fff; border: 1px solid var(--cream-300); border-radius: 28px; padding: 44px 48px; box-shadow: var(--shadow-warm-sm); display: flex; gap: 28px; align-items: flex-start; }
+  .surf .ic { width: 88px; height: 88px; border-radius: 22px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .surf h3 { font-family: var(--font-serif); font-size: 40px; font-weight: 800; color: var(--ink-900); margin: 0 0 8px; }
+  .surf p { font-size: 25px; line-height: 1.45; color: var(--ink-600); }
+  .surf .tag { display: inline-block; margin-top: 14px; font-family: var(--font-sans); font-size: 19px; font-weight: 700; color: var(--ink-400); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* principles */
+  .prin { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px 56px; flex: 1; align-content: center; }
+  .prin .item { display: flex; gap: 26px; align-items: flex-start; }
+  .prin .ic { width: 80px; height: 80px; border-radius: 999px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .prin h3 { font-family: var(--font-serif); font-size: 36px; font-weight: 700; color: var(--ink-900); margin: 0 0 6px; }
+  .prin p { font-size: 24px; line-height: 1.4; color: var(--ink-600); }
+
+  /* closing */
+  .closing { background: var(--ink-900); }
+  .closing h1 { color: #fff; }
+  .closing .lead { color: rgba(255,255,255,.72); }
+  .closing .eyebrow { color: var(--accent-300); }
+  .closing .foot { color: rgba(255,255,255,.5); }
+  .closing .ref { font-family: var(--font-mono); font-size: 24px; color: var(--accent-300); }
+
+  .icoSvg { width: 40px; height: 40px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="deck" id="deck">
+
+    <!-- 1 · COVER -->
+    <section class="slide cover active" data-screen-label="01">
+      <div class="blob" style="width:620px;height:620px;top:-160px;right:-120px;background:rgba(245,197,182,.55)"></div>
+      <div class="blob" style="width:520px;height:520px;bottom:-160px;left:-100px;background:rgba(251,216,145,.5)"></div>
+      <div style="position:relative;margin-top:40px">
+        <span class="eyebrow">Design System · Mediterranean Modern</span>
+        <div class="wordmark" style="margin:34px 0 10px"><span class="my">My</span><span class="city">City</span></div>
+        <p class="lead" style="max-width:24ch">Il sistema di design del marketplace dei negozi di Piacenza.</p>
+      </div>
+      <div class="foot"><span class="wm"><i>My</i>City</span><span>Piacenza · 2026</span></div>
+    </section>
+
+    <!-- 2 · IDEA -->
+    <section class="slide" data-screen-label="02">
+      <span class="eyebrow">Il marchio</span>
+      <h2 style="margin-top:24px;max-width:22ch">Caldo, locale, autentico.<br>Non l'ennesimo blu da SaaS.</h2>
+      <p class="lead" style="margin-top:28px;max-width:40ch">La palette nasce dalla cucina e dal mercato italiano: il cotto dei tetti, l'intonaco color crema, la mostarda, il verde dei colli, l'inchiostro tipografico.</p>
+      <div class="chips" style="margin-top:56px">
+        <div class="c" style="background:var(--primary-600)"></div>
+        <div class="c" style="background:var(--accent-500)"></div>
+        <div class="c" style="background:var(--olive-600)"></div>
+        <div class="c" style="background:var(--secondary-600)"></div>
+        <div class="c" style="background:var(--cream-200)"></div>
+        <div class="c" style="background:var(--ink-900)"></div>
+      </div>
+      <div class="foot"><span class="wm"><i>My</i>City</span><span>02</span></div>
+    </section>
+
+    <!-- 3 · COLORE -->
+    <section class="slide" data-screen-label="03">
+      <span class="eyebrow">Foundation · Colore</span>
+      <h2 style="margin:24px 0 48px">Una palette, tre tier</h2>
+      <div>
+        <div class="ramp"><div class="lbl">Terracotta<small>primary · #C0492C</small></div><div class="stops"><div class="s" style="background:var(--primary-100)"></div><div class="s" style="background:var(--primary-300)"></div><div class="s" style="background:var(--primary-500)"></div><div class="s" style="background:var(--primary-600)"></div><div class="s" style="background:var(--primary-700)"></div><div class="s" style="background:var(--primary-800)"></div><div class="s" style="background:var(--primary-900)"></div></div></div>
+        <div class="ramp"><div class="lbl">Mostarda<small>accent · #E8A33D</small></div><div class="stops"><div class="s" style="background:var(--accent-100)"></div><div class="s" style="background:var(--accent-200)"></div><div class="s" style="background:var(--accent-300)"></div><div class="s" style="background:var(--accent-500)"></div><div class="s" style="background:var(--accent-600)"></div><div class="s" style="background:var(--accent-700)"></div><div class="s" style="background:var(--accent-900)"></div></div></div>
+        <div class="ramp"><div class="lbl">Oliva<small>success · #5A7C42</small></div><div class="stops"><div class="s" style="background:var(--olive-100)"></div><div class="s" style="background:var(--olive-300)"></div><div class="s" style="background:var(--olive-500)"></div><div class="s" style="background:var(--olive-600)"></div><div class="s" style="background:var(--olive-700)"></div><div class="s" style="background:var(--olive-800)"></div><div class="s" style="background:var(--olive-900)"></div></div></div>
+        <div class="ramp"><div class="lbl">Vino<small>secondary · #B82A28</small></div><div class="stops"><div class="s" style="background:var(--secondary-100)"></div><div class="s" style="background:var(--secondary-300)"></div><div class="s" style="background:var(--secondary-500)"></div><div class="s" style="background:var(--secondary-600)"></div><div class="s" style="background:var(--secondary-700)"></div><div class="s" style="background:var(--secondary-800)"></div><div class="s" style="background:var(--secondary-900)"></div></div></div>
+        <div class="ramp"><div class="lbl">Inchiostro<small>testo · #1C1A18</small></div><div class="stops"><div class="s" style="background:var(--ink-100)"></div><div class="s" style="background:var(--ink-300)"></div><div class="s" style="background:var(--ink-500)"></div><div class="s" style="background:var(--ink-600)"></div><div class="s" style="background:var(--ink-700)"></div><div class="s" style="background:var(--ink-800)"></div><div class="s" style="background:var(--ink-900)"></div></div></div>
+      </div>
+      <div class="foot"><span class="wm"><i>My</i>City</span><span>03</span></div>
+    </section>
+
+    <!-- 4 · TIPOGRAFIA -->
+    <section class="slide" data-screen-label="04">
+      <span class="eyebrow">Foundation · Tipografia</span>
+      <h2 style="margin:24px 0 8px">Fraunces + Inter</h2>
+      <div class="typegrid">
+        <div class="spec">
+          <div class="tag">Display · Fraunces</div>
+          <div class="big-serif">Piacenza,<br>oggi a casa.</div>
+          <div class="meta">Serif editoriale · h1–h3, hero, prezzi · 400–800</div>
+        </div>
+        <div class="spec">
+          <div class="tag">UI / Body · Inter</div>
+          <div class="big-sans">Paghi alla<br>consegna</div>
+          <div class="meta">Testo, label, bottoni, dati · 400–800 · 16px base</div>
+        </div>
+      </div>
+      <div class="foot"><span class="wm"><i>My</i>City</span><span>04</span></div>
+    </section>
+
+    <!-- 5 · COMPONENTI -->
+    <section class="slide" data-screen-label="05">
+      <span class="eyebrow">Componenti</span>
+      <h2 style="margin:24px 0 40px">Primitive riusabili</h2>
+      <div class="compwrap">
+        <div>
+          <div class="complabel">Button</div>
+          <div class="row">
+            <span class="btn primary">Esplora</span>
+            <span class="btn accent">Aggiungi al carrello</span>
+            <span class="btn secondary">Negozi</span>
+            <span class="btn ghost">Salta</span>
+          </div>
+        </div>
+        <div>
+          <div class="complabel">Badge &amp; stati ordine</div>
+          <div class="row">
+            <span class="badge" style="background:var(--secondary-600);color:#fff">-30%</span>
+            <span class="badge" style="background:var(--olive-600);color:#fff">NUOVO</span>
+            <span class="badge" style="background:var(--accent-500);color:var(--ink-900)">Solo oggi</span>
+            <span class="pill" style="color:var(--status-delivery);background:#FAF5FF"><span class="dot"></span>In consegna</span>
+            <span class="pill" style="color:var(--status-delivered);background:#ECFDF5"><span class="dot"></span>Consegnato</span>
+          </div>
+        </div>
+        <div>
+          <div class="complabel">Card</div>
+          <div class="row">
+            <div class="ccard"><h4>Salumeria Verdi</h4><p>★ 4,9 · 214 recensioni · Centro storico</p></div>
+            <div class="ccard" style="background:var(--cream-50)"><h4>Superficie crema</h4><p>Ombra calda terracotta, bordo crema</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="foot"><span class="wm"><i>My</i>City</span><span>05</span></div>
+    </section>
+
+    <!-- 6 · SUPERFICI -->
+    <section class="slide" data-screen-label="06">
+      <span class="eyebrow">UI Kit · Le quattro superfici</span>
+      <h2 style="margin:24px 0 36px">Un prodotto, quattro lati</h2>
+      <div class="surfaces">
+        <div class="surf">
+          <span class="ic" style="background:var(--primary-100);color:var(--primary-700)"><svg class="icoSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/></svg></span>
+          <div><h3>Buyer</h3><p>Marketplace: home, ricerca con filtri, negozio, prodotto, carrello, checkout, tracking.</p><span class="tag">Marketplace</span></div>
+        </div>
+        <div class="surf">
+          <span class="ic" style="background:var(--accent-100);color:var(--accent-700)"><svg class="icoSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M9 21V9"/></svg></span>
+          <div><h3>Seller</h3><p>Console: dashboard, ordini, prodotti, promozioni, analisi, guadagni con pagamento alla consegna.</p><span class="tag">Console</span></div>
+        </div>
+        <div class="surf">
+          <span class="ic" style="background:var(--olive-100);color:var(--olive-700)"><svg class="icoSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg></span>
+          <div><h3>Rider</h3><p>App mobile: consegne, toggle online, flusso consegna live a 4 stati, guadagni, turni.</p><span class="tag">App mobile</span></div>
+        </div>
+        <div class="surf">
+          <span class="ic" style="background:var(--secondary-100);color:var(--secondary-600)"><svg class="icoSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5M16 13H8M16 17H8M10 9H8"/></svg></span>
+          <div><h3>Pagine</h3><p>Marketing e legale: chi siamo, come funziona, FAQ, contatti, note legali.</p><span class="tag">Static</span></div>
+        </div>
+      </div>
+      <div class="foot"><span class="wm"><i>My</i>City</span><span>06</span></div>
+    </section>
+
+    <!-- 7 · PRINCIPI -->
+    <section class="slide" data-screen-label="07">
+      <span class="eyebrow">Principi di brand</span>
+      <h2 style="margin:24px 0 44px">Cosa rende MyCity, MyCity</h2>
+      <div class="prin">
+        <div class="item"><span class="ic" style="background:var(--olive-100);color:var(--olive-700)"><svg class="icoSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg></span><div><h3>Paghi alla consegna</h3><p>Niente carta obbligatoria. L'account serve solo a confermare.</p></div></div>
+        <div class="item"><span class="ic" style="background:var(--primary-100);color:var(--primary-700)"><svg class="icoSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></span><div><h3>Solo negozi locali</h3><p>Commercianti verificati di Piacenza, non magazzini anonimi.</p></div></div>
+        <div class="item"><span class="ic" style="background:var(--accent-100);color:var(--accent-700)"><svg class="icoSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg></span><div><h3>Consegna in 24–48h</h3><p>Rider del territorio, percorsi brevi, spesso in giornata.</p></div></div>
+        <div class="item"><span class="ic" style="background:var(--secondary-100);color:var(--secondary-600)"><svg class="icoSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4"/></svg></span><div><h3>Icone Lucide, zero emoji</h3><p>Un solo set di icone, stroke 2–2.4. Coerenza prima di tutto.</p></div></div>
+      </div>
+      <div class="foot"><span class="wm"><i>My</i>City</span><span>07</span></div>
+    </section>
+
+    <!-- 8 · CHIUSURA -->
+    <section class="slide closing" data-screen-label="08">
+      <div style="margin-top:60px">
+        <span class="eyebrow">Pronto all'uso</span>
+        <h1 style="font-size:104px;margin:34px 0 26px;max-width:18ch">Token, componenti<br>e 4 superfici complete.</h1>
+        <p class="lead" style="max-width:46ch">Un unico sistema — colore, tipografia, spaziatura, componenti React e UI kit interattivi — per progettare con il brand MyCity in modo coerente.</p>
+        <p class="ref" style="margin-top:48px">github.com/NicolaeRotaru/mycity · styles.css · readme.md</p>
+      </div>
+      <div class="foot"><span class="wm"><i>My</i>City</span><span>Piacenza · 2026</span></div>
+    </section>
+
+  </div>
+</div>
+
+<div class="nav" data-noncommentable>
+  <button onclick="goToSlide(__i-1)" aria-label="Precedente">‹</button>
+  <button onclick="goToSlide(__i+1)" aria-label="Successiva">›</button>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let __i = 0;
+  function goToSlide(n) {
+    __i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => s.classList.toggle('active', k === __i));
+  }
+  window.goToSlide = goToSlide;
+  // restore position
+  try { const saved = +localStorage.getItem('mc-deck-i'); if (!isNaN(saved)) goToSlide(saved); } catch (e) {}
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') goToSlide(__i + 1);
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') goToSlide(__i - 1);
+  });
+  const _g = goToSlide; goToSlide = function(n){ _g(n); try { localStorage.setItem('mc-deck-i', __i); } catch(e){} window.__i = __i; };
+  window.goToSlide = goToSlide;
+
+  function fit() {
+    const sx = window.innerWidth / 1920, sy = window.innerHeight / 1080;
+    document.getElementById('deck').style.transform = 'scale(' + Math.min(sx, sy) + ')';
+  }
+  window.addEventListener('resize', fit); fit();
+</script>
+</body>
+</html>

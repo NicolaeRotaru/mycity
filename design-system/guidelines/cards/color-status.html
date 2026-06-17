@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x130" name="Order status" subtitle="8 stati ordine — pill tinta + ring, icona Lucide" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 18px; background: var(--cream-100); font-family: var(--font-body); }
+  .wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: var(--radius-full); font-size: 13px; font-weight: 600; box-shadow: inset 0 0 0 1px currentColor; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <span class="pill" style="color:var(--status-new); background:#FFFBEB"><span class="dot"></span>In attesa</span>
+    <span class="pill" style="color:var(--status-accepted); background:#EFF6FF"><span class="dot"></span>In preparazione</span>
+    <span class="pill" style="color:var(--status-ready); background:#F5F3FF"><span class="dot"></span>Pronto</span>
+    <span class="pill" style="color:var(--status-assigned); background:#EEF2FF"><span class="dot"></span>Rider in arrivo</span>
+    <span class="pill" style="color:var(--status-pickedup); background:#ECFEFF"><span class="dot"></span>Ritirato</span>
+    <span class="pill" style="color:var(--status-delivery); background:#FAF5FF"><span class="dot"></span>In consegna</span>
+    <span class="pill" style="color:var(--status-delivered); background:#ECFDF5"><span class="dot"></span>Consegnato</span>
+    <span class="pill" style="color:var(--status-canceled); background:#FFF1F2"><span class="dot"></span>Annullato</span>
+  </div>
+</body>
+</html>

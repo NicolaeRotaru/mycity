@@ -1,0 +1,24 @@
+<!-- @dsCard group="Type" viewport="700x290" name="Body & UI · Inter" subtitle="Testo, label, eyebrow, micro-badge" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--cream-100); font-family: var(--font-sans); color: var(--ink-800); }
+  .line { display: flex; align-items: baseline; gap: 16px; padding: 6px 0; }
+  .tag { font-family: var(--font-mono); font-size: 11px; color: var(--ink-400); white-space: nowrap; margin-left: auto; }
+  .eyebrow { display:inline-flex; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--primary-700); }
+  .badge { display:inline-flex; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; background: var(--secondary-600); color:#fff; padding: 2px 6px; border-radius: var(--radius-sm); }
+</style>
+</head>
+<body>
+  <div class="line"><span style="font-size:20px;font-weight:700">Titolo card · 20 / 700</span><span class="tag">xl semibold</span></div>
+  <div class="line"><span style="font-size:18px;font-weight:600">Sottotitolo di sezione · 18</span><span class="tag">lg semibold</span></div>
+  <div class="line"><span style="font-size:16px;font-weight:400">Corpo del testo a 16px — la dimensione base evita lo zoom automatico su iOS e tiene la lettura comoda.</span><span class="tag">base</span></div>
+  <div class="line"><span style="font-size:14px;color:var(--ink-500)">Testo secondario / meta a 14px</span><span class="tag">sm</span></div>
+  <div class="line"><span style="font-size:12px;color:var(--ink-500)">Caption · 12px</span><span class="tag">xs</span></div>
+  <div class="line"><span class="eyebrow">I più amati</span><span class="tag">eyebrow · uppercase</span></div>
+  <div class="line"><span class="badge">-30%</span><span class="tag">micro-badge · 2xs</span></div>
+</body>
+</html>

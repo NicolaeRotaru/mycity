@@ -1,0 +1,32 @@
+<!-- @dsCard group="Type" viewport="700x180" name="Type families" subtitle="Fraunces (display) + Inter (UI/body)" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--cream-100); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+  .spec { background: var(--surface-0); border: 1px solid var(--cream-300); border-radius: var(--radius-xl); padding: 18px 20px; box-shadow: var(--shadow-warm-sm); }
+  .name { font-family: var(--font-body); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--ink-500); margin-bottom: 8px; }
+  .serif { font-family: var(--font-serif); font-size: 46px; font-weight: 700; line-height: 1; color: var(--ink-900); letter-spacing: -0.01em; }
+  .sans { font-family: var(--font-sans); font-size: 40px; font-weight: 700; line-height: 1; color: var(--ink-900); }
+  .meta { font-family: var(--font-body); font-size: 12px; color: var(--ink-500); margin-top: 12px; }
+  .meta code { font-family: var(--font-mono); color: var(--ink-700); }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="spec">
+      <div class="name">Display · Fraunces</div>
+      <div class="serif">Piacenza, oggi a casa.</div>
+      <div class="meta"><code>--font-serif</code> · h1–h3, hero, prezzi editoriali · 400–800</div>
+    </div>
+    <div class="spec">
+      <div class="name">UI / Body · Inter</div>
+      <div class="sans">Paghi alla consegna</div>
+      <div class="meta"><code>--font-sans</code> · testo, label, bottoni, dati · 400–800</div>
+    </div>
+  </div>
+</body>
+</html>

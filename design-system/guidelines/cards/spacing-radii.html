@@ -1,0 +1,26 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Radii" subtitle="Angoli morbidi, artigianali — sm → full" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--cream-100); font-family: var(--font-body); }
+  .row { display: flex; gap: 16px; }
+  .item { text-align: center; }
+  .box { width: 70px; height: 64px; background: var(--surface-0); border: 2px solid var(--primary-400); }
+  .n { font-family: var(--font-mono); font-size: 11px; color: var(--ink-600); margin-top: 8px; font-weight: 700; }
+  .px { font-family: var(--font-mono); font-size: 9px; color: var(--ink-400); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="border-radius:var(--radius-sm)"></div><div class="n">sm</div><div class="px">6px</div></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-md)"></div><div class="n">md</div><div class="px">8px · default</div></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-lg)"></div><div class="n">lg</div><div class="px">12px</div></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-xl)"></div><div class="n">xl</div><div class="px">16px</div></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-2xl)"></div><div class="n">2xl</div><div class="px">20px · card</div></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-full)"></div><div class="n">full</div><div class="px">pill</div></div>
+  </div>
+</body>
+</html>

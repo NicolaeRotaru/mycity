@@ -1,0 +1,42 @@
+<!-- @dsCard group="Colors" viewport="700x170" name="Neutrals · Cream & Surface" subtitle="Sfondo crema (funnel scoperta) vs surface neutro (funnel acquisto)" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 18px; background: var(--cream-100); font-family: var(--font-body); }
+  .row { display: grid; gap: 14px; }
+  .label { font-size: 11px; font-weight: 700; color: var(--ink-500); text-transform: uppercase; letter-spacing: var(--tracking-wide); margin-bottom: 6px; }
+  .ramp { display: grid; gap: 0; border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--cream-300); }
+  .ramp.cream { grid-template-columns: repeat(6, 1fr); }
+  .ramp.surface { grid-template-columns: repeat(5, 1fr); }
+  .sw { height: 56px; display: flex; align-items: flex-end; padding: 6px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--ink-700); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div>
+      <div class="label">Cream / sand · intonaco, pane, lino</div>
+      <div class="ramp cream">
+        <div class="sw" style="background:var(--cream-50)">50</div>
+        <div class="sw" style="background:var(--cream-100)">100</div>
+        <div class="sw" style="background:var(--cream-200)">200</div>
+        <div class="sw" style="background:var(--cream-300)">300</div>
+        <div class="sw" style="background:var(--cream-400)">400</div>
+        <div class="sw" style="background:var(--cream-500)">500</div>
+      </div>
+    </div>
+    <div>
+      <div class="label">Surface · neutri caldi (le foto risaltano)</div>
+      <div class="ramp surface">
+        <div class="sw" style="background:var(--surface-0)">0</div>
+        <div class="sw" style="background:var(--surface-50)">50</div>
+        <div class="sw" style="background:var(--surface-100)">100</div>
+        <div class="sw" style="background:var(--surface-200)">200</div>
+        <div class="sw" style="background:var(--surface-300)">300</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

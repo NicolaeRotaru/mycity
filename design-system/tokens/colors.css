@@ -1,0 +1,125 @@
+/* ============================================================================
+ * MyCity — Color tokens · "Mediterranean Modern"
+ * Palette ispirata alla cucina/mercato italiano di Piacenza:
+ *   terracotta (primary), mustard (accent), olive (success), cream (sfondo),
+ *   surface (neutri caldi), ink (testo), secondary (vino/burgundy).
+ * Two tiers: (1) raw palette ramps  (2) semantic aliases.
+ * ========================================================================== */
+
+:root {
+  /* ---- Primary · terracotta (tegole, cotto, portici) -------------------- */
+  --primary-50:  #FDF4F1;
+  --primary-100: #FAE3DC;
+  --primary-200: #F5C5B6;
+  --primary-300: #EE9F86;
+  --primary-400: #E47A5A;
+  --primary-500: #D55F3F;
+  --primary-600: #C0492C;  /* brand */
+  --primary-700: #A03B25;
+  --primary-800: #7F2F1F;
+  --primary-900: #5C211A;
+  --primary-950: #321009;
+
+  /* ---- Accent · mustard / zafferano (CTA energetiche, badge) ------------ */
+  --accent-50:  #FEF8EC;
+  --accent-100: #FDECC8;
+  --accent-200: #FBD891;
+  --accent-300: #F4BC53;
+  --accent-400: #EFA830;
+  --accent-500: #E8A33D;  /* brand */
+  --accent-600: #C4801F;
+  --accent-700: #9D621C;
+  --accent-800: #7F4F1E;
+  --accent-900: #69411C;
+
+  /* ---- Olive · verde colli piacentini (success, "fresco") --------------- */
+  --olive-50:  #F6F8F1;
+  --olive-100: #E9EEDE;
+  --olive-200: #D3DCBE;
+  --olive-300: #B0C195;
+  --olive-400: #8FA672;
+  --olive-500: #7C8B5A;
+  --olive-600: #5A7C42;  /* success brand */
+  --olive-700: #456236;
+  --olive-800: #384E2C;
+  --olive-900: #2E4127;
+
+  /* ---- Cream / sand (intonaco, pane, lino — page background) ------------ */
+  --cream-50:  #FEFCF8;
+  --cream-100: #FBF7F0;  /* page background */
+  --cream-200: #F5EDD9;
+  --cream-300: #EEDFBA;
+  --cream-400: #E6CC95;
+  --cream-500: #D9B36F;
+
+  /* ---- Surface · neutri caldissimi per il funnel d'acquisto ------------- */
+  --surface-0:   #FFFFFF;
+  --surface-50:  #FAFAF9;
+  --surface-100: #F5F5F4;
+  --surface-200: #EAE8E4;
+  --surface-300: #D9D6D1;
+
+  /* ---- Ink · charcoal / inchiostro tipografico (testo) ------------------ */
+  --ink-50:  #F5F5F4;
+  --ink-100: #E7E5E4;
+  --ink-200: #D6D3D1;
+  --ink-300: #A8A29E;
+  --ink-400: #78716C;
+  --ink-500: #57534E;
+  --ink-600: #44403C;
+  --ink-700: #3C3835;
+  --ink-800: #2C2A28;  /* body text */
+  --ink-900: #1C1A18;  /* headlines */
+
+  /* ---- Secondary · vino / burgundy (sister del terracotta) -------------- */
+  --secondary-50:  #FDF2F2;
+  --secondary-100: #FCE0E0;
+  --secondary-200: #F8C0BF;
+  --secondary-300: #F09593;
+  --secondary-400: #E66663;
+  --secondary-500: #D63E3B;
+  --secondary-600: #B82A28;  /* brand */
+  --secondary-700: #962220;
+  --secondary-800: #7A1F1D;
+  --secondary-900: #651C1A;
+
+  /* ======================================================================
+   * Semantic aliases — 3-tier token system. Dark mode / re-skin = cambiare
+   * SOLO questi, senza toccare i componenti.
+   * ==================================================================== */
+  --color-cta:              var(--primary-700);
+  --color-cta-hover:        var(--primary-800);
+  --color-accent:           var(--accent-500);
+  --color-accent-hover:     var(--accent-400);
+
+  --surface:                var(--surface-0);
+  --surface-elevated:       var(--surface-0);
+  --surface-muted:          var(--cream-100);
+  --surface-page:           var(--cream-100);
+
+  --text-primary:           var(--ink-800);
+  --text-heading:           var(--ink-900);
+  --text-secondary:         var(--ink-500);
+  --text-disabled:          var(--ink-300);
+  --text-on-primary:        #FFFFFF;
+
+  --border:                 var(--cream-300);
+  --border-strong:          var(--cream-500);
+  --border-neutral:         var(--surface-200);
+
+  --success:                var(--olive-600);
+  --warning:                var(--accent-500);
+  --danger:                 #DC2626;  /* rose-600 */
+  --info:                   var(--primary-700);
+
+  /* Status palette per gli stati ordine (NEW → DELIVERED). Tinte tenui
+   * Tailwind, usate con ring + testo scuro nei badge di stato. */
+  --status-new:        #B45309;  /* amber-700  */
+  --status-accepted:   #1D4ED8;  /* blue-700   */
+  --status-ready:      #6D28D9;  /* violet-700 */
+  --status-assigned:   #4338CA;  /* indigo-700 */
+  --status-pickedup:   #0E7490;  /* cyan-700   */
+  --status-delivery:   #7E22CE;  /* purple-700 */
+  --status-delivered:  #047857;  /* emerald-700*/
+  --status-canceled:   #BE123C;  /* rose-700   */
+}

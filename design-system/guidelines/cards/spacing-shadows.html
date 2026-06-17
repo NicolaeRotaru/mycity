@@ -1,0 +1,26 @@
+<!-- @dsCard group="Spacing" viewport="700x190" name="Shadows" subtitle="Warm (su crema) vs neutre (su bianco)" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 24px; background: var(--cream-100); font-family: var(--font-body); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px 18px; }
+  .item { text-align: center; }
+  .box { height: 56px; background: var(--surface-0); border-radius: var(--radius-lg); }
+  .n { font-family: var(--font-mono); font-size: 11px; color: var(--ink-600); margin-top: 12px; font-weight: 700; }
+  .lbl { font-size: 10px; color: var(--ink-400); }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-warm-sm)"></div><div class="n">warm-sm</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-warm)"></div><div class="n">warm</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-warm-lg)"></div><div class="n">warm-lg</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-warm-xl)"></div><div class="n">warm-xl</div><div class="lbl">modal / FAB</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-sm)"></div><div class="n">sm (neutral)</div></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-card)"></div><div class="n">card (neutral)</div><div class="lbl">su canvas bianco</div></div>
+  </div>
+</body>
+</html>

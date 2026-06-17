@@ -1,0 +1,57 @@
+<!-- @dsCard group="Components" viewport="700x380" name="Feedback · Modal · EmptyState" subtitle="Dialog + zero-state placeholders" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 22px; background: var(--cream-100); font-family: var(--font-sans); }
+  #root { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; }
+  .panel { background: var(--surface-0); border: 1px solid var(--cream-300); border-radius: var(--radius-xl); overflow: hidden; box-shadow: var(--shadow-warm); }
+  .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--ink-500); margin-bottom: 10px; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel">
+    const { Modal, EmptyState, Button } = window.MyCityDesignSystem_105480;
+    function Demo() {
+      const [open, setOpen] = React.useState(false);
+      return (
+        <>
+          <div>
+            <div className="lbl">EmptyState</div>
+            <div className="panel">
+              <EmptyState icon="shopping-cart" title="Il carrello è vuoto"
+                description="Aggiungi prodotti dai negozi di Piacenza per iniziare."
+                action={<Button variant="primary" icon="store">Esplora i negozi</Button>} />
+            </div>
+          </div>
+          <div>
+            <div className="lbl">Modal</div>
+            <div className="panel" style={{ padding: '20px' }}>
+              <Button variant="accent" onClick={() => setOpen(true)}>Apri conferma ordine</Button>
+              <Modal open={open} onClose={() => setOpen(false)}
+                title="Conferma ordine" description="Paghi alla consegna"
+                footer={<>
+                  <Button variant="secondary" onClick={() => setOpen(false)}>Annulla</Button>
+                  <Button variant="primary" onClick={() => setOpen(false)}>Conferma ordine</Button>
+                </>}>
+                <p style={{ margin: 0, color: 'var(--ink-700)', lineHeight: 1.5 }}>
+                  Il rider arriva in 24–48h. Tieni pronti <strong>€18,90</strong> in contanti alla consegna.
+                </p>
+              </Modal>
+            </div>
+          </div>
+        </>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+  </script>
+</body>
+</html>
