@@ -173,6 +173,7 @@ const Footer = () => {
           <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Azienda</h3>
           <ul className="space-y-2 text-sm">
             <li><Link href="/about" className="hover:text-white transition-colors">Chi siamo</Link></li>
+            <li><Link href="/come-funziona" className="hover:text-white transition-colors">Come funziona</Link></li>
             {!isSellerArea && (
               <li><Link href="/sell" className="hover:text-white transition-colors">Vendi su MyCity</Link></li>
             )}

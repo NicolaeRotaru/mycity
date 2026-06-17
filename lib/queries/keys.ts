@@ -196,6 +196,8 @@ export const queryKeys = {
     profile:                 ['rider', 'profile'] as const,
     history:                 ['rider', 'history'] as const,
     reviews:                 ['rider', 'reviews'] as const,
+    ratingSummary:           ['rider', 'rating-summary'] as const,
+    todayStats:              ['rider', 'today-stats'] as const,
   },
 
   groups: {

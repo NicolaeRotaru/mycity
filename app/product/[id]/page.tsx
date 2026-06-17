@@ -18,6 +18,7 @@ import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition 
 import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
 import { isExpressEligible } from '@/lib/products/express';
 import { loadProductVariants } from '@/lib/products/persistVariants';
+import { deriveQualityMarks } from '@/lib/products/qualityMarks';
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
 import ContactSellerButton from '@/components/ContactSellerButton';
@@ -32,6 +33,7 @@ import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
+import { QualityMarks } from '@/components/ui/QualityMarks';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
 import { useExternalProduct } from '@/components/hooks/useExternalProduct';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
@@ -229,6 +231,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const isOutOfStock = stock === 0;
   const canAdd = !isOutOfStock && !needsVariantChoice;
 
+  // Marchi di qualità (DOP/DOC/IGP/Bio/Vegano…) derivati da tag + attributi.
+  const qualityMarks = deriveQualityMarks(product);
+
+  // Quantità legata allo stock: cap derivato (niente nuovo hook dopo gli early
+  // return). `qty` è il valore mostrato/usato, sempre ≤ stock disponibile.
+  const maxQty = stock === undefined ? Infinity : Math.max(1, stock);
+  const qty = Math.min(quantity, maxQty);
+
   const sellerProfile = Array.isArray(product.profiles) ? product.profiles[0] : product.profiles;
   // Idoneità alla consegna veloce (30-60 min): override prodotto + Express del negozio.
   const expressEligible = isExpressEligible(
@@ -246,7 +256,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       name: product.name,
       price,
       image: images[0],
-      quantity,
+      quantity: qty,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
       storeName: sellerProfile?.store_name ?? undefined,
       variantId: selectedVariant?.id,
@@ -268,7 +278,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       name: product.name,
       price,
       image: images[0],
-      quantity,
+      quantity: qty,
       sellerId: product.seller_id ?? sellerProfile?.id ?? undefined,
       storeName: sellerProfile?.store_name ?? undefined,
       variantId: selectedVariant?.id,
@@ -493,6 +503,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <AddToListButton productId={id} />
           </div>
 
+          {/* Marchi di qualità: DOP/DOC/IGP/Bio/Vegano… (derivati da tag + attributi) */}
+          <QualityMarks marks={qualityMarks} />
+
           {/* Rating */}
           <div className="flex items-center gap-3 flex-wrap">
             {reviews.length > 0 ? (
@@ -544,7 +557,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <DeliveryCutoff variant="inline" available={!isOutOfStock && expressEligible} externalDeliveryLabel={external?.delivery_label} />
 
             {/* Barra spedizione gratis reattiva alla quantità — versione leggera */}
-            <FreeShippingProgress subtotal={price * quantity} />
+            <FreeShippingProgress subtotal={price * qty} />
           </div>
 
           {/* SELETTORE VARIANTI (taglie/colori) */}
@@ -658,23 +671,28 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               )}
             </p>
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-3 pt-2 flex-wrap">
               <label className="text-sm font-medium">Q.tà:</label>
               <div className="flex items-center border border-surface-300 rounded-lg">
                 <button
                   type="button"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  onClick={() => setQuantity(Math.max(1, qty - 1))}
+                  disabled={qty <= 1}
                   aria-label="Diminuisci quantità"
-                  className="w-9 h-9 hover:bg-surface-50 rounded-l-lg"
+                  className="w-9 h-9 hover:bg-surface-50 rounded-l-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >−</button>
-                <span className="w-10 text-center font-semibold">{quantity}</span>
+                <span className="w-10 text-center font-semibold">{qty}</span>
                 <button
                   type="button"
-                  onClick={() => setQuantity(quantity + 1)}
+                  onClick={() => setQuantity(Math.min(maxQty, qty + 1))}
+                  disabled={qty >= maxQty}
                   aria-label="Aumenta quantità"
-                  className="w-9 h-9 hover:bg-surface-50 rounded-r-lg"
+                  className="w-9 h-9 hover:bg-surface-50 rounded-r-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >+</button>
               </div>
+              {Number.isFinite(maxQty) && qty >= maxQty && !isOutOfStock && (
+                <span className="text-xs text-ink-500">Massimo disponibile: {maxQty}</span>
+              )}
             </div>
 
             <Button
@@ -725,6 +743,37 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             )}
           </h2>
         </div>
+
+        {/* Riepilogo voti: media + distribuzione stelle (5★→1★) */}
+        {reviews.length > 0 && (
+          <div className="bg-white border border-cream-200 rounded-xl p-5 grid gap-5 sm:grid-cols-[200px_1fr]">
+            <div className="text-center sm:border-r sm:border-cream-200">
+              <div className="text-5xl font-extrabold text-ink-900">{avgRating.toFixed(1)}</div>
+              <div className="text-accent-500 text-lg leading-none mt-1">
+                {'★'.repeat(Math.round(avgRating))}
+                <span className="text-ink-300">{'★'.repeat(5 - Math.round(avgRating))}</span>
+              </div>
+              <p className="text-sm text-ink-500 mt-1">
+                {reviews.length} {reviews.length === 1 ? 'recensione' : 'recensioni'}
+              </p>
+            </div>
+            <div className="space-y-1.5 self-center">
+              {[5, 4, 3, 2, 1].map((star) => {
+                const count = reviews.filter((r) => Math.round(Number(r.rating)) === star).length;
+                const pct = reviews.length > 0 ? (count / reviews.length) * 100 : 0;
+                return (
+                  <div key={star} className="flex items-center gap-3">
+                    <span className="w-10 shrink-0 text-right text-xs font-semibold text-ink-600">{star}★</span>
+                    <div className="flex-1 h-2 bg-cream-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-accent-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="w-8 shrink-0 text-xs text-ink-500">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Form nuova recensione */}
         <div className="bg-white border-2 border-primary-100 rounded-xl p-5">
