@@ -1,0 +1,50 @@
+<!-- @dsCard group="Components" viewport="700x460" name="Commerce · ProductCard · OrderStatusBadge" subtitle="Signature card + order flow statuses" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 22px; background: var(--cream-100); font-family: var(--font-sans); }
+  .lbl { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--ink-500); margin-bottom: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .statuses { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel">
+    const { ProductCard, OrderStatusBadge } = window.MyCityDesignSystem_105480;
+    const img = (id) => `https://images.unsplash.com/${id}?w=400&h=400&fit=crop`;
+    function Demo() {
+      return (
+        <>
+          <div className="lbl">ProductCard</div>
+          <div className="grid">
+            <ProductCard name="Coppa Piacentina DOP 200g" price={8.9} discountPercent={20} storeName="Salumeria Verdi" freeShipping image={img('photo-1528607929212-2636ec44253e')} />
+            <ProductCard name="Gutturnio dei Colli DOC 2021" price={12.5} storeName="Cantina Pace" stock={2} image={img('photo-1510812431401-41d2bd2722f3')} />
+            <ProductCard name="Pisarei e fasò freschi 500g" price={6.4} isNew storeName="Pasta Fresca Anita" image={img('photo-1551892374-ecf8754cf8b0')} />
+            <ProductCard name="Tortelli con la coda" price={9.0} storeName="Bottega Emilia" stock={0} image={img('photo-1473093295043-cdd812d0e601')} />
+          </div>
+          <div className="lbl" style={{ marginTop: '22px' }}>OrderStatusBadge · flusso ordine</div>
+          <div className="statuses">
+            <OrderStatusBadge status="NEW" />
+            <OrderStatusBadge status="ACCEPTED" />
+            <OrderStatusBadge status="READY" />
+            <OrderStatusBadge status="ASSIGNED" />
+            <OrderStatusBadge status="OUT_FOR_DELIVERY" />
+            <OrderStatusBadge status="DELIVERED" />
+            <OrderStatusBadge status="CANCELED" />
+          </div>
+        </>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+  </script>
+</body>
+</html>

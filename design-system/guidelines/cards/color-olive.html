@@ -1,0 +1,35 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Olive · Success" subtitle="Verde dei colli, stati positivi" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 18px; background: var(--cream-100); }
+  .ramp { display: grid; gap: 0; border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-warm); font-family: var(--font-mono); }
+  .sw { height: 84px; display: flex; flex-direction: column; justify-content: flex-end; padding: 7px 6px; }
+  .sw b { font-size: 11px; font-weight: 700; line-height: 1.1; }
+  .sw span { font-size: 9px; opacity: .85; }
+  .lo b, .lo span { color: var(--ink-900); }
+  .hi b, .hi span { color: #fff; }
+  .tag { display:inline-block; margin: 0 0 10px; font-family: var(--font-body); font-size: 12px; font-weight: 600; color: var(--ink-500); }
+  .tag code { font-family: var(--font-mono); color: var(--ink-700); }
+  .ramp { grid-template-columns: repeat(10, 1fr); }
+</style>
+</head>
+<body>
+  <span class="tag">--olive-* · Verde dei colli, stati positivi</span>
+  <div class="ramp">
+    <div class="sw lo" style="background:var(--olive-50)"><b>50</b></div>
+    <div class="sw lo" style="background:var(--olive-100)"><b>100</b></div>
+    <div class="sw lo" style="background:var(--olive-200)"><b>200</b></div>
+    <div class="sw lo" style="background:var(--olive-300)"><b>300</b></div>
+    <div class="sw lo" style="background:var(--olive-400)"><b>400</b></div>
+    <div class="sw hi" style="background:var(--olive-500)"><b>500</b></div>
+    <div class="sw hi" style="background:var(--olive-600)"><b>600</b><span>success</span></div>
+    <div class="sw hi" style="background:var(--olive-700)"><b>700</b></div>
+    <div class="sw hi" style="background:var(--olive-800)"><b>800</b></div>
+    <div class="sw hi" style="background:var(--olive-900)"><b>900</b></div>
+  </div>
+</body>
+</html>

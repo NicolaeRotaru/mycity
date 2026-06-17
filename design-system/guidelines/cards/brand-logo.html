@@ -1,0 +1,35 @@
+<!-- @dsCard group="Brand" viewport="700x180" name="Logo & wordmark" subtitle="Fraunces 800 · My in mostarda, City in inchiostro/bianco" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--cream-100); font-family: var(--font-body); }
+  .grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 16px; align-items: stretch; }
+  .panel { border-radius: var(--radius-xl); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-warm-sm); }
+  .light { background: var(--surface-0); border: 1px solid var(--cream-300); }
+  .dark { background: var(--primary-700); }
+  .wm { font-family: var(--font-serif); font-size: 44px; font-weight: 800; letter-spacing: -1.5px; line-height: 1; }
+  .icon { width: 96px; border-radius: 22px; background: linear-gradient(135deg, var(--primary-500), var(--primary-700)); display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-warm); }
+  .icon span { font-family: var(--font-sans); font-size: 46px; font-weight: 900; color: #fff; letter-spacing: -3px; }
+  .cap { font-size: 10px; color: var(--ink-400); text-align: center; margin-top: 6px; font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div>
+      <div class="panel light" style="height:110px"><span class="wm"><span style="color:var(--accent-500)">My</span><span style="color:var(--ink-900)">City</span></span></div>
+      <div class="cap">wordmark-light.svg</div>
+    </div>
+    <div>
+      <div class="panel dark" style="height:110px"><span class="wm"><span style="color:var(--accent-300)">My</span><span style="color:#fff">City</span></span></div>
+      <div class="cap">wordmark-ondark.svg</div>
+    </div>
+    <div>
+      <div class="icon" style="height:110px"><span>My</span></div>
+      <div class="cap">app icon</div>
+    </div>
+  </div>
+</body>
+</html>

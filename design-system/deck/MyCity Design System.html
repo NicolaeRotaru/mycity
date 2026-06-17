@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyCity — Design System</title>
+<link rel="stylesheet" href="../styles.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,800&display=swap">
+<style>
+  html, body { margin: 0; background: #1C1A18; }
+  /* slide base */
+  section[data-label] {
+    width: 1920px; height: 1080px; box-sizing: border-box;
+    font-family: 'Inter', sans-serif; color: #2C2A28; position: relative; overflow: hidden;
+  }
+  .serif { font-family: 'Fraunces', Georgia, serif; letter-spacing: -0.01em; }
+  .eyebrow { font-size: 24px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; }
+  .kicker-num { font-family: 'Fraunces', serif; font-weight: 800; }
+</style>
+</head>
+<body>
+<deck-stage width="1920" height="1080">
+
+  <!-- 1 · TITLE -->
+  <section data-label="Cover" data-screen-label="01" style="background:#C0492C; color:#fff; display:flex; flex-direction:column; justify-content:center; padding:140px 130px;">
+    <div aria-hidden style="position:absolute; top:-160px; right:-120px; width:620px; height:620px; border-radius:50%; background:rgba(244,188,83,.22); filter:blur(40px);"></div>
+    <div aria-hidden style="position:absolute; bottom:-200px; left:-140px; width:560px; height:560px; border-radius:50%; background:rgba(184,42,40,.5); filter:blur(60px);"></div>
+    <div style="position:relative;">
+      <div class="serif" style="font-size:46px; font-weight:800;"><span style="color:#F4BC53;">My</span>City</div>
+      <div class="eyebrow" style="color:#F5C5B6; margin-top:90px;">Design System · Mediterranean Modern</div>
+      <h1 class="serif" style="font-size:128px; font-weight:800; line-height:1.02; margin:24px 0 0; max-width:1400px;">Il sistema di design dei negozi di Piacenza.</h1>
+      <p style="font-size:34px; line-height:1.5; color:#FAE3DC; margin:48px 0 0; max-width:1080px;">Token, componenti e quattro superfici di prodotto — buyer, seller, rider — costruite su un'unica lingua visiva calda e locale.</p>
+    </div>
+    <div style="position:relative; margin-top:90px; display:flex; gap:14px;">
+      <span style="width:64px; height:64px; border-radius:14px; background:#C0492C; box-shadow:inset 0 0 0 3px rgba(255,255,255,.6);"></span>
+      <span style="width:64px; height:64px; border-radius:14px; background:#E8A33D;"></span>
+      <span style="width:64px; height:64px; border-radius:14px; background:#5A7C42;"></span>
+      <span style="width:64px; height:64px; border-radius:14px; background:#B82A28;"></span>
+      <span style="width:64px; height:64px; border-radius:14px; background:#FBF7F0;"></span>
+    </div>
+  </section>
+
+  <!-- 2 · PALETTE -->
+  <section data-label="Colori" data-screen-label="02" style="background:#FBF7F0; display:flex; flex-direction:column; padding:120px 130px;">
+    <div class="eyebrow" style="color:#A03B25; font-size:24px;">01 — Colore</div>
+    <h2 class="serif" style="font-size:84px; font-weight:800; margin:14px 0 12px; color:#1C1A18;">Una palette da mercato italiano</h2>
+    <p style="font-size:30px; color:#57534E; margin:0 0 64px; max-width:1200px;">Terracotta come brand, mostarda per gli inviti all'acquisto, oliva per il positivo, vino per sconti e urgenza, crema per lo sfondo.</p>
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:28px;">
+      <div><div style="height:280px; border-radius:24px; background:#C0492C; box-shadow:0 12px 32px -8px rgba(192,73,44,.35);"></div><div class="serif" style="font-size:34px; font-weight:700; margin:24px 0 4px;">Terracotta</div><div style="font-family:monospace; font-size:24px; color:#78716C;">#C0492C · primary</div></div>
+      <div><div style="height:280px; border-radius:24px; background:#E8A33D;"></div><div class="serif" style="font-size:34px; font-weight:700; margin:24px 0 4px;">Mostarda</div><div style="font-family:monospace; font-size:24px; color:#78716C;">#E8A33D · accent</div></div>
+      <div><div style="height:280px; border-radius:24px; background:#5A7C42;"></div><div class="serif" style="font-size:34px; font-weight:700; margin:24px 0 4px;">Oliva</div><div style="font-family:monospace; font-size:24px; color:#78716C;">#5A7C42 · success</div></div>
+      <div><div style="height:280px; border-radius:24px; background:#B82A28;"></div><div class="serif" style="font-size:34px; font-weight:700; margin:24px 0 4px;">Vino</div><div style="font-family:monospace; font-size:24px; color:#78716C;">#B82A28 · secondary</div></div>
+      <div><div style="height:280px; border-radius:24px; background:#FBF7F0; box-shadow:inset 0 0 0 2px #EEDFBA;"></div><div class="serif" style="font-size:34px; font-weight:700; margin:24px 0 4px;">Crema</div><div style="font-family:monospace; font-size:24px; color:#78716C;">#FBF7F0 · surface</div></div>
+    </div>
+  </section>
+
+  <!-- 3 · TYPOGRAPHY -->
+  <section data-label="Tipografia" data-screen-label="03" style="background:#fff; display:flex; flex-direction:column; padding:120px 130px;">
+    <div class="eyebrow" style="color:#A03B25; font-size:24px;">02 — Tipografia</div>
+    <h2 class="serif" style="font-size:84px; font-weight:800; margin:14px 0 64px; color:#1C1A18;">Fraunces &amp; Inter</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:48px;">
+      <div style="background:#FBF7F0; border:1px solid #EEDFBA; border-radius:28px; padding:56px;">
+        <div class="eyebrow" style="font-size:20px; color:#78716C;">Display · Fraunces</div>
+        <div class="serif" style="font-size:104px; font-weight:700; line-height:1; color:#1C1A18; margin-top:24px;">Piacenza, oggi a casa.</div>
+        <p style="font-size:26px; color:#57534E; margin:40px 0 0;">Titoli editoriali, hero, prezzi. Pesi 400–800, tracking stretto.</p>
+      </div>
+      <div style="background:#FBF7F0; border:1px solid #EEDFBA; border-radius:28px; padding:56px;">
+        <div class="eyebrow" style="font-size:20px; color:#78716C;">UI / Body · Inter</div>
+        <div style="font-size:88px; font-weight:700; line-height:1.05; color:#1C1A18; margin-top:24px;">Paghi alla consegna</div>
+        <p style="font-size:26px; color:#57534E; margin:40px 0 0;">Testo, label, bottoni, dati. Base 16px per evitare lo zoom iOS.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · COMPONENTS -->
+  <section data-label="Componenti" data-screen-label="04" style="background:#FBF7F0; display:flex; flex-direction:column; padding:120px 130px;">
+    <div class="eyebrow" style="color:#A03B25; font-size:24px;">03 — Componenti</div>
+    <h2 class="serif" style="font-size:84px; font-weight:800; margin:14px 0 12px; color:#1C1A18;">11 primitive riutilizzabili</h2>
+    <p style="font-size:30px; color:#57534E; margin:0 0 56px; max-width:1200px;">Button, Badge, Card, Input, Select, Checkbox, Modal, EmptyState, ProductCard, OrderStatusBadge — legati ai token, icone Lucide.</p>
+    <div style="display:flex; flex-wrap:wrap; gap:20px; align-items:center;">
+      <span style="background:#A03B25; color:#fff; font-weight:600; font-size:28px; padding:20px 32px; border-radius:14px;">Esplora</span>
+      <span style="background:#EFA830; color:#1C1A18; font-weight:600; font-size:28px; padding:20px 32px; border-radius:14px;">Aggiungi al carrello</span>
+      <span style="background:#fff; color:#1C1A18; font-weight:600; font-size:28px; padding:20px 32px; border-radius:14px; box-shadow:inset 0 0 0 1px #EEDFBA;">Negozi</span>
+      <span style="background:#5A7C42; color:#fff; font-weight:600; font-size:28px; padding:20px 32px; border-radius:14px;">Confermato</span>
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:36px;">
+      <span style="background:#B82A28; color:#fff; font-weight:700; font-size:22px; text-transform:uppercase; letter-spacing:.03em; padding:8px 16px; border-radius:8px;">-30%</span>
+      <span style="background:#5A7C42; color:#fff; font-weight:700; font-size:22px; text-transform:uppercase; padding:8px 16px; border-radius:8px;">Nuovo</span>
+      <span style="background:#F6F8F1; color:#456236; font-weight:600; font-size:22px; padding:8px 16px; border-radius:8px;">Spedizione gratis</span>
+      <span style="background:#FDF4F1; color:#A03B25; font-weight:600; font-size:22px; padding:8px 16px; border-radius:8px;">Negozio locale</span>
+      <span style="border:1px solid currentColor; color:#047857; font-weight:600; font-size:22px; padding:8px 18px; border-radius:999px;">● Consegnato</span>
+      <span style="border:1px solid currentColor; color:#7E22CE; font-weight:600; font-size:22px; padding:8px 18px; border-radius:999px;">● In consegna</span>
+    </div>
+    <div style="display:flex; gap:24px; margin-top:48px;">
+      <div style="flex:1; background:#fff; border:1px solid #EEDFBA; border-radius:20px; padding:32px;"><div class="serif" style="font-size:30px; font-weight:700;">Bordered</div><div style="font-size:24px; color:#78716C; margin-top:6px;">Bianco + bordo crema</div></div>
+      <div style="flex:1; background:#fff; border:1px solid #EEDFBA; border-radius:20px; padding:32px; box-shadow:0 12px 32px -8px rgba(192,73,44,.15);"><div class="serif" style="font-size:30px; font-weight:700;">Elevated</div><div style="font-size:24px; color:#78716C; margin-top:6px;">Ombra calda terracotta</div></div>
+      <div style="flex:1; background:#FEFCF8; border:1px solid transparent; border-radius:20px; padding:32px;"><div class="serif" style="font-size:30px; font-weight:700;">Flat</div><div style="font-size:24px; color:#78716C; margin-top:6px;">Superficie crema</div></div>
+    </div>
+  </section>
+
+  <!-- 5 · SURFACES INTRO -->
+  <section data-label="Superfici" data-screen-label="05" style="background:#1C1A18; color:#fff; display:flex; flex-direction:column; justify-content:center; padding:120px 130px;">
+    <div class="eyebrow" style="color:#F4BC53; font-size:24px;">04 — Superfici di prodotto</div>
+    <h2 class="serif" style="font-size:96px; font-weight:800; margin:20px 0 80px; max-width:1400px;">Un marketplace a tre lati</h2>
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:32px;">
+      <div style="background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:24px; padding:48px;">
+        <div style="width:84px; height:84px; border-radius:20px; background:#C0492C; display:flex; align-items:center; justify-content:center;"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg></div>
+        <div class="serif" style="font-size:44px; font-weight:700; margin:28px 0 8px;">Buyer</div>
+        <p style="font-size:26px; color:rgba(255,255,255,.7); line-height:1.5; margin:0;">Marketplace: scoperta, prodotto, carrello, checkout, tracking ordine.</p>
+      </div>
+      <div style="background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:24px; padding:48px;">
+        <div style="width:84px; height:84px; border-radius:20px; background:#E8A33D; display:flex; align-items:center; justify-content:center;"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#1C1A18" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M2 7h20"/><path d="M12 22V7"/></svg></div>
+        <div class="serif" style="font-size:44px; font-weight:700; margin:28px 0 8px;">Seller</div>
+        <p style="font-size:26px; color:rgba(255,255,255,.7); line-height:1.5; margin:0;">Console: dashboard, ordini, prodotti, promozioni, analisi, guadagni.</p>
+      </div>
+      <div style="background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); border-radius:24px; padding:48px;">
+        <div style="width:84px; height:84px; border-radius:20px; background:#5A7C42; display:flex; align-items:center; justify-content:center;"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm0 0v11.5M5.5 17.5 9 8h4l3 5.5"/></svg></div>
+        <div class="serif" style="font-size:44px; font-weight:700; margin:28px 0 8px;">Rider</div>
+        <p style="font-size:26px; color:rgba(255,255,255,.7); line-height:1.5; margin:0;">App mobile: consegne, flusso live, guadagni, turni e zone.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 · BUYER -->
+  <section data-label="Buyer" data-screen-label="06" style="background:#FBF7F0; display:flex; padding:120px 130px; gap:90px; align-items:center;">
+    <div style="flex:1;">
+      <div class="eyebrow" style="color:#A03B25; font-size:24px;">Superficie · Buyer</div>
+      <h2 class="serif" style="font-size:88px; font-weight:800; margin:14px 0 40px; color:#1C1A18; line-height:1.02;">Il marketplace di quartiere</h2>
+      <div style="display:flex; flex-direction:column; gap:24px;">
+        <div style="display:flex; gap:18px; align-items:center; font-size:30px; color:#3C3835;"><span style="width:40px; height:40px; border-radius:50%; background:#E9EEDE; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#456236" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Home, ricerca con filtri, pagina negozio</div>
+        <div style="display:flex; gap:18px; align-items:center; font-size:30px; color:#3C3835;"><span style="width:40px; height:40px; border-radius:50%; background:#E9EEDE; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#456236" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Scheda prodotto, carrello, checkout multi-step</div>
+        <div style="display:flex; gap:18px; align-items:center; font-size:30px; color:#3C3835;"><span style="width:40px; height:40px; border-radius:50%; background:#E9EEDE; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#456236" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Tracking ordine, account, preferiti, messaggi</div>
+        <div style="display:flex; gap:18px; align-items:center; font-size:30px; color:#3C3835;"><span style="width:40px; height:40px; border-radius:50%; background:#E9EEDE; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#456236" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span> Pagamento alla consegna in primo piano</div>
+      </div>
+    </div>
+    <div style="flex:1; background:#fff; border:1px solid #EEDFBA; border-radius:28px; box-shadow:0 24px 48px -12px rgba(192,73,44,.22); overflow:hidden;">
+      <div style="background:#A03B25; color:#fff; padding:28px 32px; display:flex; align-items:center; gap:16px;">
+        <span class="serif" style="font-size:30px; font-weight:800;"><span style="color:#F4BC53;">My</span>City</span>
+        <span style="margin-left:auto; background:#E8A33D; color:#1C1A18; font-weight:700; font-size:22px; padding:10px 20px; border-radius:999px;">Carrello · 2</span>
+      </div>
+      <div style="padding:40px; display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+        <div style="border:1px solid #EAE8E4; border-radius:18px; overflow:hidden;"><div style="height:150px; background:#EEDFBA;"></div><div style="padding:18px;"><div style="font-size:22px; font-weight:600;">Coppa Piacentina DOP</div><div style="font-size:28px; font-weight:800; color:#B82A28; margin-top:8px;">€7,12</div></div></div>
+        <div style="border:1px solid #EAE8E4; border-radius:18px; overflow:hidden;"><div style="height:150px; background:#E6CC95;"></div><div style="padding:18px;"><div style="font-size:22px; font-weight:600;">Gutturnio DOC 2021</div><div style="font-size:28px; font-weight:800; color:#1C1A18; margin-top:8px;">€12,50</div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 · SELLER + RIDER -->
+  <section data-label="Seller & Rider" data-screen-label="07" style="background:#fff; display:flex; flex-direction:column; padding:120px 130px;">
+    <div class="eyebrow" style="color:#A03B25; font-size:24px;">Superfici · Seller &amp; Rider</div>
+    <h2 class="serif" style="font-size:84px; font-weight:800; margin:14px 0 64px; color:#1C1A18;">Gli strumenti operativi</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:48px;">
+      <div style="border-radius:28px; overflow:hidden; border:1px solid #EEDFBA;">
+        <div style="background:linear-gradient(135deg,#A03B25,#C0492C 55%,#962220); color:#fff; padding:48px;">
+          <div class="serif" style="font-size:44px; font-weight:800;">Seller console</div>
+          <div style="display:flex; gap:20px; margin-top:32px;">
+            <div style="flex:1; background:rgba(255,255,255,.12); border-radius:16px; padding:24px;"><div style="font-size:22px; opacity:.8;">Oggi</div><div style="font-size:42px; font-weight:800;">€142,50</div></div>
+            <div style="flex:1; background:rgba(255,255,255,.12); border-radius:16px; padding:24px;"><div style="font-size:22px; opacity:.8;">7 giorni</div><div style="font-size:42px; font-weight:800;">€980</div></div>
+          </div>
+        </div>
+        <div style="padding:36px; font-size:26px; color:#57534E; line-height:1.5;">KPI, ordini con avanzamento stato, catalogo, promo, analisi e guadagni con incassi in contanti (COD).</div>
+      </div>
+      <div style="border-radius:28px; overflow:hidden; border:1px solid #EEDFBA;">
+        <div style="background:linear-gradient(135deg,#456236,#5A7C42); color:#fff; padding:48px;">
+          <div class="serif" style="font-size:44px; font-weight:800;">Rider app</div>
+          <div style="display:flex; align-items:center; gap:16px; margin-top:32px; background:rgba(255,255,255,.14); border-radius:16px; padding:24px;">
+            <span style="font-size:30px; font-weight:800;">Sei online</span>
+            <span style="margin-left:auto; width:72px; height:40px; border-radius:999px; background:rgba(255,255,255,.3); position:relative;"><span style="position:absolute; top:4px; right:4px; width:32px; height:32px; border-radius:50%; background:#fff;"></span></span>
+          </div>
+        </div>
+        <div style="padding:36px; font-size:26px; color:#57534E; line-height:1.5;">Consegne disponibili, flusso live a 4 stati, navigazione, guadagni e gestione di turni e zone.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 · CLOSING -->
+  <section data-label="Sistema" data-screen-label="08" style="background:#C0492C; color:#fff; display:flex; flex-direction:column; justify-content:center; padding:140px 130px;">
+    <div aria-hidden style="position:absolute; bottom:-180px; right:-120px; width:600px; height:600px; border-radius:50%; background:rgba(244,188,83,.18); filter:blur(50px);"></div>
+    <div style="position:relative;">
+      <h2 class="serif" style="font-size:108px; font-weight:800; line-height:1.04; margin:0; max-width:1500px;">Un'unica lingua, dal token allo schermo.</h2>
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:32px; margin-top:90px; max-width:1500px;">
+        <div><div class="serif" style="font-size:84px; font-weight:800; color:#F4BC53;">11</div><div style="font-size:28px; color:#FAE3DC;">componenti</div></div>
+        <div><div class="serif" style="font-size:84px; font-weight:800; color:#F4BC53;">22</div><div style="font-size:28px; color:#FAE3DC;">card di sistema</div></div>
+        <div><div class="serif" style="font-size:84px; font-weight:800; color:#F4BC53;">4</div><div style="font-size:28px; color:#FAE3DC;">superfici</div></div>
+        <div><div class="serif" style="font-size:84px; font-weight:800; color:#F4BC53;">167</div><div style="font-size:28px; color:#FAE3DC;">token</div></div>
+      </div>
+      <p style="font-size:34px; color:#FAE3DC; margin:90px 0 0;">MyCity · Mediterranean Modern — i negozi veri di Piacenza, ora a casa tua.</p>
+    </div>
+  </section>
+
+</deck-stage>
+<script src="./deck-stage.js"></script>
+</body>
+</html>

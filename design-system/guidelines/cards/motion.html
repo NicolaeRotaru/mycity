@@ -1,0 +1,29 @@
+<!-- @dsCard group="Brand" viewport="700x160" name="Motion & easing" subtitle="ease-out-quint è la firma — fade, pop, slide-up, heart-beat" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--cream-100); font-family: var(--font-body); }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .cell { background: var(--surface-0); border: 1px solid var(--cream-300); border-radius: var(--radius-lg); padding: 16px; text-align: center; box-shadow: var(--shadow-warm-sm); }
+  .dot { width: 34px; height: 34px; border-radius: var(--radius-md); background: var(--primary-600); margin: 4px auto 12px; }
+  .pop { animation: mc-pop-in 1.6s var(--ease-out-quint) infinite; }
+  .fade { animation: mc-fade-in 1.6s ease-out infinite alternate; }
+  .beat { border-radius: var(--radius-full); background: var(--secondary-600); animation: mc-heart-beat 1.4s ease-in-out infinite; }
+  .slide { animation: rise 1.6s var(--ease-out-quint) infinite; }
+  @keyframes rise { 0%,100% { transform: translateY(8px); opacity:.4 } 50% { transform: translateY(0); opacity:1 } }
+  .n { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--ink-700); }
+  .lbl { font-size: 10px; color: var(--ink-400); margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="cell"><div class="dot fade"></div><div class="n">fade-in</div><div class="lbl">150ms</div></div>
+    <div class="cell"><div class="dot pop"></div><div class="n">pop-in</div><div class="lbl">240ms quint</div></div>
+    <div class="cell"><div class="dot slide"></div><div class="n">slide-up</div><div class="lbl">260ms quint</div></div>
+    <div class="cell"><div class="dot beat"></div><div class="n">heart-beat</div><div class="lbl">600ms</div></div>
+  </div>
+</body>
+</html>

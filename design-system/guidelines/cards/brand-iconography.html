@@ -1,0 +1,35 @@
+<!-- @dsCard group="Brand" viewport="700x150" name="Iconography · Lucide" subtitle="lucide-react, stroke 2–2.4 · CDN per i mock" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 20px; background: var(--cream-100); font-family: var(--font-body); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .ic { width: 48px; height: 48px; border-radius: var(--radius-lg); background: var(--surface-0); border: 1px solid var(--cream-300); display: flex; align-items: center; justify-content: center; color: var(--ink-700); box-shadow: var(--shadow-warm-sm); }
+  .ic.brand { background: var(--primary-700); color: #fff; border: 0; }
+  .note { font-size: 12px; color: var(--ink-500); margin-top: 14px; }
+  .note code { font-family: var(--font-mono); color: var(--ink-700); }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="ic brand"><i data-lucide="store"></i></div>
+    <div class="ic"><i data-lucide="shopping-cart"></i></div>
+    <div class="ic"><i data-lucide="heart"></i></div>
+    <div class="ic"><i data-lucide="bike"></i></div>
+    <div class="ic"><i data-lucide="map-pin"></i></div>
+    <div class="ic"><i data-lucide="truck"></i></div>
+    <div class="ic"><i data-lucide="banknote"></i></div>
+    <div class="ic"><i data-lucide="shield-check"></i></div>
+    <div class="ic"><i data-lucide="package"></i></div>
+    <div class="ic"><i data-lucide="bell"></i></div>
+    <div class="ic"><i data-lucide="sparkles"></i></div>
+    <div class="ic"><i data-lucide="flame"></i></div>
+  </div>
+  <p class="note">Set unico: <code>lucide-react</code>, stroke <code>2</code>–<code>2.4</code>. Niente emoji nelle UI. <code>store · bike · banknote</code> portano il modello (negozi · rider · paga alla consegna).</p>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>lucide.createIcons({ attrs: { width: 22, height: 22, 'stroke-width': 2.2 } });</script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+// ===== Auth (login / registrazione) =====
+function AuthPage({ mode = 'login', onAuth, onBack, onSwitch }) {
+  const isLogin = mode === 'login';
+  return (
+    <div style={{ minHeight: '70vh', display: 'grid', gridTemplateColumns: '1fr 1fr', maxWidth: 'var(--container-max)', margin: '0 auto' }}>
+      {/* form */}
+      <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '48px 56px' }}>
+        <button onClick={onBack} style={{ ...backLink, alignSelf: 'flex-start', marginBottom: '12px' }}><Lucide name="arrow-left" size={17} /> Indietro</button>
+        <h1 style={{ margin: '0 0 6px', fontFamily: 'var(--font-serif)', fontSize: '34px', fontWeight: 800, color: 'var(--ink-900)' }}>{isLogin ? 'Bentornata su MyCity' : 'Crea il tuo account'}</h1>
+        <p style={{ margin: '0 0 24px', fontSize: '15px', color: 'var(--ink-600)', lineHeight: 1.55 }}>{isLogin ? 'Accedi per seguire i tuoi ordini e i negozi preferiti.' : 'Ti serve solo per confermare l’ordine — paghi sempre alla consegna.'}</p>
+
+        <form onSubmit={(e) => { e.preventDefault(); onAuth(); }} style={{ display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '380px' }}>
+          {!isLogin && <Input label="Nome e cognome" placeholder="Lucia Bianchi" leading={<Lucide name="user" size={18} color="var(--ink-400)" />} />}
+          <Input label="Email" type="email" placeholder="nome@email.it" leading={<Lucide name="mail" size={18} color="var(--ink-400)" />} />
+          <Input label="Password" type="password" placeholder="••••••••" leading={<Lucide name="lock" size={18} color="var(--ink-400)" />}
+            labelAction={isLogin ? <a style={{ cursor: 'pointer' }}>Password dimenticata?</a> : null} />
+          {!isLogin && <Checkbox label={<>Accetto i <a style={{ cursor: 'pointer' }}>termini</a> e la <a style={{ cursor: 'pointer' }}>privacy</a>.</>} defaultChecked />}
+          <Button variant="primary" size="lg" type="submit" fullWidth iconRight="arrow-right">{isLogin ? 'Accedi' : 'Crea account'}</Button>
+        </form>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '20px 0', maxWidth: '380px' }}>
+          <span style={{ flex: 1, height: '1px', background: 'var(--cream-300)' }} /><span style={{ fontSize: '12px', color: 'var(--ink-400)' }}>oppure</span><span style={{ flex: 1, height: '1px', background: 'var(--cream-300)' }} />
+        </div>
+        <div style={{ display: 'flex', gap: '10px', maxWidth: '380px' }}>
+          <Button variant="secondary" fullWidth icon="smartphone">SPID</Button>
+          <Button variant="secondary" fullWidth onClick={onAuth}>Continua con Google</Button>
+        </div>
+
+        <p style={{ margin: '22px 0 0', fontSize: '14px', color: 'var(--ink-600)' }}>
+          {isLogin ? 'Non hai un account? ' : 'Hai già un account? '}
+          <a onClick={() => onSwitch(isLogin ? 'register' : 'login')} style={{ cursor: 'pointer', fontWeight: 700 }}>{isLogin ? 'Registrati' : 'Accedi'}</a>
+        </p>
+      </div>
+
+      {/* aside */}
+      <div style={{ position: 'relative', background: 'var(--primary-700)', color: '#fff', display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '48px 56px', overflow: 'hidden' }}>
+        <div aria-hidden style={{ position: 'absolute', top: '-100px', right: '-100px', width: '380px', height: '380px', borderRadius: '50%', background: 'rgba(244,188,83,.25)', filter: 'blur(60px)' }} />
+        <div style={{ position: 'relative', fontFamily: 'var(--font-serif)', fontSize: '30px', fontWeight: 800, lineHeight: 1.15, marginBottom: '24px' }}>I negozi <span style={{ color: 'var(--accent-300)', fontStyle: 'italic' }}>veri</span> di Piacenza, ora a casa tua.</div>
+        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {[['banknote', 'Paghi alla consegna, nessuna carta'], ['truck', 'Consegna in 24–48h dai negozi della tua via'], ['badge-check', '100% commercianti locali verificati'], ['rotate-ccw', 'Reso gratuito entro 14 giorni']].map(([ic, t]) => (
+            <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: '12px', fontSize: '15px' }}>
+              <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'rgba(255,255,255,.12)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={ic} size={18} color="var(--accent-300)" /></span> {t}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

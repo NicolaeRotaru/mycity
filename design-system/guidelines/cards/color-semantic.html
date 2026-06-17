@@ -1,0 +1,25 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Semantic roles" subtitle="CTA, success, warning, danger, info — aliases sopra la palette" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 18px; background: var(--cream-100); font-family: var(--font-body); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .chip { border-radius: var(--radius-md); padding: 12px 14px; color: #fff; box-shadow: var(--shadow-warm-sm); }
+  .chip b { display: block; font-size: 13px; font-weight: 700; }
+  .chip span { font-family: var(--font-mono); font-size: 10px; opacity: .85; }
+</style>
+</head>
+<body>
+  <div class="grid">
+    <div class="chip" style="background:var(--color-cta)"><b>CTA</b><span>--color-cta · primary-700</span></div>
+    <div class="chip" style="background:var(--color-accent); color:var(--ink-900)"><b>Accent CTA</b><span>--color-accent · accent-500</span></div>
+    <div class="chip" style="background:var(--success)"><b>Success</b><span>--success · olive-600</span></div>
+    <div class="chip" style="background:var(--warning); color:var(--ink-900)"><b>Warning</b><span>--warning · accent-500</span></div>
+    <div class="chip" style="background:var(--danger)"><b>Danger</b><span>--danger · #DC2626</span></div>
+    <div class="chip" style="background:var(--info)"><b>Info</b><span>--info · primary-700</span></div>
+  </div>
+</body>
+</html>

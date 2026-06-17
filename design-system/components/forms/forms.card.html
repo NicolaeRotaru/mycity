@@ -1,0 +1,43 @@
+<!-- @dsCard group="Components" viewport="700x380" name="Forms · Input · Select · Checkbox" subtitle="Field shell, focus + error states" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; padding: 22px; background: var(--cream-100); font-family: var(--font-sans); }
+  #root { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 22px; max-width: 620px; }
+  a { color: var(--primary-700); font-size: 13px; font-weight: 500; }
+</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel">
+    const { Input, Select, Checkbox } = window.MyCityDesignSystem_105480;
+    function Demo() {
+      return (
+        <>
+          <Input label="Email" type="email" placeholder="nome@email.it" required />
+          <Input label="Password" type="password" placeholder="••••••••"
+            labelAction={<a href="#">Password dimenticata?</a>} />
+          <Select label="Categoria" defaultValue="alimentari">
+            <option value="alimentari">Alimentari</option>
+            <option value="abbigliamento">Abbigliamento</option>
+            <option value="casa">Casa & Cucina</option>
+          </Select>
+          <Input label="CAP" defaultValue="0000" error="CAP non valido" />
+          <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
+            <Checkbox defaultChecked label="Paga alla consegna — contanti al rider" />
+            <Checkbox label={<>Accetto i <a href="#">termini di servizio</a> e la privacy.</>} />
+          </div>
+        </>
+      );
+    }
+    ReactDOM.createRoot(document.getElementById('root')).render(<Demo />);
+  </script>
+</body>
+</html>
