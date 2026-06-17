@@ -82,6 +82,11 @@ export default async function AboutPage() {
             <p className="text-sm text-ink-700">In 24-48h il rider ti consegna a casa, oppure ritiri in negozio con sconto.</p>
           </div>
         </div>
+        <div className="mt-4">
+          <Link href="/come-funziona" className="inline-flex items-center gap-1.5 font-semibold text-primary-700 hover:underline">
+            Scopri come funziona nel dettaglio <span aria-hidden>→</span>
+          </Link>
+        </div>
       </section>
 
       <section className="mb-12">

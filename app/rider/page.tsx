@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Store, Package, ChefHat, Clock, Play } from 'lucide-react';
+import { Store, Package, ChefHat, Clock, Play, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import {
@@ -77,6 +77,40 @@ export default function RiderDashboardPage() {
   });
   const online = pref?.online ?? false;
   const zones = pref?.zones ?? [];
+
+  // Rating del rider (media + conteggio) per il badge in testata.
+  const { data: rating } = useQuery({
+    queryKey: queryKeys.rider.ratingSummary,
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { avg: 0, count: 0 };
+      const { data } = await supabase.from('rider_reviews').select('rating').eq('rider_id', user.id);
+      const rows = (data ?? []) as { rating: number }[];
+      if (rows.length === 0) return { avg: 0, count: 0 };
+      return { avg: rows.reduce((s, r) => s + Number(r.rating), 0) / rows.length, count: rows.length };
+    },
+    staleTime: 60_000,
+  });
+
+  // Statistiche di oggi: consegne completate + incasso del giorno.
+  const { data: today } = useQuery({
+    queryKey: queryKeys.rider.todayStats,
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { count: 0, earned: 0 };
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const { data } = await supabase
+        .from('orders')
+        .select('shipping_cost, delivered_at')
+        .eq('rider_id', user.id)
+        .eq('delivery_status', 'DELIVERED')
+        .gte('delivered_at', start.toISOString());
+      const rows = (data ?? []) as { shipping_cost: number | null }[];
+      return { count: rows.length, earned: rows.reduce((s, o) => s + Number(o.shipping_cost || 0), 0) };
+    },
+    staleTime: 30_000,
+  });
 
   // Priorità per zona: gli ordini che cadono in una zona preferita vanno PRIMA
   // (la disponibilità promette "riceverai prima le consegne in queste zone").
@@ -151,9 +185,34 @@ export default function RiderDashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-900">Dashboard rider</h1>
-        <p className="text-sm text-ink-500">Prendi gli ordini pronti e portali ai clienti.</p>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-bold text-ink-900">Dashboard rider</h1>
+            <p className="text-sm text-ink-500">Prendi gli ordini pronti e portali ai clienti.</p>
+          </div>
+          {rating && rating.count > 0 && (
+            <Link
+              href="/rider/reviews"
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1.5 text-sm font-bold text-accent-800 ring-1 ring-accent-200 hover:bg-accent-100 transition-colors"
+            >
+              <Star size={15} strokeWidth={2.2} className="text-accent-500" fill="currentColor" aria-hidden />
+              {rating.avg.toFixed(1)}
+              <span className="font-normal text-accent-700">· {rating.count}</span>
+            </Link>
+          )}
+        </div>
+        {/* Mini-stat di oggi */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white border border-cream-300 rounded-xl px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-ink-500">Consegne oggi</p>
+            <p className="text-2xl font-extrabold text-ink-900">{today?.count ?? 0}</p>
+          </div>
+          <div className="bg-white border border-cream-300 rounded-xl px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-ink-500">Guadagno oggi</p>
+            <p className="text-2xl font-extrabold text-olive-600">{formatPrice(today?.earned ?? 0)}</p>
+          </div>
+        </div>
       </div>
 
       {/* MIEI ORDINI ATTIVI */}
