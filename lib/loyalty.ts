@@ -3,6 +3,7 @@
  * Le RPC sono SECURITY DEFINER su DB e validano auth.uid().
  */
 
+import { Medal, Gem, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
 export type LoyaltyTier = 'bronze' | 'silver' | 'gold' | 'platinum';
@@ -17,11 +18,11 @@ export type LoyaltyAccount = {
   longest_streak: number;
 };
 
-export const TIER_META: Record<LoyaltyTier, { label: string; emoji: string; threshold: number; color: string }> = {
-  bronze:   { label: 'Bronzo',   emoji: '🥉', threshold: 0,    color: 'text-amber-700' },
-  silver:   { label: 'Argento',  emoji: '🥈', threshold: 500,  color: 'text-ink-500' },
-  gold:     { label: 'Oro',      emoji: '🥇', threshold: 2000, color: 'text-accent-600' },
-  platinum: { label: 'Platino',  emoji: '💎', threshold: 5000, color: 'text-primary-700' },
+export const TIER_META: Record<LoyaltyTier, { label: string; icon: LucideIcon; threshold: number; color: string }> = {
+  bronze:   { label: 'Bronzo',   icon: Medal, threshold: 0,    color: 'text-amber-700' },
+  silver:   { label: 'Argento',  icon: Medal, threshold: 500,  color: 'text-ink-500' },
+  gold:     { label: 'Oro',      icon: Medal, threshold: 2000, color: 'text-accent-600' },
+  platinum: { label: 'Platino',  icon: Gem,   threshold: 5000, color: 'text-primary-700' },
 };
 
 export const POINTS_PER_EURO = 1;

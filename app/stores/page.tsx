@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
@@ -150,24 +151,25 @@ export default function StoresPage() {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="🔍 Cerca per nome negozio…"
+            placeholder="Cerca per nome negozio…"
             className="flex-1 min-w-[160px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
           <button
             onClick={() => setOnlyOpen((v) => !v)}
-            className={`px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
               onlyOpen ? 'bg-olive-500 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
             }`}
           >
-            🟢 Aperti ora
+            <span className={`h-2 w-2 rounded-full ${onlyOpen ? 'bg-white' : 'bg-olive-500'}`} aria-hidden />
+            Aperti ora
           </button>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortMode)}
             className="border rounded-lg px-3 py-2 text-sm bg-white font-semibold"
           >
-            <option value="rating">⭐ Più amati</option>
-            <option value="most-products">📦 Più assortiti</option>
+            <option value="rating">Più amati</option>
+            <option value="most-products">Più assortiti</option>
             <option value="name">A-Z</option>
           </select>
         </div>
@@ -198,7 +200,7 @@ export default function StoresPage() {
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-ink-500 bg-white border rounded-xl">
-          <p className="text-5xl mb-3">🔍</p>
+          <Search size={48} strokeWidth={1.5} className="mx-auto mb-3 text-ink-300" aria-hidden />
           <p className="font-semibold">Nessun negozio trovato con questi filtri.</p>
         </div>
       ) : (

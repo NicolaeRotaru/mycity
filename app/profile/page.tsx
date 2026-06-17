@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
+import { Gift } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -84,7 +85,10 @@ export default function ProfilePage() {
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-lg font-extrabold">🎁 Invita un amico, prendete €5 entrambi</p>
+              <p className="text-lg font-extrabold flex items-center gap-2">
+                <Gift size={20} className="text-white" aria-hidden />
+                Invita un amico, prendete €5 entrambi
+              </p>
               <p className="text-sm text-primary-100">Condividi il tuo codice referral</p>
             </div>
             <span className="shrink-0 rounded-lg bg-white px-3 py-1.5 text-sm font-bold text-primary-800">

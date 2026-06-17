@@ -56,7 +56,7 @@ export default function RiderConnectButton() {
       await qc.invalidateQueries({ queryKey: RIDER_STRIPE_STATUS });
       if (!silent) {
         if (data?.payouts_enabled) toast.success('IBAN attivo: riceverai i compensi.');
-        else toast('Stato aggiornato. Se risulta in attesa, completa la verifica.', { icon: '🔄' });
+        else toast('Stato aggiornato. Se risulta in attesa, completa la verifica.', { icon: <RefreshCw size={16} /> });
       }
     } catch (err) {
       if (!silent) toast.error(friendlyError(err));

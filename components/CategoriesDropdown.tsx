@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { Menu, Store, Search, ChevronDown } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -62,9 +63,9 @@ const CategoriesDropdown = ({ className = '' }: Props) => {
         aria-haspopup="menu"
         className="flex items-center gap-2 bg-ink-800 hover:bg-gray-700 text-white px-3 py-2 rounded-md text-sm font-semibold whitespace-nowrap border border-gray-700"
       >
-        <span className="text-base leading-none">☰</span>
+        <Menu size={18} strokeWidth={2.2} aria-hidden />
         <span>Categorie</span>
-        <span className={`text-xs transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
+        <ChevronDown size={14} strokeWidth={2.2} aria-hidden className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
 
       {open && (
@@ -78,7 +79,7 @@ const CategoriesDropdown = ({ className = '' }: Props) => {
             className="flex items-center gap-3 px-4 py-2.5 hover:bg-primary-50 border-b border-cream-200 font-semibold"
             role="menuitem"
           >
-            <span className="text-xl">🏪</span>
+            <Store size={20} strokeWidth={2.2} className="text-primary-600" aria-hidden />
             <span>Tutti i negozi</span>
           </Link>
           <Link
@@ -87,7 +88,7 @@ const CategoriesDropdown = ({ className = '' }: Props) => {
             className="flex items-center gap-3 px-4 py-2.5 hover:bg-primary-50 border-b border-cream-200 font-semibold"
             role="menuitem"
           >
-            <span className="text-xl">🔍</span>
+            <Search size={20} strokeWidth={2.2} className="text-primary-600" aria-hidden />
             <span>Tutti i prodotti</span>
           </Link>
           {categories.map((c) => (

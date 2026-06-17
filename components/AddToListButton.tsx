@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ListChecks, Plus, X, Check } from 'lucide-react';
+import { ListChecks, Plus, X, Check, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -90,7 +90,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
       if (!user) throw new Error('Accedi');
       const { data: list, error: e1 } = await supabase
         .from('product_lists')
-        .insert({ owner_id: user.id, title: newListTitle.trim(), cover_emoji: '⭐' })
+        .insert({ owner_id: user.id, title: newListTitle.trim(), cover_emoji: null })
         .select('id')
         .single();
       if (e1) throw e1;
@@ -141,7 +141,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
                             inIt ? 'bg-olive-50 border-olive-200' : 'bg-cream-50 border-cream-200 hover:bg-cream-100'
                           }`}
                         >
-                          <span className="text-2xl flex-shrink-0">{l.cover_emoji ?? '⭐'}</span>
+                          <span className="text-2xl flex-shrink-0">{l.cover_emoji ?? <Star size={24} strokeWidth={2.2} className="text-accent-500" aria-hidden />}</span>
                           <span className="flex-1 text-left font-semibold text-sm text-ink-900">{l.title}</span>
                           {inIt && <Check size={16} className="text-olive-700 flex-shrink-0" />}
                         </button>

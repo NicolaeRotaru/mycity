@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
+import { Image as ImageIcon, Video, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
@@ -109,8 +110,13 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-ink-700">
-                  {m.type === 'image' ? '🖼️ Immagine' : '🎬 Video'} · posizione {i + 1}
+                <p className="text-sm font-semibold text-ink-700 inline-flex items-center gap-1">
+                  {m.type === 'image' ? (
+                    <ImageIcon size={16} aria-hidden className="text-ink-500" />
+                  ) : (
+                    <Video size={16} aria-hidden className="text-ink-500" />
+                  )}
+                  {m.type === 'image' ? 'Immagine' : 'Video'} · posizione {i + 1}
                 </p>
                 <p className="text-xs text-ink-400 truncate">{m.url.split('/').pop()}</p>
               </div>
@@ -119,27 +125,28 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
                   type="button"
                   onClick={() => move(i, -1)}
                   disabled={i === 0}
-                  className="text-xs bg-white border px-2 py-1 rounded disabled:opacity-30"
+                  className="text-xs bg-white border px-2 py-1 rounded disabled:opacity-30 inline-flex items-center justify-center"
                   aria-label="Sposta su"
                 >
-                  ↑
+                  <ArrowUp size={16} aria-hidden />
                 </button>
                 <button
                   type="button"
                   onClick={() => move(i, 1)}
                   disabled={i === value.length - 1}
-                  className="text-xs bg-white border px-2 py-1 rounded disabled:opacity-30"
+                  className="text-xs bg-white border px-2 py-1 rounded disabled:opacity-30 inline-flex items-center justify-center"
                   aria-label="Sposta giù"
                 >
-                  ↓
+                  <ArrowDown size={16} aria-hidden />
                 </button>
               </div>
               <button
                 type="button"
                 onClick={() => remove(i)}
-                className="text-xs text-rose-600 hover:bg-rose-50 px-2 py-1 rounded shrink-0"
+                className="text-xs text-rose-600 hover:bg-rose-50 px-2 py-1 rounded shrink-0 inline-flex items-center gap-1"
               >
-                ✕ Rimuovi
+                <X size={16} aria-hidden />
+                Rimuovi
               </button>
             </li>
           ))}

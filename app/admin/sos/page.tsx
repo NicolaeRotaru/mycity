@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, MapPin } from 'lucide-react';
+import { AlertTriangle, Check, MapPin, Phone, Clock, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -85,12 +85,14 @@ export default function AdminSOSPage() {
 
       {/* SOS attivi */}
       <section>
-        <h2 className="font-bold text-rose-700 mb-3">
-          🔴 Attivi ({active.length})
+        <h2 className="font-bold text-rose-700 mb-3 flex items-center gap-1.5">
+          <AlertCircle size={18} strokeWidth={2.4} aria-hidden />
+          Attivi ({active.length})
         </h2>
         {active.length === 0 ? (
-          <p className="text-sm text-ink-500 bg-olive-50 border border-olive-200 rounded-lg p-4">
-            ✓ Nessun SOS attivo. Tutto tranquillo.
+          <p className="text-sm text-ink-500 bg-olive-50 border border-olive-200 rounded-lg p-4 flex items-center gap-1.5">
+            <Check size={16} strokeWidth={2.4} className="text-olive-600 shrink-0" aria-hidden />
+            Nessun SOS attivo. Tutto tranquillo.
           </p>
         ) : (
           <ul className="space-y-3">
@@ -106,12 +108,14 @@ export default function AdminSOSPage() {
                       <p className="text-sm text-ink-700">
                         Attivato: {new Date(s.triggered_at).toLocaleString('it-IT')}
                       </p>
-                      <p className="text-sm font-semibold text-rose-700">
-                        ⏱ {elapsed} min fa
+                      <p className="text-sm font-semibold text-rose-700 flex items-center gap-1.5">
+                        <Clock size={14} strokeWidth={2.4} aria-hidden />
+                        {elapsed} min fa
                       </p>
                       {s.rider?.phone && (
-                        <a href={`tel:${s.rider.phone}`} className="inline-block mt-1 text-sm text-primary-700 hover:underline">
-                          📞 {s.rider.phone}
+                        <a href={`tel:${s.rider.phone}`} className="inline-flex items-center gap-1.5 mt-1 text-sm text-primary-700 hover:underline">
+                          <Phone size={14} strokeWidth={2.4} aria-hidden />
+                          {s.rider.phone}
                         </a>
                       )}
                     </div>

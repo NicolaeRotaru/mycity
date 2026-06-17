@@ -7,6 +7,11 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import PushNotificationOptIn from '@/components/PushNotificationOptIn';
 import PublicProfileToggle from '@/components/PublicProfileToggle';
+import {
+  User, Lock, Bell, Shield, AlertTriangle, Smartphone,
+  Download, FileText, Mail, Hourglass, Undo2, Trash2, Settings,
+  type LucideIcon,
+} from 'lucide-react';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -14,12 +19,12 @@ import { Input, Select } from '@/components/ui/Field';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
 
-const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: 'account',       label: 'Account',          icon: '👤' },
-  { id: 'password',      label: 'Password',         icon: '🔐' },
-  { id: 'notifications', label: 'Notifiche',        icon: '🔔' },
-  { id: 'privacy',       label: 'Privacy e dati',   icon: '🛡️' },
-  { id: 'danger',        label: 'Zona pericolosa',  icon: '⚠️' },
+const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+  { id: 'account',       label: 'Account',          icon: User },
+  { id: 'password',      label: 'Password',         icon: Lock },
+  { id: 'notifications', label: 'Notifiche',        icon: Bell },
+  { id: 'privacy',       label: 'Privacy e dati',   icon: Shield },
+  { id: 'danger',        label: 'Zona pericolosa',  icon: AlertTriangle },
 ];
 
 type Prefs = {
@@ -272,7 +277,10 @@ export default function SettingsPage() {
     <div className="container mx-auto px-6 py-8 max-w-5xl">
       <div className="mb-6">
         <Link href="/profile" className="text-sm text-primary-700 hover:underline">← Il tuo account</Link>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-ink-900 mt-2">⚙️ Impostazioni</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold text-ink-900 mt-2 flex items-center gap-2">
+          <Settings size={28} className="text-ink-500" aria-hidden />
+          Impostazioni
+        </h1>
         <p className="text-sm text-ink-600">Gestisci account, sicurezza, notifiche e privacy.</p>
       </div>
 
@@ -280,21 +288,24 @@ export default function SettingsPage() {
         {/* Sidebar tabs */}
         <aside>
           <nav className="bg-white border rounded-xl overflow-hidden md:sticky md:top-32">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm border-l-4 transition-colors ${
-                  tab === t.id
-                    ? 'bg-primary-50 border-indigo-600 text-primary-800 font-bold'
-                    : 'border-transparent text-ink-700 hover:bg-cream-50'
-                }`}
-              >
-                <span className="text-lg">{t.icon}</span>
-                <span>{t.label}</span>
-              </button>
-            ))}
+            {TABS.map((t) => {
+              const Icon = t.icon;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm border-l-4 transition-colors ${
+                    tab === t.id
+                      ? 'bg-primary-50 border-indigo-600 text-primary-800 font-bold'
+                      : 'border-transparent text-ink-700 hover:bg-cream-50'
+                  }`}
+                >
+                  <Icon size={20} className="text-ink-500" aria-hidden />
+                  <span>{t.label}</span>
+                </button>
+              );
+            })}
           </nav>
         </aside>
 
@@ -355,7 +366,10 @@ export default function SettingsPage() {
 
           {tab === 'password' && (
             <section className="bg-white border rounded-xl p-6">
-              <h2 className="text-lg font-bold mb-1">🔐 Cambia password</h2>
+              <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+                <Lock size={20} className="text-ink-500" aria-hidden />
+                Cambia password
+              </h2>
               <p className="text-sm text-ink-500 mb-5">Usa una password di almeno 8 caratteri, diversa dalle altre.</p>
               <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
                 <Input
@@ -393,7 +407,10 @@ export default function SettingsPage() {
           {tab === 'notifications' && (
             <section className="bg-white border rounded-xl p-6 space-y-5">
               <div>
-                <h2 className="text-lg font-bold mb-1">🔔 Preferenze notifiche</h2>
+                <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+                  <Bell size={20} className="text-ink-500" aria-hidden />
+                  Preferenze notifiche
+                </h2>
                 <p className="text-sm text-ink-500">Scegli cosa vuoi ricevere e come.</p>
               </div>
 
@@ -436,7 +453,10 @@ export default function SettingsPage() {
                 />
                 <div className="mt-3 flex items-start justify-between gap-4 p-3 border rounded-lg">
                   <div>
-                    <div className="font-semibold">📲 Notifiche push del browser</div>
+                    <div className="font-semibold flex items-center gap-2">
+                      <Smartphone size={18} className="text-ink-500" aria-hidden />
+                      Notifiche push del browser
+                    </div>
                     <div className="text-xs text-ink-500">
                       Avvisi immediati anche a schermo bloccato (richiede permesso).
                     </div>
@@ -450,12 +470,18 @@ export default function SettingsPage() {
           {tab === 'privacy' && (
             <section className="bg-white border rounded-xl p-6 space-y-5">
               <div>
-                <h2 className="text-lg font-bold mb-1">🛡️ Privacy e dati</h2>
+                <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
+                  <Shield size={20} className="text-ink-500" aria-hidden />
+                  Privacy e dati
+                </h2>
                 <p className="text-sm text-ink-500">Hai pieno controllo sui tuoi dati.</p>
               </div>
 
               <div className="border rounded-lg p-4">
-                <h3 className="font-bold mb-1">📥 Scarica i tuoi dati</h3>
+                <h3 className="font-bold mb-1 flex items-center gap-2">
+                  <Download size={18} className="text-ink-500" aria-hidden />
+                  Scarica i tuoi dati
+                </h3>
                 <p className="text-sm text-ink-600 mb-3">
                   Esporta in JSON tutto quello che abbiamo su di te: profilo, ordini, indirizzi, preferenze.
                 </p>
@@ -472,7 +498,10 @@ export default function SettingsPage() {
               <PublicProfileToggle />
 
               <div className="border rounded-lg p-4">
-                <h3 className="font-bold mb-1">📄 Documenti</h3>
+                <h3 className="font-bold mb-1 flex items-center gap-2">
+                  <FileText size={18} className="text-ink-500" aria-hidden />
+                  Documenti
+                </h3>
                 <ul className="text-sm space-y-1">
                   <li><Link href="/terms" className="text-primary-700 hover:underline">Termini di servizio</Link></li>
                   <li><Link href="/privacy" className="text-primary-700 hover:underline">Privacy policy</Link></li>
@@ -481,7 +510,10 @@ export default function SettingsPage() {
               </div>
 
               <div className="border rounded-lg p-4">
-                <h3 className="font-bold mb-1">📧 Contatta il responsabile privacy</h3>
+                <h3 className="font-bold mb-1 flex items-center gap-2">
+                  <Mail size={18} className="text-ink-500" aria-hidden />
+                  Contatta il responsabile privacy
+                </h3>
                 <p className="text-sm text-ink-600">
                   Per esercitare i tuoi diritti GDPR (accesso, rettifica, opposizione, cancellazione):
                 </p>
@@ -492,13 +524,19 @@ export default function SettingsPage() {
 
           {tab === 'danger' && (
             <section className="bg-white border-2 border-red-200 rounded-xl p-6">
-              <h2 className="text-lg font-bold text-red-700 mb-1">⚠️ Zona pericolosa</h2>
+              <h2 className="text-lg font-bold text-red-700 mb-1 flex items-center gap-2">
+                <AlertTriangle size={20} className="text-red-700" aria-hidden />
+                Zona pericolosa
+              </h2>
               <p className="text-sm text-ink-600 mb-5">Azioni irreversibili. Procedi con cautela.</p>
 
               {pendingDeletion ? (
                 /* Stato: eliminazione già richiesta — mostra countdown + annulla */
                 <div className="bg-accent-50 border border-accent-300 rounded-lg p-5">
-                  <h3 className="font-bold text-accent-900 mb-2">⏳ Eliminazione programmata</h3>
+                  <h3 className="font-bold text-accent-900 mb-2 flex items-center gap-2">
+                    <Hourglass size={18} className="text-accent-900" aria-hidden />
+                    Eliminazione programmata
+                  </h3>
                   <p className="text-sm text-accent-800 mb-1 leading-relaxed">
                     Il tuo account sarà eliminato definitivamente tra{' '}
                     <strong>{pendingDeletion.daysRemaining} {pendingDeletion.daysRemaining === 1 ? 'giorno' : 'giorni'}</strong>
@@ -513,9 +551,16 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleCancelDeletion}
                     disabled={cancelingDeletion}
-                    className="bg-olive-600 hover:bg-olive-700 disabled:opacity-40 text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
+                    className="inline-flex items-center gap-2 bg-olive-600 hover:bg-olive-700 disabled:opacity-40 text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
                   >
-                    {cancelingDeletion ? 'Annullamento...' : '↩️ Annulla eliminazione'}
+                    {cancelingDeletion ? (
+                      'Annullamento...'
+                    ) : (
+                      <>
+                        <Undo2 size={18} className="text-white" aria-hidden />
+                        Annulla eliminazione
+                      </>
+                    )}
                   </button>
                 </div>
               ) : (
@@ -539,9 +584,16 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleDeleteAccount}
                     disabled={deleting || deleteConfirm !== 'ELIMINA'}
-                    className="bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
+                    className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-lg font-bold transition-colors"
                   >
-                    {deleting ? 'Invio richiesta...' : '🗑️ Richiedi eliminazione'}
+                    {deleting ? (
+                      'Invio richiesta...'
+                    ) : (
+                      <>
+                        <Trash2 size={18} className="text-white" aria-hidden />
+                        Richiedi eliminazione
+                      </>
+                    )}
                   </button>
                 </div>
               )}

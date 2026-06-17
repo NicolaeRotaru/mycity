@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { List, Map as MapIcon } from 'lucide-react';
+import { List, Map as MapIcon, MapPin, RadioTower } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StoreListRow from '@/components/StoreListRow';
 import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStoresMapLazy';
@@ -130,7 +130,11 @@ export default function NearMePage() {
 
   // Attendi i dati e l'esito della geolocalizzazione (posizione o errore).
   if (isLoading || (!pos && !permError)) {
-    return <div className="container mx-auto p-8 text-center text-ink-500">📡 Calcolo distanze…</div>;
+    return (
+      <div className="container mx-auto p-8 text-center text-ink-500 flex items-center justify-center gap-2">
+        <RadioTower size={18} strokeWidth={2.2} aria-hidden /> Calcolo distanze…
+      </div>
+    );
   }
 
   const toggleBtn = (target: 'list' | 'map', label: string, Icon: typeof List) => (
@@ -157,9 +161,10 @@ export default function NearMePage() {
       </div>
 
       {permError && (
-        <div className="mb-4 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-ink-700">
-          📍 {permError}. Mostriamo i negozi di Piacenza; abilita la geolocalizzazione per ordinarli per distanza e
-          filtrare per raggio.
+        <div className="mb-4 flex gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-ink-700">
+          <MapPin size={18} strokeWidth={2.2} className="mt-0.5 shrink-0 text-accent-500" aria-hidden />
+          <span>{permError}. Mostriamo i negozi di Piacenza; abilita la geolocalizzazione per ordinarli per distanza e
+          filtrare per raggio.</span>
         </div>
       )}
 

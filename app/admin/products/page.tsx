@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -158,7 +158,7 @@ export default function AdminProductsPage() {
                             message: `"${p.name}" verrà rimosso definitivamente.`,
                             confirmLabel: tConfirm('yesDelete'),
                             danger: true,
-                            icon: '🗑️',
+                            icon: Trash2,
                           });
                           if (ok) remove.mutate(p.id);
                         }}

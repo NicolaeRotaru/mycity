@@ -3,17 +3,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
+import {
+  Users, ShoppingCart, Store, Bike, Shield, Package, TrendingUp,
+  CheckCircle2, Banknote, ShoppingBag, type LucideIcon,
+} from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { getAccountMenuItems } from '@/lib/account-menu';
 
-const StatCard = ({ label, value, color, href, icon }: { label: string; value: string | number; color: string; href?: string; icon: string }) => {
+const StatCard = ({ label, value, color, href, icon: Icon }: { label: string; value: string | number; color: string; href?: string; icon: LucideIcon }) => {
   const inner = (
     <div className={`bg-white border-2 rounded-xl p-5 hover:shadow-md transition-all border-${color}-200`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-2xl">{icon}</span>
+        <Icon size={24} strokeWidth={2.2} className={`text-${color}-600`} aria-hidden />
         <span className="text-xs uppercase tracking-wide text-ink-400 font-semibold">{label}</span>
       </div>
       <p className="text-3xl font-bold text-ink-900">{value}</p>
@@ -109,22 +113,28 @@ export default function AdminDashboard() {
       </section>
 
       <section>
-        <h2 className="font-bold text-ink-900 mb-3">👥 Utenti ({stats.users.total})</h2>
+        <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2">
+          <Users size={20} strokeWidth={2.2} className="text-primary-700" aria-hidden />
+          Utenti ({stats.users.total})
+        </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Acquirenti" value={stats.users.buyers}  color="indigo" icon="🛒" href="/admin/users?role=buyer" />
-          <StatCard label="Venditori"  value={stats.users.sellers} color="pink"   icon="🏪" href="/admin/users?role=seller" />
-          <StatCard label="Rider"      value={stats.users.riders}  color="amber"  icon="🛵" href="/admin/users?role=rider" />
-          <StatCard label="Admin"      value={stats.users.admins}  color="rose"   icon="🛡️" href="/admin/users?role=admin" />
+          <StatCard label="Acquirenti" value={stats.users.buyers}  color="indigo" icon={ShoppingCart} href="/admin/users?role=buyer" />
+          <StatCard label="Venditori"  value={stats.users.sellers} color="pink"   icon={Store} href="/admin/users?role=seller" />
+          <StatCard label="Rider"      value={stats.users.riders}  color="amber"  icon={Bike} href="/admin/users?role=rider" />
+          <StatCard label="Admin"      value={stats.users.admins}  color="rose"   icon={Shield} href="/admin/users?role=admin" />
         </div>
       </section>
 
       <section>
-        <h2 className="font-bold text-ink-900 mb-3">📦 Ordini ({stats.orders.total})</h2>
+        <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2">
+          <Package size={20} strokeWidth={2.2} className="text-primary-700" aria-hidden />
+          Ordini ({stats.orders.total})
+        </h2>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Totali"          value={stats.orders.total}                color="blue"    icon="📦" href="/admin/orders" />
-          <StatCard label="Ultimi 7 giorni" value={stats.orders.recent}               color="violet"  icon="📈" href="/admin/orders" />
-          <StatCard label="Consegnati"      value={stats.orders.byStatus.DELIVERED ?? 0} color="emerald" icon="✅" />
-          <StatCard label="Ricavi totali"   value={formatPrice(stats.orders.revenue)} color="emerald" icon="💰" />
+          <StatCard label="Totali"          value={stats.orders.total}                color="blue"    icon={Package} href="/admin/orders" />
+          <StatCard label="Ultimi 7 giorni" value={stats.orders.recent}               color="violet"  icon={TrendingUp} href="/admin/orders" />
+          <StatCard label="Consegnati"      value={stats.orders.byStatus.DELIVERED ?? 0} color="emerald" icon={CheckCircle2} />
+          <StatCard label="Ricavi totali"   value={formatPrice(stats.orders.revenue)} color="emerald" icon={Banknote} />
         </div>
 
         <div className="bg-white border rounded-xl p-5 mt-4">
@@ -147,10 +157,13 @@ export default function AdminDashboard() {
       </section>
 
       <section>
-        <h2 className="font-bold text-ink-900 mb-3">🛍️ Catalogo</h2>
+        <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2">
+          <ShoppingBag size={20} strokeWidth={2.2} className="text-primary-700" aria-hidden />
+          Catalogo
+        </h2>
         <div className="grid grid-cols-2 gap-3">
-          <StatCard label="Prodotti totali"    value={stats.products.total}     color="indigo"  icon="📦" href="/admin/products" />
-          <StatCard label="Disponibili online" value={stats.products.available} color="emerald" icon="🟢" />
+          <StatCard label="Prodotti totali"    value={stats.products.total}     color="indigo"  icon={Package} href="/admin/products" />
+          <StatCard label="Disponibili online" value={stats.products.available} color="emerald" icon={CheckCircle2} />
         </div>
       </section>
     </div>

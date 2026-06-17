@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen } from 'lucide-react';
+import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen, MessageCircle } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
@@ -154,9 +154,9 @@ const Footer = () => {
                 href={`https://wa.me/${(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '393000000000').replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Ciao MyCity, ho una domanda')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-white transition-colors inline-flex items-center gap-1"
+                className="hover:text-white transition-colors inline-flex items-center gap-1.5"
               >
-                💬 WhatsApp Business
+                <MessageCircle size={14} strokeWidth={2} aria-hidden /> WhatsApp Business
               </a>
             </li>
             <li><Link href="/shipping" className="hover:text-white transition-colors">Spedizioni</Link></li>

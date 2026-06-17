@@ -114,7 +114,7 @@ export default async function PublicProfilePage(props: { params: Promise<{ handl
           <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
             {achievements.map((a, i) => (
               <div key={i} className="bg-white border border-cream-300 rounded-xl p-3 text-center">
-                <div className="text-3xl mb-1">{a.achievement?.icon ?? '🏆'}</div>
+                <div className="text-3xl mb-1 flex items-center justify-center">{a.achievement?.icon ?? <Trophy size={28} strokeWidth={2.2} className="text-accent-600" aria-hidden />}</div>
                 <p className="text-xs font-semibold text-ink-700 leading-tight">{a.achievement?.title}</p>
                 <p className="text-[10px] text-ink-400 uppercase mt-1">{a.achievement?.tier}</p>
               </div>

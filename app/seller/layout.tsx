@@ -7,6 +7,7 @@ import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { SubscriptionBanner } from '@/components/seller/SubscriptionBanner';
+import { Store, Mail, Home, Pencil, X, PauseCircle, Clock, ArrowLeft } from 'lucide-react';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -41,8 +42,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     return (
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="bg-white border-2 border-primary-200 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-primary-100 flex items-center justify-center text-4xl mb-4">
-            🏪
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-primary-100 flex items-center justify-center mb-4">
+            <Store size={32} className="text-primary-600" aria-hidden />
           </div>
           <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Quest'area è per i venditori</h1>
           <p className="text-ink-600 mb-1">
@@ -56,15 +57,15 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           <div className="flex flex-wrap gap-2 justify-center text-sm">
             <Link
               href="/sell"
-              className="bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 text-white px-5 py-2.5 rounded-lg font-bold shadow"
+              className="inline-flex items-center gap-1.5 bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 text-white px-5 py-2.5 rounded-lg font-bold shadow"
             >
-              🏪 Diventa venditore
+              <Store size={16} aria-hidden /> Diventa venditore
             </Link>
             <Link
               href={isRider ? '/rider' : '/'}
-              className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold"
+              className="inline-flex items-center gap-1.5 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold"
             >
-              ← Torna alla mia area
+              <ArrowLeft size={16} aria-hidden /> Torna alla mia area
             </Link>
           </div>
         </div>
@@ -76,8 +77,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     return (
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="bg-white border-2 border-orange-200 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-orange-100 flex items-center justify-center text-4xl mb-4">
-            ⏸️
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-orange-100 flex items-center justify-center mb-4">
+            <PauseCircle size={32} className="text-accent-500" aria-hidden />
           </div>
           <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Negozio temporaneamente sospeso</h1>
           <p className="text-ink-600 mb-4 max-w-md mx-auto">
@@ -85,11 +86,11 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             Contatta il supporto per chiarimenti.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Link href="/contact" className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-bold shadow">
-              ✉️ Contatta il supporto
+            <Link href="/contact" className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-bold shadow">
+              <Mail size={16} aria-hidden /> Contatta il supporto
             </Link>
-            <Link href="/" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
-              🏠 Vai al marketplace
+            <Link href="/" className="inline-flex items-center gap-1.5 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
+              <Home size={16} aria-hidden /> Vai al marketplace
             </Link>
           </div>
         </div>
@@ -101,8 +102,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     return (
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="bg-white border-2 border-rose-200 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-rose-100 flex items-center justify-center text-4xl mb-4">
-            ❌
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-rose-100 flex items-center justify-center mb-4">
+            <X size={32} className="text-secondary-600" aria-hidden />
           </div>
           <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Richiesta non approvata</h1>
           {profileExt?.rejection_reason && (
@@ -114,8 +115,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             La tua candidatura come venditore non è stata approvata. Puoi correggere i dati e ripresentare la richiesta.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Button href="/sell">✏️ Ripresenta la richiesta</Button>
-            <Button href="/" variant="secondary">🏠 Vai al marketplace</Button>
+            <Button href="/sell" icon={Pencil}>Ripresenta la richiesta</Button>
+            <Button href="/" variant="secondary" icon={Home}>Vai al marketplace</Button>
           </div>
         </div>
       </div>
@@ -126,8 +127,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
     return (
       <div className="container mx-auto p-6 max-w-2xl">
         <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center text-4xl mb-4">
-            ⏳
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center mb-4">
+            <Clock size={32} className="text-accent-500" aria-hidden />
           </div>
           <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Negozio in attesa di approvazione</h1>
           <p className="text-ink-600 mb-4 max-w-md mx-auto">
@@ -135,9 +136,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             il nostro team avrà approvato la richiesta (entro 48 ore lavorative).
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Button href="/sell" variant="secondary">✏️ Modifica richiesta</Button>
-            <Button href="/">🏠 Vai al marketplace</Button>
-            <Button href="/contact" variant="secondary">✉️ Contatti</Button>
+            <Button href="/sell" variant="secondary" icon={Pencil}>Modifica richiesta</Button>
+            <Button href="/" icon={Home}>Vai al marketplace</Button>
+            <Button href="/contact" variant="secondary" icon={Mail}>Contatti</Button>
           </div>
         </div>
       </div>

@@ -24,7 +24,7 @@ const KEY = 'mc_buyer_onboarded';
 const STEPS = [
   {
     icon: Gift,
-    title: 'Benvenuto su MyCity 👋',
+    title: 'Benvenuto su MyCity',
     body: 'Hai €5 di benvenuto pronti per il tuo primo ordine. Si applicano in automatico al checkout.',
     cta: 'Vai avanti',
   },

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Eye, EyeOff, Trash2, Share2, ListChecks } from 'lucide-react';
+import { Pencil, Eye, EyeOff, Trash2, Share2, ListChecks, Star, Package } from 'lucide-react';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -199,7 +199,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
       ]} />
 
       <header className="bg-white border border-cream-300 rounded-2xl p-6 flex items-start gap-4">
-        <div className="text-5xl flex-shrink-0">{list.cover_emoji ?? '⭐'}</div>
+        <div className="text-5xl flex-shrink-0">{list.cover_emoji ?? <Star size={40} strokeWidth={2.2} className="text-accent-500" aria-hidden />}</div>
         <div className="flex-1 min-w-0">
           {editTitle && isOwner ? (
             <div className="space-y-2">
@@ -278,7 +278,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
                   {img ? (
                     <Image src={sizedImage(img, 'thumb')} alt="" width={72} height={72} className="rounded-lg object-cover w-18 h-18" />
                   ) : (
-                    <div className="w-18 h-18 rounded-lg bg-cream-100 flex items-center justify-center text-2xl">📦</div>
+                    <div className="w-18 h-18 rounded-lg bg-cream-100 flex items-center justify-center"><Package size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden /></div>
                   )}
                 </Link>
                 <div className="flex-1 min-w-0">

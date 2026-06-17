@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Ticket } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
@@ -249,7 +250,7 @@ export default function AdminCouponsPage() {
                         message: `Il codice ${c.code} non sarà più utilizzabile dai clienti.`,
                         confirmLabel: tConfirm('yesDelete'),
                         danger: true,
-                        icon: '🎟️',
+                        icon: Ticket,
                       });
                       if (ok) remove.mutate(c.id);
                     }}

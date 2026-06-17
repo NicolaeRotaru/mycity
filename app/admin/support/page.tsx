@@ -105,7 +105,7 @@ export default function AdminSupportPage() {
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-28 rounded-xl skeleton" />)}</div>
       ) : messages.length === 0 ? (
         <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
-          <p className="text-4xl mb-2">📬</p>
+          <Inbox size={40} strokeWidth={2} className="mx-auto text-ink-300 mb-2" aria-hidden />
           <p className="text-ink-600 font-medium">Nessun messaggio in questo stato</p>
         </div>
       ) : (

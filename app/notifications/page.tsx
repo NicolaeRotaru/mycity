@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Bell, Inbox } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -85,7 +86,7 @@ export default function NotificationsPage() {
   return (
     <div className="container mx-auto px-6 py-8 max-w-3xl">
       <div className="flex items-center gap-3 mb-6">
-        <span className="text-3xl">🔔</span>
+        <Bell size={28} className="text-primary-600" aria-hidden />
         <div>
           <h1 className="text-2xl font-bold">Notifiche</h1>
           <p className="text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
@@ -94,7 +95,7 @@ export default function NotificationsPage() {
 
       {notifications.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
-          <p className="text-6xl mb-3">📭</p>
+          <Inbox size={48} className="mx-auto text-ink-500 mb-3" aria-hidden />
           <p className="text-ink-600 font-semibold mb-1">Nessuna notifica</p>
           <p className="text-sm text-ink-400">Quando ci saranno aggiornamenti, li vedrai qui.</p>
         </div>

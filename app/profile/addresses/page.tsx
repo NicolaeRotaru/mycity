@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { MapPin, Phone } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
@@ -206,12 +207,16 @@ export default function AddressesPage() {
             <div key={a.id} className="bg-white border rounded-xl p-4 flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-bold text-ink-900 flex items-center gap-2">
-                  📍 {a.label}
+                  <MapPin size={18} className="text-primary-600" aria-hidden />
+                  {a.label}
                   {a.is_default && <span className="text-xs bg-olive-100 text-olive-700 px-2 py-0.5 rounded-full font-semibold">Predefinito</span>}
                 </p>
                 <p className="text-sm text-ink-700 mt-1">{a.full_name}</p>
                 <p className="text-sm text-ink-600">{a.address}, {a.zip} {a.city}</p>
-                <p className="text-sm text-ink-500">📞 {a.phone}</p>
+                <p className="text-sm text-ink-500 flex items-center gap-1.5">
+                  <Phone size={14} className="text-ink-500" aria-hidden />
+                  {a.phone}
+                </p>
                 {a.notes && <p className="text-xs text-ink-400 italic mt-1">{a.notes}</p>}
               </div>
               <div className="flex flex-col gap-1 shrink-0">
@@ -223,7 +228,7 @@ export default function AddressesPage() {
                       message: a.label ? `Stai per rimuovere "${a.label}".` : undefined,
                       confirmLabel: 'Sì, elimina',
                       danger: true,
-                      icon: '📍',
+                      icon: MapPin,
                     });
                     if (ok) remove.mutate(a.id);
                   }}

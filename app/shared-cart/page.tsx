@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingCart, ArrowRight, Check } from 'lucide-react';
+import { ShoppingCart, ArrowRight, Check, Package, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { addToCart, type CartItem } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
@@ -165,7 +165,7 @@ function SharedCartInner() {
                     unoptimized
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-2xl">📦</div>
+                  <div className="w-full h-full flex items-center justify-center"><Package size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden /></div>
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -185,8 +185,8 @@ function SharedCartInner() {
       </ul>
 
       {unavailable.length > 0 && (
-        <div className="bg-cream-50 border border-cream-300 rounded-xl p-4 text-sm text-ink-600 mb-6">
-          ⚠ {unavailable.length} {unavailable.length === 1 ? 'prodotto non disponibile' : 'prodotti non disponibili'} sono stati esclusi dalla lista.
+        <div className="bg-cream-50 border border-cream-300 rounded-xl p-4 text-sm text-ink-600 mb-6 flex items-center gap-1.5">
+          <AlertTriangle size={16} strokeWidth={2.2} className="text-accent-500 shrink-0" aria-hidden /> {unavailable.length} {unavailable.length === 1 ? 'prodotto non disponibile' : 'prodotti non disponibili'} sono stati esclusi dalla lista.
         </div>
       )}
 

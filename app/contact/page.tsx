@@ -7,6 +7,7 @@ import Honeypot from '@/components/Honeypot';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
+import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
@@ -53,19 +54,19 @@ export default function ContactPage() {
 
       <div className="grid md:grid-cols-3 gap-4 mb-10">
         <a href="mailto:info@mycity.it" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
-          <div className="text-3xl mb-2">📧</div>
+          <div className="mb-2"><Mail size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold">Email</div>
           <div className="text-sm text-ink-600">info@mycity.it</div>
           <div className="text-xs text-ink-500 mt-1">Risposta entro 24h</div>
         </a>
         <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
-          <div className="text-3xl mb-2">💬</div>
+          <div className="mb-2"><MessageCircle size={28} className="text-olive-600" aria-hidden /></div>
           <div className="font-bold">WhatsApp</div>
           <div className="text-sm text-ink-600">+39 300 000 0000</div>
           <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
         </a>
         <a href="tel:+390523000000" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
-          <div className="text-3xl mb-2">📞</div>
+          <div className="mb-2"><Phone size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold">Telefono</div>
           <div className="text-sm text-ink-600">+39 0523 000000</div>
           <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
@@ -120,14 +121,14 @@ export default function ContactPage() {
               Inviando il messaggio accetti la nostra <Link href="/privacy" className="text-primary-700 underline">Privacy Policy</Link>.
             </p>
             <Button type="submit" loading={sending} fullWidth size="lg">
-              {sending ? 'Invio in corso...' : '✉️ Invia messaggio'}
+              {sending ? 'Invio in corso...' : <span className="inline-flex items-center gap-2"><Mail size={18} aria-hidden /> Invia messaggio</span>}
             </Button>
           </form>
         </div>
 
         <aside className="md:col-span-2 space-y-4">
           <div className="bg-gradient-to-br from-primary-50 to-purple-50 border border-primary-100 rounded-2xl p-6">
-            <h3 className="font-bold text-ink-900 mb-2">📍 Sede</h3>
+            <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-2"><MapPin size={18} className="text-primary-600 shrink-0" aria-hidden /> Sede</h3>
             <p className="text-sm text-ink-700 leading-relaxed">
               MyCity S.r.l.<br />
               Via Roma 1<br />
@@ -143,7 +144,7 @@ export default function ContactPage() {
           </div>
 
           <div className="bg-white border border-cream-300 rounded-2xl p-6">
-            <h3 className="font-bold text-ink-900 mb-3">🕐 Orari assistenza</h3>
+            <h3 className="font-bold text-ink-900 mb-3 flex items-center gap-2"><Clock size={18} className="text-primary-600 shrink-0" aria-hidden /> Orari assistenza</h3>
             <ul className="text-sm text-ink-700 space-y-1">
               <li className="flex justify-between"><span>Lunedì - Venerdì</span><span className="font-semibold">9:00 - 18:00</span></li>
               <li className="flex justify-between"><span>Sabato</span><span className="font-semibold">10:00 - 14:00</span></li>
@@ -152,7 +153,7 @@ export default function ContactPage() {
           </div>
 
           <Link href="/faq" className="block bg-accent-50 border border-accent-200 rounded-2xl p-5 hover:bg-accent-100 transition-colors">
-            <div className="font-bold text-ink-900 mb-1">💡 Forse trovi prima qui</div>
+            <div className="font-bold text-ink-900 mb-1 flex items-center gap-2"><Lightbulb size={18} className="text-accent-500 shrink-0" aria-hidden /> Forse trovi prima qui</div>
             <div className="text-sm text-ink-700">Consulta le domande frequenti →</div>
           </Link>
         </aside>

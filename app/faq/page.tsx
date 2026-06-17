@@ -2,14 +2,15 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { ShoppingCart, Truck, CreditCard, Undo2, Settings, Store, Bike, Mail, type LucideIcon } from 'lucide-react';
 
 type QA = { q: string; a: React.ReactNode };
-type Section = { title: string; icon: string; items: QA[] };
+type Section = { title: string; icon: LucideIcon; items: QA[] };
 
 const SECTIONS: Section[] = [
   {
     title: 'Acquisti e ordini',
-    icon: '🛒',
+    icon: ShoppingCart,
     items: [
       {
         q: 'Come faccio a ordinare su MyCity?',
@@ -27,7 +28,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Spedizioni e consegne',
-    icon: '🚚',
+    icon: Truck,
     items: [
       {
         q: 'Quanto costa la spedizione?',
@@ -49,7 +50,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Pagamenti',
-    icon: '💳',
+    icon: CreditCard,
     items: [
       {
         q: 'Quali metodi di pagamento accettate?',
@@ -67,7 +68,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Resi e rimborsi',
-    icon: '↩️',
+    icon: Undo2,
     items: [
       {
         q: 'Posso restituire un prodotto?',
@@ -85,7 +86,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Account e impostazioni',
-    icon: '⚙️',
+    icon: Settings,
     items: [
       {
         q: 'Come modifico i miei dati?',
@@ -103,7 +104,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Vendere su MyCity',
-    icon: '🏪',
+    icon: Store,
     items: [
       {
         q: 'Come divento venditore?',
@@ -121,7 +122,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Diventare rider',
-    icon: '🛵',
+    icon: Bike,
     items: [
       {
         q: 'Come faccio a consegnare per MyCity?',
@@ -148,10 +149,12 @@ export default function FaqPage() {
       </div>
 
       <div className="space-y-8">
-        {SECTIONS.map((section) => (
+        {SECTIONS.map((section) => {
+          const Icon = section.icon;
+          return (
           <section key={section.title}>
             <h2 className="text-xl font-bold text-ink-900 mb-4 flex items-center gap-2">
-              <span className="text-2xl">{section.icon}</span> {section.title}
+              <Icon size={24} className="text-primary-600 shrink-0" aria-hidden /> {section.title}
             </h2>
             <div className="space-y-2">
               {section.items.map((item, i) => {
@@ -178,14 +181,15 @@ export default function FaqPage() {
               })}
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-12 bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-2xl p-8 text-center">
         <h3 className="text-xl font-bold mb-2">Non hai trovato la risposta?</h3>
         <p className="text-primary-100 mb-4">Il nostro team risponde entro 24 ore lavorative.</p>
-        <Link href="/contact" className="inline-block bg-white text-primary-800 px-6 py-3 rounded-lg font-bold hover:bg-primary-50 transition-colors">
-          ✉️ Contattaci
+        <Link href="/contact" className="inline-flex items-center gap-2 bg-white text-primary-800 px-6 py-3 rounded-lg font-bold hover:bg-primary-50 transition-colors">
+          <Mail size={18} aria-hidden /> Contattaci
         </Link>
       </div>
     </div>

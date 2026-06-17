@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { AlarmClock, Check, Circle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
@@ -132,7 +133,7 @@ function ResetPasswordInner() {
     return (
       <Card>
         <div className="text-center">
-          <div className="text-5xl mb-3">⏰</div>
+          <div className="mb-3 flex justify-center text-ink-500"><AlarmClock size={48} strokeWidth={2} aria-hidden /></div>
           <h1 className="text-xl font-bold text-ink-900 mb-2">Link non valido o scaduto</h1>
           <p className="text-sm text-ink-600 mb-5">
             Il link di reset password potrebbe essere stato usato o essere scaduto.
@@ -149,8 +150,8 @@ function ResetPasswordInner() {
     return (
       <Card>
         <div className="text-center py-6">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-olive-100 text-olive-600 flex items-center justify-center text-3xl mb-3">
-            ✓
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-olive-100 text-olive-600 flex items-center justify-center mb-3">
+            <Check size={28} strokeWidth={2.4} aria-hidden />
           </div>
           <h1 className="text-xl font-bold text-ink-900 mb-1">Password aggiornata!</h1>
           <p className="text-sm text-ink-600">Tra un istante ti porto al login con la nuova password.</p>
@@ -240,8 +241,9 @@ function PasswordStrength({ value }: { value: string }) {
       <p className="text-xs text-ink-500 mb-2">{labels[ok]}</p>
       <ul className="text-xs space-y-0.5">
         {checks.map((c) => (
-          <li key={c.label} className={c.ok ? 'text-olive-600' : 'text-ink-400'}>
-            {c.ok ? '✓' : '○'} {c.label}
+          <li key={c.label} className={`flex items-center gap-1.5 ${c.ok ? 'text-olive-600' : 'text-ink-400'}`}>
+            {c.ok ? <Check size={14} strokeWidth={2.4} aria-hidden /> : <Circle size={14} strokeWidth={2.2} aria-hidden />}
+            {c.label}
           </li>
         ))}
       </ul>

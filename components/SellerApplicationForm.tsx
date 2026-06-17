@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
+import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 /**
@@ -197,16 +198,31 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
     <form onSubmit={handleSubmit(submit)} className="space-y-5">
       {/* INFO HEADER */}
       <div className="bg-gradient-to-r from-primary-600 via-purple-600 to-pink-600 text-white rounded-2xl p-6">
-        <h1 className="text-2xl md:text-3xl font-extrabold mb-1">🏪 Diventa venditore business</h1>
+        <h1 className="text-2xl md:text-3xl font-extrabold mb-1 flex items-center gap-2">
+          <Store size={28} aria-hidden />
+          Diventa venditore business
+        </h1>
         <p className="text-primary-100 text-sm leading-relaxed">
           Vetrina dedicata, prodotti illimitati.
           <strong className="text-white"> Abbonamento €50/mese</strong> e commissione del 10% sulle vendite, attivi solo dopo approvazione del nostro team.
         </p>
         <ul className="text-xs text-primary-100 mt-3 space-y-1">
-          <li>✓ Vetrina pubblica con logo, copertina, descrizione</li>
-          <li>✓ Pubblica prodotti illimitati e gestisci ordini da dashboard</li>
-          <li>✓ Abbonamento €50/mese + commissione del 10% sulle vendite</li>
-          <li>✓ Bonifico settimanale su IBAN per i tuoi incassi</li>
+          <li className="flex items-start gap-1.5">
+            <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
+            <span>Vetrina pubblica con logo, copertina, descrizione</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
+            <span>Pubblica prodotti illimitati e gestisci ordini da dashboard</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
+            <span>Abbonamento €50/mese + commissione del 10% sulle vendite</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
+            <span>Bonifico settimanale su IBAN per i tuoi incassi</span>
+          </li>
         </ul>
       </div>
 
@@ -336,7 +352,10 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         />
 
         <div className="bg-accent-50 border border-accent-200 rounded-lg p-4 text-sm text-accent-900">
-          <p className="font-semibold mb-1">💳 Carta di credito per abbonamento</p>
+          <p className="font-semibold mb-1 inline-flex items-center gap-1.5">
+            <CreditCard size={18} aria-hidden />
+            Carta di credito per abbonamento
+          </p>
           <p>
             L'abbonamento (€50/mese) viene addebitato <strong>solo dopo che l'admin avrà approvato la richiesta</strong>.
             In quel momento ti chiederemo di inserire la carta tramite un pagamento sicuro (Stripe). Non ti chiediamo i
@@ -374,7 +393,14 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         disabled={isLoading || uploadingLogo}
         className="w-full bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-base shadow-lg transition-all"
       >
-        {isLoading ? 'Invio in corso…' : '📨 Invia richiesta'}
+        {isLoading ? (
+          'Invio in corso…'
+        ) : (
+          <span className="inline-flex items-center justify-center gap-2">
+            <Send size={18} aria-hidden />
+            Invia richiesta
+          </span>
+        )}
       </button>
       <p className="text-center text-xs text-ink-500">
         Risposta entro 48 ore lavorative. Sarai notificato via email e dentro la piattaforma.

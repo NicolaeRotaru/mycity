@@ -3,6 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { ShoppingCart, Store, Bike, Gift, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
@@ -13,10 +14,10 @@ import { friendlyError } from '@/lib/errors';
 
 type Role = 'buyer' | 'seller' | 'rider';
 
-const ROLES: { value: Role; emoji: string; title: string; subtitle: string; color: string }[] = [
-  { value: 'buyer',  emoji: '🛒', title: 'Acquirente', subtitle: 'Compra dai negozi locali',  color: 'indigo' },
-  { value: 'seller', emoji: '🏪', title: 'Venditore',  subtitle: 'Vendi i tuoi prodotti',     color: 'red' },
-  { value: 'rider',  emoji: '🛵', title: 'Rider',      subtitle: 'Consegna ordini',           color: 'amber' },
+const ROLES: { value: Role; Icon: LucideIcon; title: string; subtitle: string; color: string }[] = [
+  { value: 'buyer',  Icon: ShoppingCart, title: 'Acquirente', subtitle: 'Compra dai negozi locali',  color: 'indigo' },
+  { value: 'seller', Icon: Store,        title: 'Venditore',  subtitle: 'Vendi i tuoi prodotti',     color: 'red' },
+  { value: 'rider',  Icon: Bike,         title: 'Rider',      subtitle: 'Consegna ordini',           color: 'amber' },
 ];
 
 const colorClasses: Record<string, { border: string; bg: string; btn: string }> = {
@@ -99,8 +100,9 @@ function SignUpInner() {
       <h2 className="text-2xl font-bold text-ink-800">Crea il tuo account</h2>
 
       {refCode && (
-        <div className="bg-olive-50 border-2 border-olive-200 rounded-lg p-3 text-sm text-olive-900">
-          🎁 <strong>Sei stato invitato!</strong> Codice <span className="font-mono font-bold">{refCode}</span> applicato. Hai <strong>€5 di sconto</strong> sul primo ordine.
+        <div className="bg-olive-50 border-2 border-olive-200 rounded-lg p-3 text-sm text-olive-900 flex items-center gap-1.5">
+          <Gift size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
+          <span><strong>Sei stato invitato!</strong> Codice <span className="font-mono font-bold">{refCode}</span> applicato. Hai <strong>€5 di sconto</strong> sul primo ordine.</span>
         </div>
       )}
 
@@ -114,7 +116,7 @@ function SignUpInner() {
               role === r.value ? colorClasses[r.color].border : 'border-cream-300 hover:border-cream-300'
             }`}
           >
-            <div className="text-2xl mb-1">{r.emoji}</div>
+            <div className="mb-1"><r.Icon size={24} strokeWidth={2.2} aria-hidden /></div>
             <div className="font-bold text-sm">{r.title}</div>
             <div className="text-xs text-ink-500 leading-tight">{r.subtitle}</div>
           </button>

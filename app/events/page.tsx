@@ -4,7 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar, Users, Clock, Sparkles, CalendarDays } from 'lucide-react';
+import { Calendar, Users, Clock, Sparkles, CalendarDays, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
@@ -210,7 +210,7 @@ export default function EventsPage() {
                           : 'bg-primary-700 hover:bg-primary-800 text-white'
                       }`}
                     >
-                      {isGoing ? '✓ Ci sei' : ev.cta_label}
+                      {isGoing ? <span className="inline-flex items-center gap-1"><Check size={16} strokeWidth={2.4} aria-hidden /> Ci sei</span> : ev.cta_label}
                     </button>
                     {ev.cta_url && isLive && (
                       <Link

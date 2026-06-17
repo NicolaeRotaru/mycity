@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Eye, Clock, Globe, Smartphone, Tablet, Monitor, Bot, Users, Activity,
-  LogIn, ShoppingBag, Package, MessageSquare, ShieldAlert, Cpu, Radio,
+  LogIn, ShoppingBag, Package, MessageSquare, ShieldAlert, Cpu, Radio, User,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
@@ -361,7 +361,10 @@ export default function AdminActivityPage() {
                 <div key={v.key} className="px-4 py-3 grid md:grid-cols-12 gap-1 md:gap-2 text-sm items-center hover:bg-cream-50">
                   <div className="md:col-span-3 min-w-0">
                     {v.loggedIn ? (
-                      <span className="font-semibold text-ink-900 truncate block">👤 {v.userLabel ?? 'Utente'}</span>
+                      <span className="font-semibold text-ink-900 truncate flex items-center gap-1.5">
+                        <User size={14} strokeWidth={2.2} className="shrink-0" aria-hidden />
+                        {v.userLabel ?? 'Utente'}
+                      </span>
                     ) : (
                       <span className="text-ink-500 truncate block">Anonimo · {v.key.slice(0, 8)}…</span>
                     )}

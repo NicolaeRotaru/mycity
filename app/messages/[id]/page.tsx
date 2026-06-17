@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -173,7 +173,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   if (!conversation) {
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
-        <div className="text-5xl mb-3">💬</div>
+        <MessageCircle size={40} className="mx-auto text-ink-500 mb-3" aria-hidden />
         <h1 className="text-xl font-bold mb-2">Conversazione non trovata</h1>
         <Link href="/messages" className="inline-block mt-4 text-primary-700 font-semibold hover:underline">
           ← Torna ai messaggi

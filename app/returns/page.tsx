@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
+import { Undo2, Calendar, Mail, BookOpen } from 'lucide-react';
 
 export const metadata = {
   title: 'Resi e rimborsi · MyCity',
@@ -19,13 +20,13 @@ export default function ReturnsPage() {
   return (
     <div className="container mx-auto px-6 py-10 max-w-3xl">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">↩️ Resi e rimborsi</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3 flex items-center justify-center gap-2"><Undo2 size={32} className="text-primary-600 shrink-0" aria-hidden /> Resi e rimborsi</h1>
         <p className="text-ink-600">Hai 14 giorni di tempo per ripensarci. Ecco come funziona.</p>
       </div>
 
       <div className="bg-gradient-to-r from-primary-50 to-purple-50 border border-primary-200 rounded-2xl p-6 mb-10">
         <div className="flex items-start gap-4">
-          <div className="text-4xl">📅</div>
+          <Calendar size={32} className="text-primary-600 shrink-0" aria-hidden />
           <div>
             <h2 className="font-bold text-ink-900 mb-1">14 giorni di diritto di recesso</h2>
             <p className="text-sm text-ink-700">
@@ -90,9 +91,9 @@ export default function ReturnsPage() {
           <p>Se hai dubbi o problemi con un reso, scrivici: il nostro team di supporto media tra te e il venditore
           per risolvere ogni situazione.</p>
           <div className="flex gap-3 flex-wrap mt-3">
-            <Button href="/contact">✉️ Contatta supporto</Button>
-            <Link href="/faq" className="inline-block bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold transition-colors">
-              📖 Vai alle FAQ
+            <Button href="/contact"><span className="inline-flex items-center gap-2"><Mail size={18} aria-hidden /> Contatta supporto</span></Button>
+            <Link href="/faq" className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold transition-colors">
+              <BookOpen size={18} aria-hidden /> Vai alle FAQ
             </Link>
           </div>
         </div>

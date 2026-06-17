@@ -38,7 +38,7 @@ export default function ListsPage() {
   const qc = useQueryClient();
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newEmoji, setNewEmoji] = useState('⭐');
+  const [newEmoji, setNewEmoji] = useState('');
   const [newDesc, setNewDesc] = useState('');
 
   const { data: featuredLists = [] } = useQuery({
@@ -104,7 +104,7 @@ export default function ListsPage() {
           owner_id: user.id,
           title: newTitle.trim(),
           description: newDesc.trim() || null,
-          cover_emoji: newEmoji.trim() || '⭐',
+          cover_emoji: newEmoji.trim() || null,
         })
         .select('id')
         .single();
@@ -114,7 +114,7 @@ export default function ListsPage() {
     onSuccess: (id) => {
       toast.success('Lista creata');
       setShowNew(false);
-      setNewTitle(''); setNewDesc(''); setNewEmoji('⭐');
+      setNewTitle(''); setNewDesc(''); setNewEmoji('');
       qc.invalidateQueries({ queryKey: queryKeys.lists.mine });
       window.location.href = `/lists/${id}`;
     },
@@ -129,7 +129,7 @@ export default function ListsPage() {
         className="bg-white border border-cream-300 rounded-xl p-4 hover:shadow-warm transition-shadow flex gap-3"
       >
         <div className="w-14 h-14 rounded-lg bg-cream-100 flex items-center justify-center text-3xl flex-shrink-0">
-          {list.cover_emoji ?? '⭐'}
+          {list.cover_emoji ?? <Star size={28} strokeWidth={2.2} className="text-accent-500" aria-hidden />}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">

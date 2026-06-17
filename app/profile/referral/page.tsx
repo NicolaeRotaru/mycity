@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
+import { Check, Clipboard, MessageCircle, Mail, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -51,7 +52,7 @@ export default function ReferralPage() {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://mycity.it';
   const inviteLink = `${baseUrl}/sign-up?ref=${profile.referral_code}`;
-  const shareText = `Iscriviti a MyCity Piacenza, il marketplace dei negozi locali. Usa il mio codice ${profile.referral_code} e abbiamo entrambi €5 di sconto! 👇\n${inviteLink}`;
+  const shareText = `Iscriviti a MyCity Piacenza, il marketplace dei negozi locali. Usa il mio codice ${profile.referral_code} e abbiamo entrambi €5 di sconto!\n${inviteLink}`;
 
   const copy = async () => {
     await navigator.clipboard.writeText(inviteLink);
@@ -74,9 +75,19 @@ export default function ReferralPage() {
         <p className="font-mono text-4xl font-extrabold tracking-wider mb-4">{profile.referral_code}</p>
         <button
           onClick={copy}
-          className="bg-white text-primary-800 hover:bg-primary-50 px-6 py-2.5 rounded-lg font-bold"
+          className="inline-flex items-center gap-2 bg-white text-primary-800 hover:bg-primary-50 px-6 py-2.5 rounded-lg font-bold"
         >
-          {copied ? '✓ Copiato!' : '📋 Copia link invito'}
+          {copied ? (
+            <>
+              <Check size={18} className="text-primary-800" aria-hidden />
+              Copiato!
+            </>
+          ) : (
+            <>
+              <Clipboard size={18} className="text-primary-800" aria-hidden />
+              Copia link invito
+            </>
+          )}
         </button>
       </div>
 
@@ -88,15 +99,17 @@ export default function ReferralPage() {
             href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="bg-olive-500 hover:bg-olive-600 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
+            className="inline-flex items-center justify-center gap-2 bg-olive-500 hover:bg-olive-600 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
           >
-            💬 WhatsApp
+            <MessageCircle size={16} className="text-white" aria-hidden />
+            WhatsApp
           </a>
           <a
             href={`mailto:?subject=${encodeURIComponent('Iscriviti a MyCity Piacenza')}&body=${encodeURIComponent(shareText)}`}
-            className="bg-gray-700 hover:bg-ink-800 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
+            className="inline-flex items-center justify-center gap-2 bg-gray-700 hover:bg-ink-800 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
           >
-            ✉️ Email
+            <Mail size={16} className="text-white" aria-hidden />
+            Email
           </a>
         </div>
       </div>
@@ -117,8 +130,9 @@ export default function ReferralPage() {
         </div>
       </div>
 
-      <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900">
-        💡 <strong>Come funziona</strong>: il tuo amico si iscrive col tuo codice → fa il primo ordine → tu ricevi €5 di credito, lui paga €5 in meno.
+      <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 flex items-start gap-2">
+        <Lightbulb size={18} className="text-accent-500 shrink-0 mt-0.5" aria-hidden />
+        <span><strong>Come funziona</strong>: il tuo amico si iscrive col tuo codice → fa il primo ordine → tu ricevi €5 di credito, lui paga €5 in meno.</span>
       </div>
     </div>
   );

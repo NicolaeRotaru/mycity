@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, CheckCircle2, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Banknote, CheckCircle2, AlertCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
@@ -79,9 +79,9 @@ export default function StripeConnectButton() {
       if (data?.charges_enabled && data?.payouts_enabled) {
         toast.success('Pagamenti attivati!');
       } else if (Array.isArray(data?.currently_due) && data.currently_due.length > 0) {
-        toast('Mancano ancora verifiche su Stripe: completa l\'onboarding.', { icon: '⚠️' });
+        toast('Mancano ancora verifiche su Stripe: completa l\'onboarding.', { icon: <AlertTriangle size={16} /> });
       } else {
-        toast('Stato aggiornato. Se risulta ancora in attesa, riprova tra poco.', { icon: '🔄' });
+        toast('Stato aggiornato. Se risulta ancora in attesa, riprova tra poco.', { icon: <RefreshCw size={16} /> });
       }
     } catch (err) {
       toast.error(friendlyError(err));

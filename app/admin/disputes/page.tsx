@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Check, X, Clock, ArrowLeft } from 'lucide-react';
+import { AlertCircle, Check, X, Clock, ArrowLeft, Sparkles, Search, CheckCircle2, PartyPopper, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -26,12 +26,12 @@ type Dispute = {
   against: { store_name: string | null; full_name: string | null } | null;
 };
 
-const STATUS_META: Record<Dispute['status'], { label: string; color: string; emoji: string }> = {
-  open:              { label: 'Aperto',                          color: 'accent',    emoji: '🆕' },
-  under_review:      { label: 'In valutazione',                  color: 'primary',   emoji: '🔍' },
-  resolved_buyer:    { label: 'Risolto a favore del buyer',      color: 'olive',     emoji: '✅' },
-  resolved_seller:   { label: 'Risolto a favore del venditore',  color: 'olive',     emoji: '✅' },
-  rejected:          { label: 'Rifiutato',                       color: 'secondary', emoji: '❌' },
+const STATUS_META: Record<Dispute['status'], { label: string; color: string; icon: LucideIcon }> = {
+  open:              { label: 'Aperto',                          color: 'accent',    icon: Sparkles },
+  under_review:      { label: 'In valutazione',                  color: 'primary',   icon: Search },
+  resolved_buyer:    { label: 'Risolto a favore del buyer',      color: 'olive',     icon: CheckCircle2 },
+  resolved_seller:   { label: 'Risolto a favore del venditore',  color: 'olive',     icon: CheckCircle2 },
+  rejected:          { label: 'Rifiutato',                       color: 'secondary', icon: X },
 };
 
 const REASON_LABEL: Record<string, string> = {
@@ -132,13 +132,14 @@ export default function AdminDisputesPage() {
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-32 rounded-xl skeleton" />)}</div>
       ) : disputes.length === 0 ? (
         <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
-          <p className="text-4xl mb-2">🎉</p>
+          <PartyPopper size={40} strokeWidth={2} className="mx-auto text-olive-500 mb-2" aria-hidden />
           <p className="text-ink-600 font-medium">Nessun reclamo in questo stato</p>
         </div>
       ) : (
         <div className="space-y-3">
           {disputes.map((d) => {
             const meta = STATUS_META[d.status];
+            const StatusIcon = meta.icon;
             return (
               <div key={d.id} className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
@@ -150,7 +151,7 @@ export default function AdminDisputesPage() {
                         meta.color === 'olive' ? 'bg-olive-100 text-olive-800' :
                         'bg-secondary-100 text-secondary-800'
                       }`}>
-                        {meta.emoji} {meta.label}
+                        <StatusIcon size={13} strokeWidth={2.2} aria-hidden /> {meta.label}
                       </span>
                       <span className="text-xs text-ink-500">
                         Reclamo · {REASON_LABEL[d.reason] ?? d.reason}
