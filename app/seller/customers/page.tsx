@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Star, Moon, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -165,8 +166,8 @@ export default function SellerCustomersPage() {
                     </td>
                     <td className="p-3">
                       <div className="flex flex-wrap gap-1">
-                        {isVip && <span className="bg-accent-100 text-accent-700 text-xs font-semibold px-2 py-0.5 rounded-full">⭐ VIP</span>}
-                        {isInactive && <span className="bg-rose-100 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full">😴 Inattivo</span>}
+                        {isVip && <span className="inline-flex items-center gap-1 bg-accent-100 text-accent-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Star size={12} className="text-accent-500" aria-hidden /> VIP</span>}
+                        {isInactive && <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Moon size={12} className="text-rose-500" aria-hidden /> Inattivo</span>}
                         {!isInactive && !isVip && <span className="bg-olive-100 text-olive-700 text-xs font-semibold px-2 py-0.5 rounded-full">Attivo</span>}
                       </div>
                     </td>
@@ -178,8 +179,9 @@ export default function SellerCustomersPage() {
         </table>
       </div>
 
-      <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-900">
-        💡 <strong>Suggerimento</strong>: i clienti VIP valgono in media 4× di più. Considera di mandare loro un'offerta esclusiva.
+      <div className="flex items-start gap-2 bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-900">
+        <Lightbulb size={16} className="text-primary-600 shrink-0 mt-0.5" aria-hidden />
+        <span><strong>Suggerimento</strong>: i clienti VIP valgono in media 4× di più. Considera di mandare loro un'offerta esclusiva.</span>
       </div>
     </div>
   );

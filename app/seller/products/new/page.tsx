@@ -3,6 +3,7 @@
 import { Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
@@ -227,7 +228,7 @@ function NewProductInner() {
               message: 'I dati inseriti per questo nuovo prodotto verranno persi.',
               confirmLabel: 'Sì, elimina',
               danger: true,
-              icon: '🗑️',
+              icon: Trash2,
             });
             if (!ok) return;
             clearAutosave(AUTOSAVE_KEY);

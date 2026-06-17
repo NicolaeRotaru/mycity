@@ -146,7 +146,7 @@ export default function BulkImportProductsPage() {
       // Batch insert
       const { error } = await supabase.from('products').insert(payload);
       if (error) throw error;
-      toast.success(`${valid.length} prodotti importati 🎉`);
+      toast.success(`${valid.length} prodotti importati`);
       router.push('/seller/products');
     } catch (err) {
       toast.error(friendlyError(err));

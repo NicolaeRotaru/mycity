@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutGrid } from 'lucide-react';
+import { LayoutGrid, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 
@@ -51,7 +51,7 @@ export default function CategoriePage() {
                 href={`/category/${c.slug}`}
                 className="flex items-center gap-2 font-serif font-bold text-lg text-ink-900 hover:text-primary-700"
               >
-                <span className="text-2xl">{c.icon ?? '🏷️'}</span>
+                <span className="flex items-center text-2xl text-primary-600">{c.icon ?? <Tag size={24} strokeWidth={2.2} aria-hidden />}</span>
                 {c.name}
               </Link>
               {subs.length > 0 ? (

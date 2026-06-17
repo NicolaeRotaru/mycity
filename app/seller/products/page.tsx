@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { Copy } from 'lucide-react';
+import { Copy, Trash2, Sparkles, Download, Plus } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -70,7 +70,7 @@ export default function SellerProductsPage() {
       message: `"${p.name}" verrà rimosso dal tuo catalogo. L'azione è irreversibile.`,
       confirmLabel: 'Sì, elimina',
       danger: true,
-      icon: '🗑️',
+      icon: Trash2,
     });
     if (ok) remove.mutate(p.id);
   };
@@ -83,12 +83,12 @@ export default function SellerProductsPage() {
         <h1 className="text-2xl font-serif font-bold text-ink-900">I tuoi prodotti</h1>
         <div className="flex gap-2 flex-wrap">
           <Link href="/seller/products/ai-batch" className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm">
-            <span>✨</span> AI sul catalogo
+            <Sparkles size={16} aria-hidden /> AI sul catalogo
           </Link>
           <Link href="/seller/products/import" className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm">
-            <span>📥</span> Importa CSV
+            <Download size={16} aria-hidden /> Importa CSV
           </Link>
-          <Button href="/seller/products/new" size="sm">➕ Nuovo prodotto</Button>
+          <Button href="/seller/products/new" size="sm" icon={Plus}>Nuovo prodotto</Button>
         </div>
       </div>
 
@@ -216,7 +216,7 @@ export default function SellerProductsPage() {
                     aria-label="Elimina"
                     className="px-3 py-2 text-red-600 bg-red-50 rounded-lg"
                   >
-                    🗑️
+                    <Trash2 size={16} aria-hidden />
                   </button>
                 </div>
               </div>

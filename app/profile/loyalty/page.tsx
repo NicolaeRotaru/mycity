@@ -137,7 +137,8 @@ export default function LoyaltyPage() {
           </p>
 
           <div className="mt-6 flex items-center gap-3 bg-white/15 rounded-2xl p-4 backdrop-blur">
-            <span className="text-3xl">{tierMeta.emoji}</span>
+            <tierMeta.icon size={30} className="text-white shrink-0" aria-hidden />
+
             <div className="flex-1">
               <p className="text-xs uppercase tracking-wider opacity-80">Il tuo livello</p>
               <p className="text-xl font-serif font-bold">{tierMeta.label}</p>

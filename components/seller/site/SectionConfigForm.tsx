@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Trash2 } from 'lucide-react';
+import { Trash2, CheckCircle2 } from 'lucide-react';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 import type { SiteSection } from '@/lib/store-site';
 import BannerFields from './BannerFields';
@@ -58,7 +58,7 @@ function VideoField({ section, onChange }: { section: VideoSec; onChange: (s: Si
         error={err ?? undefined}
         placeholder="https://youtu.be/… oppure https://vimeo.com/…"
       />
-      {c.videoId && <p className="text-xs text-olive-700">✓ Video {c.provider} riconosciuto.</p>}
+      {c.videoId && <p className="text-xs text-olive-700 inline-flex items-center gap-1"><CheckCircle2 size={14} aria-hidden /> Video {c.provider} riconosciuto.</p>}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { CheckCircle2, Inbox } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Honeypot from './Honeypot';
@@ -49,7 +50,9 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
           ? 'bg-olive-50 border border-olive-200 text-olive-700 rounded-lg p-4 text-sm font-medium'
           : 'bg-olive-500/20 border border-olive-400/40 text-emerald-200 rounded-lg p-3 text-sm'
       }>
-        ✅ {t('subscribedBox')}
+        <span className="inline-flex items-center gap-1.5">
+          <CheckCircle2 size={16} className="text-olive-600" aria-hidden /> {t('subscribedBox')}
+        </span>
       </div>
     );
   }
@@ -57,8 +60,8 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
   return (
     <form onSubmit={submit} className={isLight ? 'space-y-3' : 'space-y-2'}>
       <Honeypot value={honeypotRef.current} onChange={(v) => (honeypotRef.current = v)} name="company" />
-      <p className={`text-xs ${isLight ? 'text-ink-500' : 'text-ink-400'}`}>
-        📬 {t('blurb')}
+      <p className={`text-xs inline-flex items-center gap-1.5 ${isLight ? 'text-ink-500' : 'text-ink-400'}`}>
+        <Inbox size={14} aria-hidden /> {t('blurb')}
       </p>
       <div className="flex gap-2">
         <input

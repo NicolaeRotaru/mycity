@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   Plus, ExternalLink, Share2, ArrowRight, TrendingUp, Package, Star, Receipt,
   Tag, Camera, BarChart3, Users, Wallet, LayoutTemplate, Store, Upload, LifeBuoy,
-  Megaphone, type LucideIcon,
+  Megaphone, Landmark, type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
@@ -46,7 +46,7 @@ export default function SellerDashboard() {
       })();
       window.history.replaceState({}, '', '/seller/dashboard');
     } else if (s === 'refresh') {
-      toast('Configurazione interrotta. Riprova quando vuoi dalla pagina Guadagni.', { icon: '🏦' });
+      toast('Configurazione interrotta. Riprova quando vuoi dalla pagina Guadagni.', { icon: <Landmark size={18} aria-hidden /> });
       window.history.replaceState({}, '', '/seller/dashboard');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,7 +140,7 @@ export default function SellerDashboard() {
           <div className="flex flex-wrap items-center gap-4">
             <StoreAvatar logoUrl={profile?.store_logo} storeName={profile?.store_name} size="lg" className="ring-4 ring-white/25 shadow-warm" />
             <div className="min-w-0 flex-1">
-              <p className="text-white/75 text-sm">Bentornato 👋</p>
+              <p className="text-white/75 text-sm">Bentornato</p>
               <h1 className="font-serif text-3xl sm:text-4xl font-bold leading-tight truncate">{storeName}</h1>
               <span className="inline-flex items-center gap-1.5 mt-1.5 text-xs font-semibold bg-olive-500/90 text-white rounded-full px-2.5 py-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Negozio attivo

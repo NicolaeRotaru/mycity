@@ -2,6 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
+import { AlertTriangle, Check, type LucideIcon } from 'lucide-react';
 
 /**
  * Dialog di conferma globale con API imperativa, sostituto di window.confirm().
@@ -26,7 +27,10 @@ export type ConfirmOptions = {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
-  icon?: string;
+  // Accetta un'icona Lucide (preferito). Stringhe legacy (vecchie emoji) sono
+  // tollerate per retro-compatibilità ma non vengono renderizzate: il fallback
+  // brand (AlertTriangle/Check) prende il loro posto.
+  icon?: LucideIcon | string;
 };
 
 type State = (ConfirmOptions & { resolve: (ok: boolean) => void }) | null;
@@ -82,7 +86,11 @@ export function ConfirmDialogHost() {
   if (!state) return null;
 
   const isDanger = !!state.danger;
-  const icon = state.icon ?? (isDanger ? '⚠️' : '✓');
+  // Le icone Lucide sono componenti (forwardRef → oggetto/funzione). Le stringhe
+  // legacy (vecchie emoji) ricadono sul fallback brand: la UI resta senza emoji.
+  const Icon = state.icon && typeof state.icon !== 'string'
+    ? state.icon
+    : (isDanger ? AlertTriangle : Check);
 
   const accentBar = isDanger
     ? 'bg-gradient-to-r from-rose-500 via-orange-500 to-accent-500'
@@ -115,9 +123,9 @@ export function ConfirmDialogHost() {
         {/* Corpo */}
         <div className="px-6 pt-4 sm:pt-7 pb-6 text-center">
           <div
-            className={`w-14 h-14 mx-auto rounded-2xl ${iconBg} ring-4 flex items-center justify-center text-2xl mb-4`}
+            className={`w-14 h-14 mx-auto rounded-2xl ${iconBg} ring-4 flex items-center justify-center mb-4`}
           >
-            {icon}
+            <Icon size={24} strokeWidth={2.2} aria-hidden />
           </div>
           <h2
             id="confirm-title"

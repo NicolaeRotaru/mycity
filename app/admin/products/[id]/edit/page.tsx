@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
 import ExternalDataPanel from '@/components/admin/ExternalDataPanel';
 import { confirmDialog } from '@/components/ConfirmDialog';
@@ -153,7 +153,7 @@ export default function AdminEditProductPage(props: { params: Promise<{ id: stri
             message: `"${product.name as string}" verrà rimosso definitivamente.`,
             confirmLabel: 'Sì, elimina',
             danger: true,
-            icon: '🗑️',
+            icon: Trash2,
           });
           if (ok) removeProduct.mutate();
         }}

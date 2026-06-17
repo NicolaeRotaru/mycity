@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Star, FileText, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 import { toast } from 'sonner';
@@ -74,7 +75,9 @@ export default function SellerReviewsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-extrabold text-ink-900">⭐ Recensioni</h1>
+        <h1 className="text-3xl font-extrabold text-ink-900 flex items-center gap-2">
+          <Star size={26} className="text-accent-500" aria-hidden /> Recensioni
+        </h1>
         <p className="text-sm text-ink-500">Cosa pensano i clienti del tuo negozio</p>
       </div>
 
@@ -82,7 +85,7 @@ export default function SellerReviewsPage() {
         <LoadingState />
       ) : reviews.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
-          <div className="text-5xl mb-3">📝</div>
+          <FileText size={48} className="mx-auto mb-3 text-ink-300" aria-hidden />
           <p className="font-semibold text-ink-700">Nessuna recensione ancora</p>
           <p className="text-sm text-ink-500 mt-1">
             Quando i clienti riceveranno l'ordine potranno lasciarti una recensione.
@@ -206,9 +209,9 @@ function ReviewCard({ review }: { review: Review }) {
           <button
             type="button"
             onClick={() => { setReply(savedReply ?? ''); setShowReply(true); }}
-            className="text-sm text-primary-700 hover:underline font-semibold"
+            className="inline-flex items-center gap-1.5 text-sm text-primary-700 hover:underline font-semibold"
           >
-            💬 {savedReply ? 'Modifica risposta' : 'Rispondi'}
+            <MessageCircle size={16} aria-hidden /> {savedReply ? 'Modifica risposta' : 'Rispondi'}
           </button>
         ) : null}
         {review.order_id && (

@@ -113,7 +113,7 @@ export default function AchievementsPage() {
             >
               <div className="flex items-start gap-3">
                 <div className={`text-4xl ${isUnlocked ? 'animate-heart-beat' : 'grayscale'}`}>
-                  {isUnlocked ? a.icon : '🔒'}
+                  {isUnlocked ? a.icon : <Lock size={32} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className={`font-serif font-bold ${isUnlocked ? TIER_TEXT[a.tier] : 'text-ink-500'}`}>

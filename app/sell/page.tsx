@@ -12,6 +12,7 @@ import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
+import { X, Hourglass, Home, Mail } from 'lucide-react';
 
 const fetchProfile = async () => {
   const { data: { user } } = await supabase.auth.getUser();
@@ -116,7 +117,7 @@ export default function SellPage() {
     <div className="container mx-auto p-4 sm:p-6 max-w-3xl">
       {wasRejected && (
         <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-6">
-          <h2 className="font-bold text-rose-900 mb-1">❌ Richiesta precedente non approvata</h2>
+          <h2 className="font-bold text-rose-900 mb-1 flex items-center gap-2"><X size={20} className="text-rose-600 shrink-0" aria-hidden /> Richiesta precedente non approvata</h2>
           {profile.rejection_reason && (
             <p className="text-sm text-rose-800">Motivo: {profile.rejection_reason}</p>
           )}
@@ -154,8 +155,8 @@ export default function SellPage() {
 function PendingNotice({ requestedAt }: { requestedAt: string | null }) {
   return (
     <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
-      <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center text-4xl mb-4">
-        ⏳
+      <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center mb-4">
+        <Hourglass size={32} className="text-accent-500" aria-hidden />
       </div>
       <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Richiesta in valutazione</h1>
       <p className="text-ink-600 mb-4 max-w-md mx-auto">
@@ -169,9 +170,9 @@ function PendingNotice({ requestedAt }: { requestedAt: string | null }) {
         Nel frattempo puoi continuare a comprare normalmente.
       </p>
       <div className="flex flex-wrap gap-2 justify-center text-sm">
-        <Button href="/">🏠 Continua a comprare</Button>
-        <Link href="/contact" className="bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
-          ✉️ Contatta il supporto
+        <Button href="/"><span className="inline-flex items-center gap-2"><Home size={18} aria-hidden /> Continua a comprare</span></Button>
+        <Link href="/contact" className="inline-flex items-center gap-2 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
+          <Mail size={18} aria-hidden /> Contatta il supporto
         </Link>
       </div>
     </div>

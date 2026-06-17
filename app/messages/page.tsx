@@ -109,7 +109,7 @@ export default function MessagesListPage() {
 
       {conversations.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
-          <p className="text-6xl mb-3">💬</p>
+          <MessageCircle size={48} className="mx-auto text-ink-500 mb-3" aria-hidden />
           <p className="text-ink-600 font-semibold mb-1">Nessuna conversazione</p>
           <p className="text-sm text-ink-400">
             Scrivi a un negozio dalla scheda prodotto per fare domande prima di acquistare.

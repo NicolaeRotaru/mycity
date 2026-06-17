@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Truck, Gift, Zap, Store, Clock, ChefHat, Package, Bike, CheckCircle2 } from 'lucide-react';
 
 export const metadata = {
   title: 'Spedizioni e consegne · MyCity',
@@ -18,23 +19,23 @@ export default function ShippingPage() {
   return (
     <div className="container mx-auto px-6 py-10 max-w-3xl">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">🚚 Spedizioni e consegne</h1>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-ink-900 mb-3 flex items-center justify-center gap-2"><Truck size={32} className="text-primary-600 shrink-0" aria-hidden /> Spedizioni e consegne</h1>
         <p className="text-ink-600">Tempi, costi e opzioni per ricevere il tuo ordine.</p>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4 mb-10">
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-5 text-center">
-          <div className="text-3xl mb-2">🎁</div>
+          <div className="mb-2 flex justify-center"><Gift size={28} className="text-olive-600" aria-hidden /></div>
           <div className="font-bold text-green-900">Spedizione GRATIS</div>
           <div className="text-sm text-olive-700 mt-1">Per ordini ≥ €30 dallo stesso venditore</div>
         </div>
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-center">
-          <div className="text-3xl mb-2">⚡</div>
+          <div className="mb-2 flex justify-center"><Zap size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold text-primary-900">Consegna 24-48h</div>
           <div className="text-sm text-primary-800 mt-1">Nei comuni serviti</div>
         </div>
         <div className="bg-secondary-50 border border-secondary-200 rounded-xl p-5 text-center">
-          <div className="text-3xl mb-2">🏪</div>
+          <div className="mb-2 flex justify-center"><Store size={28} className="text-secondary-600" aria-hidden /></div>
           <div className="font-bold text-secondary-900">Ritiro in negozio</div>
           <div className="text-sm text-secondary-700 mt-1">10% di sconto sull'ordine</div>
         </div>
@@ -100,12 +101,12 @@ export default function ShippingPage() {
         <div>
           <h2 className="text-xl font-bold text-ink-900 mb-2">Tracciamento</h2>
           <p>Da <Link href="/orders" className="text-primary-700 underline">"I miei ordini"</Link> vedi in tempo reale:</p>
-          <ul className="list-disc pl-5">
-            <li>🕒 In attesa di conferma</li>
-            <li>👨‍🍳 In preparazione presso il venditore</li>
-            <li>📦 Pronto per il ritiro / la consegna</li>
-            <li>🛵 In consegna (con nome del rider)</li>
-            <li>✅ Consegnato</li>
+          <ul className="space-y-1 list-none pl-0">
+            <li className="flex items-center gap-2"><Clock size={18} className="text-ink-500 shrink-0" aria-hidden /> In attesa di conferma</li>
+            <li className="flex items-center gap-2"><ChefHat size={18} className="text-ink-500 shrink-0" aria-hidden /> In preparazione presso il venditore</li>
+            <li className="flex items-center gap-2"><Package size={18} className="text-ink-500 shrink-0" aria-hidden /> Pronto per il ritiro / la consegna</li>
+            <li className="flex items-center gap-2"><Bike size={18} className="text-ink-500 shrink-0" aria-hidden /> In consegna (con nome del rider)</li>
+            <li className="flex items-center gap-2"><CheckCircle2 size={18} className="text-olive-600 shrink-0" aria-hidden /> Consegnato</li>
           </ul>
         </div>
 

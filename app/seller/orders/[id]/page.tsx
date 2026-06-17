@@ -18,7 +18,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
-import { Package } from 'lucide-react';
+import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
@@ -198,10 +198,11 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           <p className="text-sm text-ink-600 mb-3">Vuoi accettare questo ordine?</p>
           <div className="flex gap-2 flex-wrap">
             <Button
+              icon={CheckCircle2}
               onClick={() => transition.mutate({ newStatus: 'ACCEPTED', timestampField: 'accepted_at' })}
               loading={transition.isPending}
             >
-              ✓ Accetta ordine
+              Accetta ordine
             </Button>
             <button
               onClick={() => {
@@ -209,9 +210,9 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
                 if (reason !== null) reject.mutate(reason || undefined);
               }}
               disabled={reject.isPending}
-              className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
             >
-              ✕ Rifiuta
+              <X size={16} aria-hidden /> Rifiuta
             </button>
           </div>
         </div>
@@ -221,10 +222,11 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           <p className="text-sm text-ink-600 mb-3">Quando hai finito di preparare l&apos;ordine:</p>
           <div className="flex gap-2 flex-wrap">
             <Button
+              icon={Package}
               onClick={() => transition.mutate({ newStatus: 'READY', timestampField: 'ready_at' })}
               loading={transition.isPending}
             >
-              📦 Pronto per il rider
+              Pronto per il rider
             </Button>
             {/* Print thermal label — Operations Manager: 1 click vs scrivere a mano */}
             <a
@@ -233,7 +235,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:border-primary-300 text-ink-900 px-4 py-2 rounded-lg font-semibold text-sm"
             >
-              🖨️ Stampa etichetta
+              <Printer size={16} aria-hidden /> Stampa etichetta
             </a>
           </div>
         </div>
@@ -249,7 +251,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               </p>
               <p className="text-sm text-cyan-100">
                 {pickupCode!.verified_at
-                  ? '✓ Codice già usato dal rider per ritirare.'
+                  ? 'Codice già usato dal rider per ritirare.'
                   : 'Mostra questo codice (o il QR) al rider quando viene a ritirare l\'ordine.'}
               </p>
             </div>
@@ -260,13 +262,13 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         </div>
       )}
       {order.delivery_status === 'READY' && !order.rider_id && (
-        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800">
-          ⏳ In attesa che un rider prenda in carico questo ordine.
+        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800 flex items-center gap-2">
+          <Clock size={16} aria-hidden className="shrink-0" /> In attesa che un rider prenda in carico questo ordine.
         </div>
       )}
       {order.rider_id && order.delivery_status !== 'DELIVERED' && (
-        <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-800">
-          🛵 Rider <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.
+        <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm text-primary-800 flex items-center gap-2">
+          <Bike size={16} aria-hidden className="shrink-0" /> <span>Rider <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.</span>
         </div>
       )}
       {/* CLIENTE + INDIRIZZO */}
@@ -274,8 +276,8 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         <h2 className="font-semibold text-ink-900 mb-3">Cliente</h2>
         <div className="text-sm space-y-1 text-ink-700">
           <p className="font-medium text-ink-900">{order.delivery_full_name}</p>
-          <p>📞 <a href={`tel:${order.delivery_phone}`} className="text-primary-700 hover:underline">{order.delivery_phone}</a></p>
-          <p>📍 {order.delivery_address}, {order.delivery_zip} {order.delivery_city}</p>
+          <p className="flex items-center gap-1.5"><Phone size={14} aria-hidden className="shrink-0 text-ink-400" /> <a href={`tel:${order.delivery_phone}`} className="text-primary-700 hover:underline">{order.delivery_phone}</a></p>
+          <p className="flex items-start gap-1.5"><MapPin size={14} aria-hidden className="shrink-0 text-ink-400 mt-0.5" /> <span>{order.delivery_address}, {order.delivery_zip} {order.delivery_city}</span></p>
           {order.delivery_notes && <p className="text-ink-500 italic mt-2">Note: {order.delivery_notes}</p>}
         </div>
       </div>
@@ -293,7 +295,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
                   {img ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     (<img src={img} alt="" loading="lazy" className="w-full h-full object-cover" />)
-                  ) : '📦'}
+                  ) : <Package size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-ink-900 truncate">{it.products?.name ?? 'Prodotto'}</p>

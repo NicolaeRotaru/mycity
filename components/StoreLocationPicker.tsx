@@ -2,6 +2,7 @@
 
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef, useState } from 'react';
+import { Search, RadioTower, Target, MapPin, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 // Centro Italia (Roma) come fallback iniziale prima che il seller imposti la propria posizione
@@ -201,7 +202,12 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
             onClick={searchAddress}
             loading={searching}
             size="sm"
-          >🔍 Cerca</Button>
+          >
+            <span className="inline-flex items-center gap-1">
+              <Search size={16} aria-hidden />
+              Cerca
+            </span>
+          </Button>
         </div>
       </div>
 
@@ -210,12 +216,18 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
           type="button"
           onClick={useMyLocation}
           disabled={locating}
-          className="text-primary-700 hover:underline disabled:opacity-50"
+          className="text-primary-700 hover:underline disabled:opacity-50 inline-flex items-center gap-1"
         >
-          {locating ? '📡 Ricerca posizione...' : '🎯 Usa la mia posizione attuale'}
+          {locating ? (
+            <RadioTower size={16} aria-hidden />
+          ) : (
+            <Target size={16} aria-hidden />
+          )}
+          {locating ? 'Ricerca posizione...' : 'Usa la mia posizione attuale'}
         </button>
-        <span className="text-xs text-ink-400 font-mono">
-          📍 {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+        <span className="text-xs text-ink-400 font-mono inline-flex items-center gap-1">
+          <MapPin size={16} aria-hidden />
+          {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
         </span>
       </div>
 
@@ -230,8 +242,9 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
         className="w-full h-64 rounded-lg border bg-cream-100 z-0"
       />
 
-      <p className="text-xs text-ink-500">
-        💡 Cerca un indirizzo, usa la tua posizione, oppure <strong>trascina il pin</strong> sulla mappa per impostare la posizione esatta del negozio.
+      <p className="text-xs text-ink-500 flex items-start gap-1">
+        <Lightbulb size={16} aria-hidden className="shrink-0 mt-0.5" />
+        <span>Cerca un indirizzo, usa la tua posizione, oppure <strong>trascina il pin</strong> sulla mappa per impostare la posizione esatta del negozio.</span>
       </p>
     </div>
   );

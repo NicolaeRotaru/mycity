@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Sparkles, AlertCircle, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Sparkles, AlertCircle, CheckCircle2, ArrowRight, Trophy, Star, Sprout, Wrench } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -133,10 +133,10 @@ export default function SellerHealthScore() {
   const score = totalPoints > 0 ? Math.round((earned / totalPoints) * 100) : 0;
 
   const tier =
-    score >= 90 ? { label: 'Eccellente', color: 'olive', emoji: '🏆' } :
-    score >= 70 ? { label: 'Ottimo',     color: 'primary', emoji: '⭐' } :
-    score >= 40 ? { label: 'In crescita', color: 'accent', emoji: '🌱' } :
-                  { label: 'Da migliorare', color: 'secondary', emoji: '🔧' };
+    score >= 90 ? { label: 'Eccellente', color: 'olive', Icon: Trophy } :
+    score >= 70 ? { label: 'Ottimo',     color: 'primary', Icon: Star } :
+    score >= 40 ? { label: 'In crescita', color: 'accent', Icon: Sprout } :
+                  { label: 'Da migliorare', color: 'secondary', Icon: Wrench };
 
   const todo = checks.filter((c) => !c.passed).slice(0, 3);
 
@@ -151,13 +151,13 @@ export default function SellerHealthScore() {
           <div className="flex items-baseline gap-3 mt-1">
             <span className="text-5xl font-serif font-extrabold text-ink-900">{score}</span>
             <span className="text-base text-ink-500">/ 100</span>
-            <span className={`text-sm font-bold ${
+            <span className={`text-sm font-bold inline-flex items-center gap-1.5 ${
               tier.color === 'olive' ? 'text-olive-700' :
               tier.color === 'primary' ? 'text-primary-700' :
               tier.color === 'accent' ? 'text-accent-700' :
               'text-secondary-700'
             }`}>
-              {tier.emoji} {tier.label}
+              <tier.Icon size={16} aria-hidden /> {tier.label}
             </span>
           </div>
         </div>

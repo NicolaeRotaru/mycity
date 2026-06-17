@@ -147,7 +147,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       setReviewPhotos([]);
       toast.success(
         reviewPhotos.length > 0
-          ? `Grazie! Recensione pubblicata · +20 punti loyalty per le foto 🎉`
+          ? `Grazie! Recensione pubblicata · +20 punti loyalty per le foto`
           : 'Grazie per la recensione!'
       );
     },

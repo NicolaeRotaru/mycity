@@ -74,7 +74,7 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
           <button type="button" onClick={dismissHint} aria-label="Chiudi" className="absolute right-2 top-2 text-ink-300 hover:text-ink-600">
             <X size={14} strokeWidth={2.4} />
           </button>
-          <p className="pr-4 text-sm font-semibold">📍 Dove ti consegniamo?</p>
+          <p className="pr-4 text-sm font-semibold inline-flex items-center gap-1.5"><MapPin size={16} strokeWidth={2.2} className="text-primary-600 shrink-0" aria-hidden /> Dove ti consegniamo?</p>
           <p className="mt-1 text-xs text-ink-500">Inserisci il tuo indirizzo per vedere cosa puoi ricevere <strong>oggi</strong>.</p>
           <button
             type="button"

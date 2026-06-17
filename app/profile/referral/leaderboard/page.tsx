@@ -51,13 +51,13 @@ export default function ReferralLeaderboardPage() {
       {/* Premi */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { rank: 1, prize: '€100', emoji: '🥇', color: 'from-accent-300 to-accent-100', text: 'text-accent-800' },
-          { rank: 2, prize: '€50',  emoji: '🥈', color: 'from-ink-200 to-ink-100',       text: 'text-ink-700' },
-          { rank: 3, prize: '€25',  emoji: '🥉', color: 'from-accent-200 to-accent-100',   text: 'text-accent-800' },
+          { rank: 1, prize: '€100', color: 'from-accent-300 to-accent-100', text: 'text-accent-800' },
+          { rank: 2, prize: '€50',  color: 'from-ink-200 to-ink-100',       text: 'text-ink-700' },
+          { rank: 3, prize: '€25',  color: 'from-accent-200 to-accent-100',   text: 'text-accent-800' },
         ].map((p) => (
           <div key={p.rank} className={`bg-gradient-to-br ${p.color} rounded-2xl p-4 text-center shadow-warm`}>
-            <div className="text-3xl">{p.emoji}</div>
-            <p className={`font-serif font-bold text-lg ${p.text}`}>{p.prize}</p>
+            <Medal size={28} className={`mx-auto ${p.text}`} aria-hidden />
+            <p className={`font-serif font-bold text-lg ${p.text} mt-1`}>{p.prize}</p>
             <p className={`text-xs ${p.text} opacity-80`}>#{p.rank} posto</p>
           </div>
         ))}

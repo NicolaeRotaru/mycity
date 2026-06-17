@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Euro, ArrowLeft, Check } from 'lucide-react';
+import { Euro, ArrowLeft, Check, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -117,7 +117,7 @@ export default function AdminCodRemittancePage() {
         <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 rounded-xl skeleton" />)}</div>
       ) : groups.length === 0 ? (
         <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
-          <p className="text-4xl mb-2">✅</p>
+          <CheckCircle2 size={40} strokeWidth={2} className="mx-auto text-olive-500 mb-2" aria-hidden />
           <p className="text-ink-600 font-medium">Nessuna rimessa COD in attesa</p>
         </div>
       ) : (

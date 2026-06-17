@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Crown, Vote, ArrowRight, Trophy, Medal } from 'lucide-react';
+import { Crown, Vote, ArrowRight, Trophy, Medal, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
@@ -184,7 +184,7 @@ export default function ShopOfMonthPage() {
             Voto del mese
           </h2>
           {myVoteSeller && (
-            <span className="text-sm text-olive-700 font-semibold">✓ Hai già votato questo mese</span>
+            <span className="inline-flex items-center gap-1 text-sm text-olive-700 font-semibold"><Check size={16} strokeWidth={2.4} aria-hidden /> Hai già votato questo mese</span>
           )}
         </div>
 
@@ -228,7 +228,7 @@ export default function ShopOfMonthPage() {
                     }`}
                     aria-label={isVoted ? 'Hai votato questo negozio' : `Vota ${row.store_name}`}
                   >
-                    {isVoted ? '✓ Votato' : 'Vota'}
+                    {isVoted ? <span className="inline-flex items-center gap-1"><Check size={14} strokeWidth={2.4} aria-hidden /> Votato</span> : 'Vota'}
                   </button>
                 </li>
               );
