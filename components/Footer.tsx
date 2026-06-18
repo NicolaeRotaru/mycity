@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen, MessageCircle } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
@@ -80,9 +81,13 @@ const SOCIALS = [
 ];
 
 const Footer = () => {
+  const pathname = usePathname();
   const { isSeller, isRider, isAuthenticated } = useProfile();
   const isSellerArea = isSeller || isRider;
   const branding = useBranding();
+
+  // Cockpit admin: footer globale nascosto su /admin (shell standalone con sidebar).
+  if (pathname?.startsWith('/admin')) return null;
 
   return (
     <footer className="bg-ink-900 text-ink-300 mt-12">

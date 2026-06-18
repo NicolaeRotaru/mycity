@@ -53,7 +53,9 @@ export default function Navbar() {
     router.refresh();
   };
 
-  if (pathname?.startsWith('/sign-in') || pathname?.startsWith('/sign-up')) return null;
+  // Su /admin la navbar globale è nascosta: l'area admin usa il cockpit con
+  // sidebar scura dedicata (vedi components/admin/AdminSidebar).
+  if (pathname?.startsWith('/sign-in') || pathname?.startsWith('/sign-up') || pathname?.startsWith('/admin')) return null;
 
   const role: Role =
     isAdmin ? 'admin' :
