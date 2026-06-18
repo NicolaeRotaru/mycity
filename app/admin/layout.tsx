@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
+import AdminSidebar from '@/components/admin/AdminSidebar';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -31,11 +32,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  // La navigazione admin vive ora nel menu "Tu" (account menu). Qui resta solo
-  // il contenuto a piena larghezza; sotto l'icona scudo c'è la dashboard.
+  // Cockpit admin (design system v2): sidebar scura su desktop, contenuto a piena
+  // larghezza su mobile (dove resta la MobileTabBar admin). Navbar e Footer globali
+  // sono nascosti su /admin per dare lo shell standalone del mockup.
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-5xl">
-      <main>{children}</main>
+    <div className="min-h-screen bg-cream-100 md:grid md:grid-cols-[248px_1fr]">
+      <AdminSidebar />
+      <div className="min-w-0 px-4 py-6 sm:px-6 md:p-7">
+        <div className="mx-auto w-full max-w-[1080px] pb-24 md:pb-0">{children}</div>
+      </div>
     </div>
   );
 }
