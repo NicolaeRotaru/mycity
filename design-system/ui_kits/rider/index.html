@@ -10,6 +10,12 @@
 <style>
   body { margin: 0; background: var(--cream-200); }
   @keyframes mc-slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  /* On real phones the bezel wastes space — fill the viewport instead. */
+  @media (max-width: 480px) {
+    body { background: var(--surface-50); }
+    #mc-app > div[style*="min-height: 100vh"] { padding: 0 !important; }
+    .rd-phone { width: 100vw !important; height: 100vh !important; max-height: 100vh !important; border-radius: 0 !important; box-shadow: none !important; }
+  }
 </style>
 </head>
 <body>
@@ -21,7 +27,7 @@
   <script>window.__buyerMounted = window.__sellerMounted = window.__riderMounted = 1;</script>
   <script src="../../_ds_bundle.js"></script>
   <script>window.__MC_ALLOW_MOUNT = 1;</script>
-  <script src="src/data.js"></script>
-  <script type="text/babel" src="app.js"></script>
+  <script type="text/babel" src="src/data.txt"></script>
+  <script type="text/babel" src="app.babel"></script>
 </body>
 </html>

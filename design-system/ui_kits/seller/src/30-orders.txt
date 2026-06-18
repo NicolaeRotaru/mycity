@@ -1,0 +1,101 @@
+// ===== Orders (grouped + detail drawer with status advancement) =====
+const SC_NEXT = { NEW: 'ACCEPTED', ACCEPTED: 'READY', READY: 'ASSIGNED' };
+const SC_NEXT_LABEL = { NEW: 'Accetta ordine', ACCEPTED: 'Segna come pronto', READY: 'Assegna al rider' };
+const SC_GROUPS = [
+  { label: 'Da fare', statuses: ['NEW', 'ACCEPTED', 'READY'] },
+  { label: 'In consegna', statuses: ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
+  { label: 'Completati', statuses: ['DELIVERED', 'CANCELED'] },
+];
+
+function Orders({ orders, onAdvance }) {
+  const [sel, setSel] = React.useState(null);
+  const groups = SC_GROUPS.map((g) => ({ ...g, items: orders.filter((o) => g.statuses.includes(o.status)) }));
+  return (
+    <div>
+      <PageTitle eyebrow="Operativo" title="Ordini ricevuti" sub="Prepara, conferma e affida gli ordini ai rider"
+        action={<div style={{ display: 'flex', gap: '8px' }}>{groups.map((g) => <span key={g.label} style={{ fontSize: '12px', background: 'var(--cream-100)', color: 'var(--ink-600)', borderRadius: '999px', padding: '5px 12px' }}>{g.label}: <strong style={{ color: 'var(--ink-900)' }}>{g.items.length}</strong></span>)}</div>} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+        {groups.map((g) => g.items.length === 0 ? null : (
+          <section key={g.label}>
+            <h2 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 700, color: 'var(--ink-700)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{g.label}</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {g.items.map((o) => {
+                const count = o.items.reduce((s, i) => s + i.q, 0);
+                return (
+                  <button key={o.id} onClick={() => setSel(o)} style={{ textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '14px 18px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>#{o.id}</span>
+                        <span style={{ color: 'var(--ink-300)' }}>·</span>
+                        <span style={{ fontSize: '12px', color: 'var(--ink-500)' }}>{o.when}</span>
+                        {o.pay === 'cod' && <Badge variant="cod" icon="banknote">Contanti</Badge>}
+                      </div>
+                      <p style={{ margin: '3px 0 0', fontWeight: 700, color: 'var(--ink-900)' }}>{o.cust}</p>
+                      <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-500)' }}>{count} {count === 1 ? 'articolo' : 'articoli'} · {o.addr}</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <OrderStatusBadge status={o.status} size="sm" />
+                      <span style={{ fontWeight: 800, color: 'var(--ink-900)', fontSize: '16px' }}>{fmt(o.total)}</span>
+                      <Lucide name="chevron-right" size={18} color="var(--ink-300)" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+      <OrderDrawer order={sel} onClose={() => setSel(null)} onAdvance={(o) => { onAdvance(o); setSel(null); }} />
+    </div>
+  );
+}
+
+function OrderDrawer({ order, onClose, onAdvance }) {
+  if (!order) return null;
+  const o = order;
+  const next = SC_NEXT[o.status];
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', background: 'rgba(0,0,0,.4)', backdropFilter: 'blur(2px)', display: 'flex', justifyContent: 'flex-end', animation: 'mc-fade-in var(--dur-fast) ease-out' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '440px', maxWidth: '92vw', height: '100%', background: 'var(--surface-0)', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-warm-xl)', animation: 'mc-slide-right var(--dur-medium) var(--ease-out-quint)' }}>
+        <header style={{ padding: '18px 20px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>#{o.id}</p>
+            <h2 style={{ margin: '2px 0 0', fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)' }}>{o.cust}</h2>
+          </div>
+          <button onClick={onClose} aria-label="Chiudi" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)' }}><Lucide name="x" size={22} /></button>
+        </header>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <OrderStatusBadge status={o.status} />
+            <span style={{ fontSize: '13px', color: 'var(--ink-500)' }}>{o.when}</span>
+          </div>
+          <div>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ink-500)' }}>Articoli</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {o.items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <img src={img(it.kw, it.lock)} alt={it.name} style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-md)', objectFit: 'cover' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}><p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)' }}>{it.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{fmt(it.price)} × {it.q}</p></div>
+                  <span style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(it.price * it.q)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ borderTop: '1px solid var(--cream-200)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Row label="Consegna" val={o.addr} />
+            <Row label="Pagamento" val={o.pay === 'cod' ? 'Contanti alla consegna' : 'Carta (online)'} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 800, color: 'var(--ink-900)', marginTop: '4px' }}><span>Totale</span><span>{fmt(o.total)}</span></div>
+          </div>
+          {o.pay === 'cod' && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--olive-50)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '13px', color: 'var(--olive-800)' }}><Lucide name="banknote" size={16} color="var(--olive-700)" /> Il rider incassa <strong>{fmt(o.total)}</strong> in contanti.</div>}
+        </div>
+        <footer style={{ padding: '16px 20px', borderTop: '1px solid var(--cream-200)', display: 'flex', gap: '8px' }}>
+          {next ? <Button variant="primary" size="lg" fullWidth iconRight="arrow-right" onClick={() => onAdvance(o)}>{SC_NEXT_LABEL[o.status]}</Button>
+            : <div style={{ flex: 1, textAlign: 'center', fontSize: '14px', color: 'var(--ink-500)', padding: '10px' }}>{o.status === 'DELIVERED' ? 'Ordine consegnato ✓' : o.status === 'CANCELED' ? 'Ordine annullato' : 'In gestione al rider'}</div>}
+          {o.status === 'NEW' && <Button variant="danger" size="lg" icon="x">Rifiuta</Button>}
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+function Row({ label, val }) { return <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '14px' }}><span style={{ color: 'var(--ink-500)' }}>{label}</span><span style={{ fontWeight: 600, color: 'var(--ink-800)', textAlign: 'right' }}>{val}</span></div>; }

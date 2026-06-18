@@ -1,0 +1,1086 @@
+/* AUTO-GENERATED from ui_kits/admin/src/*.txt (numeric order). Do not edit directly. */
+// ===== Shared (concat first) =====
+const { Button, Badge, Card, OrderStatusBadge, Modal, EmptyState, Input, Select } = window.MyCityDesignSystem_105480;
+const fmt = (n) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(n);
+const img = (kw, lock) => `https://loremflickr.com/640/640/${kw}?lock=${lock}`;
+const initials = (name) => (name || '').trim().split(/\s+/).map((w) => w[0] || '').slice(0, 2).join('').toUpperCase();
+function Lucide({ name, size = 20, stroke = 2, color, style }) {
+  return <i data-lucide={name} ref={(el) => { if (el && window.lucide) try { window.lucide.createIcons({ attrs: { width: size, height: size, 'stroke-width': stroke } }); } catch (e) {} }} style={{ width: size, height: size, display: 'inline-flex', color, flexShrink: 0, ...style }} />;
+}
+const TINT = {
+  primary:   ['var(--primary-100)', 'var(--primary-700)'],
+  olive:     ['var(--olive-100)', 'var(--olive-700)'],
+  accent:    ['var(--accent-100)', 'var(--accent-700)'],
+  secondary: ['var(--secondary-100)', 'var(--secondary-600)'],
+};
+function PageTitle({ title, sub, action, eyebrow }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', gap: '14px', alignItems: 'stretch' }}>
+        <span aria-hidden style={{ width: '4px', borderRadius: '999px', background: 'linear-gradient(180deg, var(--primary-500), var(--secondary-600))', flexShrink: 0 }} />
+        <div>
+          {eyebrow && <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--primary-700)' }}>{eyebrow}</p>}
+          <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '30px', fontWeight: 800, color: 'var(--ink-900)', letterSpacing: '-0.01em', lineHeight: 1.1 }}>{title}</h1>
+          {sub && <p style={{ margin: '5px 0 0', fontSize: '14px', color: 'var(--ink-500)', lineHeight: 1.5 }}>{sub}</p>}
+        </div>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+// ===== Admin shell (dark sidebar, founder cockpit) =====
+const AD_NAV = [
+  { group: 'Operatività', items: [
+    { id: 'today', icon: 'sun', label: 'Today' },
+    { id: 'overview', icon: 'layout-dashboard', label: 'Panoramica' },
+    { id: 'orders', icon: 'receipt', label: 'Ordini' },
+    { id: 'users', icon: 'users', label: 'Utenti' },
+  ] },
+  { group: 'Trust & Safety', items: [
+    { id: 'disputes', icon: 'gavel', label: 'Reclami', badge: 'disputes' },
+    { id: 'moderation', icon: 'shield-alert', label: 'Moderazione' },
+    { id: 'cod', icon: 'banknote', label: 'Rimesse COD' },
+    { id: 'sos', icon: 'siren', label: 'SOS rider', badge: 'sos' },
+  ] },
+  { group: 'Crescita', items: [
+    { id: 'funnel', icon: 'trending-up', label: 'Funnel & Cohort' },
+    { id: 'coupons', icon: 'ticket', label: 'Coupon' },
+    { id: 'sponsored', icon: 'megaphone', label: 'Sponsorizzati' },
+    { id: 'drops', icon: 'zap', label: 'Daily drops' },
+    { id: 'shop-month', icon: 'crown', label: 'Negozio del mese' },
+    { id: 'events', icon: 'calendar-days', label: 'Eventi' },
+  ] },
+  { group: 'Contenuti', items: [
+    { id: 'home', icon: 'layout-template', label: 'Home builder' },
+    { id: 'pages', icon: 'file-text', label: 'Pagine' },
+    { id: 'categories', icon: 'folder-tree', label: 'Categorie' },
+    { id: 'branding', icon: 'palette', label: 'Branding' },
+  ] },
+  { group: 'Sistema', items: [
+    { id: 'activity', icon: 'rss', label: 'Attività' },
+    { id: 'audit', icon: 'scroll-text', label: 'Audit log' },
+    { id: 'support', icon: 'life-buoy', label: 'Supporto' },
+  ] },
+];
+
+function AdminShell({ view, onNav, children }) {
+  const a = window.AD_ADMIN;
+  const d = window.AD_TODAY;
+  const badgeFor = (id) => id === 'disputes' ? d.disputesOpen : id === 'sos' ? d.sosActive : 0;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '248px 1fr', minHeight: '100vh', background: 'var(--cream-100)' }}>
+      <aside style={{ background: 'var(--ink-900)', color: '#fff', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
+          <div style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.01em' }}>
+            <span style={{ color: 'var(--accent-300)' }}>My</span><span style={{ color: '#fff' }}>City</span>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 700, color: '#F09593', textTransform: 'uppercase', letterSpacing: '0.08em', marginLeft: '6px' }}>Admin</span>
+          </div>
+        </div>
+        <nav style={{ flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+          {AD_NAV.map((sec) => (
+            <div key={sec.group} style={{ marginBottom: '8px' }}>
+              <p style={{ margin: '6px 12px 4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,.38)' }}>{sec.group}</p>
+              {sec.items.map((n) => {
+                const on = view === n.id; const b = badgeFor(n.id);
+                return (
+                  <button key={n.id} onClick={() => onNav(n.id)} style={{ display: 'flex', alignItems: 'center', gap: '11px', border: 0, background: on ? 'var(--primary-700)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.78)', fontWeight: on ? 700 : 500, fontSize: '13.5px', padding: '9px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', width: '100%' }}>
+                    <Lucide name={n.icon} size={17} stroke={2.2} color={on ? '#fff' : 'rgba(255,255,255,.7)'} /> {n.label}
+                    {b > 0 && <span style={{ marginLeft: 'auto', background: 'var(--secondary-600)', color: '#fff', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{b}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div style={{ padding: '12px', borderTop: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px' }}>
+            <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--secondary-600)', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{a.initials}</span>
+            <div style={{ minWidth: 0 }}><p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#fff' }}>{a.name}</p><p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,.5)' }}>{a.role}</p></div>
+          </div>
+        </div>
+      </aside>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <main style={{ flex: 1, padding: '28px', maxWidth: '1080px', width: '100%', boxSizing: 'border-box' }}>{children}</main>
+      </div>
+    </div>
+  );
+}
+
+// ===== Today (founder cockpit) =====
+function Today({ onNav }) {
+  const t = window.AD_TODAY;
+  const hasAlert = t.sosActive > 0 || t.ordersProblem > 0 || t.disputesOpen > 0;
+  const dateStr = 'Martedì 17 giugno 2026';
+  return (
+    <div>
+      <PageTitle eyebrow="Cockpit" title="Today" sub={`${dateStr} · aggiornamento automatico ogni 30s`} />
+
+      {hasAlert && (
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', background: 'var(--secondary-50)', border: '2px solid var(--secondary-200)', borderRadius: 'var(--radius-xl)', padding: '16px 18px', marginBottom: '22px' }}>
+          <Lucide name="alert-triangle" size={24} color="var(--secondary-600)" stroke={2.2} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontWeight: 800, color: 'var(--secondary-700)', fontSize: '15px' }}>Richiede attenzione immediata</p>
+            <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {t.sosActive > 0 && <AlertRow n={t.sosActive} text="SOS rider attivo" cta="Apri" onClick={() => onNav('sos')} />}
+              {t.ordersProblem > 0 && <AlertRow n={t.ordersProblem} text="ordini in problema (NEW/ACCEPTED da +4h)" cta="Verifica" onClick={() => onNav('orders')} />}
+              {t.disputesOpen > 0 && <AlertRow n={t.disputesOpen} text="reclami aperti" cta="Risolvi" onClick={() => onNav('disputes')} />}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <SectionLabel icon="trending-up" color="var(--primary-700)">Oggi</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}>
+        <AdKpi icon="shopping-bag" tone="primary" label="Ordini oggi" value={t.ordersToday} onClick={() => onNav('orders')} />
+        <AdKpi icon="euro" tone="olive" label="GMV oggi" value={fmt(t.gmvToday)} />
+        <AdKpi icon="check-circle-2" tone="olive" label="Consegnati" value={t.deliveredToday} />
+        <AdKpi icon="user-plus" tone="accent" label="Nuovi signup" value={t.signupsToday} onClick={() => onNav('users')} />
+      </div>
+
+      <SectionLabel icon="clock" color="var(--ink-500)">In attesa</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}>
+        <AdKpi icon="clock" tone="primary" label="Ordini NEW" value={t.ordersNew} onClick={() => onNav('orders')} />
+        <AdKpi icon="user-check" tone="accent" label="Seller pending" value={t.sellersPending} onClick={() => onNav('users')} />
+        <AdKpi icon="gavel" tone="secondary" label="Reclami aperti" value={t.disputesOpen} alert onClick={() => onNav('disputes')} />
+        <AdKpi icon="siren" tone="secondary" label="SOS attivi" value={t.sosActive} alert onClick={() => onNav('sos')} />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <SectionLabel icon="receipt" color="var(--primary-700)" noMargin>Ultimi ordini</SectionLabel>
+        <a onClick={() => onNav('orders')} style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--primary-700)', fontWeight: 600 }}>vedi tutti →</a>
+      </div>
+      <OrdersTable rows={window.AD_RECENT_ORDERS} />
+    </div>
+  );
+}
+
+function AlertRow({ n, text, cta, onClick }) {
+  return <li style={{ fontSize: '14px', color: 'var(--secondary-800)' }}><strong>{n}</strong> {text} — <a onClick={onClick} style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--secondary-700)', textDecoration: 'underline' }}>{cta}</a></li>;
+}
+function SectionLabel({ icon, color, children, noMargin }) {
+  return <h2 style={{ margin: noMargin ? 0 : '0 0 12px', fontSize: '14px', fontWeight: 700, color: 'var(--ink-800)', display: 'inline-flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}><Lucide name={icon} size={15} stroke={2.4} color={color} /> {children}</h2>;
+}
+function AdKpi({ icon, tone, label, value, alert, onClick }) {
+  const [bg, fg] = TINT[tone];
+  const [h, setH] = React.useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{ background: alert && value > 0 ? 'var(--secondary-50)' : 'var(--surface-0)', border: `2px solid ${alert && value > 0 ? 'var(--secondary-200)' : 'var(--cream-300)'}`, borderRadius: 'var(--radius-xl)', padding: '16px', cursor: onClick ? 'pointer' : 'default', boxShadow: h && onClick ? 'var(--shadow-warm)' : 'none', transition: 'box-shadow var(--dur-base)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <span style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-md)', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={icon} size={20} stroke={2.2} color={fg} /></span>
+        {alert && value > 0 && <Lucide name="alert-circle" size={16} color="var(--secondary-600)" />}
+      </div>
+      <p style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)', fontWeight: 700 }}>{label}</p>
+      <p style={{ margin: '4px 0 0', fontSize: '26px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1 }}>{value}</p>
+    </div>
+  );
+}
+function OrdersTable({ rows }) {
+  return (
+    <Card variant="bordered" padding="none">
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+        <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Ordine', 'Cliente', 'Negozio', 'Stato', 'Totale', 'Ora'].map((h, i) => <th key={h} style={{ textAlign: i >= 4 ? 'right' : 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+        <tbody>
+          {rows.map((o) => (
+            <tr key={o.id} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+              <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--primary-700)', fontWeight: 600 }}>#{o.id}</td>
+              <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-800)' }}>{o.cust}</td>
+              <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{o.store}</td>
+              <td style={{ padding: '11px 16px' }}><OrderStatusBadge status={o.status} size="sm" /></td>
+              <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(o.total)}</td>
+              <td style={{ padding: '11px 16px', textAlign: 'right', fontSize: '12px', color: 'var(--ink-400)' }}>{o.when}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+// ===== Overview (marketplace-wide totals) =====
+function Overview({ onNav }) {
+  const T = window.AD_TOTALS;
+  const STATUS_LABEL = { NEW: 'In attesa', ACCEPTED: 'In preparazione', READY: 'Pronto', ASSIGNED: 'Rider assegnato', PICKED_UP: 'Ritirato', OUT_FOR_DELIVERY: 'In consegna', DELIVERED: 'Consegnato', CANCELED: 'Annullato' };
+  return (
+    <div>
+      <PageTitle eyebrow="Marketplace" title="Panoramica" sub="Tutti i numeri del marketplace, in tempo reale" />
+
+      <SectionLabel icon="users" color="var(--primary-700)">Utenti · {T.users.toLocaleString('it-IT')}</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}>
+        <StatCard icon="shopping-cart" tone="primary" label="Acquirenti" value={T.buyers.toLocaleString('it-IT')} onClick={() => onNav('users')} />
+        <StatCard icon="store" tone="accent" label="Venditori" value={T.sellers} onClick={() => onNav('users')} />
+        <StatCard icon="bike" tone="olive" label="Rider" value={T.riders} onClick={() => onNav('users')} />
+        <StatCard icon="shield" tone="secondary" label="Admin" value={T.admins} onClick={() => onNav('users')} />
+      </div>
+
+      <SectionLabel icon="package" color="var(--primary-700)">Ordini · {T.orders.toLocaleString('it-IT')}</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '16px' }}>
+        <StatCard icon="package" tone="primary" label="Totali" value={T.orders.toLocaleString('it-IT')} onClick={() => onNav('orders')} />
+        <StatCard icon="trending-up" tone="accent" label="Ultimi 7 giorni" value={T.ordersRecent} onClick={() => onNav('orders')} />
+        <StatCard icon="check-circle-2" tone="olive" label="Consegnati" value={T.delivered.toLocaleString('it-IT')} />
+        <StatCard icon="euro" tone="olive" label="Ricavi totali" value={fmt(T.revenue)} />
+      </div>
+
+      <Card variant="bordered" padding="lg" style={{ marginBottom: '24px' }}>
+        <h3 style={{ margin: '0 0 14px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Stato degli ordini</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+          {window.AD_STATUS_BREAKDOWN.map((b) => (
+            <div key={b.s} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--ink-600)' }}>{STATUS_LABEL[b.s]}</span>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--ink-900)' }}>{b.n.toLocaleString('it-IT')}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <SectionLabel icon="shopping-bag" color="var(--primary-700)">Catalogo</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+        <StatCard icon="package" tone="primary" label="Prodotti totali" value={T.products.toLocaleString('it-IT')} />
+        <StatCard icon="circle-check" tone="olive" label="Disponibili online" value={T.productsAvailable.toLocaleString('it-IT')} />
+      </div>
+    </div>
+  );
+}
+function StatCard({ icon, tone, label, value, onClick }) {
+  const [bg, fg] = TINT[tone];
+  const [h, setH] = React.useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{ background: 'var(--surface-0)', border: `2px solid ${h && onClick ? fg : 'var(--cream-300)'}`, borderRadius: 'var(--radius-xl)', padding: '16px', cursor: onClick ? 'pointer' : 'default', transition: 'border-color var(--dur-base)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <span style={{ width: '38px', height: '38px', borderRadius: 'var(--radius-md)', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={icon} size={19} stroke={2.2} color={fg} /></span>
+        <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-400)', fontWeight: 700 }}>{label}</span>
+      </div>
+      <p style={{ margin: 0, fontSize: '26px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1 }}>{value}</p>
+    </div>
+  );
+}
+
+// ===== Users · Disputes · COD · SOS =====
+const AD_ROLE = {
+  buyer: ['Acquirente', 'primary'], seller: ['Venditore', 'accent'], rider: ['Rider', 'olive'], admin: ['Admin', 'secondary'],
+};
+const AD_USTATUS = { active: ['Attivo', 'var(--olive-50)', 'var(--olive-700)'], pending: ['In attesa', 'var(--accent-100)', 'var(--accent-800)'], suspended: ['Sospeso', 'var(--secondary-50)', 'var(--secondary-600)'] };
+
+function Users() {
+  const [role, setRole] = React.useState('all');
+  const tabs = [['all', 'Tutti'], ['buyer', 'Acquirenti'], ['seller', 'Venditori'], ['rider', 'Rider'], ['admin', 'Admin']];
+  const list = window.AD_USERS.filter((u) => role === 'all' || u.role === role);
+  return (
+    <div>
+      <PageTitle eyebrow="Community" title="Utenti" sub={`${window.AD_TOTALS.users.toLocaleString('it-IT')} account registrati`}
+        action={<div style={{ position: 'relative' }}><span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }}><Lucide name="search" size={16} color="var(--ink-400)" /></span><input placeholder="Cerca utente…" style={{ border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '9px 14px 9px 36px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--surface-0)' }} /></div>} />
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {tabs.map(([id, label]) => <button key={id} onClick={() => setRole(id)} style={{ border: 0, background: role === id ? 'var(--primary-700)' : 'var(--surface-0)', color: role === id ? '#fff' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: role === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{label}</button>)}
+      </div>
+      <Card variant="bordered" padding="none">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Utente', 'Ruolo', 'Ordini', 'Iscritto', 'Stato', ''].map((h, i) => <th key={i} style={{ textAlign: i === 2 ? 'right' : 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {list.map((u) => {
+              const [rl, rtone] = AD_ROLE[u.role]; const [bg, fg] = TINT[rtone]; const [sl, sbg, sfg] = AD_USTATUS[u.status];
+              return (
+                <tr key={u.email} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                  <td style={{ padding: '11px 16px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: bg, color: fg, fontWeight: 700, fontSize: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(u.name)}</span>
+                      <div><p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{u.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)' }}>{u.email}</p></div>
+                    </div>
+                  </td>
+                  <td style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{rl}</span></td>
+                  <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{u.orders}</td>
+                  <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{u.joined}</td>
+                  <td style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: sbg, color: sfg, padding: '3px 10px', borderRadius: '999px' }}>{sl}</span></td>
+                  <td style={{ padding: '11px 16px', textAlign: 'right' }}>{u.status === 'pending' ? <Button variant="primary" size="sm" icon="check">Approva</Button> : <button style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '6px' }}><Lucide name="more-horizontal" size={16} color="var(--ink-500)" /></button>}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+const AD_DSTATUS = { open: ['Aperto', 'accent'], under_review: ['In valutazione', 'primary'], resolved_buyer: ['Risolto · buyer', 'olive'], resolved_seller: ['Risolto · seller', 'olive'], rejected: ['Rifiutato', 'secondary'] };
+
+function Disputes({ onToast }) {
+  const [filter, setFilter] = React.useState('open');
+  const [open, setOpen] = React.useState(null);
+  const tabs = [['open', 'Aperti'], ['under_review', 'In valutazione'], ['resolved_buyer', 'Risolti'], ['all', 'Tutti']];
+  const list = window.AD_DISPUTES.filter((d) => filter === 'all' || d.status === filter || (filter === 'resolved_buyer' && d.status.startsWith('resolved')));
+  return (
+    <div>
+      <PageTitle eyebrow="Tutela" title="Reclami" sub="Gestisci le controversie tra clienti e venditori" />
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {tabs.map(([id, label]) => <button key={id} onClick={() => setFilter(id)} style={{ border: 0, background: filter === id ? 'var(--primary-700)' : 'var(--surface-0)', color: filter === id ? '#fff' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: filter === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{label}</button>)}
+      </div>
+      {list.length === 0
+        ? <Card variant="flat" padding="lg"><EmptyState icon="party-popper" title="Nessun reclamo" description="Nessuna controversia in questo stato. Ottimo lavoro!" /></Card>
+        : <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {list.map((d) => { const [dl, dtone] = AD_DSTATUS[d.status]; const [bg, fg] = TINT[dtone]; return (
+              <Card key={d.id} variant="bordered" padding="lg">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{dl}</span>
+                  <span style={{ fontSize: '12px', color: 'var(--ink-500)' }}>Reclamo · {d.reason}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: '12px', color: 'var(--ink-400)' }}>#{d.order} · {d.when}</span>
+                </div>
+                <p style={{ margin: '0 0 8px', fontSize: '14px', color: 'var(--ink-900)' }}><strong>{d.opener}</strong> contro <strong>{d.against}</strong></p>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-700)', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)', padding: '10px 12px', lineHeight: 1.5 }}>{d.desc}</p>
+                {d.resolution && <div style={{ marginTop: '10px', padding: '10px 12px', background: 'var(--olive-50)', borderRadius: 'var(--radius-md)', border: '1px solid var(--olive-200)' }}><p style={{ margin: 0, fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--olive-800)' }}>Risoluzione</p><p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--olive-900)' }}>{d.resolution}{d.refund ? ` · Rimborso ${fmt(d.refund)}` : ''}</p></div>}
+                {(d.status === 'open' || d.status === 'under_review') && <div style={{ marginTop: '12px' }}><Button variant="primary" size="sm" icon="gavel" onClick={() => setOpen(d)}>Decidi</Button></div>}
+              </Card>
+            ); })}
+          </div>}
+      <DisputeModal dispute={open} onClose={() => setOpen(null)} onResolve={(label) => { setOpen(null); onToast(label); }} />
+    </div>
+  );
+}
+function DisputeModal({ dispute, onClose, onResolve }) {
+  if (!dispute) return null;
+  return (
+    <Modal open={!!dispute} onClose={onClose} title="Risolvi reclamo" description={`#${dispute.order} · ${dispute.opener} vs ${dispute.against}`}
+      footer={<>
+        <Button variant="success" icon="check" onClick={() => onResolve('Reclamo risolto a favore del cliente')}>A favore buyer</Button>
+        <Button variant="secondary" onClick={() => onResolve('Reclamo risolto a favore del venditore')}>A favore seller</Button>
+        <Button variant="danger" icon="x" onClick={() => onResolve('Reclamo rifiutato')}>Rifiuta</Button>
+      </>}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div>
+          <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink-700)', display: 'block', marginBottom: '5px' }}>Motivazione della decisione</label>
+          <textarea rows="3" placeholder="Spiega la decisione (verrà mostrata alle parti)…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '15px', fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none' }} />
+        </div>
+        <Input label="Rimborso (€) — opzionale" type="number" placeholder="0,00" />
+        <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)' }}>Min. 10 caratteri di motivazione richiesti.</p>
+      </div>
+    </Modal>
+  );
+}
+
+function CodRemittance({ onToast }) {
+  const [done, setDone] = React.useState({});
+  const groups = window.AD_COD;
+  const total = groups.reduce((s, g) => s + g.toRemit, 0);
+  return (
+    <div>
+      <PageTitle eyebrow="Finanza" title="Rimesse contanti COD" sub="Conferma i contanti ricevuti dai rider per sbloccare il pagamento ai venditori" />
+      <div style={{ background: 'var(--cream-50)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '12px 16px', fontSize: '14px', color: 'var(--ink-700)', marginBottom: '16px' }}>
+        In attesa: <strong>{groups.length}</strong> rider·giorno · totale da rimettere <strong>{fmt(total)}</strong>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {groups.map((g, i) => (
+          <Card key={i} variant="bordered" padding="lg">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'var(--olive-100)', color: 'var(--olive-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="banknote" size={20} color="var(--olive-700)" /></span>
+                <div><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{g.rider}</p><p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>{g.date} · {g.orders} ordini COD</p></div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <span style={{ fontSize: '20px', fontWeight: 800, color: 'var(--ink-900)' }}>{fmt(g.toRemit)}</span>
+                {done[i] ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--olive-700)', fontWeight: 700, fontSize: '14px' }}><Lucide name="check" size={16} stroke={2.6} color="var(--olive-700)" /> Confermata</span>
+                  : <Button variant="primary" size="sm" icon="check" onClick={() => { setDone((d) => ({ ...d, [i]: true })); onToast(`Rimessa confermata · ${g.orders} ordini al payout`); }}>Conferma rimessa</Button>}
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Sos({ onToast }) {
+  const [resolved, setResolved] = React.useState(false);
+  return (
+    <div>
+      <PageTitle eyebrow="Sicurezza" title="SOS rider" sub="Emergenze segnalate dai rider durante le consegne" />
+      {resolved
+        ? <Card variant="flat" padding="lg"><EmptyState icon="shield-check" title="Nessun SOS attivo" description="Tutte le emergenze sono state gestite. I rider sono al sicuro." /></Card>
+        : <Card variant="bordered" padding="lg" style={{ border: '2px solid var(--secondary-300)', background: 'var(--secondary-50)' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
+              <span style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--secondary-600)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, animation: 'mc-pulse-soft 1.4s ease-in-out infinite' }}><Lucide name="siren" size={24} color="#fff" /></span>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <p style={{ margin: 0, fontWeight: 800, color: 'var(--secondary-700)', fontSize: '16px' }}>SOS attivo · Giulia Ferrari</p>
+                  <span style={{ fontSize: '12px', color: 'var(--secondary-600)' }}>5 min fa</span>
+                </div>
+                <p style={{ margin: '6px 0 0', fontSize: '14px', color: 'var(--ink-700)', lineHeight: 1.5 }}>Rider bloccata durante la consegna #PCD4P8. Ultima posizione: Stradone Farnese, Piacenza. Telefono: +39 333 98 76 543.</p>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '14px', flexWrap: 'wrap' }}>
+                  <Button variant="danger" icon="phone" onClick={() => onToast('Chiamata al rider in corso…')}>Chiama rider</Button>
+                  <Button variant="secondary" icon="map-pin">Vedi posizione</Button>
+                  <Button variant="success" icon="check" onClick={() => { setResolved(true); onToast('SOS contrassegnato come risolto'); }}>Segna risolto</Button>
+                </div>
+              </div>
+            </div>
+          </Card>}
+    </div>
+  );
+}
+
+// ===== Growth & marketing: Funnel · Coupons · Sponsored · Daily drops · Shop of month · Events =====
+function Funnel() {
+  const f = window.AD_FUNNEL;
+  const a7 = (f.firstOrder7d / f.signups) * 100;
+  const aEver = (f.firstOrderEver / f.signups) * 100;
+  const repeat = (f.multiBuyer / f.firstOrderEver) * 100;
+  const col = (p) => p >= 40 ? ['var(--olive-100)', 'var(--olive-800)'] : p >= 20 ? ['var(--accent-100)', 'var(--accent-800)'] : p > 0 ? ['var(--secondary-100)', 'var(--secondary-700)'] : ['transparent', 'var(--ink-300)'];
+  const rows = [
+    { icon: 'users', label: 'Signup buyer', v: f.signups, t: f.signups, tone: 'primary' },
+    { icon: 'shopping-cart', label: '1° ordine entro 7gg', v: f.firstOrder7d, t: f.signups, tone: 'accent' },
+    { icon: 'package', label: '1° ordine (totale)', v: f.firstOrderEver, t: f.signups, tone: 'olive' },
+    { icon: 'trending-up', label: 'Multi-buyer (>1 ordine)', v: f.multiBuyer, t: f.firstOrderEver, tone: 'secondary' },
+  ];
+  return (
+    <div>
+      <PageTitle eyebrow="Crescita" title="Funnel & Cohort" sub="Activation buyer e retention per coorte mensile"
+        action={<Select defaultValue="90"><option value="30">Ultimi 30 giorni</option><option value="90">Ultimi 90 giorni</option><option value="365">Ultimo anno</option></Select>} />
+      <Card variant="bordered" padding="lg" style={{ marginBottom: '20px' }}>
+        <h3 style={{ margin: '0 0 16px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Funnel activation</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {rows.map((r) => { const pct = r.t > 0 ? (r.v / r.t) * 100 : 0; const [, fg] = TINT[r.tone]; return (
+            <div key={r.label}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                <span style={{ width: '30px', height: '30px', borderRadius: 'var(--radius-md)', background: TINT[r.tone][0], display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={r.icon} size={15} color={fg} /></span>
+                <span style={{ flex: 1, fontWeight: 600, color: 'var(--ink-900)', fontSize: '14px' }}>{r.label}</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{r.v} <span style={{ color: 'var(--ink-400)', fontWeight: 400 }}>/ {r.t} ({pct.toFixed(1)}%)</span></span>
+              </div>
+              <div style={{ height: '8px', background: 'var(--cream-100)', borderRadius: '999px', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${pct}%`, background: fg }} /></div>
+            </div>
+          ); })}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', paddingTop: '16px', marginTop: '16px', borderTop: '1px solid var(--cream-200)' }}>
+          <div><p style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)', fontWeight: 700 }}>Activation 7gg</p><p style={{ margin: '2px 0 0', fontSize: '28px', fontWeight: 800, color: a7 >= 30 ? 'var(--olive-700)' : 'var(--accent-700)' }}>{a7.toFixed(1)}%</p><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>target Glovo 35–40%</p></div>
+          <div><p style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)', fontWeight: 700 }}>Activation totale</p><p style={{ margin: '2px 0 0', fontSize: '28px', fontWeight: 800, color: 'var(--ink-900)' }}>{aEver.toFixed(1)}%</p></div>
+          <div><p style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)', fontWeight: 700 }}>Buyer ricorrente</p><p style={{ margin: '2px 0 0', fontSize: '28px', fontWeight: 800, color: 'var(--ink-900)' }}>{repeat.toFixed(1)}%</p><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>target &gt;40%</p></div>
+        </div>
+      </Card>
+      <Card variant="bordered" padding="lg">
+        <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Cohort retention</h3>
+        <p style={{ margin: '0 0 14px', fontSize: '12px', color: 'var(--ink-500)' }}>% buyer di una coorte che ha riordinato nei mesi successivi.</p>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr>{['Coorte', 'Signup', 'M+1', 'M+2', 'M+3'].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '8px 10px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {f.cohorts.map((c) => { const cell = (n) => { const p = c.size > 0 ? (n / c.size) * 100 : 0; const [bg, fg] = col(p); return n === 0 ? <span style={{ color: 'var(--ink-300)' }}>—</span> : <span style={{ background: bg, color: fg, padding: '2px 8px', borderRadius: '999px', fontWeight: 600, fontSize: '12px' }}>{p.toFixed(0)}%</span>; }; return (
+              <tr key={c.month} style={{ borderTop: '1px solid var(--cream-100)' }}>
+                <td style={{ padding: '9px 10px', fontWeight: 600, color: 'var(--ink-800)', textTransform: 'capitalize' }}>{c.month}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right', color: 'var(--ink-600)' }}>{c.size}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right' }}>{cell(c.m1)}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right' }}>{cell(c.m2)}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right' }}>{cell(c.m3)}</td>
+              </tr>
+            ); })}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function Coupons({ onToast }) {
+  const [list, setList] = React.useState(window.AD_COUPONS);
+  const [showForm, setShowForm] = React.useState(false);
+  const TYPE = { PERCENT: 'Sconto %', FIXED: 'Sconto €', FREE_SHIPPING: 'Spedizione gratis' };
+  const val = (c) => c.type === 'PERCENT' ? `${c.value}%` : c.type === 'FIXED' ? fmt(c.value) : '—';
+  function toggle(code) { setList((l) => l.map((c) => c.code === code ? { ...c, active: !c.active } : c)); }
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Coupon" sub={`${list.length} codici sconto`}
+        action={<Button variant="primary" icon="plus" onClick={() => setShowForm((s) => !s)}>Nuovo coupon</Button>} />
+      {showForm && (
+        <Card variant="bordered" padding="lg" style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            <Input label="Codice" placeholder="ESTATE25" />
+            <Select label="Tipo" defaultValue="PERCENT"><option value="PERCENT">Percentuale (%)</option><option value="FIXED">Sconto fisso (€)</option><option value="FREE_SHIPPING">Spedizione gratuita</option></Select>
+            <Input label="Valore" type="number" placeholder="25" />
+            <Input label="Spesa minima (€)" type="number" placeholder="30" />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+            <Button variant="primary" icon="check" onClick={() => { setShowForm(false); onToast && onToast('Coupon creato'); }}>Crea coupon</Button>
+            <Button variant="ghost" onClick={() => setShowForm(false)}>Annulla</Button>
+          </div>
+        </Card>
+      )}
+      <Card variant="bordered" padding="none">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Codice', 'Tipo', 'Valore', 'Spesa min', 'Usi', 'Stato'].map((h, i) => <th key={h} style={{ textAlign: i >= 2 && i <= 4 ? 'right' : 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {list.map((c) => (
+              <tr key={c.code} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--ink-900)' }}>{c.code}</td>
+                <td style={{ padding: '11px 16px', color: 'var(--ink-700)', fontSize: '13px' }}>{TYPE[c.type]}{c.firstOnly && <span style={{ marginLeft: '6px', fontSize: '11px', background: 'var(--accent-100)', color: 'var(--accent-800)', padding: '1px 6px', borderRadius: '999px' }}>1° ordine</span>}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{val(c)}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-600)' }}>{c.min > 0 ? fmt(c.min) : '—'}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-600)' }}>{c.uses}{c.max ? ` / ${c.max}` : ''}</td>
+                <td style={{ padding: '11px 16px' }}><button onClick={() => toggle(c.code)} style={{ border: 0, cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '4px 10px', borderRadius: '999px', background: c.active ? 'var(--olive-100)' : 'var(--cream-200)', color: c.active ? 'var(--olive-700)' : 'var(--ink-500)', fontFamily: 'var(--font-sans)' }}>{c.active ? 'Attivo' : 'Disattivato'}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function Sponsored() {
+  const s = window.AD_SPONSORED;
+  const totSpend = s.reduce((a, x) => a + x.spend, 0);
+  const totClicks = s.reduce((a, x) => a + x.clicks, 0);
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Sponsorizzati" sub="Posizionamenti a pagamento dei venditori" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '18px' }}>
+        <StatCard icon="megaphone" tone="primary" label="Campagne attive" value={s.filter((x) => x.active).length} />
+        <StatCard icon="mouse-pointer-click" tone="accent" label="Click totali" value={totClicks.toLocaleString('it-IT')} />
+        <StatCard icon="euro" tone="olive" label="Ricavi ads" value={fmt(totSpend)} />
+      </div>
+      <Card variant="bordered" padding="none">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Negozio · prodotto', 'Posizione', 'CPC', 'Click', 'Spesa', 'Stato'].map((h, i) => <th key={h} style={{ textAlign: i >= 2 && i <= 4 ? 'right' : 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {s.map((x) => (
+              <tr key={x.product} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td style={{ padding: '11px 16px' }}><p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{x.product}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)' }}>{x.store}</p></td>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{x.slot}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{fmt(x.cpc)}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{x.clicks.toLocaleString('it-IT')}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--olive-700)' }}>{fmt(x.spend)}</td>
+                <td style={{ padding: '11px 16px' }}>{x.active ? <Badge variant="new">Attiva</Badge> : <span style={{ fontSize: '12px', color: 'var(--ink-400)', fontWeight: 600 }}>In pausa</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function DailyDrops() {
+  const d = window.AD_DROPS;
+  const ST = { live: ['var(--secondary-100)', 'var(--secondary-700)', 'LIVE ora'], scheduled: ['var(--cream-200)', 'var(--ink-600)', 'Programmato'] };
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Daily drops" sub="Offerte lampo a tempo limitato in home"
+        action={<Button variant="primary" icon="plus">Nuovo drop</Button>} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {d.map((x) => { const [bg, fg, lbl] = ST[x.status]; return (
+          <Card key={x.product} variant="bordered" padding="lg">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <span style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-lg)', background: 'var(--secondary-50)', color: 'var(--secondary-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, flexDirection: 'column' }}><Lucide name="zap" size={22} color="var(--secondary-600)" /></span>
+              <div style={{ flex: 1, minWidth: '160px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{x.product}</p><span style={{ fontSize: '11px', fontWeight: 700, background: bg, color: fg, padding: '2px 8px', borderRadius: '999px' }}>{lbl}</span></div>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>{x.store} · {x.day}</p>
+              </div>
+              <div style={{ textAlign: 'center' }}><p style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: 'var(--secondary-600)' }}>-{x.discount}%</p><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>{x.slotsLeft} pezzi</p></div>
+            </div>
+          </Card>
+        ); })}
+      </div>
+    </div>
+  );
+}
+
+function ShopOfMonth({ onToast }) {
+  const s = window.AD_SHOP_MONTH;
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Negozio del mese" sub="Metti in vetrina un commerciante eccellente" />
+      <Card variant="elevated" padding="lg" style={{ marginBottom: '20px', background: 'linear-gradient(135deg, var(--accent-100), var(--cream-100))', border: '1px solid var(--accent-200)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <span style={{ width: '56px', height: '56px', borderRadius: 'var(--radius-xl)', background: 'var(--accent-500)', color: 'var(--ink-900)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="crown" size={28} color="var(--ink-900)" /></span>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent-800)' }}>In vetrina questo mese</p>
+            <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-serif)', fontSize: '24px', fontWeight: 800, color: 'var(--ink-900)' }}>{s.current}</p>
+            <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-600)' }}>{s.area} · {s.rating.toFixed(1).replace('.', ',')}★ · {s.orders} ordini</p>
+          </div>
+        </div>
+      </Card>
+      <SectionLabel icon="trophy" color="var(--primary-700)">Candidati suggeriti</SectionLabel>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {s.candidates.map((c, i) => (
+          <Card key={c.name} variant="bordered" padding="md">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink-300)', width: '20px' }}>{i + 1}</span>
+              <span style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--cream-200)', color: 'var(--primary-700)', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{initials(c.name)}</span>
+              <div style={{ flex: 1 }}><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{c.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{c.rating.toFixed(1).replace('.', ',')}★ · {c.orders} ordini</p></div>
+              <div style={{ textAlign: 'right', marginRight: '8px' }}><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)', textTransform: 'uppercase', fontWeight: 700 }}>Score</p><p style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--olive-700)' }}>{c.score}</p></div>
+              <Button variant={i === 0 ? 'primary' : 'secondary'} size="sm" icon="crown" onClick={() => onToast && onToast(`${c.name} messo in vetrina`)}>Scegli</Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Events() {
+  const e = window.AD_EVENTS;
+  const ST = { scheduled: ['var(--olive-100)', 'var(--olive-800)', 'In programma'], ended: ['var(--cream-200)', 'var(--ink-500)', 'Concluso'] };
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Eventi" sub="Mercatini e iniziative speciali del marketplace"
+        action={<Button variant="primary" icon="plus">Nuovo evento</Button>} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+        {e.map((x) => { const [bg, fg, lbl] = ST[x.status]; return (
+          <Card key={x.name} variant="bordered" padding="lg">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="calendar-days" size={22} color="var(--primary-700)" /></span>
+              <span style={{ fontSize: '11px', fontWeight: 700, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{lbl}</span>
+            </div>
+            <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>{x.name}</p>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>{x.when} · {x.stores} negozi</p>
+          </Card>
+        ); })}
+      </div>
+    </div>
+  );
+}
+
+// ===== Content/CMS: Home builder · Pages · Categories · Branding · Product moderation =====
+//
+// HOME BUILDER — modello "a sezioni" (come Shopify / editor vetrina negozi):
+// la home pubblica È una lista ordinata di sezioni, ciascuna con un `type`,
+// un flag `visible` e un oggetto `fields` (i contenuti modificabili).
+// Per aggiungere un nuovo tipo di sezione bastano 3 passi:
+//   1) aggiungilo a window.AD_SECTION_TYPES (palette "+ Aggiungi sezione")
+//   2) definisci i suoi `fields` (text | textarea | select) nel default
+//   3) gestisci il suo rendering in <HomePreviewSection> qui sotto
+// Niente altro da toccare: lista, riordino, editor e preview sono generici.
+
+function HomeBuilder({ onToast }) {
+  const [sections, setSections] = React.useState(window.AD_HOME_SECTIONS);
+  const [selected, setSelected] = React.useState(0);
+  const [dirty, setDirty] = React.useState(false);
+  const [adding, setAdding] = React.useState(false);
+
+  const mark = (next) => { setSections(next); setDirty(true); };
+  const move = (i, dir) => { const j = i + dir; if (j < 0 || j >= sections.length) return; const n = [...sections]; [n[i], n[j]] = [n[j], n[i]]; mark(n); setSelected(j); };
+  const toggle = (i) => mark(sections.map((x, j) => j === i ? { ...x, visible: !x.visible } : x));
+  const removeAt = (i) => { mark(sections.filter((_, j) => j !== i)); setSelected(Math.max(0, i - 1)); };
+  const setField = (key, value) => mark(sections.map((x, j) => j === selected ? { ...x, fields: x.fields.map((f) => f.key === key ? { ...f, value } : f) } : x));
+  const addSection = (t) => {
+    const sec = { type: t.type, label: t.label, desc: 'Nuova sezione', visible: true, icon: t.icon, fields: [{ key: 'title', label: 'Titolo', kind: 'text', value: t.label }] };
+    mark([...sections, sec]); setSelected(sections.length); setAdding(false);
+  };
+
+  const sel = sections[selected];
+
+  return (
+    <div>
+      <PageTitle eyebrow="Contenuti" title="Home builder" sub="La home è una lista di sezioni: riordina a sinistra, modifica i contenuti al centro, controlla l’anteprima a destra."
+        action={<Button variant="secondary" icon="external-link">Vedi home</Button>} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '18px', alignItems: 'start' }}>
+        {/* ── colonna 1: lista sezioni ── */}
+        <Card variant="bordered" padding="none">
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--cream-200)' }}>
+            <p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)', fontSize: '14px' }}>Sezioni</p>
+            <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>Trascina l’ordine con le frecce · l’occhio mostra/nasconde</p>
+          </div>
+          <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {sections.map((s, i) => {
+              const on = i === selected;
+              return (
+                <div key={i} onClick={() => setSelected(i)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 10px', borderRadius: 'var(--radius-md)', cursor: 'pointer', background: on ? 'var(--primary-50)' : 'transparent', border: `1px solid ${on ? 'var(--primary-200)' : 'transparent'}`, opacity: s.visible ? 1 : 0.55 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <button onClick={(e) => { e.stopPropagation(); move(i, -1); }} disabled={i === 0} style={arrowBtn(i === 0)}><Lucide name="chevron-up" size={13} color="var(--ink-500)" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); move(i, 1); }} disabled={i === sections.length - 1} style={arrowBtn(i === sections.length - 1)}><Lucide name="chevron-down" size={13} color="var(--ink-500)" /></button>
+                  </div>
+                  <span style={{ width: '30px', height: '30px', borderRadius: 'var(--radius-md)', background: on ? 'var(--primary-100)' : 'var(--cream-100)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={s.icon || 'square'} size={15} color="var(--primary-700)" /></span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: on ? 700 : 600, color: 'var(--ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</p>
+                    <p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>{s.visible ? 'Visibile' : 'Nascosta'}</p>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); toggle(i); }} title={s.visible ? 'Nascondi' : 'Mostra'} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '4px' }}><Lucide name={s.visible ? 'eye' : 'eye-off'} size={16} color={s.visible ? 'var(--olive-600)' : 'var(--ink-400)'} /></button>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ padding: '10px 12px', borderTop: '1px solid var(--cream-200)' }}>
+            {adding ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <p style={{ margin: '2px 4px 6px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-400)' }}>Scegli un blocco</p>
+                {window.AD_SECTION_TYPES.map((t) => (
+                  <button key={t.type + t.label} onClick={() => addSection(t)} style={{ display: 'flex', alignItems: 'center', gap: '8px', border: 0, background: 'transparent', cursor: 'pointer', padding: '8px 10px', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--ink-800)', textAlign: 'left' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--cream-100)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                    <Lucide name={t.icon} size={16} color="var(--primary-700)" /> {t.label}
+                  </button>
+                ))}
+                <button onClick={() => setAdding(false)} style={{ border: 0, background: 'transparent', cursor: 'pointer', fontSize: '12px', color: 'var(--ink-500)', padding: '6px', fontFamily: 'var(--font-sans)' }}>Annulla</button>
+              </div>
+            ) : (
+              <button onClick={() => setAdding(true)} style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', border: '1px dashed var(--cream-400)', background: 'transparent', color: 'var(--primary-700)', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}><Lucide name="plus" size={15} color="var(--primary-700)" /> Aggiungi sezione</button>
+            )}
+          </div>
+        </Card>
+
+        {/* ── colonna 2: editor + anteprima ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {sel && (
+            <Card variant="bordered" padding="lg">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ width: '34px', height: '34px', borderRadius: 'var(--radius-md)', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={sel.icon || 'square'} size={17} color="var(--primary-700)" /></span>
+                  <div><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)', fontSize: '15px' }}>{sel.label}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)', fontFamily: 'var(--font-mono)' }}>type: {sel.type}</p></div>
+                </div>
+                {sections.length > 1 && <button onClick={() => removeAt(selected)} title="Rimuovi sezione" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--secondary-600)', display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)' }}><Lucide name="trash-2" size={15} color="var(--secondary-600)" /> Rimuovi</button>}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {sel.fields.map((f) => (
+                  <div key={f.key}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--ink-700)', marginBottom: '4px' }}>{f.label}</label>
+                    {f.kind === 'textarea'
+                      ? <textarea value={f.value} onChange={(e) => setField(f.key, e.target.value)} rows="2" style={inp} />
+                      : f.kind === 'select'
+                        ? <select value={f.value} onChange={(e) => setField(f.key, e.target.value)} style={inp}>{f.options.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+                        : <input value={f.value} onChange={(e) => setField(f.key, e.target.value)} style={inp} />}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          {/* anteprima live */}
+          <Card variant="bordered" padding="none">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderBottom: '1px solid var(--cream-200)', background: 'var(--cream-50)' }}>
+              <Lucide name="eye" size={15} color="var(--ink-500)" />
+              <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)' }}>Anteprima home</span>
+              <span style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--ink-400)' }}>mycity.it</span>
+            </div>
+            <div style={{ maxHeight: '420px', overflowY: 'auto', background: 'var(--surface-50)' }}>
+              {sections.filter((s) => s.visible).map((s, i) => (
+                <div key={i} onClick={() => setSelected(sections.indexOf(s))} style={{ cursor: 'pointer', outline: sections.indexOf(s) === selected ? '2px solid var(--primary-400)' : 'none', outlineOffset: '-2px' }}>
+                  <HomePreviewSection s={s} />
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '16px', alignItems: 'center' }}>
+        {dirty && <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-800)', background: 'var(--accent-100)', border: '1px solid var(--accent-200)', borderRadius: '999px', padding: '5px 12px' }}>Modifiche non salvate</span>}
+        <Button variant="primary" icon="save" onClick={() => { setDirty(false); onToast && onToast('Home pubblicata · le modifiche sono online'); }}>Salva e pubblica</Button>
+      </div>
+    </div>
+  );
+}
+const arrowBtn = (dis) => ({ border: 0, background: 'transparent', cursor: dis ? 'not-allowed' : 'pointer', opacity: dis ? 0.3 : 1, padding: '1px', display: 'inline-flex' });
+const inp = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '9px 11px', fontSize: '14px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none', resize: 'vertical' };
+
+// Render schematico (non pixel-perfect) di una sezione nell'anteprima.
+// Aggiungi qui un caso quando introduci un nuovo `type`.
+function HomePreviewSection({ s }) {
+  const f = (k, d) => { const x = (s.fields || []).find((y) => y.key === k); return x ? x.value : d; };
+  const wrap = { padding: '16px 18px', borderBottom: '1px solid var(--cream-200)' };
+  if (s.type === 'hero') return (
+    <div style={{ ...wrap, background: 'linear-gradient(135deg, var(--cream-100), var(--surface-0))' }}>
+      <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1.1 }}>{f('title', 'Hero')}</p>
+      <p style={{ margin: '6px 0 10px', fontSize: '13px', color: 'var(--ink-500)' }}>{f('subtitle', '')}</p>
+      <span style={{ display: 'inline-block', background: 'var(--primary-700)', color: '#fff', fontSize: '12px', fontWeight: 700, padding: '7px 14px', borderRadius: '999px' }}>{f('cta', 'CTA')}</span>
+    </div>
+  );
+  if (s.type === 'categories') {
+    const cols = +f('columns', '4');
+    return <div style={wrap}><PreviewHead t={f('title', 'Categorie')} /><div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: '6px' }}>{Array.from({ length: cols }).map((_, i) => <div key={i} style={{ height: '40px', borderRadius: 'var(--radius-md)', background: 'var(--cream-100)', border: '1px solid var(--cream-300)' }} />)}</div></div>;
+  }
+  if (s.type === 'rail' || s.type === 'rail2') {
+    const n = Math.min(+f('count', '4'), 6);
+    return <div style={wrap}><PreviewHead t={f('title', 'Carosello')} meta={f('source', '')} /><div style={{ display: 'flex', gap: '8px' }}>{Array.from({ length: n }).map((_, i) => <div key={i} style={{ flex: 1, minWidth: 0 }}><div style={{ height: '60px', borderRadius: 'var(--radius-md)', background: 'var(--surface-100)', border: '1px solid var(--cream-300)' }} /><div style={{ height: '7px', width: '80%', background: 'var(--cream-300)', borderRadius: '3px', marginTop: '5px' }} /></div>)}</div></div>;
+  }
+  if (s.type === 'stores') {
+    const n = Math.min(+f('count', '4'), 6);
+    return <div style={wrap}><PreviewHead t={f('title', 'Negozi')} /><div style={{ display: 'flex', gap: '8px' }}>{Array.from({ length: n }).map((_, i) => <div key={i} style={{ flex: 1, height: '54px', borderRadius: 'var(--radius-md)', background: 'var(--surface-100)', border: '1px solid var(--cream-300)' }} />)}</div></div>;
+  }
+  if (s.type === 'trust') return (
+    <div style={{ ...wrap, background: 'var(--cream-50)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+      {[f('p1', ''), f('p2', ''), f('p3', '')].filter(Boolean).map((t, i) => <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--ink-700)' }}><Lucide name="check" size={13} color="var(--olive-600)" /> {t}</span>)}
+    </div>
+  );
+  if (s.type === 'seller-cta') return (
+    <div style={{ ...wrap, background: 'var(--ink-900)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+      <span style={{ color: '#fff', fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: '15px' }}>{f('title', '')}</span>
+      <span style={{ background: 'var(--accent-500)', color: 'var(--ink-900)', fontSize: '12px', fontWeight: 700, padding: '6px 12px', borderRadius: '999px', whiteSpace: 'nowrap' }}>{f('cta', 'CTA')}</span>
+    </div>
+  );
+  if (s.type === 'banner') return <div style={wrap}><div style={{ height: '64px', borderRadius: 'var(--radius-lg)', background: 'linear-gradient(135deg, var(--primary-200), var(--accent-200))', display: 'flex', alignItems: 'center', paddingLeft: '16px', fontFamily: 'var(--font-serif)', fontWeight: 700, color: 'var(--ink-900)' }}>{f('title', 'Banner promo')}</div></div>;
+  if (s.type === 'gallery') return <div style={wrap}><PreviewHead t={f('title', 'Galleria')} /><div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '6px' }}>{[0,1,2].map((i) => <div key={i} style={{ height: '52px', borderRadius: 'var(--radius-md)', background: 'var(--surface-100)', border: '1px solid var(--cream-300)' }} />)}</div></div>;
+  if (s.type === 'text') return <div style={wrap}><p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{f('title', 'Blocco di testo')}</p><div style={{ height: '7px', background: 'var(--cream-300)', borderRadius: '3px', marginTop: '8px' }} /><div style={{ height: '7px', width: '70%', background: 'var(--cream-300)', borderRadius: '3px', marginTop: '5px' }} /></div>;
+  return <div style={wrap}><PreviewHead t={s.label} /></div>;
+}
+function PreviewHead({ t, meta }) {
+  return <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '8px' }}><span style={{ fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)' }}>{t}</span>{meta && <span style={{ fontSize: '11px', color: 'var(--ink-400)' }}>· {meta}</span>}</div>;
+}
+
+function Pages() {
+  const ST = { published: ['var(--olive-100)', 'var(--olive-700)', 'Pubblicata'], draft: ['var(--cream-200)', 'var(--ink-500)', 'Bozza'] };
+  return (
+    <div>
+      <PageTitle eyebrow="Contenuti" title="Pagine" sub="Pagine statiche e legali del sito"
+        action={<Button variant="primary" icon="plus">Nuova pagina</Button>} />
+      <Card variant="bordered" padding="none">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Titolo', 'URL', 'Aggiornata', 'Stato', ''].map((h, i) => <th key={i} style={{ textAlign: 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {window.AD_PAGES.map((p) => { const [bg, fg, lbl] = ST[p.status]; return (
+              <tr key={p.slug} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td style={{ padding: '11px 16px', fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)' }}>{p.title}</td>
+                <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-500)' }}>{p.slug}</td>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{p.updated}</td>
+                <td style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{lbl}</span></td>
+                <td style={{ padding: '11px 16px', textAlign: 'right' }}><button style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '6px' }}><Lucide name="pencil" size={16} color="var(--ink-500)" /></button></td>
+              </tr>
+            ); })}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function Categories({ onToast }) {
+  const [list, setList] = React.useState(window.AD_CATEGORIES);
+  function toggle(slug) { setList((l) => l.map((c) => c.slug === slug ? { ...c, visible: !c.visible } : c)); }
+  return (
+    <div>
+      <PageTitle eyebrow="Contenuti" title="Categorie" sub="Tassonomia del catalogo del marketplace"
+        action={<Button variant="primary" icon="plus">Nuova categoria</Button>} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+        {list.map((c) => (
+          <Card key={c.slug} variant="bordered" padding="md">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-md)', background: 'var(--cream-100)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="folder" size={20} color="var(--primary-700)" /></span>
+              <div style={{ flex: 1, minWidth: 0 }}><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{c.label}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)' }}>{c.products} prodotti · /{c.slug}</p></div>
+              <button onClick={() => toggle(c.slug)} style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '6px' }}><Lucide name={c.visible ? 'eye' : 'eye-off'} size={18} color={c.visible ? 'var(--olive-600)' : 'var(--ink-400)'} /></button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Branding({ onToast }) {
+  const b = window.AD_BRANDING;
+  const swatches = [['Primario', b.primary], ['Accento', b.accent], ['Inchiostro', '#1C1A18'], ['Crema', '#FBF7F0']];
+  return (
+    <div>
+      <PageTitle eyebrow="Contenuti" title="Branding" sub="Identità visiva del marketplace" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <Card variant="bordered" padding="lg">
+          <h3 style={{ margin: '0 0 14px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Identità</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <Input label="Nome marketplace" defaultValue={b.name} />
+            <Input label="Tagline" defaultValue={b.tagline} />
+            <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}><Button variant="primary" icon="save" onClick={() => onToast && onToast('Branding salvato')}>Salva</Button></div>
+          </div>
+        </Card>
+        <Card variant="bordered" padding="lg">
+          <h3 style={{ margin: '0 0 14px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Palette</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            {swatches.map(([l, c]) => (
+              <div key={l} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-md)', background: c, border: '1px solid rgba(0,0,0,.1)', flexShrink: 0 }} />
+                <div><p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{l}</p><p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>{c}</p></div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: '16px', padding: '14px', borderRadius: 'var(--radius-lg)', background: 'var(--cream-50)', border: '1px solid var(--cream-200)' }}>
+            <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 800 }}><span style={{ color: b.accent }}>My</span><span style={{ color: '#1C1A18' }}>City</span></p>
+            <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>Anteprima logo</p>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function ProductModeration({ onToast }) {
+  const [list, setList] = React.useState(window.AD_MOD_PRODUCTS);
+  const SEV = { high: ['var(--secondary-50)', 'var(--secondary-600)', 'Alta'], low: ['var(--accent-50)', 'var(--accent-800)', 'Bassa'] };
+  function act(name, label) { setList((l) => l.filter((p) => p.name !== name)); onToast && onToast(label); }
+  return (
+    <div>
+      <PageTitle eyebrow="Trust & Safety" title="Moderazione prodotti" sub="Prodotti segnalati dal controllo automatico AI" />
+      {list.length === 0 ? (
+        <Card variant="flat" padding="lg"><EmptyState icon="shield-check" title="Catalogo pulito" description="Nessun prodotto da moderare." tone="olive" /></Card>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {list.map((p) => { const [bg, fg, lbl] = SEV[p.sev]; return (
+            <Card key={p.name} variant="bordered" padding="lg">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                <img src={img(p.kw, p.lock)} alt="" style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-md)', objectFit: 'cover' }} />
+                <div style={{ flex: 1, minWidth: '180px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{p.name}</p><span style={{ fontSize: '11px', fontWeight: 700, background: bg, color: fg, padding: '2px 8px', borderRadius: '999px' }}>Gravità {lbl}</span></div>
+                  <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>{p.store} · {p.reason}</p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <Button variant="secondary" size="sm" icon="check" onClick={() => act(p.name, 'Prodotto approvato')}>Approva</Button>
+                  <Button variant="danger" size="sm" icon="trash-2" onClick={() => act(p.name, 'Prodotto rimosso')}>Rimuovi</Button>
+                </div>
+              </div>
+            </Card>
+          ); })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== System: Activity feed · Audit log · Support chat =====
+function Activity() {
+  return (
+    <div>
+      <PageTitle eyebrow="Sistema" title="Attività" sub="Flusso live degli eventi del marketplace" />
+      <Card variant="bordered" padding="lg">
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {window.AD_ACTIVITY.map((a, i) => (
+            <div key={i} style={{ display: 'flex', gap: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: TINT[a.tone][0], color: TINT[a.tone][1], display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={a.icon} size={17} color={TINT[a.tone][1]} /></span>
+                {i < window.AD_ACTIVITY.length - 1 && <span style={{ width: '2px', flex: 1, minHeight: '20px', background: 'var(--cream-300)' }} />}
+              </div>
+              <div style={{ paddingBottom: '18px', flex: 1 }}>
+                <p style={{ margin: 0, fontSize: '14px', color: 'var(--ink-800)' }}><strong>{a.who}</strong> {a.action} {a.target && <span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>{a.target}</span>}</p>
+                <p style={{ margin: '1px 0 0', fontSize: '12px', color: 'var(--ink-400)' }}>{a.when}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function Audit() {
+  return (
+    <div>
+      <PageTitle eyebrow="Sistema" title="Audit log" sub="Registro immutabile delle azioni amministrative"
+        action={<Button variant="secondary" icon="download">Esporta</Button>} />
+      <Card variant="bordered" padding="none">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Operatore', 'Evento', 'Dettaglio', 'IP', 'Quando'].map((h) => <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {window.AD_AUDIT.map((a, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-800)' }}>{a.actor}</td>
+                <td style={{ padding: '11px 16px' }}><span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 600, background: 'var(--cream-100)', color: 'var(--primary-700)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>{a.event}</span></td>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{a.detail}</td>
+                <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>{a.ip}</td>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{a.when}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function Support() {
+  const [active, setActive] = React.useState(window.AD_SUPPORT[0].user);
+  const [text, setText] = React.useState('');
+  const thread = window.AD_SUPPORT.find((t) => t.user === active);
+  const ROLE = { buyer: ['Acquirente', 'primary'], seller: ['Venditore', 'accent'], rider: ['Rider', 'olive'] };
+  return (
+    <div>
+      <PageTitle eyebrow="Sistema" title="Supporto" sub="Chat di assistenza con utenti, venditori e rider" />
+      <Card variant="bordered" padding="none">
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', height: '460px' }}>
+          <div style={{ borderRight: '1px solid var(--cream-200)', overflowY: 'auto' }}>
+            {window.AD_SUPPORT.map((t) => { const [rl, rt] = ROLE[t.role]; return (
+              <button key={t.user} onClick={() => setActive(t.user)} style={{ display: 'flex', gap: '10px', width: '100%', textAlign: 'left', border: 0, borderBottom: '1px solid var(--cream-100)', background: active === t.user ? 'var(--primary-50)' : 'transparent', padding: '12px 14px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--cream-200)', color: 'var(--ink-700)', fontWeight: 700, fontSize: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(t.user)}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}><strong style={{ fontSize: '13px', color: 'var(--ink-900)' }}>{t.user}</strong><span style={{ fontSize: '11px', color: 'var(--ink-400)' }}>{t.when}</span></div>
+                  <p style={{ margin: '1px 0 3px', fontSize: '12px', color: 'var(--ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.last}</p>
+                  <span style={{ fontSize: '10px', fontWeight: 700, background: TINT[rt][0], color: TINT[rt][1], padding: '1px 7px', borderRadius: '999px' }}>{rl}</span>
+                </div>
+                {t.unread > 0 && <span style={{ alignSelf: 'center', background: 'var(--secondary-600)', color: '#fff', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{t.unread}</span>}
+              </button>
+            ); })}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--cream-200)', color: 'var(--ink-700)', fontWeight: 700, fontSize: '11px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{initials(thread.user)}</span>
+              <strong style={{ fontSize: '14px', color: 'var(--ink-900)' }}>{thread.user}</strong>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: 'var(--cream-50)' }}>
+              {thread.msgs.map((m, i) => (
+                <div key={i} style={{ alignSelf: m.me ? 'flex-end' : 'flex-start', maxWidth: '72%', background: m.me ? 'var(--primary-700)' : '#fff', color: m.me ? '#fff' : 'var(--ink-800)', border: m.me ? 'none' : '1px solid var(--cream-300)', borderRadius: m.me ? '14px 14px 4px 14px' : '14px 14px 14px 4px', padding: '9px 13px', fontSize: '14px', lineHeight: 1.4 }}>{m.t}</div>
+              ))}
+            </div>
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--cream-200)', display: 'flex', gap: '8px' }}>
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Rispondi…" style={{ flex: 1, border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '10px 14px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none' }} />
+              <Button variant="primary" icon="send" onClick={() => setText('')}>Invia</Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ===== Admin app shell =====
+function App() {
+  const [view, setView] = React.useState('today');
+  const [toast, setToast] = React.useState(null);
+  const timer = React.useRef(null);
+  function showToast(t) { setToast(t); clearTimeout(timer.current); timer.current = setTimeout(() => setToast(null), 2600); }
+  function nav(v) { setView(v); window.scrollTo(0, 0); }
+  return (
+    <AdminShell view={view} onNav={nav}>
+      {view === 'today' && <Today onNav={nav} />}
+      {view === 'overview' && <Overview onNav={nav} />}
+      {view === 'orders' && <OrdersFull />}
+      {view === 'users' && <Users />}
+      {view === 'disputes' && <Disputes onToast={showToast} />}
+      {view === 'moderation' && <ProductModeration onToast={showToast} />}
+      {view === 'cod' && <CodRemittance onToast={showToast} />}
+      {view === 'sos' && <Sos onToast={showToast} />}
+      {view === 'funnel' && <Funnel />}
+      {view === 'coupons' && <Coupons onToast={showToast} />}
+      {view === 'sponsored' && <Sponsored />}
+      {view === 'drops' && <DailyDrops />}
+      {view === 'shop-month' && <ShopOfMonth onToast={showToast} />}
+      {view === 'events' && <Events />}
+      {view === 'home' && <HomeBuilder onToast={showToast} />}
+      {view === 'pages' && <Pages />}
+      {view === 'categories' && <Categories onToast={showToast} />}
+      {view === 'branding' && <Branding onToast={showToast} />}
+      {view === 'activity' && <Activity />}
+      {view === 'audit' && <Audit />}
+      {view === 'support' && <Support />}
+      {toast && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', zIndex: 'var(--z-toast)', display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--ink-900)', color: '#fff', padding: '12px 18px', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-warm-xl)', animation: 'mc-pop-in var(--dur-medium) var(--ease-out-quint)', fontSize: '14px', fontWeight: 500 }}>
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--olive-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="check" size={15} stroke={3} color="#fff" /></span>
+          {toast}
+        </div>, document.body)}
+    </AdminShell>
+  );
+}
+
+// Full orders view: status filter + table reusing OrdersTable.
+function OrdersFull() {
+  const [f, setF] = React.useState('all');
+  const tabs = [['all', 'Tutti'], ['NEW', 'Nuovi'], ['OUT_FOR_DELIVERY', 'In consegna'], ['DELIVERED', 'Consegnati'], ['CANCELED', 'Annullati']];
+  const rows = window.AD_RECENT_ORDERS.filter((o) => f === 'all' || o.status === f);
+  return (
+    <div>
+      <PageTitle eyebrow="Operativo" title="Ordini" sub={`${window.AD_TOTALS.orders.toLocaleString('it-IT')} ordini totali · ${window.AD_TOTALS.ordersRecent} negli ultimi 7 giorni`} />
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {tabs.map(([id, label]) => <button key={id} onClick={() => setF(id)} style={{ border: 0, background: f === id ? 'var(--primary-700)' : 'var(--surface-0)', color: f === id ? '#fff' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: f === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{label}</button>)}
+      </div>
+      {rows.length === 0 ? <Card variant="flat" padding="lg"><EmptyState icon="package-open" title="Nessun ordine" description="Nessun ordine in questo stato." /></Card> : <OrdersTable rows={rows} />}
+    </div>
+  );
+}
+
+(function mcMount(){
+  if (!window.__MC_ALLOW_MOUNT) return;
+  if (window.__adminReady) return;
+  var ns = window.MyCityDesignSystem_105480;
+  if (typeof App === 'undefined' || !ns || !ns.Button || !window.AD_TODAY) return setTimeout(mcMount, 30);
+  window.__adminReady = true;
+  var root = document.getElementById('root');
+  if (root) root.style.display = 'none';
+  var mount = document.getElementById('mc-app');
+  if (!mount) { mount = document.createElement('div'); mount.id = 'mc-app'; document.body.appendChild(mount); }
+  ReactDOM.createRoot(mount).render(React.createElement(App));
+})();

@@ -1,0 +1,101 @@
+// ===== Seller shell (sidebar + topbar) =====
+const SC_NAV = [
+  { group: 'Gestione', items: [
+    { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+    { id: 'orders', icon: 'receipt', label: 'Ordini', badge: 'todo' },
+    { id: 'products', icon: 'package', label: 'Prodotti' },
+    { id: 'ai', icon: 'wand-2', label: 'AI Studio' },
+  ] },
+  { group: 'Crescita', items: [
+    { id: 'promotions', icon: 'tag', label: 'Promozioni' },
+    { id: 'promote', icon: 'megaphone', label: 'Sponsorizza' },
+    { id: 'stories', icon: 'camera', label: 'Storie' },
+    { id: 'analytics', icon: 'bar-chart-3', label: 'Analisi' },
+  ] },
+  { group: 'Relazioni', items: [
+    { id: 'customers', icon: 'users', label: 'Clienti' },
+    { id: 'reviews', icon: 'star', label: 'Recensioni' },
+    { id: 'earnings', icon: 'wallet', label: 'Guadagni' },
+  ] },
+  { group: 'Negozio', items: [
+    { id: 'vetrina', icon: 'store', label: 'La tua vetrina' },
+    { id: 'profile', icon: 'user', label: 'Profilo' },
+    { id: 'help', icon: 'life-buoy', label: 'Aiuto' },
+  ] },
+];
+
+function SellerShell({ view, onNav, onNewProduct, onCopilot, children }) {
+  const store = window.SC_STORE;
+  const todo = window.SC_ORDERS.filter((o) => ['NEW', 'ACCEPTED', 'READY'].includes(o.status)).length;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '248px 1fr', minHeight: '100vh', background: 'var(--cream-100)' }}>
+      {/* sidebar */}
+      <aside style={{ background: 'var(--ink-900)', color: '#fff', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
+          <div style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.01em' }}>
+            <span style={{ color: 'var(--accent-300)' }}>My</span><span style={{ color: '#fff' }}>City</span>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 700, color: 'var(--ink-300)', textTransform: 'uppercase', letterSpacing: '0.08em', marginLeft: '6px' }}>Seller</span>
+          </div>
+        </div>
+        {/* Copilot — destinazione di primo piano */}
+        <div style={{ padding: '12px 12px 4px', flexShrink: 0 }}>
+          <button onClick={onCopilot} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', border: 0, borderRadius: 'var(--radius-lg)', padding: '12px 14px', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', color: '#fff', background: view === 'copilot' ? 'linear-gradient(135deg, var(--primary-600), var(--secondary-600))' : 'linear-gradient(135deg, var(--primary-700), var(--secondary-700))', boxShadow: view === 'copilot' ? '0 0 0 2px rgba(244,188,83,.5)' : 'var(--shadow-warm)' }}>
+            <span style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="sparkles" size={18} color="#fff" /></span>
+            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 800, fontSize: '14px' }}>Copilot</span><span style={{ display: 'block', fontSize: '11px', color: 'rgba(255,255,255,.8)' }}>Gestisci parlando</span></span>
+          </button>
+        </div>
+        <nav style={{ flex: 1, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+          {SC_NAV.map((sec) => (
+            <div key={sec.group} style={{ marginBottom: '6px' }}>
+              <p style={{ margin: '6px 12px 4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,.38)' }}>{sec.group}</p>
+              {sec.items.map((n) => {
+                const on = view === n.id;
+                return (
+                  <button key={n.id} onClick={() => onNav(n.id)} style={{ display: 'flex', alignItems: 'center', gap: '11px', border: 0, background: on ? 'var(--primary-700)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.78)', fontWeight: on ? 700 : 500, fontSize: '13.5px', padding: '9px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', width: '100%' }}>
+                    <Lucide name={n.icon} size={17} stroke={2.2} color={on ? '#fff' : 'rgba(255,255,255,.7)'} /> {n.label}
+                    {n.badge === 'todo' && todo > 0 && <span style={{ marginLeft: 'auto', background: 'var(--accent-500)', color: 'var(--ink-900)', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{todo}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div style={{ padding: '12px', borderTop: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
+          <a href="../buyer/index.html" style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'rgba(255,255,255,.7)', fontSize: '13px', padding: '8px 12px', textDecoration: 'none' }}>
+            <Lucide name="external-link" size={16} color="rgba(255,255,255,.6)" /> Vai al marketplace
+          </a>
+        </div>
+      </aside>
+
+      {/* main */}
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <header style={{ position: 'sticky', top: 0, zIndex: 'var(--z-sticky)', background: 'var(--surface-0)', borderBottom: '1px solid var(--cream-300)', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className="mc-topsearch" style={{ position: 'relative', flex: 1, maxWidth: '380px' }}>
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><Lucide name="search" size={17} color="var(--ink-400)" /></span>
+            <input placeholder="Cerca ordini, prodotti, clienti…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '9px 14px 9px 38px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--cream-50)' }} />
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Button variant="secondary" size="sm" icon="sparkles" onClick={onCopilot}>Chiedi al Copilot</Button>
+            <Button variant="primary" size="sm" icon="plus" onClick={onNewProduct}>Pubblica prodotto</Button>
+            <button style={{ position: 'relative', border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex', padding: '6px' }}><Lucide name="bell" size={20} color="var(--ink-600)" /><span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)' }} /></button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{store.initials}</span>
+              <div style={{ lineHeight: 1.1 }}>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{store.name}</p>
+                <p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>{store.area}</p>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main style={{ flex: 1, padding: '28px', maxWidth: '1100px', width: '100%', boxSizing: 'border-box' }}>{children}</main>
+      </div>
+
+      {/* floating Copilot — sempre raggiungibile */}
+      {view !== 'copilot' && (
+        <button onClick={onCopilot} title="Chiedi al Copilot" style={{ position: 'fixed', right: '24px', bottom: '24px', zIndex: 'var(--z-overlay)', display: 'inline-flex', alignItems: 'center', gap: '9px', border: 0, cursor: 'pointer', background: 'linear-gradient(135deg, var(--primary-600), var(--secondary-600))', color: '#fff', padding: '14px 18px', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-warm-xl)', fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: '14px' }}>
+          <Lucide name="sparkles" size={19} color="#fff" /> Copilot
+        </button>
+      )}
+    </div>
+  );
+}

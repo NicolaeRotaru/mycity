@@ -1,0 +1,493 @@
+// ===== AI Studio (faithful to app/seller/products/ai-batch + new + AI APIs) =====
+const SC_AI_CREATE = [
+  { id: 'voice', icon: 'mic', title: 'Da voce', desc: 'Detta il prodotto a voce, l’AI compila nome, prezzo e descrizione.', tone: 'primary' },
+  { id: 'photo', icon: 'camera', title: 'Da foto', desc: 'Carica una foto: riconosce il prodotto e crea la scheda.', tone: 'accent' },
+  { id: 'barcode', icon: 'scan-barcode', title: 'Da barcode', desc: 'Inquadra il codice a barre, recupera i dati del prodotto.', tone: 'olive' },
+  { id: 'url', icon: 'link', title: 'Da link', desc: 'Incolla un URL e importa nome, foto e attributi.', tone: 'secondary' },
+];
+const SC_AI_OPS = [
+  { key: 'improve', label: 'Migliora tutto', desc: 'Ottimizza nome, descrizione, tag e attributi di ogni prodotto.', icon: 'wand-2' },
+  { key: 'redescribe', label: 'Ri-descrivi', desc: 'Riscrive tutte le descrizioni con un tono coerente.', icon: 'file-text' },
+  { key: 'moderate', label: 'Modera', desc: 'Controlla la conformità del catalogo e segnala i prodotti a rischio.', icon: 'shield-check' },
+  { key: 'translate', label: 'Traduci', desc: 'Traduce nome, descrizione e tag in un’altra lingua.', icon: 'languages' },
+];
+const SC_AI_LANGS = [['en', 'Inglese'], ['fr', 'Francese'], ['de', 'Tedesco'], ['es', 'Spagnolo'], ['ro', 'Rumeno'], ['ar', 'Arabo']];
+
+function AiStudio({ onToast }) {
+  const [tab, setTab] = React.useState('crea');
+  return (
+    <div>
+      <PageTitle eyebrow="Intelligenza artificiale" title="AI Studio"
+        sub="Crea schede prodotto e lavora su tutto il catalogo con l’intelligenza artificiale"
+        action={<span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'var(--primary-50)', color: 'var(--primary-700)', fontSize: '12px', fontWeight: 700, padding: '6px 12px', borderRadius: '999px', boxShadow: 'inset 0 0 0 1px var(--primary-200)' }}><Lucide name="sparkles" size={14} color="var(--primary-700)" /> Powered by AI</span>} />
+
+      <div style={{ display: 'flex', gap: '4px', borderBottom: '1px solid var(--cream-300)', marginBottom: '22px' }}>
+        {[['crea', 'Crea con AI'], ['catalogo', 'Catalogo AI'], ['copilot', 'Copilot']].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} style={{ border: 0, background: 'transparent', padding: '10px 16px', fontSize: '14px', fontWeight: tab === id ? 700 : 500, color: tab === id ? 'var(--primary-700)' : 'var(--ink-500)', cursor: 'pointer', borderBottom: `2px solid ${tab === id ? 'var(--primary-600)' : 'transparent'}`, fontFamily: 'var(--font-sans)', marginBottom: '-1px' }}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'crea' && <AiCreate onToast={onToast} />}
+      {tab === 'catalogo' && <AiCatalog onToast={onToast} />}
+      {tab === 'copilot' && <AiCopilot onToast={onToast} />}
+    </div>
+  );
+}
+
+// --- Tab 1: crea prodotto con AI ---
+function AiCreate({ onToast }) {
+  const [active, setActive] = React.useState(null);
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+        {SC_AI_CREATE.map((m) => {
+          const [bg, fg] = TINT[m.tone];
+          const on = active === m.id;
+          return (
+            <button key={m.id} onClick={() => setActive(m.id)} style={{ textAlign: 'left', display: 'flex', gap: '14px', background: 'var(--surface-0)', border: `1.5px solid ${on ? 'var(--primary-400)' : 'var(--cream-300)'}`, borderRadius: 'var(--radius-xl)', padding: '18px', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: on ? '0 0 0 3px rgba(228,122,90,.15)' : 'none' }}>
+              <span style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-md)', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={m.icon} size={22} stroke={2.2} color={fg} /></span>
+              <div><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)', fontSize: '15px' }}>{m.title}</p><p style={{ margin: '3px 0 0', fontSize: '13px', color: 'var(--ink-500)', lineHeight: 1.45 }}>{m.desc}</p></div>
+            </button>
+          );
+        })}
+      </div>
+      {active === 'voice' && <AiVoicePanel onToast={onToast} />}
+      {active === 'photo' && <AiPhotoPanel onToast={onToast} />}
+      {active === 'barcode' && <AiGenericPanel icon="scan-barcode" title="Scansiona il barcode" hint="Inquadra il codice a barre del prodotto" cta="Cerca prodotto" onToast={onToast} />}
+      {active === 'url' && <AiUrlPanel onToast={onToast} />}
+    </div>
+  );
+}
+
+function AiResultCard({ name, price, desc, tags }) {
+  return (
+    <Card variant="elevated" padding="lg" style={{ marginTop: '16px', borderColor: 'var(--olive-300)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+        <Lucide name="sparkles" size={16} color="var(--olive-700)" />
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--olive-800)' }}>Scheda generata dall’AI</span>
+        <Badge variant="new">Bozza</Badge>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+        <Input label="Nome" defaultValue={name} />
+        <Input label="Prezzo (€)" defaultValue={price} />
+      </div>
+      <div style={{ marginTop: '12px' }}>
+        <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink-700)', display: 'block', marginBottom: '5px' }}>Descrizione</label>
+        <textarea rows="3" defaultValue={desc} style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '15px', fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', color: 'var(--ink-800)' }} />
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '12px' }}>
+        {tags.map((t) => <Badge key={t} variant="local">{t}</Badge>)}
+      </div>
+      <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+        <Button variant="primary" icon="check">Pubblica prodotto</Button>
+        <Button variant="secondary" icon="wand-2">Rigenera</Button>
+      </div>
+    </Card>
+  );
+}
+
+function AiThinking({ label }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '16px', padding: '16px', background: 'var(--cream-50)', border: '1px solid var(--cream-200)', borderRadius: 'var(--radius-lg)', color: 'var(--ink-600)', fontSize: '14px' }}>
+      <span style={{ width: '20px', height: '20px', border: '2px solid var(--primary-300)', borderTopColor: 'var(--primary-600)', borderRadius: '50%', display: 'inline-block', animation: 'mc-spin 0.7s linear infinite' }} />
+      {label}
+    </div>
+  );
+}
+
+function useFakeRun(ms) {
+  const [state, setState] = React.useState('idle'); // idle | running | done
+  function run() { setState('running'); setTimeout(() => setState('done'), ms || 1600); }
+  return [state, run, () => setState('idle')];
+}
+
+function AiVoicePanel({ onToast }) {
+  const [state, run] = useFakeRun(1800);
+  return (
+    <div>
+      <Card variant="bordered" padding="lg" style={{ marginTop: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '8px' }}>
+          <button onClick={run} style={{ width: '88px', height: '88px', borderRadius: '50%', border: 0, cursor: 'pointer', background: state === 'running' ? 'var(--secondary-600)' : 'var(--primary-600)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-warm)' }}>
+            <Lucide name="mic" size={36} color="#fff" />
+          </button>
+          <p style={{ margin: '16px 0 0', fontSize: '15px', fontWeight: 600, color: 'var(--ink-900)' }}>{state === 'running' ? 'Sto ascoltando…' : 'Tocca e detta il prodotto'}</p>
+          <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--ink-500)', fontStyle: 'italic', maxWidth: '420px' }}>“Coppa piacentina DOP, duecento grammi, otto euro e novanta, stagionata novanta giorni”</p>
+        </div>
+      </Card>
+      {state === 'running' && <AiThinking label="Trascrizione e compilazione della scheda…" />}
+      {state === 'done' && <AiResultCard name="Coppa Piacentina DOP 200g" price="8,90" desc="Coppa piacentina DOP stagionata 90 giorni, taglio a mano. Dolce e profumata, perfetta con un calice di Gutturnio." tags={['DOP', 'Salumi', '200g']} />}
+    </div>
+  );
+}
+
+function AiPhotoPanel({ onToast }) {
+  const [state, run] = useFakeRun(1700);
+  return (
+    <div>
+      <Card variant="bordered" padding="lg" style={{ marginTop: '16px' }}>
+        <button onClick={run} style={{ width: '100%', border: '1.5px dashed var(--cream-400)', background: 'var(--cream-50)', borderRadius: 'var(--radius-lg)', padding: '32px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', fontFamily: 'var(--font-sans)' }}>
+          <Lucide name="image-plus" size={32} color="var(--primary-600)" />
+          <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--ink-900)' }}>Carica o scatta una foto</span>
+          <span style={{ fontSize: '13px', color: 'var(--ink-500)' }}>L’AI riconosce il prodotto e compila la scheda</span>
+        </button>
+      </Card>
+      {state === 'running' && <AiThinking label="Riconoscimento immagine e generazione scheda…" />}
+      {state === 'done' && <AiResultCard name="Grana Padano DOP 18 mesi 1kg" price="18,90" desc="Grana Padano DOP stagionato 18 mesi, granuloso e saporito. Tagliato al momento, latte dei caseifici della bassa piacentina." tags={['DOP', 'Formaggi', '18 mesi']} />}
+    </div>
+  );
+}
+
+function AiUrlPanel({ onToast }) {
+  const [state, run] = useFakeRun(1500);
+  return (
+    <div>
+      <Card variant="bordered" padding="lg" style={{ marginTop: '16px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}><Input label="URL del prodotto" defaultValue="https://negozio.it/coppa-piacentina-dop" leading={<Lucide name="link" size={18} color="var(--ink-400)" />} /></div>
+          <Button variant="primary" icon="download" onClick={run}>Importa</Button>
+        </div>
+      </Card>
+      {state === 'running' && <AiThinking label="Lettura della pagina e import dei dati…" />}
+      {state === 'done' && <AiResultCard name="Coppa Piacentina DOP 200g" price="9,50" desc="Importato dalla pagina di origine. Coppa piacentina DOP, stagionatura naturale, confezione sottovuoto." tags={['Importato', 'DOP', 'Salumi']} />}
+    </div>
+  );
+}
+
+function AiGenericPanel({ icon, title, hint, cta, onToast }) {
+  const [state, run] = useFakeRun(1500);
+  return (
+    <div>
+      <Card variant="bordered" padding="lg" style={{ marginTop: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', padding: '12px' }}>
+          <span style={{ width: '64px', height: '64px', borderRadius: 'var(--radius-lg)', background: 'var(--olive-50)', color: 'var(--olive-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px' }}><Lucide name={icon} size={30} color="var(--olive-700)" /></span>
+          <p style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--ink-900)' }}>{title}</p>
+          <p style={{ margin: '4px 0 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{hint}</p>
+          <Button variant="primary" icon="search" onClick={run}>{cta}</Button>
+        </div>
+      </Card>
+      {state === 'running' && <AiThinking label="Ricerca del prodotto…" />}
+      {state === 'done' && <AiResultCard name="Salame nostrano stagionato 300g" price="11,50" desc="Recuperato dal database prodotti. Salame nostrano piacentino, concia tradizionale, stagionatura naturale in cantina." tags={['Barcode', 'Salumi']} />}
+    </div>
+  );
+}
+
+// --- Tab 2: operazioni AI su tutto il catalogo (batch) ---
+function AiCatalog({ onToast }) {
+  const [op, setOp] = React.useState('improve');
+  const [lang, setLang] = React.useState('en');
+  const [job, setJob] = React.useState(null); // null | 'processing' | 'ready' | 'applied'
+  const total = window.SC_PRODUCTS.length;
+  const opMeta = SC_AI_OPS.find((o) => o.key === op);
+  const isModerate = op === 'moderate';
+
+  function start() {
+    setJob('processing');
+    setTimeout(() => setJob('ready'), 2200);
+  }
+  function apply() {
+    setJob('applied');
+    onToast && onToast(isModerate ? 'Prodotti a rischio messi in bozza' : `AI applicata a ${total} prodotti`);
+  }
+
+  const sample = window.SC_PRODUCTS.slice(0, 6);
+  return (
+    <div style={{ maxWidth: '720px' }}>
+      <p style={{ margin: '0 0 16px', fontSize: '14px', color: 'var(--ink-600)', lineHeight: 1.6 }}>
+        Lavora su <strong>tutti</strong> i tuoi prodotti in un colpo solo. Il job gira in background; quando è pronto rivedi e applichi. <span style={{ color: 'var(--ink-400)' }}>(Human-in-the-loop: applichi solo dopo l’anteprima.)</span>
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
+        {SC_AI_OPS.map((o) => {
+          const on = op === o.key;
+          return (
+            <button key={o.key} onClick={() => { setOp(o.key); setJob(null); }} disabled={job === 'processing'} style={{ textAlign: 'left', background: on ? 'var(--primary-50)' : 'var(--surface-0)', border: `1.5px solid ${on ? 'var(--primary-400)' : 'var(--cream-300)'}`, borderRadius: 'var(--radius-lg)', padding: '14px', cursor: job === 'processing' ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: job === 'processing' && !on ? 0.5 : 1 }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: 'var(--ink-800)' }}><Lucide name={o.icon} size={16} color="var(--primary-600)" /> {o.label}</span>
+              <span style={{ display: 'block', marginTop: '3px', fontSize: '12px', color: 'var(--ink-500)', lineHeight: 1.4 }}>{o.desc}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {op === 'translate' && (
+        <div style={{ marginTop: '14px', maxWidth: '280px' }}>
+          <Select label="Lingua di destinazione" value={lang} onChange={(e) => setLang(e.target.value)}>
+            {SC_AI_LANGS.map(([c, l]) => <option key={c} value={c}>{l}</option>)}
+          </Select>
+        </div>
+      )}
+
+      {(!job || job === 'applied') && (
+        <div style={{ marginTop: '18px' }}>
+          <Button variant="primary" size="lg" icon="sparkles" onClick={start}>Avvia sul catalogo · {total} prodotti</Button>
+        </div>
+      )}
+
+      {job === 'processing' && <AiThinking label={`Sto elaborando ${total} prodotti… puoi lasciare aperta la pagina o tornare più tardi.`} />}
+
+      {(job === 'ready' || job === 'applied') && (
+        <Card variant="bordered" padding="lg" style={{ marginTop: '18px' }}>
+          <p style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 700, color: 'var(--ink-800)' }}>
+            {isModerate ? `2 prodotti segnalati su ${total}` : `${total} prodotti con modifiche proposte`}
+          </p>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: '240px', overflowY: 'auto' }}>
+            {sample.map((p, i) => (
+              <li key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 0', borderBottom: '1px solid var(--cream-100)' }}>
+                <img src={img(p.kw, p.lock)} alt="" style={{ width: '34px', height: '34px', borderRadius: 'var(--radius-md)', objectFit: 'cover' }} />
+                <span style={{ flex: 1, fontSize: '13px', color: 'var(--ink-800)' }}>{p.name}</span>
+                {isModerate
+                  ? (i === 1 ? <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--secondary-600)' }}>⚠︎ Foto poco chiara</span> : <span style={{ fontSize: '12px', color: 'var(--olive-700)', fontWeight: 600 }}>✓ ok</span>)
+                  : <span style={{ fontSize: '12px', color: 'var(--primary-700)', fontWeight: 600 }}>{op === 'translate' ? 'Tradotto' : op === 'redescribe' ? 'Ri-descritto' : 'Ottimizzato'}</span>}
+              </li>
+            ))}
+          </ul>
+          {job === 'ready' && (
+            <div style={{ marginTop: '14px' }}>
+              <Button variant="primary" icon="check" onClick={apply}>{isModerate ? 'Metti in bozza i segnalati' : 'Applica a tutti'}</Button>
+            </div>
+          )}
+          {job === 'applied' && <p style={{ margin: '14px 0 0', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '14px', fontWeight: 700, color: 'var(--olive-700)' }}><Lucide name="check" size={16} stroke={2.6} color="var(--olive-700)" /> Applicato.</p>}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// --- Tab 3: Catalog Copilot (chat con anteprime ricche in-line) ---
+const SC_COPILOT_SEED = [
+  { me: false, text: 'Ciao! Sono il tuo copilota catalogo. Posso creare prodotti, sistemare i prezzi, lanciare promo o dirti perché un prodotto non vende. Cosa facciamo?' },
+];
+const SC_COPILOT_SUGGEST = ['Aggiungi 3 formaggi tipici', 'Alza del 5% i prezzi dei salumi', 'Crea una promo per il weekend', 'Quali prodotti sono quasi esauriti?', 'Perché la coppa non vende?'];
+
+function AiCopilot({ onToast }) {
+  const [msgs, setMsgs] = React.useState(SC_COPILOT_SEED);
+  const [text, setText] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const endRef = React.useRef(null);
+  React.useEffect(() => { if (endRef.current) endRef.current.scrollTop = endRef.current.scrollHeight; }, [msgs]);
+
+  function send(q) {
+    const question = (q ?? text).trim();
+    if (!question || busy) return;
+    setText(''); setBusy(true);
+    setMsgs((m) => [...m, { me: true, text: question }, { me: false, typing: true }]);
+    const reply = copilotReply(question);
+    setTimeout(() => {
+      setMsgs((m) => [...m.filter((x) => !x.typing), { me: false, ...reply }]);
+      setBusy(false);
+    }, 1200);
+  }
+
+  return (
+    <Card variant="bordered" padding="none" style={{ maxWidth: '760px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 18px', borderBottom: '1px solid var(--cream-200)' }}>
+        <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--secondary-600))', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="sparkles" size={18} color="#fff" /></span>
+        <div style={{ flex: 1 }}><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)', fontSize: '15px' }}>Catalog Copilot</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--olive-600)' }}>● Online · vede il tuo catalogo</p></div>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ink-400)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Haiku 4.5</span>
+      </div>
+
+      <div ref={endRef} style={{ height: '440px', overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--cream-50)' }}>
+        {msgs.map((m, i) => {
+          if (m.typing) return <div key={i} style={{ alignSelf: 'flex-start', background: '#fff', border: '1px solid var(--cream-300)', borderRadius: '14px 14px 14px 4px', padding: '10px 14px' }}><span style={{ display: 'inline-flex', gap: '3px' }}><Dot d="0s" /><Dot d=".15s" /><Dot d=".3s" /></span></div>;
+          return (
+            <div key={i} style={{ alignSelf: m.me ? 'flex-end' : 'flex-start', maxWidth: m.card ? '94%' : '80%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {m.text && <div style={{ background: m.me ? 'var(--primary-700)' : '#fff', color: m.me ? '#fff' : 'var(--ink-800)', border: m.me ? 'none' : '1px solid var(--cream-300)', borderRadius: m.me ? '14px 14px 4px 14px' : '14px 14px 14px 4px', padding: '10px 14px', fontSize: '14px', lineHeight: 1.5 }}>{m.text}</div>}
+              {m.card && <CopilotPreview card={m.card} onToast={onToast} />}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ padding: '10px 14px', borderTop: '1px solid var(--cream-200)', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        {SC_COPILOT_SUGGEST.map((s) => <button key={s} onClick={() => send(s)} style={{ border: '1px solid var(--cream-300)', background: 'var(--surface-0)', color: 'var(--primary-700)', fontSize: '12px', fontWeight: 600, padding: '6px 12px', borderRadius: '999px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{s}</button>)}
+      </div>
+      <div style={{ padding: '12px 14px', borderTop: '1px solid var(--cream-200)', display: 'flex', gap: '8px' }}>
+        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder="Chiedi al copilota…" style={{ flex: 1, border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '10px 14px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none' }} />
+        <Button variant="primary" icon="send" onClick={() => send()}>Invia</Button>
+      </div>
+    </Card>
+  );
+}
+function Dot({ d }) { return <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--ink-300)', display: 'inline-block', animation: 'mc-pulse-soft 1s ease-in-out infinite', animationDelay: d }} />; }
+
+// Rich preview rendered INSIDE an assistant bubble.
+function CopilotPreview({ card, onToast }) {
+  const [done, setDone] = React.useState(false);
+  const act = (label) => { setDone(true); onToast && onToast(label); };
+  const shell = { background: '#fff', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-warm-sm)' };
+  const head = (icon, title, tag) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 14px', borderBottom: '1px solid var(--cream-200)', background: 'var(--cream-50)' }}>
+      <Lucide name={icon} size={16} color="var(--primary-700)" />
+      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)', flex: 1 }}>{title}</span>
+      {tag}
+    </div>
+  );
+  const footer = (primary, secondary) => done
+    ? <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '12px 14px', borderTop: '1px solid var(--cream-200)', color: 'var(--olive-700)', fontWeight: 700, fontSize: '13px' }}><Lucide name="check" size={15} stroke={2.6} color="var(--olive-700)" /> {done}</div>
+    : <div style={{ display: 'flex', gap: '8px', padding: '12px 14px', borderTop: '1px solid var(--cream-200)' }}>
+        <Button variant="primary" size="sm" icon={primary.icon} onClick={() => act(primary.toast)}>{primary.label}</Button>
+        {secondary && <Button variant="secondary" size="sm" onClick={() => act(secondary.toast)}>{secondary.label}</Button>}
+      </div>;
+
+  // 1) Product drafts
+  if (card.type === 'drafts') {
+    return (
+      <div style={shell}>
+        {head('package-plus', `${card.items.length} bozze prodotto generate`, <Badge variant="new">Bozza</Badge>)}
+        <div style={{ padding: '6px 0' }}>
+          {card.items.map((p) => (
+            <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px' }}>
+              <img src={img(p.kw, p.lock)} alt="" style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{p.name}</p>
+                <p style={{ margin: '1px 0 0', fontSize: '12px', color: 'var(--ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.desc}</p>
+              </div>
+              <span style={{ fontWeight: 800, color: 'var(--ink-900)', fontSize: '14px' }}>{p.price}</span>
+            </div>
+          ))}
+        </div>
+        {footer({ icon: 'check', label: 'Pubblica tutte', toast: `${card.items.length} prodotti pubblicati` }, { label: 'Rivedi', toast: 'Aperto in Prodotti → Bozze' })}
+      </div>
+    );
+  }
+
+  // 2) Price table (before → after)
+  if (card.type === 'prices') {
+    return (
+      <div style={shell}>
+        {head('trending-up', card.title, <Badge variant="urgency">{card.delta}</Badge>)}
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)' }}>{['Prodotto', 'Ora', '', 'Nuovo'].map((h, j) => <th key={j} style={{ textAlign: j === 0 ? 'left' : 'right', padding: '7px 14px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-400)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {card.rows.map((r) => (
+              <tr key={r.name} style={{ borderTop: '1px solid var(--cream-100)' }}>
+                <td style={{ padding: '8px 14px', fontSize: '13px', color: 'var(--ink-800)' }}>{r.name}</td>
+                <td style={{ padding: '8px 6px', fontSize: '13px', color: 'var(--ink-400)', textAlign: 'right', textDecoration: 'line-through' }}>{r.from}</td>
+                <td style={{ padding: '8px 2px', textAlign: 'center', color: 'var(--ink-300)' }}><Lucide name="arrow-right" size={12} color="var(--ink-300)" /></td>
+                <td style={{ padding: '8px 14px', fontSize: '13px', fontWeight: 700, color: 'var(--olive-700)', textAlign: 'right' }}>{r.to}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {footer({ icon: 'check', label: 'Applica prezzi', toast: 'Prezzi aggiornati' }, { label: 'Annulla', toast: 'Modifica annullata' })}
+      </div>
+    );
+  }
+
+  // 3) Promo card
+  if (card.type === 'promo') {
+    return (
+      <div style={shell}>
+        {head('tag', 'Promozione proposta', <Badge variant="discount">{card.value}</Badge>)}
+        <div style={{ padding: '14px' }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: '17px', color: 'var(--ink-900)' }}>{card.name}</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '14px', marginTop: '10px' }}>
+            {card.facts.map((f) => <span key={f.l} style={{ fontSize: '12px', color: 'var(--ink-600)' }}><span style={{ display: 'block', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ink-400)', fontWeight: 700 }}>{f.l}</span>{f.v}</span>)}
+          </div>
+        </div>
+        {footer({ icon: 'rocket', label: 'Attiva promo', toast: 'Promo attivata' }, { label: 'Modifica', toast: 'Aperto editor promo' })}
+      </div>
+    );
+  }
+
+  // 4) Stock list
+  if (card.type === 'stock') {
+    return (
+      <div style={shell}>
+        {head('alert-triangle', 'Scorte in esaurimento', <Badge variant="lowstock">{card.rows.length}</Badge>)}
+        <div style={{ padding: '6px 0' }}>
+          {card.rows.map((r) => (
+            <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 14px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: r.n === 0 ? 'var(--secondary-600)' : 'var(--accent-500)', flexShrink: 0 }} />
+              <span style={{ flex: 1, fontSize: '13px', color: 'var(--ink-800)' }}>{r.name}</span>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: r.n === 0 ? 'var(--secondary-600)' : 'var(--accent-700)' }}>{r.n === 0 ? 'Esaurito' : `${r.n} rimasti`}</span>
+            </div>
+          ))}
+        </div>
+        {footer({ icon: 'bell', label: 'Avvisa quando rifornisco', toast: 'Promemoria impostato' }, null)}
+      </div>
+    );
+  }
+
+  // 5) "Perché non vende?" diagnosis
+  if (card.type === 'diagnose') {
+    return (
+      <div style={shell}>
+        {head('stethoscope', `Diagnosi · ${card.product}`, null)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px' }}>
+          <ScoreRing value={card.score} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.5 }}>{card.summary}</p>
+          </div>
+        </div>
+        <div style={{ padding: '0 14px 12px', display: 'flex', flexDirection: 'column', gap: '7px' }}>
+          {card.issues.map((it) => (
+            <div key={it.t} style={{ display: 'flex', gap: '9px', alignItems: 'flex-start' }}>
+              <Lucide name={it.sev === 'high' ? 'x-circle' : 'alert-circle'} size={15} color={it.sev === 'high' ? 'var(--secondary-600)' : 'var(--accent-600)'} style={{ marginTop: '1px' }} />
+              <div><p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{it.t}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{it.d}</p></div>
+            </div>
+          ))}
+        </div>
+        {footer({ icon: 'wand-2', label: 'Applica i fix consigliati', toast: 'Fix applicati alla scheda' }, { label: 'Solo prezzo', toast: 'Prezzo allineato al mercato' })}
+      </div>
+    );
+  }
+  return null;
+}
+
+function ScoreRing({ value }) {
+  const r = 26, c = 2 * Math.PI * r, off = c - (value / 100) * c;
+  const col = value >= 70 ? 'var(--olive-500)' : value >= 45 ? 'var(--accent-500)' : 'var(--secondary-500)';
+  return (
+    <div style={{ position: 'relative', width: '68px', height: '68px', flexShrink: 0 }}>
+      <svg width="68" height="68" viewBox="0 0 68 68">
+        <circle cx="34" cy="34" r={r} fill="none" stroke="var(--cream-200)" strokeWidth="7" />
+        <circle cx="34" cy="34" r={r} fill="none" stroke={col} strokeWidth="7" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} transform="rotate(-90 34 34)" />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--ink-900)' }}>{value}</span>
+        <span style={{ fontSize: '8px', color: 'var(--ink-400)', marginTop: '-2px' }}>/100</span>
+      </div>
+    </div>
+  );
+}
+
+function copilotReply(q) {
+  const s = q.toLowerCase();
+  if (s.includes('formagg') || s.includes('aggiungi') || s.includes('crea prod')) return {
+    text: 'Ho preparato 3 bozze di formaggi tipici piacentini con nome, descrizione e prezzo suggerito sul mercato:',
+    card: { type: 'drafts', items: [
+      { name: 'Gorgonzola DOP 200g', desc: 'Cremoso, erborinato, latte piacentino', price: '€6,20', kw: 'cheese', lock: 15 },
+      { name: 'Pecorino stagionato 300g', desc: 'Stagionatura 6 mesi, sapore deciso', price: '€9,80', kw: 'cheese', lock: 7 },
+      { name: 'Provolone Valpadana 250g', desc: 'Dolce, filato a mano', price: '€7,40', kw: 'cheese', lock: 3 },
+    ] },
+  };
+  if (s.includes('prezz') || s.includes('5%') || s.includes('alza') || s.includes('salum')) return {
+    text: 'Ho simulato +5% sui salumi, arrotondato al centesimo. Ecco prima e dopo:',
+    card: { type: 'prices', title: '+5% sui salumi', delta: '+5%', rows: [
+      { name: 'Coppa Piacentina DOP', from: '€8,90', to: '€9,35' },
+      { name: 'Salame nostrano', from: '€11,50', to: '€12,08' },
+      { name: 'Pancetta arrotolata', from: '€9,40', to: '€9,87' },
+      { name: 'Culatello di Zibello', from: '€14,00', to: '€14,70' },
+    ] },
+  };
+  if (s.includes('promo') || s.includes('weekend') || s.includes('sconto') || s.includes('offert')) return {
+    text: 'Ecco una promo pensata per il weekend, con spedizione gratis sopra soglia per alzare lo scontrino:',
+    card: { type: 'promo', name: 'Weekend Piacentino', value: '−15%', facts: [
+      { l: 'Sconto', v: '−15% salumi e formaggi' }, { l: 'Quando', v: 'Ven–Dom' }, { l: 'Spedizione', v: 'Gratis sopra €25' }, { l: 'Durata', v: '3 giorni' },
+    ] },
+  };
+  if (s.includes('esaur') || s.includes('scort') || s.includes('rimast') || s.includes('magazzino')) return {
+    text: 'Controllato il catalogo: ecco i prodotti da rifornire a breve.',
+    card: { type: 'stock', rows: [
+      { name: 'Gorgonzola DOP 200g', n: 0 }, { name: 'Pancetta arrotolata 250g', n: 3 }, { name: 'Culatello di Zibello 150g', n: 4 },
+    ] },
+  };
+  if (s.includes('non vende') || s.includes('perché') || s.includes('perche') || s.includes('diagnos') || s.includes('coppa')) return {
+    text: 'Ho analizzato la scheda della Coppa Piacentina e l’ho confrontata con prodotti simili sul marketplace:',
+    card: { type: 'diagnose', product: 'Coppa Piacentina DOP', score: 52, summary: 'Buon prodotto ma la scheda non converte: la foto è poco appetitosa e il prezzo è sopra la media di zona.', issues: [
+      { sev: 'high', t: 'Foto poco invitante', d: 'Sfondo scuro: le schede con foto su legno chiaro vendono +40%.' },
+      { sev: 'high', t: 'Prezzo sopra mercato', d: 'Media simili €8,10 · tu €8,90. Suggerito €8,40.' },
+      { sev: 'low', t: 'Descrizione corta', d: 'Manca l’abbinamento e la stagionatura nel testo.' },
+    ] },
+  };
+  return { text: 'Ricevuto. Posso creare prodotti, aggiornare prezzi in blocco, lanciare promo, controllare le scorte o diagnosticare perché un prodotto non vende. Dimmi pure!' };
+}
