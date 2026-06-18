@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { formatDate } from '@/lib/format';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
@@ -312,30 +313,31 @@ function AdminUsersPageInner() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900">Utenti</h1>
-          <p className="text-sm text-ink-500">{filtered.length} risultati</p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={exportCSV}
-            disabled={filtered.length === 0}
-            className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 disabled:opacity-50 text-ink-700 px-4 py-2 rounded-lg font-semibold text-sm"
-          >
-            Esporta CSV
-          </button>
-        {pendingCount > 0 && filter !== 'pending' && (
-          <button
-            onClick={() => setFilter('pending')}
-            className="inline-flex items-center gap-1.5 bg-accent-100 hover:bg-accent-200 text-accent-900 px-4 py-2 rounded-lg font-semibold text-sm"
-          >
-            <Clock size={16} strokeWidth={2.2} aria-hidden />
-            {pendingCount} richieste in attesa
-          </button>
-        )}
-        </div>
-      </div>
+      <AdminPageTitle
+        eyebrow="Operatività"
+        title="Utenti"
+        sub={`${filtered.length} risultati`}
+        action={
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={exportCSV}
+              disabled={filtered.length === 0}
+              className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 disabled:opacity-50 text-ink-700 px-4 py-2 rounded-lg font-semibold text-sm"
+            >
+              Esporta CSV
+            </button>
+            {pendingCount > 0 && filter !== 'pending' && (
+              <button
+                onClick={() => setFilter('pending')}
+                className="inline-flex items-center gap-1.5 bg-accent-100 hover:bg-accent-200 text-accent-900 px-4 py-2 rounded-lg font-semibold text-sm"
+              >
+                <Clock size={16} strokeWidth={2.2} aria-hidden />
+                {pendingCount} richieste in attesa
+              </button>
+            )}
+          </div>
+        }
+      />
 
       <div className="flex gap-2 flex-wrap">
         {[

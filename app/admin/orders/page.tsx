@@ -13,6 +13,7 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Row = {
@@ -101,19 +102,20 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900">Ordini</h1>
-          <p className="text-sm text-ink-500">{filtered.length} ordini</p>
-        </div>
-        <button
-          onClick={exportCSV}
-          disabled={filtered.length === 0}
-          className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 disabled:opacity-50 text-ink-700 px-4 py-2 rounded-lg font-semibold text-sm"
-        >
-          Esporta CSV
-        </button>
-      </div>
+      <AdminPageTitle
+        eyebrow="Operatività"
+        title="Ordini"
+        sub={`${filtered.length} ordini`}
+        action={
+          <button
+            onClick={exportCSV}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 disabled:opacity-50 text-ink-700 px-4 py-2 rounded-lg font-semibold text-sm"
+          >
+            Esporta CSV
+          </button>
+        }
+      />
 
       <div className="flex gap-2 flex-wrap text-sm">
         {FILTERS.map((f) => (
@@ -121,7 +123,7 @@ export default function AdminOrdersPage() {
             key={f}
             onClick={() => setFilter(f)}
             className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
-              filter === f ? 'bg-rose-600 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
+              filter === f ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
           >
             {f === 'all' ? 'Tutti' : ORDER_STATUS_LABEL[f as OrderStatus]}

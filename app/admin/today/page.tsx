@@ -4,13 +4,15 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   ShoppingBag, TrendingUp, AlertTriangle, UserCheck, Euro,
-  Clock, Package, AlertCircle, CheckCircle2,
+  Clock, AlertCircle, CheckCircle2,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { ORDER_STATUS_LABEL, type OrderStatus } from '@/lib/order-status';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
 
 /**
  * Admin "Today" dashboard — 1 colpo d'occhio per tutte le metriche vitali.
@@ -86,57 +88,55 @@ export default function AdminTodayPage() {
     label: string;
     value: string | number;
     href?: string;
-    color?: 'primary' | 'olive' | 'rose' | 'accent';
+    color?: 'primary' | 'olive' | 'accent' | 'secondary';
     alert?: boolean;
   };
   const KpiCard = ({ icon: Icon, label, value, href, color = 'primary', alert }: KpiCardProps) => {
-    const colorMap: Record<string, string> = {
-      primary: 'bg-primary-50 text-primary-700 border-primary-200',
-      olive: 'bg-olive-50 text-olive-700 border-olive-200',
-      accent: 'bg-accent-50 text-accent-700 border-accent-200',
-      rose: 'bg-rose-50 text-rose-700 border-rose-200',
-      amber: 'bg-accent-50 text-accent-700 border-accent-200',
+    const medallion: Record<string, string> = {
+      primary: 'bg-primary-100 text-primary-700',
+      olive: 'bg-olive-100 text-olive-700',
+      accent: 'bg-accent-100 text-accent-700',
+      secondary: 'bg-secondary-100 text-secondary-600',
     };
+    const on = !!alert && Number(value) > 0;
     const inner = (
-      <div className={`border-2 rounded-xl p-4 ${alert ? colorMap.rose : 'bg-white border-cream-300'} transition-all hover:shadow-warm`}>
-        <div className="flex items-start justify-between mb-2">
-          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${colorMap[color]}`}>
-            <Icon size={20} strokeWidth={2.2} />
-          </div>
-          {alert && Number(value) > 0 && <AlertCircle size={16} className="text-rose-600" />}
+      <div className={`rounded-xl border-2 p-4 transition-all hover:shadow-warm ${on ? 'bg-secondary-50 border-secondary-200' : 'bg-white border-cream-300'}`}>
+        <div className="mb-2.5 flex items-start justify-between">
+          <span className={`inline-flex h-10 w-10 items-center justify-center rounded-md ${medallion[color]}`}>
+            <Icon size={20} strokeWidth={2.2} aria-hidden />
+          </span>
+          {on && <AlertCircle size={16} className="text-secondary-600" aria-hidden />}
         </div>
-        <p className="text-xs uppercase tracking-wider text-ink-500 font-semibold">{label}</p>
-        <p className="text-2xl font-bold text-ink-900 mt-1">{value}</p>
+        <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-500">{label}</p>
+        <p className="mt-1 text-[26px] font-extrabold leading-none text-ink-900">{value}</p>
       </div>
     );
-    return href ? <Link href={href}>{inner}</Link> : inner;
+    return href ? <Link href={href} className="block">{inner}</Link> : inner;
   };
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold text-ink-900">Today</h1>
-        <p className="text-sm text-ink-500">
-          {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} ·
-          Auto-refresh ogni 30s.
-        </p>
-      </header>
+      <AdminPageTitle
+        eyebrow="Cockpit"
+        title="Today"
+        sub={`${new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} · aggiornamento automatico ogni 30s`}
+      />
 
-      {/* Alert rosso se ci sono problemi attivi */}
+      {/* Alert se ci sono problemi attivi */}
       {(stats.sosActiveCount > 0 || stats.ordersProblemCount > 0 || stats.disputesOpenCount > 0) && (
-        <div className="bg-rose-50 border-2 border-rose-300 rounded-xl p-4 flex items-start gap-3">
-          <AlertTriangle size={24} className="text-rose-600 flex-shrink-0 mt-0.5" strokeWidth={2.2} />
+        <div className="flex items-start gap-3 rounded-xl border-2 border-secondary-200 bg-secondary-50 p-4">
+          <AlertTriangle size={24} className="mt-0.5 flex-shrink-0 text-secondary-600" strokeWidth={2.2} />
           <div className="flex-1">
-            <p className="font-bold text-rose-900">Richiede attenzione immediata</p>
-            <ul className="text-sm text-rose-800 mt-1 space-y-0.5">
+            <p className="font-bold text-secondary-700">Richiede attenzione immediata</p>
+            <ul className="mt-1 space-y-0.5 text-sm text-secondary-800">
               {stats.sosActiveCount > 0 && (
-                <li>{stats.sosActiveCount} SOS rider attivo — <Link href="/admin/sos" className="underline font-semibold">apri</Link></li>
+                <li>{stats.sosActiveCount} SOS rider attivo — <Link href="/admin/sos" className="font-semibold underline">apri</Link></li>
               )}
               {stats.ordersProblemCount > 0 && (
-                <li>{stats.ordersProblemCount} ordini in problema (NEW/ACCEPTED da +4h) — <Link href="/admin/orders" className="underline font-semibold">verifica</Link></li>
+                <li>{stats.ordersProblemCount} ordini in problema (NEW/ACCEPTED da +4h) — <Link href="/admin/orders" className="font-semibold underline">verifica</Link></li>
               )}
               {stats.disputesOpenCount > 0 && (
-                <li>{stats.disputesOpenCount} dispute aperte — <Link href="/admin/disputes" className="underline font-semibold">risolvi</Link></li>
+                <li>{stats.disputesOpenCount} dispute aperte — <Link href="/admin/disputes" className="font-semibold underline">risolvi</Link></li>
               )}
             </ul>
           </div>
@@ -145,11 +145,8 @@ export default function AdminTodayPage() {
 
       {/* KPI today */}
       <section>
-        <h2 className="font-bold text-ink-900 mb-3 inline-flex items-center gap-2">
-          <TrendingUp size={16} strokeWidth={2.4} className="text-primary-700" aria-hidden />
-          Oggi
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <AdminSectionLabel icon={TrendingUp}>Oggi</AdminSectionLabel>
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
           <KpiCard icon={ShoppingBag} label="Ordini oggi" value={stats.ordersTodayCount} href="/admin/orders" color="primary" />
           <KpiCard icon={Euro} label="GMV oggi" value={formatPrice(stats.gmvToday)} color="olive" />
           <KpiCard icon={CheckCircle2} label="Consegnati" value={stats.deliveredToday} color="olive" />
@@ -159,36 +156,33 @@ export default function AdminTodayPage() {
 
       {/* KPI in attesa */}
       <section>
-        <h2 className="font-bold text-ink-900 mb-3 inline-flex items-center gap-2">
-          <Clock size={16} strokeWidth={2.4} className="text-ink-500" aria-hidden />
-          In attesa
-        </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <AdminSectionLabel icon={Clock}>In attesa</AdminSectionLabel>
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
           <KpiCard icon={Clock} label="Ordini NEW" value={stats.ordersPendingCount} href="/admin/orders" color="primary" />
           <KpiCard icon={UserCheck} label="Seller pending" value={stats.sellersPendingCount} href="/admin/users?role=seller" color="accent" />
-          <KpiCard icon={AlertTriangle} label="Dispute aperte" value={stats.disputesOpenCount} href="/admin/disputes" color="rose" alert />
-          <KpiCard icon={AlertCircle} label="SOS attivi" value={stats.sosActiveCount} href="/admin/sos" color="rose" alert />
+          <KpiCard icon={AlertTriangle} label="Dispute aperte" value={stats.disputesOpenCount} href="/admin/disputes" color="secondary" alert />
+          <KpiCard icon={AlertCircle} label="SOS attivi" value={stats.sosActiveCount} href="/admin/sos" color="secondary" alert />
         </div>
       </section>
 
       {/* Ultimi ordini */}
       <section>
-        <div className="flex items-center justify-between mb-3">
+        <div className="mb-3 flex items-center justify-between">
           <h2 className="font-bold text-ink-900">Ultimi 10 ordini</h2>
           <Link href="/admin/orders" className="text-xs text-primary-700 hover:underline">vedi tutti →</Link>
         </div>
-        <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
+        <div className="overflow-hidden rounded-xl border-2 border-cream-300 bg-white">
           {stats.recentOrders.length === 0 ? (
-            <p className="text-sm text-ink-500 p-6 text-center">Nessun ordine ancora oggi.</p>
+            <p className="p-6 text-center text-sm text-ink-500">Nessun ordine ancora oggi.</p>
           ) : (
             <table className="w-full text-sm">
-              <thead className="bg-cream-50 text-ink-600 text-xs uppercase tracking-wider">
+              <thead className="bg-cream-50 text-xs uppercase tracking-wider text-ink-600">
                 <tr>
-                  <th className="text-left px-4 py-2">Ordine</th>
-                  <th className="text-left px-4 py-2">Cliente</th>
-                  <th className="text-left px-4 py-2">Stato</th>
-                  <th className="text-right px-4 py-2">Totale</th>
-                  <th className="text-right px-4 py-2">Quando</th>
+                  <th className="px-4 py-2.5 text-left">Ordine</th>
+                  <th className="px-4 py-2.5 text-left">Cliente</th>
+                  <th className="px-4 py-2.5 text-left">Stato</th>
+                  <th className="px-4 py-2.5 text-right">Totale</th>
+                  <th className="px-4 py-2.5 text-right">Quando</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-cream-100">
@@ -205,8 +199,8 @@ export default function AdminTodayPage() {
                     </td>
                     <td className="px-4 py-3 text-ink-700">{o.delivery_full_name ?? '—'}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-cream-100 text-ink-700">
-                        {o.delivery_status}
+                      <span className="inline-block rounded-full bg-cream-100 px-2 py-0.5 text-xs font-semibold text-ink-700">
+                        {ORDER_STATUS_LABEL[o.delivery_status as OrderStatus] ?? o.delivery_status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-semibold">{formatPrice(Number(o.total_price ?? 0))}</td>

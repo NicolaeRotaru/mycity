@@ -5,26 +5,14 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import {
   Users, ShoppingCart, Store, Bike, Shield, Package, TrendingUp,
-  CheckCircle2, Banknote, ShoppingBag, type LucideIcon,
+  CheckCircle2, Banknote, ShoppingBag, LayoutGrid,
 } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { getAccountMenuItems } from '@/lib/account-menu';
-
-const StatCard = ({ label, value, color, href, icon: Icon }: { label: string; value: string | number; color: string; href?: string; icon: LucideIcon }) => {
-  const inner = (
-    <div className={`bg-white border-2 rounded-xl p-5 hover:shadow-md transition-all border-${color}-200`}>
-      <div className="flex items-center justify-between mb-2">
-        <Icon size={24} strokeWidth={2.2} className={`text-${color}-600`} aria-hidden />
-        <span className="text-xs uppercase tracking-wide text-ink-400 font-semibold">{label}</span>
-      </div>
-      <p className="text-3xl font-bold text-ink-900">{value}</p>
-    </div>
-  );
-  return href ? <Link href={href}>{inner}</Link> : inner;
-};
+import { AdminPageTitle, AdminSectionLabel, AdminStatCard } from '@/components/admin/AdminUI';
 
 export default function AdminDashboard() {
   const { data: stats, isLoading } = useQuery({
@@ -85,15 +73,16 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-900">Dashboard amministratore</h1>
-        <p className="text-sm text-ink-500">Panoramica del marketplace in tempo reale.</p>
-      </div>
+      <AdminPageTitle
+        eyebrow="Marketplace"
+        title="Panoramica"
+        sub="Tutti i numeri del marketplace, in tempo reale."
+      />
 
-      {/* Sezioni admin: scorciatoie (la stessa navigazione è anche nel menu "Tu") */}
-      <section>
-        <h2 className="font-bold text-ink-900 mb-3">Sezioni</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+      {/* Scorciatoie: solo mobile (su desktop la navigazione è nella sidebar cockpit). */}
+      <section className="md:hidden">
+        <AdminSectionLabel icon={LayoutGrid}>Sezioni</AdminSectionLabel>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {getAccountMenuItems('admin')
             .filter((it) => it.href.startsWith('/admin') && it.href !== '/admin')
             .map((it) => {
@@ -113,42 +102,36 @@ export default function AdminDashboard() {
       </section>
 
       <section>
-        <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2">
-          <Users size={20} strokeWidth={2.2} className="text-primary-700" aria-hidden />
-          Utenti ({stats.users.total})
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Acquirenti" value={stats.users.buyers}  color="indigo" icon={ShoppingCart} href="/admin/users?role=buyer" />
-          <StatCard label="Venditori"  value={stats.users.sellers} color="pink"   icon={Store} href="/admin/users?role=seller" />
-          <StatCard label="Rider"      value={stats.users.riders}  color="amber"  icon={Bike} href="/admin/users?role=rider" />
-          <StatCard label="Admin"      value={stats.users.admins}  color="rose"   icon={Shield} href="/admin/users?role=admin" />
+        <AdminSectionLabel icon={Users}>Utenti · {stats.users.total}</AdminSectionLabel>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+          <AdminStatCard tone="primary"   icon={ShoppingCart} label="Acquirenti" value={stats.users.buyers}  href="/admin/users?role=buyer" />
+          <AdminStatCard tone="accent"    icon={Store}        label="Venditori"  value={stats.users.sellers} href="/admin/users?role=seller" />
+          <AdminStatCard tone="olive"     icon={Bike}         label="Rider"      value={stats.users.riders}  href="/admin/users?role=rider" />
+          <AdminStatCard tone="secondary" icon={Shield}       label="Admin"      value={stats.users.admins}  href="/admin/users?role=admin" />
         </div>
       </section>
 
       <section>
-        <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2">
-          <Package size={20} strokeWidth={2.2} className="text-primary-700" aria-hidden />
-          Ordini ({stats.orders.total})
-        </h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Totali"          value={stats.orders.total}                color="blue"    icon={Package} href="/admin/orders" />
-          <StatCard label="Ultimi 7 giorni" value={stats.orders.recent}               color="violet"  icon={TrendingUp} href="/admin/orders" />
-          <StatCard label="Consegnati"      value={stats.orders.byStatus.DELIVERED ?? 0} color="emerald" icon={CheckCircle2} />
-          <StatCard label="Ricavi totali"   value={formatPrice(stats.orders.revenue)} color="emerald" icon={Banknote} />
+        <AdminSectionLabel icon={Package}>Ordini · {stats.orders.total}</AdminSectionLabel>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
+          <AdminStatCard tone="primary" icon={Package}      label="Totali"          value={stats.orders.total} href="/admin/orders" />
+          <AdminStatCard tone="accent"  icon={TrendingUp}   label="Ultimi 7 giorni" value={stats.orders.recent} href="/admin/orders" />
+          <AdminStatCard tone="olive"   icon={CheckCircle2} label="Consegnati"      value={stats.orders.byStatus.DELIVERED ?? 0} />
+          <AdminStatCard tone="olive"   icon={Banknote}     label="Ricavi totali"   value={formatPrice(stats.orders.revenue)} />
         </div>
 
-        <div className="bg-white border rounded-xl p-5 mt-4">
-          <h3 className="font-semibold text-ink-900 mb-3">Stato degli ordini</h3>
+        <div className="bg-white border-2 border-cream-300 rounded-xl p-5 mt-4">
+          <h3 className="font-serif text-[17px] font-bold text-ink-900 mb-3.5">Stato degli ordini</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
             {(['NEW','ACCEPTED','READY','ASSIGNED','PICKED_UP','OUT_FOR_DELIVERY','DELIVERED','CANCELED'] as OrderStatus[]).map((s) => {
               const Icon = ORDER_STATUS_ICON[s];
               return (
-              <div key={s} className="flex items-center justify-between bg-cream-50 rounded px-3 py-2">
-                <span className="text-ink-700 truncate inline-flex items-center gap-1.5">
+              <div key={s} className="flex items-center justify-between bg-cream-50 rounded-md px-3 py-2">
+                <span className="text-ink-600 truncate inline-flex items-center gap-1.5">
                   <Icon size={14} strokeWidth={2.2} aria-hidden />
                   {ORDER_STATUS_LABEL[s]}
                 </span>
-                <span className="font-bold text-ink-900">{stats.orders.byStatus[s] ?? 0}</span>
+                <span className="font-extrabold text-ink-900">{stats.orders.byStatus[s] ?? 0}</span>
               </div>
               );
             })}
@@ -157,13 +140,10 @@ export default function AdminDashboard() {
       </section>
 
       <section>
-        <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2">
-          <ShoppingBag size={20} strokeWidth={2.2} className="text-primary-700" aria-hidden />
-          Catalogo
-        </h2>
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard label="Prodotti totali"    value={stats.products.total}     color="indigo"  icon={Package} href="/admin/products" />
-          <StatCard label="Disponibili online" value={stats.products.available} color="emerald" icon={CheckCircle2} />
+        <AdminSectionLabel icon={ShoppingBag}>Catalogo</AdminSectionLabel>
+        <div className="grid grid-cols-2 gap-3.5">
+          <AdminStatCard tone="primary" icon={Package}      label="Prodotti totali"    value={stats.products.total} href="/admin/products" />
+          <AdminStatCard tone="olive"   icon={CheckCircle2} label="Disponibili online" value={stats.products.available} />
         </div>
       </section>
     </div>
