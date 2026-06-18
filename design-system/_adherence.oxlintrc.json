@@ -20,13 +20,7 @@
               "components/core/**",
               "components/feedback/**",
               "components/forms/**",
-              "deck/**",
-              "ui_kits/buyer/**",
-              "ui_kits/buyer/src/**",
-              "ui_kits/rider/**",
-              "ui_kits/rider/src/**",
-              "ui_kits/seller/**",
-              "ui_kits/seller/src/**"
+              "deck/**"
             ],
             "message": "Import design-system components from 'index.js', not component internals."
           }

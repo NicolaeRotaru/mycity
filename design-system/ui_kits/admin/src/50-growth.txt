@@ -1,0 +1,217 @@
+// ===== Growth & marketing: Funnel · Coupons · Sponsored · Daily drops · Shop of month · Events =====
+function Funnel() {
+  const f = window.AD_FUNNEL;
+  const a7 = (f.firstOrder7d / f.signups) * 100;
+  const aEver = (f.firstOrderEver / f.signups) * 100;
+  const repeat = (f.multiBuyer / f.firstOrderEver) * 100;
+  const col = (p) => p >= 40 ? ['var(--olive-100)', 'var(--olive-800)'] : p >= 20 ? ['var(--accent-100)', 'var(--accent-800)'] : p > 0 ? ['var(--secondary-100)', 'var(--secondary-700)'] : ['transparent', 'var(--ink-300)'];
+  const rows = [
+    { icon: 'users', label: 'Signup buyer', v: f.signups, t: f.signups, tone: 'primary' },
+    { icon: 'shopping-cart', label: '1° ordine entro 7gg', v: f.firstOrder7d, t: f.signups, tone: 'accent' },
+    { icon: 'package', label: '1° ordine (totale)', v: f.firstOrderEver, t: f.signups, tone: 'olive' },
+    { icon: 'trending-up', label: 'Multi-buyer (>1 ordine)', v: f.multiBuyer, t: f.firstOrderEver, tone: 'secondary' },
+  ];
+  return (
+    <div>
+      <PageTitle eyebrow="Crescita" title="Funnel & Cohort" sub="Activation buyer e retention per coorte mensile"
+        action={<Select defaultValue="90"><option value="30">Ultimi 30 giorni</option><option value="90">Ultimi 90 giorni</option><option value="365">Ultimo anno</option></Select>} />
+      <Card variant="bordered" padding="lg" style={{ marginBottom: '20px' }}>
+        <h3 style={{ margin: '0 0 16px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Funnel activation</h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {rows.map((r) => { const pct = r.t > 0 ? (r.v / r.t) * 100 : 0; const [, fg] = TINT[r.tone]; return (
+            <div key={r.label}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+                <span style={{ width: '30px', height: '30px', borderRadius: 'var(--radius-md)', background: TINT[r.tone][0], display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={r.icon} size={15} color={fg} /></span>
+                <span style={{ flex: 1, fontWeight: 600, color: 'var(--ink-900)', fontSize: '14px' }}>{r.label}</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{r.v} <span style={{ color: 'var(--ink-400)', fontWeight: 400 }}>/ {r.t} ({pct.toFixed(1)}%)</span></span>
+              </div>
+              <div style={{ height: '8px', background: 'var(--cream-100)', borderRadius: '999px', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${pct}%`, background: fg }} /></div>
+            </div>
+          ); })}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', paddingTop: '16px', marginTop: '16px', borderTop: '1px solid var(--cream-200)' }}>
+          <div><p style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)', fontWeight: 700 }}>Activation 7gg</p><p style={{ margin: '2px 0 0', fontSize: '28px', fontWeight: 800, color: a7 >= 30 ? 'var(--olive-700)' : 'var(--accent-700)' }}>{a7.toFixed(1)}%</p><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>target Glovo 35–40%</p></div>
+          <div><p style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)', fontWeight: 700 }}>Activation totale</p><p style={{ margin: '2px 0 0', fontSize: '28px', fontWeight: 800, color: 'var(--ink-900)' }}>{aEver.toFixed(1)}%</p></div>
+          <div><p style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)', fontWeight: 700 }}>Buyer ricorrente</p><p style={{ margin: '2px 0 0', fontSize: '28px', fontWeight: 800, color: 'var(--ink-900)' }}>{repeat.toFixed(1)}%</p><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>target &gt;40%</p></div>
+        </div>
+      </Card>
+      <Card variant="bordered" padding="lg">
+        <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Cohort retention</h3>
+        <p style={{ margin: '0 0 14px', fontSize: '12px', color: 'var(--ink-500)' }}>% buyer di una coorte che ha riordinato nei mesi successivi.</p>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr>{['Coorte', 'Signup', 'M+1', 'M+2', 'M+3'].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '8px 10px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {f.cohorts.map((c) => { const cell = (n) => { const p = c.size > 0 ? (n / c.size) * 100 : 0; const [bg, fg] = col(p); return n === 0 ? <span style={{ color: 'var(--ink-300)' }}>—</span> : <span style={{ background: bg, color: fg, padding: '2px 8px', borderRadius: '999px', fontWeight: 600, fontSize: '12px' }}>{p.toFixed(0)}%</span>; }; return (
+              <tr key={c.month} style={{ borderTop: '1px solid var(--cream-100)' }}>
+                <td style={{ padding: '9px 10px', fontWeight: 600, color: 'var(--ink-800)', textTransform: 'capitalize' }}>{c.month}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right', color: 'var(--ink-600)' }}>{c.size}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right' }}>{cell(c.m1)}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right' }}>{cell(c.m2)}</td>
+                <td style={{ padding: '9px 10px', textAlign: 'right' }}>{cell(c.m3)}</td>
+              </tr>
+            ); })}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function Coupons({ onToast }) {
+  const [list, setList] = React.useState(window.AD_COUPONS);
+  const [showForm, setShowForm] = React.useState(false);
+  const TYPE = { PERCENT: 'Sconto %', FIXED: 'Sconto €', FREE_SHIPPING: 'Spedizione gratis' };
+  const val = (c) => c.type === 'PERCENT' ? `${c.value}%` : c.type === 'FIXED' ? fmt(c.value) : '—';
+  function toggle(code) { setList((l) => l.map((c) => c.code === code ? { ...c, active: !c.active } : c)); }
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Coupon" sub={`${list.length} codici sconto`}
+        action={<Button variant="primary" icon="plus" onClick={() => setShowForm((s) => !s)}>Nuovo coupon</Button>} />
+      {showForm && (
+        <Card variant="bordered" padding="lg" style={{ marginBottom: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+            <Input label="Codice" placeholder="ESTATE25" />
+            <Select label="Tipo" defaultValue="PERCENT"><option value="PERCENT">Percentuale (%)</option><option value="FIXED">Sconto fisso (€)</option><option value="FREE_SHIPPING">Spedizione gratuita</option></Select>
+            <Input label="Valore" type="number" placeholder="25" />
+            <Input label="Spesa minima (€)" type="number" placeholder="30" />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '14px' }}>
+            <Button variant="primary" icon="check" onClick={() => { setShowForm(false); onToast && onToast('Coupon creato'); }}>Crea coupon</Button>
+            <Button variant="ghost" onClick={() => setShowForm(false)}>Annulla</Button>
+          </div>
+        </Card>
+      )}
+      <Card variant="bordered" padding="none">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Codice', 'Tipo', 'Valore', 'Spesa min', 'Usi', 'Stato'].map((h, i) => <th key={h} style={{ textAlign: i >= 2 && i <= 4 ? 'right' : 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {list.map((c) => (
+              <tr key={c.code} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--ink-900)' }}>{c.code}</td>
+                <td style={{ padding: '11px 16px', color: 'var(--ink-700)', fontSize: '13px' }}>{TYPE[c.type]}{c.firstOnly && <span style={{ marginLeft: '6px', fontSize: '11px', background: 'var(--accent-100)', color: 'var(--accent-800)', padding: '1px 6px', borderRadius: '999px' }}>1° ordine</span>}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{val(c)}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-600)' }}>{c.min > 0 ? fmt(c.min) : '—'}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-600)' }}>{c.uses}{c.max ? ` / ${c.max}` : ''}</td>
+                <td style={{ padding: '11px 16px' }}><button onClick={() => toggle(c.code)} style={{ border: 0, cursor: 'pointer', fontSize: '12px', fontWeight: 600, padding: '4px 10px', borderRadius: '999px', background: c.active ? 'var(--olive-100)' : 'var(--cream-200)', color: c.active ? 'var(--olive-700)' : 'var(--ink-500)', fontFamily: 'var(--font-sans)' }}>{c.active ? 'Attivo' : 'Disattivato'}</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function Sponsored() {
+  const s = window.AD_SPONSORED;
+  const totSpend = s.reduce((a, x) => a + x.spend, 0);
+  const totClicks = s.reduce((a, x) => a + x.clicks, 0);
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Sponsorizzati" sub="Posizionamenti a pagamento dei venditori" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '18px' }}>
+        <StatCard icon="megaphone" tone="primary" label="Campagne attive" value={s.filter((x) => x.active).length} />
+        <StatCard icon="mouse-pointer-click" tone="accent" label="Click totali" value={totClicks.toLocaleString('it-IT')} />
+        <StatCard icon="euro" tone="olive" label="Ricavi ads" value={fmt(totSpend)} />
+      </div>
+      <Card variant="bordered" padding="none">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Negozio · prodotto', 'Posizione', 'CPC', 'Click', 'Spesa', 'Stato'].map((h, i) => <th key={h} style={{ textAlign: i >= 2 && i <= 4 ? 'right' : 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {s.map((x) => (
+              <tr key={x.product} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td style={{ padding: '11px 16px' }}><p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{x.product}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)' }}>{x.store}</p></td>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{x.slot}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{fmt(x.cpc)}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{x.clicks.toLocaleString('it-IT')}</td>
+                <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--olive-700)' }}>{fmt(x.spend)}</td>
+                <td style={{ padding: '11px 16px' }}>{x.active ? <Badge variant="new">Attiva</Badge> : <span style={{ fontSize: '12px', color: 'var(--ink-400)', fontWeight: 600 }}>In pausa</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function DailyDrops() {
+  const d = window.AD_DROPS;
+  const ST = { live: ['var(--secondary-100)', 'var(--secondary-700)', 'LIVE ora'], scheduled: ['var(--cream-200)', 'var(--ink-600)', 'Programmato'] };
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Daily drops" sub="Offerte lampo a tempo limitato in home"
+        action={<Button variant="primary" icon="plus">Nuovo drop</Button>} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {d.map((x) => { const [bg, fg, lbl] = ST[x.status]; return (
+          <Card key={x.product} variant="bordered" padding="lg">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <span style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-lg)', background: 'var(--secondary-50)', color: 'var(--secondary-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, flexDirection: 'column' }}><Lucide name="zap" size={22} color="var(--secondary-600)" /></span>
+              <div style={{ flex: 1, minWidth: '160px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{x.product}</p><span style={{ fontSize: '11px', fontWeight: 700, background: bg, color: fg, padding: '2px 8px', borderRadius: '999px' }}>{lbl}</span></div>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>{x.store} · {x.day}</p>
+              </div>
+              <div style={{ textAlign: 'center' }}><p style={{ margin: 0, fontSize: '22px', fontWeight: 800, color: 'var(--secondary-600)' }}>-{x.discount}%</p><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>{x.slotsLeft} pezzi</p></div>
+            </div>
+          </Card>
+        ); })}
+      </div>
+    </div>
+  );
+}
+
+function ShopOfMonth({ onToast }) {
+  const s = window.AD_SHOP_MONTH;
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Negozio del mese" sub="Metti in vetrina un commerciante eccellente" />
+      <Card variant="elevated" padding="lg" style={{ marginBottom: '20px', background: 'linear-gradient(135deg, var(--accent-100), var(--cream-100))', border: '1px solid var(--accent-200)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+          <span style={{ width: '56px', height: '56px', borderRadius: 'var(--radius-xl)', background: 'var(--accent-500)', color: 'var(--ink-900)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="crown" size={28} color="var(--ink-900)" /></span>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--accent-800)' }}>In vetrina questo mese</p>
+            <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-serif)', fontSize: '24px', fontWeight: 800, color: 'var(--ink-900)' }}>{s.current}</p>
+            <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-600)' }}>{s.area} · {s.rating.toFixed(1).replace('.', ',')}★ · {s.orders} ordini</p>
+          </div>
+        </div>
+      </Card>
+      <SectionLabel icon="trophy" color="var(--primary-700)">Candidati suggeriti</SectionLabel>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {s.candidates.map((c, i) => (
+          <Card key={c.name} variant="bordered" padding="md">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink-300)', width: '20px' }}>{i + 1}</span>
+              <span style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--cream-200)', color: 'var(--primary-700)', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{initials(c.name)}</span>
+              <div style={{ flex: 1 }}><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{c.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{c.rating.toFixed(1).replace('.', ',')}★ · {c.orders} ordini</p></div>
+              <div style={{ textAlign: 'right', marginRight: '8px' }}><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)', textTransform: 'uppercase', fontWeight: 700 }}>Score</p><p style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--olive-700)' }}>{c.score}</p></div>
+              <Button variant={i === 0 ? 'primary' : 'secondary'} size="sm" icon="crown" onClick={() => onToast && onToast(`${c.name} messo in vetrina`)}>Scegli</Button>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Events() {
+  const e = window.AD_EVENTS;
+  const ST = { scheduled: ['var(--olive-100)', 'var(--olive-800)', 'In programma'], ended: ['var(--cream-200)', 'var(--ink-500)', 'Concluso'] };
+  return (
+    <div>
+      <PageTitle eyebrow="Marketing" title="Eventi" sub="Mercatini e iniziative speciali del marketplace"
+        action={<Button variant="primary" icon="plus">Nuovo evento</Button>} />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+        {e.map((x) => { const [bg, fg, lbl] = ST[x.status]; return (
+          <Card key={x.name} variant="bordered" padding="lg">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <span style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="calendar-days" size={22} color="var(--primary-700)" /></span>
+              <span style={{ fontSize: '11px', fontWeight: 700, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{lbl}</span>
+            </div>
+            <p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>{x.name}</p>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>{x.when} · {x.stores} negozi</p>
+          </Card>
+        ); })}
+      </div>
+    </div>
+  );
+}

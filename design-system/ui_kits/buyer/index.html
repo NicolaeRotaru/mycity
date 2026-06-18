@@ -15,6 +15,42 @@
   .mc-catbar { scrollbar-width: none; -ms-overflow-style: none; }
   .mc-catbar::-webkit-scrollbar { display: none; }
   @keyframes mc-slide-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  /* ── design polish applied across every buyer page ── */
+  #root main > * { animation: mc-fade-in var(--dur-medium) var(--ease-out); }
+  #root input:focus, #root select:focus, #root textarea:focus { border-color: var(--primary-400); box-shadow: 0 0 0 3px rgba(228,122,90,.18); }
+  #root button { transition: transform var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out); }
+  #root button:active { transform: translateY(1px); }
+  #root *::-webkit-scrollbar-track { background: transparent; }
+
+  /* ════════════ RESPONSIVE — tablet & mobile ════════════ */
+  /* Tablet (≤1024px): dense product grids relax, two-column page layouts stack */
+  @media (max-width: 1024px) {
+    #root [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(3, 1fr) !important; }
+    #root [style*="248px 1fr"], #root [style*="260px 1fr"],
+    #root [style*="1fr 380px"], #root [style*="1fr 360px"], #root [style*="1fr 320px"],
+    #root [style*="1.2fr 1fr"], #root [style*="1.1fr 1fr"], #root [style*="220px 1fr"],
+    #root [style*="240px 1fr"] { grid-template-columns: 1fr !important; }
+    /* sticky asides (filters / order summary) un-stick when stacked */
+    #root aside[style*="position: sticky"] { position: static !important; top: auto !important; }
+  }
+  /* Mobile (≤640px) */
+  @media (max-width: 640px) {
+    #root [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    #root [style*="repeat(3, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    #root [style*="repeat(2, 1fr)"] { grid-template-columns: 1fr !important; }
+    #root [style*="1fr 1fr"] { grid-template-columns: 1fr !important; }
+    /* trim the generous desktop paddings */
+    #root [style*="padding: 44px 20px"], #root [style*="padding: 28px 20px"],
+    #root [style*="padding: 24px 20px"], #root [style*="padding: 32px 20px"] { padding-left: 16px !important; padding-right: 16px !important; }
+    /* hero headline + section titles scale down */
+    #root h1 { font-size: clamp(28px, 8vw, 40px) !important; }
+    /* navbar: hide the location pill, let search breathe */
+    .mc-loc { display: none !important; }
+    /* auth split-screen → single column (hide the marketing aside) */
+    #root [style*="grid-template-columns: 1fr 1fr"][style*="70vh"] > div:last-child { display: none !important; }
+    /* cart drawer / sheets full width */
+    #root [style*="width: 420px"] { width: 100vw !important; max-width: 100vw !important; }
+  }
 </style>
 </head>
 <body>
@@ -26,7 +62,7 @@
   <script>window.__buyerMounted = window.__sellerMounted = window.__riderMounted = 1;</script>
   <script src="../../_ds_bundle.js"></script>
   <script>window.__MC_ALLOW_MOUNT = 1;</script>
-  <script src="src/data.js"></script>
-  <script type="text/babel" src="app.js"></script>
+  <script type="text/babel" src="src/data.txt"></script>
+  <script type="text/babel" src="app.babel"></script>
 </body>
 </html>

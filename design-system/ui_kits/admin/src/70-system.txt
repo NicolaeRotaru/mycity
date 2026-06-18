@@ -1,0 +1,93 @@
+// ===== System: Activity feed · Audit log · Support chat =====
+function Activity() {
+  return (
+    <div>
+      <PageTitle eyebrow="Sistema" title="Attività" sub="Flusso live degli eventi del marketplace" />
+      <Card variant="bordered" padding="lg">
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {window.AD_ACTIVITY.map((a, i) => (
+            <div key={i} style={{ display: 'flex', gap: '14px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: TINT[a.tone][0], color: TINT[a.tone][1], display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={a.icon} size={17} color={TINT[a.tone][1]} /></span>
+                {i < window.AD_ACTIVITY.length - 1 && <span style={{ width: '2px', flex: 1, minHeight: '20px', background: 'var(--cream-300)' }} />}
+              </div>
+              <div style={{ paddingBottom: '18px', flex: 1 }}>
+                <p style={{ margin: 0, fontSize: '14px', color: 'var(--ink-800)' }}><strong>{a.who}</strong> {a.action} {a.target && <span style={{ color: 'var(--primary-700)', fontWeight: 600 }}>{a.target}</span>}</p>
+                <p style={{ margin: '1px 0 0', fontSize: '12px', color: 'var(--ink-400)' }}>{a.when}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function Audit() {
+  return (
+    <div>
+      <PageTitle eyebrow="Sistema" title="Audit log" sub="Registro immutabile delle azioni amministrative"
+        action={<Button variant="secondary" icon="download">Esporta</Button>} />
+      <Card variant="bordered" padding="none">
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Operatore', 'Evento', 'Dettaglio', 'IP', 'Quando'].map((h) => <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {window.AD_AUDIT.map((a, i) => (
+              <tr key={i} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-800)' }}>{a.actor}</td>
+                <td style={{ padding: '11px 16px' }}><span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 600, background: 'var(--cream-100)', color: 'var(--primary-700)', padding: '2px 8px', borderRadius: 'var(--radius-sm)' }}>{a.event}</span></td>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{a.detail}</td>
+                <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>{a.ip}</td>
+                <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{a.when}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+function Support() {
+  const [active, setActive] = React.useState(window.AD_SUPPORT[0].user);
+  const [text, setText] = React.useState('');
+  const thread = window.AD_SUPPORT.find((t) => t.user === active);
+  const ROLE = { buyer: ['Acquirente', 'primary'], seller: ['Venditore', 'accent'], rider: ['Rider', 'olive'] };
+  return (
+    <div>
+      <PageTitle eyebrow="Sistema" title="Supporto" sub="Chat di assistenza con utenti, venditori e rider" />
+      <Card variant="bordered" padding="none">
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', height: '460px' }}>
+          <div style={{ borderRight: '1px solid var(--cream-200)', overflowY: 'auto' }}>
+            {window.AD_SUPPORT.map((t) => { const [rl, rt] = ROLE[t.role]; return (
+              <button key={t.user} onClick={() => setActive(t.user)} style={{ display: 'flex', gap: '10px', width: '100%', textAlign: 'left', border: 0, borderBottom: '1px solid var(--cream-100)', background: active === t.user ? 'var(--primary-50)' : 'transparent', padding: '12px 14px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--cream-200)', color: 'var(--ink-700)', fontWeight: 700, fontSize: '12px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(t.user)}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}><strong style={{ fontSize: '13px', color: 'var(--ink-900)' }}>{t.user}</strong><span style={{ fontSize: '11px', color: 'var(--ink-400)' }}>{t.when}</span></div>
+                  <p style={{ margin: '1px 0 3px', fontSize: '12px', color: 'var(--ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.last}</p>
+                  <span style={{ fontSize: '10px', fontWeight: 700, background: TINT[rt][0], color: TINT[rt][1], padding: '1px 7px', borderRadius: '999px' }}>{rl}</span>
+                </div>
+                {t.unread > 0 && <span style={{ alignSelf: 'center', background: 'var(--secondary-600)', color: '#fff', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{t.unread}</span>}
+              </button>
+            ); })}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--cream-200)', color: 'var(--ink-700)', fontWeight: 700, fontSize: '11px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{initials(thread.user)}</span>
+              <strong style={{ fontSize: '14px', color: 'var(--ink-900)' }}>{thread.user}</strong>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px', background: 'var(--cream-50)' }}>
+              {thread.msgs.map((m, i) => (
+                <div key={i} style={{ alignSelf: m.me ? 'flex-end' : 'flex-start', maxWidth: '72%', background: m.me ? 'var(--primary-700)' : '#fff', color: m.me ? '#fff' : 'var(--ink-800)', border: m.me ? 'none' : '1px solid var(--cream-300)', borderRadius: m.me ? '14px 14px 4px 14px' : '14px 14px 14px 4px', padding: '9px 13px', fontSize: '14px', lineHeight: 1.4 }}>{m.t}</div>
+              ))}
+            </div>
+            <div style={{ padding: '12px 16px', borderTop: '1px solid var(--cream-200)', display: 'flex', gap: '8px' }}>
+              <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Rispondi…" style={{ flex: 1, border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '10px 14px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none' }} />
+              <Button variant="primary" icon="send" onClick={() => setText('')}>Invia</Button>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}

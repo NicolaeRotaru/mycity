@@ -1,0 +1,45 @@
+// ===== Seller app shell (view state + toasts) =====
+function App() {
+  const [view, setView] = React.useState('dashboard');
+  const [orders, setOrders] = React.useState(window.SC_ORDERS);
+  const [newProd, setNewProd] = React.useState(false);
+  const [toast, setToast] = React.useState(null);
+  const timer = React.useRef(null);
+
+  function showToast(text) { setToast(text); clearTimeout(timer.current); timer.current = setTimeout(() => setToast(null), 2600); }
+  function nav(v) { setView(v); window.scrollTo(0, 0); }
+  function advance(o) {
+    const next = SC_NEXT[o.status];
+    if (!next) return;
+    setOrders((list) => list.map((x) => x.id === o.id ? { ...x, status: next } : x));
+    showToast(`Ordine #${o.id} → ${next === 'ACCEPTED' ? 'accettato' : next === 'READY' ? 'pronto' : 'assegnato al rider'}`);
+  }
+  function saveProduct() { setNewProd(false); showToast('Prodotto pubblicato in vetrina'); }
+  const copilot = () => nav('copilot');
+
+  return (
+    <SellerShell view={view} onNav={nav} onNewProduct={() => setNewProd(true)} onCopilot={copilot}>
+      {view === 'copilot' && <CopilotPage onToast={showToast} />}
+      {view === 'dashboard' && <Dashboard onNav={nav} onNewProduct={() => setNewProd(true)} />}
+      {view === 'orders' && <Orders orders={orders} onAdvance={advance} />}
+      {view === 'products' && <Products products={window.SC_PRODUCTS} onNewProduct={() => setNewProd(true)} />}
+      {view === 'ai' && <AiStudio onToast={showToast} />}
+      {view === 'promotions' && <Promotions onNew={() => showToast('Editor promo (demo)')} />}
+      {view === 'promote' && <Promote onToast={showToast} />}
+      {view === 'stories' && <Stories onToast={showToast} />}
+      {view === 'analytics' && <Analytics />}
+      {view === 'customers' && <Customers />}
+      {view === 'reviews' && <Reviews />}
+      {view === 'earnings' && <Earnings />}
+      {view === 'vetrina' && <Vetrina onToast={showToast} />}
+      {view === 'profile' && <SellerProfile onToast={showToast} />}
+      {view === 'help' && <SellerHelp />}
+      <NewProductModal open={newProd} onClose={() => setNewProd(false)} onSave={saveProduct} />
+      {toast && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', zIndex: 'var(--z-toast)', display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--ink-900)', color: '#fff', padding: '12px 18px', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-warm-xl)', animation: 'mc-pop-in var(--dur-medium) var(--ease-out-quint)', fontSize: '14px', fontWeight: 500 }}>
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--olive-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="check" size={15} stroke={3} color="#fff" /></span>
+          {toast}
+        </div>, document.body)}
+    </SellerShell>
+  );
+}

@@ -1,0 +1,77 @@
+// ===== Admin shell (dark sidebar, founder cockpit) =====
+const AD_NAV = [
+  { group: 'Operatività', items: [
+    { id: 'today', icon: 'sun', label: 'Today' },
+    { id: 'overview', icon: 'layout-dashboard', label: 'Panoramica' },
+    { id: 'orders', icon: 'receipt', label: 'Ordini' },
+    { id: 'users', icon: 'users', label: 'Utenti' },
+  ] },
+  { group: 'Trust & Safety', items: [
+    { id: 'disputes', icon: 'gavel', label: 'Reclami', badge: 'disputes' },
+    { id: 'moderation', icon: 'shield-alert', label: 'Moderazione' },
+    { id: 'cod', icon: 'banknote', label: 'Rimesse COD' },
+    { id: 'sos', icon: 'siren', label: 'SOS rider', badge: 'sos' },
+  ] },
+  { group: 'Crescita', items: [
+    { id: 'funnel', icon: 'trending-up', label: 'Funnel & Cohort' },
+    { id: 'coupons', icon: 'ticket', label: 'Coupon' },
+    { id: 'sponsored', icon: 'megaphone', label: 'Sponsorizzati' },
+    { id: 'drops', icon: 'zap', label: 'Daily drops' },
+    { id: 'shop-month', icon: 'crown', label: 'Negozio del mese' },
+    { id: 'events', icon: 'calendar-days', label: 'Eventi' },
+  ] },
+  { group: 'Contenuti', items: [
+    { id: 'home', icon: 'layout-template', label: 'Home builder' },
+    { id: 'pages', icon: 'file-text', label: 'Pagine' },
+    { id: 'categories', icon: 'folder-tree', label: 'Categorie' },
+    { id: 'branding', icon: 'palette', label: 'Branding' },
+  ] },
+  { group: 'Sistema', items: [
+    { id: 'activity', icon: 'rss', label: 'Attività' },
+    { id: 'audit', icon: 'scroll-text', label: 'Audit log' },
+    { id: 'support', icon: 'life-buoy', label: 'Supporto' },
+  ] },
+];
+
+function AdminShell({ view, onNav, children }) {
+  const a = window.AD_ADMIN;
+  const d = window.AD_TODAY;
+  const badgeFor = (id) => id === 'disputes' ? d.disputesOpen : id === 'sos' ? d.sosActive : 0;
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '248px 1fr', minHeight: '100vh', background: 'var(--cream-100)' }}>
+      <aside style={{ background: 'var(--ink-900)', color: '#fff', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
+          <div style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.01em' }}>
+            <span style={{ color: 'var(--accent-300)' }}>My</span><span style={{ color: '#fff' }}>City</span>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 700, color: '#F09593', textTransform: 'uppercase', letterSpacing: '0.08em', marginLeft: '6px' }}>Admin</span>
+          </div>
+        </div>
+        <nav style={{ flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+          {AD_NAV.map((sec) => (
+            <div key={sec.group} style={{ marginBottom: '8px' }}>
+              <p style={{ margin: '6px 12px 4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,.38)' }}>{sec.group}</p>
+              {sec.items.map((n) => {
+                const on = view === n.id; const b = badgeFor(n.id);
+                return (
+                  <button key={n.id} onClick={() => onNav(n.id)} style={{ display: 'flex', alignItems: 'center', gap: '11px', border: 0, background: on ? 'var(--primary-700)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.78)', fontWeight: on ? 700 : 500, fontSize: '13.5px', padding: '9px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', width: '100%' }}>
+                    <Lucide name={n.icon} size={17} stroke={2.2} color={on ? '#fff' : 'rgba(255,255,255,.7)'} /> {n.label}
+                    {b > 0 && <span style={{ marginLeft: 'auto', background: 'var(--secondary-600)', color: '#fff', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{b}</span>}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div style={{ padding: '12px', borderTop: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px' }}>
+            <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--secondary-600)', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{a.initials}</span>
+            <div style={{ minWidth: 0 }}><p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#fff' }}>{a.name}</p><p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,.5)' }}>{a.role}</p></div>
+          </div>
+        </div>
+      </aside>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <main style={{ flex: 1, padding: '28px', maxWidth: '1080px', width: '100%', boxSizing: 'border-box' }}>{children}</main>
+      </div>
+    </div>
+  );
+}

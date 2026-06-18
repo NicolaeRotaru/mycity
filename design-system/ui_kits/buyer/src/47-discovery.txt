@@ -1,0 +1,175 @@
+// ===== Discovery & merchandising: collections, near map, lists, events, returns =====
+
+// Pagine vetrina tematiche (novita, piu-venduti, piccoli-prezzi, promozioni, regali).
+// Una sola vista parametrica: cambia titolo, filtro e accento.
+const MC_COLLECTIONS = {
+  novita:        { eyebrow: 'Appena arrivati', title: 'Novità dai negozi', icon: 'sparkles', filter: (p) => p.isNew, blurb: 'I prodotti più freschi pubblicati dai commercianti di Piacenza.' },
+  'piu-venduti': { eyebrow: 'I best seller', title: 'I più venduti', icon: 'flame', filter: () => true, sort: (a, b) => (b.reviews || 0) - (a.reviews || 0), blurb: 'Quello che va forte questa settimana in città.' },
+  'piccoli-prezzi': { eyebrow: 'Sotto i 10€', title: 'Piccoli prezzi', icon: 'piggy-bank', filter: (p) => finalPrice(p) < 10, blurb: 'Buono, locale e leggero sul portafoglio.' },
+  promozioni:    { eyebrow: 'In offerta', title: 'Promozioni', icon: 'tag', filter: (p) => p.discountPercent > 0, blurb: 'Sconti veri dai negozi della tua via.' },
+  regali:        { eyebrow: 'Idee regalo', title: 'Regali', icon: 'gift', filter: (p) => finalPrice(p) >= 12 || p.cat === 'casa' || p.cat === 'cantina', blurb: 'Pensieri buoni e artigianali, da Piacenza con gusto.' },
+};
+
+function CollectionPage({ slug, products, onOpen, onAdd, onStore, onHome }) {
+  const c = MC_COLLECTIONS[slug] || MC_COLLECTIONS.novita;
+  let list = products.filter(c.filter);
+  if (c.sort) list = [...list].sort(c.sort);
+  return (
+    <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '24px 20px' }}>
+      <div style={{ fontSize: '13px', color: 'var(--ink-500)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <a onClick={onHome} style={{ cursor: 'pointer', color: 'var(--ink-500)' }}>Home</a> <Lucide name="chevron-right" size={13} color="var(--ink-400)" /> <span style={{ color: 'var(--ink-700)' }}>{c.title}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+        <span style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-xl)', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={c.icon} size={26} color="var(--primary-700)" /></span>
+        <div>
+          <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary-700)' }}>{c.eyebrow}</p>
+          <h1 style={{ margin: '2px 0 0', fontFamily: 'var(--font-serif)', fontSize: '32px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1.05 }}>{c.title}</h1>
+          <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--ink-500)' }}>{c.blurb}</p>
+        </div>
+      </div>
+      {list.length === 0
+        ? <Card variant="flat" padding="lg"><EmptyState icon="search-x" title="Niente qui per ora" description="Torna presto: i negozi aggiungono prodotti ogni giorno." /></Card>
+        : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+            {list.map((p) => <ProductGridCard key={p.id} p={p} onOpen={onOpen} onAdd={onAdd} onStore={onStore} />)}
+          </div>}
+    </div>
+  );
+}
+
+// Negozi vicini — mappa schematica + lista.
+function NearPage({ stores, onStore, onHome }) {
+  const pins = [['18%', '32%'], ['62%', '22%'], ['40%', '58%'], ['76%', '64%'], ['28%', '74%'], ['55%', '44%'], ['85%', '38%']];
+  return (
+    <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '24px 20px' }}>
+      <div style={{ fontSize: '13px', color: 'var(--ink-500)', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <a onClick={onHome} style={{ cursor: 'pointer', color: 'var(--ink-500)' }}>Home</a> <Lucide name="chevron-right" size={13} color="var(--ink-400)" /> <span style={{ color: 'var(--ink-700)' }}>Negozi vicini</span>
+      </div>
+      <h1 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '32px', fontWeight: 800, color: 'var(--ink-900)' }}>Negozi vicino a te</h1>
+      <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--ink-500)' }}><Lucide name="map-pin" size={14} color="var(--primary-600)" style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Piacenza · 29121 · {stores.length} negozi nel raggio di 3 km</p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <div style={{ position: 'relative', height: '420px', borderRadius: 'var(--radius-2xl)', overflow: 'hidden', border: '1px solid var(--cream-300)', background: 'linear-gradient(135deg, var(--olive-100), var(--cream-200))' }}>
+          <div aria-hidden style={{ position: 'absolute', inset: 0, backgroundImage: 'repeating-linear-gradient(0deg, rgba(28,26,24,.04) 0 1px, transparent 1px 32px), repeating-linear-gradient(90deg, rgba(28,26,24,.04) 0 1px, transparent 1px 32px)' }} />
+          <span style={{ position: 'absolute', left: '47%', top: '48%', width: '18px', height: '18px', borderRadius: '50%', background: 'var(--info, var(--primary-700))', border: '3px solid #fff', boxShadow: 'var(--shadow-warm)' }} title="Tu sei qui" />
+          {stores.map((s, i) => { const [l, t] = pins[i % pins.length]; return (
+            <button key={s.id} onClick={() => onStore(s)} title={s.name} style={{ position: 'absolute', left: l, top: t, transform: 'translate(-50%,-100%)', border: 0, background: 'transparent', cursor: 'pointer' }}>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <span style={{ background: 'var(--primary-700)', color: '#fff', borderRadius: 'var(--radius-full)', width: '30px', height: '30px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-warm)' }}><Lucide name="store" size={15} color="#fff" /></span>
+              </span>
+            </button>
+          ); })}
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {stores.map((s) => (
+            <div key={s.id} onClick={() => onStore(s)} className="mc-card-hover" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '12px 14px' }}>
+              <img src={s.cover} alt={s.name} style={{ width: '52px', height: '52px', borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)', fontSize: '14px' }}>{s.name}</p>{s.verified && <Lucide name="badge-check" size={14} color="var(--primary-600)" />}</div>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>{String(s.rating).replace('.', ',')}★ · {s.cat} · {s.area}</p>
+              </div>
+              {s.deliveryToday && <Badge variant="free" icon="truck">Oggi</Badge>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Liste / wishlist multiple.
+function ListsPage({ products, onOpen, onAdd, onStore, onHome }) {
+  const lists = [
+    { name: 'Cena del sabato', icon: 'utensils', ids: ['p1', 'p2', 'p3'] },
+    { name: 'Regali di Natale', icon: 'gift', ids: ['p7', 'p8'] },
+    { name: 'Dispensa', icon: 'shopping-basket', ids: ['p5', 'p6', 'p9'] },
+  ];
+  const [active, setActive] = React.useState(0);
+  const l = lists[active];
+  const items = l.ids.map((id) => products.find((p) => p.id === id)).filter(Boolean);
+  return (
+    <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '24px 20px' }}>
+      <h1 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '32px', fontWeight: 800, color: 'var(--ink-900)' }}>Le mie liste</h1>
+      <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--ink-500)' }}>Salva i prodotti in liste tematiche e riordina con un tap.</p>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '18px', flexWrap: 'wrap' }}>
+        {lists.map((x, i) => (
+          <button key={x.name} onClick={() => setActive(i)} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', border: 0, background: i === active ? 'var(--primary-700)' : 'var(--surface-0)', color: i === active ? '#fff' : 'var(--ink-700)', fontWeight: 600, fontSize: '13px', padding: '9px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: i === active ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>
+            <Lucide name={x.icon} size={15} color={i === active ? '#fff' : 'var(--ink-500)'} /> {x.name} <span style={{ opacity: 0.7 }}>· {x.ids.length}</span>
+          </button>
+        ))}
+        <button style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', border: '1px dashed var(--cream-400)', background: 'transparent', color: 'var(--primary-700)', fontWeight: 600, fontSize: '13px', padding: '9px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}><Lucide name="plus" size={15} color="var(--primary-700)" /> Nuova lista</button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+        <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Lucide name={l.icon} size={19} color="var(--primary-700)" /> {l.name}</h2>
+        <Button variant="accent" icon="shopping-cart" onClick={() => items.forEach((p) => onAdd(p))}>Aggiungi tutto al carrello</Button>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+        {items.map((p) => <ProductGridCard key={p.id} p={p} onOpen={onOpen} onAdd={onAdd} onStore={onStore} />)}
+      </div>
+    </div>
+  );
+}
+
+// Eventi del marketplace (lato buyer).
+function EventsPage({ onHome }) {
+  const events = [
+    { name: 'Mercato di Natale', when: '8–24 dic 2026', where: 'Piazza Cavalli', kw: 'bread', lock: 3, blurb: 'I negozi di MyCity in piazza con specialità e idee regalo.' },
+    { name: 'Sagra del Salume', when: '12–14 set 2026', where: 'Palazzo Gotico', kw: 'salami', lock: 7, blurb: 'Degustazioni e tagli a mano dai salumieri piacentini.' },
+    { name: 'Festa della Pasta Fresca', when: '20–22 mar 2026', where: 'Borgo', kw: 'pasta', lock: 15, blurb: 'Pisarei, tortelli e anolini fatti a mano dal vivo.' },
+  ];
+  return (
+    <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '24px 20px' }}>
+      <h1 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '32px', fontWeight: 800, color: 'var(--ink-900)' }}>Eventi a Piacenza</h1>
+      <p style={{ margin: '0 0 20px', fontSize: '14px', color: 'var(--ink-500)' }}>Incontra i negozi di MyCity dal vivo in città.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+        {events.map((e) => (
+          <div key={e.name} className="mc-card-hover" style={{ background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-2xl)', overflow: 'hidden' }}>
+            <div style={{ position: 'relative', height: '130px' }}>
+              <img src={img(e.kw, e.lock)} alt={e.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <span style={{ position: 'absolute', top: '10px', left: '10px', background: 'rgba(28,26,24,.82)', color: '#fff', fontSize: '12px', fontWeight: 600, padding: '4px 10px', borderRadius: 'var(--radius-full)' }}>{e.when}</span>
+            </div>
+            <div style={{ padding: '14px 16px' }}>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>{e.name}</h3>
+              <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--ink-500)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Lucide name="map-pin" size={13} color="var(--ink-400)" /> {e.where}</p>
+              <p style={{ margin: '8px 0 12px', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.5 }}>{e.blurb}</p>
+              <Button variant="secondary" size="sm" iconRight="arrow-right">Scopri di più</Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Reso (gestione resi lato account).
+function ReturnsView({ onBack }) {
+  const returns = [
+    { id: 'R-1042', order: 'PC-2390', product: 'Gutturnio dei Colli DOC', reason: 'Bottiglia danneggiata', status: 'approved', refund: 12.5, when: '2 giorni fa' },
+    { id: 'R-0988', order: 'PC-2274', product: 'Sciarpa in lana merino', reason: 'Taglia errata', status: 'in_transit', refund: 27.2, when: '5 giorni fa' },
+  ];
+  const ST = { approved: ['var(--olive-50)', 'var(--olive-700)', 'Rimborsato'], in_transit: ['var(--accent-50)', 'var(--accent-800)', 'Reso in corso'], rejected: ['var(--secondary-50)', 'var(--secondary-600)', 'Rifiutato'] };
+  return (
+    <div>
+      <div style={{ marginBottom: '18px' }}>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '28px', fontWeight: 700, color: 'var(--ink-900)' }}>Resi e rimborsi</h1>
+        <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--ink-500)' }}>Hai 14 giorni per il reso. Ti rimborsiamo senza domande.</p>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {returns.map((r) => { const [bg, fg, lbl] = ST[r.status]; return (
+          <Card key={r.id} variant="bordered" padding="lg">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><strong style={{ fontSize: '14px', color: 'var(--ink-900)' }}>{r.product}</strong><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{lbl}</span></div>
+                <p style={{ margin: '3px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>Reso {r.id} · ordine {r.order} · {r.reason} · {r.when}</p>
+              </div>
+              <span style={{ fontSize: '18px', fontWeight: 800, color: 'var(--olive-700)' }}>{fmt(r.refund)}</span>
+            </div>
+          </Card>
+        ); })}
+      </div>
+      <div style={{ marginTop: '16px', padding: '16px', background: 'var(--cream-50)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <Lucide name="rotate-ccw" size={20} color="var(--primary-700)" />
+        <span style={{ flex: 1, fontSize: '14px', color: 'var(--ink-700)' }}>Vuoi rendere un altro prodotto? Scegli l’ordine e il motivo, al ritiro pensa il rider.</span>
+        <Button variant="secondary" size="sm" icon="plus">Nuovo reso</Button>
+      </div>
+    </div>
+  );
+}

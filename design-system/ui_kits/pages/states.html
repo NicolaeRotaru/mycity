@@ -1,0 +1,94 @@
+<!-- @dsCard group="MyCity Pagine" viewport="1280x820" name="Stati di sistema · 404 · Errore · Caricamento" subtitle="not-found, error and loading states" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyCity — Stati di sistema</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; background: var(--surface-50); font-family: var(--font-sans); color: var(--text-primary); }
+  .switch { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 50; display: flex; gap: 4px; background: var(--surface-0); border: 1px solid var(--cream-300); border-radius: var(--radius-full); padding: 4px; box-shadow: var(--shadow-warm); }
+  .switch button { border: 0; background: transparent; padding: 7px 16px; font-size: 13px; font-weight: 600; color: var(--ink-600); cursor: pointer; border-radius: var(--radius-full); font-family: var(--font-sans); }
+  .switch button.active { background: var(--primary-700); color: #fff; }
+  .stage { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .state { display: none; text-align: center; max-width: 440px; }
+  .state.active { display: block; animation: mc-fade-in var(--dur-medium) var(--ease-out); }
+  .medallion { width: 96px; height: 96px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 24px; }
+  .state h1 { font-size: 30px; margin: 0 0 10px; }
+  .big { font-family: var(--font-serif); font-size: 96px; font-weight: 800; line-height: 1; color: var(--primary-700); margin: 0 0 8px; letter-spacing: -2px; }
+  .state p { font-size: 16px; line-height: 1.6; color: var(--ink-600); margin: 0 0 24px; }
+  .btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border: 0; padding: 12px 20px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; font-family: var(--font-sans); text-decoration: none; }
+  .btn-primary { background: var(--primary-700); color: #fff; }
+  .btn-secondary { background: var(--surface-0); color: var(--ink-900); border: 1px solid var(--cream-300); }
+  /* skeleton loading */
+  .skeleton { width: 100%; max-width: 980px; }
+  .sk-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .sk-card { background: var(--surface-0); border: 1px solid var(--cream-300); border-radius: var(--radius-2xl); overflow: hidden; }
+  .sk-img { aspect-ratio: 1; background: linear-gradient(90deg, var(--cream-200) 0px, var(--cream-100) 200px, var(--cream-200) 400px); background-size: 1000px 100%; animation: mc-shimmer 2s linear infinite; }
+  .sk-line { height: 11px; border-radius: 6px; margin: 10px; background: linear-gradient(90deg, var(--cream-200) 0px, var(--cream-100) 200px, var(--cream-200) 400px); background-size: 1000px 100%; animation: mc-shimmer 2s linear infinite; }
+  .sk-line.short { width: 50%; }
+  .spinner { width: 44px; height: 44px; border: 4px solid var(--cream-300); border-top-color: var(--primary-600); border-radius: 50%; animation: mc-spin .8s linear infinite; margin: 0 auto 20px; }
+</style>
+</head>
+<body>
+  <div class="switch">
+    <button class="active" data-s="nf">404</button>
+    <button data-s="err">Errore</button>
+    <button data-s="load">Caricamento</button>
+  </div>
+
+  <div class="stage">
+    <!-- 404 -->
+    <div class="state active" id="nf">
+      <p class="big">404</p>
+      <h1 style="font-family:var(--font-serif)">Pagina non trovata</h1>
+      <p>La pagina che cerchi non esiste o è stata spostata. Ma i negozi di Piacenza sono sempre qui.</p>
+      <div class="btns">
+        <a class="btn btn-primary" href="../buyer/index.html"><i data-lucide="home"></i> Torna alla home</a>
+        <a class="btn btn-secondary" href="../buyer/index.html"><i data-lucide="search"></i> Esplora i negozi</a>
+      </div>
+    </div>
+
+    <!-- error -->
+    <div class="state" id="err">
+      <span class="medallion" style="background:var(--secondary-50);color:var(--secondary-600)"><i data-lucide="alert-triangle" style="width:42px;height:42px"></i></span>
+      <h1 style="font-family:var(--font-serif)">Qualcosa è andato storto</h1>
+      <p>Si è verificato un errore imprevisto. Riprova tra un momento — se il problema continua, scrivici.</p>
+      <div class="btns">
+        <button class="btn btn-primary" onclick="location.reload()"><i data-lucide="rotate-cw"></i> Riprova</button>
+        <a class="btn btn-secondary" href="index.html"><i data-lucide="life-buoy"></i> Contatta il supporto</a>
+      </div>
+    </div>
+
+    <!-- loading -->
+    <div class="state" id="load">
+      <div class="spinner"></div>
+      <h1 style="font-family:var(--font-serif);margin-bottom:6px">Stiamo caricando…</h1>
+      <p>Prepariamo i prodotti dei negozi vicino a te.</p>
+      <div class="skeleton">
+        <div class="sk-row">
+          <div class="sk-card"><div class="sk-img"></div><div class="sk-line"></div><div class="sk-line short"></div></div>
+          <div class="sk-card"><div class="sk-img"></div><div class="sk-line"></div><div class="sk-line short"></div></div>
+          <div class="sk-card"><div class="sk-img"></div><div class="sk-line"></div><div class="sk-line short"></div></div>
+          <div class="sk-card"><div class="sk-img"></div><div class="sk-line"></div><div class="sk-line short"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>
+    lucide.createIcons({ attrs: { 'stroke-width': 2.2 } });
+    document.querySelectorAll('.switch button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        document.querySelectorAll('.switch button').forEach(function (x) { x.classList.remove('active'); });
+        document.querySelectorAll('.state').forEach(function (s) { s.classList.remove('active'); });
+        b.classList.add('active');
+        document.getElementById(b.dataset.s).classList.add('active');
+      });
+    });
+  </script>
+</body>
+</html>
