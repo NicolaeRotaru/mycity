@@ -1,13 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Sun, LayoutDashboard, Receipt, Users, Gavel, Banknote, Siren,
   TrendingUp, Ticket, Megaphone, Zap, Crown, CalendarDays,
   LayoutTemplate, FileText, FolderTree, Palette, Rss, ScrollText, LifeBuoy,
+  Home, LogOut,
   type LucideIcon,
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 
 type NavItem = { href: string; icon: LucideIcon; label: string };
@@ -59,10 +61,17 @@ function isActive(pathname: string, href: string): boolean {
 
 export default function AdminSidebar() {
   const pathname = usePathname() ?? '';
+  const router = useRouter();
   const { profile, userEmail } = useProfile();
   const name = profile?.full_name || profile?.email || userEmail || 'Admin';
   const initials =
     name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase() || 'A';
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/sign-in');
+    router.refresh();
+  };
 
   return (
     <aside className="hidden md:flex sticky top-0 h-screen w-[248px] flex-col bg-ink-900 text-white">
@@ -106,7 +115,7 @@ export default function AdminSidebar() {
       </nav>
 
       <div className="shrink-0 border-t border-white/10 p-3">
-        <div className="flex items-center gap-2.5 px-2 py-1.5">
+        <div className="mb-1 flex items-center gap-2.5 px-2 py-1.5">
           <span className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-secondary-600 text-[13px] font-bold text-white">
             {initials}
           </span>
@@ -115,6 +124,19 @@ export default function AdminSidebar() {
             <p className="text-[11px] text-white/50">Admin</p>
           </div>
         </div>
+        <Link
+          href="/"
+          className="flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white"
+        >
+          <Home size={16} strokeWidth={2.2} aria-hidden /> Torna al sito
+        </Link>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-secondary-600/20 hover:text-white"
+        >
+          <LogOut size={16} strokeWidth={2.2} aria-hidden /> Esci
+        </button>
       </div>
     </aside>
   );
