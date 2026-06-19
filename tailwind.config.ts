@@ -135,11 +135,24 @@ export default {
         'skip-link':   '100',     // skip link focus
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        // Inter caricato via next/font (--font-inter su <html>); allinea le
+        // utility font-sans alla face realmente caricata.
+        sans: ['var(--font-inter)', 'Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
         serif: ['var(--font-serif)', 'Georgia', 'serif'],
+      },
+      fontSize: {
+        // Step micro mancante dalla ramp Tailwind (design --text-2xs).
+        '2xs': '0.625rem',
+      },
+      letterSpacing: {
+        // Tracking editoriale del design (additivi, nessun override).
+        display: '-0.01em',
+        editorial: '-0.015em',
+        label: '0.04em',
       },
       borderRadius: {
         // Bordi un filo più morbidi (era 0.5rem default)
+        sm: '0.375rem',
         DEFAULT: '0.5rem',
         lg: '0.75rem',
         xl: '1rem',
