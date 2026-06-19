@@ -7,6 +7,7 @@ import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { SubscriptionBanner } from '@/components/seller/SubscriptionBanner';
+import SellerShell from '@/components/seller/SellerShell';
 import { Store, Mail, Home, Pencil, X, PauseCircle, Clock, ArrowLeft } from 'lucide-react';
 
 export default function SellerLayout({ children }: { children: React.ReactNode }) {
@@ -155,9 +156,9 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-6xl">
+    <SellerShell>
       {isSeller && <SubscriptionBanner status={profile?.subscription_status} />}
-      <main>{children}</main>
-    </div>
+      {children}
+    </SellerShell>
   );
 }
