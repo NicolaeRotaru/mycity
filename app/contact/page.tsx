@@ -127,7 +127,7 @@ export default function ContactPage() {
         </div>
 
         <aside className="md:col-span-2 space-y-4">
-          <div className="bg-gradient-to-br from-primary-50 to-purple-50 border border-primary-100 rounded-2xl p-6">
+          <div className="bg-gradient-to-br from-primary-50 to-secondary-50 border border-primary-100 rounded-2xl p-6">
             <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-2"><MapPin size={18} className="text-primary-600 shrink-0" aria-hidden /> Sede</h3>
             <p className="text-sm text-ink-700 leading-relaxed">
               MyCity S.r.l.<br />

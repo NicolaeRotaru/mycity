@@ -94,11 +94,11 @@ export function ConfirmDialogHost() {
 
   const accentBar = isDanger
     ? 'bg-gradient-to-r from-rose-500 via-orange-500 to-accent-500'
-    : 'bg-gradient-to-r from-primary-600 via-purple-600 to-pink-600';
+    : 'bg-gradient-to-r from-primary-600 via-primary-700 to-secondary-600';
 
   const iconBg = isDanger
     ? 'bg-gradient-to-br from-rose-100 to-orange-100 text-rose-600 ring-rose-200'
-    : 'bg-gradient-to-br from-primary-100 to-purple-100 text-primary-700 ring-primary-200';
+    : 'bg-gradient-to-br from-primary-100 to-secondary-100 text-primary-700 ring-primary-200';
 
   return (
     <div
@@ -156,7 +156,7 @@ export function ConfirmDialogHost() {
             className={`px-4 py-3 rounded-xl font-bold text-white shadow-md active:scale-[0.98] transition-all ${
               isDanger
                 ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
-                : 'bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 shadow-indigo-200'
+                : 'bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 shadow-primary-200'
             }`}
           >
             {state.confirmLabel ?? tActions('confirm')}

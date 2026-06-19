@@ -81,11 +81,11 @@ export default function ProfilePage() {
       <div className="space-y-6">
         <Link
           href="/profile/referral"
-          className="block rounded-2xl bg-gradient-to-r from-primary-600 to-purple-600 p-5 text-white transition-all hover:shadow-lg"
+          className="block rounded-2xl bg-gradient-to-r from-primary-600 to-secondary-600 p-5 text-white transition-all hover:shadow-lg"
         >
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-lg font-extrabold flex items-center gap-2">
+              <p className="text-lg font-extrabold font-serif flex items-center gap-2">
                 <Gift size={20} className="text-white" aria-hidden />
                 Invita un amico, prendete €5 entrambi
               </p>

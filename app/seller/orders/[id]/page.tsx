@@ -242,14 +242,14 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       )}
       {/* CODICE RITIRO (visibile dopo ACCEPTED) */}
       {showPickupCode && (
-        <div className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white rounded-2xl p-6 shadow-lg">
+        <div className="bg-gradient-to-br from-primary-500 to-secondary-600 text-white rounded-2xl p-6 shadow-lg">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
-              <p className="text-xs uppercase tracking-widest text-cyan-100 font-semibold">Codice ritiro</p>
+              <p className="text-xs uppercase tracking-widest text-primary-100 font-semibold">Codice ritiro</p>
               <p className="font-mono font-extrabold text-4xl sm:text-5xl tracking-[0.3em] my-2">
                 {pickupCode!.code}
               </p>
-              <p className="text-sm text-cyan-100">
+              <p className="text-sm text-primary-100">
                 {pickupCode!.verified_at
                   ? 'Codice già usato dal rider per ritirare.'
                   : 'Mostra questo codice (o il QR) al rider quando viene a ritirare l\'ordine.'}
@@ -301,7 +301,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
                   <p className="font-medium text-ink-900 truncate">{it.products?.name ?? 'Prodotto'}</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-bold text-lg text-ink-900">×{it.quantity}</p>
+                  <p className="font-bold font-serif text-lg text-ink-900">×{it.quantity}</p>
                   <p className="text-xs text-ink-500">{formatPrice(Number(it.unit_price) * it.quantity)}</p>
                 </div>
               </div>
@@ -311,7 +311,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         <div className="px-6 py-4 border-t border-cream-200 bg-cream-50 text-sm space-y-1">
           <div className="flex justify-between"><span className="text-ink-600">Subtotale</span><span>{formatPrice(subtotal)}</span></div>
           <div className="flex justify-between"><span className="text-ink-600">Spedizione</span><span>{order.shipping_cost > 0 ? formatPrice(order.shipping_cost) : 'GRATUITA'}</span></div>
-          <div className="flex justify-between font-bold text-base pt-1 border-t border-cream-300"><span>Totale</span><span className="text-primary-800">{formatPrice(order.total_price)}</span></div>
+          <div className="flex justify-between font-bold text-base pt-1 border-t border-cream-300"><span>Totale</span><span className="font-serif text-primary-800">{formatPrice(order.total_price)}</span></div>
         </div>
       </div>
     </div>

@@ -125,7 +125,7 @@ export default function RiderAvailabilityPage() {
       {/* Online toggle */}
       <section className={`border-2 rounded-2xl p-6 transition-colors ${
         avail.online
-          ? 'bg-gradient-to-br from-olive-50 to-teal-50 border-olive-300'
+          ? 'bg-gradient-to-br from-olive-50 to-olive-100 border-olive-300'
           : 'bg-cream-50 border-cream-300'
       }`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -135,7 +135,7 @@ export default function RiderAvailabilityPage() {
               <span className={`relative inline-flex rounded-full h-3 w-3 ${avail.online ? 'bg-olive-500' : 'bg-gray-400'}`} />
             </span>
             <div>
-              <p className="text-xl font-extrabold text-ink-900">
+              <p className="text-xl font-extrabold font-serif text-ink-900">
                 {avail.online ? 'Sei online' : 'Sei offline'}
               </p>
               <p className="text-xs text-ink-600">

@@ -65,7 +65,7 @@ export default function HelpPage() {
       {/* Search-like CTA */}
       <Link
         href="/faq"
-        className="block bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-2xl p-8 mb-10 hover:shadow-xl transition-all"
+        className="block bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-2xl p-8 mb-10 hover:shadow-xl transition-all"
       >
         <div className="text-center">
           <div className="mb-2 flex justify-center"><Search size={32} className="text-white" aria-hidden /></div>
@@ -103,7 +103,7 @@ export default function HelpPage() {
               <div className="text-xs text-ink-500">info@mycity.it</div>
             </div>
           </a>
-          <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-green-300 transition-colors">
+          <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-olive-300 transition-colors">
             <MessageCircle size={24} className="text-olive-600 shrink-0" aria-hidden />
             <div>
               <div className="font-semibold text-sm">WhatsApp</div>

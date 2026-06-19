@@ -230,7 +230,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   if (order.delivery_status === 'ASSIGNED') {
     actions.push({ label: 'Ho ritirato l\'ordine', nextStatus: 'PICKED_UP', timestampField: 'picked_up_at', color: 'bg-cyan-600 hover:bg-cyan-700' });
   } else if (order.delivery_status === 'PICKED_UP') {
-    actions.push({ label: 'In consegna al cliente', nextStatus: 'OUT_FOR_DELIVERY', color: 'bg-secondary-700 hover:bg-purple-700' });
+    actions.push({ label: 'In consegna al cliente', nextStatus: 'OUT_FOR_DELIVERY', color: 'bg-secondary-700 hover:bg-secondary-800' });
   } else if (order.delivery_status === 'OUT_FOR_DELIVERY') {
     actions.push({ label: 'Consegnato', nextStatus: 'DELIVERED', timestampField: 'delivered_at', color: 'bg-olive-600 hover:bg-olive-700' });
   }
@@ -320,7 +320,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           <button
             onClick={() => transition.mutate({ newStatus: 'OUT_FOR_DELIVERY' })}
             disabled={transition.isPending}
-            className="w-full flex items-center justify-center gap-2 bg-secondary-700 hover:bg-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+            className="w-full flex items-center justify-center gap-2 bg-secondary-700 hover:bg-secondary-800 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
           >
             <Bike size={20} strokeWidth={2.2} aria-hidden /> Sto andando dal cliente
           </button>

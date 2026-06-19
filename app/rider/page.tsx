@@ -206,11 +206,11 @@ export default function RiderDashboardPage() {
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-white border border-cream-300 rounded-xl px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-ink-500">Consegne oggi</p>
-            <p className="text-2xl font-extrabold text-ink-900">{today?.count ?? 0}</p>
+            <p className="text-2xl font-extrabold font-serif text-ink-900">{today?.count ?? 0}</p>
           </div>
           <div className="bg-white border border-cream-300 rounded-xl px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-ink-500">Guadagno oggi</p>
-            <p className="text-2xl font-extrabold text-olive-600">{formatPrice(today?.earned ?? 0)}</p>
+            <p className="text-2xl font-extrabold font-serif text-olive-600">{formatPrice(today?.earned ?? 0)}</p>
           </div>
         </div>
       </div>
@@ -253,8 +253,8 @@ export default function RiderDashboardPage() {
       </section>
 
       {!online ? (
-        <section className="bg-gradient-to-br from-olive-50 to-teal-50 border-2 border-olive-200 rounded-2xl p-8 text-center">
-          <p className="text-xl font-extrabold text-ink-900 mb-1">Sei offline</p>
+        <section className="bg-gradient-to-br from-olive-50 to-olive-100 border-2 border-olive-200 rounded-2xl p-8 text-center">
+          <p className="text-xl font-extrabold font-serif text-ink-900 mb-1">Sei offline</p>
           <p className="text-sm text-ink-600 mb-4">Vai online per vedere e accettare le consegne disponibili.</p>
           <button
             onClick={() => goOnline.mutate()}

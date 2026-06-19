@@ -97,17 +97,17 @@ export default function SellerCustomersPage() {
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-primary-700">{customers.length}</p>
+          <p className="text-2xl font-bold font-serif text-primary-700">{customers.length}</p>
           <p className="text-xs text-ink-500 uppercase tracking-wide">Totali</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-accent-600">
+          <p className="text-2xl font-bold font-serif text-accent-600">
             {customers.filter((c) => c.ordersCount >= 5).length}
           </p>
           <p className="text-xs text-ink-500 uppercase tracking-wide">VIP</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-olive-600">{formatPrice(avgOrderValue)}</p>
+          <p className="text-2xl font-bold font-serif text-olive-600">{formatPrice(avgOrderValue)}</p>
           <p className="text-xs text-ink-500 uppercase tracking-wide">Ordine medio</p>
         </div>
       </div>
@@ -167,7 +167,7 @@ export default function SellerCustomersPage() {
                     <td className="p-3">
                       <div className="flex flex-wrap gap-1">
                         {isVip && <span className="inline-flex items-center gap-1 bg-accent-100 text-accent-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Star size={12} className="text-accent-500" aria-hidden /> VIP</span>}
-                        {isInactive && <span className="inline-flex items-center gap-1 bg-rose-100 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Moon size={12} className="text-rose-500" aria-hidden /> Inattivo</span>}
+                        {isInactive && <span className="inline-flex items-center gap-1 bg-secondary-100 text-secondary-700 text-xs font-semibold px-2 py-0.5 rounded-full"><Moon size={12} className="text-secondary-500" aria-hidden /> Inattivo</span>}
                         {!isInactive && !isVip && <span className="bg-olive-100 text-olive-700 text-xs font-semibold px-2 py-0.5 rounded-full">Attivo</span>}
                       </div>
                     </td>

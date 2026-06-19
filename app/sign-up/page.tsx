@@ -21,7 +21,7 @@ const ROLES: { value: Role; Icon: LucideIcon; title: string; subtitle: string; c
 ];
 
 const colorClasses: Record<string, { border: string; bg: string; btn: string }> = {
-  indigo: { border: 'border-indigo-500 bg-primary-50', bg: 'bg-primary-50 border-primary-200 text-primary-800', btn: 'bg-primary-700 hover:bg-primary-800' },
+  indigo: { border: 'border-primary-500 bg-primary-50', bg: 'bg-primary-50 border-primary-200 text-primary-800', btn: 'bg-primary-700 hover:bg-primary-800' },
   red:    { border: 'border-secondary-600 bg-secondary-50', bg: 'bg-secondary-50 border-secondary-200 text-secondary-800',     btn: 'bg-secondary-600 hover:bg-secondary-700' },
   amber:  { border: 'border-accent-500 bg-accent-50',   bg: 'bg-accent-50 border-accent-200 text-accent-800',   btn: 'bg-accent-500 hover:bg-accent-600' },
 };

@@ -525,7 +525,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
           <div className="border-y border-surface-200 py-4 space-y-3">
             <div className="flex items-baseline gap-2 flex-wrap">
-              <span className="text-4xl font-extrabold text-ink-900">
+              <span className="text-4xl font-extrabold font-serif text-ink-900">
                 {formatPrice(price)}
                 {unitSuffix && <span className="text-base font-semibold text-ink-400">{unitSuffix}</span>}
               </span>
@@ -657,7 +657,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         {/* CTA STICKY */}
         <div className="lg:sticky lg:top-32 h-fit">
           <div className="bg-surface-0 border border-surface-200 rounded-xl p-5 shadow-card space-y-3">
-            <div className="text-2xl font-extrabold text-ink-900">{formatPrice(price)}</div>
+            <div className="text-2xl font-extrabold font-serif text-ink-900">{formatPrice(price)}</div>
             {freeShipping && (
               <Badge variant="free" icon={Bike}>Spedizione gratuita</Badge>
             )}
@@ -748,7 +748,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         {reviews.length > 0 && (
           <div className="bg-white border border-cream-200 rounded-xl p-5 grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="text-center sm:border-r sm:border-cream-200">
-              <div className="text-5xl font-extrabold text-ink-900">{avgRating.toFixed(1)}</div>
+              <div className="text-5xl font-extrabold font-serif text-ink-900">{avgRating.toFixed(1)}</div>
               <div className="text-accent-500 text-lg leading-none mt-1">
                 {'★'.repeat(Math.round(avgRating))}
                 <span className="text-ink-300">{'★'.repeat(5 - Math.round(avgRating))}</span>

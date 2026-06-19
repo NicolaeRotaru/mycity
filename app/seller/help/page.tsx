@@ -77,7 +77,7 @@ export default function SellerHelpPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-3">
-        <Link href="/contact" className="bg-gradient-to-br from-primary-600 to-purple-600 text-white rounded-xl p-5 hover:shadow-lg transition-all">
+        <Link href="/contact" className="bg-gradient-to-br from-primary-600 to-secondary-600 text-white rounded-xl p-5 hover:shadow-lg transition-all">
           <div className="mb-2"><Mail size={24} className="text-white" aria-hidden /></div>
           <p className="font-bold">Contatta il team</p>
           <p className="text-xs text-primary-100 mt-1">Risposta entro 24h</p>

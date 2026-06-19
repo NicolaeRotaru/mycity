@@ -96,7 +96,7 @@ export default function SellerReviewsPage() {
           {/* Riepilogo + distribuzione */}
           <section className="bg-white border rounded-xl p-6 grid md:grid-cols-[200px_1fr] gap-6">
             <div className="text-center">
-              <div className="text-6xl font-extrabold text-ink-900">{stats.avg.toFixed(1)}</div>
+              <div className="text-6xl font-extrabold font-serif text-ink-900">{stats.avg.toFixed(1)}</div>
               <Stars rating={stats.avg} />
               <p className="text-sm text-ink-500 mt-1">{stats.count} recensioni</p>
             </div>

@@ -40,17 +40,17 @@ export default async function AboutPage() {
       <div className="grid md:grid-cols-3 gap-4 mb-12">
         <div className="bg-white border rounded-xl p-6 text-center">
           <Store className="mx-auto mb-2 text-primary-600" size={32} strokeWidth={2} aria-hidden />
-          <div className="text-2xl font-extrabold text-primary-700">100%</div>
+          <div className="text-2xl font-extrabold font-serif text-primary-700">100%</div>
           <div className="text-sm text-ink-600">Venditori locali</div>
         </div>
         <div className="bg-white border rounded-xl p-6 text-center">
           <Truck className="mx-auto mb-2 text-secondary-600" size={32} strokeWidth={2} aria-hidden />
-          <div className="text-2xl font-extrabold text-secondary-600">24-48h</div>
+          <div className="text-2xl font-extrabold font-serif text-secondary-600">24-48h</div>
           <div className="text-sm text-ink-600">Consegna</div>
         </div>
         <div className="bg-white border rounded-xl p-6 text-center">
           <Banknote className="mx-auto mb-2 text-secondary-600" size={32} strokeWidth={2} aria-hidden />
-          <div className="text-2xl font-extrabold text-secondary-600">0€</div>
+          <div className="text-2xl font-extrabold font-serif text-secondary-600">0€</div>
           <div className="text-sm text-ink-600">Commissioni mensili</div>
         </div>
       </div>

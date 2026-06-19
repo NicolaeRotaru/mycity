@@ -159,7 +159,7 @@ export default function SellerEarningsPage() {
               <div key={day} className="flex-1 flex flex-col items-center gap-1">
                 <div className="flex-1 w-full flex items-end">
                   <div
-                    className="w-full bg-gradient-to-t from-primary-500 to-purple-500 rounded-t"
+                    className="w-full bg-gradient-to-t from-primary-500 to-secondary-500 rounded-t"
                     style={{ height: `${Math.max(pct, 4)}%` }}
                     title={formatPrice(val)}
                   />
@@ -174,7 +174,7 @@ export default function SellerEarningsPage() {
       </section>
 
       {/* Stato bonifici (reale) */}
-      <section className="bg-gradient-to-br from-olive-50 to-teal-50 border border-olive-200 rounded-xl p-5">
+      <section className="bg-gradient-to-br from-olive-50 to-olive-100 border border-olive-200 rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h2 className="font-bold text-olive-900 mb-1 flex items-center gap-2"><Landmark size={20} className="text-olive-600" aria-hidden /> Bonifici</h2>
@@ -267,7 +267,7 @@ function Stat({
   return (
     <div className={`${palette.bg} ${palette.border} border-2 ${highlight ? 'ring-2 ring-offset-2 ring-olive-300' : ''} rounded-xl p-5`}>
       <p className="text-xs uppercase tracking-wide font-bold text-ink-500">{label}</p>
-      <p className={`text-3xl font-extrabold ${palette.text} mt-2`}>{value}</p>
+      <p className={`text-3xl font-extrabold font-serif ${palette.text} mt-2`}>{value}</p>
       {hint && <p className="text-xs text-ink-500 mt-1">{hint}</p>}
     </div>
   );
