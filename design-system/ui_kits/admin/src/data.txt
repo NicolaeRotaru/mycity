@@ -1,0 +1,205 @@
+// MyCity Admin — demo data (plain globals; loaded before app.babel).
+window.AD_ADMIN = { name: 'Founder', initials: 'FA', role: 'Amministratore' };
+
+window.AD_TODAY = {
+  ordersToday: 47, gmvToday: 1284.5, deliveredToday: 38, signupsToday: 12,
+  ordersNew: 6, sellersPending: 3, disputesOpen: 2, sosActive: 1, ordersProblem: 2,
+};
+
+window.AD_TOTALS = {
+  users: 2148, buyers: 1894, sellers: 142, riders: 98, admins: 4,
+  orders: 8640, ordersRecent: 412, delivered: 7980, revenue: 184320.0,
+  products: 1240, productsAvailable: 1118,
+};
+
+window.AD_STATUS_BREAKDOWN = [
+  { s: 'NEW', n: 6 }, { s: 'ACCEPTED', n: 9 }, { s: 'READY', n: 4 }, { s: 'ASSIGNED', n: 7 },
+  { s: 'PICKED_UP', n: 5 }, { s: 'OUT_FOR_DELIVERY', n: 12 }, { s: 'DELIVERED', n: 7980 }, { s: 'CANCELED', n: 88 },
+];
+
+window.AD_RECENT_ORDERS = [
+  { id: 'PCA1F3', cust: 'Lucia Bianchi', store: 'Salumeria Verdi', status: 'OUT_FOR_DELIVERY', total: 27.4, when: '10:24' },
+  { id: 'PCB2K9', cust: 'Marco Rossi', store: 'Pasta Fresca Anita', status: 'ACCEPTED', total: 23.0, when: '10:11' },
+  { id: 'PCC7M2', cust: 'Anna Conti', store: 'Forno Borgo', status: 'NEW', total: 17.8, when: '09:58' },
+  { id: 'PCD4P8', cust: 'Davide Neri', store: 'Cantina Pace', status: 'DELIVERED', total: 35.6, when: '09:40' },
+  { id: 'PCE9R1', cust: 'Sara Galli', store: 'Salumeria Verdi', status: 'ASSIGNED', total: 14.2, when: '09:22' },
+  { id: 'PCF3T6', cust: 'Paolo Ferri', store: 'Bottega Emilia', status: 'DELIVERED', total: 42.3, when: '08:55' },
+  { id: 'PCG8W4', cust: 'Elena Vitali', store: 'Ceramiche del Po', status: 'CANCELED', total: 21.4, when: '08:30' },
+];
+
+window.AD_USERS = [
+  { name: 'Lucia Bianchi', email: 'lucia.b@email.it', role: 'buyer', orders: 14, joined: '12 gen 2026', status: 'active' },
+  { name: 'Salumeria Verdi', email: 'verdi@negozio.it', role: 'seller', orders: 214, joined: '3 mar 2024', status: 'active' },
+  { name: 'Giulia Ferrari', email: 'giulia.f@email.it', role: 'rider', orders: 312, joined: '8 set 2025', status: 'active' },
+  { name: 'Pasta Fresca Anita', email: 'anita@negozio.it', role: 'seller', orders: 176, joined: '14 giu 2025', status: 'pending' },
+  { name: 'Marco Rossi', email: 'marco.r@email.it', role: 'buyer', orders: 9, joined: '2 feb 2026', status: 'active' },
+  { name: 'Forno Borgo', email: 'forno@negozio.it', role: 'seller', orders: 156, joined: '20 nov 2025', status: 'pending' },
+  { name: 'Davide Neri', email: 'davide.n@email.it', role: 'rider', orders: 88, joined: '1 dic 2025', status: 'suspended' },
+  { name: 'Anna Conti', email: 'anna.c@email.it', role: 'buyer', orders: 5, joined: '18 mag 2026', status: 'active' },
+];
+
+window.AD_DISPUTES = [
+  { id: 'd1', order: 'PCH1Z7', opener: 'Luca Moretti', against: 'Bottega Emilia', reason: 'Non ricevuto', status: 'open', when: '2 ore fa',
+    desc: 'Ordine segnato come consegnato ma non ho ricevuto nulla. Ho aspettato tutto il pomeriggio a casa.' },
+  { id: 'd2', order: 'PCK22A', opener: 'Sara Galli', against: 'Cantina Pace', reason: 'Danneggiato', status: 'open', when: 'Ieri',
+    desc: 'Due bottiglie su sei sono arrivate rotte, imballaggio insufficiente. Allego foto.' },
+  { id: 'd3', order: 'PCK19B', opener: 'Marco Rossi', against: 'Salumeria Verdi', reason: 'Non come descritto', status: 'under_review', when: '2 giorni fa',
+    desc: 'La coppa è diversa dalla foto, molto più grassa del previsto.' },
+  { id: 'd4', order: 'PCJ02C', opener: 'Elena Vitali', against: 'Forno Borgo', reason: 'Prodotto sbagliato', status: 'resolved_buyer', when: '5 giorni fa',
+    desc: 'Ho ricevuto pane integrale invece del pane bianco ordinato.', resolution: 'Rimborso totale al cliente, errore confermato dal negozio.', refund: 4.5 },
+];
+
+window.AD_COD = [
+  { rider: 'Giulia Ferrari', date: 'Oggi', orders: 8, toRemit: 187.4 },
+  { rider: 'Davide Neri', date: 'Oggi', orders: 5, toRemit: 112.0 },
+  { rider: 'Giulia Ferrari', date: 'Ieri', orders: 11, toRemit: 243.6 },
+  { rider: 'Luca Verdi', date: 'Ieri', orders: 6, toRemit: 134.2 },
+];
+
+window.AD_SELLERS_PENDING = [
+  { name: 'Pasta Fresca Anita', cat: 'Gastronomia', area: 'Borgo', when: '2 giorni fa' },
+  { name: 'Forno Borgo', cat: 'Alimentari', area: 'Borgo', when: '4 giorni fa' },
+  { name: 'Fiori di Piazza', cat: 'Fiori & Piante', area: 'Centro', when: '6 giorni fa' },
+];
+
+// ── Crescita / marketing ──
+window.AD_FUNNEL = { signups: 412, firstOrder7d: 138, firstOrderEver: 196, multiBuyer: 92,
+  cohorts: [
+    { month: 'mar 26', size: 96, m1: 41, m2: 28, m3: 22 },
+    { month: 'apr 26', size: 124, m1: 58, m2: 34, m3: 0 },
+    { month: 'mag 26', size: 108, m1: 47, m2: 0, m3: 0 },
+    { month: 'giu 26', size: 84, m1: 0, m2: 0, m3: 0 },
+  ] };
+
+window.AD_COUPONS = [
+  { code: 'BENVENUTO5', type: 'FIXED', value: 5, min: 15, uses: 312, max: null, firstOnly: true, active: true },
+  { code: 'ESTATE25', type: 'PERCENT', value: 25, min: 30, uses: 47, max: 200, firstOnly: false, active: true },
+  { code: 'SPEDIZIONE', type: 'FREE_SHIPPING', value: 0, min: 20, uses: 188, max: null, firstOnly: false, active: true },
+  { code: 'PRIMAVERA10', type: 'PERCENT', value: 10, min: 0, uses: 520, max: 500, firstOnly: false, active: false },
+];
+
+window.AD_SPONSORED = [
+  { store: 'Salumeria Verdi', product: 'Coppa Piacentina DOP', slot: 'Home · in evidenza', cpc: 0.35, clicks: 1240, spend: 434.0, active: true },
+  { store: 'Cantina Pace', product: 'Gutturnio DOC 2021', slot: 'Ricerca · top', cpc: 0.28, clicks: 680, spend: 190.4, active: true },
+  { store: 'Forno Borgo', product: 'Pane a lievito madre', slot: 'Categoria · Alimentari', cpc: 0.22, clicks: 410, spend: 90.2, active: false },
+];
+
+window.AD_DROPS = [
+  { day: 'Oggi', product: 'Tortelli con la coda', store: 'Bottega Emilia', discount: 30, slotsLeft: 12, status: 'live' },
+  { day: 'Domani', product: 'Grana Padano 18 mesi', store: 'Salumeria Verdi', discount: 20, slotsLeft: 30, status: 'scheduled' },
+  { day: 'Gio 19', product: 'Set tazze ceramica', store: 'Ceramiche del Po', discount: 25, slotsLeft: 15, status: 'scheduled' },
+];
+
+window.AD_SHOP_MONTH = { current: 'Pasta Fresca Anita', area: 'Borgo', rating: 5.0, orders: 176,
+  candidates: [
+    { name: 'Pasta Fresca Anita', score: 98, rating: 5.0, orders: 176 },
+    { name: 'Salumeria Verdi', score: 94, rating: 4.9, orders: 214 },
+    { name: 'Forno Borgo', score: 89, rating: 4.8, orders: 156 },
+  ] };
+
+window.AD_EVENTS = [
+  { name: 'Mercato di Natale', when: '8–24 dic 2026', stores: 18, status: 'scheduled' },
+  { name: 'Sagra del Salume', when: '12–14 set 2026', stores: 9, status: 'scheduled' },
+  { name: 'Festa di primavera', when: '20–22 mar 2026', stores: 14, status: 'ended' },
+];
+
+// ── Contenuti / CMS ──
+window.AD_HOME_SECTIONS = [
+  { type: 'hero', label: 'Hero', desc: 'Titolo, sottotitolo e CTA principali', visible: true, icon: 'megaphone',
+    fields: [
+      { key: 'title', label: 'Titolo', kind: 'text', value: 'I negozi veri di Piacenza, ora a casa tua.' },
+      { key: 'subtitle', label: 'Sottotitolo', kind: 'textarea', value: 'Ordina dai commercianti della tua via e paghi alla consegna.' },
+      { key: 'cta', label: 'Testo pulsante', kind: 'text', value: 'Inizia a esplorare' },
+    ] },
+  { type: 'categories', label: 'Categorie', desc: 'Griglia delle categorie', visible: true, icon: 'layout-grid',
+    fields: [
+      { key: 'title', label: 'Titolo sezione', kind: 'text', value: 'Sfoglia per categoria' },
+      { key: 'columns', label: 'Colonne', kind: 'select', value: '4', options: ['3', '4', '5', '6'] },
+    ] },
+  { type: 'rail', label: 'Prodotti che vanno forte', desc: 'Carosello prodotti', visible: true, icon: 'flame',
+    fields: [
+      { key: 'title', label: 'Titolo', kind: 'text', value: 'Prodotti che vanno forte' },
+      { key: 'source', label: 'Fonte prodotti', kind: 'select', value: 'I più amati', options: ['I più amati', 'Novità', 'In offerta', 'Manuale'] },
+      { key: 'count', label: 'Quanti mostrarne', kind: 'select', value: '4', options: ['4', '6', '8'] },
+    ] },
+  { type: 'stores', label: 'Negozi in evidenza', desc: 'Negozi selezionati', visible: true, icon: 'store',
+    fields: [
+      { key: 'title', label: 'Titolo', kind: 'text', value: 'Negozi in evidenza' },
+      { key: 'count', label: 'Quanti negozi', kind: 'select', value: '4', options: ['3', '4', '6'] },
+    ] },
+  { type: 'trust', label: 'Fascia fiducia', desc: 'Paga alla consegna · 24–48h · reso', visible: true, icon: 'shield-check',
+    fields: [
+      { key: 'p1', label: 'Punto 1', kind: 'text', value: 'Paghi alla consegna' },
+      { key: 'p2', label: 'Punto 2', kind: 'text', value: 'Consegna in 24–48h' },
+      { key: 'p3', label: 'Punto 3', kind: 'text', value: 'Reso entro 14 giorni' },
+    ] },
+  { type: 'rail2', label: 'Novità dai negozi', desc: 'Secondo carosello', visible: false, icon: 'sparkles',
+    fields: [
+      { key: 'title', label: 'Titolo', kind: 'text', value: 'Novità dai negozi' },
+      { key: 'count', label: 'Quanti mostrarne', kind: 'select', value: '4', options: ['4', '6', '8'] },
+    ] },
+  { type: 'seller-cta', label: 'CTA venditori', desc: 'Diventa venditore', visible: true, icon: 'badge-check',
+    fields: [
+      { key: 'title', label: 'Titolo', kind: 'text', value: 'Hai un negozio a Piacenza?' },
+      { key: 'cta', label: 'Testo pulsante', kind: 'text', value: 'Diventa venditore' },
+    ] },
+];
+// Tipi di sezione disponibili da aggiungere (palette del builder).
+window.AD_SECTION_TYPES = [
+  { type: 'rail', label: 'Carosello prodotti', icon: 'flame' },
+  { type: 'stores', label: 'Negozi in evidenza', icon: 'store' },
+  { type: 'banner', label: 'Banner promo', icon: 'image' },
+  { type: 'gallery', label: 'Galleria immagini', icon: 'images' },
+  { type: 'text', label: 'Blocco di testo', icon: 'type' },
+  { type: 'trust', label: 'Fascia fiducia', icon: 'shield-check' },
+];
+
+window.AD_PAGES = [
+  { title: 'Chi siamo', slug: '/about', updated: '12 giu 2026', status: 'published' },
+  { title: 'Come funziona', slug: '/how-it-works', updated: '12 giu 2026', status: 'published' },
+  { title: 'FAQ', slug: '/faq', updated: '10 giu 2026', status: 'published' },
+  { title: 'Termini e condizioni', slug: '/terms', updated: '1 giu 2026', status: 'published' },
+  { title: 'Privacy', slug: '/privacy', updated: '1 giu 2026', status: 'published' },
+  { title: 'Lavora con noi', slug: '/careers', updated: '—', status: 'draft' },
+];
+
+window.AD_CATEGORIES = [
+  { label: 'Alimentari', slug: 'alimentari', products: 312, visible: true },
+  { label: 'Gastronomia', slug: 'gastronomia', products: 248, visible: true },
+  { label: 'Vini & Cantina', slug: 'cantina', products: 156, visible: true },
+  { label: 'Casa & Cucina', slug: 'casa', products: 134, visible: true },
+  { label: 'Abbigliamento', slug: 'abbigliamento', products: 98, visible: true },
+  { label: 'Fiori & Piante', slug: 'fiori', products: 42, visible: false },
+];
+
+window.AD_BRANDING = { primary: '#C0492C', accent: '#E8A33D', name: 'MyCity Piacenza', tagline: 'I negozi veri di Piacenza, ora a casa tua.' };
+
+// ── Moderazione ──
+window.AD_MOD_PRODUCTS = [
+  { name: 'Integratore "miracoloso"', store: 'Erboristeria X', reason: 'Claim salutistici non consentiti', sev: 'high', kw: 'marmalade', lock: 7 },
+  { name: 'Coltello da cucina 25cm', store: 'Casalinghi Po', reason: 'Categoria sensibile · verifica', sev: 'low', kw: 'pottery', lock: 3 },
+  { name: 'Vino sfuso senza etichetta', store: 'Cantina Y', reason: 'Etichettatura alcolici incompleta', sev: 'high', kw: 'wine', lock: 15 },
+];
+
+// ── Sistema ──
+window.AD_ACTIVITY = [
+  { who: 'Giulia Ferrari', action: 'ha consegnato l’ordine', target: '#PCF3T6', when: '2 min fa', icon: 'bike', tone: 'olive' },
+  { who: 'Salumeria Verdi', action: 'ha pubblicato un prodotto', target: 'Pancetta 250g', when: '14 min fa', icon: 'package-plus', tone: 'primary' },
+  { who: 'Lucia Bianchi', action: 'ha aperto un reclamo', target: '#PCH1Z7', when: '1 ora fa', icon: 'gavel', tone: 'secondary' },
+  { who: 'Forno Borgo', action: 'si è registrato come venditore', target: '', when: '4 ore fa', icon: 'store', tone: 'accent' },
+  { who: 'Admin', action: 'ha confermato la rimessa COD di', target: 'Giulia Ferrari', when: 'Ieri', icon: 'banknote', tone: 'olive' },
+];
+window.AD_AUDIT = [
+  { actor: 'founder@mycity.it', event: 'coupon.create', detail: 'ESTATE25', ip: '93.40.x.x', when: 'Oggi 09:12' },
+  { actor: 'founder@mycity.it', event: 'dispute.resolve', detail: '#PCJ02C → buyer', ip: '93.40.x.x', when: 'Ieri 16:40' },
+  { actor: 'ops@mycity.it', event: 'seller.approve', detail: 'Pasta Fresca Anita', ip: '93.40.x.x', when: 'Ieri 11:05' },
+  { actor: 'founder@mycity.it', event: 'home.publish', detail: '7 sezioni', ip: '93.40.x.x', when: '2 giorni fa' },
+];
+window.AD_SUPPORT = [
+  { user: 'Lucia Bianchi', role: 'buyer', last: 'Il rider non trova il citofono…', when: '3 min fa', unread: 2,
+    msgs: [{ me: false, t: 'Buongiorno, il rider non trova il mio citofono.' }, { me: false, t: 'Il rider non trova il citofono…' }] },
+  { user: 'Salumeria Verdi', role: 'seller', last: 'Come imposto la spedizione gratis?', when: '20 min fa', unread: 0,
+    msgs: [{ me: false, t: 'Come imposto la spedizione gratis?' }, { me: true, t: 'Ciao! Vai su Prodotti → modifica → attiva “Spedizione gratuita”.' }] },
+  { user: 'Giulia Ferrari', role: 'rider', last: 'Grazie, risolto!', when: '1 ora fa', unread: 0,
+    msgs: [{ me: false, t: 'Non riesco a segnare consegnato.' }, { me: true, t: 'Prova a riaprire l’app, dovrebbe sbloccarsi.' }, { me: false, t: 'Grazie, risolto!' }] },
+];

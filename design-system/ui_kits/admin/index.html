@@ -1,0 +1,97 @@
+<!-- @dsCard group="MyCity Admin" viewport="1280x900" name="Admin · cockpit completo (21 schermate)" subtitle="Founder console — today, overview, ordini, utenti, reclami, moderazione, COD, SOS, funnel, coupon, sponsorizzati, drops, negozio del mese, eventi, home builder, pagine, categorie, branding, attività, audit, supporto" -->
+<!-- @startingPoint section="MyCity" subtitle="Admin console completa — cockpit, crescita, contenuti/CMS, trust & safety, sistema" viewport="1280x900" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyCity Admin — Console amministratore</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  body { margin: 0; background: var(--cream-100); }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb { background: var(--cream-400); border-radius: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  #mc-app table { border-collapse: collapse; }
+  #mc-app tbody tr { transition: background-color var(--dur-fast) var(--ease-out); }
+  #mc-app tbody tr:hover { background: var(--cream-50); }
+  #mc-app td, #mc-app th { font-variant-numeric: tabular-nums; }
+  #mc-app main > * { animation: mc-fade-in var(--dur-medium) var(--ease-out); }
+  #mc-app input:focus, #mc-app select:focus, #mc-app textarea:focus { border-color: var(--primary-400); box-shadow: 0 0 0 3px rgba(228,122,90,.18); }
+  #mc-app button { transition: transform var(--dur-fast) var(--ease-out); }
+  #mc-app button:active { transform: translateY(1px); }
+
+  /* ════════════ RESPONSIVE — tablet & mobile ════════════ */
+  @media (max-width: 1024px) {
+    #mc-app > div[style*="248px 1fr"] { grid-template-columns: 1fr !important; }
+    /* sidebar → drawer off-canvas (hamburger), come il seller */
+    #mc-app aside[style*="height: 100vh"][style*="position: sticky"] {
+      position: fixed !important; left: 0 !important; top: 0 !important; height: 100vh !important;
+      width: 286px !important; max-width: 84vw !important; z-index: var(--z-modal) !important;
+      transform: translateX(-100%); transition: transform .28s var(--ease-out-quint);
+    }
+    #mc-app aside.mc-nav-open[style*="height: 100vh"][style*="position: sticky"] { transform: translateX(0) !important; box-shadow: 0 0 50px rgba(0,0,0,.45) !important; }
+    #mc-app aside[style*="height: 100vh"] nav { overflow-x: hidden !important; }
+    .mc-admin-topbar { display: flex !important; }
+    .mc-hamburger { display: inline-flex !important; }
+    .mc-drawer-close { display: inline-flex !important; }
+    .mc-nav-backdrop { display: block !important; }
+    #mc-app .mc-drawer-only { display: flex !important; }
+    /* popover notifiche: ancorato a destra, larghezza contenuta */
+    .mc-notif-pop { position: fixed !important; top: 56px !important; right: 10px !important; left: auto !important; width: 320px !important; max-width: calc(100vw - 20px) !important; }
+    #mc-app [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    #mc-app [style*="repeat(3, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    #mc-app [style*="1fr 320px"], #mc-app [style*="1fr 360px"], #mc-app [style*="1fr 380px"],
+    #mc-app [style*="300px 1fr"], #mc-app [style*="260px 1fr"], #mc-app [style*="240px 1fr"], #mc-app [style*="220px 1fr"],
+    #mc-app [style*="1.4fr 1fr"], #mc-app [style*="1.3fr 1fr"], #mc-app [style*="1.2fr 1fr"],
+    #mc-app [style*="1.1fr 1fr"] { grid-template-columns: 1fr !important; }
+    #mc-app aside[style*="position: sticky"] { position: static !important; top: auto !important; }
+    #mc-app table { display: block; overflow-x: auto; white-space: nowrap; }
+    #mc-app table thead th:first-child, #mc-app table tbody td:first-child { position: sticky; left: 0; background: var(--surface-0); z-index: 1; }
+    #mc-app table thead th:first-child { background: var(--cream-50); }
+  }
+  @media (max-width: 640px) {
+    #mc-app [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    #mc-app [style*="repeat(3, 1fr)"] { grid-template-columns: 1fr !important; }
+    #mc-app [style*="repeat(2, 1fr)"] { grid-template-columns: 1fr !important; }
+    #mc-app [style*="1fr 1fr"] { grid-template-columns: 1fr !important; }
+    #mc-app main { padding: 16px !important; }
+    #mc-app h1 { font-size: clamp(22px, 6vw, 30px) !important; }
+    /* ── liste/tabelle → card leggibili (niente più scroll orizzontale) ── */
+    #mc-app table { display: block !important; overflow: visible !important; white-space: normal !important; }
+    #mc-app thead { display: none !important; }
+    #mc-app tbody { display: block !important; }
+    #mc-app tbody tr { display: block !important; border: 1px solid var(--cream-200) !important; border-radius: var(--radius-lg) !important; background: var(--surface-0) !important; margin: 0 0 10px !important; padding: 6px 14px !important; box-shadow: var(--shadow-warm-sm) !important; }
+    #mc-app tbody tr:hover { background: var(--surface-0) !important; }
+    #mc-app tbody td { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 12px !important; text-align: right !important; white-space: normal !important; padding: 8px 0 !important; border: 0 !important; border-bottom: 1px solid var(--cream-100) !important; position: static !important; }
+    #mc-app tbody td:last-child { border-bottom: 0 !important; }
+    /* prima cella = titolo della card */
+    #mc-app tbody td:first-child { font-weight: 700 !important; font-size: 15px !important; color: var(--ink-900) !important; justify-content: flex-start !important; text-align: left !important; padding-top: 4px !important; }
+    /* etichetta colonna davanti a ogni valore */
+    #mc-app tbody td[data-label]:not(:first-child)::before { content: attr(data-label); font-size: 12px; font-weight: 600; color: var(--ink-400); text-align: left; margin-right: auto; }
+    /* la matrice cohort resta una tabella compatta scrollabile (non a card) */
+    #mc-app table.mc-cohort { display: block !important; overflow-x: auto !important; white-space: nowrap !important; }
+    #mc-app table.mc-cohort thead { display: table-header-group !important; }
+    #mc-app table.mc-cohort tbody { display: table-row-group !important; }
+    #mc-app table.mc-cohort tr { display: table-row !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; }
+    #mc-app table.mc-cohort td { display: table-cell !important; border: 0 !important; text-align: right !important; }
+    #mc-app table.mc-cohort td:first-child { font-weight: 600 !important; font-size: 12px !important; }
+    #mc-app table.mc-cohort td::before { content: none !important; }
+  }
+</style>
+<link rel="stylesheet" href="../_mobile.css">
+<link rel="stylesheet" href="../_a11y.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>window.__buyerMounted = window.__sellerMounted = window.__riderMounted = 1;</script>
+  <script src="../../_ds_bundle.js"></script>
+  <script>window.__MC_ALLOW_MOUNT = 1;</script>
+  <script type="text/babel" src="src/data.txt"></script>
+  <script type="text/babel" src="app.babel"></script>
+</body>
+</html>

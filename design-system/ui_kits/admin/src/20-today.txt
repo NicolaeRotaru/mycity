@@ -1,0 +1,89 @@
+// ===== Today (founder cockpit) =====
+function Today({ onNav }) {
+  const t = window.AD_TODAY;
+  const hasAlert = t.sosActive > 0 || t.ordersProblem > 0 || t.disputesOpen > 0;
+  const dateStr = 'Martedì 17 giugno 2026';
+  return (
+    <div>
+      <PageTitle eyebrow="Cockpit" title="Today" sub={`${dateStr} · aggiornamento automatico ogni 30s`} />
+
+      {hasAlert && (
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', background: 'var(--secondary-50)', border: '2px solid var(--secondary-200)', borderRadius: 'var(--radius-xl)', padding: '16px 18px', marginBottom: '22px' }}>
+          <Lucide name="alert-triangle" size={24} color="var(--secondary-600)" stroke={2.2} />
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontWeight: 800, color: 'var(--secondary-700)', fontSize: '15px' }}>Richiede attenzione immediata</p>
+            <ul style={{ margin: '6px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {t.sosActive > 0 && <AlertRow n={t.sosActive} text="SOS rider attivo" cta="Apri" onClick={() => onNav('sos')} />}
+              {t.ordersProblem > 0 && <AlertRow n={t.ordersProblem} text="ordini in problema (NEW/ACCEPTED da +4h)" cta="Verifica" onClick={() => onNav('orders')} />}
+              {t.disputesOpen > 0 && <AlertRow n={t.disputesOpen} text="reclami aperti" cta="Risolvi" onClick={() => onNav('disputes')} />}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      <SectionLabel icon="trending-up" color="var(--primary-700)">Oggi</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}>
+        <AdKpi icon="shopping-bag" tone="primary" label="Ordini oggi" value={t.ordersToday} onClick={() => onNav('orders')} />
+        <AdKpi icon="euro" tone="olive" label="GMV oggi" value={fmt(t.gmvToday)} />
+        <AdKpi icon="check-circle-2" tone="olive" label="Consegnati" value={t.deliveredToday} />
+        <AdKpi icon="user-plus" tone="accent" label="Nuovi signup" value={t.signupsToday} onClick={() => onNav('users')} />
+      </div>
+
+      <SectionLabel icon="clock" color="var(--ink-500)">In attesa</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}>
+        <AdKpi icon="clock" tone="primary" label="Ordini NEW" value={t.ordersNew} onClick={() => onNav('orders')} />
+        <AdKpi icon="user-check" tone="accent" label="Seller pending" value={t.sellersPending} onClick={() => onNav('users')} />
+        <AdKpi icon="gavel" tone="secondary" label="Reclami aperti" value={t.disputesOpen} alert onClick={() => onNav('disputes')} />
+        <AdKpi icon="siren" tone="secondary" label="SOS attivi" value={t.sosActive} alert onClick={() => onNav('sos')} />
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <SectionLabel icon="receipt" color="var(--primary-700)" noMargin>Ultimi ordini</SectionLabel>
+        <a onClick={() => onNav('orders')} style={{ cursor: 'pointer', fontSize: '13px', color: 'var(--primary-700)', fontWeight: 600 }}>vedi tutti →</a>
+      </div>
+      <OrdersTable rows={window.AD_RECENT_ORDERS} />
+    </div>
+  );
+}
+
+function AlertRow({ n, text, cta, onClick }) {
+  return <li style={{ fontSize: '14px', color: 'var(--secondary-800)' }}><strong>{n}</strong> {text} — <a onClick={onClick} style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--secondary-700)', textDecoration: 'underline' }}>{cta}</a></li>;
+}
+function SectionLabel({ icon, color, children, noMargin }) {
+  return <h2 style={{ margin: noMargin ? 0 : '0 0 12px', fontSize: '14px', fontWeight: 700, color: 'var(--ink-800)', display: 'inline-flex', alignItems: 'center', gap: '8px', textTransform: 'uppercase', letterSpacing: '0.03em' }}><Lucide name={icon} size={15} stroke={2.4} color={color} /> {children}</h2>;
+}
+function AdKpi({ icon, tone, label, value, alert, onClick }) {
+  const [bg, fg] = TINT[tone];
+  const [h, setH] = React.useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{ background: alert && value > 0 ? 'var(--secondary-50)' : 'var(--surface-0)', border: `2px solid ${alert && value > 0 ? 'var(--secondary-200)' : 'var(--cream-300)'}`, borderRadius: 'var(--radius-xl)', padding: '16px', cursor: onClick ? 'pointer' : 'default', boxShadow: h && onClick ? 'var(--shadow-warm)' : 'none', transition: 'box-shadow var(--dur-base)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <span style={{ width: '40px', height: '40px', borderRadius: 'var(--radius-md)', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={icon} size={20} stroke={2.2} color={fg} /></span>
+        {alert && value > 0 && <Lucide name="alert-circle" size={16} color="var(--secondary-600)" />}
+      </div>
+      <p style={{ margin: 0, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)', fontWeight: 700 }}>{label}</p>
+      <p style={{ margin: '4px 0 0', fontSize: '26px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1 }}>{value}</p>
+    </div>
+  );
+}
+function OrdersTable({ rows }) {
+  return (
+    <Card variant="bordered" padding="none">
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+        <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Ordine', 'Cliente', 'Negozio', 'Stato', 'Totale', 'Ora'].map((h, i) => <th key={h} style={{ textAlign: i >= 4 ? 'right' : 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+        <tbody>
+          {rows.map((o) => (
+            <tr key={o.id} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+              <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--primary-700)', fontWeight: 600 }}>#{o.id}</td>
+              <td data-label="Cliente" style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-800)' }}>{o.cust}</td>
+              <td data-label="Negozio" style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{o.store}</td>
+              <td data-label="Stato" style={{ padding: '11px 16px' }}><OrderStatusBadge status={o.status} size="sm" /></td>
+              <td data-label="Totale" style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(o.total)}</td>
+              <td data-label="Ora" style={{ padding: '11px 16px', textAlign: 'right', fontSize: '12px', color: 'var(--ink-400)' }}>{o.when}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}

@@ -1,0 +1,202 @@
+// ===== Earnings · Availability · Profile =====
+function Earnings() {
+  const [period, setPeriod] = React.useState('7d');
+  const periods = [['today', 'Oggi'], ['7d', '7 giorni'], ['30d', '30 giorni'], ['all', 'Tutto']];
+  const k = window.RD_KPI, e7 = window.RD_EARN_7D, max = Math.max(...e7);
+  const days = ['L', 'M', 'M', 'G', 'V', 'S', 'D'];
+  return (
+    <div style={{ paddingBottom: '20px' }}>
+      <ScreenHead title="Guadagni" sub="Tutto quello che hai incassato" />
+      <div style={{ display: 'flex', gap: '6px', padding: '0 16px 14px', overflowX: 'auto' }}>
+        {periods.map(([id, l]) => <button key={id} onClick={() => setPeriod(id)} style={{ flexShrink: 0, border: 0, background: period === id ? 'var(--accent-500)' : 'var(--surface-0)', color: period === id ? 'var(--ink-900)' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '7px 14px', borderRadius: '999px', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: period === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{l}</button>)}
+      </div>
+
+      {/* big number */}
+      <div style={{ margin: '0 16px 16px', borderRadius: 'var(--radius-2xl)', padding: '22px', background: 'linear-gradient(135deg, var(--accent-100), var(--cream-200))', border: '1px solid var(--accent-200)' }}>
+        <p style={{ margin: 0, fontSize: '11px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent-800)' }}>Hai guadagnato</p>
+        <p style={{ margin: '4px 0 0', fontSize: '46px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1 }}>{fmt(k.weekEarned)}</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '16px' }}>
+          <div style={{ background: 'rgba(255,255,255,.6)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}><p style={{ margin: 0, fontSize: '10px', textTransform: 'uppercase', color: 'var(--ink-500)', fontWeight: 700 }}>Consegne</p><p style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'var(--ink-900)' }}>{k.weekDeliveries}</p></div>
+          <div style={{ background: 'rgba(255,255,255,.6)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}><p style={{ margin: 0, fontSize: '10px', textTransform: 'uppercase', color: 'var(--ink-500)', fontWeight: 700 }}>Media/consegna</p><p style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'var(--ink-900)' }}>{fmt(k.avgPerDelivery)}</p></div>
+        </div>
+      </div>
+
+      {/* obiettivo + bonus giornaliero */}
+      <div style={{ margin: '0 16px 16px' }}>
+        <Card variant="bordered" padding="md">
+          {(() => {
+            const goal = 5, done = k.todayDeliveries, pct = Math.min(100, (done / goal) * 100), left = Math.max(0, goal - done), reached = done >= goal;
+            return (
+              <React.Fragment>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ width: '32px', height: '32px', borderRadius: '50%', background: reached ? 'var(--olive-100)' : 'var(--accent-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={reached ? 'check' : 'zap'} size={16} color={reached ? 'var(--olive-700)' : 'var(--accent-700)'} /></span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Bonus giornaliero</p>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{reached ? 'Obiettivo raggiunto: +2,00 € sbloccati!' : `Ancora ${left} ${left === 1 ? 'consegna' : 'consegne'} per +2,00 €`}</p>
+                  </div>
+                  <span style={{ fontWeight: 800, fontSize: '16px', color: reached ? 'var(--olive-700)' : 'var(--accent-800)' }}>+{fmt(2)}</span>
+                </div>
+                <div style={{ height: '8px', borderRadius: '999px', background: 'var(--cream-200)', overflow: 'hidden' }}>
+                  <div style={{ width: pct + '%', height: '100%', background: reached ? 'var(--olive-500)' : 'linear-gradient(90deg, var(--accent-400), var(--accent-600))', borderRadius: '999px', transition: 'width var(--dur-base)' }} />
+                </div>
+                <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--ink-400)', textAlign: 'right' }}>{done}/{goal} consegne oggi</p>
+              </React.Fragment>
+            );
+          })()}
+        </Card>
+      </div>
+
+      {/* proiezione settimanale */}
+      <div style={{ margin: '0 16px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--primary-50)', border: '1px solid var(--primary-200)', borderRadius: 'var(--radius-lg)', padding: '12px 14px' }}>
+          <Lucide name="trending-up" size={18} color="var(--primary-700)" />
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--primary-900)', lineHeight: 1.45 }}>Di questo passo chiudi la settimana intorno a <strong>{fmt(k.weekEarned / Math.max(1, k.weekDeliveries) * (k.weekDeliveries + 14))}</strong>. Resta online nelle ore di punta (19–20) per arrivarci prima.</p>
+        </div>
+      </div>
+
+      {/* chart */}
+      <div style={{ margin: '0 16px 16px' }}>
+        <Card variant="bordered" padding="md">
+          <p style={{ margin: '0 0 14px', fontWeight: 700, color: 'var(--ink-900)', fontSize: '14px' }}>Ultimi 7 giorni</p>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px', height: '110px' }}>
+            {e7.map((v, i) => (
+              <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', height: '100%' }}>
+                <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end' }}><div title={fmt(v)} style={{ width: '100%', height: `${(v / max) * 100}%`, minHeight: '5px', background: 'linear-gradient(180deg, var(--accent-400), var(--accent-600))', borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0' }} /></div>
+                <span style={{ fontSize: '10px', color: 'var(--ink-400)' }}>{days[i]}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {/* payouts info */}
+      <div style={{ margin: '0 16px' }}>
+        <Card variant="flat" padding="md" style={{ background: 'var(--olive-50)', border: '1px solid var(--olive-200)' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <Lucide name="landmark" size={18} color="var(--olive-700)" />
+            <div>
+              <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--olive-900)' }}>Compensi sul tuo IBAN</p>
+              <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--olive-800)', lineHeight: 1.5 }}>Le consegne con carta vengono versate ~24h dopo. I contanti li incassi direttamente alla consegna.</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* history */}
+      <div style={{ margin: '16px 16px 0' }}>
+        <SectionLabel>Storico consegne</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {window.RD_HISTORY.map((h) => (
+            <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '12px 14px' }}>
+              <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--olive-50)', color: 'var(--olive-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="check" size={17} stroke={2.4} color="var(--olive-700)" /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{h.store} → {h.cust}</p>
+                <p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>{h.when} · {h.pay === 'cod' ? 'Contanti' : 'Carta'}</p>
+              </div>
+              <span style={{ fontWeight: 700, color: 'var(--olive-700)' }}>{fmt(h.fee)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Availability({ online, onToggle }) {
+  const [zones, setZones] = React.useState(window.RD_ZONES);
+  const toggleZone = (i) => setZones((z) => z.map((x, j) => j === i ? { ...x, on: !x.on } : x));
+  return (
+    <div style={{ paddingBottom: '20px' }}>
+      <ScreenHead title="Turni & zone" sub="Quando e dove vuoi consegnare" />
+      <div style={{ margin: '0 16px 16px' }}>
+        <Card variant="bordered" padding="md">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>Stato</p><p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-500)' }}>{online ? 'Online · ricevi consegne' : 'Offline'}</p></div>
+            <button onClick={onToggle} style={{ border: 0, cursor: 'pointer', width: '52px', height: '30px', borderRadius: '999px', background: online ? 'var(--olive-500)' : 'var(--cream-300)', position: 'relative' }}><span style={{ position: 'absolute', top: '3px', left: online ? '25px' : '3px', width: '24px', height: '24px', borderRadius: '50%', background: '#fff', transition: 'left var(--dur-base)', boxShadow: 'var(--shadow-sm)' }} /></button>
+          </div>
+        </Card>
+      </div>
+      <div style={{ margin: '0 16px 16px' }}>
+        <SectionLabel>Zone preferite</SectionLabel>
+        <p style={{ margin: '-4px 0 12px', fontSize: '12px', color: 'var(--ink-500)' }}>Ricevi prima le consegne in queste zone.</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {zones.map((z, i) => (
+            <button key={z.name} onClick={() => toggleZone(i)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--surface-0)', border: `1.5px solid ${z.on ? 'var(--primary-400)' : 'var(--cream-300)'}`, borderRadius: 'var(--radius-lg)', padding: '12px 14px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)' }}><Lucide name="map-pin" size={15} color={z.on ? 'var(--primary-600)' : 'var(--ink-400)'} /> {z.name}</span>
+              <Lucide name={z.on ? 'check-circle-2' : 'circle'} size={20} color={z.on ? 'var(--primary-600)' : 'var(--ink-300)'} />
+            </button>
+          ))}
+        </div>
+      </div>
+      <div style={{ margin: '0 16px' }}>
+        <SectionLabel>Orari di punta</SectionLabel>
+        <Card variant="flat" padding="md" style={{ background: 'var(--primary-50)', border: '1px solid var(--primary-100)' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+            <Lucide name="trending-up" size={18} color="var(--primary-700)" />
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--primary-900)', lineHeight: 1.5 }}>Più consegne tra le <strong>12–14</strong> e le <strong>19–21</strong>. Tieni la disponibilità ON nei picchi per guadagnare di più.</p>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function Profile({ onNav }) {
+  const r = window.RD_RIDER;
+  const go = onNav || (() => {});
+  return (
+    <div style={{ paddingBottom: '20px' }}>
+      <div style={{ padding: '24px 20px', textAlign: 'center', background: 'linear-gradient(135deg, var(--primary-700), var(--secondary-700))', color: '#fff' }}>
+        <span style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'rgba(255,255,255,.18)', border: '3px solid rgba(255,255,255,.3)', color: '#fff', fontWeight: 800, fontSize: '26px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{r.initials}</span>
+        <p style={{ margin: '12px 0 0', fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800 }}>{r.name}</p>
+        <p style={{ margin: '2px 0 0', fontSize: '13px', opacity: 0.85, display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Lucide name="star" size={14} color="var(--accent-300)" /> {String(r.rating).replace('.', ',')} · {r.deliveries} consegne</p>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', padding: '16px' }}>
+        <InfoTile icon="bike" label="Veicolo" value={r.vehicle} />
+        <InfoTile icon="map-pin" label="Zona base" value={r.zone} />
+      </div>
+      <div style={{ padding: '16px 16px 0' }}>
+        <SectionLabel>Documenti & compliance</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[
+            { icon: 'id-card', label: 'Patente di guida', sub: 'Scade 03/2028', status: 'ok' },
+            { icon: 'shield-check', label: 'Assicurazione RC', sub: 'Scade 14/07/2026', status: 'soon' },
+            { icon: 'file-check', label: 'Documento identità', sub: 'Verificato', status: 'ok' },
+            { icon: 'hard-hat', label: 'Idoneità sanitaria', sub: 'Da caricare', status: 'missing' },
+          ].map((d) => {
+            const meta = { ok: ['var(--olive-50)', 'var(--olive-700)', 'OK', 'circle-check'], soon: ['var(--accent-50)', 'var(--accent-700)', 'In scadenza', 'clock'], missing: ['var(--secondary-50)', 'var(--secondary-600)', 'Mancante', 'circle-alert'] }[d.status];
+            return (
+              <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '12px 14px' }}>
+                <span style={{ width: '38px', height: '38px', borderRadius: '50%', background: meta[0], display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={d.icon} size={18} color={meta[1]} /></span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{d.label}</p>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{d.sub}</p>
+                </div>
+                {d.status === 'missing'
+                  ? <button style={{ border: 0, background: meta[1], color: '#fff', fontWeight: 700, fontSize: '12px', padding: '7px 12px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', flexShrink: 0 }}>Carica</button>
+                  : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 700, color: meta[1], flexShrink: 0 }}><Lucide name={meta[3]} size={14} color={meta[1]} /> {meta[2]}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        {[['star', 'Le mie recensioni', 'reviews'], ['history', 'Storico consegne', 'history'], ['user', 'Dati personali', null], ['landmark', 'IBAN e compensi', null], ['life-buoy', 'Aiuto', 'help'], ['log-out', 'Esci', null]].map(([ic, l, dest]) => (
+          <button key={l} onClick={() => dest && go(dest)} style={{ display: 'flex', alignItems: 'center', gap: '12px', border: 0, borderBottom: '1px solid var(--cream-200)', background: 'transparent', padding: '14px 4px', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '15px', color: l === 'Esci' ? 'var(--secondary-600)' : 'var(--ink-800)', textAlign: 'left', width: '100%' }}>
+            <Lucide name={ic} size={19} color={l === 'Esci' ? 'var(--secondary-600)' : 'var(--ink-500)'} /> <span style={{ flex: 1 }}>{l}</span>
+            {l !== 'Esci' && <Lucide name="chevron-right" size={17} color="var(--ink-300)" />}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+function InfoTile({ icon, label, value }) {
+  return (
+    <div style={{ background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '14px' }}>
+      <Lucide name={icon} size={18} color="var(--primary-600)" />
+      <p style={{ margin: '8px 0 0', fontSize: '11px', color: 'var(--ink-400)', textTransform: 'uppercase', fontWeight: 700 }}>{label}</p>
+      <p style={{ margin: '2px 0 0', fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)' }}>{value}</p>
+    </div>
+  );
+}

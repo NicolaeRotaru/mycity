@@ -16,7 +16,7 @@ const MC_FALLBACK_IMG = 'data:image/svg+xml;utf8,' + encodeURIComponent(
 );
 
 export function ProductCard({
-  name, price, image, storeName, discountPercent, stock,
+  name, price, image, storeName, discountPercent, stock, eta,
   isNew = false, freeShipping = false, onAdd, onFav, favorite = false, href, style,
 }) {
   const [hover, setHover] = React.useState(false);
@@ -54,9 +54,15 @@ export function ProductCard({
           : <img src={MC_FALLBACK_IMG} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
         <button type="button" aria-label="Preferiti"
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); setFav((v) => !v); onFav?.(); }}
-          style={{ position: 'absolute', top: '8px', right: '8px', width: '28px', height: '28px', borderRadius: 'var(--radius-full)', border: 0, background: 'rgba(255,255,255,.95)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill={fav ? 'var(--secondary-500)' : 'none'} stroke={fav ? 'var(--secondary-500)' : 'var(--ink-400)'} strokeWidth="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.5 4.04 3 5.5l7 7Z"/></svg>
+          style={{ position: 'absolute', top: '6px', right: '6px', width: '36px', height: '36px', borderRadius: 'var(--radius-full)', border: 0, background: 'rgba(255,255,255,.95)', boxShadow: 'var(--shadow-sm)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill={fav ? 'var(--secondary-500)' : 'none'} stroke={fav ? 'var(--secondary-500)' : 'var(--ink-400)'} strokeWidth="2"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.5 4.04 3 5.5l7 7Z"/></svg>
         </button>
+        {eta && !outOfStock && (
+          <span style={{ position: 'absolute', left: '8px', bottom: '8px', display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(255,255,255,.95)', color: eta.today ? 'var(--olive-700)' : 'var(--ink-700)', fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-sm)', fontFamily: 'var(--font-sans)' }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={eta.today ? 'var(--olive-600)' : 'var(--ink-500)'} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 17h14M3 12h2l1-7h12l1 7h2M7 17a2 2 0 1 0 4 0M13 17a2 2 0 1 0 4 0"/></svg>
+            {eta.short === 'Oggi' ? 'Oggi' : eta.short === 'Domani' ? 'Domani' : '24–48h'}
+          </span>
+        )}
       </div>
       {/* body */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, padding: '10px' }}>
@@ -86,8 +92,8 @@ export function ProductCard({
           )}
           <button type="button" aria-label="Aggiungi al carrello" disabled={outOfStock}
             onClick={(e) => { e.preventDefault(); e.stopPropagation(); onAdd?.(); }}
-            style={{ marginLeft: 'auto', width: '28px', height: '28px', flexShrink: 0, borderRadius: 'var(--radius-md)', border: 0, background: outOfStock ? 'var(--cream-200)' : 'var(--primary-600)', color: outOfStock ? 'var(--ink-400)' : '#fff', cursor: outOfStock ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            style={{ marginLeft: 'auto', width: '44px', height: '44px', flexShrink: 0, borderRadius: 'var(--radius-md)', border: 0, background: outOfStock ? 'var(--cream-200)' : 'var(--primary-600)', color: outOfStock ? 'var(--ink-400)' : '#fff', cursor: outOfStock ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-sm)' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>
           </button>
         </div>
       </div>

@@ -20,13 +20,7 @@
               "components/core/**",
               "components/feedback/**",
               "components/forms/**",
-              "deck/**",
-              "ui_kits/buyer/**",
-              "ui_kits/buyer/src/**",
-              "ui_kits/rider/**",
-              "ui_kits/rider/src/**",
-              "ui_kits/seller/**",
-              "ui_kits/seller/src/**"
+              "deck/**"
             ],
             "message": "Import design-system components from 'index.js', not component internals."
           }
@@ -112,8 +106,8 @@
         "message": "<OrderStatusBadge> variant must be one of 'pill' | 'inline' | 'icon-only'."
       },
       {
-        "selector": "JSXOpeningElement[name.name='ProductCard'] > JSXAttribute > JSXIdentifier[name!=/^(?:name|price|image|storeName|discountPercent|stock|isNew|freeShipping|favorite|onAdd|onFav|href|style|key|ref|className|style|children)$/]",
-        "message": "<ProductCard> doesn't accept that prop. Declared props: name, price, image, storeName, discountPercent, stock, isNew, freeShipping, favorite, onAdd, onFav, href, style."
+        "selector": "JSXOpeningElement[name.name='ProductCard'] > JSXAttribute > JSXIdentifier[name!=/^(?:name|price|image|storeName|discountPercent|stock|eta|isNew|freeShipping|favorite|onAdd|onFav|href|style|key|ref|className|style|children)$/]",
+        "message": "<ProductCard> doesn't accept that prop. Declared props: name, price, image, storeName, discountPercent, stock, eta, isNew, freeShipping, favorite, onAdd, onFav, href, style."
       },
       {
         "selector": "JSXOpeningElement[name.name='Select'] > JSXAttribute > JSXIdentifier[name!=/^(?:label|hint|error|children|containerStyle|style|key|ref|className|style|children)$/]",

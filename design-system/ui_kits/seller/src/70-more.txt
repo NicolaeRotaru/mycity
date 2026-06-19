@@ -1,0 +1,206 @@
+// ===== Promotions · Reviews · Customers =====
+function NewPromoModal({ open, onClose, onToast }) {
+  const [type, setType] = React.useState('discount');
+  const [pct, setPct] = React.useState(15);
+  const [prod, setProd] = React.useState((window.SC_PRODUCTS[0] || {}).name || '');
+  const [from, setFrom] = React.useState('18:00');
+  const [to, setTo] = React.useState('20:00');
+  if (!open) return null;
+  const types = [
+    { id: 'discount', icon: 'tag', label: 'Sconto %', desc: 'Riduci il prezzo di un prodotto' },
+    { id: 'bundle', icon: 'package-plus', label: 'Bundle', desc: '2 prodotti a prezzo speciale' },
+    { id: 'happy', icon: 'clock', label: 'Happy hour', desc: 'Sconto in una fascia oraria' },
+  ];
+  const inp = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '14px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none' };
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', background: 'rgba(28,26,24,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '520px', maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-0)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-warm-xl)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--cream-200)' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)' }}>Nuova promozione</h2>
+          <button onClick={onClose} aria-label="Chiudi" style={{ border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex' }}><Lucide name="x" size={20} color="var(--ink-500)" /></button>
+        </div>
+        <div style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            {types.map((t) => (
+              <button key={t.id} onClick={() => setType(t.id)} style={{ textAlign: 'left', border: '1.5px solid ' + (type === t.id ? 'var(--primary-500)' : 'var(--cream-300)'), background: type === t.id ? 'var(--primary-50)' : 'var(--surface-0)', borderRadius: 'var(--radius-lg)', padding: '12px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                <Lucide name={t.icon} size={20} color={type === t.id ? 'var(--primary-700)' : 'var(--ink-500)'} />
+                <p style={{ margin: '8px 0 2px', fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>{t.label}</p>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)', lineHeight: 1.35 }}>{t.desc}</p>
+              </button>
+            ))}
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '5px' }}>Prodotto</label>
+            <select value={prod} onChange={(e) => setProd(e.target.value)} style={inp}>{window.SC_PRODUCTS.map((p) => <option key={p.name}>{p.name}</option>)}</select>
+          </div>
+          {type !== 'bundle' && (
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '5px' }}>Sconto · {pct}%</label>
+              <input type="range" min="5" max="50" step="5" value={pct} onChange={(e) => setPct(+e.target.value)} style={{ width: '100%', accentColor: 'var(--primary-600)' }} />
+            </div>
+          )}
+          {type === 'happy' && (
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ flex: 1 }}><label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '5px' }}>Dalle</label><input value={from} onChange={(e) => setFrom(e.target.value)} style={inp} /></div>
+              <div style={{ flex: 1 }}><label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '5px' }}>Alle</label><input value={to} onChange={(e) => setTo(e.target.value)} style={inp} /></div>
+            </div>
+          )}
+          <div style={{ background: 'var(--cream-50)', border: '1px solid var(--cream-200)', borderRadius: 'var(--radius-md)', padding: '12px 14px', fontSize: '13px', color: 'var(--ink-600)' }}>
+            <Lucide name="eye" size={14} color="var(--ink-400)" /> Anteprima: <strong style={{ color: 'var(--ink-900)' }}>{type === 'bundle' ? `Bundle su "${prod}"` : type === 'happy' ? `-${pct}% su "${prod}" dalle ${from} alle ${to}` : `-${pct}% su "${prod}"`}</strong>
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '16px 22px', borderTop: '1px solid var(--cream-200)' }}>
+          <Button variant="ghost" onClick={onClose}>Annulla</Button>
+          <Button variant="primary" icon="check" onClick={() => { onClose(); onToast && onToast('Promozione creata'); }}>Crea promozione</Button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+function Promotions({ onNew, onToast }) {
+  const promos = window.SC_PROMOS;
+  const [modal, setModal] = React.useState(false);
+  return (
+    <div>
+      <NewPromoModal open={modal} onClose={() => setModal(false)} onToast={onToast} />
+      <PageTitle eyebrow="Marketing" title="Promozioni" sub="Sconti e offerte a tempo per i tuoi prodotti"
+        action={<Button variant="primary" icon="plus" onClick={() => setModal(true)}>Nuova promo</Button>} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        {promos.map((p) => (
+          <Card key={p.id} variant="bordered" padding="lg">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              <span style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-md)', background: p.active ? 'var(--secondary-100)' : 'var(--surface-100)', color: p.active ? 'var(--secondary-600)' : 'var(--ink-400)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={p.type === 'shipping' ? 'truck' : 'tag'} size={22} stroke={2.2} color={p.active ? 'var(--secondary-600)' : 'var(--ink-400)'} /></span>
+              <div style={{ flex: 1, minWidth: '180px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)', fontSize: '15px' }}>{p.name}</p>
+                  {p.active ? <Badge variant="new">Attiva</Badge> : <span style={{ fontSize: '12px', color: 'var(--ink-400)', fontWeight: 600 }}>Terminata</span>}
+                </div>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>{p.product} · scade il {p.ends}</p>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <p style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'var(--secondary-600)' }}>{p.type === 'shipping' ? 'Sped. gratis' : `-${p.value}%`}</p>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)' }}>{p.used} utilizzi</p>
+              </div>
+              <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
+                <span style={{ position: 'relative', width: '40px', height: '23px', borderRadius: '999px', background: p.active ? 'var(--olive-500)' : 'var(--cream-400)', transition: 'background var(--dur-base)' }}>
+                  <span style={{ position: 'absolute', top: '2px', left: p.active ? '19px' : '2px', width: '19px', height: '19px', borderRadius: '50%', background: '#fff', transition: 'left var(--dur-base)', boxShadow: 'var(--shadow-sm)' }} />
+                </span>
+              </label>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReviewReply({ initial }) {
+  const [reply, setReply] = React.useState(initial || null);
+  const [editing, setEditing] = React.useState(false);
+  const [text, setText] = React.useState('');
+  if (reply && !editing) {
+    return (
+      <div style={{ background: 'var(--cream-50)', borderLeft: '3px solid var(--primary-400)', borderRadius: '0 var(--radius-md) var(--radius-md) 0', padding: '8px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: 'var(--primary-700)' }}>La tua risposta</p>
+          <button onClick={() => { setEditing(true); setText(reply); }} style={{ border: 0, background: 'transparent', color: 'var(--ink-400)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>Modifica</button>
+        </div>
+        <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-600)' }}>{reply}</p>
+      </div>
+    );
+  }
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Scrivi una risposta pubblica…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '9px 12px', fontSize: '13px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', resize: 'vertical', outline: 'none' }} />
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="primary" size="sm" icon="check" onClick={() => { if (text.trim()) { setReply(text.trim()); setEditing(false); } }}>Pubblica</Button>
+          <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Annulla</Button>
+        </div>
+      </div>
+    );
+  }
+  return <Button variant="ghost" size="sm" icon="reply" onClick={() => { setEditing(true); setText(''); }}>Rispondi</Button>;
+}
+function Reviews() {
+  const reviews = window.SC_REVIEWS;
+  const avg = window.SC_STORE.rating;
+  return (
+    <div>
+      <PageTitle eyebrow="Reputazione" title="Recensioni" sub="Reputazione e feedback dei clienti" />
+      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '24px', alignItems: 'start' }}>
+        <Card variant="flat" padding="lg">
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-serif)', fontSize: '46px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1 }}>{avg.toFixed(1).replace('.', ',')}</div>
+            <div style={{ margin: '8px 0' }}><Stars value={avg} size={18} /></div>
+            <div style={{ fontSize: '13px', color: 'var(--ink-500)' }}>{window.SC_STORE.reviews} recensioni</div>
+          </div>
+          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {[[5, 82], [4, 13], [3, 3], [2, 1], [1, 1]].map(([s, pct]) => (
+              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ink-500)' }}>
+                <span style={{ width: '8px' }}>{s}</span><Lucide name="star" size={11} color="var(--accent-500)" />
+                <span style={{ flex: 1, height: '6px', background: 'var(--cream-200)', borderRadius: '3px', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${pct}%`, background: 'var(--accent-500)' }} /></span>
+                <span style={{ width: '28px', textAlign: 'right' }}>{pct}%</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {reviews.map((r, i) => (
+            <Card key={i} variant="bordered" padding="md">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--cream-200)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px' }}>{initials(r.who)}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><strong style={{ fontSize: '14px', color: 'var(--ink-900)' }}>{r.who}</strong><Stars value={r.rating} size={13} /></div>
+                  <span style={{ fontSize: '12px', color: 'var(--ink-400)' }}>{r.when} · {r.product}</span>
+                </div>
+              </div>
+              <p style={{ margin: '0 0 10px', fontSize: '14px', lineHeight: 1.55, color: 'var(--ink-700)' }}>{r.text}</p>
+              <ReviewReply initial={r.reply} />
+            </Card>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Customers() {
+  const custs = window.SC_CUSTOMERS;
+  return (
+    <div>
+      <PageTitle eyebrow="Relazioni" title="Clienti" sub="Chi compra dal tuo negozio" />
+      <Card variant="bordered" padding="none">
+        <table className="mc-prod-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Cliente', 'Ordini', 'Speso', 'Ultimo'].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '12px 18px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {custs.map((c) => (
+              <tr key={c.name} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td style={{ padding: '12px 18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{c.initials}</span>
+                    <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)' }}>{c.name}</span>
+                  </div>
+                </td>
+                <td style={{ padding: '12px 18px', textAlign: 'right', color: 'var(--ink-700)' }}>{c.orders}</td>
+                <td style={{ padding: '12px 18px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(c.spent)}</td>
+                <td style={{ padding: '12px 18px', textAlign: 'right', color: 'var(--ink-500)', fontSize: '13px' }}>{c.last}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="mc-prod-cards" style={{ display: 'none', flexDirection: 'column' }}>
+          {custs.map((c) => (
+            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid var(--cream-200)' }}>
+              <span style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{c.initials}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)' }}>{c.name}</p>
+                <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: 'var(--ink-500)' }}>{c.orders} ordini · ultimo {c.last}</p>
+              </div>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink-900)', flexShrink: 0 }}>{fmt(c.spent)}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  );
+}

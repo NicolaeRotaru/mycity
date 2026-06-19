@@ -11,8 +11,90 @@
   body { margin: 0; background: var(--cream-100); }
   *::-webkit-scrollbar { width: 10px; height: 10px; }
   *::-webkit-scrollbar-thumb { background: var(--cream-400); border-radius: 8px; }
+  *::-webkit-scrollbar-track { background: transparent; }
   @keyframes mc-slide-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  /* Copilot FAB: pulsazione delicata per farsi notare, poi si ferma (non dà fastidio) */
+  @keyframes mc-copilot-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(228,122,90,.45); }
+    70% { box-shadow: 0 0 0 12px rgba(228,122,90,0); }
+    100% { box-shadow: 0 0 0 0 rgba(228,122,90,0); }
+  }
+  .mc-copilot-fab { animation: mc-copilot-pulse 2.4s ease-out 3; }
+  @media (prefers-reduced-motion: reduce) { .mc-copilot-fab { animation: none !important; } }
+  /* ── Design polish applied across every seller page ── */
+  /* tables: row hover + tabular numerals + tidy cells */
+  #mc-app table { border-collapse: collapse; }
+  #mc-app tbody tr { transition: background-color var(--dur-fast) var(--ease-out); }
+  #mc-app tbody tr:hover { background: var(--cream-50); }
+  #mc-app td, #mc-app th { font-variant-numeric: tabular-nums; }
+  /* gentle entrance for the routed view */
+  #mc-app main > * { animation: mc-fade-in var(--dur-medium) var(--ease-out); }
+  /* inputs/selects share one focus ring */
+  #mc-app input:focus, #mc-app select:focus, #mc-app textarea:focus {
+    border-color: var(--primary-400);
+    box-shadow: 0 0 0 3px rgba(228,122,90,.18);
+  }
+  /* buttons: subtle press feedback everywhere */
+  #mc-app button { transition: transform var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out); }
+  #mc-app button:active { transform: translateY(1px); }
+
+  /* ════════════ RESPONSIVE — tablet & mobile ════════════ */
+  @media (max-width: 1024px) {
+    /* shell: sidebar + content → single column; sidebar becomes a top strip */
+    #mc-app > div[style*="248px 1fr"] { grid-template-columns: 1fr !important; }
+    #mc-app aside[style*="height: 100vh"][style*="position: sticky"] {
+      position: fixed !important; left: 0 !important; top: 0 !important; height: 100vh !important;
+      width: 286px !important; max-width: 84vw !important; z-index: var(--z-modal) !important;
+      transform: translateX(-100%); transition: transform .28s var(--ease-out-quint);
+    }
+    #mc-app aside.mc-nav-open[style*="height: 100vh"] { transform: translateX(0) !important; box-shadow: 0 0 50px rgba(0,0,0,.45) !important; }
+    .mc-hamburger { display: inline-flex !important; }
+    .mc-nav-backdrop { display: block !important; }
+    #mc-app aside nav { overflow-x: hidden !important; }
+    /* striscia scura più pulita: niente scrollbar, niente bottone collapse, footer compatto in riga */
+    #mc-app .mc-collapse-btn { display: none !important; }
+    /* dense card rows relax */
+    #mc-app [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    #mc-app [style*="repeat(3, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    /* two-column page layouts stack */
+    #mc-app [style*="1fr 320px"], #mc-app [style*="1fr 360px"], #mc-app [style*="1fr 380px"],
+    #mc-app [style*="300px 1fr"], #mc-app [style*="260px 1fr"], #mc-app [style*="240px 1fr"],
+    #mc-app [style*="1.4fr 1fr"], #mc-app [style*="1.3fr 1fr"], #mc-app [style*="1.2fr 1fr"],
+    #mc-app [style*="1.1fr 1fr"] { grid-template-columns: 1fr !important; }
+    #mc-app aside[style*="position: sticky"] { position: static !important; top: auto !important; }
+    /* tables scroll horizontally instead of squashing */
+    #mc-app table { display: block; overflow-x: auto; white-space: nowrap; }
+    /* keep the first column visible while scrolling for context */
+    #mc-app table thead th:first-child, #mc-app table tbody td:first-child { position: sticky; left: 0; background: var(--surface-0); z-index: 1; }
+    #mc-app table thead th:first-child { background: var(--cream-50); }
+  }
+  @media (max-width: 640px) {
+    #mc-app [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    #mc-app [style*="repeat(3, 1fr)"] { grid-template-columns: 1fr !important; }
+    #mc-app [style*="repeat(2, 1fr)"] { grid-template-columns: 1fr !important; }
+    #mc-app [style*="1fr 1fr"] { grid-template-columns: 1fr !important; }
+    #mc-app main { padding: 16px !important; }
+    #mc-app header { padding-left: 14px !important; padding-right: 14px !important; }
+    #mc-app h1 { font-size: clamp(22px, 6vw, 30px) !important; }
+    /* hide topbar search on phones to save room */
+    .mc-topsearch { display: none !important; }
+    /* declutter the header: avatar name text nascosto; Copilot resta come icona accanto a Pubblica */
+    #mc-app header { padding: 10px 14px !important; gap: 8px !important; }
+    #mc-app header > div:last-child { gap: 8px !important; }
+    #mc-app header > div:last-child > div:last-child > div { display: none !important; }
+    /* bottoni header compatti: Copilot diventa solo icona */
+    .mc-copilot-btn .mc-hdr-label { display: none !important; }
+    /* in the collapsed top strip the big Copilot promo is redundant with the FAB */
+    #mc-app aside > div:nth-child(2) { display: none !important; }
+    /* Prodotti: la tabella diventa una lista a card leggibile */
+    #mc-app .mc-prod-table { display: none !important; }
+    #mc-app .mc-prod-cards { display: flex !important; }
+    /* popover notifiche: ancorato a destra, larghezza contenuta (non riempie tutto) */
+    .mc-notif-pop { position: fixed !important; top: 56px !important; right: 10px !important; left: auto !important; width: 320px !important; max-width: calc(100vw - 20px) !important; }
+  }
 </style>
+<link rel="stylesheet" href="../_mobile.css">
+<link rel="stylesheet" href="../_a11y.css">
 </head>
 <body>
   <div id="root"></div>
@@ -23,7 +105,7 @@
   <script>window.__buyerMounted = window.__sellerMounted = window.__riderMounted = 1;</script>
   <script src="../../_ds_bundle.js"></script>
   <script>window.__MC_ALLOW_MOUNT = 1;</script>
-  <script src="src/data.js"></script>
-  <script type="text/babel" src="app.js"></script>
+  <script type="text/babel" src="src/data.txt"></script>
+  <script type="text/babel" src="app.babel"></script>
 </body>
 </html>

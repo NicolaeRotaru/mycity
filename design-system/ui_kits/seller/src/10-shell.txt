@@ -1,0 +1,155 @@
+// ===== Seller shell (sidebar + topbar) =====
+const SC_NAV = [
+  { group: 'Gestione', items: [
+    { id: 'dashboard', icon: 'layout-dashboard', label: 'Dashboard' },
+    { id: 'orders', icon: 'receipt', label: 'Ordini', badge: 'todo' },
+    { id: 'products', icon: 'package', label: 'Prodotti' },
+    { id: 'ai', icon: 'wand-2', label: 'AI Studio' },
+  ] },
+  { group: 'Crescita', items: [
+    { id: 'promotions', icon: 'tag', label: 'Promozioni' },
+    { id: 'promote', icon: 'megaphone', label: 'Sponsorizza' },
+    { id: 'stories', icon: 'camera', label: 'Storie' },
+    { id: 'analytics', icon: 'bar-chart-3', label: 'Analisi' },
+  ] },
+  { group: 'Relazioni', items: [
+    { id: 'customers', icon: 'users', label: 'Clienti' },
+    { id: 'reviews', icon: 'star', label: 'Recensioni' },
+    { id: 'earnings', icon: 'wallet', label: 'Guadagni' },
+  ] },
+  { group: 'Negozio', items: [
+    { id: 'vetrina', icon: 'store', label: 'La tua vetrina' },
+    { id: 'profile', icon: 'user', label: 'Profilo' },
+    { id: 'help', icon: 'life-buoy', label: 'Aiuto' },
+  ] },
+];
+
+const SC_NOTIFS = [
+  { id: 'sn1', icon: 'receipt', tone: 'primary', title: 'Nuovo ordine #PC-2461', body: '2 articoli · 18,40 € · paga alla consegna', when: '3 min fa', unread: true, cta: 'Vedi ordine', go: 'orders' },
+  { id: 'sn2', icon: 'star', tone: 'accent', title: 'Nuova recensione 5★', body: '"Coppa eccezionale, consegna puntuale"', when: '1 ora fa', unread: true, cta: 'Rispondi', go: 'reviews' },
+  { id: 'sn3', icon: 'wallet', tone: 'olive', title: 'Pagamento accreditato', body: 'Bonifico di 342,10 € in arrivo', when: 'Ieri', unread: false, cta: 'Apri guadagni', go: 'earnings' },
+  { id: 'sn4', icon: 'package', tone: 'secondary', title: 'Scorta in esaurimento', body: 'Gutturnio DOC · 3 pezzi rimasti', when: 'Ieri', unread: false, cta: 'Rifornisci', go: 'products' },
+];
+function SellerNotifPopover({ onClose, onNav }) {
+  const items = SC_NOTIFS;
+  const tone = { primary: 'var(--primary-600)', secondary: 'var(--secondary-600)', accent: 'var(--accent-600)', olive: 'var(--olive-600)' };
+  const unread = items.filter((n) => n.unread).length;
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-dropdown)', background: 'transparent' }} />
+      <div className="mc-notif-pop" style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, width: '330px', maxWidth: '88vw', background: 'var(--surface-0)', color: 'var(--ink-900)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-warm-xl)', border: '1px solid var(--cream-200)', zIndex: 'calc(var(--z-dropdown) + 1)', overflow: 'hidden' }}>
+        <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: '16px' }}>Notifiche</span>
+          {unread > 0 && <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary-700)' }}>{unread} non lette</span>}
+        </div>
+        <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
+          {items.map((n) => (
+            <div key={n.id} style={{ display: 'flex', gap: '11px', padding: '12px 16px', borderBottom: '1px solid var(--cream-100)', background: n.unread ? 'var(--cream-50)' : 'transparent' }}>
+              <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--cream-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={n.icon} size={16} color={tone[n.tone] || 'var(--primary-600)'} /></span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: '13.5px', color: 'var(--ink-900)' }}>{n.title}</p>
+                <p style={{ margin: '1px 0 0', fontSize: '12.5px', color: 'var(--ink-500)', lineHeight: 1.4 }}>{n.body}</p>
+                <p style={{ margin: '3px 0 0', fontSize: '11px', color: 'var(--ink-400)' }}>{n.when}</p>
+                {n.cta && <button onClick={() => { onClose && onClose(); onNav && onNav(n.go); }} style={{ marginTop: '7px', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', color: 'var(--primary-700)', fontWeight: 700, fontSize: '12px', padding: '5px 11px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{n.cta}</button>}
+              </div>
+              {n.unread && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)', flexShrink: 0, marginTop: '5px' }} />}
+            </div>
+          ))}
+        </div>
+        <button onClick={() => { onClose && onClose(); onNav && onNav('reviews'); }} style={{ width: '100%', border: 0, borderTop: '1px solid var(--cream-200)', background: 'var(--cream-50)', color: 'var(--ink-700)', fontWeight: 600, fontSize: '13px', padding: '11px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>Centro notifiche</button>
+      </div>
+    </React.Fragment>
+  );
+}
+function SellerShell({ view, onNav, onNewProduct, onCopilot, children }) {
+  const store = window.SC_STORE;
+  const todo = window.SC_ORDERS.filter((o) => ['NEW', 'ACCEPTED', 'READY'].includes(o.status)).length;
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const [navOpen, setNavOpen] = React.useState(false);
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: `${collapsed ? '76px' : '248px'} 1fr`, minHeight: '100vh', background: 'var(--cream-100)', transition: 'grid-template-columns var(--dur-base) var(--ease-out)' }}>
+      {/* sidebar */}
+      <aside className={navOpen ? 'mc-nav-open' : ''} style={{ background: 'var(--ink-900)', color: '#fff', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ padding: collapsed ? '18px 10px 14px' : '20px 16px 14px', borderBottom: '1px solid rgba(255,255,255,.1)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: '8px' }}>
+          {!collapsed && (
+            <div style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.01em' }}>
+              <span style={{ color: 'var(--accent-300)' }}>My</span><span style={{ color: '#fff' }}>City</span>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 700, color: 'var(--ink-300)', textTransform: 'uppercase', letterSpacing: '0.08em', marginLeft: '6px' }}>Seller</span>
+            </div>
+          )}
+          <button className="mc-collapse-btn" onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? 'Espandi menu' : 'Comprimi menu'} title={collapsed ? 'Espandi menu' : 'Comprimi menu'} style={{ border: 0, background: 'rgba(255,255,255,.08)', color: '#fff', cursor: 'pointer', width: '34px', height: '34px', borderRadius: 'var(--radius-md)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Lucide name={collapsed ? 'panel-left-open' : 'panel-left-close'} size={18} color="#fff" />
+          </button>
+        </div>
+        {/* Copilot — destinazione di primo piano */}
+        <div style={{ padding: collapsed ? '12px 10px 4px' : '12px 12px 4px', flexShrink: 0 }}>
+          <button onClick={onCopilot} title="Copilot" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '10px', border: 0, borderRadius: 'var(--radius-lg)', padding: collapsed ? '10px' : '12px 14px', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', color: '#fff', background: view === 'copilot' ? 'linear-gradient(135deg, var(--primary-600), var(--secondary-600))' : 'linear-gradient(135deg, var(--primary-700), var(--secondary-700))', boxShadow: view === 'copilot' ? '0 0 0 2px rgba(244,188,83,.5)' : 'var(--shadow-warm)' }}>
+            <span style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="sparkles" size={18} color="#fff" /></span>
+            {!collapsed && <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 800, fontSize: '14px' }}>Copilot</span><span style={{ display: 'block', fontSize: '11px', color: 'rgba(255,255,255,.8)' }}>Gestisci parlando</span></span>}
+          </button>
+        </div>
+        <nav style={{ flex: 1, padding: collapsed ? '8px' : '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+          {SC_NAV.map((sec) => (
+            <div key={sec.group} style={{ marginBottom: '6px' }}>
+              {!collapsed && <p style={{ margin: '6px 12px 4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,.38)' }}>{sec.group}</p>}
+              {sec.items.map((n) => {
+                const on = view === n.id;
+                return (
+                  <button key={n.id} onClick={() => { onNav(n.id); setNavOpen(false); }} title={n.label} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '11px', border: 0, background: on ? 'var(--primary-700)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.78)', fontWeight: on ? 700 : 500, fontSize: '13.5px', padding: collapsed ? '11px' : '9px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', width: '100%' }}>
+                    <Lucide name={n.icon} size={17} stroke={2.2} color={on ? '#fff' : 'rgba(255,255,255,.7)'} /> {!collapsed && n.label}
+                    {!collapsed && n.badge === 'todo' && todo > 0 && <span style={{ marginLeft: 'auto', background: 'var(--accent-500)', color: 'var(--ink-900)', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{todo}</span>}
+                    {collapsed && n.badge === 'todo' && todo > 0 && <span style={{ position: 'absolute', top: '6px', right: '8px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-500)' }} />}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+        <div className="mc-aside-footer" style={{ padding: collapsed ? '10px 8px' : '12px', borderTop: '1px solid rgba(255,255,255,.1)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <a href="../buyer/index.html" title="Vai al marketplace" style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '10px', color: 'rgba(255,255,255,.7)', fontSize: '13px', padding: '9px 12px', textDecoration: 'none', borderRadius: 'var(--radius-md)' }}>
+            <Lucide name="external-link" size={16} color="rgba(255,255,255,.6)" /> {!collapsed && <span className="mc-aside-flabel">Vai al marketplace</span>}
+          </a>
+          <a href="../buyer/index.html" title="Esci" style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '10px', color: 'rgba(255,255,255,.7)', fontSize: '13px', padding: '9px 12px', textDecoration: 'none', borderRadius: 'var(--radius-md)' }}>
+            <Lucide name="log-out" size={16} color="rgba(255,255,255,.6)" /> {!collapsed && <span className="mc-aside-flabel">Esci</span>}
+          </a>
+        </div>
+      </aside>
+
+      {navOpen && <div className="mc-nav-backdrop" onClick={() => setNavOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 'calc(var(--z-modal) - 1)' }} />}
+
+      {/* main */}
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <header style={{ position: 'sticky', top: 0, zIndex: 'var(--z-sticky)', background: 'var(--surface-0)', borderBottom: '1px solid var(--cream-300)', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button className="mc-hamburger" onClick={() => setNavOpen(true)} aria-label="Menu" style={{ display: 'none', border: 0, background: 'transparent', cursor: 'pointer', padding: '6px', marginRight: '2px' }}><Lucide name="menu" size={22} color="var(--ink-700)" /></button>
+          <div className="mc-topsearch" style={{ position: 'relative', flex: 1, maxWidth: '380px' }}>
+            <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><Lucide name="search" size={17} color="var(--ink-400)" /></span>
+            <input placeholder="Cerca ordini, prodotti, clienti…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '9px 14px 9px 38px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--cream-50)' }} />
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button className="mc-hdr-btn mc-new-btn" onClick={onNewProduct} title="Pubblica prodotto" style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', border: 0, background: 'var(--primary-700)', color: '#fff', fontWeight: 700, fontSize: '13px', padding: '9px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap' }}><Lucide name="plus" size={16} color="#fff" /><span className="mc-hdr-label">Pubblica prodotto</span></button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setNotifOpen((o) => !o)} aria-label="Notifiche" style={{ position: 'relative', border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex', padding: '6px' }}><Lucide name="bell" size={20} color="var(--ink-600)" /><span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)' }} /></button>
+              {notifOpen && <SellerNotifPopover onClose={() => setNotifOpen(false)} onNav={onNav} />}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{store.initials}</span>
+              <div style={{ lineHeight: 1.1 }}>
+                <p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{store.name}</p>
+                <p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>{store.area}</p>
+              </div>
+            </div>
+          </div>
+        </header>
+        <main style={{ flex: 1, padding: '28px', maxWidth: '1100px', width: '100%', boxSizing: 'border-box' }}>{children}</main>
+      </div>
+
+      {/* floating Copilot — sempre raggiungibile */}
+      {view !== 'copilot' && (
+        <button onClick={onCopilot} title="Chiedi al Copilot" className="mc-copilot-fab" style={{ position: 'fixed', right: '24px', bottom: '24px', zIndex: 'var(--z-overlay)', display: 'inline-flex', alignItems: 'center', gap: '9px', border: 0, cursor: 'pointer', background: 'linear-gradient(135deg, var(--primary-600), var(--secondary-600))', color: '#fff', padding: '14px 18px', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-warm-xl)', fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: '14px' }}>
+          <Lucide name="sparkles" size={19} color="#fff" /> Copilot
+        </button>
+      )}
+    </div>
+  );
+}

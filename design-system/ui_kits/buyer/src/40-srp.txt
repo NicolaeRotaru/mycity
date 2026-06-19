@@ -1,0 +1,174 @@
+// ===== Search results page (SRP) — faceted filters + sort =====
+const MC_SORTS = [
+  ['rilevanza', 'Rilevanza'],
+  ['prezzo-asc', 'Prezzo crescente'],
+  ['prezzo-desc', 'Prezzo decrescente'],
+  ['sconto', 'Sconto maggiore'],
+  ['novita', 'Novità'],
+];
+
+function SearchResults({ allProducts, query, cat, onOpen, onAdd, onStore, onClearNav }) {
+  const [priceMax, setPriceMax] = React.useState(40);
+  const [stores, setStores] = React.useState(() => new Set());
+  const [deliveryToday, setDeliveryToday] = React.useState(false);
+  const [onlyDiscount, setOnlyDiscount] = React.useState(false);
+  const [inStock, setInStock] = React.useState(false);
+  const [sort, setSort] = React.useState('rilevanza');
+  const [filtersOpen, setFiltersOpen] = React.useState(false);
+
+  const storeNames = [...new Set(allProducts.map((p) => p.store))];
+
+  let list = allProducts.filter((p) => {
+    if (cat && p.cat !== cat) return false;
+    if (query) { const q = query.toLowerCase(); if (!p.name.toLowerCase().includes(q) && !p.store.toLowerCase().includes(q) && !(p.tags || []).join(' ').toLowerCase().includes(q)) return false; }
+    if (finalPrice(p) > priceMax) return false;
+    if (stores.size && !stores.has(p.store)) return false;
+    if (deliveryToday && !(storeBy(p.store) || {}).deliveryToday) return false;
+    if (onlyDiscount && !(p.discountPercent > 0)) return false;
+    if (inStock && p.stock === 0) return false;
+    return true;
+  });
+
+  list = [...list].sort((a, b) => {
+    if (sort === 'prezzo-asc') return finalPrice(a) - finalPrice(b);
+    if (sort === 'prezzo-desc') return finalPrice(b) - finalPrice(a);
+    if (sort === 'sconto') return (b.discountPercent || 0) - (a.discountPercent || 0);
+    if (sort === 'novita') return (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0);
+    return 0;
+  });
+
+  const catLabel = cat ? (window.MC_CATEGORIES.find((c) => c.slug === cat) || {}).label : null;
+  const heading = query ? `Risultati per “${query}”` : (catLabel || 'Tutti i prodotti');
+  const activeFilters = (stores.size > 0) + deliveryToday + onlyDiscount + inStock + (priceMax < 40);
+
+  function toggleStore(name) {
+    setStores((prev) => { const n = new Set(prev); n.has(name) ? n.delete(name) : n.add(name); return n; });
+  }
+  function reset() { setPriceMax(40); setStores(new Set()); setDeliveryToday(false); setOnlyDiscount(false); setInStock(false); }
+
+  // zero-results helpers: "forse cercavi" + prodotti alternativi (mai un vicolo cieco)
+  const didYouMean = React.useMemo(() => {
+    if (!query) return [];
+    const q = query.toLowerCase().trim();
+    const vocab = [...new Set([
+      ...window.MC_CATEGORIES.map((c) => c.label),
+      ...allProducts.map((p) => p.store),
+      ...allProducts.flatMap((p) => (p.tags || [])),
+    ])];
+    const score = (t) => { const s = t.toLowerCase(); if (s.includes(q) || q.includes(s)) return 3; const a = new Set(s.split(/\s+/)); const hit = q.split(/\s+/).filter((w) => w.length > 2 && [...a].some((x) => x.startsWith(w.slice(0, 3)))).length; return hit; };
+    return vocab.map((t) => [t, score(t)]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([t]) => t);
+  }, [query, allProducts]);
+  const alternatives = React.useMemo(() => {
+    const pool = cat ? allProducts.filter((p) => p.cat === cat) : allProducts;
+    return [...pool].filter((p) => p.stock !== 0).sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.reviews || 0) - (a.reviews || 0)).slice(0, 3);
+  }, [allProducts, cat]);
+
+  const chips = [];
+  if (priceMax < 40) chips.push({ key: 'price', label: `Fino a ${fmt(priceMax)}`, clear: () => setPriceMax(40) });
+  if (deliveryToday) chips.push({ key: 'today', label: 'Consegna oggi', clear: () => setDeliveryToday(false) });
+  if (onlyDiscount) chips.push({ key: 'disc', label: 'In offerta', clear: () => setOnlyDiscount(false) });
+  if (inStock) chips.push({ key: 'stock', label: 'Disponibili', clear: () => setInStock(false) });
+  [...stores].forEach((s) => chips.push({ key: 's-' + s, label: s, clear: () => toggleStore(s) }));
+
+  return (
+    <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '24px 20px' }}>
+      <div style={{ fontSize: '13px', color: 'var(--ink-500)', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <a onClick={onClearNav} style={{ cursor: 'pointer', color: 'var(--ink-500)' }}>Home</a> <Lucide name="chevron-right" size={13} color="var(--ink-400)" /> <span style={{ color: 'var(--ink-700)' }}>{heading}</span>
+      </div>
+      <h1 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '30px', fontWeight: 700, color: 'var(--ink-900)' }}>{heading}</h1>
+
+      <button className="mc-srp-toggle" onClick={() => setFiltersOpen(true)} style={{ display: 'none', alignItems: 'center', gap: '8px', marginTop: '14px', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', color: 'var(--ink-900)', fontWeight: 700, fontSize: '14px', padding: '11px 16px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: 'var(--shadow-warm-sm)' }}>
+        <Lucide name="sliders-horizontal" size={16} color="var(--primary-700)" /> Filtri e ordina{activeFilters > 0 && <span style={{ marginLeft: '2px', background: 'var(--primary-700)', color: '#fff', fontSize: '12px', fontWeight: 700, borderRadius: '999px', minWidth: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{activeFilters}</span>}
+      </button>
+      <div className={'mc-srp-backdrop' + (filtersOpen ? ' mc-open' : '')} onClick={() => setFiltersOpen(false)} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '248px 1fr', gap: '28px', marginTop: '18px', alignItems: 'start' }}>
+        {/* filters */}
+        <aside className={'mc-srp-filters' + (filtersOpen ? ' mc-open' : '')} style={{ position: 'sticky', top: '128px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>Filtri</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              {activeFilters > 0 && <button onClick={reset} style={{ border: 0, background: 'transparent', color: 'var(--primary-700)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>Azzera</button>}
+              <button className="mc-srp-close" onClick={() => setFiltersOpen(false)} aria-label="Chiudi" style={{ display: 'none', border: 0, background: 'transparent', color: 'var(--ink-500)', cursor: 'pointer', alignItems: 'center' }}><Lucide name="x" size={22} /></button>
+            </div>
+          </div>
+
+          <FilterGroup title="Prezzo massimo">
+            <input type="range" min="3" max="40" step="1" value={priceMax} onChange={(e) => setPriceMax(+e.target.value)} style={{ width: '100%', accentColor: 'var(--primary-600)' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--ink-500)' }}><span>€3</span><strong style={{ color: 'var(--ink-900)' }}>fino a {fmt(priceMax)}</strong></div>
+          </FilterGroup>
+
+          <FilterGroup title="Disponibilità">
+            <Checkbox label="Consegna oggi" checked={deliveryToday} onChange={(e) => setDeliveryToday(e.target.checked)} />
+            <Checkbox label="Solo in offerta" checked={onlyDiscount} onChange={(e) => setOnlyDiscount(e.target.checked)} />
+            <Checkbox label="Solo disponibili" checked={inStock} onChange={(e) => setInStock(e.target.checked)} />
+          </FilterGroup>
+
+          <FilterGroup title="Negozio">
+            {storeNames.map((s) => <Checkbox key={s} label={s} checked={stores.has(s)} onChange={() => toggleStore(s)} />)}
+          </FilterGroup>
+          <button className="mc-srp-apply" onClick={() => setFiltersOpen(false)} style={{ display: 'none', border: 0, background: 'var(--primary-700)', color: '#fff', fontWeight: 700, fontSize: '15px', padding: '14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', marginTop: '4px' }}>Mostra {list.length} risultati</button>
+        </aside>
+
+        {/* results */}
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <span style={{ fontSize: '14px', color: 'var(--ink-500)' }}><strong style={{ color: 'var(--ink-900)' }}>{list.length}</strong> prodotti dai negozi di Piacenza</span>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink-500)' }}>
+              Ordina per
+              <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ appearance: 'none', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', borderRadius: 'var(--radius-md)', padding: '8px 30px 8px 12px', fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)', fontFamily: 'var(--font-sans)', cursor: 'pointer', backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'14\' height=\'14\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2378716c\' stroke-width=\'2.4\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}>
+                {MC_SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </label>
+          </div>
+
+          {chips.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px', alignItems: 'center' }}>
+              {chips.map((c) => (
+                <button key={c.key} onClick={c.clear} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', border: '1px solid var(--primary-200)', background: 'var(--primary-50)', color: 'var(--primary-800)', fontSize: '13px', fontWeight: 600, padding: '6px 8px 6px 12px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                  {c.label} <Lucide name="x" size={14} color="var(--primary-700)" />
+                </button>
+              ))}
+              <button onClick={reset} style={{ border: 0, background: 'transparent', color: 'var(--ink-500)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-sans)', padding: '6px 8px' }}>Azzera tutto</button>
+            </div>
+          )}
+
+          {list.length === 0
+            ? <Card variant="flat" padding="lg">
+                <EmptyState icon="search-x" title={query ? `Nessun risultato per "${query}"` : 'Nessun risultato'} description={activeFilters > 0 ? 'I filtri attivi sono troppo stretti. Prova ad allargarli.' : 'Non abbiamo trovato questo prodotto. Ecco alcune alternative dai negozi di Piacenza.'} action={activeFilters > 0 ? <Button variant="secondary" onClick={reset}>Azzera i filtri</Button> : null} />
+                {didYouMean.length > 0 && (
+                  <div style={{ marginTop: '4px', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: '13px', color: 'var(--ink-500)' }}>Forse cercavi</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
+                      {didYouMean.map((t) => (
+                        <button key={t} onClick={() => { reset(); onStore && null; setSort('rilevanza'); }} style={{ border: '1px solid var(--primary-200)', background: 'var(--primary-50)', color: 'var(--primary-800)', fontSize: '13px', fontWeight: 600, padding: '7px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{t}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {alternatives.length > 0 && (
+                  <div style={{ marginTop: '22px', borderTop: '1px solid var(--cream-200)', paddingTop: '18px' }}>
+                    <p style={{ margin: '0 0 12px', fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Potrebbe interessarti</p>
+                    <div className="mc-srp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                      {alternatives.map((p) => <ProductGridCard key={p.id} p={p} onOpen={onOpen} onAdd={onAdd} onStore={onStore} />)}
+                    </div>
+                  </div>
+                )}
+              </Card>
+            : <div className="mc-srp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+                {list.map((p) => <ProductGridCard key={p.id} p={p} onOpen={onOpen} onAdd={onAdd} onStore={onStore} />)}
+              </div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FilterGroup({ title, children }) {
+  return (
+    <div style={{ borderTop: '1px solid var(--cream-300)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-800)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{title}</span>
+      {children}
+    </div>
+  );
+}

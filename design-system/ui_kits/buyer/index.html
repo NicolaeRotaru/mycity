@@ -8,6 +8,7 @@
 <title>MyCity Piacenza — Marketplace</title>
 <link rel="stylesheet" href="../../styles.css">
 <style>
+  html, body { max-width: 100%; overflow-x: hidden; }
   body { margin: 0; background: var(--surface-50); }
   *::-webkit-scrollbar { width: 10px; height: 10px; }
   *::-webkit-scrollbar-thumb { background: var(--cream-400); border-radius: 8px; }
@@ -15,7 +16,121 @@
   .mc-catbar { scrollbar-width: none; -ms-overflow-style: none; }
   .mc-catbar::-webkit-scrollbar { display: none; }
   @keyframes mc-slide-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  /* ── design polish applied across every buyer page ── */
+  #root main > * { animation: mc-fade-in var(--dur-medium) var(--ease-out); }
+  #root input:focus, #root select:focus, #root textarea:focus { border-color: var(--primary-400); box-shadow: 0 0 0 3px rgba(228,122,90,.18); }
+  #root button { transition: transform var(--dur-fast) var(--ease-out), filter var(--dur-fast) var(--ease-out); }
+  #root button:active { transform: translateY(1px); }
+  #root *::-webkit-scrollbar-track { background: transparent; }
+  /* promo ticker: ferma il marquee se l'utente preferisce meno movimento */
+  @media (prefers-reduced-motion: reduce) {
+    #root [style*="mc-marquee"] { animation: none !important; transform: none !important; }
+  }
+
+  /* ════════════ RESPONSIVE — tablet & mobile ════════════ */
+  /* Tablet (≤1024px): dense product grids relax, two-column page layouts stack */
+  @media (max-width: 1024px) {
+    #root [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(3, 1fr) !important; }
+    #root [style*="248px 1fr"], #root [style*="260px 1fr"],
+    #root [style*="1fr 380px"], #root [style*="1fr 360px"], #root [style*="1fr 320px"],
+    #root [style*="1.2fr 1fr"], #root [style*="1.1fr 1fr"], #root [style*="1.3fr 1fr"], #root [style*="220px 1fr"],
+    #root [style*="240px 1fr"] { grid-template-columns: 1fr !important; }
+    /* sticky asides (filters / order summary) un-stick when stacked */
+    #root aside[style*="position: sticky"] { position: static !important; top: auto !important; }
+  }
+  /* Mobile (≤640px) */
+  @media (max-width: 640px) {
+    #root [style*="repeat(4, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    #root [style*="repeat(3, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+    /* pagine categorie (SRP): risultati sempre a 2 colonne su mobile */
+    #root .mc-srp-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    #root [style*="repeat(2, 1fr)"] { grid-template-columns: 1fr !important; }
+    #root [style*="1fr 1fr"] { grid-template-columns: 1fr !important; }
+    /* trim the generous desktop paddings */
+    #root [style*="padding: 44px 20px"], #root [style*="padding: 28px 20px"],
+    #root [style*="padding: 24px 20px"], #root [style*="padding: 32px 20px"] { padding-left: 16px !important; padding-right: 16px !important; }
+    /* hero headline + section titles scale down */
+    #root h1 { font-size: clamp(28px, 8vw, 40px) !important; }
+    /* ── navbar mobile: riga 1 = logo + icone (no civico); riga 2 = ricerca ── */
+    header .mc-topbar { flex-wrap: wrap !important; row-gap: 10px !important; padding: 10px 14px !important; gap: 10px !important; }
+    .mc-loc { display: none !important; }
+    .mc-navactions { display: flex !important; margin-left: auto !important; }
+    /* il carrello è già nella bottom tab bar; in alto: cuore, campanello e account */
+    .mc-navactions > button.mc-cartbtn { display: none !important; }
+    .mc-navactions > button.mc-navdesktop { display: none !important; }
+    .mc-navactions > button.mc-accountbtn { display: inline-flex !important; width: 34px !important; height: 34px !important; margin-left: 6px !important; }
+    /* la ricerca scende su una riga propria, a tutta larghezza */
+    .mc-searchwrap { order: 10 !important; flex-basis: 100% !important; min-width: 100% !important; }
+    /* category + discovery strip: a touch tighter */
+    .mc-catbar { padding: 0 12px !important; }
+    .mc-catbar button { padding: 12px 12px !important; }
+    /* allinea il rail prodotti alle altre sezioni (16px di lato, non 20px) */
+    .mc-rail-inner { padding-left: 16px !important; padding-right: 16px !important; }
+    /* Come funziona: 1 colonna su mobile (niente step orfano) */
+    #root .mc-how-grid { grid-template-columns: 1fr !important; gap: 14px !important; }
+    /* hero: CTA a tutta larghezza e uniformi */
+    .mc-hero-cta { flex-direction: column !important; align-items: stretch !important; }
+    .mc-hero-cta > button { width: 100% !important; justify-content: center !important; }
+    /* CTA venditore: impila, bottone a tutta larghezza */
+    .mc-seller-cta { flex-direction: column !important; align-items: stretch !important; }
+    .mc-seller-cta > button { width: 100% !important; justify-content: center !important; }
+    /* "Vedi tutto": area tap più comoda */
+    .mc-seeall { padding: 8px 0 !important; }
+    /* link footer: area tap più ampia */
+    #root footer a { display: inline-block; padding: 5px 0 !important; }
+    /* barra categorie: sfumatura che segnala lo scorrimento orizzontale */
+    .mc-catwrap { position: relative; }
+    .mc-catwrap::after { content: ''; position: absolute; top: 1px; right: 0; bottom: 0; width: 40px; background: linear-gradient(90deg, rgba(160,59,37,0), var(--primary-700)); pointer-events: none; z-index: 1; }
+    /* footer: 5-col desktop grid → 2 cols, logo block full width */
+    #root footer > div[style*="1.4fr"] { grid-template-columns: 1fr 1fr !important; gap: 22px 20px !important; padding: 28px 16px !important; }
+    #root footer > div[style*="1.4fr"] > div:first-child { grid-column: 1 / -1 !important; }
+    /* promo ticker: smaller on phones */
+    #root header [style*="mc-marquee"] { gap: 28px !important; }
+    /* auth split-screen → single column (hide the marketing aside) */
+    #root [style*="grid-template-columns: 1fr 1fr"][style*="70vh"] > div:last-child { display: none !important; }
+    /* show the bottom tab bar + lift content above it */
+    .mc-tabbar { display: grid !important; }
+    /* la tab bar resta su UNA riga (4 colonne): batte la regola generica repeat(4,1fr)→2col */
+    #root .mc-tabbar { grid-template-columns: repeat(4, 1fr) !important; }
+    #root main { padding-bottom: 76px !important; }
+    /* sticky add-to-cart on the product page (sits above the tab bar) */
+    .mc-pdp-sticky { display: flex !important; bottom: 64px !important; }
+
+    /* ── cart drawer (portalled to <body>, outside #root) → full-screen sheet ── */
+    [style*="width: 420px"][style*="max-width: 92vw"] { width: 100vw !important; max-width: 100vw !important; }
+
+    /* ── account: 7-item side nav → horizontal scroll tab strip ── */
+    #root aside nav { flex-direction: row !important; overflow-x: auto !important; gap: 4px !important; scrollbar-width: none; -ms-overflow-style: none; padding-bottom: 2px; }
+    #root aside nav::-webkit-scrollbar { display: none; }
+    #root aside nav button { flex: 0 0 auto !important; width: auto !important; white-space: nowrap !important; }
+
+    /* ── SRP: filters become a bottom sheet behind a "Filtri e ordina" button ── */
+    .mc-srp-toggle { display: inline-flex !important; }
+    .mc-srp-close { display: inline-flex !important; }
+    .mc-srp-apply { display: block !important; position: sticky; bottom: 0; }
+    #root aside.mc-srp-filters {
+      position: fixed !important; left: 0 !important; right: 0 !important; bottom: 0 !important; top: auto !important;
+      z-index: var(--z-modal) !important;
+      background: var(--surface-0) !important;
+      border-radius: 20px 20px 0 0 !important;
+      box-shadow: 0 -10px 44px -12px rgba(28,26,24,.4) !important;
+      max-height: 82vh; overflow-y: auto;
+      padding: 18px 20px calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+      gap: 16px !important;
+      transform: translateY(110%) !important; transition: transform var(--dur-medium) var(--ease-out-quint);
+    }
+    #root aside.mc-srp-filters.mc-open { transform: translateY(0) !important; }
+    .mc-srp-backdrop.mc-open { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: calc(var(--z-modal) - 1); animation: mc-fade-in var(--dur-fast) ease-out; }
+
+    /* ── new senior-UX components: reveal mobile-only bars, stack wide cards ── */
+    .mc-mobilebar { display: none !important; }
+    .mc-checkout-bar { display: flex !important; }
+    .mc-checkout-page { padding-bottom: 104px !important; }
+    #root .mc-reorder-row { grid-template-columns: 1fr !important; }
+  }
 </style>
+<link rel="stylesheet" href="../_mobile.css">
+<link rel="stylesheet" href="../_a11y.css">
 </head>
 <body>
   <div id="root"></div>
@@ -26,7 +141,7 @@
   <script>window.__buyerMounted = window.__sellerMounted = window.__riderMounted = 1;</script>
   <script src="../../_ds_bundle.js"></script>
   <script>window.__MC_ALLOW_MOUNT = 1;</script>
-  <script src="src/data.js"></script>
-  <script type="text/babel" src="app.js"></script>
+  <script type="text/babel" src="src/data.txt"></script>
+  <script type="text/babel" src="app.babel"></script>
 </body>
 </html>

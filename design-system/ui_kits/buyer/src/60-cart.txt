@@ -1,0 +1,122 @@
+// ===== Cart drawer — raggruppato per negozio (consegna separata per negozio) =====
+const CART_FREE = 25;     // soglia spedizione gratis per negozio
+const CART_SHIP = 3.5;    // costo consegna per negozio sotto soglia
+
+function CartDrawer({ open, items, products, onClose, onQty, onRemove, onAdd, onCheckout, onContinue }) {
+  if (!open) return null;
+  // group items by store
+  const groups = {};
+  items.forEach((it) => { (groups[it.store] = groups[it.store] || []).push(it); });
+  const storeNames = Object.keys(groups);
+  const groupSub = (g) => g.reduce((s, it) => s + it.finalPrice * it.qty, 0);
+  const subtotal = items.reduce((s, it) => s + it.finalPrice * it.qty, 0);
+  const shipping = storeNames.reduce((s, name) => s + (groupSub(groups[name]) >= CART_FREE || groupSub(groups[name]) === 0 ? 0 : CART_SHIP), 0);
+  const total = subtotal + shipping;
+  const totalQty = items.reduce((s, it) => s + it.qty, 0);
+
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', background: 'rgba(0,0,0,.4)', backdropFilter: 'blur(2px)', display: 'flex', justifyContent: 'flex-end', animation: 'mc-fade-in var(--dur-fast) ease-out' }}>
+      <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Carrello" style={{ width: '420px', maxWidth: '92vw', height: '100%', background: 'var(--surface-0)', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-warm-xl)', animation: 'mc-slide-right var(--dur-medium) var(--ease-out-quint)' }}>
+        <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px', borderBottom: '1px solid var(--cream-200)' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            <Lucide name="shopping-cart" size={20} /> Carrello <span style={{ fontSize: '14px', color: 'var(--ink-400)', fontFamily: 'var(--font-sans)' }}>· {totalQty}</span>
+          </h2>
+          <button onClick={onClose} aria-label="Chiudi" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)', display: 'inline-flex' }}><Lucide name="x" size={22} /></button>
+        </header>
+
+        {items.length > 0 && storeNames.length > 1 && (
+          <div style={{ padding: '10px 20px', background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-200)', fontSize: '12px', color: 'var(--ink-600)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Lucide name="package" size={14} color="var(--ink-500)" /> Ordine da <strong>{storeNames.length} negozi</strong> · ogni negozio consegna separatamente
+          </div>
+        )}
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '8px 20px' }}>
+          {items.length === 0 ? (
+            <EmptyState icon="shopping-cart" title="Il carrello è vuoto" description="Aggiungi prodotti dai negozi di Piacenza per iniziare." action={<Button variant="primary" onClick={onContinue}>Esplora i negozi</Button>} />
+          ) : (<>{storeNames.map((name) => {
+            const g = groups[name];
+            const sub = groupSub(g);
+            const toFree = Math.max(0, CART_FREE - sub);
+            return (
+              <div key={name} style={{ marginBottom: '8px' }}>
+                {/* store header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 0 8px', position: 'sticky', top: 0, background: 'var(--surface-0)' }}>
+                  <span style={{ width: '22px', height: '22px', flexShrink: 0, borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontSize: '9px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{initials(name)}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{name}</span>
+                </div>
+                {/* per-store free-shipping bar */}
+                <div style={{ padding: '8px 10px', marginBottom: '6px', borderRadius: 'var(--radius-md)', background: toFree > 0 ? 'var(--accent-100)' : 'var(--olive-50)' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--ink-700)', marginBottom: '5px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <Lucide name="truck" size={13} color={toFree > 0 ? 'var(--accent-700)' : 'var(--olive-700)'} />
+                    {toFree > 0 ? <span>Ancora <strong>{fmt(toFree)}</strong> per spedizione gratis</span> : <span><strong>Spedizione gratis</strong> da questo negozio</span>}
+                  </div>
+                  <div style={{ height: '5px', background: 'rgba(255,255,255,.7)', borderRadius: '3px', overflow: 'hidden' }}><span style={{ display: 'block', height: '100%', width: `${Math.min(100, (sub / CART_FREE) * 100)}%`, background: toFree > 0 ? 'var(--accent-500)' : 'var(--olive-500)', transition: 'width var(--dur-medium) var(--ease-out-quint)' }} /></div>
+                </div>
+                {g.map((it) => (
+                  <div key={it.id} style={{ display: 'flex', gap: '12px', padding: '12px 0', borderBottom: '1px solid var(--cream-200)' }}>
+                    <img src={it.img} alt={it.name} style={{ width: '60px', height: '60px', borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)', lineHeight: 1.3 }}>{it.name}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '8px' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)' }}>
+                          <button onClick={() => onQty(it.id, -1)} aria-label="Meno" style={miniBtn}><Lucide name="minus" size={14} /></button>
+                          <span style={{ minWidth: '24px', textAlign: 'center', fontSize: '13px', fontWeight: 700 }}>{it.qty}</span>
+                          <button onClick={() => onQty(it.id, 1)} aria-label="Più" style={miniBtn}><Lucide name="plus" size={14} /></button>
+                        </div>
+                        <span style={{ fontWeight: 800, fontSize: '15px', color: 'var(--ink-900)' }}>{fmt(it.finalPrice * it.qty)}</span>
+                      </div>
+                    </div>
+                    <button onClick={() => onRemove(it.id)} aria-label="Rimuovi" style={{ border: 0, background: 'transparent', color: 'var(--ink-400)', cursor: 'pointer', alignSelf: 'flex-start', display: 'inline-flex' }}><Lucide name="trash-2" size={16} /></button>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <CartUpsell items={items} products={products} onAdd={onAdd} />
+          </>)}
+        </div>
+
+        {items.length > 0 && (
+          <footer style={{ borderTop: '1px solid var(--cream-200)', padding: '16px 20px', background: 'var(--cream-50)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: 'var(--ink-600)', marginBottom: '6px' }}><span>Subtotale</span><span>{fmt(subtotal)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: 'var(--ink-600)', marginBottom: '10px' }}><span>Consegna {storeNames.length > 1 ? `(${storeNames.length} negozi)` : ''}</span><span>{shipping === 0 ? <span style={{ color: 'var(--olive-700)', fontWeight: 600 }}>Gratis</span> : fmt(shipping)}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 800, color: 'var(--ink-900)', marginBottom: '14px' }}><span>Totale</span><span>{fmt(total)}</span></div>
+            <Button variant="primary" size="lg" fullWidth iconRight="arrow-right" onClick={onCheckout}>Vai alla conferma</Button>
+            <p style={{ margin: '10px 0 0', fontSize: '12px', color: 'var(--ink-500)', textAlign: 'center', display: 'inline-flex', width: '100%', justifyContent: 'center', gap: '5px' }}><Lucide name="banknote" size={14} color="var(--olive-600)" /> Paghi alla consegna · contanti al rider</p>
+          </footer>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+const miniBtn = { width: '34px', height: '34px', border: 0, background: 'transparent', color: 'var(--ink-700)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' };
+
+// "Completa con" — suggerimenti curati (MC_PAIRINGS) per i prodotti nel carrello.
+function CartUpsell({ items, products, onAdd }) {
+  if (!products || items.length === 0) return null;
+  const inCart = new Set(items.map((it) => it.id));
+  const ids = [];
+  items.forEach((it) => (window.MC_PAIRINGS[it.id] || []).forEach((pid) => { if (!inCart.has(pid) && !ids.includes(pid)) ids.push(pid); }));
+  const sugg = ids.map((id) => products.find((p) => p.id === id)).filter(Boolean).slice(0, 6);
+  if (sugg.length === 0) return null;
+  return (
+    <div style={{ padding: '14px 0 4px', borderTop: '1px solid var(--cream-200)', marginTop: '4px' }}>
+      <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Lucide name="sparkles" size={14} color="var(--primary-600)" /> Completa con</p>
+      <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '6px', margin: '0 -20px', padding: '0 20px 6px', scrollbarWidth: 'none' }}>
+        {sugg.map((p) => (
+          <div key={p.id} style={{ flex: '0 0 132px', width: '132px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', overflow: 'hidden', background: 'var(--surface-0)' }}>
+            <img src={imgUrl(p.kw, p.galleryLocks[0])} alt="" style={{ width: '100%', height: '78px', objectFit: 'cover' }} />
+            <div style={{ padding: '8px' }}>
+              <p style={{ margin: 0, fontSize: '12px', fontWeight: 600, color: 'var(--ink-900)', lineHeight: 1.25, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: '2.5em' }}>{p.name}</p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--ink-900)' }}>{fmt(finalPrice(p))}</span>
+                <button onClick={() => onAdd(p, 1)} aria-label="Aggiungi" style={{ width: '30px', height: '30px', flexShrink: 0, borderRadius: 'var(--radius-md)', border: 0, background: 'var(--primary-600)', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="plus" size={16} color="#fff" /></button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

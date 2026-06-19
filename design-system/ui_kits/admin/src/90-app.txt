@@ -1,0 +1,56 @@
+// ===== Admin app shell =====
+function App() {
+  const [view, setView] = React.useState('today');
+  const [toast, setToast] = React.useState(null);
+  const timer = React.useRef(null);
+  function showToast(t) { setToast(t); clearTimeout(timer.current); timer.current = setTimeout(() => setToast(null), 2600); }
+  function nav(v) { setView(v); window.scrollTo(0, 0); }
+  return (
+    <AdminShell view={view} onNav={nav}>
+      {view === 'today' && <Today onNav={nav} />}
+      {view === 'overview' && <Overview onNav={nav} />}
+      {view === 'orders' && <OrdersFull />}
+      {view === 'users' && <Users />}
+      {view === 'disputes' && <Disputes onToast={showToast} />}
+      {view === 'moderation' && <ProductModeration onToast={showToast} />}
+      {view === 'cod' && <CodRemittance onToast={showToast} />}
+      {view === 'payouts' && <SellerPayouts onToast={showToast} />}
+      {view === 'delivery' && <DeliveryConfig onToast={showToast} />}
+      {view === 'sos' && <Sos onToast={showToast} />}
+      {view === 'funnel' && <Funnel onToast={showToast} />}
+      {view === 'coupons' && <Coupons onToast={showToast} />}
+      {view === 'sponsored' && <Sponsored />}
+      {view === 'drops' && <DailyDrops />}
+      {view === 'shop-month' && <ShopOfMonth onToast={showToast} />}
+      {view === 'events' && <Events />}
+      {view === 'home' && <HomeBuilder onToast={showToast} />}
+      {view === 'pages' && <Pages />}
+      {view === 'categories' && <Categories onToast={showToast} />}
+      {view === 'branding' && <Branding onToast={showToast} />}
+      {view === 'activity' && <Activity />}
+      {view === 'audit' && <Audit />}
+      {view === 'support' && <Support />}
+      {toast && ReactDOM.createPortal(
+        <div style={{ position: 'fixed', left: '50%', bottom: '28px', transform: 'translateX(-50%)', zIndex: 'var(--z-toast)', display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--ink-900)', color: '#fff', padding: '12px 18px', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-warm-xl)', animation: 'mc-pop-in var(--dur-medium) var(--ease-out-quint)', fontSize: '14px', fontWeight: 500 }}>
+          <span style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--olive-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="check" size={15} stroke={3} color="#fff" /></span>
+          {toast}
+        </div>, document.body)}
+    </AdminShell>
+  );
+}
+
+// Full orders view: status filter + table reusing OrdersTable.
+function OrdersFull() {
+  const [f, setF] = React.useState('all');
+  const tabs = [['all', 'Tutti'], ['NEW', 'Nuovi'], ['OUT_FOR_DELIVERY', 'In consegna'], ['DELIVERED', 'Consegnati'], ['CANCELED', 'Annullati']];
+  const rows = window.AD_RECENT_ORDERS.filter((o) => f === 'all' || o.status === f);
+  return (
+    <div>
+      <PageTitle eyebrow="Operativo" title="Ordini" sub={`${window.AD_TOTALS.orders.toLocaleString('it-IT')} ordini totali · ${window.AD_TOTALS.ordersRecent} negli ultimi 7 giorni`} />
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        {tabs.map(([id, label]) => <button key={id} onClick={() => setF(id)} style={{ border: 0, background: f === id ? 'var(--primary-700)' : 'var(--surface-0)', color: f === id ? '#fff' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: f === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{label}</button>)}
+      </div>
+      {rows.length === 0 ? <Card variant="flat" padding="lg"><EmptyState icon="package-open" title="Nessun ordine" description="Nessun ordine in questo stato." /></Card> : <OrdersTable rows={rows} />}
+    </div>
+  );
+}

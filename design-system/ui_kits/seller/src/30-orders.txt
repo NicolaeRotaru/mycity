@@ -1,0 +1,167 @@
+// ===== Orders (grouped + detail drawer with status advancement) =====
+const SC_NEXT = { NEW: 'ACCEPTED', ACCEPTED: 'READY', READY: 'ASSIGNED' };
+const SC_NEXT_LABEL = { NEW: 'Accetta ordine', ACCEPTED: 'Segna come pronto', READY: 'Assegna al rider' };
+const DELIV_FLOW = [
+  { s: 'ASSIGNED', label: 'Rider assegnato', icon: 'bike', sub: 'Un rider sta arrivando in negozio' },
+  { s: 'PICKED_UP', label: 'Ordine ritirato', icon: 'package-check', sub: 'Il rider ha ritirato l’ordine' },
+  { s: 'OUT_FOR_DELIVERY', label: 'In consegna', icon: 'truck', sub: 'In viaggio verso il cliente' },
+  { s: 'DELIVERED', label: 'Consegnato', icon: 'check-circle-2', sub: 'Consegna completata' },
+];
+const SC_GROUPS = [
+  { label: 'Da fare', statuses: ['NEW', 'ACCEPTED', 'READY'] },
+  { label: 'In consegna', statuses: ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
+  { label: 'Completati', statuses: ['DELIVERED', 'CANCELED'] },
+];
+
+function Orders({ orders, onAdvance }) {
+  const [sel, setSel] = React.useState(null);
+  const groups = SC_GROUPS.map((g) => ({ ...g, items: orders.filter((o) => g.statuses.includes(o.status)) }));
+  return (
+    <div>
+      <PageTitle eyebrow="Operativo" title="Ordini ricevuti" sub="Prepara, conferma e affida gli ordini ai rider"
+        action={<div style={{ display: 'flex', gap: '8px' }}>{groups.map((g) => <span key={g.label} style={{ fontSize: '12px', background: 'var(--cream-100)', color: 'var(--ink-600)', borderRadius: '999px', padding: '5px 12px' }}>{g.label}: <strong style={{ color: 'var(--ink-900)' }}>{g.items.length}</strong></span>)}</div>} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+        {groups.map((g) => g.items.length === 0 ? null : (
+          <section key={g.label}>
+            <h2 style={{ margin: '0 0 10px', fontSize: '14px', fontWeight: 700, color: 'var(--ink-700)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{g.label}</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {g.items.map((o) => {
+                const count = o.items.reduce((s, i) => s + i.q, 0);
+                return (
+                  <button key={o.id} onClick={() => setSel(o)} style={{ textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '14px 18px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>#{o.id}</span>
+                        <span style={{ color: 'var(--ink-300)' }}>·</span>
+                        <span style={{ fontSize: '12px', color: 'var(--ink-500)' }}>{o.when}</span>
+                        {o.pay === 'cod' && <Badge variant="cod" icon="banknote">Contanti</Badge>}
+                      </div>
+                      <p style={{ margin: '3px 0 0', fontWeight: 700, color: 'var(--ink-900)' }}>{o.cust}</p>
+                      <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-500)' }}>{count} {count === 1 ? 'articolo' : 'articoli'} · {o.addr}</p>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <OrderStatusBadge status={o.status} size="sm" />
+                      <span style={{ fontWeight: 800, color: 'var(--ink-900)', fontSize: '16px' }}>{fmt(o.total)}</span>
+                      <Lucide name="chevron-right" size={18} color="var(--ink-300)" />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
+      <OrderDrawer order={sel} onClose={() => setSel(null)} onAdvance={(o) => { onAdvance(o); setSel(null); }} />
+    </div>
+  );
+}
+
+function printTicket(o) {
+  const rows = o.items.map((it) => '<tr><td class="q">' + it.q + '×</td><td class="n">' + it.name + '</td><td class="p">' + fmt(it.price * it.q) + '</td></tr>').join('');
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Ticket ' + o.id + '</title><style>' +
+    '@page{size:58mm auto;margin:0}body{width:58mm;margin:0;padding:6mm 4mm;font-family:ui-monospace,Menlo,monospace;color:#000;font-size:12px}' +
+    'h1{font-size:15px;text-align:center;margin:0 0 2mm}.muted{color:#444;text-align:center;margin:0 0 3mm;font-size:11px}' +
+    'hr{border:0;border-top:1px dashed #000;margin:3mm 0}table{width:100%;border-collapse:collapse}td{padding:1mm 0;vertical-align:top}' +
+    '.q{width:9mm;font-weight:700}.p{text-align:right;white-space:nowrap}.tot{display:flex;justify-content:space-between;font-weight:700;font-size:14px;margin-top:2mm}' +
+    '.cod{margin-top:3mm;padding:2mm;border:1px solid #000;text-align:center;font-weight:700}.foot{text-align:center;margin-top:4mm;font-size:11px}</style></head><body>' +
+    '<h1>MyCity · ' + window.SC_STORE.name + '</h1><p class="muted">Ordine #' + o.id + ' · ' + (o.when || '') + '</p><hr>' +
+    '<p style="margin:0 0 2mm"><strong>' + o.cust + '</strong><br>' + (o.addr || '') + '</p><hr>' +
+    '<table>' + rows + '</table><hr><div class="tot"><span>TOTALE</span><span>' + fmt(o.total) + '</span></div>' +
+    (o.pay === 'cod' ? '<div class="cod">CONTANTI · incassa ' + fmt(o.total) + '</div>' : '<p class="muted" style="margin-top:3mm">Pagato con carta</p>') +
+    '<p class="foot">Grazie! · mycity.it</p></body></html>';
+  const w = window.open('', '_blank', 'width=380,height=640');
+  if (!w) return;
+  w.document.write(html); w.document.close();
+  w.focus(); setTimeout(() => { try { w.print(); } catch (e) {} }, 250);
+}
+function OrderDrawer({ order, onClose, onAdvance }) {
+  const [track, setTrack] = React.useState(false);
+  React.useEffect(() => { setTrack(false); }, [order]);
+  if (!order) return null;
+  const o = order;
+  const next = SC_NEXT[o.status];
+  const inDelivery = ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(o.status);
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', background: 'rgba(0,0,0,.4)', backdropFilter: 'blur(2px)', display: 'flex', justifyContent: 'flex-end', animation: 'mc-fade-in var(--dur-fast) ease-out' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '440px', maxWidth: '92vw', height: '100%', background: 'var(--surface-0)', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-warm-xl)', animation: 'mc-slide-right var(--dur-medium) var(--ease-out-quint)' }}>
+        <header style={{ padding: '18px 20px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            {track && <button onClick={() => setTrack(false)} aria-label="Indietro" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)', display: 'inline-flex' }}><Lucide name="arrow-left" size={20} /></button>}
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>#{o.id}</p>
+              <h2 style={{ margin: '2px 0 0', fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)' }}>{track ? 'Traccia consegna' : o.cust}</h2>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button onClick={() => printTicket(o)} aria-label="Stampa ticket" title="Stampa ticket cucina" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)', display: 'inline-flex', padding: '4px' }}><Lucide name="printer" size={20} /></button>
+            <button onClick={onClose} aria-label="Chiudi" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)' }}><Lucide name="x" size={22} /></button>
+          </div>
+        </header>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {track ? <DeliveryTrack o={o} /> : (
+          <React.Fragment>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <OrderStatusBadge status={o.status} />
+            <span style={{ fontSize: '13px', color: 'var(--ink-500)' }}>{o.when}</span>
+          </div>
+          <div>
+            <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ink-500)' }}>Articoli</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {o.items.map((it, i) => (
+                <div key={i} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <img src={img(it.kw, it.lock)} alt={it.name} style={{ width: '48px', height: '48px', borderRadius: 'var(--radius-md)', objectFit: 'cover' }} />
+                  <div style={{ flex: 1, minWidth: 0 }}><p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)' }}>{it.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{fmt(it.price)} × {it.q}</p></div>
+                  <span style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(it.price * it.q)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ borderTop: '1px solid var(--cream-200)', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Row label="Consegna" val={o.addr} />
+            <Row label="Pagamento" val={o.pay === 'cod' ? 'Contanti alla consegna' : 'Carta (online)'} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 800, color: 'var(--ink-900)', marginTop: '4px' }}><span>Totale</span><span>{fmt(o.total)}</span></div>
+          </div>
+          {o.pay === 'cod' && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--olive-50)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '13px', color: 'var(--olive-800)' }}><Lucide name="banknote" size={16} color="var(--olive-700)" /> Il rider incassa <strong>{fmt(o.total)}</strong> in contanti.</div>}
+          </React.Fragment>
+          )}
+        </div>
+        <footer style={{ padding: '16px 20px', borderTop: '1px solid var(--cream-200)', display: 'flex', gap: '8px' }}>
+          {track
+            ? <Button variant="secondary" size="lg" fullWidth icon="arrow-left" onClick={() => setTrack(false)}>Torna ai dettagli</Button>
+            : next ? <Button variant="primary" size="lg" fullWidth iconRight="arrow-right" onClick={() => onAdvance(o)}>{SC_NEXT_LABEL[o.status]}</Button>
+              : inDelivery ? <Button variant="primary" size="lg" fullWidth icon="map-pin" onClick={() => setTrack(true)}>Traccia consegna</Button>
+                : <div style={{ flex: 1, textAlign: 'center', fontSize: '14px', color: 'var(--ink-500)', padding: '10px' }}>{o.status === 'CANCELED' ? 'Ordine annullato' : 'Ordine concluso ✓'}</div>}
+          {!track && o.status === 'NEW' && <Button variant="danger" size="lg" icon="x">Rifiuta</Button>}
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+function DeliveryTrack({ o }) {
+  const idx = Math.max(0, DELIV_FLOW.findIndex((f) => f.s === o.status));
+  const eta = o.status === 'DELIVERED' ? 'Consegnato' : o.status === 'OUT_FOR_DELIVERY' ? 'Arrivo stimato ~10 min' : 'Arrivo stimato ~25 min';
+  return (
+    <React.Fragment>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--primary-50)', border: '1px solid var(--primary-100)', borderRadius: 'var(--radius-lg)', padding: '12px 14px' }}>
+        <span style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="bike" size={20} color="#fff" /></span>
+        <div style={{ flex: 1, minWidth: 0 }}><p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Marco · rider MyCity</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{eta}</p></div>
+        <a href="tel:+390523555014" aria-label="Chiama il rider" style={{ width: '38px', height: '38px', flexShrink: 0, borderRadius: '50%', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="phone" size={16} color="var(--primary-700)" /></a>
+      </div>
+      <div style={{ position: 'relative', paddingLeft: '8px' }}>
+        {DELIV_FLOW.map((f, i) => {
+          const done = i < idx, active = i === idx;
+          return (
+            <div key={f.s} style={{ display: 'flex', gap: '14px', paddingBottom: i === DELIV_FLOW.length - 1 ? 0 : '22px', position: 'relative' }}>
+              {i < DELIV_FLOW.length - 1 && <span style={{ position: 'absolute', left: '15px', top: '32px', bottom: '-4px', width: '2px', background: done ? 'var(--olive-400)' : 'var(--cream-300)' }} />}
+              <span style={{ width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: done ? 'var(--olive-500)' : active ? 'var(--primary-600)' : 'var(--cream-200)', color: (done || active) ? '#fff' : 'var(--ink-400)', boxShadow: active ? '0 0 0 4px var(--primary-100)' : 'none', zIndex: 1 }}><Lucide name={done ? 'check' : f.icon} size={16} stroke={done ? 3 : 2.2} color={(done || active) ? '#fff' : 'var(--ink-400)'} /></span>
+              <div style={{ paddingTop: '4px' }}><p style={{ margin: 0, fontSize: '14px', fontWeight: active ? 700 : 600, color: active ? 'var(--ink-900)' : done ? 'var(--ink-700)' : 'var(--ink-400)' }}>{f.label}</p><p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>{f.sub}</p></div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink-600)', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}><Lucide name="map-pin" size={15} color="var(--primary-600)" /> Consegna a {o.cust} · {o.addr}</div>
+    </React.Fragment>
+  );
+}
+function Row({ label, val }) { return <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '14px' }}><span style={{ color: 'var(--ink-500)' }}>{label}</span><span style={{ fontWeight: 600, color: 'var(--ink-800)', textAlign: 'right' }}>{val}</span></div>; }

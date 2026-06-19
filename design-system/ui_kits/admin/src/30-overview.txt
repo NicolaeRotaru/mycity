@@ -1,0 +1,89 @@
+// ===== Overview (marketplace-wide totals) =====
+function HealthTile({ icon, tone, label, value, delta, up, hint }) {
+  const [bg, fg] = TINT[tone];
+  const good = up;
+  return (
+    <div style={{ background: 'var(--surface-0)', border: '2px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <span style={{ width: '34px', height: '34px', borderRadius: 'var(--radius-md)', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={icon} size={17} stroke={2.2} color={fg} /></span>
+        {delta != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px', fontWeight: 700, color: good ? 'var(--olive-700)' : 'var(--secondary-600)' }}><Lucide name={good ? 'trending-up' : 'trending-down'} size={13} color={good ? 'var(--olive-600)' : 'var(--secondary-600)'} /> {delta}</span>}
+      </div>
+      <p style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1 }}>{value}</p>
+      <p style={{ margin: '5px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>{label}</p>
+      {hint && <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--ink-400)' }}>{hint}</p>}
+    </div>
+  );
+}
+function Overview({ onNav }) {
+  const T = window.AD_TOTALS;
+  const STATUS_LABEL = { NEW: 'In attesa', ACCEPTED: 'In preparazione', READY: 'Pronto', ASSIGNED: 'Rider assegnato', PICKED_UP: 'Ritirato', OUT_FOR_DELIVERY: 'In consegna', DELIVERED: 'Consegnato', CANCELED: 'Annullato' };
+  const gmv = T.revenue;
+  const takeRate = 0.14;
+  const commissione = gmv * takeRate;
+  const aov = gmv / T.orders;
+  const canceled = (window.AD_STATUS_BREAKDOWN.find((b) => b.s === 'CANCELED') || { n: 0 }).n;
+  const onTime = (100 - (canceled / T.orders) * 100 - 3.1);
+  return (
+    <div>
+      <PageTitle eyebrow="Marketplace" title="Panoramica" sub="Tutti i numeri del marketplace, in tempo reale" />
+
+      <SectionLabel icon="activity" color="var(--primary-700)">Salute del marketplace</SectionLabel>
+      <div className="mc-health-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '10px' }}>
+        <HealthTile icon="euro" tone="olive" label="GMV totale" value={fmt(gmv)} delta="+8,4%" up hint={'AOV ' + fmt(aov)} />
+        <HealthTile icon="percent" tone="primary" label={'Commissioni (take-rate ' + Math.round(takeRate * 100) + '%)'} value={fmt(commissione)} delta="+6,1%" up />
+        <HealthTile icon="timer" tone="accent" label="Consegne puntuali" value={onTime.toFixed(1).replace('.', ',') + '%'} delta="-1,2%" up={false} hint="obiettivo ≥ 95%" />
+        <HealthTile icon="store" tone="secondary" label="Churn negozi (30g)" value="2,8%" delta="-0,4%" up hint="4 negozi inattivi" />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--accent-50)', border: '1px solid var(--accent-200)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '24px', fontSize: '13px', color: 'var(--accent-900)' }}>
+        <Lucide name="info" size={15} color="var(--accent-700)" /> Le consegne puntuali sono sotto l'obiettivo: <strong style={{ marginLeft: '3px' }}>controlla i rider con più SOS</strong> nella sezione Moderazione.
+      </div>
+
+      <SectionLabel icon="users" color="var(--primary-700)">Utenti · {T.users.toLocaleString('it-IT')}</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}>
+        <StatCard icon="shopping-cart" tone="primary" label="Acquirenti" value={T.buyers.toLocaleString('it-IT')} onClick={() => onNav('users')} />
+        <StatCard icon="store" tone="accent" label="Venditori" value={T.sellers} onClick={() => onNav('users')} />
+        <StatCard icon="bike" tone="olive" label="Rider" value={T.riders} onClick={() => onNav('users')} />
+        <StatCard icon="shield" tone="secondary" label="Admin" value={T.admins} onClick={() => onNav('users')} />
+      </div>
+
+      <SectionLabel icon="package" color="var(--primary-700)">Ordini · {T.orders.toLocaleString('it-IT')}</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '16px' }}>
+        <StatCard icon="package" tone="primary" label="Totali" value={T.orders.toLocaleString('it-IT')} onClick={() => onNav('orders')} />
+        <StatCard icon="trending-up" tone="accent" label="Ultimi 7 giorni" value={T.ordersRecent} onClick={() => onNav('orders')} />
+        <StatCard icon="check-circle-2" tone="olive" label="Consegnati" value={T.delivered.toLocaleString('it-IT')} />
+        <StatCard icon="euro" tone="olive" label="Ricavi totali" value={fmt(T.revenue)} />
+      </div>
+
+      <Card variant="bordered" padding="lg" style={{ marginBottom: '24px' }}>
+        <h3 style={{ margin: '0 0 14px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Stato degli ordini</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+          {window.AD_STATUS_BREAKDOWN.map((b) => (
+            <div key={b.s} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)', padding: '8px 12px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--ink-600)' }}>{STATUS_LABEL[b.s]}</span>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--ink-900)' }}>{b.n.toLocaleString('it-IT')}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <SectionLabel icon="shopping-bag" color="var(--primary-700)">Catalogo</SectionLabel>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
+        <StatCard icon="package" tone="primary" label="Prodotti totali" value={T.products.toLocaleString('it-IT')} />
+        <StatCard icon="circle-check" tone="olive" label="Disponibili online" value={T.productsAvailable.toLocaleString('it-IT')} />
+      </div>
+    </div>
+  );
+}
+function StatCard({ icon, tone, label, value, onClick }) {
+  const [bg, fg] = TINT[tone];
+  const [h, setH] = React.useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{ background: 'var(--surface-0)', border: `2px solid ${h && onClick ? fg : 'var(--cream-300)'}`, borderRadius: 'var(--radius-xl)', padding: '16px', cursor: onClick ? 'pointer' : 'default', transition: 'border-color var(--dur-base)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <span style={{ width: '38px', height: '38px', borderRadius: 'var(--radius-md)', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={icon} size={19} stroke={2.2} color={fg} /></span>
+        <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-400)', fontWeight: 700 }}>{label}</span>
+      </div>
+      <p style={{ margin: 0, fontSize: '26px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1 }}>{value}</p>
+    </div>
+  );
+}

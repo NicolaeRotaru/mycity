@@ -1,0 +1,224 @@
+// ===== Checkout (indirizzo → consegna → pagamento → conferma) =====
+function CheckoutPage({ items, onBack, onPlace }) {
+  const [addrs, setAddrs] = React.useState(() => window.MC_ADDRESSES.map((a) => ({ ...a, km: a.km != null ? a.km : (a.id === 'a1' ? 2.0 : a.id === 'a2' ? 4.2 : 3.0) })));
+  const [addr, setAddr] = React.useState(window.MC_ADDRESSES.find((a) => a.def).id);
+  const [adding, setAdding] = React.useState(false);
+  const [naddr, setNaddr] = React.useState({ label: 'Casa', name: window.MC_USER.name, street: '', city: 'Piacenza', phone: window.MC_USER.phone });
+  const coInp = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '9px 11px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none', color: 'var(--ink-900)' };
+  const [pay, setPay] = React.useState('cod');
+  const [pickup, setPickup] = React.useState(false);
+  const [note, setNote] = React.useState('');
+  const TODAY_TIMES = ['In giornata · 15:00–18:00', 'Stasera · 18:00–20:00'];
+  const TOM_TIMES = ['Domani · 9:00–12:00', 'Domani · 12:00–15:00', 'Domani · 15:00–18:30', 'Domani · 18:30–20:00'];
+  // capacità degli slot (scarsità tipo Glovo): free | low (quasi pieno) | full (pieno)
+  const SLOT_CAP = {
+    'In giornata · 15:00–18:00': 'low', 'Stasera · 18:00–20:00': 'free',
+    'Domani · 9:00–12:00': 'free', 'Domani · 12:00–15:00': 'full',
+    'Domani · 15:00–18:30': 'low', 'Domani · 18:30–20:00': 'free',
+  };
+  const [when, setWhen] = React.useState('today');
+  const [todayTime, setTodayTime] = React.useState(TODAY_TIMES[0]);
+  const [tomTime, setTomTime] = React.useState(TOM_TIMES[2]);
+  const qty = items.reduce((s, it) => s + it.qty, 0);
+  const subtotal = items.reduce((s, it) => s + it.finalPrice * it.qty, 0);
+  const selAddr = addrs.find((a) => a.id === addr) || {};
+  const km = selAddr.km != null ? selAddr.km : 2.8;
+  // costo consegna = base infrastruttura + peso (n. prodotti) + distanza + supplemento giornata
+  const BASE_FEE = 1.5;
+  const qtyFee = qty <= 10 ? 1 : qty <= 20 ? 2 : qty <= 30 ? 3 : 4;
+  const distFee = km <= 3 ? 1 : km <= 6 ? 2 : km <= 9 ? 3 : 4;
+  const isToday = when === 'now' || when === 'today';
+  const todayFee = isToday ? 1 : 0;
+  const shipping = pickup ? 0 : (BASE_FEE + qtyFee + distFee + todayFee);
+  const total = subtotal + shipping;
+  const whenLabel = pickup ? 'Ritiro in negozio' : (when === 'now' ? 'Adesso · arrivo in ~30–45 min' : when === 'today' ? todayTime : tomTime);
+
+  return (
+    <div className="mc-checkout-page" style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '24px 20px' }}>
+      <button onClick={onBack} style={backLink}><Lucide name="arrow-left" size={17} /> Torna al carrello</button>
+      <h1 style={{ margin: '6px 0 20px', fontFamily: 'var(--font-serif)', fontSize: '32px', fontWeight: 700, color: 'var(--ink-900)' }}>Conferma il tuo ordine</h1>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: '28px', alignItems: 'start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* indirizzo */}
+          <StepCard n={1} icon="map-pin" title="Indirizzo di consegna">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              {addrs.map((a) => (
+                <SelectTile key={a.id} active={addr === a.id} onClick={() => setAddr(a.id)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                    <Badge variant="local">{a.label}</Badge>{a.def && <span style={{ fontSize: '11px', color: 'var(--ink-400)' }}>Predefinito</span>}
+                  </div>
+                  <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)' }}>{a.name}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-600)' }}>{a.street}, {a.city}</p>
+                </SelectTile>
+              ))}
+            </div>
+            <button onClick={() => setAdding((v) => !v)} style={ghostAdd}><Lucide name={adding ? 'x' : 'plus'} size={15} /> {adding ? 'Annulla' : 'Aggiungi nuovo indirizzo'}</button>
+            {adding && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '10px' }}>
+                <input value={naddr.label} onChange={(e) => setNaddr({ ...naddr, label: e.target.value })} placeholder="Etichetta (Casa, Ufficio…)" style={coInp} />
+                <input value={naddr.name} onChange={(e) => setNaddr({ ...naddr, name: e.target.value })} placeholder="Nome e cognome" style={coInp} />
+                <input value={naddr.street} onChange={(e) => setNaddr({ ...naddr, street: e.target.value })} placeholder="Via e numero" style={coInp} />
+                <input value={naddr.city} onChange={(e) => setNaddr({ ...naddr, city: e.target.value })} placeholder="Città" style={coInp} />
+                <Button variant="primary" size="sm" onClick={() => { if (!naddr.street.trim() || !naddr.name.trim()) return; const id = 'a' + Date.now(); setAddrs((l) => [...l, { ...naddr, id, km: 3.4 }]); setAddr(id); setAdding(false); }}>Salva indirizzo</Button>
+              </div>
+            )}
+          </StepCard>
+
+          {/* consegna */}
+          <StepCard n={2} icon="truck" title="Quando vuoi riceverlo">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              <SelectTile active={when === 'now'} onClick={() => setWhen('now')}>
+                <span style={{ position: 'absolute', top: '-9px', left: '12px' }}><Badge variant="urgency">Express</Badge></span>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Adesso</p>
+                <p style={{ margin: '2px 0 6px', fontSize: '13px', color: 'var(--ink-600)' }}>~30–45 min</p>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ink-500)', background: 'var(--cream-100)', padding: '3px 9px', borderRadius: 'var(--radius-full)' }}>+1€</span>
+              </SelectTile>
+              <SelectTile active={when === 'today'} onClick={() => setWhen('today')}>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Oggi</p>
+                <p style={{ margin: '2px 0 6px', fontSize: '13px', color: 'var(--ink-600)' }}>Scegli l'ora</p>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--ink-500)', background: 'var(--cream-100)', padding: '3px 9px', borderRadius: 'var(--radius-full)' }}>+1€</span>
+              </SelectTile>
+              <SelectTile active={when === 'tomorrow'} onClick={() => setWhen('tomorrow')}>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Domani</p>
+                <p style={{ margin: '2px 0 6px', fontSize: '13px', color: 'var(--ink-600)' }}>Consegna standard</p>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--olive-700)', background: 'var(--olive-50)', padding: '3px 9px', borderRadius: 'var(--radius-full)' }}>Standard</span>
+              </SelectTile>
+            </div>
+            {when !== 'now' && (
+              <div style={{ marginTop: '14px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '8px' }}>Fascia oraria <span style={{ fontWeight: 500, color: 'var(--ink-400)' }}>· scegli quando ricevere</span></label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {(when === 'today' ? TODAY_TIMES : TOM_TIMES).map((t) => {
+                    const cap = SLOT_CAP[t] || 'free';
+                    const full = cap === 'full';
+                    const cur = (when === 'today' ? todayTime : tomTime) === t;
+                    const capMeta = { free: ['var(--olive-600)', 'var(--olive-50)', 'Disponibile'], low: ['var(--accent-700)', 'var(--accent-50)', 'Quasi pieno'], full: ['var(--ink-400)', 'var(--surface-100)', 'Al completo'] }[cap];
+                    return (
+                      <button key={t} type="button" disabled={full} onClick={() => (when === 'today' ? setTodayTime(t) : setTomTime(t))} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', textAlign: 'left', border: '1.5px solid ' + (cur && !full ? 'var(--primary-500)' : 'var(--cream-300)'), background: full ? 'var(--surface-50)' : (cur ? 'var(--primary-50)' : 'var(--surface-0)'), borderRadius: 'var(--radius-md)', padding: '11px 14px', cursor: full ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-sans)', opacity: full ? 0.6 : 1, width: '100%' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '9px', fontSize: '14px', fontWeight: 600, color: 'var(--ink-900)' }}>
+                          <span style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2px solid ' + (cur && !full ? 'var(--primary-600)' : 'var(--cream-400)'), display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{cur && !full && <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: 'var(--primary-600)' }} />}</span>
+                          {t}
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '11px', fontWeight: 700, color: capMeta[0], background: capMeta[1], padding: '3px 9px', borderRadius: 'var(--radius-full)', flexShrink: 0 }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: capMeta[0] }} />{capMeta[2]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {pickup ? (
+              <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--olive-50)', border: '1px solid var(--olive-200)', borderRadius: 'var(--radius-md)', padding: '12px 14px', fontSize: '13px', color: 'var(--olive-800)' }}><Lucide name="store" size={16} color="var(--olive-700)" /> Ritiro in negozio selezionato — nessun costo di consegna.</div>
+            ) : (
+            <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--cream-50)', border: '1px solid var(--cream-200)', borderRadius: 'var(--radius-md)', padding: '12px 16px' }}>
+              <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Costo di consegna</span>
+              <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--ink-900)' }}>{fmt(shipping)}</span>
+            </div>
+            )}
+          </StepCard>
+
+          {/* pagamento */}
+          <StepCard n={3} icon="banknote" title="Come paghi">
+            <SelectTile active={pay === 'cod'} onClick={() => setPay('cod')} row>
+              <span style={payIcon('var(--olive-100)', 'var(--olive-700)')}><Lucide name="banknote" size={20} color="var(--olive-700)" /></span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Paga alla consegna · contanti</p>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-600)' }}>Paghi al rider quando arriva. Tieni pronti {fmt(total)}.</p>
+              </div>
+              <Badge variant="new">Consigliato</Badge>
+            </SelectTile>
+            <SelectTile active={pay === 'card'} onClick={() => setPay('card')} row style={{ marginTop: '10px', opacity: .7 }}>
+              <span style={payIcon('var(--surface-200)', 'var(--ink-500)')}><Lucide name="credit-card" size={20} color="var(--ink-500)" /></span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Carta di credito</p>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>Presto disponibile</p>
+              </div>
+            </SelectTile>
+            <SelectTile active={pickup} onClick={() => setPickup((p) => !p)} row style={{ marginTop: '10px' }}>
+              <span style={payIcon('var(--primary-100)', 'var(--primary-700)')}><Lucide name="store" size={20} color="var(--primary-700)" /></span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Ritira in negozio</p>
+                <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-600)' }}>Niente consegna: ritiri tu e salti i costi di spedizione.</p>
+              </div>
+              <Badge variant="new">Gratis</Badge>
+            </SelectTile>
+            <div style={{ marginTop: '14px' }}>
+              <Input label="Note per il rider (facoltativo)" placeholder="Es. citofono Bianchi, 2° piano" value={note} onChange={(e) => setNote(e.target.value)} />
+            </div>
+          </StepCard>
+        </div>
+
+        {/* riepilogo sticky */}
+        <aside style={{ position: 'sticky', top: '128px' }}>
+          <Card variant="elevated" padding="lg">
+            <h2 style={{ margin: '0 0 14px', fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>Riepilogo</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '220px', overflowY: 'auto', marginBottom: '12px' }}>
+              {items.map((it) => (
+                <div key={it.id} style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <div style={{ position: 'relative' }}>
+                    <img src={it.img} alt={it.name} style={{ width: '46px', height: '46px', borderRadius: 'var(--radius-md)', objectFit: 'cover' }} />
+                    <span style={{ position: 'absolute', top: '-6px', right: '-6px', minWidth: '18px', height: '18px', padding: '0 4px', borderRadius: '50%', background: 'var(--ink-900)', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{it.qty}</span>
+                  </div>
+                  <span style={{ flex: 1, fontSize: '13px', color: 'var(--ink-700)', lineHeight: 1.3 }}>{it.name}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(it.finalPrice * it.qty)}</span>
+                </div>
+              ))}
+            </div>
+            <Divider />
+            <Row label="Subtotale" val={fmt(subtotal)} />
+            {pickup ? (
+              <Row label="Ritiro in negozio" val="Gratis" olive />
+            ) : (
+              <Row label="Consegna" val={fmt(shipping)} />
+            )}
+            <Divider />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '20px', fontWeight: 800, color: 'var(--ink-900)', margin: '6px 0 14px' }}><span>Totale</span><span>{fmt(total)}</span></div>
+            <Button variant="primary" size="lg" fullWidth iconRight="arrow-right" onClick={() => onPlace({ items, total, slot: { day: when, time: whenLabel, fee: shipping, km }, address: selAddr })}>Conferma e ordina</Button>
+            <p style={{ margin: '10px 0 0', fontSize: '12px', color: 'var(--ink-500)', textAlign: 'center' }}>Confermando accetti i termini. Paghi solo alla consegna.</p>
+          </Card>
+        </aside>
+      </div>
+
+      {/* mobile sticky confirm bar */}
+      <div className="mc-checkout-bar" style={{ display: 'none', position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 'var(--z-sticky)', background: 'var(--surface-0)', borderTop: '1px solid var(--cream-300)', boxShadow: '0 -4px 18px -6px rgba(28,26,24,.18)', padding: '10px 16px calc(10px + env(safe-area-inset-bottom, 0px))', alignItems: 'center', gap: '12px' }}>
+        <div style={{ lineHeight: 1.1 }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-500)', fontWeight: 600 }}>Totale · paghi alla consegna</div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--ink-900)' }}>{fmt(total)}</div>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Button variant="primary" size="lg" fullWidth iconRight="arrow-right" onClick={() => onPlace({ items, total, slot: { day: when, time: whenLabel, fee: shipping, km }, address: selAddr })}>Conferma e ordina</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const backLink = { display: 'inline-flex', alignItems: 'center', gap: '6px', border: 0, background: 'transparent', color: 'var(--ink-600)', fontSize: '14px', fontWeight: 500, cursor: 'pointer', padding: '8px 0', fontFamily: 'var(--font-sans)' };
+const ghostAdd = { display: 'inline-flex', alignItems: 'center', gap: '6px', marginTop: '12px', border: '1px dashed var(--cream-400)', background: 'transparent', color: 'var(--primary-700)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', padding: '10px 14px', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-sans)', width: '100%', justifyContent: 'center' };
+const payIcon = (bg, fg) => ({ width: '40px', height: '40px', borderRadius: 'var(--radius-md)', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 });
+
+function StepCard({ n, icon, title, children }) {
+  return (
+    <Card variant="bordered" padding="lg">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+        <span style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--primary-700)', color: '#fff', fontSize: '14px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-sans)' }}>{n}</span>
+        <Lucide name={icon} size={18} color="var(--primary-700)" />
+        <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>{title}</h2>
+      </div>
+      {children}
+    </Card>
+  );
+}
+
+function SelectTile({ active, onClick, children, row, style }) {
+  return (
+    <button onClick={onClick} style={{ position: 'relative', textAlign: 'left', cursor: 'pointer', display: row ? 'flex' : 'block', alignItems: 'center', gap: '12px', width: '100%', background: active ? 'var(--primary-50)' : 'var(--surface-0)', border: `1.5px solid ${active ? 'var(--primary-500)' : 'var(--cream-300)'}`, borderRadius: 'var(--radius-lg)', padding: '14px', fontFamily: 'var(--font-sans)', boxShadow: active ? '0 0 0 3px rgba(228,122,90,.15)' : 'none', transition: 'border-color var(--dur-base), background var(--dur-base)', ...style }}>
+      {children}
+    </button>
+  );
+}
+
+function Row({ label, val, olive }) {
+  return <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: 'var(--ink-600)', padding: '3px 0' }}><span>{label}</span><span style={{ fontWeight: 600, color: olive ? 'var(--olive-700)' : 'var(--ink-800)' }}>{val}</span></div>;
+}
+function Divider() { return <div style={{ height: '1px', background: 'var(--cream-300)', margin: '10px 0' }} />; }

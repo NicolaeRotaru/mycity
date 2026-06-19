@@ -1,0 +1,71 @@
+/* ============================================================================
+ * MyCity — shared mobile hardening for the UI-kit recreations
+ * Linked LAST in buyer / seller / admin index.html so it is authoritative.
+ * (Rider is a self-contained phone frame and handles its own sizing.)
+ *
+ * These rules are deliberately VALUE-AGNOSTIC: instead of enumerating every
+ * inline grid-template (brittle, always misses some), they guarantee that no
+ * section can ever exceed the viewport, whatever the exact inline values are.
+ * Apps mount into #root (buyer) or #mc-app (seller / admin).
+ * ========================================================================== */
+
+/* 1 · The page itself never scrolls sideways. */
+html, body { max-width: 100%; overflow-x: hidden; }
+
+/* 2 · THE key fix the apps were missing: let grid & flex *text/layout
+ *     containers* shrink below their content instead of forcing the track/row
+ *     wider than the screen. Scoped to block/text elements so fixed-size inline
+ *     items (avatars, icon chips, buttons) are NOT collapsed — collapsing those
+ *     is what makes content overlap. */
+@media (max-width: 1024px) {
+  #root :is(div, section, article, main, header, footer, aside, nav, ul, ol, li, p, h1, h2, h3, table, form, label, figure),
+  #mc-app :is(div, section, article, main, header, footer, aside, nav, ul, ol, li, p, h1, h2, h3, table, form, label, figure) { min-width: 0; }
+  /* images & media stay within their box */
+  #root img, #root video, #root canvas,
+  #mc-app img, #mc-app video, #mc-app canvas { max-width: 100%; }
+}
+
+/* 3 · Phones (≤640px). */
+@media (max-width: 640px) {
+
+  /* 3a · Collapse EVERY inline multi-column grid to a single column. This one
+   *      rule replaces (and supersedes) the per-template enumerations.
+   *      Exclude the fixed bottom tab bar — it must keep its 5 columns. */
+  #root [style*="grid-template-columns"]:not(.mc-tabbar):not(.mc-srp-grid),
+  #mc-app [style*="grid-template-columns"]:not(.mc-tabbar):not(.mc-srp-grid) { grid-template-columns: 1fr !important; }
+
+  /* The bottom tab bar stays a 5-up row whatever its inline value. */
+  .mc-tabbar { grid-template-columns: repeat(5, 1fr) !important; }
+
+  /* 3b · …keep dense 4-up rails (product cards / KPI tiles) 2-up — they read
+   *      better and still fit a phone comfortably. */
+  #root [style*="repeat(4, 1fr)"]:not(.mc-tabbar):not(.mc-srp-grid),
+  #root .mc-srp-grid:not(.mc-tabbar):not(.x),
+  #mc-app [style*="repeat(4, 1fr)"]:not(.mc-tabbar):not(.mc-srp-grid),
+  #mc-app [style*="repeat(4, 1fr)"]:not(.mc-tabbar) { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* 3c · Trim the generous desktop block paddings so content isn't clipped. */
+  #root [style*="padding: 44px"], #root [style*="padding: 36px"],
+  #root [style*="padding: 32px"], #root [style*="padding: 28px"],
+  #mc-app [style*="padding: 44px"], #mc-app [style*="padding: 36px"],
+  #mc-app [style*="padding: 32px"], #mc-app [style*="padding: 28px"] {
+    padding-left: 16px !important; padding-right: 16px !important;
+  }
+
+  /* 3d · Headlines scale with the viewport; long words wrap instead of pushing
+   *      the layout wide. */
+  #root h1, #mc-app h1 { font-size: clamp(24px, 7vw, 34px) !important; }
+  #root h2, #mc-app h2 { font-size: clamp(20px, 5.5vw, 28px) !important; }
+
+  /* 3e · Long unbroken strings (emails, URLs, IDs) wrap rather than overflow. */
+  #root, #mc-app { overflow-wrap: anywhere; }
+
+  /* 3f · Wide fixed-width sheets / drawers / panels fill the screen. */
+  #root [style*="width: 420px"], #root [style*="width: 440px"], #root [style*="width: 480px"],
+  #mc-app [style*="width: 420px"], #mc-app [style*="width: 440px"], #mc-app [style*="width: 480px"] {
+    width: 100vw !important; max-width: 100vw !important;
+  }
+
+  /* 3g · Tables stay readable by scrolling inside their own box, never the page. */
+  #root table, #mc-app table { display: block; overflow-x: auto; max-width: 100%; }
+}
