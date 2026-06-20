@@ -225,7 +225,7 @@ const CartButton = ({ count }: { count: number }) => (
     <ShoppingCart size={16} strokeWidth={2.4} />
     <span className="hidden lg:inline">Carrello</span>
     {count > 0 && (
-      <span className="bg-ink-900 text-accent-500 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+      <span className="bg-ink-900 text-accent-400 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
         {count > 99 ? '99+' : count}
       </span>
     )}

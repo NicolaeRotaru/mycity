@@ -85,14 +85,20 @@ const CategoryBar = () => {
   return (
     <div ref={rootRef} className="relative">
       <div className="container mx-auto px-3 sm:px-4">
-        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-2 text-sm">
-          {/* Mega-menu trigger — scorre insieme alle pill */}
+        {/* Tab underline-style: divider sottile sotto la barra, voce attiva con
+            underline + colore accent (per mockup navbar). */}
+        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide border-b border-white/10 text-sm">
+          {/* Mega-menu trigger — stessa riga delle tab, attivo quando aperto */}
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-haspopup="menu"
-            className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-white/15 px-3 py-1.5 font-semibold text-white transition-colors hover:bg-white/25"
+            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 font-semibold transition-colors ${
+              open
+                ? 'border-accent-400 text-accent-300'
+                : 'border-transparent text-white/90 hover:text-white'
+            }`}
           >
             <LayoutGrid size={15} strokeWidth={2.2} />
             Tutte le categorie
@@ -106,8 +112,11 @@ const CategoryBar = () => {
               <Link
                 key={e.href}
                 href={e.href}
-                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 font-semibold transition-colors ${
-                  active ? 'bg-accent-500 text-ink-900 shadow-sm' : 'text-white/90 hover:bg-white/15 hover:text-white'
+                aria-current={active ? 'page' : undefined}
+                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 transition-colors ${
+                  active
+                    ? 'border-accent-400 font-semibold text-accent-300'
+                    : 'border-transparent font-medium text-white/90 hover:text-white'
                 }`}
               >
                 <Icon size={14} strokeWidth={2.2} />
