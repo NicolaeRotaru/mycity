@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AlertTriangle, Store, Zap, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Zap, Wallet } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -18,7 +18,9 @@ import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
+import { StepCard } from '@/components/checkout/StepCard';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
@@ -577,8 +579,16 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl">
-      <h1 className="sr-only">Completa il tuo ordine</h1>
+    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl pb-28 lg:pb-8">
+      {/* Back-to-cart + H1 serif visibile */}
+      <Link
+        href="/cart"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-600 hover:text-ink-900 mb-1"
+      >
+        <ArrowLeft size={17} aria-hidden /> Torna al carrello
+      </Link>
+      <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-900 mb-5">Conferma il tuo ordine</h1>
+
       <StepIndicator steps={CHECKOUT_STEPS} currentStep={2} />
 
       {!authUser && (
@@ -593,73 +603,105 @@ export default function CheckoutPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          <ShippingAddressForm
-            form={form}
-            savedAddresses={savedAddresses}
-            errors={errors}
-            onChange={handleChange}
-            onSubmit={handleSubmit}
-            onApplySavedAddress={applySavedAddress}
-          />
+        <div className="lg:col-span-2 space-y-4">
+          {/* STEP 1 — Indirizzo */}
+          <StepCard n={1} icon={MapPin} title="Indirizzo di consegna">
+            <ShippingAddressForm
+              form={form}
+              savedAddresses={savedAddresses}
+              errors={errors}
+              onChange={handleChange}
+              onSubmit={handleSubmit}
+              onApplySavedAddress={applySavedAddress}
+            />
+          </StepCard>
 
-          {/* RITIRO IN NEGOZIO */}
-          <label className={`block border-2 rounded-xl p-4 cursor-pointer transition-all ${
-            pickupInStore ? 'border-olive-400 bg-olive-50' : 'border-cream-300 bg-white hover:border-olive-200'
-          }`}>
-            <div className="flex items-start gap-3">
+          {/* STEP 2 — Quando vuoi riceverlo (consegna / express / ritiro) */}
+          <StepCard n={2} icon={Truck} title="Quando vuoi riceverlo">
+            {expressStores.length > 0 && !pickupInStore && (
+              <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-800 flex items-start gap-2 mb-3">
+                <Zap size={16} className="shrink-0 mt-0.5 text-accent-600" aria-hidden />
+                <span><strong>Consegna Express disponibile</strong> (~30–60 min, se ci sono rider) per: {expressStores.join(', ')}. Altrimenti consegna standard 24–48h.</span>
+              </div>
+            )}
+
+            {pickupInStore ? (
+              <div className="flex items-center gap-2 rounded-xl border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-800">
+                <Store size={16} className="text-olive-700 shrink-0" aria-hidden /> Ritiro in negozio selezionato — nessun costo di consegna. Vai tu quando l&apos;ordine è pronto.
+              </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3">
+                <div>
+                  <p className="font-bold text-ink-900">Consegna a domicilio</p>
+                  <p className="text-sm text-ink-600">Standard 24–48h{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
+                </div>
+                <span className="font-serif text-lg font-extrabold text-ink-900">
+                  {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
+                </span>
+              </div>
+            )}
+          </StepCard>
+
+          {/* STEP 3 — Come paghi (carta / COD + ritiro come tile metodo) */}
+          <StepCard n={3} icon={Wallet} title="Come paghi">
+            <PaymentMethodSelector
+              value={paymentMethod}
+              onChange={(m) => { setPaymentMethod(m); trackCheckoutStep('payment_method', { method: m }); }}
+              stripeAvailable={stripeAvailable}
+              multiSeller={groups.length > 1}
+            />
+
+            {/* RITIRO IN NEGOZIO — tile metodo con quadrato-icona colorato + badge */}
+            <label className={`mt-3 flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+              pickupInStore ? 'border-olive-400 bg-olive-50' : 'border-cream-300 bg-white hover:border-olive-200'
+            }`}>
               <input
                 type="checkbox"
                 checked={pickupInStore}
                 onChange={(e) => setPickupInStore(e.target.checked)}
-                className="mt-1 w-4 h-4 accent-olive-600"
+                className="mt-2.5 w-4 h-4 accent-olive-600"
               />
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
+                <Store size={20} aria-hidden />
+              </span>
               <div className="flex-1">
-                <p className="font-bold text-ink-900 flex items-center gap-2"><Store size={16} aria-hidden /> Ritira tu in negozio — salta la fila</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
+                  {pickupInStore ? (
+                    <span className="bg-olive-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
+                      −{formatPrice(pickupDiscount)}
+                    </span>
+                  ) : (
+                    <Badge variant="new">Sconto {PICKUP_DISCOUNT_PERCENT}%</Badge>
+                  )}
+                </div>
                 <p className="text-sm text-ink-600 mt-0.5">
-                  Niente spedizione, sconto subito. Vai tu al negozio quando l'ordine è pronto.
-                </p>
-              </div>
-              {pickupInStore && (
-                <span className="bg-olive-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
-                  −{formatPrice(pickupDiscount)}
-                </span>
-              )}
-            </div>
-          </label>
-
-          {expressStores.length > 0 && !pickupInStore && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
-              <Zap size={16} className="shrink-0 mt-0.5 text-amber-500" aria-hidden />
-              <span><strong>Consegna Express disponibile</strong> (~30–60 min, se ci sono rider) per: {expressStores.join(', ')}. Altrimenti consegna standard 24–48h.</span>
-            </div>
-          )}
-
-
-          <PaymentMethodSelector
-            value={paymentMethod}
-            onChange={(m) => { setPaymentMethod(m); trackCheckoutStep('payment_method', { method: m }); }}
-            stripeAvailable={stripeAvailable}
-            multiSeller={groups.length > 1}
-          />
-
-          {/* Credito MyCity — solo COD in questo flusso */}
-          {paymentMethod === 'cod' && walletEuro > 0 && (
-            <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-cream-300 bg-white cursor-pointer hover:border-primary-200">
-              <input
-                type="checkbox"
-                checked={useCredit}
-                onChange={(e) => setUseCredit(e.target.checked)}
-                className="mt-1 w-4 h-4 accent-primary-600"
-              />
-              <div className="flex-1">
-                <p className="font-bold text-ink-900 flex items-center gap-2"><Wallet size={16} aria-hidden /> Usa il mio credito MyCity</p>
-                <p className="text-sm text-ink-600 mt-0.5">
-                  Hai {formatPrice(walletEuro)} di credito.{creditApplied > 0 ? ` Applicati ${formatPrice(creditApplied)} a questo ordine.` : ''}
+                  Niente spedizione, sconto subito. Vai tu al negozio quando l&apos;ordine è pronto.
                 </p>
               </div>
             </label>
-          )}
+
+            {/* Credito MyCity — solo COD in questo flusso */}
+            {paymentMethod === 'cod' && walletEuro > 0 && (
+              <label className="mt-3 flex items-start gap-3 p-4 rounded-xl border-2 border-cream-300 bg-white cursor-pointer hover:border-primary-200">
+                <input
+                  type="checkbox"
+                  checked={useCredit}
+                  onChange={(e) => setUseCredit(e.target.checked)}
+                  className="mt-2.5 w-4 h-4 accent-primary-600"
+                />
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
+                  <Wallet size={20} aria-hidden />
+                </span>
+                <div className="flex-1">
+                  <p className="font-bold text-ink-900">Usa il mio credito MyCity</p>
+                  <p className="text-sm text-ink-600 mt-0.5">
+                    Hai {formatPrice(walletEuro)} di credito.{creditApplied > 0 ? ` Applicati ${formatPrice(creditApplied)} a questo ordine.` : ''}
+                  </p>
+                </div>
+              </label>
+            )}
+          </StepCard>
 
           {/* RIEPILOGO PER NEGOZIO */}
           {groups.length > 1 && (
@@ -720,7 +762,7 @@ export default function CheckoutPage() {
         <div className="lg:sticky lg:top-32 h-fit space-y-4">
           <div className="bg-white border border-surface-200 rounded-xl shadow-card overflow-hidden">
             <div className="bg-surface-50 border-b border-surface-200 px-5 py-3 flex justify-between items-center">
-              <h2 className="font-bold">Riepilogo ordine</h2>
+              <h2 className="font-serif text-lg font-bold text-ink-900">Riepilogo</h2>
               <span className="text-xs text-ink-400">{cart.length} articoli</span>
             </div>
 
@@ -754,6 +796,28 @@ export default function CheckoutPage() {
             />
           </div>
         </div>
+      </div>
+
+      {/* Barra conferma mobile sticky — riusa lo stesso submit di OrderSummary
+          (form="checkout-form"): nessuna logica nuova, solo un secondo trigger.
+          Nascosta su desktop (lì c'è la sidebar sticky). Non intrappola il focus:
+          è un singolo bottone nel flusso tab naturale. */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-sticky bg-white border-t border-cream-300 shadow-warm-lg px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3">
+        <div className="leading-tight">
+          <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
+          <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
+        </div>
+        <button
+          type="submit"
+          form="checkout-form"
+          disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}
+          aria-label={paymentMethod === 'card' ? 'Paga con carta e conferma ordine' : 'Conferma ordine'}
+          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+        >
+          {isCheckingOut
+            ? (paymentMethod === 'card' ? 'Apertura…' : 'Elaborazione…')
+            : (paymentMethod === 'card' ? 'Paga con carta' : 'Conferma ordine')}
+        </button>
       </div>
     </div>
   );

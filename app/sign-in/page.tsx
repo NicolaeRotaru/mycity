@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { Mail, ArrowRight } from 'lucide-react';
 import { auth, supabase } from '@/lib/supabase/client';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { toast } from 'sonner';
@@ -10,6 +11,7 @@ import Turnstile from '@/components/Turnstile';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, PasswordInput } from '@/components/ui/Field';
+import { AuthShell, AuthAlternatives, SellerRiderRecruit } from '@/components/ui/AuthShell';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
@@ -115,12 +117,20 @@ const SignInForm = () => {
     }
   };
 
+  // Preserva returnTo verso la registrazione (es. checkout → login → registrati).
+  const signUpHref = returnTo && returnTo !== '/'
+    ? `/sign-up?returnTo=${encodeURIComponent(returnTo)}`
+    : '/sign-up';
+
   return (
-    <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-ink-800">Accedi</h2>
-        <p className="text-sm text-ink-500 mt-1">Bentornato su MyCity</p>
-      </div>
+    <>
+      <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+        Bentornato su MyCity
+      </h1>
+      <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+        Accedi per seguire i tuoi ordini e i negozi preferiti.
+      </p>
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <Input
           id="signin-email"
@@ -131,6 +141,7 @@ const SignInForm = () => {
           placeholder="la-tua@email.it"
           autoComplete="email"
           inputMode="email"
+          leading={<Mail size={18} aria-hidden />}
           required
         />
         <PasswordInput
@@ -161,26 +172,31 @@ const SignInForm = () => {
             />
           </div>
         )}
-        <Button type="submit" loading={isLoading} fullWidth>
+        <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>
           {isLoading ? 'Accesso in corso...' : 'Accedi'}
         </Button>
       </form>
-      <p className="text-center text-sm text-ink-600">
+
+      <AuthAlternatives />
+
+      <p className="mt-6 text-[14px] text-ink-600">
         Non hai un account?{' '}
-        <Link href="/sign-up" className="text-primary-700 hover:underline font-semibold">
+        <Link href={signUpHref} className="font-bold text-primary-700 hover:underline">
           Registrati
         </Link>
       </p>
-    </div>
+
+      <SellerRiderRecruit />
+    </>
   );
 };
 
 const SignIn = () => (
-  <div className="min-h-screen flex items-center justify-center bg-cream-50 p-4">
-    <Suspense fallback={<LoadingState variant="inline" />}>
+  <Suspense fallback={<LoadingState variant="inline" />}>
+    <AuthShell back={{ href: '/', label: 'Torna alla home' }}>
       <SignInForm />
-    </Suspense>
-  </div>
+    </AuthShell>
+  </Suspense>
 );
 
 export default SignIn;

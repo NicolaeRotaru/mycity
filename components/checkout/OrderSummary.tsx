@@ -2,13 +2,14 @@
 
 import { Banknote, Check, Lock, RotateCcw, Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
-import { Button } from '@/components/ui/Button';
 
 /**
  * Riepilogo costi + bottone submit del checkout.
  *
- * Estratto da app/checkout/page.tsx. Controlled component — riceve tutti
- * i totali e callbacks dal parent.
+ * RESKIN: totale in serif, CTA primary, micro-rassicurazioni invariate.
+ * Controlled component — riceve tutti i totali e callbacks dal parent.
+ * LOGICA INVARIATA: stesso submit `form="checkout-form"`, stessi totali,
+ * stesso `disabled`/`isCheckingOut`, ramo card vs cod.
  */
 
 type Props = {
@@ -42,7 +43,7 @@ export function OrderSummary({
     <>
       {couponSection}
 
-      <div className="px-5 py-4 space-y-2 border-t bg-cream-50/50 text-sm">
+      <div className="px-5 py-4 space-y-2 border-t border-cream-300 bg-cream-50/50 text-sm">
         <div className="flex justify-between">
           <span className="text-ink-600">Subtotale</span>
           <span className="font-semibold">{formatPrice(subtotal)}</span>
@@ -71,9 +72,9 @@ export function OrderSummary({
             <span className="font-semibold">−{formatPrice(creditApplied)}</span>
           </div>
         )}
-        <div className="flex justify-between pt-2 border-t font-bold text-lg">
-          <span>Totale</span>
-          <span className="text-primary-800">{formatPrice(total)}</span>
+        <div className="flex justify-between items-baseline pt-2 border-t border-cream-300">
+          <span className="font-bold">Totale</span>
+          <span className="font-serif text-xl font-extrabold text-primary-800">{formatPrice(total)}</span>
         </div>
       </div>
 
@@ -82,11 +83,7 @@ export function OrderSummary({
         form="checkout-form"
         disabled={isCheckingOut || disabled}
         aria-label={paymentMethod === 'card' ? 'Paga con carta e conferma ordine' : 'Conferma ordine'}
-        className={`w-full disabled:opacity-50 disabled:cursor-not-allowed py-4 font-extrabold text-base transition-colors shadow-lg ${
-          paymentMethod === 'card'
-            ? 'bg-primary-700 hover:bg-primary-800 text-white'
-            : 'bg-accent-400 hover:bg-accent-500 text-ink-900'
-        }`}
+        className="w-full bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-4 font-extrabold text-base transition-colors shadow-warm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-inset"
       >
         {isCheckingOut ? (
           paymentMethod === 'card' ? 'Apertura pagamento sicuro…' : 'Elaborazione…'

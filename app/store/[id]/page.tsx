@@ -112,8 +112,10 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
         </div>
       )}
 
-      {/* Sezioni della home, nell'ordine e con la visibilità scelti dal negozio */}
-      <SectionRenderer sections={sections} ctx={ctx} />
+      {/* Sezioni della home, nell'ordine e con la visibilità scelti dal negozio.
+          `tabs`: l'hero resta in testa e le altre sezioni si raggruppano nelle
+          tab Prodotti / Info & orari / Recensioni (solo presentazione). */}
+      <SectionRenderer sections={sections} ctx={ctx} tabs />
     </div>
   );
 }
