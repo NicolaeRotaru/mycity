@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { ArrowRight, SearchX } from 'lucide-react';
+import { ArrowRight, RotateCcw, SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
+import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
@@ -38,9 +39,24 @@ interface Props {
   title?: string;
   titleHref?: string;
   seeAllHref?: string;
+  /**
+   * Personalizzazione dello stato "zero risultati" (opzionale, retro-compatibile).
+   * Se non passati, lo stato vuoto resta quello generico storico.
+   */
+  emptyTitle?: string;
+  emptyDescription?: string;
+  /** Se fornito, lo stato vuoto mostra un'azione "Azzera filtri". */
+  onReset?: () => void;
+  /** Slot renderizzato sotto lo stato vuoto: "Forse cercavi" + alternative. */
+  emptySuggestions?: React.ReactNode;
+  /**
+   * Notifica al chiamante il numero di prodotti visibili (post-filtro client-side),
+   * per la riga conteggio "N prodotti …" renderizzata fuori dalla griglia.
+   */
+  onCount?: (count: number) => void;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount }: Props) => {
   const { data: products = [], isLoading } = useQuery({
     queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
     queryFn: async () => {
@@ -185,6 +201,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     return arr;
   }, [prods, onlyOpenStores, minRating, ratings, sort, onlyPromo, onlyInStock, promoIds]);
 
+  // Notifica il conteggio visibile (post-filtro) al chiamante, per la riga
+  // "N prodotti …" renderizzata fuori dalla griglia (SRP / categoria).
+  useEffect(() => {
+    if (!onCount || isLoading) return;
+    onCount(filtered.length);
+  }, [onCount, isLoading, filtered.length]);
+
   // Funnel: emette `search_performed` (PostHog + GA4) quando una ricerca
   // testuale si risolve. Solo in contesto ricerca (prop `search` valorizzata),
   // una volta per termine (no inflation da refetch/re-render).
@@ -244,6 +267,35 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   if (filtered.length === 0) {
     // Le sezioni per-sottocategoria spariscono quando non hanno prodotti.
     if (isSection) return null;
+    // Stato vuoto arricchito (opt-in): titolo/descrizione personalizzati,
+    // azione "Azzera filtri" e slot "Forse cercavi" + alternative. Quando
+    // nessuna delle nuove prop è passata, resta lo stato storico generico.
+    const enriched = !!emptyTitle || !!emptyDescription || !!onReset || !!emptySuggestions;
+    if (enriched) {
+      return (
+        <div className="bg-white border border-cream-300 rounded-2xl px-4 py-12">
+          <div className="text-center">
+            <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-cream-100 text-ink-400">
+              <SearchX size={30} strokeWidth={1.7} aria-hidden />
+            </div>
+            <h3 className="font-serif text-lg font-bold text-ink-900">
+              {emptyTitle ?? 'Nessun prodotto trovato'}
+            </h3>
+            <p className="mx-auto mt-1 max-w-md text-sm text-ink-500">
+              {emptyDescription ?? 'Prova a modificare i filtri o cerca qualcos’altro.'}
+            </p>
+            {onReset && (
+              <div className="mt-4 flex items-center justify-center">
+                <Button variant="secondary" size="sm" shape="pill" icon={RotateCcw} onClick={onReset}>
+                  Azzera filtri
+                </Button>
+              </div>
+            )}
+          </div>
+          {emptySuggestions}
+        </div>
+      );
+    }
     return (
       <div className="text-center py-16 bg-white border border-cream-300 rounded-xl">
         <SearchX size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" />
