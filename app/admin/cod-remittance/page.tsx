@@ -1,15 +1,15 @@
 'use client';
 
 import { useMemo } from 'react';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Euro, ArrowLeft, Check, CheckCircle2 } from 'lucide-react';
+import { Check, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 /**
  * Rimesse contanti COD (🔴-1 slice 2/UI). Elenca i gruppi rider·giorno con ordini
@@ -99,19 +99,11 @@ export default function AdminCodRemittancePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/admin" className="text-sm text-ink-500 hover:text-ink-800 inline-flex items-center gap-1">
-          <ArrowLeft size={14} /> Dashboard admin
-        </Link>
-        <h1 className="text-3xl font-serif font-bold mt-2 text-ink-900 flex items-center gap-2">
-          <Euro size={26} className="text-primary-700" />
-          Rimesse contanti COD
-        </h1>
-        <p className="text-sm text-ink-500 mt-1">
-          Conferma i contanti ricevuti dai rider per sbloccare il pagamento ai venditori.
-          L&apos;importo da rimettere è il totale incassato meno il compenso di consegna del rider.
-        </p>
-      </div>
+      <AdminPageTitle
+        eyebrow="Finanza"
+        title="Rimesse contanti COD"
+        sub="Conferma i contanti ricevuti dai rider per sbloccare il pagamento ai venditori. L'importo da rimettere è il totale incassato meno il compenso di consegna del rider."
+      />
 
       {isLoading ? (
         <div className="space-y-3">{[...Array(3)].map((_, i) => <div key={i} className="h-24 rounded-xl skeleton" />)}</div>

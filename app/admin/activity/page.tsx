@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Eye, Clock, Globe, Smartphone, Tablet, Monitor, Bot, Users, Activity,
@@ -9,6 +8,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 type EventRow = {
   id: string;
@@ -210,17 +210,11 @@ export default function AdminActivityPage() {
 
   return (
     <div className="space-y-6 overflow-x-hidden">
-      <div>
-        <Link href="/admin" className="text-sm text-ink-500 hover:text-ink-800">← Dashboard admin</Link>
-        <h1 className="text-3xl font-serif font-bold mt-2 text-ink-900 flex items-center gap-2">
-          <Eye size={26} className="text-primary-600" />
-          Sorveglianza
-        </h1>
-        <p className="text-sm text-ink-500 mt-1">
-          Tutto ciò che accade sulla piattaforma in tempo reale: visite (anche anonime), accessi,
-          ordini, modifiche. Aggiornamento automatico ogni 15s.
-        </p>
-      </div>
+      <AdminPageTitle
+        eyebrow="Sistema"
+        title="Attività"
+        sub="Flusso live degli eventi del marketplace: visite (anche anonime), accessi, ordini, modifiche. Aggiornamento automatico ogni 15s."
+      />
 
       {/* KPI in tempo reale */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Check, X, Clock, ArrowLeft, Sparkles, Search, CheckCircle2, PartyPopper, type LucideIcon } from 'lucide-react';
+import { Check, X, Sparkles, Search, CheckCircle2, PartyPopper, ShieldAlert, Gavel, Repeat, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -11,6 +11,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 type Dispute = {
   id: string;
@@ -102,15 +103,91 @@ export default function AdminDisputesPage() {
 
   const detail = disputes.find((d) => d.id === openId);
 
+  // "Segnali di rischio" — derivati dai reclami caricati (nessuna API nuova):
+  // venditori con più reclami e clienti che aprono reclami ripetuti.
+  const riskSignals = useMemo(() => {
+    const byStore = new Map<string, { name: string; count: number }>();
+    const byOpener = new Map<string, { name: string; count: number }>();
+    for (const d of disputes) {
+      const storeName = d.against?.store_name ?? d.against?.full_name;
+      if (storeName) {
+        const e = byStore.get(storeName) ?? { name: storeName, count: 0 };
+        e.count += 1;
+        byStore.set(storeName, e);
+      }
+      const openerName = d.opener?.full_name ?? d.opener?.email;
+      if (openerName) {
+        const e = byOpener.get(openerName) ?? { name: openerName, count: 0 };
+        e.count += 1;
+        byOpener.set(openerName, e);
+      }
+    }
+    type Signal = { icon: LucideIcon; high: boolean; title: string; body: string };
+    const signals: Signal[] = [];
+    const topStore = [...byStore.values()].sort((a, b) => b.count - a.count)[0];
+    if (topStore && topStore.count >= 2) {
+      signals.push({
+        icon: Gavel,
+        high: topStore.count >= 3,
+        title: `Negozio · ${topStore.name}`,
+        body: `${topStore.count} reclami a carico nel periodo caricato. Possibile problema di qualità o servizio.`,
+      });
+    }
+    const topOpener = [...byOpener.values()].sort((a, b) => b.count - a.count)[0];
+    if (topOpener && topOpener.count >= 2) {
+      signals.push({
+        icon: Repeat,
+        high: topOpener.count >= 4,
+        title: `Cliente · ${topOpener.name}`,
+        body: `${topOpener.count} reclami aperti. Pattern da verificare per possibili abusi.`,
+      });
+    }
+    const openCount = disputes.filter((d) => d.status === 'open').length;
+    if (openCount >= 1) {
+      signals.push({
+        icon: ShieldAlert,
+        high: openCount >= 5,
+        title: 'Reclami da gestire',
+        body: `${openCount} ${openCount === 1 ? 'reclamo aperto' : 'reclami aperti'} in attesa di una decisione. Riducili per tenere alta la fiducia.`,
+      });
+    }
+    return signals;
+  }, [disputes]);
+
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/admin" className="text-sm text-ink-500 hover:text-ink-800">← Dashboard admin</Link>
-        <h1 className="text-3xl font-serif font-bold mt-2 text-ink-900 flex items-center gap-2">
-          <AlertCircle size={26} className="text-secondary-600" />
-          Reclami
-        </h1>
-      </div>
+      <AdminPageTitle
+        eyebrow="Tutela"
+        title="Reclami"
+        sub="Gestisci le controversie tra clienti e venditori."
+      />
+
+      {riskSignals.length > 0 && (
+        <section className="rounded-xl border-2 border-cream-300 bg-white p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <ShieldAlert size={17} className="text-secondary-600" strokeWidth={2.2} aria-hidden />
+            <h2 className="font-serif text-base font-bold text-ink-900">Segnali di rischio</h2>
+            <span className="rounded-full bg-secondary-50 px-2 py-0.5 text-[11px] font-bold text-secondary-700">auto</span>
+          </div>
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {riskSignals.map((r) => {
+              const Icon = r.icon;
+              return (
+                <div
+                  key={r.title}
+                  className={`rounded-md border p-3.5 ${r.high ? 'border-secondary-200 bg-secondary-50' : 'border-accent-200 bg-accent-50'}`}
+                >
+                  <div className="mb-1.5 flex items-center gap-2">
+                    <Icon size={15} className={r.high ? 'text-secondary-600' : 'text-accent-700'} strokeWidth={2.2} aria-hidden />
+                    <span className="text-[13px] font-bold text-ink-900">{r.title}</span>
+                  </div>
+                  <p className="text-[12.5px] leading-snug text-ink-600">{r.body}</p>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {(['open', 'under_review', 'resolved_buyer', 'resolved_seller', 'rejected', 'all'] as const).map((f) => (

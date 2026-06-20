@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CircleDot, Calendar, MapPin, Check, Plus, Save, Pause, Play } from 'lucide-react';
+import { Calendar, MapPin, CheckCircle2, Circle, Plus, Save, TrendingUp } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Card } from '@/components/ui/Card';
 
 type DayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 
@@ -116,112 +117,45 @@ export default function RiderAvailabilityPage() {
   if (loading) return <LoadingState />;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-1.5 text-3xl font-extrabold text-ink-900"><CircleDot size={18} strokeWidth={2.2} className="text-olive-600" aria-hidden /> Disponibilità</h1>
-        <p className="text-sm text-ink-500">Imposta quando e dove vuoi ricevere consegne.</p>
+    <div className="pb-5">
+      {/* ScreenHead */}
+      <div className="px-5 pb-2 pt-4">
+        <h1 className="font-serif text-[26px] font-extrabold text-ink-900">Turni & zone</h1>
+        <p className="mt-0.5 text-[13px] text-ink-500">Quando e dove vuoi consegnare</p>
       </div>
 
-      {/* Online toggle */}
-      <section className={`border-2 rounded-2xl p-6 transition-colors ${
-        avail.online
-          ? 'bg-gradient-to-br from-olive-50 to-olive-100 border-olive-300'
-          : 'bg-cream-50 border-cream-300'
-      }`}>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <span className={`relative inline-flex h-3 w-3 ${avail.online ? '' : 'opacity-30'}`}>
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${avail.online ? 'bg-olive-400' : 'bg-cream-300'} opacity-75`} />
-              <span className={`relative inline-flex rounded-full h-3 w-3 ${avail.online ? 'bg-olive-500' : 'bg-gray-400'}`} />
-            </span>
+      {/* Stato online — switch iOS */}
+      <div className="px-4 pb-4">
+        <Card variant="bordered" padding="md">
+          <div className="flex items-center justify-between">
             <div>
-              <p className="text-xl font-extrabold font-serif text-ink-900">
-                {avail.online ? 'Sei online' : 'Sei offline'}
-              </p>
-              <p className="text-xs text-ink-600">
-                {avail.online
-                  ? 'Stai ricevendo proposte di consegna'
-                  : 'Non riceverai proposte fino a quando non ti metterai online'}
-              </p>
+              <p className="font-bold text-ink-900">Stato</p>
+              <p className="text-[13px] text-ink-500">{avail.online ? 'Online · ricevi consegne' : 'Offline'}</p>
             </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={avail.online}
+              aria-label={avail.online ? 'Vai offline' : 'Vai online'}
+              onClick={() => save({ ...avail, online: !avail.online })}
+              className={`relative h-[30px] w-[52px] shrink-0 rounded-full transition-colors ${
+                avail.online ? 'bg-olive-500' : 'bg-cream-300'
+              }`}
+            >
+              <span
+                className="absolute top-[3px] h-6 w-6 rounded-full bg-white shadow-sm transition-all"
+                style={{ left: avail.online ? '25px' : '3px' }}
+              />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => save({ ...avail, online: !avail.online })}
-            className={`flex items-center justify-center gap-1.5 px-6 py-3 rounded-xl font-bold text-white text-base shadow transition-all ${
-              avail.online
-                ? 'bg-rose-500 hover:bg-rose-600'
-                : 'bg-olive-500 hover:bg-olive-600 hover:scale-105'
-            }`}
-          >
-            {avail.online
-              ? <><Pause size={16} strokeWidth={2.2} aria-hidden /> Vai offline</>
-              : <><Play size={16} strokeWidth={2.2} aria-hidden /> Vai online</>}
-          </button>
-        </div>
-      </section>
-
-      {/* Settimanale */}
-      <section className="bg-white border rounded-xl p-5">
-        <h2 className="flex items-center gap-1.5 font-bold text-ink-900 mb-4"><Calendar size={18} strokeWidth={2.2} aria-hidden /> Orari preferiti</h2>
-        <p className="text-xs text-ink-500 mb-4">
-          Indica le tue fasce orarie preferite: è un promemoria per organizzarti. Per ricevere
-          consegne ricordati di metterti <strong>online</strong> qui sopra.
-        </p>
-        <div className="space-y-2">
-          {DAYS.map((d) => {
-            const cfg = avail.schedule[d.key];
-            return (
-              <div key={d.key} className={`flex flex-wrap items-center gap-x-3 gap-y-2 p-3 rounded-lg border ${cfg.enabled ? 'bg-white border-cream-300' : 'bg-cream-50 border-cream-200 opacity-60'}`}>
-                <label className="flex items-center gap-2 w-28 shrink-0 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={cfg.enabled}
-                    onChange={(e) => save({
-                      ...avail,
-                      schedule: { ...avail.schedule, [d.key]: { ...cfg, enabled: e.target.checked } },
-                    }, true)}
-                    className="w-4 h-4 rounded text-accent-500 focus:ring-accent-500"
-                  />
-                  <span className="font-semibold text-sm">{d.label}</span>
-                </label>
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <input
-                    type="time"
-                    value={cfg.from}
-                    disabled={!cfg.enabled}
-                    onChange={(e) => save({
-                      ...avail,
-                      schedule: { ...avail.schedule, [d.key]: { ...cfg, from: e.target.value } },
-                    }, true)}
-                    className="border rounded px-2 py-1 text-sm disabled:bg-cream-100 flex-1 min-w-0"
-                  />
-                  <span className="text-ink-400 text-sm shrink-0">→</span>
-                  <input
-                    type="time"
-                    value={cfg.to}
-                    disabled={!cfg.enabled}
-                    onChange={(e) => save({
-                      ...avail,
-                      schedule: { ...avail.schedule, [d.key]: { ...cfg, to: e.target.value } },
-                    }, true)}
-                    className="border rounded px-2 py-1 text-sm disabled:bg-cream-100 flex-1 min-w-0"
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+        </Card>
+      </div>
 
       {/* Zone preferite */}
-      <section className="bg-white border rounded-xl p-5">
-        <h2 className="flex items-center gap-1.5 font-bold text-ink-900 mb-2"><MapPin size={18} strokeWidth={2.2} aria-hidden /> Zone preferite</h2>
-        <p className="text-xs text-ink-500 mb-4">
-          Riceverai prima le consegne in queste zone. Max 6. Lascia vuoto per ricevere ovunque.
-        </p>
-
-        <div className="flex flex-wrap gap-2 mb-4">
+      <div className="px-4 pb-4">
+        <p className="mb-1 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Zone preferite</p>
+        <p className="mb-3 text-xs text-ink-500">Ricevi prima le consegne in queste zone. Max 6.</p>
+        <div className="flex flex-col gap-2">
           {SUGGESTED_ZONES.map((z) => {
             const active = zones.includes(z);
             return (
@@ -229,47 +163,128 @@ export default function RiderAvailabilityPage() {
                 key={z}
                 type="button"
                 onClick={() => toggleZone(z)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border transition-colors ${
-                  active
-                    ? 'bg-accent-500 text-white border-accent-500'
-                    : 'bg-white text-ink-700 border-cream-300 hover:border-accent-400'
+                aria-pressed={active}
+                className={`flex items-center justify-between rounded-lg border bg-surface-0 px-3.5 py-3 transition-colors ${
+                  active ? 'border-primary-400' : 'border-cream-300'
                 }`}
               >
-                {active ? <Check size={14} strokeWidth={2.2} aria-hidden /> : <Plus size={14} strokeWidth={2.2} aria-hidden />}{z}
+                <span className="inline-flex items-center gap-2 text-sm font-semibold text-ink-900">
+                  <MapPin size={15} className={active ? 'text-primary-600' : 'text-ink-400'} aria-hidden /> {z}
+                </span>
+                {active
+                  ? <CheckCircle2 size={20} className="text-primary-600" aria-hidden />
+                  : <Circle size={20} className="text-ink-300" aria-hidden />}
               </button>
             );
           })}
         </div>
 
-        <div className="flex gap-2">
+        {/* Zona personalizzata */}
+        <div className="mt-3 flex gap-2">
           <input
             type="text"
             value={customZone}
             onChange={(e) => setCustomZone(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomZone(); } }}
-            placeholder="Aggiungi una zona personalizzata…"
+            placeholder="Aggiungi una zona…"
             maxLength={40}
-            className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-400"
+            aria-label="Aggiungi una zona personalizzata"
+            className="min-w-0 flex-1 rounded-lg border border-cream-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
           <button
             type="button"
             onClick={addCustomZone}
             disabled={!customZone.trim()}
-            className="bg-accent-500 hover:bg-accent-600 disabled:opacity-40 text-white px-4 py-2 rounded-lg text-sm font-semibold"
+            className="inline-flex items-center gap-1 rounded-lg bg-primary-700 px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-800 disabled:opacity-40"
           >
-            Aggiungi
+            <Plus size={15} strokeWidth={2.4} aria-hidden /> Aggiungi
           </button>
         </div>
-
         {zones.length > 0 && (
-          <div className="mt-3 text-xs text-ink-500">
-            Selezionate: {zones.length}/6
-          </div>
+          <p className="mt-2 text-xs text-ink-500">Selezionate: {zones.length}/6</p>
         )}
-      </section>
+      </div>
 
-      <div className="flex items-center gap-1.5 bg-olive-50 border border-olive-200 rounded-xl p-4 text-sm text-olive-900">
-        <Save size={16} strokeWidth={2.2} aria-hidden /> Le preferenze sono salvate sul tuo profilo e sincronizzate su tutti i dispositivi.
+      {/* Orari preferiti (promemoria personale) */}
+      <div className="px-4 pb-4">
+        <p className="mb-2.5 flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">
+          <Calendar size={15} aria-hidden /> Orari preferiti
+        </p>
+        <Card variant="bordered" padding="md">
+          <p className="mb-3 text-xs text-ink-500">
+            Le tue fasce orarie preferite (promemoria). Per ricevere consegne ricordati di metterti <strong>online</strong>.
+          </p>
+          <div className="flex flex-col gap-2">
+            {DAYS.map((d) => {
+              const cfg = avail.schedule[d.key];
+              return (
+                <div
+                  key={d.key}
+                  className={`flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-2.5 ${
+                    cfg.enabled ? 'border-cream-300 bg-surface-0' : 'border-cream-200 bg-cream-50 opacity-60'
+                  }`}
+                >
+                  <label className="flex w-24 shrink-0 cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={cfg.enabled}
+                      onChange={(e) => save({
+                        ...avail,
+                        schedule: { ...avail.schedule, [d.key]: { ...cfg, enabled: e.target.checked } },
+                      }, true)}
+                      className="h-4 w-4 rounded text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-[13px] font-semibold">{d.label}</span>
+                  </label>
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <input
+                      type="time"
+                      value={cfg.from}
+                      disabled={!cfg.enabled}
+                      aria-label={`${d.label} dalle`}
+                      onChange={(e) => save({
+                        ...avail,
+                        schedule: { ...avail.schedule, [d.key]: { ...cfg, from: e.target.value } },
+                      }, true)}
+                      className="min-w-0 flex-1 rounded border border-cream-300 px-2 py-1 text-sm disabled:bg-cream-100"
+                    />
+                    <span className="shrink-0 text-sm text-ink-400">→</span>
+                    <input
+                      type="time"
+                      value={cfg.to}
+                      disabled={!cfg.enabled}
+                      aria-label={`${d.label} alle`}
+                      onChange={(e) => save({
+                        ...avail,
+                        schedule: { ...avail.schedule, [d.key]: { ...cfg, to: e.target.value } },
+                      }, true)}
+                      className="min-w-0 flex-1 rounded border border-cream-300 px-2 py-1 text-sm disabled:bg-cream-100"
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+
+      {/* Orari di punta */}
+      <div className="px-4 pb-4">
+        <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">Orari di punta</p>
+        <Card variant="flat" padding="md" className="border border-primary-100 bg-primary-50">
+          <div className="flex items-start gap-2.5">
+            <TrendingUp size={18} className="shrink-0 text-primary-700" aria-hidden />
+            <p className="text-[13px] leading-relaxed text-primary-900">
+              Più consegne tra le <strong>12–14</strong> e le <strong>19–21</strong>. Tieni la disponibilità ON nei picchi per guadagnare di più.
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      <div className="px-4">
+        <div className="flex items-center gap-1.5 rounded-lg border border-olive-200 bg-olive-50 p-3.5 text-[13px] text-olive-900">
+          <Save size={16} strokeWidth={2.2} className="shrink-0" aria-hidden /> Le preferenze sono salvate sul tuo profilo e sincronizzate su tutti i dispositivi.
+        </div>
       </div>
     </div>
   );

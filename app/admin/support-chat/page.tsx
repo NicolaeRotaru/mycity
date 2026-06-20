@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Headset, ArrowRight, Inbox } from 'lucide-react';
+import { ArrowRight, Inbox } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 type Row = {
   id: string;
@@ -53,16 +54,16 @@ export default function AdminSupportChatPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-900 flex items-center gap-2">
-          <Headset size={22} className="text-primary-700" />
-          Chat assistenza
-          {totalUnread > 0 && (
-            <span className="bg-primary-600 text-white text-xs font-bold rounded-full px-2 py-0.5">{totalUnread}</span>
-          )}
-        </h1>
-        <p className="text-sm text-ink-500">Richieste di assistenza degli utenti. Apri una chat per rispondere.</p>
-      </div>
+      <AdminPageTitle
+        eyebrow="Sistema"
+        title="Chat assistenza"
+        sub="Richieste di assistenza degli utenti. Apri una chat per rispondere."
+        action={totalUnread > 0 && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-100 px-3 py-1.5 text-sm font-bold text-primary-700">
+            {totalUnread} da leggere
+          </span>
+        )}
+      />
 
       {convos.length === 0 ? (
         <div className="bg-white border border-cream-300 rounded-xl p-12 text-center text-ink-500">

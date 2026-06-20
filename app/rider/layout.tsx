@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
-import SOSButton from '@/components/rider/SOSButton';
+import RiderShell from '@/components/rider/RiderShell';
 
 export default function RiderLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -32,11 +32,8 @@ export default function RiderLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  return (
-    <div className="container mx-auto px-4 sm:px-6 py-6 sm:py-8 max-w-6xl">
-      <main>{children}</main>
-      {/* Sicurezza rider: SOS sempre raggiungibile (P0-7). */}
-      {isRider && <SOSButton />}
-    </div>
-  );
+  // Shell mobile "phone-shaped" con bottom tab bar dedicata. La chrome globale
+  // (Navbar/Footer/MobileTabBar) si nasconde su /rider come per /seller e /admin.
+  // SOS solo per rider veri (P0-7): un admin che ispeziona /rider non lo vede.
+  return <RiderShell showSOS={isRider}>{children}</RiderShell>;
 }

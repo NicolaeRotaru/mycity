@@ -12,6 +12,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 type Row = {
   id: string;
@@ -70,27 +71,28 @@ export default function AdminProductsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-between items-center flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900">Prodotti</h1>
-          <p className="text-sm text-ink-500">{filtered.length} di {products.length}</p>
-        </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <input
-            type="search"
-            placeholder="Cerca prodotto o negozio…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border rounded-lg px-3 py-1.5 text-sm flex-1 sm:w-64"
-          />
-          <Link
-            href="/admin/products/new"
-            className="inline-flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap"
-          >
-            <Plus size={16} aria-hidden /> Nuovo
-          </Link>
-        </div>
-      </div>
+      <AdminPageTitle
+        eyebrow="Catalogo"
+        title="Prodotti"
+        sub={`${filtered.length} di ${products.length}`}
+        action={
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <input
+              type="search"
+              placeholder="Cerca prodotto o negozio…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="border border-cream-300 rounded-lg px-3 py-1.5 text-sm flex-1 sm:w-64"
+            />
+            <Link
+              href="/admin/products/new"
+              className="inline-flex items-center gap-1.5 bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap"
+            >
+              <Plus size={16} aria-hidden /> Nuovo
+            </Link>
+          </div>
+        }
+      />
 
       <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">

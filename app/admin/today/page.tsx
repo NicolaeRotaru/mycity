@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   ShoppingBag, TrendingUp, AlertTriangle, UserCheck, Euro,
-  Clock, AlertCircle, CheckCircle2,
+  Clock, AlertCircle, CheckCircle2, Gavel, Siren, Receipt,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -160,15 +160,15 @@ export default function AdminTodayPage() {
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
           <KpiCard icon={Clock} label="Ordini NEW" value={stats.ordersPendingCount} href="/admin/orders" color="primary" />
           <KpiCard icon={UserCheck} label="Seller pending" value={stats.sellersPendingCount} href="/admin/users?role=seller" color="accent" />
-          <KpiCard icon={AlertTriangle} label="Dispute aperte" value={stats.disputesOpenCount} href="/admin/disputes" color="secondary" alert />
-          <KpiCard icon={AlertCircle} label="SOS attivi" value={stats.sosActiveCount} href="/admin/sos" color="secondary" alert />
+          <KpiCard icon={Gavel} label="Reclami aperti" value={stats.disputesOpenCount} href="/admin/disputes" color="secondary" alert />
+          <KpiCard icon={Siren} label="SOS attivi" value={stats.sosActiveCount} href="/admin/sos" color="secondary" alert />
         </div>
       </section>
 
       {/* Ultimi ordini */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-bold text-ink-900">Ultimi 10 ordini</h2>
+          <AdminSectionLabel icon={Receipt}>Ultimi 10 ordini</AdminSectionLabel>
           <Link href="/admin/orders" className="text-xs text-primary-700 hover:underline">vedi tutti →</Link>
         </div>
         <div className="overflow-hidden rounded-xl border-2 border-cream-300 bg-white">

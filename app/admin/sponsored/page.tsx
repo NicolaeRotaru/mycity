@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Megaphone, Pause, Play, Trash2, BarChart3 } from 'lucide-react';
+import { Pause, Play, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
-import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 /**
  * Admin: gestione sponsored listings.
@@ -103,13 +103,11 @@ export default function AdminSponsoredPage() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-ink-900 flex items-center gap-2">
-          <Megaphone size={22} className="text-primary-700" strokeWidth={2.2} />
-          Sponsored Listings
-        </h1>
-        <p className="text-sm text-ink-500 mt-1">Campagne pubblicitarie acquistate dai seller.</p>
-      </header>
+      <AdminPageTitle
+        eyebrow="Marketing"
+        title="Sponsorizzati"
+        sub="Posizionamenti a pagamento acquistati dai venditori."
+      />
 
       {/* KPI summary */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

@@ -16,12 +16,22 @@ type Review = {
   reviewer: { full_name: string | null } | null;
 };
 
-const Stars = ({ rating }: { rating: number }) => (
-  <span className="text-accent-500 tracking-tight">
-    {'★'.repeat(Math.round(rating))}
-    <span className="text-ink-300">{'★'.repeat(5 - Math.round(rating))}</span>
-  </span>
-);
+const Stars = ({ rating, size = 14 }: { rating: number; size?: number }) => {
+  const full = Math.round(rating);
+  return (
+    <span className="inline-flex" aria-label={`${rating.toFixed(1)} su 5`}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <Star
+          key={i}
+          size={size}
+          className={i <= full ? 'text-accent-500' : 'text-ink-300'}
+          fill={i <= full ? 'currentColor' : 'none'}
+          aria-hidden
+        />
+      ))}
+    </span>
+  );
+};
 
 export default function RiderReviewsPage() {
   const [filter, setFilter] = useState<'all' | 5 | 4 | 3 | 2 | 1>('all');
@@ -62,106 +72,100 @@ export default function RiderReviewsPage() {
     : reviews.filter((r) => Math.round(r.rating) === filter);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-1.5 text-3xl font-extrabold text-ink-900"><Star size={18} strokeWidth={2.2} className="text-accent-400" aria-hidden /> Le tue recensioni</h1>
-        <p className="text-sm text-ink-500">Cosa pensano i clienti delle tue consegne</p>
+    <div className="pb-5">
+      {/* Header con back */}
+      <div className="px-5 pb-2 pt-4">
+        <h1 className="font-serif text-[26px] font-extrabold text-ink-900">Le mie recensioni</h1>
+        <p className="mt-0.5 text-[13px] text-ink-500">Cosa pensano i clienti delle tue consegne</p>
       </div>
 
-      {isLoading ? (
-        <LoadingState />
-      ) : reviews.length === 0 ? (
-        <div className="bg-white border rounded-xl p-12 text-center">
-          <Bike size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" aria-hidden />
-          <p className="font-semibold text-ink-700">Nessuna recensione ancora</p>
-          <p className="text-sm text-ink-500 mt-1">
-            Dopo ogni consegna il cliente può lasciarti una valutazione. Più consegni, più feedback ricevi.
-          </p>
-        </div>
-      ) : (
-        <>
-          <section className="bg-gradient-to-br from-accent-50 to-accent-100 border border-accent-200 rounded-xl p-6 grid md:grid-cols-[200px_1fr] gap-6">
-            <div className="text-center">
-              <div className="text-6xl font-extrabold font-serif text-accent-900">{stats.avg.toFixed(1)}</div>
-              <Stars rating={stats.avg} />
-              <p className="text-sm text-accent-800 mt-1">{stats.count} recensioni</p>
-              {stats.avg >= 4.5 && (
-                <span className="inline-flex items-center gap-1.5 mt-2 bg-accent-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                  <Trophy size={14} strokeWidth={2.2} aria-hidden /> Top rider
-                </span>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              {stats.distribution.map((count, i) => {
-                const star = 5 - i;
-                const pct = stats.count > 0 ? (count / stats.count) * 100 : 0;
-                return (
-                  <button
-                    key={star}
-                    type="button"
-                    onClick={() => setFilter(filter === star ? 'all' : (star as 5 | 4 | 3 | 2 | 1))}
-                    className={`w-full flex items-center gap-3 px-2 py-1 rounded hover:bg-white/50 transition-colors ${
-                      filter === star ? 'bg-white/70' : ''
-                    }`}
-                  >
-                    <span className="text-xs font-semibold w-10 text-right">{star}★</span>
-                    <div className="flex-1 bg-white/40 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="h-full bg-accent-500 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-accent-900 w-10">{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          {filter !== 'all' && (
-            <div className="flex items-center justify-between bg-accent-50 border border-accent-200 rounded-lg px-4 py-2 text-sm">
-              <span>Filtro: solo recensioni a {filter} stelle</span>
-              <button onClick={() => setFilter('all')} className="text-accent-700 font-semibold hover:underline">
-                Mostra tutte
-              </button>
-            </div>
-          )}
-
-          <div className="space-y-3">
-            {filtered.map((r) => {
-              const initial = r.reviewer?.full_name?.[0]?.toUpperCase() ?? '?';
-              return (
-                <article key={r.id} className="bg-white border rounded-xl p-5">
-                  <header className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-full bg-accent-100 text-accent-700 font-bold flex items-center justify-center shrink-0">
-                      {initial}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <p className="font-semibold text-ink-900">{r.reviewer?.full_name ?? 'Cliente'}</p>
-                        <span className="text-xs text-ink-400">{formatDate(r.created_at)}</span>
-                      </div>
-                      <Stars rating={r.rating} />
-                    </div>
-                  </header>
-                  {r.comment && (
-                    <p className="text-sm text-ink-700 leading-relaxed mt-2 pl-13">{r.comment}</p>
-                  )}
-                </article>
-              );
-            })}
+      <div className="px-4">
+        {isLoading ? (
+          <LoadingState />
+        ) : reviews.length === 0 ? (
+          <div className="rounded-xl border border-cream-300 bg-surface-0 p-10 text-center">
+            <Bike size={44} strokeWidth={1.5} className="mx-auto mb-3 text-ink-300" aria-hidden />
+            <p className="font-semibold text-ink-700">Nessuna recensione ancora</p>
+            <p className="mt-1 text-sm text-ink-500">
+              Dopo ogni consegna il cliente può lasciarti una valutazione. Più consegni, più feedback ricevi.
+            </p>
           </div>
-        </>
-      )}
+        ) : (
+          <>
+            {/* Media serif + distribuzione */}
+            <div className="mb-3.5 rounded-xl border border-accent-200 bg-accent-100 p-4">
+              <div className="flex items-center gap-4">
+                <div className="text-center">
+                  <p className="font-serif text-[34px] font-extrabold leading-none text-ink-900">{stats.avg.toFixed(1).replace('.', ',')}</p>
+                  <div className="mt-1"><Stars rating={stats.avg} size={14} /></div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-ink-900">{stats.avg >= 4.5 ? 'Ottimo lavoro!' : 'Continua così'}</p>
+                  <p className="mt-0.5 text-[13px] text-ink-600">Su {stats.count} {stats.count === 1 ? 'recensione' : 'recensioni'}.</p>
+                  {stats.avg >= 4.5 && (
+                    <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-accent-500 px-3 py-1 text-xs font-bold text-ink-900">
+                      <Trophy size={14} strokeWidth={2.2} aria-hidden /> Top rider
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 space-y-1.5">
+                {stats.distribution.map((count, i) => {
+                  const star = 5 - i;
+                  const pct = stats.count > 0 ? (count / stats.count) * 100 : 0;
+                  return (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setFilter(filter === star ? 'all' : (star as 5 | 4 | 3 | 2 | 1))}
+                      className={`flex w-full items-center gap-3 rounded px-1.5 py-1 transition-colors hover:bg-white/50 ${filter === star ? 'bg-white/70' : ''}`}
+                    >
+                      <span className="w-8 text-right text-xs font-semibold">{star}★</span>
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-white/40">
+                        <div className="h-full rounded-full bg-accent-500 transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="w-7 text-xs text-ink-700">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-      <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-sm text-primary-900">
-        <h3 className="flex items-center gap-1.5 font-bold mb-2"><Lightbulb size={16} strokeWidth={2.2} aria-hidden /> Come migliorare il rating</h3>
-        <ul className="space-y-1">
-          <li>• Saluta sempre con un sorriso e mostra il volto</li>
-          <li>• Avvisa via app quando sei a 2 minuti dalla consegna</li>
-          <li>• Maneggia con cura prodotti fragili o caldi</li>
-          <li>• Sii puntuale: niente fa più piacere di una consegna in orario</li>
-        </ul>
+            {filter !== 'all' && (
+              <div className="mb-3 flex items-center justify-between rounded-lg border border-accent-200 bg-accent-50 px-3.5 py-2 text-sm">
+                <span>Filtro: {filter}★</span>
+                <button onClick={() => setFilter('all')} className="font-semibold text-accent-700 hover:underline">Mostra tutte</button>
+              </div>
+            )}
+
+            {/* Lista recensioni */}
+            <div className="flex flex-col gap-2.5">
+              {filtered.map((r) => (
+                <article key={r.id} className="rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <strong className="text-[13px] text-ink-900">{r.reviewer?.full_name ?? 'Cliente'}</strong>
+                    <Stars rating={r.rating} size={12} />
+                  </div>
+                  {r.comment && <p className="text-[13px] leading-relaxed text-ink-600">{r.comment}</p>}
+                  <p className="mt-1 text-[11px] text-ink-400">{formatDate(r.created_at)}</p>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Tips */}
+        <div className="mt-4 rounded-xl border border-primary-200 bg-primary-50 p-4 text-sm text-primary-900">
+          <h3 className="mb-2 flex items-center gap-1.5 font-bold">
+            <Lightbulb size={16} strokeWidth={2.2} aria-hidden /> Come migliorare il rating
+          </h3>
+          <ul className="space-y-1 text-[13px]">
+            <li>• Saluta sempre con un sorriso e mostra il volto</li>
+            <li>• Avvisa via app quando sei a 2 minuti dalla consegna</li>
+            <li>• Maneggia con cura prodotti fragili o caldi</li>
+            <li>• Sii puntuale: niente fa più piacere di una consegna in orario</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
