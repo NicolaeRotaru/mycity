@@ -12,6 +12,8 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
+import SellerPageTitle from '@/components/seller/SellerPageTitle';
+import EmptyState from '@/components/EmptyState';
 import { queryKeys } from '@/lib/queries/keys';
 
 /**
@@ -120,25 +122,22 @@ export default function SellerStoriesPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
-      <header className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900 flex items-center gap-2">
-            <Camera size={22} className="text-primary-700" strokeWidth={2.2} />
-            Storie del negozio
-          </h1>
-          <p className="text-sm text-ink-500 mt-1">
-            Foto + 1 frase. Scade in 24h. Modo veloce per restare in cima.
-          </p>
-        </div>
-        <Button onClick={() => setOpen(true)} size="sm" icon={Camera}>Nuova storia</Button>
-      </header>
+    <div className="space-y-6">
+      <SellerPageTitle
+        eyebrow="Crescita"
+        title="Storie"
+        sub="Foto + 1 frase. Scade in 24h. Modo veloce per restare in cima."
+        className="mb-0"
+        action={<Button onClick={() => setOpen(true)} size="sm" icon={Camera}>Nuova storia</Button>}
+      />
 
       {stories.length === 0 ? (
-        <div className="bg-white border border-cream-300 rounded-xl p-8 text-center">
-          <Camera size={48} className="mx-auto text-ink-300 mb-3" strokeWidth={1.5} />
-          <p className="text-ink-500">Nessuna storia pubblicata.</p>
-          <p className="text-xs text-ink-400 mt-1">Pubblica 1 foto al giorno per restare in evidenza.</p>
+        <div className="rounded-xl border border-cream-300 bg-white">
+          <EmptyState
+            icon={Camera}
+            title="Nessuna storia pubblicata"
+            description="Pubblica 1 foto al giorno per restare in evidenza. Scade automaticamente dopo 24h."
+          />
         </div>
       ) : (
         <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

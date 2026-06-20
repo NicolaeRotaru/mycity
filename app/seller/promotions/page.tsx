@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Sparkles, ArrowLeft, Plus, Calendar, Tag } from 'lucide-react';
+import { Sparkles, Plus, Calendar, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
@@ -12,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Promo = {
@@ -120,19 +120,13 @@ export default function SellerPromotionsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <Link href="/seller/dashboard" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-800">
-            <ArrowLeft size={14} /> Dashboard
-          </Link>
-          <h1 className="text-3xl font-serif font-bold mt-2 text-ink-900 flex items-center gap-2">
-            <Sparkles size={28} className="text-accent-600" />
-            Promozioni
-          </h1>
-          <p className="text-sm text-ink-500 mt-1">Crea sconti che spingono le vendite. Si attivano automaticamente.</p>
-        </div>
-        <Button onClick={() => setShowWizard(true)} icon={Plus}>Nuova promo (30 sec)</Button>
-      </div>
+      <SellerPageTitle
+        eyebrow="Crescita"
+        title="Promozioni"
+        sub="Crea sconti che spingono le vendite. Si attivano automaticamente."
+        className="mb-0"
+        action={<Button onClick={() => setShowWizard(true)} icon={Plus}>Nuova promo (30 sec)</Button>}
+      />
 
       {/* Promo attive */}
       <section>

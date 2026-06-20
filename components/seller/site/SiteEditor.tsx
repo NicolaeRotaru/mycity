@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Save, Store, ChevronRight, ArrowLeft, Palette, LayoutTemplate, Menu as MenuIcon, type LucideIcon } from 'lucide-react';
+import { ExternalLink, Save, Store, ChevronRight, Palette, LayoutTemplate, Menu as MenuIcon, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
+import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { normalizeSite, storeSiteSchema, type StoreSite, type SitePage } from '@/lib/store-site';
 import ThemePicker from './ThemePicker';
 import PageListEditor from './PageListEditor';
@@ -173,18 +174,13 @@ export default function SiteEditor() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link href="/seller/dashboard" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-primary-700 transition-colors">
-            <ArrowLeft size={15} aria-hidden /> Dashboard
-          </Link>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-900 mt-1">Il tuo sito</h1>
-          <p className="text-sm text-ink-500 mt-1 max-w-xl">
-            La tua vetrina online: dettagli, tema, pagine e menu. Le modifiche diventano pubbliche quando premi <span className="font-semibold text-ink-700">Salva sito</span>.
-          </p>
-        </div>
-        {previewBtn}
-      </header>
+      <SellerPageTitle
+        eyebrow="Negozio"
+        title="La tua vetrina"
+        sub="Dettagli, tema, pagine e menu. Le modifiche diventano pubbliche quando premi Salva sito."
+        className="mb-0"
+        action={previewBtn}
+      />
 
       {/* Dettagli negozio (navigabile) */}
       <button

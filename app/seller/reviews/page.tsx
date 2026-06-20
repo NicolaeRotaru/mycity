@@ -2,12 +2,13 @@
 
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Star, FileText, MessageCircle } from 'lucide-react';
+import { FileText, MessageCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Review = {
@@ -74,12 +75,7 @@ export default function SellerReviewsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold text-ink-900 flex items-center gap-2">
-          <Star size={26} className="text-accent-500" aria-hidden /> Recensioni
-        </h1>
-        <p className="text-sm text-ink-500">Cosa pensano i clienti del tuo negozio</p>
-      </div>
+      <SellerPageTitle eyebrow="Reputazione" title="Recensioni" sub="Cosa pensano i clienti del tuo negozio" className="mb-0" />
 
       {isLoading ? (
         <LoadingState />
