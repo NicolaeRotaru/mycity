@@ -14,14 +14,16 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
-import OrderTimeline from '@/components/OrderTimeline';
 import { notify } from '@/lib/notifications';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
-import { Package, Radio, MapPin, PackageCheck, Bike, CircleCheck, Navigation, Phone, StickyNote, Banknote, Check } from 'lucide-react';
+import {
+  Package, Radio, MapPin, PackageCheck, Bike, CircleCheck, Navigation, Phone,
+  StickyNote, Banknote, Check, ChevronLeft, Store,
+} from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 
 type OrderRow = {
@@ -61,6 +63,9 @@ type OrderRow = {
     products: { name: string } | null;
   }[];
 };
+
+// Segmenti progresso consegna (il rider parte da ASSIGNED).
+const FLOW: OrderStatus[] = ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'];
 
 export default function RiderOrderDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -213,9 +218,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   useEffect(() => () => stopSharing(), []);
 
   if (isLoading) return <LoadingState />;
-  if (!order) return <EmptyState icon={Package} title="Ordine non trovato" ctaLabel="Tutti gli ordini" ctaHref="/rider" />;
-
-  const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
+  if (!order) return <EmptyState icon={Package} title="Ordine non trovato" ctaLabel="Tutte le consegne" ctaHref="/rider" />;
 
   const points: MapPoint[] = [];
   if (order.seller?.store_lat && order.seller?.store_lng) {
@@ -225,120 +228,253 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     points.push({ lat: order.delivery_lat, lng: order.delivery_lng, label: 'Cliente', color: 'rose' });
   }
 
-  // Azioni in base allo stato
-  const actions: { label: string; nextStatus: OrderStatus; timestampField?: string; color: string }[] = [];
-  if (order.delivery_status === 'ASSIGNED') {
-    actions.push({ label: 'Ho ritirato l\'ordine', nextStatus: 'PICKED_UP', timestampField: 'picked_up_at', color: 'bg-cyan-600 hover:bg-cyan-700' });
-  } else if (order.delivery_status === 'PICKED_UP') {
-    actions.push({ label: 'In consegna al cliente', nextStatus: 'OUT_FOR_DELIVERY', color: 'bg-secondary-700 hover:bg-secondary-800' });
-  } else if (order.delivery_status === 'OUT_FOR_DELIVERY') {
-    actions.push({ label: 'Consegnato', nextStatus: 'DELIVERED', timestampField: 'delivered_at', color: 'bg-olive-600 hover:bg-olive-700' });
-  }
+  const done = order.delivery_status === 'DELIVERED';
+  const stepIdx = FLOW.indexOf(order.delivery_status);
+  // Step 0 (ASSIGNED) → target negozio; gli step successivi → target cliente.
+  const targetIsStore = order.delivery_status === 'ASSIGNED';
 
   // Destinazione corrente per il "Naviga"
-  const navTarget =
-    order.delivery_status === 'OUT_FOR_DELIVERY' || order.delivery_status === 'PICKED_UP'
-      ? { lat: order.delivery_lat, lng: order.delivery_lng, label: order.delivery_address }
-      : { lat: order.seller?.store_lat, lng: order.seller?.store_lng, label: order.seller?.store_address };
+  const navTarget = targetIsStore
+    ? { lat: order.seller?.store_lat, lng: order.seller?.store_lng }
+    : { lat: order.delivery_lat, lng: order.delivery_lng };
+  const callPhone = targetIsStore ? order.seller?.store_phone : order.delivery_phone;
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <Link href="/rider" className="text-sm text-accent-600 hover:underline">← Dashboard</Link>
-          <h1 className="text-2xl font-bold text-ink-900 mt-1">
-            #{order.id.slice(0, 6).toUpperCase()}
-          </h1>
-        </div>
-        <OrderStatusBadge status={order.delivery_status} />
+    <div className="flex min-h-screen flex-col pb-[calc(80px+env(safe-area-inset-bottom,0px))]">
+      {/* MAPPA in testa (map-led) */}
+      <div className="relative">
+        {points.length > 0 ? (
+          <DeliveryMap points={points} className="z-0 h-56 w-full" />
+        ) : (
+          <div className="flex h-56 w-full items-center justify-center bg-gradient-to-br from-olive-100 to-cream-200 text-ink-400">
+            <MapPin size={28} aria-hidden />
+          </div>
+        )}
+        {/* Back flottante */}
+        <Link
+          href="/rider"
+          aria-label="Torna alle consegne"
+          className="absolute left-3 top-3 z-[1] inline-flex h-9 w-9 items-center justify-center rounded-full bg-surface-0/95 text-ink-700 shadow-warm-sm hover:bg-surface-0"
+        >
+          <ChevronLeft size={20} aria-hidden />
+        </Link>
+        <span className="absolute right-3 top-3 z-[1] rounded-full bg-ink-900/80 px-3 py-1.5 text-xs font-semibold text-white">
+          #{order.id.slice(0, 6).toUpperCase()}
+        </span>
       </div>
 
-      <OrderTimeline
-        status={order.delivery_status}
-        createdAt={order.created_at}
-        acceptedAt={order.accepted_at}
-        readyAt={order.ready_at}
-        pickedUpAt={order.picked_up_at}
-        deliveredAt={order.delivered_at}
-        canceledAt={order.canceled_at}
-      />
-
-      {/* MAPPA */}
-      {points.length > 0 && (
-        <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
-          <DeliveryMap points={points} className="w-full h-72 z-0" />
+      <div className="flex-1 px-4 pt-4">
+        {/* Stato + progresso segmentato */}
+        <div className="mb-3 flex items-center justify-between">
+          <OrderStatusBadge status={order.delivery_status} />
         </div>
-      )}
+        <div className="mb-[18px] flex items-center gap-1">
+          {FLOW.map((s, i) => (
+            <div
+              key={s}
+              className={`h-[5px] flex-1 rounded-full ${i <= stepIdx ? 'bg-olive-500' : 'bg-cream-300'}`}
+            />
+          ))}
+        </div>
 
-      {/* GPS SHARING */}
-      <div className={`rounded-xl p-5 border-2 ${sharing ? 'bg-olive-50 border-olive-300' : 'bg-accent-50 border-accent-300'}`}>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <p className="font-bold text-ink-900 flex items-center gap-1.5">
-              {sharing
-                ? <><Radio size={16} strokeWidth={2.2} aria-hidden /> Posizione condivisa</>
-                : <><MapPin size={16} strokeWidth={2.2} aria-hidden /> Condividi posizione</>}
+        {/* Card target unica con azioni Naviga / Chiama */}
+        {!done && (
+          <div className="mb-3.5 rounded-xl border border-cream-300 bg-surface-0 p-4 shadow-warm">
+            <p className="mb-1 text-[12px] font-bold uppercase tracking-[0.03em] text-ink-400">
+              {targetIsStore ? 'Ritira al negozio' : 'Consegna al cliente'}
             </p>
-            <p className="text-sm text-ink-600">
-              {sharing
-                ? 'Il cliente vede la tua posizione in tempo reale.'
-                : 'Attiva il GPS per far vedere al cliente dove sei.'}
+            <p className="flex items-center gap-1.5 font-serif text-xl font-bold text-ink-900">
+              {targetIsStore
+                ? <><Store size={18} className="text-primary-600" aria-hidden /> {order.seller?.store_name}</>
+                : order.delivery_full_name}
             </p>
+            <p className="mb-3 mt-0.5 text-sm text-ink-600">
+              {targetIsStore
+                ? order.seller?.store_address
+                : `${order.delivery_address}, ${order.delivery_zip ?? ''} ${order.delivery_city ?? ''}`}
+            </p>
+            <div className="flex gap-2">
+              {navTarget.lat && navTarget.lng && (
+                <Button
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  variant="secondary"
+                  size="sm"
+                  icon={Navigation}
+                  fullWidth
+                >
+                  Naviga
+                </Button>
+              )}
+              {callPhone && (
+                <Button href={`tel:${callPhone}`} variant="secondary" size="sm" icon={Phone} fullWidth>
+                  Chiama
+                </Button>
+              )}
+            </div>
+            {!targetIsStore && order.delivery_notes && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-md bg-accent-50 p-2.5 text-[13px] italic text-ink-700">
+                <StickyNote size={14} className="mt-0.5 shrink-0" aria-hidden /> {order.delivery_notes}
+              </p>
+            )}
           </div>
-          {sharing ? (
-            <button onClick={stopSharing} className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold">
-              Disattiva
-            </button>
-          ) : (
-            <button onClick={startSharing} className="bg-olive-600 hover:bg-olive-700 text-white px-4 py-2 rounded-lg font-semibold">
-              Attiva GPS
-            </button>
+        )}
+
+        {/* GPS SHARING */}
+        {!done && (
+          <div className={`mb-3.5 rounded-xl border-2 p-4 ${sharing ? 'border-olive-300 bg-olive-50' : 'border-accent-300 bg-accent-50'}`}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="flex items-center gap-1.5 font-bold text-ink-900">
+                  {sharing
+                    ? <><Radio size={16} strokeWidth={2.2} aria-hidden /> Posizione condivisa</>
+                    : <><MapPin size={16} strokeWidth={2.2} aria-hidden /> Condividi posizione</>}
+                </p>
+                <p className="text-[13px] text-ink-600">
+                  {sharing ? 'Il cliente vede dove sei in tempo reale.' : 'Attiva il GPS per il cliente.'}
+                </p>
+              </div>
+              {sharing ? (
+                <button onClick={stopSharing} className="shrink-0 rounded-lg bg-rose-600 px-4 py-2 font-semibold text-white hover:bg-rose-700">
+                  Disattiva
+                </button>
+              ) : (
+                <button onClick={startSharing} className="shrink-0 rounded-lg bg-olive-600 px-4 py-2 font-semibold text-white hover:bg-olive-700">
+                  Attiva GPS
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Riepilogo ordine */}
+        <div className="mb-3.5 rounded-xl border border-cream-300 bg-surface-0 p-4">
+          <div className="mb-1.5 flex justify-between text-sm">
+            <span className="text-ink-500">Articoli</span>
+            <span className="font-semibold text-ink-900">{order.order_items.length} prodotti</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-ink-500">Il tuo compenso</span>
+            <span className="font-bold text-olive-700">{formatPrice(order.shipping_cost || 0)}</span>
+          </div>
+          {order.payment_method === 'cod' && (
+            <div className="mt-2.5 flex items-center gap-2 rounded-md bg-accent-100 px-3 py-2.5">
+              <Banknote size={18} className="text-accent-800" aria-hidden />
+              <span className="text-[13px] text-accent-900">
+                Incassa <strong>{formatPrice(order.total_price)}</strong> in contanti dal cliente.
+              </span>
+            </div>
           )}
         </div>
+
+        {/* CASH ON DELIVERY: conferma incasso */}
+        {order.payment_method === 'cod'
+          && (order.delivery_status === 'PICKED_UP' || order.delivery_status === 'OUT_FOR_DELIVERY' || order.delivery_status === 'DELIVERED')
+          && !order.cash_confirmed_at && (
+            <div className="mb-3.5 space-y-3 rounded-xl border-2 border-accent-300 bg-accent-50 p-4">
+              <div>
+                <p className="flex items-center gap-1.5 font-bold text-accent-900"><Banknote size={16} strokeWidth={2.2} aria-hidden /> Conferma incasso</p>
+                <p className="text-sm text-accent-800">
+                  Conferma l&apos;importo ricevuto in contanti per chiudere l&apos;ordine. La foto è facoltativa.
+                </p>
+              </div>
+              <CashConfirmDialog
+                orderId={order.id}
+                expectedCents={Math.round(Number(order.total_price) * 100)}
+                onConfirmed={() => qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) })}
+              />
+            </div>
+          )}
+
+        {order.payment_method === 'cod' && order.cash_confirmed_at && (
+          <div className="mb-3.5 flex items-center gap-1.5 rounded-xl border-2 border-olive-200 bg-olive-50 p-4 text-sm text-olive-900">
+            <Check size={15} strokeWidth={2.5} className="shrink-0" aria-hidden /> Incasso confermato il {new Date(order.cash_confirmed_at).toLocaleString('it-IT')}.
+          </div>
+        )}
+
+        {/* Stato completato — serif */}
+        {done && (
+          <div className="py-5 text-center">
+            <span className="mb-3 inline-flex h-16 w-16 items-center justify-center rounded-full bg-olive-100">
+              <Check size={32} strokeWidth={3} className="text-olive-700" aria-hidden />
+            </span>
+            <p className="font-serif text-[22px] font-extrabold text-ink-900">Consegna completata!</p>
+            <p className="mt-1 text-sm text-ink-500">Hai guadagnato {formatPrice(order.shipping_cost || 0)}.</p>
+          </div>
+        )}
+
+        {/* Rilascio ordine (solo all'inizio) */}
+        {order.delivery_status === 'ASSIGNED' && (
+          <button
+            onClick={() => { if (confirm('Rilasciare questo ordine? Tornerà disponibile per altri rider.')) release.mutate(); }}
+            disabled={release.isPending}
+            className="mb-2 w-full rounded-xl border border-rose-300 px-6 py-3 font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+          >
+            Non posso completarlo — rilascia ordine
+          </button>
+        )}
+
+        {/* Dettaglio articoli */}
+        <details className="mb-3.5 rounded-xl border border-cream-300 bg-surface-0 px-4 py-3">
+          <summary className="cursor-pointer text-sm font-semibold text-ink-900">Articoli ({order.order_items.length})</summary>
+          <div className="mt-2 divide-y divide-cream-100 text-sm">
+            {order.order_items.map((it) => (
+              <div key={it.id} className="flex justify-between py-2">
+                <span>{it.products?.name ?? 'Prodotto'} <span className="text-ink-400">×{it.quantity}</span></span>
+                <span className="text-ink-600">{formatPrice(Number(it.unit_price) * it.quantity)}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex justify-between border-t border-cream-200 pt-2 text-sm font-bold">
+            <span>{order.payment_method === 'card' ? 'Totale (già pagato online)' : 'Totale (da incassare)'}</span>
+            <span className="text-primary-800">{formatPrice(order.total_price)}</span>
+          </div>
+        </details>
       </div>
 
-      {/* AZIONE PRINCIPALE */}
-      {order.delivery_status === 'ASSIGNED' && (
-        <button
-          onClick={() => setVerifyOpen('pickup')}
-          className="w-full flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+      {/* FOOTER STICKY — azione primaria per stato */}
+      {!done && (
+        <div
+          className="fixed bottom-0 left-1/2 z-sticky w-full max-w-[480px] -translate-x-1/2 border-t border-cream-200 bg-surface-0 px-4 py-3"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         >
-          <PackageCheck size={20} strokeWidth={2.2} aria-hidden /> Conferma ritiro al negozio
-        </button>
-      )}
-      {order.delivery_status === 'ASSIGNED' && (
-        <button
-          onClick={() => { if (confirm('Rilasciare questo ordine? Tornerà disponibile per altri rider.')) release.mutate(); }}
-          disabled={release.isPending}
-          className="w-full mt-2 border border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-50 px-6 py-3 rounded-xl font-semibold"
-        >
-          Non posso completarlo — rilascia ordine
-        </button>
-      )}
-      {order.delivery_status === 'PICKED_UP' && (
-        <div className="space-y-2">
-          <button
-            onClick={() => transition.mutate({ newStatus: 'OUT_FOR_DELIVERY' })}
-            disabled={transition.isPending}
-            className="w-full flex items-center justify-center gap-2 bg-secondary-700 hover:bg-secondary-800 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
-          >
-            <Bike size={20} strokeWidth={2.2} aria-hidden /> Sto andando dal cliente
-          </button>
-          <button
-            onClick={() => setVerifyOpen('delivery')}
-            className="w-full flex items-center justify-center gap-2 bg-olive-600 hover:bg-olive-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
-          >
-            <CircleCheck size={20} strokeWidth={2.2} aria-hidden /> Conferma consegna al cliente
-          </button>
+          {order.delivery_status === 'ASSIGNED' && (
+            <Button onClick={() => setVerifyOpen('pickup')} variant="primary" size="lg" icon={PackageCheck} fullWidth>
+              Conferma ritiro al negozio
+            </Button>
+          )}
+          {order.delivery_status === 'PICKED_UP' && (
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={() => transition.mutate({ newStatus: 'OUT_FOR_DELIVERY' })}
+                loading={transition.isPending}
+                variant="secondary"
+                size="lg"
+                icon={Bike}
+                fullWidth
+              >
+                Sto andando dal cliente
+              </Button>
+              <Button onClick={() => setVerifyOpen('delivery')} variant="success" size="lg" icon={CircleCheck} fullWidth>
+                Conferma consegna
+              </Button>
+            </div>
+          )}
+          {order.delivery_status === 'OUT_FOR_DELIVERY' && (
+            <Button onClick={() => setVerifyOpen('delivery')} variant="success" size="lg" icon={CircleCheck} fullWidth>
+              Conferma consegna al cliente
+            </Button>
+          )}
         </div>
       )}
-      {order.delivery_status === 'OUT_FOR_DELIVERY' && (
-        <button
-          onClick={() => setVerifyOpen('delivery')}
-          className="w-full flex items-center justify-center gap-2 bg-olive-600 hover:bg-olive-700 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg"
+      {done && (
+        <div
+          className="fixed bottom-0 left-1/2 z-sticky w-full max-w-[480px] -translate-x-1/2 border-t border-cream-200 bg-surface-0 px-4 py-3"
+          style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         >
-          <CircleCheck size={20} strokeWidth={2.2} aria-hidden /> Conferma consegna al cliente
-        </button>
+          <Button href="/rider" variant="primary" size="lg" fullWidth>Torna alle consegne</Button>
+        </div>
       )}
 
       {/* Dialog verifica */}
@@ -347,7 +483,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         title="Codice ritiro"
         description="Chiedi al negoziante il codice a 6 cifre per confermare il ritiro."
         ctaLabel="Conferma ritiro"
-        ctaColor="bg-cyan-600 hover:bg-cyan-700"
+        ctaColor="bg-primary-700 hover:bg-primary-800"
         onClose={() => setVerifyOpen(null)}
         onSubmit={verifyPickup}
       />
@@ -360,94 +496,6 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         onClose={() => setVerifyOpen(null)}
         onSubmit={verifyDelivery}
       />
-
-      {/* NAVIGA */}
-      {navTarget.lat && navTarget.lng && order.delivery_status !== 'DELIVERED' && (
-        <Button
-          href={`https://www.google.com/maps/dir/?api=1&destination=${navTarget.lat},${navTarget.lng}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          fullWidth
-          size="lg"
-          icon={Navigation}
-        >Naviga su Google Maps</Button>
-      )}
-
-      {/* NEGOZIO */}
-      <div className="bg-white border border-cream-300 rounded-xl p-5">
-        <h3 className="text-xs uppercase tracking-wide text-ink-500 font-semibold mb-2">Ritira al negozio</h3>
-        <p className="font-semibold text-ink-900">{order.seller?.store_name}</p>
-        <p className="text-sm text-ink-700">{order.seller?.store_address}</p>
-        {order.seller?.store_phone && (
-          <a href={`tel:${order.seller.store_phone}`} className="text-sm text-primary-700 hover:underline mt-1 inline-flex items-center gap-1.5">
-            <Phone size={14} strokeWidth={2.2} aria-hidden /> {order.seller.store_phone}
-          </a>
-        )}
-      </div>
-
-      {/* CLIENTE */}
-      <div className="bg-white border border-cream-300 rounded-xl p-5">
-        <h3 className="text-xs uppercase tracking-wide text-ink-500 font-semibold mb-2">Consegna a</h3>
-        <p className="font-semibold text-ink-900">{order.delivery_full_name}</p>
-        <p className="text-sm text-ink-700">{order.delivery_address}, {order.delivery_zip} {order.delivery_city}</p>
-        {order.delivery_phone && (
-          <a href={`tel:${order.delivery_phone}`} className="text-sm text-primary-700 hover:underline mt-1 inline-flex items-center gap-1.5">
-            <Phone size={14} strokeWidth={2.2} aria-hidden /> {order.delivery_phone}
-          </a>
-        )}
-        {order.delivery_notes && (
-          <p className="text-sm text-ink-600 italic mt-2 bg-accent-50 p-2 rounded flex items-start gap-1.5"><StickyNote size={14} className="shrink-0 mt-0.5" aria-hidden /> {order.delivery_notes}</p>
-        )}
-      </div>
-
-      {/* PRODOTTI */}
-      <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-cream-200">
-          <h3 className="font-semibold text-ink-900">Articoli ({order.order_items.length})</h3>
-        </div>
-        <div className="divide-y divide-cream-100 text-sm">
-          {order.order_items.map((it) => (
-            <div key={it.id} className="px-5 py-2.5 flex justify-between">
-              <span>{it.products?.name ?? 'Prodotto'} <span className="text-ink-400">×{it.quantity}</span></span>
-              <span className="text-ink-600">{formatPrice(Number(it.unit_price) * it.quantity)}</span>
-            </div>
-          ))}
-        </div>
-        <div className="px-5 py-3 border-t border-cream-200 bg-cream-50 text-sm flex justify-between font-bold">
-          <span>
-            {order.payment_method === 'card'
-              ? 'Totale (gia\' pagato online)'
-              : 'Totale (da incassare in contanti)'}
-          </span>
-          <span className="text-primary-800">{formatPrice(order.total_price)}</span>
-        </div>
-      </div>
-
-      {/* CASH ON DELIVERY: conferma incasso */}
-      {order.payment_method === 'cod'
-        && (order.delivery_status === 'PICKED_UP' || order.delivery_status === 'OUT_FOR_DELIVERY' || order.delivery_status === 'DELIVERED')
-        && !order.cash_confirmed_at && (
-          <div className="bg-accent-50 border-2 border-accent-300 rounded-xl p-4 space-y-3">
-            <div>
-              <p className="font-bold text-accent-900 flex items-center gap-1.5"><Banknote size={16} strokeWidth={2.2} aria-hidden /> Conferma incasso</p>
-              <p className="text-sm text-accent-800">
-                Conferma l&apos;importo ricevuto in contanti per chiudere l&apos;ordine. La foto è
-                facoltativa.
-              </p>
-            </div>
-            <CashConfirmDialog
-              orderId={order.id}
-              expectedCents={Math.round(Number(order.total_price) * 100)}
-              onConfirmed={() => qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) })}
-            />
-          </div>
-        )}
-
-      {order.payment_method === 'cod' && order.cash_confirmed_at && (
-        <div className="bg-olive-50 border-2 border-olive-200 rounded-xl p-4 text-sm text-olive-900 flex items-center gap-1.5">
-          <Check size={15} strokeWidth={2.5} className="shrink-0" aria-hidden /> Incasso confermato il {new Date(order.cash_confirmed_at).toLocaleString('it-IT')}.
-        </div>
-      )}
     </div>
   );
 }

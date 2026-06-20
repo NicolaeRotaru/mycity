@@ -53,9 +53,10 @@ export default function Navbar() {
     router.refresh();
   };
 
-  // Su /admin e /seller la navbar globale è nascosta: queste aree usano il
-  // proprio shell con sidebar scura dedicata (AdminSidebar / SellerShell).
-  if (pathname?.startsWith('/sign-in') || pathname?.startsWith('/sign-up') || pathname?.startsWith('/admin') || pathname?.startsWith('/seller')) return null;
+  // Su /admin, /seller e /rider la navbar globale è nascosta: queste aree usano
+  // il proprio shell dedicato (AdminSidebar / SellerShell / RiderShell con la
+  // sua bottom tab bar).
+  if (pathname?.startsWith('/sign-in') || pathname?.startsWith('/sign-up') || pathname?.startsWith('/admin') || pathname?.startsWith('/seller') || pathname?.startsWith('/rider')) return null;
 
   const role: Role =
     isAdmin ? 'admin' :

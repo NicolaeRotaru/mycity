@@ -86,9 +86,9 @@ const Footer = () => {
   const isSellerArea = isSeller || isRider;
   const branding = useBranding();
 
-  // Cockpit admin e shell seller: footer globale nascosto (shell standalone con
-  // sidebar dedicata su /admin e /seller).
-  if (pathname?.startsWith('/admin') || pathname?.startsWith('/seller')) return null;
+  // Cockpit admin, shell seller e shell rider: footer globale nascosto (shell
+  // standalone con chrome dedicata su /admin, /seller e /rider).
+  if (pathname?.startsWith('/admin') || pathname?.startsWith('/seller') || pathname?.startsWith('/rider')) return null;
 
   return (
     <footer className="bg-ink-900 text-ink-300 mt-12">

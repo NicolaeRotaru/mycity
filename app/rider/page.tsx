@@ -4,17 +4,20 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Store, Package, ChefHat, Clock, Play, Star } from 'lucide-react';
+import {
+  Store, MapPin, Navigation, ArrowRight, Layers, Power, Package, ChefHat, Star,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
-import {
-  type OrderStatus,
-} from '@/lib/order-status';
+import { type OrderStatus } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { notify } from '@/lib/notifications';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { useProfile } from '@/components/hooks/useProfile';
 
 type AvailableOrder = {
   id: string;
@@ -32,9 +35,36 @@ type AvailableOrder = {
   order_items: { id: string; quantity: number }[];
 };
 
+/** Riga negozio → cliente, replica del DeliveryRoute del design kit rider. */
+function DeliveryRoute({ store, cust, small }: { store: string; cust: string; small?: boolean }) {
+  return (
+    <div className={`flex flex-col ${small ? 'gap-1.5' : 'gap-2'}`}>
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-100 text-primary-700">
+          <Store size={13} strokeWidth={2.2} aria-hidden />
+        </span>
+        <span className="text-sm font-semibold text-ink-900">{store}</span>
+      </div>
+      <div className="flex items-center gap-2.5">
+        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-olive-100 text-olive-700">
+          <MapPin size={13} strokeWidth={2.2} aria-hidden />
+        </span>
+        <span className="text-[13px] text-ink-600">{cust}</span>
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-2.5 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">{children}</p>
+  );
+}
+
 export default function RiderDashboardPage() {
   const qc = useQueryClient();
   const router = useRouter();
+  const { profile, userEmail } = useProfile();
 
   // Ordini ACCEPTED/READY senza rider + i miei ordini attivi
   const { data: orders = [], isLoading } = useQuery({
@@ -127,6 +157,7 @@ export default function RiderDashboardPage() {
   const myActive   = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED' && o.delivery_status !== 'CANCELED');
   const available  = orders.filter((o) => !o.rider_id && o.delivery_status === 'READY').sort(byZone);
   const inPrep     = orders.filter((o) => !o.rider_id && o.delivery_status === 'ACCEPTED').sort(byZone);
+  const activeOne  = myActive[0];
 
   const claim = useMutation({
     mutationFn: async (orderId: string) => {
@@ -167,198 +198,226 @@ export default function RiderDashboardPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  const goOnline = useMutation({
-    mutationFn: async () => {
+  // Toggle online/offline: stesso update profilo della pagina Disponibilità.
+  const toggleOnline = useMutation({
+    mutationFn: async (next: boolean) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { error } = await supabase.from('profiles').update({ rider_is_online: true }).eq('id', user.id);
+      const { error } = await supabase.from('profiles').update({ rider_is_online: next }).eq('id', user.id);
       if (error) throw error;
+      return next;
     },
-    onSuccess: () => {
+    onSuccess: (next) => {
       qc.invalidateQueries({ queryKey: queryKeys.rider.pref });
-      toast.success('Sei online! Ora ricevi le consegne disponibili.');
+      toast.success(next ? 'Sei online! Ora ricevi le consegne disponibili.' : 'Sei offline.');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
   if (isLoading) return <LoadingState />;
 
+  const riderName = profile?.full_name || profile?.email || userEmail || 'Rider';
+  const firstName = riderName.trim().split(/\s+/)[0];
+  const initials =
+    riderName.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase() || 'R';
+
   return (
-    <div className="space-y-8">
-      <div className="space-y-4">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-2xl font-bold text-ink-900">Dashboard rider</h1>
-            <p className="text-sm text-ink-500">Prendi gli ordini pronti e portali ai clienti.</p>
-          </div>
-          {rating && rating.count > 0 && (
-            <Link
-              href="/rider/reviews"
-              className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1.5 text-sm font-bold text-accent-800 ring-1 ring-accent-200 hover:bg-accent-100 transition-colors"
-            >
-              <Star size={15} strokeWidth={2.2} className="text-accent-500" fill="currentColor" aria-hidden />
-              {rating.avg.toFixed(1)}
-              <span className="font-normal text-accent-700">· {rating.count}</span>
+    <div className="pb-5">
+      {/* Header rider: avatar + saluto + rating */}
+      <div className="flex items-center gap-3 px-5 pb-3.5 pt-4">
+        <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-sm font-bold text-white">
+          {initials}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[15px] font-bold text-ink-900">Ciao, {firstName}</p>
+          {rating && rating.count > 0 ? (
+            <Link href="/rider/reviews" className="inline-flex items-center gap-1 text-xs text-ink-500 hover:text-ink-700">
+              <Star size={12} className="text-accent-500" fill="currentColor" aria-hidden />
+              {rating.avg.toFixed(1).replace('.', ',')} · {rating.count} {rating.count === 1 ? 'recensione' : 'recensioni'}
             </Link>
+          ) : (
+            <p className="text-xs text-ink-500">Pronto a consegnare</p>
           )}
-        </div>
-        {/* Mini-stat di oggi */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-white border border-cream-300 rounded-xl px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-ink-500">Consegne oggi</p>
-            <p className="text-2xl font-extrabold font-serif text-ink-900">{today?.count ?? 0}</p>
-          </div>
-          <div className="bg-white border border-cream-300 rounded-xl px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-ink-500">Guadagno oggi</p>
-            <p className="text-2xl font-extrabold font-serif text-olive-600">{formatPrice(today?.earned ?? 0)}</p>
-          </div>
         </div>
       </div>
 
-      {/* MIEI ORDINI ATTIVI */}
-      <section>
-        <h2 className="font-bold text-ink-900 mb-3">Le tue consegne attive ({myActive.length})</h2>
-        {myActive.length === 0 ? (
-          <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-500">
-            Nessuna consegna in corso. Prendi un ordine qui sotto per iniziare.
+      {/* Online toggle card — gradiente olive quando online, switch iOS */}
+      <div className="px-4 pb-4">
+        <div
+          className={`flex items-center justify-between rounded-2xl px-5 py-[18px] ${
+            online
+              ? 'bg-gradient-to-br from-olive-600 to-olive-700 text-white shadow-warm'
+              : 'border border-cream-300 bg-surface-0 text-ink-900'
+          }`}
+        >
+          <div>
+            <p className="font-serif text-[18px] font-extrabold">{online ? 'Sei online' : 'Sei offline'}</p>
+            <p className={`mt-0.5 text-xs ${online ? 'text-white/85' : 'text-ink-500'}`}>
+              {online ? 'Ricevi le consegne disponibili' : 'Vai online per iniziare'}
+            </p>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {myActive.map((o) => {
-              return (
-                <Link
-                  key={o.id}
-                  href={`/rider/orders/${o.id}`}
-                  className="block bg-white border-2 border-accent-300 rounded-xl px-5 py-4 hover:shadow-md transition-all"
-                >
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <OrderStatusBadge status={o.delivery_status} size="sm" />
-                        <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
-                      </div>
-                      <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={15} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden /> {o.seller?.store_name}</p>
-                      <p className="text-sm text-ink-500 truncate">→ {o.delivery_address}, {o.delivery_city}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-ink-500">Compenso</p>
-                      <p className="font-bold text-olive-600">{formatPrice(o.shipping_cost || 4.9)}</p>
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      {!online ? (
-        <section className="bg-gradient-to-br from-olive-50 to-olive-100 border-2 border-olive-200 rounded-2xl p-8 text-center">
-          <p className="text-xl font-extrabold font-serif text-ink-900 mb-1">Sei offline</p>
-          <p className="text-sm text-ink-600 mb-4">Vai online per vedere e accettare le consegne disponibili.</p>
           <button
-            onClick={() => goOnline.mutate()}
-            disabled={goOnline.isPending}
-            className="inline-flex items-center gap-2 bg-olive-500 hover:bg-olive-600 disabled:opacity-50 text-white px-6 py-3 rounded-xl font-bold shadow"
+            type="button"
+            role="switch"
+            aria-checked={online}
+            aria-label={online ? 'Vai offline' : 'Vai online'}
+            disabled={toggleOnline.isPending}
+            onClick={() => toggleOnline.mutate(!online)}
+            className={`relative h-8 w-[58px] shrink-0 rounded-full transition-colors disabled:opacity-60 ${
+              online ? 'bg-white/30' : 'bg-cream-300'
+            }`}
           >
-            <Play size={16} strokeWidth={2.2} aria-hidden /> Vai online
+            <span
+              className="absolute top-[3px] h-[26px] w-[26px] rounded-full bg-white shadow-sm transition-all"
+              style={{ left: online ? '29px' : '3px' }}
+            />
           </button>
-          <p className="mt-3 text-xs text-ink-500">
-            Gestisci orari e zone nella pagina <Link href="/rider/availability" className="text-olive-700 underline">Disponibilità</Link>.
-          </p>
-        </section>
-      ) : (
-       <>
-      {/* ORDINI DISPONIBILI */}
-      <section>
-        <h2 className="font-bold text-ink-900 mb-3">Ordini disponibili ({available.length})</h2>
-        {available.length === 0 ? (
-          <div className="bg-white border border-cream-300 rounded-xl p-8 text-center text-ink-500">
-            Nessun ordine pronto al momento. Riprova tra un po'.
+        </div>
+      </div>
+
+      {/* Stat di oggi: 3-up */}
+      <div className="mb-[18px] grid grid-cols-3 gap-2 px-4">
+        {[
+          ['Oggi', formatPrice(today?.earned ?? 0)],
+          ['Consegne', String(today?.count ?? 0)],
+          ['Rating', rating && rating.count > 0 ? rating.avg.toFixed(1).replace('.', ',') : '—'],
+        ].map(([label, value]) => (
+          <div key={label} className="rounded-lg border border-cream-300 bg-surface-0 px-3 py-2.5 text-center">
+            <p className="font-serif text-[17px] font-extrabold text-ink-900">{value}</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.03em] text-ink-400">{label}</p>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {available.map((o) => (
-              <div
-                key={o.id}
-                className="bg-white border border-cream-300 rounded-xl px-5 py-4 hover:shadow-md transition-all"
-              >
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-violet-50 text-violet-700 ring-1 ring-violet-200">
-                        <Package size={12} strokeWidth={2.4} aria-hidden /> Pronto
-                      </span>
-                      <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
-                    </div>
-                    <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={15} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden /> {o.seller?.store_name}</p>
-                    <p className="text-xs text-ink-500">{o.seller?.store_address}</p>
-                    <p className="text-sm text-ink-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
+        ))}
+      </div>
+
+      {/* Consegna attiva (la tua) */}
+      {activeOne && (
+        <div className="mb-[18px] px-4">
+          <SectionLabel>La tua consegna</SectionLabel>
+          <Link
+            href={`/rider/orders/${activeOne.id}`}
+            className="block rounded-xl border-2 border-accent-400 bg-surface-0 p-4 shadow-warm transition-shadow hover:shadow-warm-lg"
+          >
+            <div className="mb-2.5 flex items-center justify-between">
+              <OrderStatusBadge status={activeOne.delivery_status} size="sm" />
+              <span className="font-mono text-[11px] text-ink-400">#{activeOne.id.slice(0, 6).toUpperCase()}</span>
+            </div>
+            <DeliveryRoute
+              store={activeOne.seller?.store_name ?? 'Negozio'}
+              cust={`${activeOne.delivery_address ?? ''}${activeOne.delivery_city ? ', ' + activeOne.delivery_city : ''}`}
+            />
+            <div className="mt-3 flex items-center justify-between border-t border-cream-200 pt-3">
+              <span className="text-sm font-bold text-olive-700">{formatPrice(activeOne.shipping_cost || 4.9)}</span>
+              <span className="inline-flex items-center gap-1.5 text-sm font-bold text-primary-700">
+                Continua <ArrowRight size={16} aria-hidden />
+              </span>
+            </div>
+          </Link>
+        </div>
+      )}
+
+      {/* Ordini disponibili / offline empty state */}
+      {online ? (
+        <div className="px-4">
+          {/* Giro intelligente: batch quando ci sono ≥2 ordini disponibili */}
+          {available.length >= 2 && (() => {
+            const batch = available.slice(0, 2);
+            const sum = batch.reduce((t, o) => t + Number(o.shipping_cost || 4.9), 0);
+            return (
+              <div className="mb-3.5 rounded-xl border border-primary-300 bg-gradient-to-br from-primary-50 to-cream-50 p-3.5">
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-600 text-white">
+                    <Layers size={16} strokeWidth={2.2} aria-hidden />
+                  </span>
+                  <span className="text-sm font-extrabold text-ink-900">Giro intelligente · 2 consegne</span>
+                  <span className="ml-auto rounded-full bg-surface-0 px-2 py-[3px] text-[11px] font-bold text-primary-700">
+                    +15% efficienza
+                  </span>
+                </div>
+                <p className="mb-2.5 text-[12.5px] leading-relaxed text-ink-600">
+                  Due consegne pronte vicine tra loro. Accetta la prima e continua col giro per ottimizzare i km.
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 text-xs text-ink-500">
+                    <Navigation size={13} className="text-ink-400" aria-hidden /> Stesso giro
+                  </span>
+                  <span className="text-base font-extrabold text-olive-700">{formatPrice(sum)}</span>
+                </div>
+              </div>
+            );
+          })()}
+
+          <SectionLabel>Ordini disponibili ({available.length})</SectionLabel>
+          {available.length === 0 ? (
+            <div className="rounded-xl border border-cream-300 bg-surface-0 p-8 text-center text-sm text-ink-500">
+              Nessun ordine pronto al momento. Riprova tra un po'.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {available.map((o) => (
+                <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5">
+                  <div className="mb-2 flex items-center justify-between">
+                    <Badge variant="new" icon={Package}>Pronto</Badge>
+                    <span className="font-mono text-[11px] text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-xs text-ink-500">Compenso</p>
-                      <p className="font-bold text-olive-600">{formatPrice(o.shipping_cost || 4.9)}</p>
+                  <DeliveryRoute
+                    store={o.seller?.store_name ?? 'Negozio'}
+                    cust={`${o.delivery_address ?? ''}${o.delivery_city ? ', ' + o.delivery_city : ''}`}
+                    small
+                  />
+                  <div className="mt-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] text-ink-400">Compenso</p>
+                      <p className="font-serif text-lg font-extrabold text-olive-700">{formatPrice(o.shipping_cost || 4.9)}</p>
                     </div>
-                    <button
+                    <Button
+                      variant="accent"
                       onClick={() => claim.mutate(o.id)}
-                      disabled={claim.isPending}
-                      className="bg-accent-500 hover:bg-accent-600 disabled:opacity-50 text-white px-5 py-3 rounded-lg font-semibold whitespace-nowrap"
+                      loading={claim.isPending}
                     >
                       Accetta
-                    </button>
+                    </Button>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+              ))}
+            </div>
+          )}
 
-      {/* ORDINI IN PREPARAZIONE — visibili ma non ancora claimabili */}
-      {inPrep.length > 0 && (
-        <section>
-          <h2 className="font-bold text-ink-900 mb-3">
-            In preparazione ({inPrep.length})
-            <span className="ml-2 text-xs font-normal text-ink-500">aspetta che il negozio li renda pronti</span>
-          </h2>
-          <div className="space-y-2">
-            {inPrep.map((o) => (
-              <div
-                key={o.id}
-                className="bg-white border border-cream-300 rounded-xl px-5 py-4 opacity-80"
-              >
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-800 ring-1 ring-primary-200">
-                        <ChefHat size={12} strokeWidth={2.4} aria-hidden /> In preparazione
-                      </span>
-                      <span className="text-xs font-mono text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
+          {/* In preparazione — visibili ma non claimabili */}
+          {inPrep.length > 0 && (
+            <div className="mt-[18px]">
+              <SectionLabel>In preparazione · attendi</SectionLabel>
+              <div className="flex flex-col gap-2.5">
+                {inPrep.map((o) => (
+                  <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5 opacity-75">
+                    <div className="mb-2 flex items-center justify-between">
+                      <Badge variant="local" icon={ChefHat}>In preparazione</Badge>
+                      <span className="font-bold text-olive-700">{formatPrice(o.shipping_cost || 4.9)}</span>
                     </div>
-                    <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={15} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden /> {o.seller?.store_name}</p>
-                    <p className="text-xs text-ink-500">{o.seller?.store_address}</p>
-                    <p className="text-sm text-ink-700 mt-1">→ {o.delivery_address}, {o.delivery_city}</p>
+                    <DeliveryRoute
+                      store={o.seller?.store_name ?? 'Negozio'}
+                      cust={`${o.delivery_address ?? ''}${o.delivery_city ? ', ' + o.delivery_city : ''}`}
+                      small
+                    />
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <p className="text-xs text-ink-500">Compenso</p>
-                      <p className="font-bold text-olive-600">{formatPrice(o.shipping_cost || 4.9)}</p>
-                    </div>
-                    <button
-                      disabled
-                      className="inline-flex items-center gap-1.5 bg-cream-200 text-ink-400 px-5 py-3 rounded-lg font-semibold whitespace-nowrap cursor-not-allowed"
-                    >
-                      <Clock size={15} strokeWidth={2.2} aria-hidden /> Attendi
-                    </button>
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="px-4">
+          <div className="rounded-xl border border-cream-300 bg-surface-0 px-5 py-8 text-center">
+            <span className="mb-3 inline-flex h-14 w-14 items-center justify-center rounded-full bg-olive-50">
+              <Power size={26} className="text-olive-600" aria-hidden />
+            </span>
+            <p className="font-bold text-ink-900">Sei offline</p>
+            <p className="mt-1 text-[13px] text-ink-500">Vai online per vedere gli ordini disponibili nella tua zona.</p>
+            <p className="mt-3 text-xs text-ink-500">
+              Gestisci orari e zone nella pagina{' '}
+              <Link href="/rider/availability" className="text-olive-700 underline">Turni</Link>.
+            </p>
           </div>
-        </section>
-      )}
-      </>
+        </div>
       )}
     </div>
   );
