@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import {
   Users, ShoppingCart, Store, Bike, Shield, Package, TrendingUp,
-  CheckCircle2, Banknote, ShoppingBag, LayoutGrid,
+  CheckCircle2, Banknote, ShoppingBag, LayoutGrid, Activity, Euro, Percent, Timer, Info,
+  type LucideIcon,
 } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
@@ -13,6 +14,34 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { AdminPageTitle, AdminSectionLabel, AdminStatCard } from '@/components/admin/AdminUI';
+
+const TAKE_RATE = 0.14;
+
+const HEALTH_TONE: Record<string, { bg: string; fg: string }> = {
+  olive:     { bg: 'bg-olive-100',     fg: 'text-olive-700' },
+  primary:   { bg: 'bg-primary-100',   fg: 'text-primary-700' },
+  accent:    { bg: 'bg-accent-100',    fg: 'text-accent-700' },
+  secondary: { bg: 'bg-secondary-100', fg: 'text-secondary-600' },
+};
+
+/** Tile "salute del marketplace": medaglione + valore grande + label + hint. */
+function HealthTile({
+  icon: Icon, tone, label, value, hint,
+}: { icon: LucideIcon; tone: keyof typeof HEALTH_TONE; label: string; value: string; hint?: string }) {
+  const t = HEALTH_TONE[tone];
+  return (
+    <div className="rounded-xl border-2 border-cream-300 bg-white p-4">
+      <div className="mb-2.5 flex items-center justify-between">
+        <span className={`inline-flex h-[34px] w-[34px] items-center justify-center rounded-md ${t.bg} ${t.fg}`}>
+          <Icon size={17} strokeWidth={2.2} aria-hidden />
+        </span>
+      </div>
+      <p className="text-[24px] font-extrabold leading-none text-ink-900">{value}</p>
+      <p className="mt-1.5 text-xs text-ink-500">{label}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-ink-400">{hint}</p>}
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const { data: stats, isLoading } = useQuery({
@@ -71,6 +100,17 @@ export default function AdminDashboard() {
     return <LoadingState />;
   }
 
+  // Salute del marketplace — metriche derivate dai dati già caricati (nessuna API nuova).
+  const gmv = stats.orders.revenue;
+  const delivered = stats.orders.byStatus.DELIVERED ?? 0;
+  const canceled = stats.orders.byStatus.CANCELED ?? 0;
+  const commissions = gmv * TAKE_RATE;
+  const aov = delivered > 0 ? gmv / delivered : 0;
+  const closedOrders = stats.orders.total - (stats.orders.byStatus.NEW ?? 0) - (stats.orders.byStatus.ACCEPTED ?? 0);
+  const fulfillmentRate = closedOrders > 0 ? (delivered / closedOrders) * 100 : 0;
+  const cancelRate = stats.orders.total > 0 ? (canceled / stats.orders.total) * 100 : 0;
+  const fulfillmentLow = fulfillmentRate > 0 && fulfillmentRate < 95;
+
   return (
     <div className="space-y-8">
       <AdminPageTitle
@@ -78,6 +118,27 @@ export default function AdminDashboard() {
         title="Panoramica"
         sub="Tutti i numeri del marketplace, in tempo reale."
       />
+
+      {/* Salute del marketplace */}
+      <section>
+        <AdminSectionLabel icon={Activity}>Salute del marketplace</AdminSectionLabel>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <HealthTile icon={Euro} tone="olive" label="GMV (ordini consegnati)" value={formatPrice(gmv)} hint={`AOV ${formatPrice(aov)}`} />
+          <HealthTile icon={Percent} tone="primary" label={`Commissioni (take-rate ${Math.round(TAKE_RATE * 100)}%)`} value={formatPrice(commissions)} hint="stima sul GMV consegnato" />
+          <HealthTile icon={Timer} tone="accent" label="Tasso di consegna" value={`${fulfillmentRate.toFixed(1)}%`} hint="obiettivo ≥ 95%" />
+          <HealthTile icon={Store} tone="secondary" label="Tasso di annullamento" value={`${cancelRate.toFixed(1)}%`} hint={`${canceled} ordini annullati`} />
+        </div>
+        {fulfillmentLow && (
+          <div className="mt-2.5 flex items-center gap-2 rounded-md border border-accent-200 bg-accent-50 px-3.5 py-2.5 text-[13px] text-accent-900">
+            <Info size={15} className="shrink-0 text-accent-700" aria-hidden />
+            <span>
+              Il tasso di consegna è sotto l&apos;obiettivo:{' '}
+              <strong>verifica gli ordini bloccati</strong> in{' '}
+              <Link href="/admin/orders" className="font-semibold underline">Ordini</Link>.
+            </span>
+          </div>
+        )}
+      </section>
 
       {/* Scorciatoie: solo mobile (su desktop la navigazione è nella sidebar cockpit). */}
       <section className="md:hidden">

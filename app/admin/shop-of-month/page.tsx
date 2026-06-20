@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Crown, Trophy, ArrowRight } from 'lucide-react';
+import { Trophy, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { Button } from '@/components/ui/Button';
 import { ImageUrlField } from '@/components/ImageUrlField';
+import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
 
 /**
  * Admin: Negozio del mese.
@@ -111,16 +112,11 @@ export default function AdminShopOfMonthPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-bold text-ink-900 flex items-center gap-2">
-          <Crown size={22} className="text-accent-500" strokeWidth={2.2} />
-          Negozio del mese
-        </h1>
-        <p className="text-sm text-ink-500 mt-1">
-          Mese: <strong>{new Date(firstOfMonth).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}</strong>.
-          Imposta un solo pick al mese; il voto degli utenti corre in parallelo.
-        </p>
-      </header>
+      <AdminPageTitle
+        eyebrow="Marketing"
+        title="Negozio del mese"
+        sub={`Mese: ${new Date(firstOfMonth).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}. Imposta un solo pick al mese; il voto degli utenti corre in parallelo.`}
+      />
 
       <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-6 space-y-4">
         <div>
@@ -200,10 +196,7 @@ export default function AdminShopOfMonthPage() {
 
       {/* Leaderboard voti */}
       <section>
-        <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2">
-          <Trophy size={18} className="text-accent-500" strokeWidth={2.2} />
-          Voto utenti (live)
-        </h2>
+        <AdminSectionLabel icon={Trophy}>Voto utenti (live)</AdminSectionLabel>
         {leaderboard.length === 0 ? (
           <p className="text-sm text-ink-500">Nessun voto registrato per questo mese.</p>
         ) : (

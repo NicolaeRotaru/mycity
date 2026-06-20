@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Ticket } from 'lucide-react';
+import { Ticket, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
@@ -10,6 +10,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { Button } from '@/components/ui/Button';
 
 type Coupon = {
   id: string;
@@ -104,20 +106,14 @@ export default function AdminCouponsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900">Coupon</h1>
-          <p className="text-sm text-ink-500">{coupons.length} codici</p>
-        </div>
-        {!showForm && (
-          <button
-            onClick={() => setShowForm(true)}
-            className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold text-sm"
-          >
-            + Nuovo coupon
-          </button>
+      <AdminPageTitle
+        eyebrow="Marketing"
+        title="Coupon"
+        sub={`${coupons.length} codici sconto`}
+        action={!showForm && (
+          <Button onClick={() => setShowForm(true)} icon={Plus}>Nuovo coupon</Button>
         )}
-      </div>
+      />
 
       {showForm && (
         <form

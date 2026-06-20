@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Shield, Clock } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 type AuditRow = {
   id: string;
@@ -67,14 +67,11 @@ export default function AuditLogPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/admin" className="text-sm text-ink-500 hover:text-ink-800">← Dashboard admin</Link>
-        <h1 className="text-3xl font-serif font-bold mt-2 text-ink-900 flex items-center gap-2">
-          <Shield size={26} className="text-primary-600" />
-          Log delle azioni
-        </h1>
-        <p className="text-sm text-ink-500 mt-1">Tutte le azioni amministrative tracciate. Per compliance e audit.</p>
-      </div>
+      <AdminPageTitle
+        eyebrow="Sistema"
+        title="Audit log"
+        sub="Registro immutabile delle azioni amministrative. Per compliance e audit."
+      />
 
       <div className="bg-white border border-cream-300 rounded-2xl p-4">
         <label className="block text-xs font-semibold text-ink-700 mb-1">Filtra per azione</label>

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Inbox, Mail, CheckCircle2, AlertOctagon, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -10,6 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 type Message = {
   id: string;
@@ -77,13 +77,11 @@ export default function AdminSupportPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <Link href="/admin" className="text-sm text-ink-500 hover:text-ink-800">← Dashboard admin</Link>
-        <h1 className="text-3xl font-serif font-bold mt-2 text-ink-900 flex items-center gap-2">
-          <Inbox size={26} className="text-primary-600" />
-          Customer support inbox
-        </h1>
-      </div>
+      <AdminPageTitle
+        eyebrow="Sistema"
+        title="Supporto"
+        sub="Richieste di assistenza inviate dagli utenti tramite il modulo di contatto."
+      />
 
       <div className="flex flex-wrap gap-2">
         {(['new', 'in_progress', 'resolved', 'spam', 'all'] as const).map((f) => (

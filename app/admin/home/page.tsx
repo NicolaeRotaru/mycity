@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ExternalLink, Save, ArrowLeft, LayoutTemplate, Undo2 } from 'lucide-react';
+import { ExternalLink, Save, LayoutTemplate, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { LoadError } from '@/components/admin/LoadError';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { normalizeHomeSite, homeSiteSchema, type HomeSite } from '@/lib/home-site';
 import HomeSectionsEditor from '@/components/admin/home/HomeSectionsEditor';
 
@@ -99,27 +100,21 @@ export default function AdminHomePage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-primary-700 transition-colors">
-            <ArrowLeft size={15} aria-hidden /> Dashboard admin
+      <AdminPageTitle
+        eyebrow="Contenuti"
+        title="Home builder"
+        sub="Componi la home pubblica del marketplace: riordina le sezioni, mostrale o nascondile, modifica i testi e aggiungi blocchi. Le modifiche diventano pubbliche quando premi Salva."
+        action={
+          <Link
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-primary-300 text-ink-800 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-warm-sm shrink-0 transition-colors"
+          >
+            <ExternalLink size={16} aria-hidden /> Vedi home
           </Link>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-900 mt-1">Home builder</h1>
-          <p className="text-sm text-ink-500 mt-1 max-w-xl">
-            Componi la home pubblica del marketplace: riordina le sezioni, mostrale o nascondile,
-            modifica i testi e aggiungi blocchi. Le modifiche diventano pubbliche quando premi{' '}
-            <span className="font-semibold text-ink-700">Salva</span>.
-          </p>
-        </div>
-        <Link
-          href="/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-white border border-cream-300 hover:border-primary-300 text-ink-800 px-4 py-2.5 rounded-xl text-sm font-semibold shadow-warm-sm shrink-0 transition-colors"
-        >
-          <ExternalLink size={16} aria-hidden /> Vedi home
-        </Link>
-      </header>
+        }
+      />
 
       <section className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <div className="flex items-start gap-3 mb-4">

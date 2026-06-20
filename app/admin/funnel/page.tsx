@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, Users, ShoppingCart, Package, type LucideIcon } from 'lucide-react';
+import { TrendingUp, Users, ShoppingCart, Package, UserX, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 /**
  * Admin: Funnel signup → first order + Cohort retention.
@@ -128,6 +129,26 @@ export default function AdminFunnelPage() {
   const activationEver = data.signups > 0 ? (data.firstOrderEver / data.signups) * 100 : 0;
   const repeatBuyer = data.firstOrderEver > 0 ? (data.multipleOrders / data.firstOrderEver) * 100 : 0;
 
+  // Segmenti derivati dal funnel già calcolato (nessuna API nuova).
+  const newSignups = data.firstOrderWithin7d;          // attivati entro 7gg
+  const active = data.multipleOrders;                  // buyer con >1 ordine
+  const oneTime = Math.max(0, data.firstOrderEver - data.multipleOrders); // 1 solo ordine → rischio churn
+  const neverOrdered = Math.max(0, data.signups - data.firstOrderEver);   // mai ordinato → inattivi
+  const segments: Array<[string, number, string]> = [
+    ['Attivati (7gg)', newSignups, 'primary'],
+    ['Ricorrenti', active, 'olive'],
+    ['Acquisto singolo', oneTime, 'accent'],
+    ['A rischio churn', oneTime, 'secondary'],
+    ['Mai ordinato', neverOrdered, 'ink'],
+  ];
+  const chipTone: Record<string, string> = {
+    primary: 'border-primary-200 text-primary-800',
+    olive: 'border-olive-200 text-olive-800',
+    accent: 'border-accent-200 text-accent-800',
+    secondary: 'border-secondary-200 text-secondary-700',
+    ink: 'border-cream-300 text-ink-700',
+  };
+
   const FunnelRow = ({ icon: Icon, label, value, total, color }: {
     icon: LucideIcon;
     label: string;
@@ -154,24 +175,55 @@ export default function AdminFunnelPage() {
 
   return (
     <div className="space-y-8">
-      <header className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink-900 flex items-center gap-2">
-            <TrendingUp size={22} className="text-primary-700" strokeWidth={2.2} />
-            Funnel & Cohort
-          </h1>
-          <p className="text-sm text-ink-500 mt-1">Activation buyer + retention cohort.</p>
+      <AdminPageTitle
+        eyebrow="Crescita"
+        title="Funnel & Cohort"
+        sub="Activation buyer e retention per coorte mensile."
+        action={
+          <select
+            value={periodDays}
+            onChange={(e) => setPeriodDays(Number(e.target.value))}
+            aria-label="Periodo"
+            className="bg-white border border-cream-300 rounded-lg px-3 py-2 text-sm"
+          >
+            <option value={30}>Ultimi 30 giorni</option>
+            <option value={90}>Ultimi 90 giorni</option>
+            <option value={365}>Ultimo anno</option>
+          </select>
+        }
+      />
+
+      {/* Alert churn — buyer con un solo ordine, a rischio abbandono */}
+      {oneTime > 0 && (
+        <div className="flex items-start gap-3 rounded-xl border border-secondary-200 bg-secondary-50 p-4">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-600 text-white">
+            <UserX size={18} strokeWidth={2.2} aria-hidden />
+          </span>
+          <div className="flex-1">
+            <p className="font-bold text-secondary-700">Alert churn · {oneTime} buyer a rischio</p>
+            <p className="mt-0.5 text-sm leading-normal text-ink-700">
+              Hanno fatto un solo ordine e non hanno mai riordinato nel periodo. Un coupon di
+              richiamo può riportarli prima che diventino inattivi.
+            </p>
+          </div>
         </div>
-        <select
-          value={periodDays}
-          onChange={(e) => setPeriodDays(Number(e.target.value))}
-          className="bg-white border border-cream-300 rounded-lg px-3 py-2 text-sm"
-        >
-          <option value={30}>Ultimi 30 giorni</option>
-          <option value={90}>Ultimi 90 giorni</option>
-          <option value={365}>Ultimo anno</option>
-        </select>
-      </header>
+      )}
+
+      {/* Segmenti buyer */}
+      <div>
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.04em] text-ink-500">Segmenti</p>
+        <div className="flex flex-wrap gap-2">
+          {segments.map(([label, n, tone]) => (
+            <span
+              key={label}
+              className={`inline-flex items-center gap-2 rounded-full border bg-white px-3 py-1.5 text-[13px] font-semibold ${chipTone[tone]}`}
+            >
+              {label}
+              <span className="rounded-full bg-cream-100 px-2 py-0.5 text-xs font-bold text-ink-600">{n}</span>
+            </span>
+          ))}
+        </div>
+      </div>
 
       {/* Funnel activation */}
       <section className="bg-white border border-cream-300 rounded-xl p-6 space-y-4">

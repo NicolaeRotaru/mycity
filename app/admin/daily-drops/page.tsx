@@ -1,9 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Zap, Trash2 } from 'lucide-react';
+import { Trash2, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
@@ -11,6 +10,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea } from '@/components/ui/Field';
 import { formatPrice } from '@/lib/format';
+import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
 
 /**
  * Admin: Drop del giorno. La tabella daily_drops esisteva senza interfaccia: qui
@@ -113,16 +113,11 @@ export default function AdminDailyDropsPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-primary-700 transition-colors">
-          <ArrowLeft size={15} aria-hidden /> Dashboard admin
-        </Link>
-        <h1 className="text-2xl font-bold text-ink-900 flex items-center gap-2 mt-1">
-          <Zap size={22} className="text-accent-500" strokeWidth={2.2} />
-          Drop del giorno
-        </h1>
-        <p className="text-sm text-ink-500 mt-1">Imposta l&apos;offerta del giorno mostrata in home (un drop per data). Si auto-nasconde se per oggi non c&apos;è nulla.</p>
-      </header>
+      <AdminPageTitle
+        eyebrow="Marketing"
+        title="Daily drops"
+        sub="Offerte lampo a tempo limitato mostrate in home (un drop per data). Si auto-nasconde se per oggi non c'è nulla."
+      />
 
       <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }} className="bg-white border border-cream-300 rounded-xl p-6 space-y-4">
         <Select label="Prodotto" value={productId} onChange={(e) => setProductId(e.target.value)}>
@@ -150,7 +145,7 @@ export default function AdminDailyDropsPage() {
       </form>
 
       <section>
-        <h2 className="font-bold text-ink-900 mb-3">Drop programmati</h2>
+        <AdminSectionLabel icon={Zap}>Drop programmati</AdminSectionLabel>
         {drops.length === 0 ? (
           <p className="text-sm text-ink-500">Nessun drop per oggi o per i prossimi giorni.</p>
         ) : (

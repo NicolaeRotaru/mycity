@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Palette, Trash2, Plus } from 'lucide-react';
+import { Save, Palette, Trash2, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { LoadError } from '@/components/admin/LoadError';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import {
   normalizeBranding, brandingSchema, wedgeIcon, WEDGE_ICON_KEYS, MAX_WEDGE_ITEMS, type Branding,
@@ -80,17 +80,11 @@ export default function AdminBrandingPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-primary-700 transition-colors">
-            <ArrowLeft size={15} aria-hidden /> Dashboard admin
-          </Link>
-          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-900 mt-1">Aspetto & branding</h1>
-          <p className="text-sm text-ink-500 mt-1 max-w-xl">
-            Modifica la barra annunci in cima al sito, il nome (wordmark) e il testo del footer. Le modifiche diventano pubbliche al salvataggio.
-          </p>
-        </div>
-      </header>
+      <AdminPageTitle
+        eyebrow="Contenuti"
+        title="Branding"
+        sub="Modifica la barra annunci in cima al sito, il nome (wordmark) e il testo del footer. Le modifiche diventano pubbliche al salvataggio."
+      />
 
       {/* Barra annunci */}
       <section className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6 space-y-4">

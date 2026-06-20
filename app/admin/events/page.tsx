@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CalendarDays, Plus, Pencil, Trash2, Pause, Play } from 'lucide-react';
+import { Plus, Pencil, Trash2, Pause, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { confirmDialog } from '@/components/ConfirmDialog';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/Button';
 import { ImageUrlField } from '@/components/ImageUrlField';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 /**
  * Admin: gestione Eventi MyCity.
@@ -136,13 +137,12 @@ export default function AdminEventsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-ink-900 flex items-center gap-2">
-          <CalendarDays size={22} className="text-secondary-600" strokeWidth={2.2} />
-          Eventi MyCity
-        </h1>
-        <Button onClick={() => setEditing(emptyForm())} size="sm" icon={Plus}>Nuovo evento</Button>
-      </div>
+      <AdminPageTitle
+        eyebrow="Marketing"
+        title="Eventi"
+        sub="Mercatini e iniziative speciali del marketplace."
+        action={<Button onClick={() => setEditing(emptyForm())} icon={Plus}>Nuovo evento</Button>}
+      />
 
       {/* DESKTOP: tabella */}
       <div className="hidden md:block bg-white border border-cream-300 rounded-xl overflow-hidden">
