@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import StoreListRow from '@/components/StoreListRow';
 import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStoresMapLazy';
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
+import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -152,13 +153,18 @@ export default function NearMePage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="mb-4">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-ink-900">Vicino a te</h1>
-        <p className="text-ink-500 mt-1">
-          {filtered.length} {filtered.length === 1 ? 'negozio' : 'negozi'}
-          {pos ? ` entro ${radiusKm} km` : ' a Piacenza'}
-        </p>
-      </div>
+      <CollectionHeader
+        icon={MapPin}
+        eyebrow="Negozi vicini"
+        title="Vicino a te"
+        blurb="I negozi della tua zona a Piacenza, con consegna locale rapida."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Vicino a te' }]}
+      />
+
+      <p className="mb-4 text-ink-500">
+        {filtered.length} {filtered.length === 1 ? 'negozio' : 'negozi'}
+        {pos ? ` entro ${radiusKm} km` : ' a Piacenza'}
+      </p>
 
       {permError && (
         <div className="mb-4 flex gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-ink-700">

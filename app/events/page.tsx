@@ -4,12 +4,13 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar, Users, Clock, Sparkles, CalendarDays, Check } from 'lucide-react';
+import { Users, Clock, CalendarDays, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import CollectionHeader from '@/components/CollectionHeader';
 import { queryKeys } from '@/lib/queries/keys';
 
 /**
@@ -124,18 +125,13 @@ export default function EventsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl space-y-8">
-      <header className="text-center space-y-2">
-        <span className="inline-flex items-center gap-1.5 bg-secondary-100 text-secondary-800 px-3 py-1 rounded-full text-xs font-bold tracking-wide ring-1 ring-secondary-200">
-          <Sparkles size={14} strokeWidth={2.4} />
-          Eventi MyCity
-        </span>
-        <h1 className="font-serif text-3xl md:text-4xl font-bold text-ink-900">
-          Cosa succede in città
-        </h1>
-        <p className="text-ink-600 max-w-2xl mx-auto">
-          Mercatini virtuali, flash sale, lanci. Partecipa e ricevi una notifica quando inizia.
-        </p>
-      </header>
+      <CollectionHeader
+        icon={CalendarDays}
+        eyebrow="Eventi MyCity"
+        title="Cosa succede in città"
+        blurb="Mercatini virtuali, flash sale, lanci. Partecipa e ricevi una notifica quando inizia."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Eventi' }]}
+      />
 
       {isLoading ? (
         <LoadingState />
