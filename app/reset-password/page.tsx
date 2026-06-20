@@ -2,13 +2,13 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { AlarmClock, Check, Circle } from 'lucide-react';
+import { Check, Circle, Mail, MailCheck, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/Button';
-import { PasswordInput } from '@/components/ui/Field';
+import { Input, PasswordInput } from '@/components/ui/Field';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { AuthShell } from '@/components/ui/AuthShell';
 import { logger } from '@/lib/logger';
 
 /**
@@ -16,7 +16,8 @@ import { logger } from '@/lib/logger';
  *
  * Flusso Supabase:
  *  1) /sign-in → user clicca "Password dimenticata?" → resetPasswordForEmail()
- *     con redirectTo = `${origin}/reset-password`
+ *     con redirectTo = `${origin}/reset-password` — OPPURE l'utente arriva qui
+ *     senza token e usa la vista "richiedi link" sotto.
  *  2) Supabase invia email con magic link verso /reset-password con un token
  *     nel fragment dell'URL (#access_token=...&type=recovery&...)
  *  3) Al mount, il client Supabase intercetta l'hash e fa setSession.
@@ -24,7 +25,7 @@ import { logger } from '@/lib/logger';
  *  4) Mostriamo il form di nuova password.
  *  5) updateUser({ password }) → success → redirect al sign-in.
  *
- * Se l'utente arriva qui senza token, mostriamo un avviso.
+ * Se l'utente arriva qui senza token, mostriamo la vista "richiedi link".
  */
 
 function translateError(msg: string): string {
@@ -34,9 +35,9 @@ function translateError(msg: string): string {
   if (m.includes('weak') || m.includes('at least'))
     return 'Password troppo debole. Usane una più lunga, con maiuscole/numeri/simboli.';
   if (m.includes('expired') || m.includes('jwt'))
-    return 'Sessione scaduta. Richiedi un nuovo link di reset dalla pagina di accesso.';
+    return 'Sessione scaduta. Richiedi un nuovo link di reset qui sotto.';
   if (m.includes('invalid') && m.includes('token'))
-    return 'Link di reset non valido. Richiedine uno nuovo dalla pagina di accesso.';
+    return 'Link di reset non valido. Richiedine uno nuovo qui sotto.';
   if (m.includes('rate') || m.includes('too many'))
     return 'Troppi tentativi. Riprova fra qualche minuto.';
   if (m.includes('not authenticated') || m.includes('no session'))
@@ -53,6 +54,11 @@ function ResetPasswordInner() {
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+
+  // Vista "richiedi link" (quando l'utente arriva senza token di recovery).
+  const [requestEmail, setRequestEmail] = useState('');
+  const [sendingLink, setSendingLink] = useState(false);
+  const [linkSent, setLinkSent] = useState(false);
 
   // Ascolta gli eventi di Supabase: PASSWORD_RECOVERY ci dice che il magic
   // link è stato consumato e la sessione di recovery è attiva.
@@ -94,7 +100,7 @@ function ResetPasswordInner() {
       // Diagnostica: verifica che ci sia ancora una sessione attiva
       const { data: sess } = await supabase.auth.getSession();
       if (!sess.session) {
-        toast.error('Sessione di reset persa. Richiedi un nuovo link dalla pagina di accesso.');
+        toast.error('Sessione di reset persa. Richiedi un nuovo link qui sotto.');
         setSubmitting(false);
         return;
       }
@@ -116,57 +122,118 @@ function ResetPasswordInner() {
     }
   };
 
+  // Richiesta di un nuovo link di reset (vista senza token).
+  const requestLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!requestEmail.trim()) {
+      toast.error('Inserisci la tua email per ricevere il link di reset');
+      return;
+    }
+    setSendingLink(true);
+    try {
+      const redirectTo = typeof window !== 'undefined'
+        ? `${window.location.origin}/reset-password`
+        : undefined;
+      const { error } = await supabase.auth.resetPasswordForEmail(requestEmail.trim(), { redirectTo });
+      if (error) throw error;
+      setLinkSent(true);
+    } catch (err) {
+      toast.error(translateError(err instanceof Error ? err.message : ''));
+    } finally {
+      setSendingLink(false);
+    }
+  };
+
   // STATO: caricamento iniziale (attendiamo l'evento di Supabase)
   if (checkingSession) {
     return (
-      <Card>
-        <div className="text-center py-6">
-          <div className="w-12 h-12 mx-auto rounded-full border-4 border-primary-200 border-t-primary-600 animate-spin mb-3" />
+      <AuthShell>
+        <div className="py-6 text-center">
+          <div className="mx-auto mb-3 h-12 w-12 animate-spin rounded-full border-4 border-primary-200 border-t-primary-600" />
           <p className="text-sm text-ink-500">Verifica del link di reset…</p>
         </div>
-      </Card>
+      </AuthShell>
     );
   }
 
-  // STATO: nessuna sessione di recovery valida → link rotto o scaduto
+  // STATO: nessuna sessione di recovery valida → vista "richiedi link".
   if (!recoveryReady) {
-    return (
-      <Card>
-        <div className="text-center">
-          <div className="mb-3 flex justify-center text-ink-500"><AlarmClock size={48} strokeWidth={2} aria-hidden /></div>
-          <h1 className="text-xl font-bold text-ink-900 mb-2">Link non valido o scaduto</h1>
-          <p className="text-sm text-ink-600 mb-5">
-            Il link di reset password potrebbe essere stato usato o essere scaduto.
-            Richiedine uno nuovo dalla pagina di accesso.
+    if (linkSent) {
+      return (
+        <AuthShell back={{ href: '/sign-in', label: 'Torna al login' }}>
+          <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+            Controlla l&apos;email
+          </h1>
+          <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+            Ti abbiamo inviato un link per reimpostare la password. Controlla la posta (anche lo spam).
           </p>
-          <Button href="/sign-in">Vai al login</Button>
-        </div>
-      </Card>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-xl border border-olive-200 bg-olive-50 p-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-olive-100">
+                <MailCheck size={20} className="text-olive-700" aria-hidden />
+              </span>
+              <span className="text-sm text-olive-900">
+                Link inviato a <strong>{requestEmail.trim()}</strong>
+              </span>
+            </div>
+            <Button href="/sign-in" size="lg" fullWidth>Torna al login</Button>
+          </div>
+        </AuthShell>
+      );
+    }
+    return (
+      <AuthShell back={{ href: '/sign-in', label: 'Torna al login' }}>
+        <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+          Reimposta la password
+        </h1>
+        <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+          Inserisci la tua email: ti mandiamo un link per scegliere una nuova password.
+        </p>
+        <form onSubmit={requestLink} className="space-y-4">
+          <Input
+            id="reset-request-email"
+            label="Email"
+            type="email"
+            value={requestEmail}
+            onChange={(e) => setRequestEmail(e.target.value)}
+            placeholder="la-tua@email.it"
+            autoComplete="email"
+            inputMode="email"
+            leading={<Mail size={18} aria-hidden />}
+            required
+          />
+          <Button type="submit" size="lg" loading={sendingLink} iconRight={ArrowRight} fullWidth>
+            {sendingLink ? 'Invio…' : 'Invia il link'}
+          </Button>
+        </form>
+      </AuthShell>
     );
   }
 
   // STATO: successo (prima del redirect)
   if (done) {
     return (
-      <Card>
-        <div className="text-center py-6">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-olive-100 text-olive-600 flex items-center justify-center mb-3">
+      <AuthShell>
+        <div className="py-6 text-center">
+          <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-olive-100 text-olive-600">
             <Check size={28} strokeWidth={2.4} aria-hidden />
           </div>
-          <h1 className="text-xl font-bold text-ink-900 mb-1">Password aggiornata!</h1>
-          <p className="text-sm text-ink-600">Tra un istante ti porto al login con la nuova password.</p>
+          <h1 className="font-serif text-2xl font-extrabold text-ink-900">Password aggiornata!</h1>
+          <p className="mt-1 text-sm text-ink-600">Tra un istante ti porto al login con la nuova password.</p>
         </div>
-      </Card>
+      </AuthShell>
     );
   }
 
-  // STATO: form
+  // STATO: form nuova password (sessione di recovery attiva)
   return (
-    <Card>
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold text-ink-900">Nuova password</h1>
-        <p className="text-sm text-ink-500 mt-1">Scegli una password sicura, di almeno 8 caratteri.</p>
-      </div>
+    <AuthShell back={{ href: '/sign-in', label: 'Torna al login' }}>
+      <h1 className="font-serif text-[34px] font-extrabold leading-tight text-ink-900">
+        Nuova password
+      </h1>
+      <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
+        Scegli una password sicura, di almeno 8 caratteri.
+      </p>
       <form onSubmit={submit} className="space-y-4">
         <PasswordInput
           label="Nuova password"
@@ -193,25 +260,18 @@ function ResetPasswordInner() {
         {/* Strength hint */}
         <PasswordStrength value={password} />
 
-        <button
+        <Button
           type="submit"
-          disabled={submitting || password.length < 8 || password !== confirm}
-          className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-40 text-white px-4 py-3 rounded-lg font-bold transition-colors shadow"
+          size="lg"
+          loading={submitting}
+          disabled={password.length < 8 || password !== confirm}
+          iconRight={ArrowRight}
+          fullWidth
         >
           {submitting ? 'Aggiornamento…' : 'Imposta nuova password'}
-        </button>
+        </Button>
       </form>
-    </Card>
-  );
-}
-
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-cream-50 p-4">
-      <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
-        {children}
-      </div>
-    </div>
+    </AuthShell>
   );
 }
 
@@ -223,14 +283,14 @@ function PasswordStrength({ value }: { value: string }) {
     { ok: /[^A-Za-z0-9]/.test(value),   label: 'Un simbolo (consigliato)' },
   ];
   const ok = checks.filter((c) => c.ok).length;
-  const colors = ['bg-cream-200', 'bg-rose-400', 'bg-orange-400', 'bg-accent-400', 'bg-olive-500'];
+  const colors = ['bg-cream-200', 'bg-secondary-400', 'bg-accent-400', 'bg-accent-500', 'bg-olive-500'];
   const labels = ['', 'Debole', 'Sufficiente', 'Buona', 'Forte'];
 
   if (!value) return null;
 
   return (
     <div>
-      <div className="flex gap-1 mb-2">
+      <div className="mb-2 flex gap-1">
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
@@ -238,8 +298,8 @@ function PasswordStrength({ value }: { value: string }) {
           />
         ))}
       </div>
-      <p className="text-xs text-ink-500 mb-2">{labels[ok]}</p>
-      <ul className="text-xs space-y-0.5">
+      <p className="mb-2 text-xs text-ink-500">{labels[ok]}</p>
+      <ul className="space-y-0.5 text-xs">
         {checks.map((c) => (
           <li key={c.label} className={`flex items-center gap-1.5 ${c.ok ? 'text-olive-600' : 'text-ink-400'}`}>
             {c.ok ? <Check size={14} strokeWidth={2.4} aria-hidden /> : <Circle size={14} strokeWidth={2.2} aria-hidden />}
@@ -253,7 +313,7 @@ function PasswordStrength({ value }: { value: string }) {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<Card><LoadingState variant="inline" /></Card>}>
+    <Suspense fallback={<AuthShell><LoadingState variant="inline" /></AuthShell>}>
       <ResetPasswordInner />
     </Suspense>
   );
