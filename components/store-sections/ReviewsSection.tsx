@@ -1,50 +1,114 @@
 'use client';
 
-import { Star } from 'lucide-react';
-import type { SectionContext } from './SectionContext';
+import { useState } from 'react';
+import Image from 'next/image';
+import { Star, User, BadgeCheck, ThumbsUp } from 'lucide-react';
+import { sizedImage } from '@/lib/image-url';
+import type { SectionContext, SectionReview } from './SectionContext';
 
-/** Recensioni clienti (ultime, con risposta del negozio). */
+/**
+ * Recensione singola arricchita: avatar, stelle, pill "Acquisto verificato"
+ * (mostrata solo se la recensione porta quel segnale), eventuale foto, testo,
+ * risposta del negozio e azione "Utile". Il conteggio "Utile" è uno stato locale
+ * ottimistico (non persistito): la riga è pronta per un campo `helpful`/endpoint.
+ */
+function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
+  const [helped, setHelped] = useState(false);
+  // Campi opzionali non ancora nello schema DB (store_reviews): se in futuro la
+  // query li includerà, l'UI è già pronta. Per ora restano undefined (graceful).
+  const extra = r as SectionReview & { author?: string | null; verified?: boolean; photo?: string | null; helpful?: number };
+  const author = extra.author ?? null;
+  const baseHelpful = typeof extra.helpful === 'number' ? extra.helpful : 0;
+  const helpfulCount = baseHelpful + (helped ? 1 : 0);
+
+  return (
+    <li className="rounded-2xl border border-cream-300 bg-white p-4 shadow-warm-sm">
+      <div className="mb-1.5 flex items-center gap-2.5">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-cream-200 text-primary-700">
+          <User size={16} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <strong className="text-sm text-ink-900">{author ?? 'Cliente'}</strong>
+            <span className="text-sm text-accent-400" aria-label={`${r.rating} su 5 stelle`}>
+              {'★'.repeat(r.rating)}
+              {'☆'.repeat(5 - r.rating)}
+            </span>
+            {extra.verified && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-olive-50 px-2 py-0.5 text-[11px] font-bold text-olive-700">
+                <BadgeCheck size={11} aria-hidden /> Acquisto verificato
+              </span>
+            )}
+          </div>
+          <span className="text-xs text-ink-400">{new Date(r.created_at).toLocaleDateString('it-IT')}</span>
+        </div>
+      </div>
+
+      {r.comment && <p className="text-sm leading-relaxed text-ink-700">{r.comment}</p>}
+
+      {extra.photo && (
+        <Image
+          src={sizedImage(extra.photo, 'thumb')}
+          alt=""
+          width={72}
+          height={72}
+          className="mt-2.5 h-[72px] w-[72px] rounded-lg object-cover"
+        />
+      )}
+
+      {r.seller_reply && (
+        <div className="mt-2.5 ml-3 rounded-r-lg border-l-2 border-primary-200 bg-cream-50 py-1.5 pl-3 pr-2">
+          <p className="text-xs font-semibold text-primary-700">Risposta del negozio</p>
+          <p className="whitespace-pre-wrap text-sm text-ink-700">{r.seller_reply}</p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => setHelped((v) => !v)}
+        aria-pressed={helped}
+        className={`mt-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+          helped ? '' : 'border-cream-300 text-ink-500 hover:text-ink-800'
+        }`}
+        style={
+          helped
+            ? { backgroundColor: `color-mix(in srgb, ${accent} 12%, white)`, color: accent, borderColor: accent }
+            : undefined
+        }
+      >
+        <ThumbsUp size={13} aria-hidden /> Utile{helpfulCount > 0 ? ` · ${helpfulCount}` : ''}
+      </button>
+    </li>
+  );
+}
+
+/** Recensioni clienti (ultime), con titolo serif, media voti e item arricchiti. */
 export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
-  const { reviews } = ctx;
+  const { reviews, accent } = ctx;
   if (reviews.length === 0) return null;
 
   const avgRating = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
 
   return (
-    <div className="bg-white border border-cream-300 rounded-2xl p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <h2 className="font-semibold text-lg text-ink-900 flex items-center gap-2">
-          <Star size={18} className="text-accent-500 fill-accent-400" aria-hidden />
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h2 className="flex items-center gap-2 font-serif text-xl font-bold text-ink-900">
+          <Star size={18} className="fill-accent-400 text-accent-500" aria-hidden />
           Recensioni clienti
         </h2>
         <div className="flex items-center gap-1">
-          <span className="text-accent-400 text-lg">
+          <span className="text-lg text-accent-400" aria-hidden>
             {'★'.repeat(Math.round(avgRating))}
             {'☆'.repeat(5 - Math.round(avgRating))}
           </span>
-          <span className="text-sm text-ink-600 font-medium">
+          <span className="text-sm font-medium text-ink-600">
             {avgRating.toFixed(1)} ({reviews.length})
           </span>
         </div>
       </div>
       <ul className="space-y-3">
-        {reviews.slice(0, 5).map((r) => (
-          <li key={r.id} className="border-b border-cream-200 last:border-0 pb-3 last:pb-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-accent-400 text-sm">
-                {'★'.repeat(r.rating)}
-                {'☆'.repeat(5 - r.rating)}
-              </span>
-              <span className="text-xs text-ink-400">{new Date(r.created_at).toLocaleDateString('it-IT')}</span>
-            </div>
-            {r.comment && <p className="text-sm text-ink-700">{r.comment}</p>}
-            {r.seller_reply && (
-              <div className="mt-2 ml-3 pl-3 border-l-2 border-primary-200 bg-cream-50 rounded-r-lg py-1.5 pr-2">
-                <p className="text-xs font-semibold text-primary-700">Risposta del negozio</p>
-                <p className="text-sm text-ink-700 whitespace-pre-wrap">{r.seller_reply}</p>
-              </div>
-            )}
-          </li>
+        {reviews.slice(0, 6).map((r) => (
+          <ReviewItem key={r.id} r={r} accent={accent} />
         ))}
       </ul>
     </div>
