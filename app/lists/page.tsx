@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import CollectionHeader from '@/components/CollectionHeader';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -148,18 +149,13 @@ export default function ListsPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl space-y-10">
-      <header className="text-center space-y-2">
-        <span className="inline-flex items-center gap-1.5 bg-secondary-100 text-secondary-800 px-3 py-1 rounded-full text-xs font-bold tracking-wide">
-          <ListChecks size={14} strokeWidth={2.4} />
-          Liste curate
-        </span>
-        <h1 className="font-serif text-3xl md:text-4xl font-bold text-ink-900">
-          Cosa comprano i piacentini
-        </h1>
-        <p className="text-ink-600 max-w-2xl mx-auto">
-          Liste di prodotti scelte da altri utenti. Lasciati ispirare o crea la tua.
-        </p>
-      </header>
+      <CollectionHeader
+        icon={ListChecks}
+        eyebrow="Liste curate"
+        title="Cosa comprano i piacentini"
+        blurb="Liste di prodotti scelte da altri utenti. Lasciati ispirare o crea la tua."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Liste' }]}
+      />
 
       {/* Le tue liste */}
       {myLists.length > 0 && (

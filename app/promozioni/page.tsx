@@ -1,9 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Percent, SearchX } from 'lucide-react';
+import { Tag, SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from '@/components/ProductCard';
+import CollectionHeader from '@/components/CollectionHeader';
 import { SkeletonGrid } from '@/components/SkeletonCard';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -32,16 +33,14 @@ export default function PromozioniPage() {
   });
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6 max-w-7xl">
-      <header className="flex items-center gap-4">
-        <span className="w-14 h-14 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
-          <Percent size={26} strokeWidth={2.2} />
-        </span>
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-ink-900">Promozioni</h1>
-          <p className="text-ink-500">Tutti gli sconti attivi dei negozi di Piacenza</p>
-        </div>
-      </header>
+    <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <CollectionHeader
+        icon={Tag}
+        eyebrow="In offerta"
+        title="Promozioni"
+        blurb="Sconti veri dai negozi della tua via."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Promozioni' }]}
+      />
 
       {isLoading ? (
         <SkeletonGrid count={12} />

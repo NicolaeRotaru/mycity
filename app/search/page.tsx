@@ -1,8 +1,9 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState, type RefObject } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, ArrowDownWideNarrow, TrendingUp, X, Tag, PackageCheck, Check } from 'lucide-react';
+import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, ArrowDownWideNarrow, TrendingUp, X, Tag, PackageCheck, Check, Search, ChevronRight } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { useQuery } from '@tanstack/react-query';
@@ -61,6 +62,7 @@ function SearchInner() {
   const params = useSearchParams();
   const t = useTranslations('search');
   const ta = useTranslations('actions');
+  const tn = useTranslations('nav');
   const q = params.get('q') ?? '';
   const [maxPrice, setMaxPrice] = useState<number>(500);
   const [minPrice, setMinPrice] = useState<number>(0);
@@ -120,6 +122,28 @@ function SearchInner() {
     minRating > 0 && `rating ${minRating}+`,
     sort !== 'relevance' && 'ordinamento',
   ].filter(Boolean).length;
+
+  // Conteggio reale dei risultati visibili, sollevato da ProductGrid via onCount.
+  const [resultCount, setResultCount] = useState<number | null>(null);
+
+  // Chip dei filtri attivi: ciascuno rimovibile, riflette lo stato reale di
+  // filtri/ordinamento/prezzo. La clear di ogni chip tocca solo il proprio stato.
+  type Chip = { key: string; label: string; clear: () => void };
+  const categoryName = categories.find((c) => c.id === categoryId)?.name;
+  const chips: Chip[] = [];
+  if (categoryId) chips.push({ key: 'cat', label: t('filterCategory', { name: categoryName ?? '' }), clear: () => setCategoryId('') });
+  if (minPrice > 0 && maxPrice < 500) chips.push({ key: 'price', label: t('filterPriceRange', { min: minPrice, max: maxPrice }), clear: () => { setMinPrice(0); setMaxPrice(500); } });
+  else if (maxPrice < 500) chips.push({ key: 'pmax', label: t('filterPrice', { max: maxPrice }), clear: () => setMaxPrice(500) });
+  else if (minPrice > 0) chips.push({ key: 'pmin', label: t('filterPriceMin', { min: minPrice }), clear: () => setMinPrice(0) });
+  if (minRating > 0) chips.push({ key: 'rating', label: t('chip.minRating', { rating: minRating }), clear: () => setMinRating(0) });
+  if (freeShipping) chips.push({ key: 'free', label: t('chip.freeShipping'), clear: () => setFreeShipping(false) });
+  if (onlyPromo) chips.push({ key: 'promo', label: t('chip.promotion'), clear: () => setOnlyPromo(false) });
+  if (onlyInStock) chips.push({ key: 'stock', label: t('chip.inStock'), clear: () => setOnlyInStock(false) });
+  if (onlyOpenStores) chips.push({ key: 'open', label: t('chip.openNow'), clear: () => setOnlyOpenStores(false) });
+  if (sort !== 'relevance') chips.push({ key: 'sort', label: t(`sort.${sort}`), clear: () => setSort('relevance') });
+
+  // "Forse cercavi": categorie reali (già caricate da Supabase) come scorciatoie.
+  const didYouMean = categories.slice(0, 6);
 
   // Controlli filtro condivisi tra colonna desktop e bottom-sheet mobile.
   const filterControls = (
@@ -382,17 +406,63 @@ function SearchInner() {
 
       <main className="md:col-span-3 space-y-6">
         <SponsoredCarousel placement="search_top" />
-        <div className="flex items-end justify-between gap-4 flex-wrap">
-          <h1 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">
-            {q ? t.rich('resultsFor', { q, hl: (chunks) => <span className="text-primary-700">{chunks}</span> }) : t('allProducts')}
-          </h1>
-          {sort !== 'relevance' && (
-            <span className="text-sm text-ink-500 inline-flex items-center gap-1">
-              {sort === 'price_asc' || sort === 'price_desc' ? <ArrowDownAZ size={14} /> : <TrendingUp size={14} />}
-              {t('sortedBy', { label: sort === 'newest' ? t('sort.newest') : sort === 'price_asc' ? t('sort.price_asc') : sort === 'price_desc' ? t('sort.price_desc') : t('sort.rating') })}
-            </span>
+        <div className="space-y-3">
+          {/* Breadcrumb accessibile: Home › Ricerca */}
+          <nav aria-label="Breadcrumb">
+            <ol className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink-500">
+              <li className="inline-flex items-center gap-1.5">
+                <Link href="/" className="hover:text-ink-700 transition-colors">{tn('home')}</Link>
+                <ChevronRight size={13} className="text-ink-400 shrink-0" aria-hidden />
+              </li>
+              <li>
+                <span className="text-ink-700" aria-current="page">{tn('search')}</span>
+              </li>
+            </ol>
+          </nav>
+
+          <div className="flex items-end justify-between gap-4 flex-wrap">
+            <h1 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">
+              {q ? t.rich('resultsFor', { q, hl: (chunks) => <span className="text-primary-700">{chunks}</span> }) : t('allProducts')}
+            </h1>
+            {sort !== 'relevance' && (
+              <span className="text-sm text-ink-500 inline-flex items-center gap-1">
+                {sort === 'price_asc' || sort === 'price_desc' ? <ArrowDownAZ size={14} /> : <TrendingUp size={14} />}
+                {t('sortedBy', { label: sort === 'newest' ? t('sort.newest') : sort === 'price_asc' ? t('sort.price_asc') : sort === 'price_desc' ? t('sort.price_desc') : t('sort.rating') })}
+              </span>
+            )}
+          </div>
+
+          {/* Riga conteggio: "N prodotti dai negozi di Piacenza" */}
+          {resultCount !== null && (
+            <p className="text-sm text-ink-500">{t('countLine', { count: resultCount })}</p>
+          )}
+
+          {/* Chip dei filtri attivi (rimovibili) */}
+          {chips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('activeFilters')}>
+              {chips.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={c.clear}
+                  aria-label={t('removeFilter', { label: c.label })}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 pl-3 pr-2 py-1 text-[13px] font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
+                >
+                  {c.label}
+                  <X size={14} strokeWidth={2.4} className="text-primary-700" aria-hidden />
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={reset}
+                className="inline-flex items-center gap-1 px-2 py-1 text-[13px] font-semibold text-ink-500 hover:text-primary-700 transition-colors"
+              >
+                <RotateCcw size={13} aria-hidden /> {t('clearAll')}
+              </button>
+            </div>
           )}
         </div>
+
         <ProductGrid
           search={q || undefined}
           categoryId={categoryId || undefined}
@@ -403,6 +473,33 @@ function SearchInner() {
           onlyInStock={onlyInStock}
           minRating={minRating > 0 ? minRating : undefined}
           sort={sort}
+          onCount={setResultCount}
+          emptyTitle={q ? t('noResultsTitle', { q }) : t('noResultsGeneric')}
+          emptyDescription={activeFilters > 0 ? t('noResultsFiltered') : t('noResultsDescription')}
+          onReset={activeFilters > 0 ? reset : undefined}
+          emptySuggestions={
+            <div className="mt-6 space-y-6">
+              {didYouMean.length > 0 && (
+                <div className="text-center">
+                  <p className="mb-2 text-[13px] text-ink-500">{t('didYouMean')}</p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    {didYouMean.map((c) => (
+                      <Link
+                        key={c.id}
+                        href={`/category/${c.slug}`}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-primary-200 bg-primary-50 px-3.5 py-1.5 text-[13px] font-semibold text-primary-800 hover:bg-primary-100 transition-colors"
+                      >
+                        <Search size={13} strokeWidth={2.4} aria-hidden /> {c.name}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="border-t border-cream-200 pt-5">
+                <ProductGrid rail limit={12} title={t('alsoInteresting')} sort="newest" />
+              </div>
+            </div>
+          }
         />
       </main>
     </div>

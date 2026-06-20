@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { LayoutGrid, Tag } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import CollectionHeader from '@/components/CollectionHeader';
 
 type Cat = { id: string; slug: string; name: string; icon: string | null; parent_id: string | null };
 
@@ -32,15 +33,13 @@ export default function CategoriePage() {
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6 max-w-5xl">
-      <header className="flex items-center gap-4">
-        <span className="w-14 h-14 rounded-2xl bg-primary-100 text-primary-700 flex items-center justify-center shrink-0">
-          <LayoutGrid size={26} strokeWidth={2.2} />
-        </span>
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-ink-900">Categorie</h1>
-          <p className="text-ink-500">Esplora tutte le categorie e le sottocategorie</p>
-        </div>
-      </header>
+      <CollectionHeader
+        icon={LayoutGrid}
+        eyebrow="Sfoglia per reparto"
+        title="Categorie"
+        blurb="Esplora tutte le categorie e le sottocategorie dei negozi di Piacenza."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Categorie' }]}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {tops.map((c) => {

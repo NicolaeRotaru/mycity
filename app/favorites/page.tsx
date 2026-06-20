@@ -48,7 +48,7 @@ export default function FavoritesPage() {
 
   if (products.length === 0) {
     return (
-      <div className="container mx-auto py-12 max-w-2xl">
+      <div className="py-8">
         <EmptyState
           icon={Heart}
           title="Nessun preferito ancora"
@@ -63,9 +63,9 @@ export default function FavoritesPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <h1 className="text-2xl font-bold text-ink-900 mb-6">I tuoi preferiti ({products.length})</h1>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+    <div>
+      <h1 className="mb-6 font-serif text-2xl font-bold text-ink-900">I tuoi preferiti ({products.length})</h1>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {products.map((p) => (
           <ProductCard
             key={p.id}
