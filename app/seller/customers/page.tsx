@@ -6,6 +6,7 @@ import { Star, Moon, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 
 type CustomerRow = {
@@ -90,10 +91,12 @@ export default function SellerCustomersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-ink-900">I tuoi clienti</h1>
-        <p className="text-sm text-ink-500">{customers.length} clienti totali · {formatPrice(totalRevenue)} di ricavi</p>
-      </div>
+      <SellerPageTitle
+        eyebrow="Relazioni"
+        title="Clienti"
+        sub={`${customers.length} clienti totali · ${formatPrice(totalRevenue)} di ricavi`}
+        className="mb-0"
+      />
 
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">

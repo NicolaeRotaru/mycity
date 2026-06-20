@@ -11,6 +11,8 @@ import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import SellerPageTitle from '@/components/seller/SellerPageTitle';
 
 const PER_WEEK_EUR = 4.99;
 const DURATIONS = [1, 2, 4]; // settimane
@@ -92,84 +94,102 @@ export default function SellerPromotePage() {
 
   if (isLoading) return <LoadingState />;
 
+  const selectedProduct = products.find((p) => p.id === selected) ?? null;
+
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-ink-900 flex items-center gap-2">
-          <Megaphone size={22} className="text-primary-700" strokeWidth={2.2} />
-          Metti in primo piano
-        </h1>
-        <p className="text-sm text-ink-500 mt-1">
-          Fai apparire un tuo prodotto nel carosello <strong>&laquo;In primo piano&raquo;</strong> della ricerca. €4,99 / settimana.
-        </p>
-      </header>
+    <div>
+      <SellerPageTitle
+        eyebrow="Crescita"
+        title="Sponsorizza"
+        sub="Fai apparire un tuo prodotto nel carosello «In primo piano» della ricerca. €4,99 / settimana."
+      />
 
-      {/* Selezione prodotto */}
-      <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm space-y-4">
-        <h2 className="font-semibold text-ink-900">1. Scegli il prodotto</h2>
-        {products.length === 0 ? (
-          <p className="text-sm text-ink-500">Non hai prodotti in vendita da sponsorizzare.</p>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {products.map((p) => {
-              const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
-              const active = selected === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setSelected(p.id)}
-                  className={`text-left rounded-xl border-2 overflow-hidden transition-colors ${
-                    active ? 'border-primary-600 ring-2 ring-primary-200' : 'border-cream-300 hover:border-primary-300'
-                  }`}
-                >
-                  <div className="relative aspect-square bg-cream-100">
-                    {img && <Image src={sizedImage(img, 'thumb')} alt={p.name} fill sizes="144px" unoptimized className="object-cover" />}
-                    {active && <span className="absolute top-1 right-1 bg-primary-600 text-white rounded-full p-1"><Sparkles size={12} /></span>}
-                  </div>
-                  <div className="p-2">
-                    <p className="text-sm font-semibold text-ink-900 line-clamp-2">{p.name}</p>
-                    <p className="text-sm font-bold text-primary-700">{formatPrice(p.price)}</p>
-                  </div>
-                </button>
-              );
-            })}
+      {/* Wizard 2 colonne: a sinistra la scelta, a destra durata + riepilogo */}
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1.5fr_1fr]">
+        {/* Selezione prodotto */}
+        <Card variant="elevated" padding="lg" className="space-y-4">
+          <h2 className="flex items-center gap-2 font-serif text-lg font-bold text-ink-900">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">1</span>
+            Scegli il prodotto
+          </h2>
+          {products.length === 0 ? (
+            <p className="text-sm text-ink-500">Non hai prodotti in vendita da sponsorizzare.</p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {products.map((p) => {
+                const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
+                const active = selected === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setSelected(p.id)}
+                    aria-pressed={active}
+                    className={`overflow-hidden rounded-xl border-2 text-left transition-colors ${
+                      active ? 'border-primary-600 ring-2 ring-primary-200' : 'border-cream-300 hover:border-primary-300'
+                    }`}
+                  >
+                    <div className="relative aspect-square bg-cream-100">
+                      {img && <Image src={sizedImage(img, 'thumb')} alt={p.name} fill sizes="144px" unoptimized className="object-cover" />}
+                      {active && <span className="absolute right-1 top-1 rounded-full bg-primary-600 p-1 text-white"><Sparkles size={12} aria-hidden /></span>}
+                    </div>
+                    <div className="p-2">
+                      <p className="line-clamp-2 text-sm font-semibold text-ink-900">{p.name}</p>
+                      <p className="text-sm font-bold text-primary-700">{formatPrice(p.price)}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </Card>
+
+        {/* Durata + pagamento (sticky su desktop) */}
+        <Card variant="elevated" padding="lg" className="space-y-4 lg:sticky lg:top-24">
+          <h2 className="flex items-center gap-2 font-serif text-lg font-bold text-ink-900">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-primary-100 text-xs font-bold text-primary-700">2</span>
+            Durata
+          </h2>
+          <div className="grid grid-cols-3 gap-2">
+            {DURATIONS.map((w) => (
+              <button
+                key={w}
+                type="button"
+                onClick={() => setWeeks(w)}
+                aria-pressed={weeks === w}
+                className={`rounded-xl border-2 py-3 font-bold transition-colors ${
+                  weeks === w ? 'border-primary-600 bg-primary-600 text-white' : 'border-cream-300 bg-white text-ink-900 hover:border-primary-300'
+                }`}
+              >
+                {w} {w === 1 ? 'sett.' : 'sett.'}
+                <span className="block text-xs font-semibold opacity-80">{formatPrice(w * PER_WEEK_EUR)}</span>
+              </button>
+            ))}
           </div>
-        )}
-      </div>
 
-      {/* Durata + pagamento */}
-      <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm space-y-4">
-        <h2 className="font-semibold text-ink-900">2. Durata</h2>
-        <div className="grid grid-cols-3 gap-2 max-w-md">
-          {DURATIONS.map((w) => (
-            <button
-              key={w}
-              type="button"
-              onClick={() => setWeeks(w)}
-              className={`py-3 rounded-xl font-bold border-2 transition-colors ${
-                weeks === w ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-ink-900 border-cream-300 hover:border-primary-300'
-              }`}
-            >
-              {w} {w === 1 ? 'settimana' : 'settimane'}
-              <span className="block text-xs font-semibold opacity-80">{formatPrice(w * PER_WEEK_EUR)}</span>
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center justify-between pt-2 border-t">
-          <span className="text-ink-600">Totale</span>
-          <span className="text-2xl font-serif font-bold text-ink-900">{formatPrice(price)}</span>
-        </div>
-        <Button onClick={pay} loading={paying} disabled={!selected} fullWidth size="lg" icon={Megaphone}>
-          Sponsorizza e paga {formatPrice(price)}
-        </Button>
+          <div className="rounded-lg bg-cream-50 px-3 py-2.5 text-sm">
+            {selectedProduct ? (
+              <p className="text-ink-600">Sponsorizzi <strong className="text-ink-900">{selectedProduct.name}</strong> per {weeks} {weeks === 1 ? 'settimana' : 'settimane'}.</p>
+            ) : (
+              <p className="text-ink-500">Scegli un prodotto a sinistra per continuare.</p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between border-t border-cream-200 pt-3">
+            <span className="text-ink-600">Totale</span>
+            <span className="font-serif text-2xl font-bold text-ink-900">{formatPrice(price)}</span>
+          </div>
+          <Button onClick={pay} loading={paying} disabled={!selected} fullWidth size="lg" icon={Megaphone}>
+            Sponsorizza e paga {formatPrice(price)}
+          </Button>
+        </Card>
       </div>
 
       {/* Campagne */}
       {campaigns.length > 0 && (
-        <div className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
-          <h2 className="font-semibold text-ink-900 mb-3 flex items-center gap-2">
-            <TrendingUp size={18} className="text-primary-600" /> Le tue campagne
+        <Card variant="elevated" padding="lg" className="mt-5">
+          <h2 className="mb-3 flex items-center gap-2 font-serif text-lg font-bold text-ink-900">
+            <TrendingUp size={18} className="text-primary-600" aria-hidden /> Le tue campagne
           </h2>
           <div className="divide-y divide-cream-200">
             {campaigns.map((c) => (
@@ -187,7 +207,7 @@ export default function SellerPromotePage() {
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );

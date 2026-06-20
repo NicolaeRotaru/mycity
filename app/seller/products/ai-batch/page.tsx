@@ -3,16 +3,29 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { Sparkles, Loader2, Wand2, FileText, ShieldCheck, Languages, ArrowLeft, Check, AlertTriangle } from 'lucide-react';
+import {
+  Sparkles, Loader2, Wand2, FileText, ShieldCheck, Languages, Check, AlertTriangle,
+  Mic, Camera, ScanBarcode, Link2, type LucideIcon,
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import CatalogCopilot from '@/components/seller/CatalogCopilot';
+import SellerPageTitle from '@/components/seller/SellerPageTitle';
+import { Card } from '@/components/ui/Card';
+import { Select } from '@/components/ui/Field';
+import { Button } from '@/components/ui/Button';
 
 /**
- * Operazioni AI su TUTTO il catalogo (Batch API, asincrona, -50%). Il venditore
- * sceglie l'operazione, avvia il job, il polling segue lo stato e — a risultati
- * pronti — può applicare in blocco. Human-in-the-loop: si applica solo dopo aver
- * visto quanti prodotti verrebbero toccati.
+ * AI Studio — tre modi per lavorare col catalogo con l'intelligenza artificiale:
+ *  - "Crea con AI": entrate verso il flusso reale di creazione (voce/foto/barcode/link)
+ *    che vive in /seller/products/new (gli strumenti AI sono lì, sul form prodotto).
+ *  - "Catalogo AI": operazioni in blocco su TUTTO il catalogo via Batch API
+ *    (improve/redescribe/moderate/translate). Human-in-the-loop: si applica solo
+ *    dopo l'anteprima.
+ *  - "Copilot": comando in linguaggio naturale sull'intero catalogo.
+ *
+ * Tutte le chiamate AI esistenti (/api/ai/catalog-batch/*, /api/ai/copilot,
+ * /api/ai/catalog-apply via CatalogCopilot) restano invariate.
  */
 
 type Operation = 'improve' | 'redescribe' | 'moderate' | 'translate';
@@ -34,7 +47,7 @@ type Job = {
   counts: { total: number; withChanges: number };
 };
 
-const OPS: { key: Operation; label: string; desc: string; icon: typeof Wand2 }[] = [
+const OPS: { key: Operation; label: string; desc: string; icon: LucideIcon }[] = [
   { key: 'improve', label: 'Migliora tutto', desc: 'Ottimizza nome, descrizione, tag e attributi di ogni prodotto.', icon: Wand2 },
   { key: 'redescribe', label: 'Ri-descrivi', desc: 'Riscrive tutte le descrizioni con un tono coerente.', icon: FileText },
   { key: 'moderate', label: 'Modera', desc: 'Controlla la conformità di tutto il catalogo e segnala i prodotti a rischio.', icon: ShieldCheck },
@@ -44,6 +57,29 @@ const LANGS = [
   { code: 'en', label: 'Inglese' }, { code: 'fr', label: 'Francese' }, { code: 'de', label: 'Tedesco' },
   { code: 'es', label: 'Spagnolo' }, { code: 'ro', label: 'Rumeno' }, { code: 'ar', label: 'Arabo' }, { code: 'zh', label: 'Cinese' },
 ];
+
+type Tab = 'crea' | 'catalogo' | 'copilot';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'crea', label: 'Crea con AI' },
+  { key: 'catalogo', label: 'Catalogo AI' },
+  { key: 'copilot', label: 'Copilot' },
+];
+
+// Le 4 modalità di creazione: l'AI compila la scheda, tu confermi. Tutte aprono
+// il flusso reale di creazione prodotto, dove vivono gli strumenti AI sul form.
+type CreateTone = 'primary' | 'accent' | 'olive' | 'secondary';
+const CREATE_METHODS: { id: string; icon: LucideIcon; title: string; desc: string; tone: CreateTone; href: string }[] = [
+  { id: 'voice', icon: Mic, title: 'Da voce', desc: 'Detta il prodotto a voce: l\'AI compila nome, prezzo e descrizione.', tone: 'primary', href: '/seller/products/new' },
+  { id: 'photo', icon: Camera, title: 'Da foto', desc: 'Carica una foto: riconosce il prodotto e crea la scheda.', tone: 'accent', href: '/seller/products/new' },
+  { id: 'barcode', icon: ScanBarcode, title: 'Da barcode', desc: 'Inquadra il codice a barre e recupera i dati del prodotto.', tone: 'olive', href: '/seller/products/new' },
+  { id: 'url', icon: Link2, title: 'Da link', desc: 'Incolla un URL e importa nome, foto e attributi.', tone: 'secondary', href: '/seller/products/new' },
+];
+const TONE: Record<CreateTone, string> = {
+  primary:   'bg-primary-100 text-primary-700',
+  accent:    'bg-accent-100 text-accent-700',
+  olive:     'bg-olive-100 text-olive-700',
+  secondary: 'bg-secondary-100 text-secondary-600',
+};
 
 async function authedFetch(path: string, init?: RequestInit) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -58,6 +94,91 @@ async function authedFetch(path: string, init?: RequestInit) {
 }
 
 export default function CatalogAiBatchPage() {
+  const [tab, setTab] = useState<Tab>('crea');
+
+  return (
+    <div>
+      <SellerPageTitle
+        eyebrow="Intelligenza artificiale"
+        title="AI Studio"
+        sub="Crea schede prodotto e lavora su tutto il catalogo con l'intelligenza artificiale"
+        action={
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-50 px-3 py-1.5 text-xs font-bold text-primary-700 ring-1 ring-inset ring-primary-200">
+            <Sparkles size={14} aria-hidden /> Powered by AI
+          </span>
+        }
+      />
+
+      {/* Tab */}
+      <div className="mb-6 flex gap-1 border-b border-cream-300">
+        {TABS.map((t) => {
+          const on = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              aria-current={on ? 'true' : undefined}
+              className={`-mb-px border-b-2 px-4 py-2.5 text-sm transition-colors ${
+                on
+                  ? 'border-primary-600 font-bold text-primary-700'
+                  : 'border-transparent font-medium text-ink-500 hover:text-ink-700'
+              }`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === 'crea' && <CreateTab />}
+      {tab === 'catalogo' && <CatalogTab />}
+      {tab === 'copilot' && (
+        <div className="max-w-2xl">
+          <CatalogCopilot />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Tab 1: crea con AI (entrate verso il form reale) ---------------- */
+function CreateTab() {
+  return (
+    <div className="max-w-3xl space-y-4">
+      <p className="text-sm text-ink-600">
+        Scegli da dove partire: l&apos;AI compila la scheda, tu controlli e pubblichi.
+      </p>
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        {CREATE_METHODS.map((m) => {
+          const Icon = m.icon;
+          return (
+            <Link
+              key={m.id}
+              href={m.href}
+              className="flex gap-3.5 rounded-xl border border-cream-300 bg-white p-[18px] transition-all hover:border-primary-300 hover:shadow-warm"
+            >
+              <span className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-md ${TONE[m.tone]}`}>
+                <Icon size={22} strokeWidth={2.2} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="font-bold text-ink-900">{m.title}</p>
+                <p className="mt-0.5 text-[13px] leading-snug text-ink-500">{m.desc}</p>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+      <p className="text-xs text-ink-400">
+        Gli strumenti AI per la singola scheda (voce, foto, import da link, ottimizza per la ricerca,
+        traduci, &laquo;perché non vende?&raquo;) sono disponibili nel form prodotto.
+      </p>
+    </div>
+  );
+}
+
+/* ---------------- Tab 2: operazioni AI su tutto il catalogo (batch) ---------------- */
+function CatalogTab() {
   const [operation, setOperation] = useState<Operation>('improve');
   const [lang, setLang] = useState('en');
   const [job, setJob] = useState<Job | null>(null);
@@ -114,21 +235,14 @@ export default function CatalogAiBatchPage() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <div>
-        <Link href="/seller/products" className="inline-flex items-center gap-1 text-sm text-ink-500 hover:text-ink-700">
-          <ArrowLeft size={15} aria-hidden /> Torna ai prodotti
-        </Link>
-        <h1 className="mt-1 flex items-center gap-2 text-2xl font-bold">
-          <Sparkles size={22} className="text-primary-600" aria-hidden /> AI su tutto il catalogo
-        </h1>
-        <p className="text-sm text-ink-500">
-          Lavora su tutti i tuoi prodotti in un colpo solo. Il job gira in background (anche qualche minuto):
-          quando è pronto rivedi e applichi.
-        </p>
-      </div>
+      <p className="text-sm leading-relaxed text-ink-600">
+        Lavora su <strong>tutti</strong> i tuoi prodotti in un colpo solo. Il job gira in background
+        (anche qualche minuto): quando è pronto rivedi e applichi.{' '}
+        <span className="text-ink-400">(Human-in-the-loop: applichi solo dopo l&apos;anteprima.)</span>
+      </p>
 
       {/* Scelta operazione */}
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
         {OPS.map((o) => {
           const Icon = o.icon;
           const active = operation === o.key;
@@ -136,58 +250,51 @@ export default function CatalogAiBatchPage() {
             <button
               key={o.key}
               type="button"
-              onClick={() => setOperation(o.key)}
+              onClick={() => { setOperation(o.key); setJob(null); }}
               disabled={job?.status === 'processing'}
-              className={`rounded-lg border p-3 text-left transition-colors disabled:opacity-50 ${
-                active ? 'border-primary-400 bg-primary-50' : 'border-cream-200 bg-white hover:bg-cream-50'
+              className={`rounded-xl border p-3.5 text-left transition-colors disabled:opacity-50 ${
+                active ? 'border-primary-400 bg-primary-50' : 'border-cream-300 bg-white hover:bg-cream-50'
               }`}
             >
-              <span className="flex items-center gap-2 font-semibold text-ink-800">
+              <span className="flex items-center gap-2 font-bold text-ink-800">
                 <Icon size={16} className="text-primary-600" aria-hidden /> {o.label}
               </span>
-              <span className="mt-0.5 block text-xs text-ink-500">{o.desc}</span>
+              <span className="mt-1 block text-xs leading-snug text-ink-500">{o.desc}</span>
             </button>
           );
         })}
       </div>
 
       {operation === 'translate' && (
-        <label className="flex items-center gap-2 text-sm text-ink-700">
-          Lingua di destinazione:
-          <select
+        <div className="max-w-[280px]">
+          <Select
+            label="Lingua di destinazione"
             value={lang}
             onChange={(e) => setLang(e.target.value)}
             disabled={job?.status === 'processing'}
-            className="rounded-lg border border-cream-300 px-2 py-1.5 text-sm focus:outline-none"
           >
             {LANGS.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
-          </select>
-        </label>
+          </Select>
+        </div>
       )}
 
       {(!job || job.status === 'applied') && (
-        <button
-          type="button"
-          onClick={() => void start()}
-          disabled={starting}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2.5 font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
-        >
-          {starting ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Sparkles size={18} aria-hidden />}
+        <Button size="lg" icon={Sparkles} loading={starting} onClick={() => void start()}>
           Avvia sul catalogo
-        </button>
+        </Button>
       )}
 
       {/* Stato job */}
       {job && job.status === 'processing' && (
-        <div className="flex items-center gap-3 rounded-lg border border-cream-200 bg-cream-50 p-4 text-sm text-ink-600">
+        <div className="flex items-center gap-3 rounded-xl border border-cream-200 bg-cream-50 p-4 text-sm text-ink-600">
           <Loader2 size={18} className="animate-spin" aria-hidden />
           <span>Sto elaborando {job.total} prodotti… puoi lasciare aperta questa pagina o tornare più tardi.</span>
         </div>
       )}
 
       {job && (job.status === 'ready' || job.status === 'applied') && (
-        <div className="rounded-lg border border-cream-200 bg-white p-4 shadow-warm">
-          <p className="text-sm font-semibold text-ink-800">
+        <Card variant="elevated" padding="lg">
+          <p className="text-sm font-bold text-ink-800">
             {isModerate
               ? `${job.results.filter((r) => r.flagged).length} prodotti segnalati su ${job.counts.total}`
               : `${job.counts.withChanges} prodotti con modifiche su ${job.counts.total}`}
@@ -197,7 +304,7 @@ export default function CatalogAiBatchPage() {
               <li key={r.product_id} className="flex gap-2 border-b border-cream-100 py-1 last:border-0">
                 {isModerate ? (
                   r.flagged
-                    ? <span className="inline-flex items-center gap-1.5 text-rose-600"><AlertTriangle size={14} aria-hidden /> {r.reason ?? 'Da rivedere'}</span>
+                    ? <span className="inline-flex items-center gap-1.5 text-secondary-600"><AlertTriangle size={14} aria-hidden /> {r.reason ?? 'Da rivedere'}</span>
                     : <span className="inline-flex items-center gap-1.5 text-olive-600"><Check size={14} strokeWidth={2.4} aria-hidden /> ok</span>
                 ) : (
                   <span>{r.summary ?? (r.patch && Object.keys(r.patch).length ? 'Modifiche proposte' : 'Nessuna modifica')}</span>
@@ -207,27 +314,17 @@ export default function CatalogAiBatchPage() {
           </ul>
 
           {job.status === 'ready' && (
-            <button
-              type="button"
-              onClick={() => void apply()}
-              disabled={applying}
-              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
-            >
-              {applying ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} strokeWidth={2.4} aria-hidden />}
+            <Button className="mt-3" icon={Check} loading={applying} onClick={() => void apply()}>
               {actionLabel}
-            </button>
+            </Button>
           )}
           {job.status === 'applied' && (
             <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-olive-600">
               <Check size={16} strokeWidth={2.6} aria-hidden /> Applicato.
             </p>
           )}
-        </div>
+        </Card>
       )}
-
-      <div className="border-t border-cream-200 pt-6">
-        <CatalogCopilot />
-      </div>
     </div>
   );
 }

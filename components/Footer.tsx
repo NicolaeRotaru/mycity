@@ -183,6 +183,7 @@ const Footer = () => {
             {!isSellerArea && (
               <li><Link href="/sell" className="hover:text-white transition-colors">Vendi su MyCity</Link></li>
             )}
+            <li><Link href="/lavora-con-noi" className="hover:text-white transition-colors">Lavora con noi</Link></li>
             <li><Link href="/terms" className="hover:text-white transition-colors">Termini di servizio</Link></li>
             <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy policy</Link></li>
             <li><Link href="/cookies" className="hover:text-white transition-colors">Cookie policy</Link></li>

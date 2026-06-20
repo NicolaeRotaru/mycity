@@ -252,6 +252,26 @@ function HomeBlock({
       );
     }
 
+    /* --------------------------------------------------------- BANDA FIDUCIA */
+    case 'trustRow':
+      return (
+        <section className="bg-cream-50 border-y border-cream-300">
+          <div className="container mx-auto px-4 sm:px-6 py-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {DEFAULT_TRUST_BULLETS.map((v) => (
+              <div key={v.t} className="flex items-start gap-3">
+                <span className={`shrink-0 w-11 h-11 rounded-full flex items-center justify-center ${trustColorClass(v.color)}`}>
+                  <v.Icon size={20} strokeWidth={2.2} />
+                </span>
+                <div className="min-w-0">
+                  <p className="font-semibold text-ink-900 leading-tight">{v.t}</p>
+                  <p className="text-sm text-ink-600 mt-0.5 leading-snug">{v.d}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+
     /* ---------------------------------------------------------- NEGOZI VICINI */
     case 'nearbyStores': {
       const c = section.config;

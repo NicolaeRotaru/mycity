@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircle, RotateCcw, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, RotateCcw, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from './Button';
@@ -36,11 +36,11 @@ export function ErrorState({
   const _back = backLabel ?? tActions('back');
   return (
     <div className="py-12 px-4 text-center" role="alert">
-      <div className="mx-auto rounded-full bg-rose-50 text-rose-600 flex items-center justify-center w-16 h-16 mb-3">
-        <AlertCircle size={30} strokeWidth={1.8} aria-hidden />
+      <div className="mx-auto rounded-full bg-secondary-50 text-secondary-600 flex items-center justify-center w-24 h-24 mb-6">
+        <AlertTriangle size={42} strokeWidth={1.8} aria-hidden />
       </div>
-      <h2 className="font-serif text-lg font-bold text-ink-900">{_title}</h2>
-      <p className="text-sm text-ink-500 mt-1 max-w-md mx-auto">{_desc}</p>
+      <h2 className="font-serif text-2xl font-bold text-ink-900">{_title}</h2>
+      <p className="text-base text-ink-600 mt-2.5 max-w-md mx-auto leading-relaxed">{_desc}</p>
       <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
         {retry && (
           <Button onClick={retry} icon={RotateCcw} variant="primary">{tActions('retry')}</Button>
