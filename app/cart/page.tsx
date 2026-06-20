@@ -11,8 +11,13 @@ import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
-import { Banknote, Check, Lightbulb, Lock, RotateCcw, ShieldCheck, ShoppingCart, Store, Trash2 } from 'lucide-react';
+import { CartUpsell } from '@/components/cart/CartUpsell';
+import { Banknote, Check, Lightbulb, Lock, Package, RotateCcw, ShieldCheck, ShoppingCart, Store, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+
+/** Iniziali del negozio per il mini-logo: "Salumeria Verdi" → "SV". */
+const storeInitials = (name: string) =>
+  name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -55,6 +60,23 @@ export default function CartPage() {
     );
   }
 
+  // Raggruppa per negozio (presentazione): usa sellerId/storeName già presenti
+  // nel CartItem. Nessuna mutazione di stato — solo il rendering cambia.
+  const groupOrder: string[] = [];
+  const groupsByStore = new Map<string, { storeName: string; items: CartItem[] }>();
+  for (const it of items) {
+    const key = it.sellerId ?? it.storeName ?? '__nostore__';
+    if (!groupsByStore.has(key)) {
+      groupsByStore.set(key, { storeName: it.storeName ?? 'Negozio', items: [] });
+      groupOrder.push(key);
+    }
+    groupsByStore.get(key)!.items.push(it);
+  }
+  const groups = groupOrder.map((k) => ({ key: k, ...groupsByStore.get(k)! }));
+  const multiStore = groups.length > 1;
+  const groupSubtotal = (g: { items: CartItem[] }) =>
+    g.items.reduce((s, it) => s + it.price * it.quantity, 0);
+
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8">
       {/* Step indicator condiviso col checkout (carrello = step 1) */}
@@ -63,68 +85,97 @@ export default function CartPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* COLONNA SX: prodotti */}
         <div className="lg:col-span-2 space-y-4">
-          <h1 className="text-2xl font-bold">
-            Il tuo carrello <span className="text-ink-400 font-normal">({count} articoli)</span>
+          <h1 className="font-serif text-2xl font-bold text-ink-900">
+            Il tuo carrello <span className="text-ink-400 font-normal font-sans text-lg">({count} articoli)</span>
           </h1>
 
-          {/* Progress spedizione gratis (componente condiviso PDP/carrello/checkout) */}
-          <FreeShippingProgress subtotal={total} />
-
-          {items.map((item) => (
-            <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border rounded-xl p-4 flex gap-4 hover:shadow-md transition-shadow">
-              <div className="relative w-24 h-24 bg-cream-100 rounded-lg shrink-0 overflow-hidden">
-                <Image
-                  src={sizedImage(item.image ?? 'https://placehold.co/200x200/eef2ff/6366f1?text=Foto', 'thumb')}
-                  alt={item.name}
-                  fill
-                  sizes="96px"
-                  unoptimized
-                  className="object-cover"
-                />
-              </div>
-              <div className="flex-1 flex flex-col justify-between min-w-0">
-                <Link
-                  href={`/product/${item.id}`}
-                  className="font-semibold hover:text-primary-700 line-clamp-2"
-                >
-                  {item.name}
-                </Link>
-                {item.variantLabel && (
-                  <p className="text-xs font-semibold text-ink-500">{item.variantLabel}</p>
-                )}
-                <p className="text-xs text-olive-600 font-semibold flex items-center gap-1">
-                  <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Spedizione 24-48h
-                </p>
-                <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center border rounded-lg">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity - 1, item.variantId)}
-                        aria-label="Diminuisci quantità"
-                        className="w-8 h-8 hover:bg-cream-100 rounded-l-lg"
-                      >−</button>
-                      <span className="w-8 text-center font-semibold">{item.quantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
-                        aria-label="Aumenta quantità"
-                        className="w-8 h-8 hover:bg-cream-100 rounded-r-lg"
-                      >+</button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeFromCart(item.id, item.variantId)}
-                      className="text-ink-400 hover:text-red-600 text-sm ml-2 flex items-center gap-1"
-                    >
-                      <Trash2 size={15} aria-hidden /> Rimuovi
-                    </button>
-                  </div>
-                  <span className="font-bold font-serif text-ink-900 text-lg">{formatPrice(item.price * item.quantity)}</span>
-                </div>
-              </div>
+          {/* Avviso multi-negozio: ogni negozio consegna separatamente */}
+          {multiStore && (
+            <div className="flex items-center gap-2 rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-600">
+              <Package size={16} className="text-ink-500 shrink-0" aria-hidden />
+              <span>
+                Ordine da <strong className="text-ink-900">{groups.length} negozi</strong> · ogni negozio consegna separatamente
+              </span>
             </div>
-          ))}
+          )}
+
+          {/* Gruppi per negozio */}
+          {groups.map((g) => {
+            const sub = groupSubtotal(g);
+            return (
+              <div key={g.key} className="space-y-3">
+                {/* Header negozio */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[9px] font-bold text-white">
+                    {storeInitials(g.storeName)}
+                  </span>
+                  <span className="text-sm font-bold text-ink-900">{g.storeName}</span>
+                </div>
+
+                {/* Progress spedizione gratis per negozio */}
+                <FreeShippingProgress subtotal={sub} className="p-3" />
+
+                {g.items.map((item) => (
+                  <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-4 hover:shadow-card transition-shadow">
+                    <div className="relative w-24 h-24 bg-cream-100 rounded-lg shrink-0 overflow-hidden">
+                      <Image
+                        src={sizedImage(item.image ?? 'https://placehold.co/200x200/eef2ff/6366f1?text=Foto', 'thumb')}
+                        alt={item.name}
+                        fill
+                        sizes="96px"
+                        unoptimized
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 flex flex-col justify-between min-w-0">
+                      <Link
+                        href={`/product/${item.id}`}
+                        className="font-semibold hover:text-primary-700 line-clamp-2"
+                      >
+                        {item.name}
+                      </Link>
+                      {item.variantLabel && (
+                        <p className="text-xs font-semibold text-ink-500">{item.variantLabel}</p>
+                      )}
+                      <p className="text-xs text-olive-600 font-semibold flex items-center gap-1">
+                        <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Spedizione 24-48h
+                      </p>
+                      <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center border border-cream-300 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.id, item.quantity - 1, item.variantId)}
+                              aria-label="Diminuisci quantità"
+                              className="w-8 h-8 hover:bg-cream-100 rounded-l-lg"
+                            >−</button>
+                            <span className="w-8 text-center font-semibold">{item.quantity}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
+                              aria-label="Aumenta quantità"
+                              className="w-8 h-8 hover:bg-cream-100 rounded-r-lg"
+                            >+</button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeFromCart(item.id, item.variantId)}
+                            className="text-ink-400 hover:text-secondary-600 text-sm ml-2 flex items-center gap-1"
+                          >
+                            <Trash2 size={15} aria-hidden /> Rimuovi
+                          </button>
+                        </div>
+                        <span className="font-bold font-serif text-ink-900 text-lg">{formatPrice(item.price * item.quantity)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+
+          {/* Upsell "Completa con" — prodotti reali degli stessi negozi */}
+          <CartUpsell items={items} />
 
           <Link
             href="/"
@@ -136,10 +187,10 @@ export default function CartPage() {
 
         {/* COLONNA DX: riepilogo sticky */}
         <div className="space-y-4 lg:sticky lg:top-32 h-fit">
-          <div className="bg-white border rounded-xl p-6 space-y-4 shadow-sm">
-            <h2 className="text-lg font-bold flex items-center justify-between">
+          <div className="bg-white border border-cream-300 rounded-xl p-6 space-y-4 shadow-card">
+            <h2 className="font-serif text-lg font-bold text-ink-900 flex items-center justify-between">
               Riepilogo ordine
-              <span className="text-xs font-normal text-ink-400">{count} articoli</span>
+              <span className="text-xs font-normal font-sans text-ink-400">{count} articoli</span>
             </h2>
 
             <div className="space-y-2 text-sm">
@@ -155,17 +206,17 @@ export default function CartPage() {
               </div>
             </div>
 
-            <div className="border-t pt-3 flex justify-between items-baseline">
+            <div className="border-t border-cream-300 pt-3 flex justify-between items-baseline">
               <span className="font-bold">Totale</span>
               <div className="text-right">
-                <div className="text-2xl font-extrabold font-serif text-primary-800">{formatPrice(finalTotal)}</div>
+                <div className="font-serif text-2xl font-extrabold text-primary-800">{formatPrice(finalTotal)}</div>
                 <div className="text-[10px] text-ink-400 uppercase">IVA inclusa</div>
               </div>
             </div>
 
             <Link
               href="/checkout"
-              className="flex items-center justify-center gap-2 w-full text-center bg-accent-500 hover:bg-accent-600 text-ink-900 py-3.5 rounded-lg font-bold shadow-warm hover:shadow-warm-lg transition-all"
+              className="flex items-center justify-center gap-2 w-full text-center bg-primary-700 hover:bg-primary-800 text-white py-3.5 rounded-lg font-bold shadow-warm-sm hover:shadow-warm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
             >
               <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
             </Link>

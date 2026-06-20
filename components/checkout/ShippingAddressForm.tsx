@@ -1,17 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import type { ChangeEvent, FormEvent } from 'react';
-import { MapPin } from 'lucide-react';
-import { Input, Textarea, Select } from '@/components/ui/Field';
+import { useState, type ChangeEvent, type FormEvent } from 'react';
+import { Plus, X } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
+import { Input, Textarea } from '@/components/ui/Field';
 
 /**
  * Form indirizzo di consegna per checkout.
  *
- * Estratto da app/checkout/page.tsx per ridurre il monolite.
- * Riceve form state + handlers come props (controlled component).
- * Usa la primitiva Input/Textarea/Select: label, errori per-campo, aria,
- * autocomplete/inputmode (UX mobile, no zoom iOS).
+ * RESKIN: gli indirizzi salvati sono *tile cliccabili* (+ una tile tratteggiata
+ * "aggiungi indirizzo" che apre il form manuale), al posto della vecchia Select.
+ *
+ * LOGICA INVARIATA: stesso form `#checkout-form` (target del submit della
+ * OrderSummary), stessi `name`/handlers dei campi, stesso `onSubmit`,
+ * `onChange`, `onApplySavedAddress` ed errori per-campo. Le tile chiamano
+ * `onApplySavedAddress` esattamente come faceva la Select.
  */
 
 export type AddressForm = {
@@ -55,31 +59,77 @@ export function ShippingAddressForm({
   onSubmit,
   onApplySavedAddress,
 }: Props) {
-  return (
-    <div className="bg-white border rounded-xl p-6 space-y-4">
-      <h2 className="text-xl font-bold flex items-center gap-2"><MapPin size={20} strokeWidth={2.2} aria-hidden /> Indirizzo di consegna</h2>
+  // UI-only: il form manuale è aperto di default solo senza indirizzi salvati.
+  const [editing, setEditing] = useState(savedAddresses.length === 0);
 
+  // Tile attiva = indirizzo salvato i cui campi combaciano col form corrente.
+  // Pura derivazione visiva, nessuna logica di stato dell'indirizzo qui.
+  const activeId = savedAddresses.find(
+    (a) =>
+      a.address === form.address &&
+      a.city === form.city &&
+      (a.full_name ?? '') === form.fullName,
+  )?.id;
+
+  const selectTile = (id: string) => {
+    onApplySavedAddress(id);
+    setEditing(false);
+  };
+
+  return (
+    <div className="space-y-4">
       {savedAddresses.length > 0 && (
-        <div>
-          <Select
-            label="Indirizzo salvato"
-            onChange={(e) => onApplySavedAddress(e.target.value)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {savedAddresses.map((a) => {
+            const active = !editing && a.id === activeId;
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => selectTile(a.id)}
+                aria-pressed={active}
+                className={`text-left rounded-xl border-2 p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1 ${
+                  active
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-cream-300 bg-white hover:border-primary-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  {a.label && <Badge variant="local">{a.label}</Badge>}
+                  {a.is_default && <span className="text-2xs text-ink-400">Predefinito</span>}
+                </div>
+                {a.full_name && <p className="text-sm font-semibold text-ink-900">{a.full_name}</p>}
+                <p className="text-sm text-ink-600">{a.address}, {a.city}</p>
+              </button>
+            );
+          })}
+
+          {/* Tile tratteggiata "aggiungi / inserisci a mano" */}
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            aria-expanded={editing}
+            className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1 ${
+              editing
+                ? 'border-primary-400 bg-primary-50 text-primary-700'
+                : 'border-cream-400 text-primary-700 hover:border-primary-300 hover:bg-primary-50/50'
+            }`}
           >
-            {savedAddresses.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.label} — {a.address}, {a.city}
-                {a.is_default ? ' (predefinito)' : ''}
-              </option>
-            ))}
-          </Select>
-          <p className="text-xs text-ink-400 mt-1">
-            Oppure modifica i campi sotto.{' '}
-            <Link href="/profile/addresses" className="text-primary-700 hover:underline">Gestisci indirizzi</Link>
-          </p>
+            {editing ? <X size={18} aria-hidden /> : <Plus size={18} aria-hidden />}
+            {editing ? 'Chiudi' : 'Inserisci nuovo indirizzo'}
+          </button>
         </div>
       )}
 
-      <form onSubmit={onSubmit} className="space-y-4" id="checkout-form">
+      {savedAddresses.length > 0 && (
+        <p className="text-xs text-ink-400">
+          <Link href="/profile/addresses" className="text-primary-700 hover:underline">Gestisci indirizzi</Link>
+        </p>
+      )}
+
+      {/* Il form resta SEMPRE montato (è il target di submit della OrderSummary);
+          su mobile/desktop lo nascondiamo visivamente quando si usa una tile. */}
+      <form onSubmit={onSubmit} className={`space-y-4 ${editing ? '' : 'hidden'}`} id="checkout-form">
         <Input
           label="Nome e cognome"
           name="fullName"

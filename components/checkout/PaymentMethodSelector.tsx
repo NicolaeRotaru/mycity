@@ -8,11 +8,13 @@
  *    (Separate Charges and Transfers, vedi lib/stripe/client.ts).
  *  - COD: N ordini creati direttamente lato client.
  *
- * Estratto da app/checkout/page.tsx per ridurre il monolite.
+ * RESKIN: tile con quadrato-icona colorato + badge, al posto delle righe radio
+ * piatte. La LOGICA è invariata — stessi radio `name="paymentMethod"`,
+ * `value`/`onChange`, gating `stripeAvailable`, nota `multiSeller`.
  */
 
 import { Badge } from '@/components/ui/Badge';
-import { Banknote, CreditCard, Info, Wallet } from 'lucide-react';
+import { Banknote, CreditCard, Info } from 'lucide-react';
 
 type PaymentMethod = 'cod' | 'card';
 
@@ -26,63 +28,66 @@ type Props = {
 
 export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiSeller }: Props) {
   return (
-    <div className="bg-white border rounded-xl p-6">
-      <h2 className="text-xl font-bold flex items-center gap-2 mb-4"><Wallet size={20} strokeWidth={2.2} aria-hidden /> Metodo di pagamento</h2>
-      <div className="space-y-3">
-        {stripeAvailable && (
-          <label
-            className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
-              value === 'card'
-                ? 'border-primary-400 bg-primary-50'
-                : 'border-cream-300 bg-white hover:border-primary-200'
-            }`}
-          >
-            <input
-              type="radio"
-              name="paymentMethod"
-              value="card"
-              checked={value === 'card'}
-              onChange={() => onChange('card')}
-              className="mt-1"
-            />
-            <div className="flex-1">
-              <p className="font-bold text-ink-900 flex items-center gap-2"><CreditCard size={16} aria-hidden /> Carta di credito / debito</p>
-              <p className="text-sm text-ink-600">
-                Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
-              </p>
-              {multiSeller && (
-                <p className="text-xs text-primary-700 mt-1 flex items-center gap-1">
-                  <Info size={13} aria-hidden /> Un solo pagamento per tutto il carrello, anche con più negozi.
-                </p>
-              )}
-            </div>
-          </label>
-        )}
-
+    <div className="space-y-3">
+      {stripeAvailable && (
         <label
-          className={`flex items-start gap-3 rounded-lg border-2 p-4 cursor-pointer transition-colors ${
-            value === 'cod'
-              ? 'border-accent-400 bg-accent-50'
-              : 'border-cream-300 bg-white hover:border-accent-200'
+          className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+            value === 'card'
+              ? 'border-primary-500 bg-primary-50'
+              : 'border-cream-300 bg-white hover:border-primary-200'
           }`}
         >
           <input
             type="radio"
             name="paymentMethod"
-            value="cod"
-            checked={value === 'cod'}
-            onChange={() => onChange('cod')}
-            className="mt-1"
+            value="card"
+            checked={value === 'card'}
+            onChange={() => onChange('card')}
+            className="mt-2.5 accent-primary-600"
           />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
+            <CreditCard size={20} aria-hidden />
+          </span>
           <div className="flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="font-bold text-ink-900 flex items-center gap-2"><Banknote size={16} aria-hidden /> Contanti alla consegna</p>
-              <Badge variant="cod">Zero rischio</Badge>
-            </div>
-            <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
+            <p className="font-bold text-ink-900">Carta di credito / debito</p>
+            <p className="text-sm text-ink-600">
+              Visa, Mastercard, Amex, Apple Pay, Google Pay — pagamento sicuro su Stripe.
+            </p>
+            {multiSeller && (
+              <p className="text-xs text-primary-700 mt-1 flex items-center gap-1">
+                <Info size={13} aria-hidden /> Un solo pagamento per tutto il carrello, anche con più negozi.
+              </p>
+            )}
           </div>
         </label>
-      </div>
+      )}
+
+      <label
+        className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+          value === 'cod'
+            ? 'border-olive-400 bg-olive-50'
+            : 'border-cream-300 bg-white hover:border-olive-200'
+        }`}
+      >
+        <input
+          type="radio"
+          name="paymentMethod"
+          value="cod"
+          checked={value === 'cod'}
+          onChange={() => onChange('cod')}
+          className="mt-2.5 accent-olive-600"
+        />
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
+          <Banknote size={20} aria-hidden />
+        </span>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-bold text-ink-900">Contanti alla consegna</p>
+            <Badge variant="cod">Zero rischio</Badge>
+          </div>
+          <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
+        </div>
+      </label>
     </div>
   );
 }
