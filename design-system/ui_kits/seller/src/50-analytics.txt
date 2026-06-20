@@ -3,11 +3,41 @@ function Analytics() {
   const rev = window.SC_REVENUE_7D;
   const max = Math.max(...rev);
   const days = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
-  const top = window.SC_PRODUCTS.slice().sort((a, b) => b.sold - a.sold).slice(0, 5);
+  const prods = window.SC_PRODUCTS;
+  const top = prods.slice().sort((a, b) => b.sold - a.sold).slice(0, 5);
   const maxSold = top[0].sold;
+  // insight prescrittivi
+  const pushP = top[0];
+  const restockP = prods.filter((p) => p.status === 'soldout' || (p.status === 'available' && p.stock <= 3)).sort((a, b) => b.sold - a.sold)[0];
+  const slowP = prods.filter((p) => p.status === 'available' && p.sold > 0).sort((a, b) => a.sold - b.sold)[0];
+  const insights = [
+    pushP && { icon: 'trending-up', tone: 'olive', title: `Spingi "${pushP.name}"`, body: `È il tuo best-seller (${pushP.sold} venduti). Sponsorizzalo per restare in cima alle ricerche.`, cta: 'Sponsorizza' },
+    restockP && { icon: 'package-x', tone: 'secondary', title: restockP.status === 'soldout' ? `Riassortisci "${restockP.name}"` : `Scorta bassa: "${restockP.name}"`, body: restockP.status === 'soldout' ? `Esaurito ma ha venduto ${restockP.sold} pezzi: stai perdendo ordini.` : `Solo ${restockP.stock} rimasti. Riassortisci prima del weekend.`, cta: 'Aggiorna stock' },
+    slowP && { icon: 'trending-down', tone: 'accent', title: `"${slowP.name}" vende poco`, body: `Solo ${slowP.sold} venduti. Prova uno sconto, una foto migliore o un bundle.`, cta: 'Metti in offerta' },
+  ].filter(Boolean);
+  const peakHours = [['12–13', 62], ['13–14', 40], ['18–19', 88], ['19–20', 100], ['20–21', 54]];
+  const tone = { olive: ['var(--olive-50)', 'var(--olive-200)', 'var(--olive-700)'], secondary: ['var(--secondary-50)', 'var(--secondary-200)', 'var(--secondary-600)'], accent: ['var(--accent-50)', 'var(--accent-200)', 'var(--accent-700)'] };
   return (
     <div>
       <PageTitle eyebrow="Insight" title="Analisi" sub="Andamento delle vendite e prodotti migliori" />
+      {insights.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          <h2 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Lucide name="sparkles" size={18} color="var(--primary-600)" /> Consigli per te</h2>
+          <div className="mc-insight-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+            {insights.map((it, i) => {
+              const [bg, bd, fg] = tone[it.tone];
+              return (
+                <div key={i} style={{ background: bg, border: '1px solid ' + bd, borderRadius: 'var(--radius-lg)', padding: '16px' }}>
+                  <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--surface-0)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}><Lucide name={it.icon} size={18} color={fg} /></span>
+                  <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>{it.title}</p>
+                  <p style={{ margin: '4px 0 12px', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.45 }}>{it.body}</p>
+                  <button style={{ border: 0, background: fg, color: '#fff', fontWeight: 700, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{it.cta}</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '20px' }}>
         {[['Fatturato 7gg', fmt(window.SC_KPI.revenue7), '+12%', 'olive'], ['Ordini 7gg', window.SC_KPI.orders7, '+8%', 'primary'], ['Scontrino medio', fmt(23.9), '+3%', 'accent'], ['Tasso reso', '1,4%', '−0,2%', 'secondary']].map(([l, v, d, t]) => (
         <Card key={l} variant="bordered" padding="md">
@@ -48,6 +78,21 @@ function Analytics() {
           </div>
         </Card>
       </div>
+      <Card variant="bordered" padding="lg" style={{ marginTop: '20px' }}>
+        <h2 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>Ore di punta</h2>
+        <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--ink-500)' }}>Quando arrivano i tuoi ordini — assicurati di essere pronto e disponibile.</p>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', height: '120px' }}>
+          {peakHours.map(([h, v]) => (
+            <div key={h} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', height: '100%' }}>
+              <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end' }}>
+                <div style={{ width: '100%', height: `${v}%`, background: v >= 88 ? 'linear-gradient(180deg, var(--secondary-400), var(--secondary-600))' : 'linear-gradient(180deg, var(--accent-300), var(--accent-500))', borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0', minHeight: '6px' }} />
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-500)' }}>{h}</span>
+            </div>
+          ))}
+        </div>
+        <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--olive-800)', background: 'var(--olive-50)', borderRadius: 'var(--radius-md)', padding: '10px 12px', display: 'inline-flex', alignItems: 'center', gap: '7px' }}><Lucide name="lightbulb" size={15} color="var(--olive-700)" /> Picco tra le <strong>19 e le 20</strong>: tieni il negozio online e lo stock pronto.</p>
+      </Card>
     </div>
   );
 }

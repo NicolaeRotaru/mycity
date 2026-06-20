@@ -241,7 +241,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
                     mine ? 'bg-primary-700 text-white rounded-br-sm' : 'bg-white text-ink-900 border rounded-bl-sm'
                   }`}>
                     <p className="whitespace-pre-wrap break-words">{it.msg.body}</p>
-                    <p className={`text-[10px] mt-0.5 text-right ${mine ? 'text-indigo-200' : 'text-ink-400'}`}>
+                    <p className={`text-[10px] mt-0.5 text-right ${mine ? 'text-primary-100' : 'text-ink-400'}`}>
                       {formatTime(it.msg.created_at)}
                     </p>
                   </div>

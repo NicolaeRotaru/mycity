@@ -16,7 +16,7 @@ function Dashboard({ onNav, onNewProduct }) {
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <Button variant="secondary" icon="plus" onClick={onNewProduct}>Pubblica prodotto</Button>
-              <button style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.25)', color: '#fff', fontWeight: 600, padding: '10px 16px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '14px' }}><Lucide name="external-link" size={16} /> Vetrina</button>
+              <button onClick={() => onNav('vetrina')} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.25)', color: '#fff', fontWeight: 600, padding: '10px 16px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '14px' }}><Lucide name="store" size={16} /> Vetrina</button>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '22px' }}>

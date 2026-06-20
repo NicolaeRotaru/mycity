@@ -1,0 +1,152 @@
+<!-- @dsCard group="MyCity Pagine" viewport="1280x900" name="Chi siamo · MyCity" subtitle="About page — missione, storia, valori, numeri" -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyCity — Chi siamo</title>
+<link rel="stylesheet" href="../../styles.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--surface-50); font-family: var(--font-sans); color: var(--text-primary); }
+  a { color: var(--primary-700); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+  /* topbar */
+  .topbar { background: var(--primary-700); color: #fff; position: sticky; top: 0; z-index: var(--z-sticky); }
+  .topbar .row { max-width: 1040px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 20px; }
+  .logo { font-family: var(--font-serif); font-size: 24px; font-weight: 800; letter-spacing: -0.01em; text-decoration: none; }
+  .logo .my { color: var(--accent-300); }
+  .logo .c { color: #fff; }
+  .topbar .links { margin-left: auto; display: flex; gap: 18px; }
+  .topbar .links a { color: rgba(255,255,255,.92); font-size: 14px; font-weight: 600; text-decoration: none; }
+  /* hero */
+  .hero { background: linear-gradient(160deg, var(--primary-700), var(--secondary-700) 130%); color: #fff; }
+  .hero .inner { max-width: 1040px; margin: 0 auto; padding: 64px 20px 72px; }
+  .eyebrow { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--accent-300); margin-bottom: 14px; }
+  .hero h1 { font-family: var(--font-serif); font-size: clamp(34px, 6vw, 56px); line-height: 1.05; font-weight: 800; margin: 0 0 18px; max-width: 16ch; color: #fff; }
+  .hero p { font-size: clamp(16px, 2vw, 20px); line-height: 1.6; color: rgba(255,255,255,.9); margin: 0; max-width: 52ch; }
+  /* stats */
+  .stats { max-width: 1040px; margin: -38px auto 0; padding: 0 20px; position: relative; z-index: 2; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .stat { background: var(--surface-0); border: 1px solid var(--cream-300); border-radius: var(--radius-xl); padding: 20px 22px; box-shadow: var(--shadow-warm); }
+  .stat b { display: block; font-family: var(--font-serif); font-size: 32px; font-weight: 800; color: var(--primary-700); line-height: 1; }
+  .stat span { display: block; font-size: 13px; color: var(--ink-500); margin-top: 6px; }
+  /* sections */
+  section.block { padding: 60px 0; }
+  .block h2 { font-family: var(--font-serif); font-size: clamp(26px, 3.5vw, 34px); font-weight: 800; margin: 0 0 14px; color: var(--ink-900); }
+  .lead { font-size: 17px; line-height: 1.7; color: var(--ink-700); max-width: 64ch; }
+  .lead + .lead { margin-top: 14px; }
+  .split { display: grid; grid-template-columns: 1.1fr 1fr; gap: 44px; align-items: center; }
+  .photo { border-radius: var(--radius-2xl); overflow: hidden; aspect-ratio: 4/3; background: var(--surface-100); box-shadow: var(--shadow-card); }
+  .photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* values */
+  .values { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 12px; }
+  .value { background: var(--surface-0); border: 1px solid var(--cream-300); border-radius: var(--radius-xl); padding: 24px; }
+  .value .ic { width: 46px; height: 46px; border-radius: var(--radius-lg); background: var(--primary-100); color: var(--primary-700); display: inline-flex; align-items: center; justify-content: center; margin-bottom: 14px; }
+  .value h3 { font-size: 18px; font-weight: 700; margin: 0 0 6px; color: var(--ink-900); }
+  .value p { font-size: 14px; line-height: 1.6; color: var(--ink-600); margin: 0; }
+  .band { background: var(--cream-100); border-top: 1px solid var(--cream-300); border-bottom: 1px solid var(--cream-300); }
+  /* CTA */
+  .cta { background: var(--ink-900); color: #fff; border-radius: var(--radius-2xl); padding: 44px; display: flex; align-items: center; justify-content: space-between; gap: 28px; flex-wrap: wrap; }
+  .cta h2 { color: #fff; margin: 0 0 8px; }
+  .cta p { margin: 0; color: rgba(255,255,255,.8); font-size: 15px; max-width: 46ch; }
+  .cta .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; border-radius: var(--radius-full); padding: 13px 22px; font-weight: 700; font-size: 15px; text-decoration: none; font-family: var(--font-sans); cursor: pointer; border: 0; }
+  .btn.primary { background: var(--accent-500); color: var(--ink-900); }
+  .btn.ghost { background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.25); }
+  /* footer */
+  footer.f { background: var(--cream-200); border-top: 1px solid var(--cream-300); padding: 22px 0; }
+  footer.f .row { max-width: 1040px; margin: 0 auto; padding: 0 20px; font-size: 12px; color: var(--ink-500); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  footer.f a { color: var(--ink-600); text-decoration: none; }
+  html, body { overflow-x: hidden; }
+  @media (max-width: 760px) {
+    .stats { grid-template-columns: 1fr 1fr; }
+    .split { grid-template-columns: 1fr; gap: 24px; }
+    .values { grid-template-columns: 1fr; }
+    .cta { padding: 28px; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar"><div class="row">
+    <a href="../buyer/index.html" class="logo"><span class="my">My</span><span class="c">City</span></a>
+    <span class="links">
+      <a href="lavora-con-noi.html">Lavora con noi</a>
+      <a href="../buyer/index.html">Torna al marketplace</a>
+    </span>
+  </div></div>
+
+  <header class="hero"><div class="inner">
+    <span class="eyebrow"><i data-lucide="sparkles"></i> La nostra storia</span>
+    <h1>Il quartiere, a portata di mano.</h1>
+    <p>MyCity nasce a Piacenza per dare ai negozi di vicinato lo stesso superpotere dei grandi e-commerce: vendere online e consegnare a casa, restando ciò che sono — la salumeria di fiducia, il fornaio sotto casa, l'enoteca all'angolo.</p>
+  </div></header>
+
+  <div class="stats">
+    <div class="stat"><b>140+</b><span>negozi locali a bordo</span></div>
+    <div class="stat"><b>24–48h</b><span>tempi di consegna</span></div>
+    <div class="stat"><b>9</b><span>quartieri coperti</span></div>
+    <div class="stat"><b>0%</b><span>carte: paghi alla consegna</span></div>
+  </div>
+
+  <section class="block"><div class="wrap split">
+    <div>
+      <h2>Perché esistiamo</h2>
+      <p class="lead">Ogni saracinesca che si abbassa è una storia, un mestiere, un pezzo di città che si spegne. Le grandi piattaforme hanno reso comodo comprare lontano; noi vogliamo rendere altrettanto comodo comprare <strong>vicino</strong>.</p>
+      <p class="lead">Con MyCity un negoziante pubblica i suoi prodotti in pochi minuti — anche da una foto — e i suoi clienti li ricevono a casa in giornata. Niente vetrine digitali complicate, niente commissioni assurde: solo il quartiere che torna a girare.</p>
+    </div>
+    <div class="photo"><img src="https://loremflickr.com/720/540/piacenza,street?lock=21" alt="Una via del centro di Piacenza"></div>
+  </div></section>
+
+  <section class="block band"><div class="wrap">
+    <h2>I nostri valori</h2>
+    <p class="lead">Tre principi guidano ogni decisione di prodotto.</p>
+    <div class="values">
+      <div class="value">
+        <span class="ic"><i data-lucide="map-pin"></i></span>
+        <h3>Locale, davvero</h3>
+        <p>Solo commercianti del territorio, verificati uno a uno. Niente rivenditori anonimi: dietro ogni prodotto c'è una persona che conosci.</p>
+      </div>
+      <div class="value">
+        <span class="ic"><i data-lucide="handshake"></i></span>
+        <h3>Equi con i negozi</h3>
+        <p>Commissioni trasparenti e incassi rapidi. Il valore resta in città, nelle tasche di chi lo crea.</p>
+      </div>
+      <div class="value">
+        <span class="ic"><i data-lucide="banknote"></i></span>
+        <h3>Semplice per tutti</h3>
+        <p>Paghi alla consegna, in contanti se vuoi. Nessun account obbligatorio per iniziare: la tecnologia sparisce, resta il servizio.</p>
+      </div>
+    </div>
+  </div></section>
+
+  <section class="block"><div class="wrap split">
+    <div class="photo"><img src="https://loremflickr.com/720/540/market,deli?lock=7" alt="Un banco di gastronomia"></div>
+    <div>
+      <h2>Come siamo arrivati qui</h2>
+      <p class="lead">Tutto è partito da una domanda semplice di un gruppo di piacentini: <em>perché posso farmi arrivare qualsiasi cosa dall'altra parte del mondo, ma non un etto di coppa dal salumiere di fronte?</em></p>
+      <p class="lead">Nel 2026 abbiamo messo insieme i primi negozi del centro storico, una flotta di rider in bici e un'app pensata per chi non ha tempo da perdere. Oggi MyCity cresce quartiere dopo quartiere, sempre con la stessa bussola: la prossimità.</p>
+    </div>
+  </div></section>
+
+  <section class="block"><div class="wrap">
+    <div class="cta">
+      <div>
+        <h2>Vuoi farne parte?</h2>
+        <p>Che tu abbia un negozio, una bici o voglia di costruire qualcosa di utile per la tua città — c'è posto per te.</p>
+      </div>
+      <div class="actions">
+        <a href="lavora-con-noi.html" class="btn primary"><i data-lucide="briefcase"></i> Lavora con noi</a>
+        <a href="../seller/registrati.html" class="btn ghost"><i data-lucide="store"></i> Apri un negozio</a>
+      </div>
+    </div>
+  </div></section>
+
+  <footer class="f"><div class="row">
+    <span>© 2026 MyCity Piacenza · P.IVA 0000000000</span>
+    <span><a href="legal.html">Note legali</a> · <a href="lavora-con-noi.html">Lavora con noi</a> · <a href="../buyer/index.html">Marketplace</a></span>
+  </div></footer>
+
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>lucide.createIcons({ attrs: { 'stroke-width': 2.1 } });</script>
+</body>
+</html>

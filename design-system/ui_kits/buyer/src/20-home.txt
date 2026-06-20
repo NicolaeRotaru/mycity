@@ -2,10 +2,13 @@
 function pImg(p, i = 0) { return imgUrl(p.kw, p.galleryLocks[i % p.galleryLocks.length]); }
 
 function ProductGridCard({ p, onOpen, onAdd, onStore }) {
+  const [fav, setFav] = React.useState(() => (window.MC_FAVORITES || []).includes(p.id));
   return (
     <div onClick={() => onOpen(p)} style={{ cursor: 'pointer', height: '100%' }}>
       <ProductCard name={p.name} price={p.price} discountPercent={p.discountPercent}
         storeName={p.store} image={pImg(p)} isNew={p.isNew} freeShipping={p.freeShipping} stock={p.stock}
+        eta={deliveryEta(storeBy(p.store))}
+        favorite={fav} onFav={() => setFav((v) => !v)}
         onAdd={() => onAdd(p)} />
     </div>
   );
@@ -28,7 +31,7 @@ function Hero({ onExplore, onStore }) {
           <p style={{ margin: 0, fontSize: '18px', lineHeight: 1.6, color: 'var(--ink-600)', maxWidth: '34em' }}>
             Alimentari, gastronomia, vini, casa: ordini dai commercianti della tua via in pochi tap e <strong style={{ color: 'var(--ink-900)' }}>paghi alla consegna</strong>. A casa in 24–48h.
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+          <div className="mc-hero-cta" style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
             <Button variant="primary" size="lg" shape="pill" iconRight="arrow-right" onClick={onExplore}>Inizia a esplorare</Button>
             <Button variant="secondary" size="lg" shape="pill" icon="store" onClick={() => onStore(featured)}>Esplora i negozi</Button>
           </div>
@@ -48,8 +51,8 @@ function Hero({ onExplore, onStore }) {
               <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '19px', fontWeight: 700, color: 'var(--ink-900)' }}>{featured.name}</h3>
               <Lucide name="badge-check" size={18} color="var(--primary-600)" />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--ink-500)' }}>
-              <Stars value={featured.rating} /> <strong style={{ color: 'var(--ink-800)' }}>{String(featured.rating).replace('.', ',')}</strong> · {featured.reviews} recensioni · {featured.area}
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px 6px', fontSize: '13px', color: 'var(--ink-500)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Stars value={featured.rating} /> <strong style={{ color: 'var(--ink-800)' }}>{String(featured.rating).replace('.', ',')}</strong></span> <span>{featured.reviews} recensioni · {featured.area}</span>
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '2px' }}>
               <Badge variant="local">Negozio locale</Badge>
@@ -75,7 +78,7 @@ function HowItWorks() {
         <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--primary-700)' }}>Semplice e senza pensieri</span>
         <h2 style={{ margin: '4px 0 0', fontFamily: 'var(--font-serif)', fontSize: '30px', fontWeight: 700, color: 'var(--ink-900)' }}>Come funziona, in 3 passi</h2>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+      <div className="mc-how-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
         {steps.map((s) => (
           <Card key={s.n} variant="elevated" padding="lg" as="article">
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
@@ -96,13 +99,13 @@ function HowItWorks() {
 function ProductRail({ products, onOpen, onAdd, onStore, title, eyebrow, onSeeAll }) {
   return (
     <section style={{ background: '#fff', borderTop: '1px solid var(--cream-300)', borderBottom: '1px solid var(--cream-300)', padding: '28px 0' }}>
-      <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '0 20px' }}>
+      <div className="mc-rail-inner" style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '0 20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--primary-700)', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}><Lucide name="heart" size={14} color="var(--primary-700)" /> {eyebrow}</span>
             <h2 style={{ margin: '4px 0 0', fontFamily: 'var(--font-serif)', fontSize: '28px', fontWeight: 700, color: 'var(--ink-900)' }}>{title}</h2>
           </div>
-          <a onClick={onSeeAll} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--primary-700)', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}>Vedi tutto <Lucide name="arrow-right" size={16} color="var(--primary-700)" /></a>
+          <a onClick={onSeeAll} className="mc-seeall" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--primary-700)', fontWeight: 600, fontSize: '14px', cursor: 'pointer' }}>Vedi tutto <Lucide name="arrow-right" size={16} color="var(--primary-700)" /></a>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
           {products.map((p) => <ProductGridCard key={p.id} p={p} onOpen={onOpen} onAdd={onAdd} onStore={onStore} />)}
@@ -133,8 +136,11 @@ function StoresRail({ stores, onStore }) {
                 <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{s.name}</h3>
                 {s.verified && <Lucide name="badge-check" size={15} color="var(--primary-600)" />}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--ink-500)', marginTop: '5px' }}>
-                <Stars value={s.rating} size={13} /> <strong style={{ color: 'var(--ink-800)' }}>{String(s.rating).replace('.', ',')}</strong> · {s.cat} · {s.area}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '6px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--ink-500)' }}>
+                  <Stars value={s.rating} size={13} /> <strong style={{ color: 'var(--ink-800)' }}>{String(s.rating).replace('.', ',')}</strong>
+                </div>
+                <div style={{ fontSize: '12px', color: 'var(--ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.cat} · {s.area}</div>
               </div>
             </div>
           </div>
@@ -171,23 +177,43 @@ function TrustRow() {
 function SellerCta() {
   return (
     <section style={{ background: 'var(--ink-900)', color: '#fff' }}>
-      <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '22px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+      <div className="mc-seller-cta" style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '22px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ flexShrink: 0, width: '40px', height: '40px', borderRadius: 'var(--radius-full)', background: 'rgba(255,255,255,.1)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="shield-check" size={18} stroke={2.4} color="var(--accent-400)" /></span>
           <p style={{ margin: 0, fontSize: '17px' }}><span style={{ fontFamily: 'var(--font-serif)', fontWeight: 700 }}>Hai un negozio a Piacenza?</span> <span style={{ color: 'var(--ink-300)' }}>Vendi online con zero commissioni.</span></p>
         </div>
-        <Button variant="accent" shape="pill" icon="store">Diventa venditore</Button>
+        <Button variant="accent" shape="pill" icon="store" onClick={() => { window.location.href = '../seller/registrati.html'; }}>Diventa venditore</Button>
       </div>
     </section>
   );
 }
 
-function Footer({ onAuth }) {
+function Footer({ onAuth, onExplore, onNear, onCollection }) {
   const cols = [
-    ['MyCity', ['Chi siamo', 'Come funziona', 'Lavora con noi', 'Contatti']],
-    ['Acquista', ['Categorie', 'Negozi', 'Offerte', 'Novità']],
-    ['Vendi', ['Diventa venditore', 'Zero commissioni', 'Centro venditori', 'Diventa rider']],
-    ['Aiuto', ['FAQ', 'Resi e rimborsi', 'Privacy', 'Cookie']],
+    ['MyCity', [
+      ['Chi siamo', { href: '../pages/chi-siamo.html' }],
+      ['Come funziona', { href: '../pages/legal.html' }],
+      ['Lavora con noi', { href: '../pages/lavora-con-noi.html' }],
+      ['Contatti', { href: '../pages/legal.html' }],
+    ]],
+    ['Acquista', [
+      ['Categorie', { on: () => onExplore && onExplore() }],
+      ['Negozi', { on: () => onNear && onNear() }],
+      ['Offerte', { on: () => onCollection && onCollection('promozioni') }],
+      ['Novità', { on: () => onCollection && onCollection('novita') }],
+    ]],
+    ['Vendi', [
+      ['Diventa venditore', { href: '../seller/registrati.html' }],
+      ['Zero commissioni', { href: '../seller/index.html' }],
+      ['Centro venditori', { href: '../seller/index.html' }],
+      ['Diventa rider', { href: '../rider/registrati.html' }],
+    ]],
+    ['Aiuto', [
+      ['FAQ', { href: '../pages/legal.html' }],
+      ['Resi e rimborsi', { href: '../pages/legal.html' }],
+      ['Privacy', { href: '../pages/legal.html' }],
+      ['Cookie', { href: '../pages/legal.html' }],
+    ]],
   ];
   return (
     <footer style={{ background: 'var(--cream-200)', borderTop: '1px solid var(--cream-300)', color: 'var(--ink-700)' }}>
@@ -200,7 +226,7 @@ function Footer({ onAuth }) {
           <div key={h}>
             <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{h}</p>
             <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: '7px' }}>
-              {links.map((l) => <li key={l}><a style={{ fontSize: '13px', color: 'var(--ink-600)', cursor: 'pointer' }}>{l}</a></li>)}
+              {links.map(([label, target]) => <li key={label}><a href={target.href || undefined} onClick={target.on || undefined} style={{ fontSize: '13px', color: 'var(--ink-600)', cursor: 'pointer', textDecoration: 'none' }}>{label}</a></li>)}
             </ul>
           </div>
         ))}
@@ -213,10 +239,72 @@ function Footer({ onAuth }) {
   );
 }
 
-function Home({ products, stores, onOpen, onAdd, onStore, onExplore }) {
+function ReorderRail({ orders, products, onReorder, onOpenOrder, onOpen }) {
+  const recent = (orders || []).filter((o) => o.status !== 'CANCELED').slice(0, 3);
+  if (recent.length === 0) return null;
+  // "la tua spesa": articoli più frequenti negli ordini recenti, uniti in un solo riordino
+  const freq = {};
+  recent.forEach((o) => (o.lines || []).forEach((l) => { freq[l.id] = (freq[l.id] || 0) + 1; }));
+  const staples = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 6)
+    .map(([id]) => window.MC_PRODUCTS.find((x) => x.id === id)).filter(Boolean);
+  const stapleOrder = { store: 'La tua spesa', lines: staples.map((p) => ({ id: p.id, q: 1 })) };
+  const stapleTotal = staples.reduce((t, p) => t + p.price, 0);
+  return (
+    <section style={{ background: 'var(--primary-50)', borderBottom: '1px solid var(--cream-300)', padding: '24px 0' }}>
+      <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '14px', gap: '12px', flexWrap: 'wrap' }}>
+          <div>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--primary-700)', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}><Lucide name="rotate-ccw" size={14} color="var(--primary-700)" /> Bentornata, {(window.MC_USER && window.MC_USER.name.split(' ')[0]) || 'Lucia'}</span>
+            <h2 style={{ margin: '4px 0 0', fontFamily: 'var(--font-serif)', fontSize: '28px', fontWeight: 700, color: 'var(--ink-900)' }}>Ordina di nuovo</h2>
+          </div>
+        </div>
+        {staples.length >= 3 && (
+          <div className="mc-staples" style={{ background: 'var(--surface-0)', border: '1.5px solid var(--primary-200)', borderRadius: 'var(--radius-xl)', padding: '16px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: '180px' }}>
+              <p style={{ margin: 0, fontSize: '15px', fontWeight: 800, color: 'var(--ink-900)', display: 'inline-flex', alignItems: 'center', gap: '7px' }}><Lucide name="shopping-basket" size={18} color="var(--primary-700)" /> La tua spesa della settimana</p>
+              <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>{staples.length} prodotti che compri spesso · {fmt(stapleTotal)}</p>
+            </div>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              {staples.slice(0, 5).map((p) => <img key={p.id} src={imgUrl(p.kw, p.galleryLocks[0])} alt={p.name} title={p.name} onClick={() => onOpen(p)} style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', objectFit: 'cover', cursor: 'pointer', flexShrink: 0, border: '1px solid var(--cream-200)' }} />)}
+            </div>
+            <Button variant="primary" icon="rotate-ccw" onClick={() => onReorder(stapleOrder)}>Ricompra tutta la spesa</Button>
+          </div>
+        )}
+        <div className="mc-reorder-row" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+          {recent.map((o) => {
+            const lines = o.lines.map((l) => ({ p: window.MC_PRODUCTS.find((x) => x.id === l.id), q: l.q })).filter((x) => x.p);
+            const thumbs = lines.slice(0, 4);
+            return (
+              <div key={o.id} style={{ background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <StoreChip name={o.store} size={22} />
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'var(--ink-400)', whiteSpace: 'nowrap' }}>{o.date}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  {thumbs.map(({ p }, i) => <img key={i} src={imgUrl(p.kw, p.galleryLocks[0])} alt="" onClick={() => onOpen(p)} style={{ width: '46px', height: '46px', borderRadius: 'var(--radius-md)', objectFit: 'cover', cursor: 'pointer', flexShrink: 0 }} />)}
+                  <span style={{ flex: 1, minWidth: 0, alignSelf: 'center', fontSize: '12px', color: 'var(--ink-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lines.map((l) => l.p.name).join(', ')}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'auto', flexWrap: 'wrap' }}>
+                  <Button variant="primary" size="sm" icon="rotate-ccw" onClick={() => onReorder(o)}>Riordina</Button>
+                  <button onClick={() => onOpenOrder(o)} style={{ border: 0, background: 'transparent', color: 'var(--ink-500)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-sans)', padding: '8px' }}>Dettagli</button>
+                  <span style={{ marginLeft: 'auto', fontSize: '14px', fontWeight: 800, color: 'var(--ink-900)' }}>{fmt(o.total)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Home({ products, stores, orders, onOpen, onAdd, onStore, onExplore, onReorder, onOpenOrder }) {
   return (
     <>
       <Hero onExplore={onExplore} onStore={onStore} />
+      <ReorderRail orders={orders} products={products} onReorder={onReorder} onOpenOrder={onOpenOrder} onOpen={onOpen} />
       <HowItWorks />
       <ProductRail products={products.slice(0, 4)} onOpen={onOpen} onAdd={onAdd} onStore={onStore} eyebrow="I più amati" title="Prodotti che vanno forte" onSeeAll={onExplore} />
       <StoresRail stores={stores.slice(0, 4)} onStore={onStore} />

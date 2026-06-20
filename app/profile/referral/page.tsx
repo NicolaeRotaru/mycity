@@ -70,8 +70,8 @@ export default function ReferralPage() {
       </div>
 
       {/* CODICE */}
-      <div className="bg-gradient-to-br from-primary-600 to-purple-600 text-white rounded-2xl p-6 text-center">
-        <p className="text-xs uppercase tracking-widest text-indigo-200 mb-2">Il tuo codice</p>
+      <div className="bg-gradient-to-br from-primary-600 to-secondary-600 text-white rounded-2xl p-6 text-center">
+        <p className="text-xs uppercase tracking-widest text-primary-100 mb-2">Il tuo codice</p>
         <p className="font-mono text-4xl font-extrabold tracking-wider mb-4">{profile.referral_code}</p>
         <button
           onClick={copy}
@@ -117,15 +117,15 @@ export default function ReferralPage() {
       {/* STATS */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-3xl font-bold text-primary-700">{stats?.total ?? 0}</p>
+          <p className="text-3xl font-bold font-serif text-primary-700">{stats?.total ?? 0}</p>
           <p className="text-xs text-ink-500 uppercase tracking-wide mt-1">Invitati</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-3xl font-bold text-accent-600">{stats?.rewarded ?? 0}</p>
+          <p className="text-3xl font-bold font-serif text-accent-600">{stats?.rewarded ?? 0}</p>
           <p className="text-xs text-ink-500 uppercase tracking-wide mt-1">Confermati</p>
         </div>
         <div className="bg-white border rounded-xl p-4 text-center">
-          <p className="text-2xl font-bold text-olive-600">{formatPrice(stats?.earned ?? 0)}</p>
+          <p className="text-2xl font-bold font-serif text-olive-600">{formatPrice(stats?.earned ?? 0)}</p>
           <p className="text-xs text-ink-500 uppercase tracking-wide mt-1">Guadagnati</p>
         </div>
       </div>

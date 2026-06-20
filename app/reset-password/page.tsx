@@ -121,7 +121,7 @@ function ResetPasswordInner() {
     return (
       <Card>
         <div className="text-center py-6">
-          <div className="w-12 h-12 mx-auto rounded-full border-4 border-primary-200 border-t-indigo-600 animate-spin mb-3" />
+          <div className="w-12 h-12 mx-auto rounded-full border-4 border-primary-200 border-t-primary-600 animate-spin mb-3" />
           <p className="text-sm text-ink-500">Verifica del link di reset…</p>
         </div>
       </Card>
@@ -196,7 +196,7 @@ function ResetPasswordInner() {
         <button
           type="submit"
           disabled={submitting || password.length < 8 || password !== confirm}
-          className="w-full bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-40 text-white px-4 py-3 rounded-lg font-bold transition-colors shadow"
+          className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-40 text-white px-4 py-3 rounded-lg font-bold transition-colors shadow"
         >
           {submitting ? 'Aggiornamento…' : 'Imposta nuova password'}
         </button>

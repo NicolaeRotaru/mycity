@@ -1,20 +1,29 @@
 // ===== Products (catalogue table + new-product modal) =====
 function Products({ products, onNewProduct, onToggle }) {
   const [filter, setFilter] = React.useState('all');
+  const [bulk, setBulk] = React.useState(false);
+  const [edits, setEdits] = React.useState({});
   const tabs = [['all', 'Tutti'], ['available', 'In vendita'], ['soldout', 'Esauriti'], ['draft', 'Bozze']];
   const list = products.filter((p) => filter === 'all' || p.status === filter);
   const STATUS = { available: ['var(--olive-50)', 'var(--olive-700)', 'In vendita'], soldout: ['var(--secondary-50)', 'var(--secondary-600)', 'Esaurito'], draft: ['var(--surface-100)', 'var(--ink-500)', 'Bozza'] };
+  const editCount = Object.keys(edits).length;
+  const setField = (id, k, v) => setEdits((e) => ({ ...e, [id]: { ...(e[id] || {}), [k]: v } }));
+  const valOf = (p, k) => (edits[p.id] && edits[p.id][k] != null ? edits[p.id][k] : (k === 'price' ? String(p.price).replace('.', ',') : String(p[k])));
+  const cancelBulk = () => { setBulk(false); setEdits({}); };
+  const saveBulk = () => { setBulk(false); setEdits({}); };
+  const bulkInput = { width: '74px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '6px 8px', fontSize: '13px', fontWeight: 600, textAlign: 'right', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none' };
   return (
-    <div>
+    <div style={bulk ? { paddingBottom: '76px' } : null}>
       <PageTitle eyebrow="Catalogo" title="Prodotti" sub={`${products.length} prodotti a catalogo`}
-        action={<div style={{ display: 'flex', gap: '8px' }}><Button variant="secondary" icon="upload">Importa CSV</Button><Button variant="primary" icon="plus" onClick={onNewProduct}>Nuovo prodotto</Button></div>} />
+        action={<div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{bulk ? <Button variant="ghost" icon="x" onClick={cancelBulk}>Annulla</Button> : <Button variant="secondary" icon="sliders-horizontal" onClick={() => setBulk(true)}>Modifica in blocco</Button>}<Button variant="secondary" icon="upload">Importa CSV</Button><Button variant="primary" icon="plus" onClick={onNewProduct}>Nuovo prodotto</Button></div>} />
+      {bulk && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--primary-50)', border: '1px solid var(--primary-200)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: 'var(--primary-800)' }}><Lucide name="sliders-horizontal" size={15} color="var(--primary-700)" /> Modifica prezzo e scorte direttamente nella lista, poi salva tutto in una volta.</div>}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
         {tabs.map(([id, label]) => (
           <button key={id} onClick={() => setFilter(id)} style={{ border: 0, background: filter === id ? 'var(--primary-700)' : 'var(--surface-0)', color: filter === id ? '#fff' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: filter === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{label}</button>
         ))}
       </div>
       <Card variant="bordered" padding="none">
-        <div style={{ overflowX: 'auto' }}>
+        <div className="mc-prod-table" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
             <thead>
               <tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>
@@ -36,10 +45,9 @@ function Products({ products, onNewProduct, onToggle }) {
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(fp)}</span>
-                      {p.discount > 0 && <span style={{ display: 'block', fontSize: '11px', color: 'var(--secondary-600)', fontWeight: 600 }}>-{p.discount}%</span>}
+                      {bulk ? <input value={valOf(p, 'price')} onChange={(e) => setField(p.id, 'price', e.target.value)} style={bulkInput} /> : <><span style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(fp)}</span>{p.discount > 0 && <span style={{ display: 'block', fontSize: '11px', color: 'var(--secondary-600)', fontWeight: 600 }}>-{p.discount}%</span>}</>}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: p.stock === 0 ? 'var(--secondary-600)' : p.stock <= 3 ? 'var(--accent-700)' : 'var(--ink-700)' }}>{p.stock}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: p.stock === 0 ? 'var(--secondary-600)' : p.stock <= 3 ? 'var(--accent-700)' : 'var(--ink-700)' }}>{bulk ? <input value={valOf(p, 'stock')} onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''))} style={bulkInput} /> : p.stock}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--ink-600)' }}>{p.sold}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{lbl}</span></td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -52,33 +60,139 @@ function Products({ products, onNewProduct, onToggle }) {
             </tbody>
           </table>
         </div>
+        <div className="mc-prod-cards" style={{ display: 'none', flexDirection: 'column' }}>
+          {list.map((p) => {
+            const [bg, fg, lbl] = STATUS[p.status];
+            const fp = p.discount > 0 ? p.price * (1 - p.discount / 100) : p.price;
+            return (
+              <div key={p.id} style={{ display: 'flex', gap: '12px', padding: '14px 16px', borderBottom: '1px solid var(--cream-200)' }}>
+                <img src={img(p.kw, p.lock)} alt={p.name} style={{ width: '58px', height: '58px', borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                    <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)' }}>{p.name}</p>
+                    <span style={{ fontSize: '11px', fontWeight: 600, background: bg, color: fg, padding: '3px 9px', borderRadius: '999px', whiteSpace: 'nowrap', flexShrink: 0 }}>{lbl}</span>
+                  </div>
+                  <p style={{ margin: '2px 0 8px', fontSize: '12px', color: 'var(--ink-400)' }}>{p.cat}</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>
+                    <span style={{ color: 'var(--ink-900)', fontWeight: 700 }}>{fmt(fp)}{p.discount > 0 && <span style={{ color: 'var(--secondary-600)', fontWeight: 600, marginLeft: '5px' }}>-{p.discount}%</span>}</span>
+                    <span>Stock: <strong style={{ color: p.stock === 0 ? 'var(--secondary-600)' : p.stock <= 3 ? 'var(--accent-700)' : 'var(--ink-700)' }}>{p.stock}</strong></span>
+                    <span>Venduti: <strong>{p.sold}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    <button title="Modifica" style={{ border: '1px solid var(--cream-300)', background: 'var(--surface-0)', cursor: 'pointer', padding: '7px 12px', borderRadius: 'var(--radius-md)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-sans)' }}><Lucide name="pencil" size={15} color="var(--ink-600)" /> <span style={{ fontSize: '13px', color: 'var(--ink-700)' }}>Modifica</span></button>
+                    <button title="Altro" style={{ border: '1px solid var(--cream-300)', background: 'var(--surface-0)', cursor: 'pointer', padding: '7px 11px', borderRadius: 'var(--radius-md)', display: 'inline-flex' }}><Lucide name="more-horizontal" size={16} color="var(--ink-500)" /></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </Card>
+      {bulk && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 'var(--z-sticky)', background: 'var(--surface-0)', borderTop: '1px solid var(--cream-300)', boxShadow: '0 -4px 18px -6px rgba(28,26,24,.18)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--ink-600)' }}>{editCount > 0 ? <><strong style={{ color: 'var(--ink-900)' }}>{editCount}</strong> {editCount === 1 ? 'prodotto modificato' : 'prodotti modificati'}</> : 'Nessuna modifica'}</span>
+          <div style={{ display: 'flex', gap: '8px' }}><Button variant="ghost" onClick={cancelBulk}>Annulla</Button><Button variant="primary" icon="check" onClick={saveBulk} disabled={editCount === 0}>Salva modifiche</Button></div>
+        </div>
+      )}
     </div>
   );
 }
 const iconBtn = { border: 0, background: 'transparent', cursor: 'pointer', padding: '6px', borderRadius: 'var(--radius-md)', display: 'inline-flex' };
 
 function NewProductModal({ open, onClose, onSave }) {
+  const FRESH = { name: '', price: '', stock: '', cat: 'Salumi', desc: '', free: false };
+  const [mode, setMode] = React.useState('manual');
+  const [form, setForm] = React.useState(FRESH);
+  const [busy, setBusy] = React.useState(false);
+  const [note, setNote] = React.useState(null);
+  const [url, setUrl] = React.useState('');
+  const [market, setMarket] = React.useState('');
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  React.useEffect(() => { if (!open) { setMode('manual'); setForm(FRESH); setBusy(false); setNote(null); setUrl(''); setMarket(''); } }, [open]);
+
+  const PHOTO_FILL = { name: 'Coppa Piacentina DOP 200g', price: '8,90', stock: '12', cat: 'Salumi', desc: 'Stagionata 90 giorni, taglio a mano, sottovuoto fresco di giornata. Dolce e profumata, perfetta con un calice di Gutturnio.', free: true };
+  const URL_FILL = { name: 'Olio extravergine d’oliva bio 750ml', price: '12,50', stock: '30', cat: 'Conserve', desc: 'Estratto a freddo, acidità <0,3%. Dati, foto e tempo di consegna recuperati automaticamente dal marketplace.', free: false };
+  function runPhoto() { setBusy(true); setTimeout(() => { setForm((f) => ({ ...f, ...PHOTO_FILL })); setNote({ icon: 'images', text: 'Riconosciuto da 2 foto dall’AI · rivedi e pubblica' }); setBusy(false); setMode('manual'); }, 1400); }
+  function runUrl() { if (url.trim().length < 3) return; setBusy(true); setTimeout(() => { setForm((f) => ({ ...f, ...URL_FILL })); setNote({ icon: 'sparkles', text: 'Importato da ' + (market || 'Amazon') + ' · controlla e pubblica' }); setBusy(false); setMode('manual'); }, 1500); }
+
+  const MODES = [
+    { id: 'photo', icon: 'images', label: 'Da foto', desc: 'L’AI riconosce il prodotto' },
+    { id: 'url', icon: 'link-2', label: 'Da link', desc: 'Importa da Amazon / eBay' },
+    { id: 'manual', icon: 'pencil', label: 'Manuale', desc: 'Compila tu i campi' },
+  ];
+  const canPublish = form.name.trim().length > 0;
+  const Spin = () => <span style={{ display: 'inline-flex', animation: 'mc-spin 0.8s linear infinite' }}><Lucide name="loader" size={18} color="#fff" /></span>;
+
   return (
-    <Modal open={open} onClose={onClose} title="Nuovo prodotto" description="Pubblica un articolo nella tua vetrina" size="lg"
-      footer={<><Button variant="secondary" onClick={onClose}>Annulla</Button><Button variant="primary" icon="check" onClick={onSave}>Pubblica prodotto</Button></>}>
+    <Modal open={open} onClose={onClose} title="Nuovo prodotto" description="Tre modi per inserirlo — l’AI fa il grosso, tu confermi" size="lg"
+      footer={<><Button variant="secondary" onClick={onClose}>Annulla</Button><Button variant="primary" icon="check" onClick={onSave} disabled={!canPublish}>Pubblica prodotto</Button></>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-          <div style={{ width: '88px', height: '88px', borderRadius: 'var(--radius-lg)', border: '1.5px dashed var(--cream-400)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-400)', flexShrink: 0, cursor: 'pointer' }}><Lucide name="camera" size={22} color="var(--ink-400)" /><span style={{ fontSize: '10px', marginTop: '4px' }}>Foto</span></div>
-          <div style={{ flex: 1 }}><Input label="Nome prodotto" placeholder="Es. Coppa Piacentina DOP 200g" /></div>
+        {/* selettore delle 3 modalità */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+          {MODES.map((m) => {
+            const on = mode === m.id;
+            return (
+              <button key={m.id} onClick={() => setMode(m.id)} disabled={busy} style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '6px', border: `1.5px solid ${on ? 'var(--primary-400)' : 'var(--cream-300)'}`, background: on ? 'var(--primary-50)' : 'var(--surface-0)', borderRadius: 'var(--radius-lg)', padding: '12px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                <span style={{ width: '34px', height: '34px', borderRadius: 'var(--radius-md)', background: on ? 'var(--primary-600)' : 'var(--cream-100)', color: on ? '#fff' : 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={m.icon} size={18} color={on ? '#fff' : 'var(--primary-700)'} /></span>
+                <span><span style={{ display: 'block', fontWeight: 700, fontSize: '13.5px', color: 'var(--ink-900)' }}>{m.label}</span><span style={{ display: 'block', fontSize: '11.5px', color: 'var(--ink-500)' }}>{m.desc}</span></span>
+              </button>
+            );
+          })}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-          <Input label="Prezzo (€)" type="number" placeholder="8,90" />
-          <Input label="Stock disponibile" type="number" placeholder="12" />
-        </div>
-        <Select label="Categoria" defaultValue="Salumi">
-          <option>Salumi</option><option>Formaggi</option><option>Conserve</option><option>Pasta fresca</option><option>Vini</option>
-        </Select>
-        <div>
-          <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink-700)', display: 'block', marginBottom: '5px' }}>Descrizione</label>
-          <textarea rows="3" placeholder="Racconta il prodotto: origine, stagionatura, abbinamenti…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '15px', fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none' }} />
-        </div>
-        <Checkbox label="Spedizione gratuita per questo prodotto" />
+
+        {/* MODE: da foto */}
+        {mode === 'photo' && (
+          <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--secondary-200)', background: 'var(--secondary-50)', padding: '18px' }}>
+            <p style={{ margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: 'var(--secondary-900)' }}><Lucide name="package-plus" size={18} color="var(--secondary-700)" /> Crea dalle foto</p>
+            <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.5 }}>Carica le foto del prodotto (di solito 2: fronte + retro). L’AI riconosce nome, categoria e prezzo suggerito: tu controlli e pubblichi.</p>
+            <button onClick={runPhoto} disabled={busy} style={{ width: '100%', borderRadius: 'var(--radius-lg)', border: '1.5px dashed var(--secondary-300)', background: 'var(--surface-0)', padding: '26px', cursor: busy ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', fontFamily: 'var(--font-sans)' }}>
+              {busy ? <><span style={{ display: 'inline-flex', animation: 'mc-spin 0.8s linear infinite' }}><Lucide name="loader" size={26} color="var(--secondary-700)" /></span><span style={{ fontSize: '13px', color: 'var(--ink-600)' }}>Analizzo le foto…</span></>
+                : <><span style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--secondary-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="images" size={24} color="var(--secondary-700)" /></span><span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>Carica le foto</span><span style={{ fontSize: '12px', color: 'var(--ink-400)' }}>JPG o PNG · fino a 12 foto</span></>}
+            </button>
+          </div>
+        )}
+
+        {/* MODE: da link */}
+        {mode === 'url' && (
+          <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--primary-200)', background: 'var(--primary-50)', padding: '18px' }}>
+            <p style={{ margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: 'var(--primary-800)' }}><Lucide name="sparkles" size={18} color="var(--primary-700)" /> Importa da Amazon / eBay</p>
+            <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.5 }}>Incolla il link del prodotto (o il nome): recuperiamo nome, descrizione, prezzo, foto, caratteristiche e il <strong>tempo di consegna</strong>.</p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '0 12px' }}>
+                <Lucide name="link-2" size={16} color="var(--ink-400)" />
+                <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') runUrl(); }} placeholder="https://www.amazon.it/… o nome prodotto" style={{ flex: 1, border: 0, outline: 'none', padding: '10px 0', fontSize: '14px', fontFamily: 'var(--font-sans)', background: 'transparent', color: 'var(--ink-900)' }} />
+              </div>
+              <select value={market} onChange={(e) => setMarket(e.target.value)} style={{ border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '14px', fontFamily: 'var(--font-sans)', background: 'var(--surface-0)' }}>
+                <option value="">Rileva auto</option><option>Amazon</option><option>eBay</option><option>AliExpress</option><option>Altro</option>
+              </select>
+              <Button variant="primary" onClick={runUrl} disabled={busy || url.trim().length < 3}>{busy ? 'Importo…' : 'Importa'}</Button>
+            </div>
+            {busy && <p style={{ margin: '10px 0 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--primary-700)' }}><span style={{ display: 'inline-flex', animation: 'mc-spin 0.8s linear infinite' }}><Lucide name="loader" size={15} color="var(--primary-700)" /></span> Recupero i dati dal marketplace…</p>}
+          </div>
+        )}
+
+        {/* MODE: manuale (anche destinazione dopo foto/link) */}
+        {mode === 'manual' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {note && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--olive-50)', border: '1px solid var(--olive-200)', borderRadius: 'var(--radius-md)', padding: '9px 12px', fontSize: '13px', color: 'var(--olive-800)' }}><Lucide name={note.icon} size={15} color="var(--olive-700)" /> {note.text}</div>}
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+              <div style={{ width: '88px', height: '88px', borderRadius: 'var(--radius-lg)', border: '1.5px dashed var(--cream-400)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-400)', flexShrink: 0, cursor: 'pointer', background: note ? 'var(--cream-100)' : 'transparent' }}><Lucide name="camera" size={22} color="var(--ink-400)" /><span style={{ fontSize: '10px', marginTop: '4px' }}>Foto</span></div>
+              <div style={{ flex: 1 }}><Input label="Nome prodotto" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Es. Coppa Piacentina DOP 200g" /></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <Input label="Prezzo (€)" value={form.price} onChange={(e) => set('price', e.target.value)} placeholder="8,90" />
+              <Input label="Stock disponibile" value={form.stock} onChange={(e) => set('stock', e.target.value)} placeholder="12" />
+            </div>
+            <Select label="Categoria" value={form.cat} onChange={(e) => set('cat', e.target.value)}>
+              <option>Salumi</option><option>Formaggi</option><option>Conserve</option><option>Pasta fresca</option><option>Vini</option><option>Pane e forno</option><option>Parafarmacia</option>
+            </Select>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink-700)', display: 'block', marginBottom: '5px' }}>Descrizione</label>
+              <textarea rows="3" value={form.desc} onChange={(e) => set('desc', e.target.value)} placeholder="Racconta il prodotto: origine, stagionatura, abbinamenti…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '15px', fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', color: 'var(--ink-900)' }} />
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--ink-700)', cursor: 'pointer' }}><input type="checkbox" checked={form.free} onChange={(e) => set('free', e.target.checked)} style={{ width: '16px', height: '16px', accentColor: 'var(--primary-600)' }} /> Spedizione gratuita per questo prodotto</label>
+          </div>
+        )}
       </div>
     </Modal>
   );

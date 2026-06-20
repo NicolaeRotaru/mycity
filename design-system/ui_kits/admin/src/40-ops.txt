@@ -29,10 +29,10 @@ function Users() {
                       <div><p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{u.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)' }}>{u.email}</p></div>
                     </div>
                   </td>
-                  <td style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{rl}</span></td>
-                  <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{u.orders}</td>
-                  <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{u.joined}</td>
-                  <td style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: sbg, color: sfg, padding: '3px 10px', borderRadius: '999px' }}>{sl}</span></td>
+                  <td data-label="Ruolo" style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{rl}</span></td>
+                  <td data-label="Ordini" style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{u.orders}</td>
+                  <td data-label="Iscritto" style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{u.joined}</td>
+                  <td data-label="Stato" style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: sbg, color: sfg, padding: '3px 10px', borderRadius: '999px' }}>{sl}</span></td>
                   <td style={{ padding: '11px 16px', textAlign: 'right' }}>{u.status === 'pending' ? <Button variant="primary" size="sm" icon="check">Approva</Button> : <button style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '6px' }}><Lucide name="more-horizontal" size={16} color="var(--ink-500)" /></button>}</td>
                 </tr>
               );
@@ -54,6 +54,35 @@ function Disputes({ onToast }) {
   return (
     <div>
       <PageTitle eyebrow="Tutela" title="Reclami" sub="Gestisci le controversie tra clienti e venditori" />
+      <div style={{ background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '16px', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Lucide name="shield-alert" size={17} color="var(--secondary-600)" />
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>Segnali di rischio</h3>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--secondary-700)', background: 'var(--secondary-50)', padding: '2px 8px', borderRadius: '999px' }}>auto</span>
+        </div>
+        <div className="mc-risk-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+          {[
+            { icon: 'siren', sev: 'high', title: 'Rider · Marco D.', body: '3 SOS in 7 giorni — sopra la soglia (1). Verifica account.', cta: 'Apri profilo' },
+            { icon: 'gavel', sev: 'high', title: 'Negozio · Bottega Emilia', body: 'Tasso reclami 9,2% (media 1,8%). Possibile problema qualità.', cta: 'Esamina' },
+            { icon: 'repeat', sev: 'med', title: 'Cliente · L. Moretti', body: '4 rimborsi richiesti in 30 giorni. Pattern sospetto.', cta: 'Rivedi' },
+          ].map((r, i) => {
+            const hi = r.sev === 'high';
+            const bd = hi ? 'var(--secondary-200)' : 'var(--accent-200)';
+            const bg = hi ? 'var(--secondary-50)' : 'var(--accent-50)';
+            const fg = hi ? 'var(--secondary-600)' : 'var(--accent-700)';
+            return (
+              <div key={i} style={{ background: bg, border: '1px solid ' + bd, borderRadius: 'var(--radius-md)', padding: '13px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '6px' }}>
+                  <Lucide name={r.icon} size={15} color={fg} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{r.title}</span>
+                </div>
+                <p style={{ margin: '0 0 10px', fontSize: '12.5px', color: 'var(--ink-600)', lineHeight: 1.45 }}>{r.body}</p>
+                <button style={{ border: 0, background: fg, color: '#fff', fontWeight: 700, fontSize: '12px', padding: '6px 12px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{r.cta}</button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {tabs.map(([id, label]) => <button key={id} onClick={() => setFilter(id)} style={{ border: 0, background: filter === id ? 'var(--primary-700)' : 'var(--surface-0)', color: filter === id ? '#fff' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: filter === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{label}</button>)}
       </div>
@@ -130,6 +159,92 @@ function CodRemittance({ onToast }) {
   );
 }
 
+function DeliveryConfig({ onToast }) {
+  const [base, setBase] = React.useState(1.5);
+  const [todayFee, setTodayFee] = React.useState(1);
+  const [zones, setZones] = React.useState([
+    { name: 'Centro storico', cap: '29121', on: true, perKm: 1.0 },
+    { name: 'Borgo / Farnesiana', cap: '29122', on: true, perKm: 1.5 },
+    { name: 'Periferia', cap: '29100', on: true, perKm: 2.0 },
+    { name: 'Comuni limitrofi', cap: '29010', on: false, perKm: 3.0 },
+  ]);
+  const toggleZone = (i) => setZones((z) => z.map((x, j) => j === i ? { ...x, on: !x.on } : x));
+  const setKm = (i, v) => setZones((z) => z.map((x, j) => j === i ? { ...x, perKm: v } : x));
+  const tiers = [['Fino a 10 prodotti', '1,00 €'], ['11–20 prodotti', '2,00 €'], ['21–30 prodotti', '3,00 €'], ['Oltre 30', '4,00 €']];
+  const num = { width: '80px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '7px 10px', fontSize: '14px', fontWeight: 700, textAlign: 'right', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none' };
+  return (
+    <div>
+      <PageTitle eyebrow="Operatività" title="Zone & tariffe di consegna" sub="Configura le tariffe applicate al checkout, per zona e per volume" />
+      <div className="mc-deliv-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <Card variant="bordered" padding="lg">
+          <h3 style={{ margin: '0 0 14px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Costi base</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}><div><p style={{ margin: 0, fontWeight: 600, color: 'var(--ink-900)', fontSize: '14px' }}>Infrastruttura delivery</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>Quota fissa su ogni ordine</p></div><input type="number" step="0.5" value={base} onChange={(e) => setBase(+e.target.value)} style={num} /></div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}><div><p style={{ margin: 0, fontWeight: 600, color: 'var(--ink-900)', fontSize: '14px' }}>Supplemento "in giornata"</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>Consegna oggi / slot orario</p></div><input type="number" step="0.5" value={todayFee} onChange={(e) => setTodayFee(+e.target.value)} style={num} /></div>
+          </div>
+          <h3 style={{ margin: '20px 0 10px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Tariffa per volume</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {tiers.map(([l, v]) => <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '8px 12px', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)' }}><span style={{ color: 'var(--ink-600)' }}>{l}</span><strong style={{ color: 'var(--ink-900)' }}>{v}</strong></div>)}
+          </div>
+        </Card>
+        <Card variant="bordered" padding="lg">
+          <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Zone attive</h3>
+          <p style={{ margin: '0 0 14px', fontSize: '12px', color: 'var(--ink-500)' }}>Solo le zone attive vedono i negozi al checkout. La tariffa distanza è €/km.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {zones.map((z, i) => (
+              <div key={z.cap} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 13px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', opacity: z.on ? 1 : 0.55 }}>
+                <span onClick={() => toggleZone(i)} style={{ position: 'relative', width: '38px', height: '22px', borderRadius: '999px', background: z.on ? 'var(--olive-500)' : 'var(--cream-400)', cursor: 'pointer', flexShrink: 0 }}><span style={{ position: 'absolute', top: '2px', left: z.on ? '18px' : '2px', width: '18px', height: '18px', borderRadius: '50%', background: '#fff' }} /></span>
+                <div style={{ flex: 1, minWidth: 0 }}><p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{z.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)', fontFamily: 'var(--font-mono)' }}>CAP {z.cap}</p></div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--ink-600)' }}><input type="number" step="0.5" value={z.perKm} onChange={(e) => setKm(i, +e.target.value)} style={{ ...num, width: '64px' }} />€/km</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      <div style={{ marginTop: '18px' }}><Button variant="primary" icon="save" onClick={() => onToast && onToast('Tariffe di consegna aggiornate')}>Salva configurazione</Button></div>
+    </div>
+  );
+}
+function SellerPayouts({ onToast }) {
+  const seed = [
+    { store: 'Salumeria Verdi', period: '8–14 giu', gross: 1284.50, fee: 0, net: 1284.50, status: 'ready', iban: 'IT60•••4821' },
+    { store: 'Pasta Fresca Anita', period: '8–14 giu', gross: 942.00, fee: 0, net: 942.00, status: 'ready', iban: 'IT22•••7733' },
+    { store: 'Cantina Pace', period: '8–14 giu', gross: 1730.80, fee: 0, net: 1730.80, status: 'hold', iban: 'IT91•••1290', note: 'In attesa rimessa COD' },
+    { store: 'Bottega Emilia', period: '1–7 giu', gross: 612.40, fee: 0, net: 612.40, status: 'paid', iban: 'IT08•••5512', when: '9 giu' },
+  ];
+  const [rows, setRows] = React.useState(seed);
+  const pay = (i) => { setRows((r) => r.map((x, j) => j === i ? { ...x, status: 'paid', when: 'oggi' } : x)); onToast && onToast('Bonifico avviato'); };
+  const STT = { ready: ['Pronto al pagamento', 'var(--olive-50)', 'var(--olive-700)'], hold: ['In sospeso', 'var(--accent-50)', 'var(--accent-700)'], paid: ['Pagato', 'var(--surface-100)', 'var(--ink-500)'] };
+  const due = rows.filter((r) => r.status === 'ready').reduce((s, r) => s + r.net, 0);
+  const held = rows.filter((r) => r.status === 'hold').reduce((s, r) => s + r.net, 0);
+  return (
+    <div>
+      <PageTitle eyebrow="Finanza" title="Payout venditori" sub="Riconciliazione settimanale e bonifici ai negozi (commissione 0%)" />
+      <div className="mc-payout-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '18px' }}>
+        <div style={{ background: 'var(--surface-0)', border: '2px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '16px' }}><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>Da pagare ora</p><p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--olive-700)' }}>{fmt(due)}</p></div>
+        <div style={{ background: 'var(--surface-0)', border: '2px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '16px' }}><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>In sospeso (COD)</p><p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--accent-700)' }}>{fmt(held)}</p></div>
+        <div style={{ background: 'var(--surface-0)', border: '2px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '16px' }}><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>Negozi attivi</p><p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--ink-900)' }}>{rows.length}</p></div>
+      </div>
+      <Card variant="bordered" padding="none">
+        <table className="mc-prod-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Negozio', 'Periodo', 'Lordo', 'Netto', 'Stato', ''].map((h, i) => <th key={i} style={{ textAlign: i >= 2 && i <= 3 ? 'right' : 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((r, i) => { const [sl, sbg, sfg] = STT[r.status]; return (
+              <tr key={r.store} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td data-label="Negozio" style={{ padding: '12px 16px' }}><div><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)', fontSize: '14px' }}>{r.store}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)', fontFamily: 'var(--font-mono)' }}>{r.iban}</p></div></td>
+                <td data-label="Periodo" style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{r.period}</td>
+                <td data-label="Lordo" style={{ padding: '12px 16px', textAlign: 'right', fontSize: '13px', color: 'var(--ink-600)' }}>{fmt(r.gross)}</td>
+                <td data-label="Netto" style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(r.net)}</td>
+                <td data-label="Stato" style={{ padding: '12px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: sbg, color: sfg, padding: '3px 10px', borderRadius: '999px' }}>{sl}</span>{r.note && <span style={{ display: 'block', fontSize: '11px', color: 'var(--ink-400)', marginTop: '3px' }}>{r.note}</span>}{r.when && <span style={{ display: 'block', fontSize: '11px', color: 'var(--ink-400)', marginTop: '3px' }}>{r.when}</span>}</td>
+                <td data-label="" style={{ padding: '12px 16px', textAlign: 'right' }}>{r.status === 'ready' ? <Button variant="primary" size="sm" icon="send" onClick={() => pay(i)}>Paga</Button> : r.status === 'hold' ? <Button variant="ghost" size="sm" icon="clock" disabled>In attesa</Button> : <span style={{ color: 'var(--olive-700)', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Lucide name="check" size={15} color="var(--olive-700)" /> Pagato</span>}</td>
+              </tr>
+            ); })}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
 function Sos({ onToast }) {
   const [resolved, setResolved] = React.useState(false);
   return (

@@ -107,53 +107,254 @@ function Stories({ onToast }) {
   );
 }
 
-// ── Vetrina: editor del negozio pubblico (app/seller/site) ──
+// ── Vetrina: editor a blocchi stile WordPress (app/seller/site) ──
+const VET_ACCENTS = [
+  { id: 'terracotta', label: 'Terracotta', v: 'var(--primary-600)' },
+  { id: 'oliva', label: 'Oliva', v: 'var(--olive-600)' },
+  { id: 'senape', label: 'Senape', v: 'var(--accent-600)' },
+  { id: 'prugna', label: 'Prugna', v: 'var(--secondary-600)' },
+];
+const VET_TYPES = {
+  cover: { label: 'Copertina', icon: 'image' },
+  about: { label: 'Chi siamo', icon: 'text' },
+  products: { label: 'Prodotti', icon: 'grid-3x3' },
+  hours: { label: 'Orari', icon: 'clock' },
+  stories: { label: 'Storie', icon: 'camera' },
+  reviews: { label: 'Recensioni', icon: 'star' },
+  contact: { label: 'Dove siamo', icon: 'map-pin' },
+  banner: { label: 'Banner promo', icon: 'megaphone' },
+};
+function vetDefault(type, store) {
+  if (type === 'cover') return { title: store.name, tagline: 'Salumi e formaggi piacentini, tagliati a mano ogni giorno.' };
+  if (type === 'about') return { heading: 'Chi siamo', text: 'Nel cuore del centro storico dal 1962. Selezioniamo solo produttori del territorio e tagliamo a mano ogni giorno.' };
+  if (type === 'products') return { heading: 'In vetrina', cols: 3 };
+  if (type === 'hours') return { heading: 'Orari', text: 'Lun–Sab 8:00–19:30 · Domenica chiuso' };
+  if (type === 'stories') return { heading: 'Le nostre storie' };
+  if (type === 'reviews') return { heading: 'Cosa dicono i clienti' };
+  if (type === 'contact') return { heading: 'Dove siamo', text: 'Via Roma 18, Centro storico · Piacenza' };
+  if (type === 'banner') return { text: '€5 di sconto sul primo ordine — questa settimana' };
+  return {};
+}
 function Vetrina({ onToast }) {
   const store = window.SC_STORE;
-  const [cover, setCover] = React.useState(true);
-  const [showReviews, setShowReviews] = React.useState(true);
-  const [showStories, setShowStories] = React.useState(true);
+  const [blocks, setBlocks] = React.useState([
+    { id: 'b1', type: 'cover', on: true, ...vetDefault('cover', store) },
+    { id: 'b2', type: 'about', on: true, ...vetDefault('about', store) },
+    { id: 'b3', type: 'products', on: true, ...vetDefault('products', store) },
+    { id: 'b4', type: 'hours', on: true, ...vetDefault('hours', store) },
+    { id: 'b5', type: 'stories', on: true, ...vetDefault('stories', store) },
+    { id: 'b6', type: 'reviews', on: true, ...vetDefault('reviews', store) },
+    { id: 'b7', type: 'contact', on: true, ...vetDefault('contact', store) },
+  ]);
+  const [sel, setSel] = React.useState('b1');
+  const [accent, setAccent] = React.useState('terracotta');
+  const [pv, setPv] = React.useState('desktop');
+  const [adding, setAdding] = React.useState(false);
+  const accentV = (VET_ACCENTS.find((a) => a.id === accent) || VET_ACCENTS[0]).v;
+  const selBlock = blocks.find((b) => b.id === sel);
+  const patch = (id, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, ...p } : b));
+  const move = (i, d) => setBlocks((bs) => { const n = [...bs]; const j = i + d; if (j < 0 || j >= n.length) return bs; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  const del = (id) => setBlocks((bs) => bs.filter((b) => b.id !== id));
+  const add = (type) => { const id = 'b' + Date.now(); setBlocks((bs) => [...bs, { id, type, on: true, ...vetDefault(type, store) }]); setSel(id); setAdding(false); };
+
+  const fieldLabel = { display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--ink-600)', marginBottom: '4px' };
+  const inp = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '9px 11px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none', color: 'var(--ink-900)' };
+
   return (
     <div>
-      <PageTitle eyebrow="Contenuti" title="La tua vetrina" sub="Personalizza come appare il negozio agli acquirenti"
-        action={<Button variant="secondary" icon="external-link">Vedi vetrina</Button>} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '20px', alignItems: 'start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Card variant="bordered" padding="lg">
-            <h3 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Informazioni</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <Input label="Nome negozio" defaultValue={store.name} />
-              <div><label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--ink-700)', marginBottom: '4px' }}>Descrizione</label><textarea rows="3" defaultValue="Salumi e formaggi piacentini selezionati, tagliati a mano ogni giorno nel cuore del centro storico." style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '9px 11px', fontSize: '14px', fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none' }} /></div>
-              <Input label="Orari" defaultValue={`8:00 – ${store.closeAt}`} />
+      <PageTitle eyebrow="Negozio" title="La tua vetrina" sub="Costruiscila a blocchi — trascina, modifica e vedi l'anteprima dal vivo"
+        action={<div style={{ display: 'flex', gap: '8px' }}><Button variant="secondary" icon="external-link" onClick={() => { window.location.href = '../buyer/index.html?store=' + encodeURIComponent(store.name); }}>Vedi vetrina</Button><Button variant="primary" icon="save" onClick={() => onToast && onToast('Vetrina pubblicata')}>Salva vetrina</Button></div>} />
+      <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '20px', alignItems: 'start' }}>
+        {/* ── editor a blocchi ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <Card variant="bordered" padding="md">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>Blocchi</h3>
+              <button onClick={() => setAdding((v) => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', border: 0, background: 'var(--primary-100)', color: 'var(--primary-700)', fontWeight: 700, fontSize: '12.5px', padding: '6px 10px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}><Lucide name={adding ? 'x' : 'plus'} size={14} color="var(--primary-700)" /> {adding ? 'Chiudi' : 'Aggiungi'}</button>
+            </div>
+            {adding && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--cream-200)' }}>
+                {Object.keys(VET_TYPES).map((t) => (
+                  <button key={t} onClick={() => add(t)} style={{ display: 'flex', alignItems: 'center', gap: '7px', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', borderRadius: 'var(--radius-md)', padding: '8px 10px', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '12.5px', color: 'var(--ink-800)', textAlign: 'left' }}><Lucide name={VET_TYPES[t].icon} size={14} color="var(--primary-600)" /> {VET_TYPES[t].label}</button>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {blocks.map((b, i) => {
+                const on = sel === b.id;
+                return (
+                  <div key={b.id} onClick={() => setSel(b.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: 'var(--radius-md)', cursor: 'pointer', background: on ? 'var(--primary-50)' : 'var(--cream-50)', border: '1px solid ' + (on ? 'var(--primary-300)' : 'transparent') }}>
+                    <Lucide name="grip-vertical" size={15} color="var(--ink-300)" />
+                    <Lucide name={VET_TYPES[b.type].icon} size={15} color={b.on ? 'var(--primary-600)' : 'var(--ink-300)'} />
+                    <span style={{ flex: 1, minWidth: 0, fontSize: '13px', fontWeight: on ? 700 : 500, color: b.on ? 'var(--ink-900)' : 'var(--ink-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{VET_TYPES[b.type].label}</span>
+                    <button onClick={(e) => { e.stopPropagation(); move(i, -1); }} aria-label="Su" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex', opacity: i === 0 ? 0.3 : 1 }}><Lucide name="chevron-up" size={15} color="var(--ink-500)" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); move(i, 1); }} aria-label="Giù" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex', opacity: i === blocks.length - 1 ? 0.3 : 1 }}><Lucide name="chevron-down" size={15} color="var(--ink-500)" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); patch(b.id, { on: !b.on }); }} aria-label="Mostra/nascondi" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex' }}><Lucide name={b.on ? 'eye' : 'eye-off'} size={15} color={b.on ? 'var(--olive-600)' : 'var(--ink-300)'} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); del(b.id); }} aria-label="Elimina" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex' }}><Lucide name="trash-2" size={14} color="var(--ink-400)" /></button>
+                  </div>
+                );
+              })}
             </div>
           </Card>
-          <Card variant="bordered" padding="lg">
-            <h3 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Sezioni della vetrina</h3>
-            {[['Foto di copertina', cover, setCover], ['Recensioni', showReviews, setShowReviews], ['Storie', showStories, setShowStories]].map(([l, v, set]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--cream-200)' }}>
-                <span style={{ fontSize: '14px', color: 'var(--ink-800)' }}>{l}</span>
-                <button onClick={() => set((x) => !x)} style={{ border: 0, cursor: 'pointer', width: '44px', height: '26px', borderRadius: '999px', background: v ? 'var(--olive-500)' : 'var(--cream-400)', position: 'relative' }}><span style={{ position: 'absolute', top: '3px', left: v ? '21px' : '3px', width: '20px', height: '20px', borderRadius: '50%', background: '#fff', transition: 'left var(--dur-base)', boxShadow: 'var(--shadow-sm)' }} /></button>
+
+          {/* editor del blocco selezionato */}
+          {selBlock && (
+            <Card variant="bordered" padding="md">
+              <h3 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)', display: 'flex', alignItems: 'center', gap: '7px' }}><Lucide name={VET_TYPES[selBlock.type].icon} size={16} color="var(--primary-600)" /> {VET_TYPES[selBlock.type].label}</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {selBlock.type === 'cover' && (<React.Fragment>
+                  <button style={{ width: '100%', height: '70px', borderRadius: 'var(--radius-md)', border: '1.5px dashed var(--cream-400)', background: 'var(--cream-50)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--ink-500)', fontFamily: 'var(--font-sans)', fontSize: '13px' }}><Lucide name="image-plus" size={18} color="var(--ink-400)" /> Cambia foto di copertina</button>
+                  <div><label style={fieldLabel}>Titolo</label><input value={selBlock.title} onChange={(e) => patch(selBlock.id, { title: e.target.value })} style={inp} /></div>
+                  <div><label style={fieldLabel}>Sottotitolo</label><textarea rows="2" value={selBlock.tagline} onChange={(e) => patch(selBlock.id, { tagline: e.target.value })} style={{ ...inp, resize: 'vertical' }} /></div>
+                </React.Fragment>)}
+                {(selBlock.type === 'about' || selBlock.type === 'hours' || selBlock.type === 'contact') && (<React.Fragment>
+                  <div><label style={fieldLabel}>Titolo sezione</label><input value={selBlock.heading} onChange={(e) => patch(selBlock.id, { heading: e.target.value })} style={inp} /></div>
+                  <div><label style={fieldLabel}>Testo</label><textarea rows="3" value={selBlock.text} onChange={(e) => patch(selBlock.id, { text: e.target.value })} style={{ ...inp, resize: 'vertical' }} /></div>
+                </React.Fragment>)}
+                {selBlock.type === 'banner' && (<div><label style={fieldLabel}>Testo del banner</label><input value={selBlock.text} onChange={(e) => patch(selBlock.id, { text: e.target.value })} style={inp} /></div>)}
+                {selBlock.type === 'products' && (<React.Fragment>
+                  <div><label style={fieldLabel}>Titolo sezione</label><input value={selBlock.heading} onChange={(e) => patch(selBlock.id, { heading: e.target.value })} style={inp} /></div>
+                  <div><label style={fieldLabel}>Colonne</label><div style={{ display: 'flex', gap: '6px' }}>{[2, 3, 4].map((c) => <button key={c} onClick={() => patch(selBlock.id, { cols: c })} style={{ flex: 1, border: '1px solid ' + (selBlock.cols === c ? 'var(--primary-400)' : 'var(--cream-300)'), background: selBlock.cols === c ? 'var(--primary-50)' : 'var(--surface-0)', color: selBlock.cols === c ? 'var(--primary-700)' : 'var(--ink-600)', fontWeight: 700, padding: '8px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '13px' }}>{c}</button>)}</div></div>
+                </React.Fragment>)}
+                {(selBlock.type === 'stories' || selBlock.type === 'reviews') && (<React.Fragment>
+                  <div><label style={fieldLabel}>Titolo sezione</label><input value={selBlock.heading} onChange={(e) => patch(selBlock.id, { heading: e.target.value })} style={inp} /></div>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)', display: 'flex', alignItems: 'center', gap: '6px' }}><Lucide name="sparkles" size={13} color="var(--ink-400)" /> Contenuti aggiornati in automatico dal negozio.</p>
+                </React.Fragment>)}
               </div>
-            ))}
+            </Card>
+          )}
+
+          {/* tema colore */}
+          <Card variant="bordered" padding="md">
+            <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)' }}>Tema</h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {VET_ACCENTS.map((a) => (
+                <button key={a.id} onClick={() => setAccent(a.id)} title={a.label} aria-label={a.label} style={{ width: '34px', height: '34px', borderRadius: '50%', background: a.v, cursor: 'pointer', border: '3px solid ' + (accent === a.id ? 'var(--ink-900)' : 'transparent'), boxShadow: 'var(--shadow-sm)' }} />
+              ))}
+            </div>
           </Card>
         </div>
-        {/* anteprima vetrina */}
+
+        {/* ── anteprima live ── */}
         <Card variant="bordered" padding="none" style={{ position: 'sticky', top: '90px', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--cream-200)', background: 'var(--cream-50)', display: 'flex', alignItems: 'center', gap: '8px' }}><Lucide name="eye" size={14} color="var(--ink-500)" /><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)' }}>Anteprima</span></div>
-          {cover && <div style={{ height: '90px', background: 'linear-gradient(135deg, var(--primary-300), var(--accent-300))' }} />}
-          <div style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{store.initials}</span><div><p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{store.name}</p><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>{store.rating.toFixed(1).replace('.', ',')}★ · {store.area}</p></div></div>
-            {showStories && <div style={{ display: 'flex', gap: '6px', marginTop: '12px' }}>{[0,1,2].map((i) => <div key={i} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--cream-200)', border: '2px solid var(--secondary-400)' }} />)}</div>}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '12px' }}>{[0,1,2,3].map((i) => <div key={i} style={{ height: '50px', borderRadius: 'var(--radius-md)', background: 'var(--surface-100)', border: '1px solid var(--cream-300)' }} />)}</div>
-            {showReviews && <div style={{ marginTop: '12px', padding: '8px 10px', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)', fontSize: '11px', color: 'var(--ink-500)' }}>★★★★★ "Prodotti top, consegna puntuale"</div>}
+          <div style={{ padding: '9px 14px', borderBottom: '1px solid var(--cream-200)', background: 'var(--cream-50)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ display: 'flex', gap: '5px' }}>{['#ef6f5b', '#f4bc53', '#7fae5a'].map((c) => <span key={c} style={{ width: '10px', height: '10px', borderRadius: '50%', background: c }} />)}</span>
+            <span style={{ flex: 1, textAlign: 'center', fontSize: '11px', color: 'var(--ink-400)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>mycity.it/negozio/{store.name.toLowerCase().replace(/[^a-z]+/g, '-')}</span>
+            <div style={{ display: 'inline-flex', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '2px', flexShrink: 0 }}>
+              {[['desktop', 'monitor'], ['mobile', 'smartphone']].map(([k, ic]) => (
+                <button key={k} onClick={() => setPv(k)} aria-label={k} title={k === 'desktop' ? 'Anteprima desktop' : 'Anteprima mobile'} style={{ border: 0, background: pv === k ? 'var(--primary-700)' : 'transparent', color: pv === k ? '#fff' : 'var(--ink-500)', cursor: 'pointer', padding: '5px 9px', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center' }}><Lucide name={ic} size={14} color={pv === k ? '#fff' : 'var(--ink-500)'} /></button>
+              ))}
+            </div>
+          </div>
+          <div style={{ maxHeight: '640px', overflowY: 'auto', background: pv === 'mobile' ? 'var(--cream-200)' : 'var(--surface-50)', padding: pv === 'mobile' ? '20px 0' : 0, display: pv === 'mobile' ? 'flex' : 'block', justifyContent: 'center' }}>
+            <div style={pv === 'mobile' ? { width: '320px', maxWidth: '100%', background: 'var(--surface-50)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-warm-lg)', border: '5px solid var(--ink-900)' } : { width: '100%' }}>
+            {blocks.filter((b) => b.on).map((b) => <VetBlock key={b.id} b={b} accent={accentV} store={store} />)}
+            {blocks.filter((b) => b.on).length === 0 && <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--ink-400)', fontSize: '13px' }}>Nessun blocco attivo — aggiungine uno per iniziare.</div>}
+            </div>
           </div>
         </Card>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}><Button variant="primary" icon="save" onClick={() => onToast && onToast('Vetrina aggiornata')}>Salva vetrina</Button></div>
     </div>
   );
 }
-
+function VetBlock({ b, accent, store }) {
+  if (b.type === 'cover') return (
+    <div>
+      <div style={{ height: '120px', background: 'linear-gradient(135deg, ' + accent + ', var(--accent-300))', position: 'relative' }} />
+      <div style={{ padding: '0 16px', marginTop: '-30px' }}>
+        <span style={{ width: '60px', height: '60px', borderRadius: 'var(--radius-lg)', background: '#fff', border: '3px solid #fff', boxShadow: 'var(--shadow-card)', color: accent, fontWeight: 800, fontSize: '22px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-serif)' }}>{store.initials}</span>
+        <h2 style={{ margin: '10px 0 2px', fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, color: 'var(--ink-900)' }}>{b.title}</h2>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-500)', lineHeight: 1.5 }}>{b.tagline}</p>
+      </div>
+    </div>
+  );
+  if (b.type === 'banner') return (
+    <div style={{ margin: '14px 16px', padding: '12px 14px', borderRadius: 'var(--radius-lg)', background: accent, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '13px' }}><Lucide name="megaphone" size={16} color="#fff" /> {b.text}</div>
+  );
+  if (b.type === 'products') return (
+    <div style={{ padding: '16px' }}>
+      <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{b.heading}</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + (b.cols || 3) + ', 1fr)', gap: '8px' }}>
+        {Array.from({ length: (b.cols || 3) * 2 }).map((_, i) => (
+          <div key={i} style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#fff', border: '1px solid var(--cream-300)' }}>
+            <div style={{ aspectRatio: '1', background: 'var(--surface-100)' }} />
+            <div style={{ padding: '6px' }}><div style={{ height: '7px', width: '80%', background: 'var(--cream-300)', borderRadius: '3px' }} /><div style={{ height: '7px', width: '40%', background: accent, borderRadius: '3px', marginTop: '5px', opacity: 0.7 }} /></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  if (b.type === 'stories') return (
+    <div style={{ padding: '16px' }}>
+      <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{b.heading}</h3>
+      <div style={{ display: 'flex', gap: '8px' }}>{[0, 1, 2, 3].map((i) => <div key={i} style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'var(--surface-100)', border: '2px solid ' + accent, flexShrink: 0 }} />)}</div>
+    </div>
+  );
+  if (b.type === 'reviews') return (
+    <div style={{ padding: '16px' }}>
+      <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{b.heading}</h3>
+      <div style={{ background: '#fff', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '12px' }}>
+        <div style={{ color: 'var(--accent-500)', fontSize: '13px', letterSpacing: '2px' }}>★★★★★</div>
+        <p style={{ margin: '6px 0 0', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.5 }}>“Prodotti top, consegna puntuale. Pago comodamente alla porta.”</p>
+        <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--ink-400)' }}>— Marco B.</p>
+      </div>
+    </div>
+  );
+  // about / hours / contact
+  return (
+    <div style={{ padding: '16px' }}>
+      <h3 style={{ margin: '0 0 6px', fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)', display: 'flex', alignItems: 'center', gap: '7px' }}>{b.type === 'contact' && <Lucide name="map-pin" size={16} color={accent} />}{b.type === 'hours' && <Lucide name="clock" size={16} color={accent} />}{b.heading}</h3>
+      <p style={{ margin: 0, fontSize: '13.5px', color: 'var(--ink-600)', lineHeight: 1.6 }}>{b.text}</p>
+      {b.type === 'contact' && <div style={{ height: '90px', marginTop: '10px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, var(--cream-200), var(--surface-100))', border: '1px solid var(--cream-300)', position: 'relative', overflow: 'hidden' }}><span style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)' }}><Lucide name="map-pin" size={24} color={accent} /></span></div>}
+    </div>
+  );
+}
+// ── Orari & disponibilità (self-service) ──
+function SellerHours({ onToast }) {
+  const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+  const [hours, setHours] = React.useState(DAYS.map((d, i) => ({ d, on: i < 6, from: '08:00', to: '19:30' })));
+  const [paused, setPaused] = React.useState(false);
+  const [vacation, setVacation] = React.useState(false);
+  const toggleDay = (i) => setHours((h) => h.map((x, j) => j === i ? { ...x, on: !x.on } : x));
+  const setT = (i, k, v) => setHours((h) => h.map((x, j) => j === i ? { ...x, [k]: v } : x));
+  const tInp = { border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-sm)', padding: '5px 7px', fontSize: '13px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none', width: '78px' };
+  const statusLabel = vacation ? 'In ferie' : paused ? 'In pausa' : 'Aperto secondo orari';
+  const statusColor = vacation ? 'var(--secondary-600)' : paused ? 'var(--accent-700)' : 'var(--olive-700)';
+  return (
+    <Card variant="bordered" padding="lg">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Orari & disponibilità</h3>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: statusColor }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor }} />{statusLabel}</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px', opacity: vacation ? 0.5 : 1, pointerEvents: vacation ? 'none' : 'auto' }}>
+        {hours.map((h, i) => (
+          <div key={h.d} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button onClick={() => toggleDay(i)} style={{ width: '54px', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 700, color: h.on ? 'var(--ink-900)' : 'var(--ink-300)' }}>{h.d}</button>
+            <span onClick={() => toggleDay(i)} style={{ position: 'relative', width: '36px', height: '21px', borderRadius: '999px', background: h.on ? 'var(--olive-500)' : 'var(--cream-400)', cursor: 'pointer', flexShrink: 0 }}><span style={{ position: 'absolute', top: '2px', left: h.on ? '17px' : '2px', width: '17px', height: '17px', borderRadius: '50%', background: '#fff', transition: 'left var(--dur-base)' }} /></span>
+            {h.on ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <input value={h.from} onChange={(e) => setT(i, 'from', e.target.value)} style={tInp} />
+                <span style={{ color: 'var(--ink-400)' }}>–</span>
+                <input value={h.to} onChange={(e) => setT(i, 'to', e.target.value)} style={tInp} />
+              </span>
+            ) : <span style={{ fontSize: '13px', color: 'var(--ink-400)' }}>Chiuso</span>}
+          </div>
+        ))}
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'var(--accent-50)', border: '1px solid var(--accent-200)', borderRadius: 'var(--radius-md)', marginBottom: '8px', cursor: 'pointer' }}>
+        <Lucide name="pause" size={16} color="var(--accent-700)" />
+        <span style={{ flex: 1, fontSize: '13px', color: 'var(--accent-900)' }}><strong>Pausa ordini</strong> · chiudi temporaneamente (es. troppi ordini)</span>
+        <span onClick={() => setPaused((v) => !v)} style={{ position: 'relative', width: '40px', height: '23px', borderRadius: '999px', background: paused ? 'var(--accent-600)' : 'var(--cream-400)', cursor: 'pointer', flexShrink: 0 }}><span style={{ position: 'absolute', top: '2px', left: paused ? '19px' : '2px', width: '19px', height: '19px', borderRadius: '50%', background: '#fff' }} /></span>
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'var(--secondary-50)', border: '1px solid var(--secondary-200)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>
+        <Lucide name="palmtree" size={16} color="var(--secondary-600)" />
+        <span style={{ flex: 1, fontSize: '13px', color: 'var(--secondary-700)' }}><strong>Modalità ferie</strong> · il negozio risulta chiuso ai clienti</span>
+        <span onClick={() => setVacation((v) => !v)} style={{ position: 'relative', width: '40px', height: '23px', borderRadius: '999px', background: vacation ? 'var(--secondary-600)' : 'var(--cream-400)', cursor: 'pointer', flexShrink: 0 }}><span style={{ position: 'absolute', top: '2px', left: vacation ? '19px' : '2px', width: '19px', height: '19px', borderRadius: '50%', background: '#fff' }} /></span>
+      </label>
+      <div style={{ marginTop: '14px' }}><Button variant="primary" size="sm" icon="save" onClick={() => onToast && onToast('Orari aggiornati · visibili ai clienti')}>Salva orari</Button></div>
+    </Card>
+  );
+}
 // ── Profilo venditore (app/seller/profile) ──
 function SellerProfile({ onToast }) {
   const store = window.SC_STORE;
@@ -173,6 +374,7 @@ function SellerProfile({ onToast }) {
           </div>
         </Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <SellerHours onToast={onToast} />
           <Card variant="bordered" padding="lg">
             <h3 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Pagamenti</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--olive-50)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--olive-200)' }}>

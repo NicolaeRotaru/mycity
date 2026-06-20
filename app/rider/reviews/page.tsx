@@ -80,9 +80,9 @@ export default function RiderReviewsPage() {
         </div>
       ) : (
         <>
-          <section className="bg-gradient-to-br from-accent-50 to-orange-50 border border-accent-200 rounded-xl p-6 grid md:grid-cols-[200px_1fr] gap-6">
+          <section className="bg-gradient-to-br from-accent-50 to-accent-100 border border-accent-200 rounded-xl p-6 grid md:grid-cols-[200px_1fr] gap-6">
             <div className="text-center">
-              <div className="text-6xl font-extrabold text-accent-900">{stats.avg.toFixed(1)}</div>
+              <div className="text-6xl font-extrabold font-serif text-accent-900">{stats.avg.toFixed(1)}</div>
               <Stars rating={stats.avg} />
               <p className="text-sm text-accent-800 mt-1">{stats.count} recensioni</p>
               {stats.avg >= 4.5 && (

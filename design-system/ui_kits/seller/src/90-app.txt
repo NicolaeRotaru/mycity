@@ -24,7 +24,7 @@ function App() {
       {view === 'orders' && <Orders orders={orders} onAdvance={advance} />}
       {view === 'products' && <Products products={window.SC_PRODUCTS} onNewProduct={() => setNewProd(true)} />}
       {view === 'ai' && <AiStudio onToast={showToast} />}
-      {view === 'promotions' && <Promotions onNew={() => showToast('Editor promo (demo)')} />}
+      {view === 'promotions' && <Promotions onToast={showToast} />}
       {view === 'promote' && <Promote onToast={showToast} />}
       {view === 'stories' && <Stories onToast={showToast} />}
       {view === 'analytics' && <Analytics />}

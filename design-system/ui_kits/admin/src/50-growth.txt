@@ -1,5 +1,5 @@
 // ===== Growth & marketing: Funnel · Coupons · Sponsored · Daily drops · Shop of month · Events =====
-function Funnel() {
+function Funnel({ onToast }) {
   const f = window.AD_FUNNEL;
   const a7 = (f.firstOrder7d / f.signups) * 100;
   const aEver = (f.firstOrderEver / f.signups) * 100;
@@ -15,6 +15,27 @@ function Funnel() {
     <div>
       <PageTitle eyebrow="Crescita" title="Funnel & Cohort" sub="Activation buyer e retention per coorte mensile"
         action={<Select defaultValue="90"><option value="30">Ultimi 30 giorni</option><option value="90">Ultimi 90 giorni</option><option value="365">Ultimo anno</option></Select>} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: 'var(--secondary-50)', border: '1px solid var(--secondary-200)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: '18px' }}>
+        <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--secondary-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="user-x" size={18} color="#fff" /></span>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, fontWeight: 800, color: 'var(--secondary-700)', fontSize: '15px' }}>Alert churn · 38 buyer a rischio</p>
+          <p style={{ margin: '3px 0 0', fontSize: '13px', color: 'var(--ink-700)', lineHeight: 1.5 }}>Hanno ordinato ogni settimana ma sono inattivi da oltre <strong>21 giorni</strong>. Il valore stimato a rischio è <strong>1.240 €/mese</strong>. Invia un coupon di richiamo prima che se ne vadano.</p>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <Button variant="primary" size="sm" icon="ticket" onClick={() => onToast && onToast('Coupon di richiamo inviato a 38 buyer')}>Invia coupon di richiamo</Button>
+            <Button variant="secondary" size="sm" icon="download" onClick={() => onToast && onToast('Segmento esportato (CSV)')}>Esporta segmento</Button>
+          </div>
+        </div>
+      </div>
+      <div style={{ marginBottom: '18px' }}>
+        <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)' }}>Segmenti</p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {[['Nuovi (7gg)', 412, 'primary'], ['Attivi', 196, 'olive'], ['Ricorrenti', 92, 'accent'], ['A rischio churn', 38, 'secondary'], ['Inattivi', 64, 'ink']].map(([l, n, t]) => (
+            <button key={l} onClick={() => onToast && onToast('Segmento "' + l + '" · ' + n + ' utenti')} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', borderRadius: 'var(--radius-full)', padding: '7px 13px', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600, color: 'var(--ink-800)' }}>
+              {l} <span style={{ background: 'var(--cream-100)', color: 'var(--ink-600)', borderRadius: '999px', padding: '1px 8px', fontSize: '12px', fontWeight: 700 }}>{n}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       <Card variant="bordered" padding="lg" style={{ marginBottom: '20px' }}>
         <h3 style={{ margin: '0 0 16px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Funnel activation</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -38,7 +59,7 @@ function Funnel() {
       <Card variant="bordered" padding="lg">
         <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Cohort retention</h3>
         <p style={{ margin: '0 0 14px', fontSize: '12px', color: 'var(--ink-500)' }}>% buyer di una coorte che ha riordinato nei mesi successivi.</p>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+        <table className="mc-cohort" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
           <thead><tr>{['Coorte', 'Signup', 'M+1', 'M+2', 'M+3'].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '8px 10px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
           <tbody>
             {f.cohorts.map((c) => { const cell = (n) => { const p = c.size > 0 ? (n / c.size) * 100 : 0; const [bg, fg] = col(p); return n === 0 ? <span style={{ color: 'var(--ink-300)' }}>—</span> : <span style={{ background: bg, color: fg, padding: '2px 8px', borderRadius: '999px', fontWeight: 600, fontSize: '12px' }}>{p.toFixed(0)}%</span>; }; return (

@@ -14,8 +14,10 @@ function App() {
       {view === 'disputes' && <Disputes onToast={showToast} />}
       {view === 'moderation' && <ProductModeration onToast={showToast} />}
       {view === 'cod' && <CodRemittance onToast={showToast} />}
+      {view === 'payouts' && <SellerPayouts onToast={showToast} />}
+      {view === 'delivery' && <DeliveryConfig onToast={showToast} />}
       {view === 'sos' && <Sos onToast={showToast} />}
-      {view === 'funnel' && <Funnel />}
+      {view === 'funnel' && <Funnel onToast={showToast} />}
       {view === 'coupons' && <Coupons onToast={showToast} />}
       {view === 'sponsored' && <Sponsored />}
       {view === 'drops' && <DailyDrops />}

@@ -1,4 +1,29 @@
 // ===== App shell — view state machine, cart, toast =====
+function MobileTabBar({ active, cartCount, onHome, onSearch, onLists, onCart, onAccount }) {
+  const tabs = [
+    { id: 'home', icon: 'home', label: 'Home', on: onHome },
+    { id: 'srp', icon: 'search', label: 'Cerca', on: onSearch },
+    { id: 'lists', icon: 'heart', label: 'Liste', on: onLists },
+    { id: 'cart', icon: 'shopping-cart', label: 'Carrello', on: onCart, badge: cartCount },
+  ];
+  return (
+    <nav className="mc-tabbar" style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 'var(--z-mobile-nav)', background: 'var(--surface-0)', borderTop: '1px solid var(--cream-300)', boxShadow: '0 -2px 12px -4px rgba(28,26,24,.1)', display: 'none', gridTemplateColumns: 'repeat(4, 1fr)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      {tabs.map((t) => {
+        const on = active === t.id;
+        return (
+          <button key={t.id} onClick={t.on} aria-label={t.label} style={{ position: 'relative', border: 0, background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: '5px', padding: '8px 2px', color: on ? 'var(--primary-700)' : 'var(--ink-400)', fontFamily: 'var(--font-sans)', minHeight: '56px' }}>
+            <span style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Lucide name={t.icon} size={20} stroke={on ? 2.4 : 2} color={on ? 'var(--primary-700)' : 'var(--ink-400)'} />
+              {t.badge > 0 && <span style={{ position: 'absolute', top: '-6px', right: '-7px', minWidth: '16px', height: '16px', padding: '0 4px', borderRadius: '999px', background: 'var(--secondary-600)', color: '#fff', fontSize: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 2px var(--surface-0)' }}>{t.badge}</span>}
+            </span>
+            <span style={{ fontSize: '11px', fontWeight: on ? 700 : 500, letterSpacing: '-.02em', whiteSpace: 'nowrap' }}>{t.label}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 function App() {
   const [view, setView] = React.useState('home');   // home|srp|store|product|checkout|tracking|account|auth
   const [current, setCurrent] = React.useState(null);
@@ -13,7 +38,17 @@ function App() {
   const [acctSection, setAcctSection] = React.useState('ordini');
   const [authMode, setAuthMode] = React.useState('login');
   const [collection, setCollection] = React.useState('novita');
+  const [lastRemoved, setLastRemoved] = React.useState(null);
   const toastTimer = React.useRef(null);
+  const [online, setOnline] = React.useState(() => (typeof navigator !== 'undefined' ? navigator.onLine !== false : true));
+  React.useEffect(() => {
+    const up = () => setOnline(true); const down = () => setOnline(false);
+    window.addEventListener('online', up); window.addEventListener('offline', down);
+    return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); };
+  }, []);
+  const [zone, setZone] = React.useState(() => { try { return localStorage.getItem('mc-zone') || ''; } catch (e) { return ''; } });
+  const [zoneOpen, setZoneOpen] = React.useState(() => { try { return !localStorage.getItem('mc-zone'); } catch (e) { return true; } });
+  function saveZone(cap) { setZone(cap); try { localStorage.setItem('mc-zone', cap); } catch (e) {} setZoneOpen(false); showToast('Consegna a ' + cap + ' · Piacenza'); }
 
   const all = window.MC_PRODUCTS;
   const stores = window.MC_STORES;
@@ -31,7 +66,32 @@ function App() {
     showToast(`${p.name.length > 28 ? p.name.slice(0, 28) + '…' : p.name} aggiunto`);
   }
   function changeQty(id, d) { setCart((c) => c.map((it) => it.id === id ? { ...it, qty: Math.max(1, it.qty + d) } : it)); }
-  function removeItem(id) { setCart((c) => c.filter((it) => it.id !== id)); }
+  function removeItem(id) {
+    const it = cart.find((x) => x.id === id);
+    if (it) setLastRemoved(it);
+    setCart((c) => c.filter((x) => x.id !== id));
+    setToast({ text: it ? `${it.name.length > 24 ? it.name.slice(0, 24) + '…' : it.name} rimosso` : 'Articolo rimosso', undo: true });
+    clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), 4200);
+  }
+  function undoRemove() {
+    if (!lastRemoved) return;
+    setCart((c) => c.some((x) => x.id === lastRemoved.id) ? c : [...c, lastRemoved]);
+    setLastRemoved(null); setToast(null);
+  }
+  function reorder(o) {
+    const lines = o.lines || o.items;
+    setCart((c) => {
+      const next = [...c];
+      lines.forEach((l) => {
+        const p = window.MC_PRODUCTS.find((x) => x.id === l.id); if (!p) return;
+        const ex = next.find((it) => it.id === p.id);
+        const q = l.q || l.qty || 1;
+        if (ex) ex.qty += q; else next.push({ id: p.id, name: p.name, store: p.store, img: imgUrl(p.kw, p.galleryLocks[0]), finalPrice: finalPrice(p), qty: q });
+      });
+      return next;
+    });
+    showToast('Articoli riaggiunti al carrello'); setDrawer(true);
+  }
 
   function openProduct(p) { setCurrent(p); setView('product'); top(); }
   function openStore(s) { if (!s) return; setStore(s); setView('store'); top(); }
@@ -54,18 +114,31 @@ function App() {
   }
   function afterOrder() { setCart([]); setOrder(null); goHome(); }
 
+  React.useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('store');
+    if (!q) return;
+    const s = window.MC_STORES.find((x) => x.id === q || x.name === q);
+    if (s) { setStore(s); setView('store'); }
+  }, []);
+
   const showFooter = view === 'home' || view === 'srp' || view === 'collection' || view === 'near' || view === 'lists' || view === 'events';
   const dark = view !== 'auth';
 
   return (
     <>
+      {!online && (
+        <div role="alert" style={{ position: 'sticky', top: 0, zIndex: 'var(--z-banner, 200)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--ink-900)', color: '#fff', fontSize: '13px', fontWeight: 600, padding: '8px 14px' }}>
+          <Lucide name="wifi-off" size={15} color="var(--accent-400)" /> Sei offline — controlla la connessione. Il carrello è salvato.
+        </div>
+      )}
       {dark && <Navbar cartCount={cartCount} onCart={() => setDrawer(true)} onHome={goHome}
         activeCat={cat} onCat={(c) => goSrp(c)} query={query} onQuery={setQuery} onSubmitSearch={submitSearch}
         onAccount={() => goAccount('ordini')} onFav={() => goAccount('preferiti')} onNotif={() => goAccount('notifiche')}
-        onCollection={goCollection} onNear={() => goView('near')} onLists={() => goView('lists')} onEvents={() => goView('events')} />}
+        onCollection={goCollection} onNear={() => goView('near')} onLists={() => goView('lists')} onEvents={() => goView('events')}
+        onPickProduct={openProduct} onStorePick={openStore} />}
 
       <main style={{ minHeight: '70vh', background: 'var(--surface-50)' }}>
-        {view === 'home' && <Home products={all} stores={stores} onOpen={openProduct} onAdd={addToCart} onStore={openStore} onExplore={() => goSrp(null)} />}
+        {view === 'home' && <Home products={all} stores={stores} orders={window.MC_ORDERS} onOpen={openProduct} onAdd={addToCart} onStore={openStore} onExplore={() => goSrp(null)} onReorder={reorder} onOpenOrder={openOrder} />}
         {view === 'srp' && <SearchResults allProducts={all} query={committedQuery} cat={cat} onOpen={openProduct} onAdd={addToCart} onStore={openStore} onClearNav={goHome} />}
         {view === 'collection' && <CollectionPage slug={collection} products={all} onOpen={openProduct} onAdd={addToCart} onStore={openStore} onHome={goHome} />}
         {view === 'near' && <NearPage stores={stores} onStore={openStore} onHome={goHome} />}
@@ -74,16 +147,21 @@ function App() {
         {view === 'store' && store && <StorePage store={store} products={all} onBack={goHome} onOpen={openProduct} onAdd={addToCart} />}
         {view === 'product' && current && <ProductPage product={current} onBack={goHome} onAdd={addToCart} onOpen={openProduct} onStore={openStore} />}
         {view === 'checkout' && <CheckoutPage items={cart} onBack={() => setDrawer(true)} onPlace={placeOrder} />}
-        {view === 'tracking' && order && <OrderTracking order={order} onContinue={afterOrder} onHome={afterOrder} />}
+        {view === 'tracking' && order && <OrderTracking order={order} onContinue={afterOrder} onHome={afterOrder} onReorder={() => { reorder(order); setDrawer(true); }} />}
         {view === 'account' && <AccountPage section={acctSection} onSection={setAcctSection} products={all} onOpen={openProduct} onAdd={addToCart} onStore={openStore} onOpenOrder={openOrder} />}
         {view === 'auth' && <AuthPage mode={authMode} onAuth={goHome} onBack={goHome} onSwitch={setAuthMode} />}
         {showFooter && <Footer onAuth={() => setView('auth')} />}
       </main>
 
-      <CartDrawer open={drawer} items={cart} onClose={() => setDrawer(false)}
-        onQty={changeQty} onRemove={removeItem} onCheckout={goCheckout} onContinue={() => { setDrawer(false); goSrp(null); }} />
+      <CartDrawer open={drawer} items={cart} products={all} onClose={() => setDrawer(false)}
+        onQty={changeQty} onRemove={removeItem} onAdd={addToCart} onCheckout={goCheckout} onContinue={() => { setDrawer(false); goSrp(null); }} />
 
-      <Toast toast={toast} onUndo={null} />
+      {dark && view !== 'checkout' && <MobileTabBar active={view} cartCount={cartCount}
+        onHome={goHome} onSearch={() => goView('srp')} onLists={() => goView('lists')}
+        onCart={() => setDrawer(true)} onAccount={() => goAccount('ordini')} />}
+
+      <Toast toast={toast} onUndo={toast && toast.undo ? undoRemove : null} />
+      <ZoneOnboarding open={zoneOpen} current={zone} onClose={() => setZoneOpen(false)} onSave={saveZone} />
     </>
   );
 }

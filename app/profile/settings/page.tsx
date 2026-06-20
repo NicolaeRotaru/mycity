@@ -297,7 +297,7 @@ export default function SettingsPage() {
                   onClick={() => setTab(t.id)}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-left text-sm border-l-4 transition-colors ${
                     tab === t.id
-                      ? 'bg-primary-50 border-indigo-600 text-primary-800 font-bold'
+                      ? 'bg-primary-50 border-primary-600 text-primary-800 font-bold'
                       : 'border-transparent text-ink-700 hover:bg-cream-50'
                   }`}
                 >

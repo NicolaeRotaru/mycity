@@ -48,7 +48,7 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
       <div className={
         isLight
           ? 'bg-olive-50 border border-olive-200 text-olive-700 rounded-lg p-4 text-sm font-medium'
-          : 'bg-olive-500/20 border border-olive-400/40 text-emerald-200 rounded-lg p-3 text-sm'
+          : 'bg-olive-500/20 border border-olive-400/40 text-olive-100 rounded-lg p-3 text-sm'
       }>
         <span className="inline-flex items-center gap-1.5">
           <CheckCircle2 size={16} className="text-olive-600" aria-hidden /> {t('subscribedBox')}

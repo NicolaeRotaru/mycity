@@ -197,7 +197,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
   return (
     <form onSubmit={handleSubmit(submit)} className="space-y-5">
       {/* INFO HEADER */}
-      <div className="bg-gradient-to-r from-primary-600 via-purple-600 to-pink-600 text-white rounded-2xl p-6">
+      <div className="bg-gradient-to-r from-primary-600 via-primary-700 to-secondary-600 text-white rounded-2xl p-6">
         <h1 className="text-2xl md:text-3xl font-extrabold mb-1 flex items-center gap-2">
           <Store size={28} aria-hidden />
           Diventa venditore business
@@ -391,7 +391,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       <button
         type="submit"
         disabled={isLoading || uploadingLogo}
-        className="w-full bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-base shadow-lg transition-all"
+        className="w-full bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-50 text-white px-6 py-4 rounded-xl font-bold text-base shadow-lg transition-all"
       >
         {isLoading ? (
           'Invio in corso…'

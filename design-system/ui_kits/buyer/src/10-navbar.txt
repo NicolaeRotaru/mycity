@@ -1,18 +1,145 @@
 // ===== Navbar (promo ticker + terracotta bar + category bar) =====
+const MC_RECENT = [];
+function SearchBox({ query, onQuery, onSubmitSearch, onPickProduct, onStore }) {
+  const [focus, setFocus] = React.useState(false);
+  const q = (query || '').trim().toLowerCase();
+  const prods = q ? window.MC_PRODUCTS.filter((p) => p.name.toLowerCase().includes(q) || p.store.toLowerCase().includes(q) || (p.tags || []).join(' ').toLowerCase().includes(q)).slice(0, 5) : [];
+  const stores = q ? window.MC_STORES.filter((s) => s.name.toLowerCase().includes(q)).slice(0, 2) : [];
+  const popular = ['Coppa Piacentina', 'Gutturnio', 'Pisarei', 'Grana Padano'];
+  const open = focus && (q.length > 0 || MC_RECENT.length > 0);
+  function go(term) { onQuery(term); MC_RECENT.unshift(term); MC_RECENT.splice(4); setFocus(false); requestAnimationFrame(() => onSubmitSearch && onSubmitSearch()); }
+  function pick(p) { setFocus(false); onPickProduct && onPickProduct(p); }
+  return (
+    <div style={{ flex: 1, maxWidth: '560px', position: 'relative' }}>
+      <form onSubmit={(e) => { e.preventDefault(); if (q) go(query); }}>
+        <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', display: 'inline-flex', pointerEvents: 'none', zIndex: 2 }}><Lucide name="search" size={18} color="var(--ink-400)" /></span>
+        <input value={query} onChange={(e) => onQuery(e.target.value)} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 160)} placeholder="Cerca prodotti, negozi a Piacenza…"
+          style={{ width: '100%', boxSizing: 'border-box', border: 0, borderRadius: open ? '22px 22px 0 0' : 'var(--radius-full)', padding: '11px 16px 11px 42px', fontSize: '15px', fontFamily: 'var(--font-sans)', background: '#fff', color: 'var(--ink-900)', outline: 'none' }} />
+      </form>
+      {open && (
+        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: '#fff', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)', boxShadow: 'var(--shadow-warm-xl)', overflow: 'hidden', zIndex: 'var(--z-dropdown)', maxHeight: '420px', overflowY: 'auto' }}>
+          {q.length === 0 && MC_RECENT.length > 0 && (
+            <div style={{ padding: '8px 0' }}>
+              <p style={dropLabel}>Ricerche recenti</p>
+              {MC_RECENT.map((r, i) => <button key={i} onMouseDown={(e) => { e.preventDefault(); go(r); }} style={dropRow}><Lucide name="clock" size={15} color="var(--ink-400)" /> <span style={{ color: 'var(--ink-800)' }}>{r}</span></button>)}
+            </div>
+          )}
+          {q.length === 0 && (
+            <div style={{ padding: '8px 0', borderTop: MC_RECENT.length ? '1px solid var(--cream-200)' : 'none' }}>
+              <p style={dropLabel}>Di tendenza</p>
+              {popular.map((r) => <button key={r} onMouseDown={(e) => { e.preventDefault(); go(r); }} style={dropRow}><Lucide name="trending-up" size={15} color="var(--primary-600)" /> <span style={{ color: 'var(--ink-800)' }}>{r}</span></button>)}
+            </div>
+          )}
+          {stores.length > 0 && <div style={{ padding: '8px 0' }}><p style={dropLabel}>Negozi</p>
+            {stores.map((s) => <button key={s.id} onMouseDown={(e) => { e.preventDefault(); setFocus(false); onStore && onStore(s); }} style={dropRow}><span style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontSize: '10px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{(s.name.match(/\b\w/g) || []).slice(0, 2).join('').toUpperCase()}</span> <span style={{ color: 'var(--ink-900)', fontWeight: 600 }}>{s.name}</span><Lucide name="store" size={14} color="var(--ink-300)" style={{ marginLeft: 'auto' }} /></button>)}
+          </div>}
+          {prods.length > 0 && <div style={{ padding: '8px 0', borderTop: stores.length ? '1px solid var(--cream-200)' : 'none' }}><p style={dropLabel}>Prodotti</p>
+            {prods.map((p) => <button key={p.id} onMouseDown={(e) => { e.preventDefault(); pick(p); }} style={dropRow}><img src={imgUrl(p.kw, p.galleryLocks[0])} alt="" style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-sm)', objectFit: 'cover', flexShrink: 0 }} /> <span style={{ minWidth: 0 }}><span style={{ display: 'block', color: 'var(--ink-900)', fontWeight: 600, fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span><span style={{ display: 'block', color: 'var(--ink-400)', fontSize: '11px' }}>{p.store}</span></span><span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--ink-900)', fontSize: '13px' }}>{new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(finalPrice(p))}</span></button>)}
+          </div>}
+          {q.length > 0 && <button onMouseDown={(e) => { e.preventDefault(); go(query); }} style={{ ...dropRow, borderTop: '1px solid var(--cream-200)', color: 'var(--primary-700)', fontWeight: 700 }}><Lucide name="search" size={15} color="var(--primary-700)" /> Cerca “{query}”</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+const dropLabel = { margin: '4px 16px 4px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-400)' };
+const dropRow = { display: 'flex', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', padding: '9px 16px', fontFamily: 'var(--font-sans)', fontSize: '14px' };
+
 function PromoTicker() {
   const items = [
     { icon: 'bike', t: 'Consegna in 24–48h dai negozi di Piacenza' },
     { icon: 'banknote', t: 'Paghi alla consegna — nessuna carta' },
     { icon: 'gift', t: '€5 di sconto al primo ordine' },
     { icon: 'badge-check', t: 'Solo commercianti locali verificati' },
+    { icon: 'leaf', t: 'Prodotti freschi del territorio piacentino' },
+    { icon: 'clock', t: 'Ordini entro le 12 consegnati in giornata' },
   ];
   const run = [...items, ...items];
   return (
     <div style={{ background: 'var(--ink-900)', color: 'var(--cream-100)', fontSize: '12.5px', fontWeight: 500, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-      <div style={{ display: 'inline-flex', gap: '40px', padding: '7px 0', animation: 'mc-marquee 32s linear infinite', willChange: 'transform' }}>
+      <div style={{ display: 'inline-flex', gap: '40px', padding: '7px 0', animation: 'mc-marquee 24s linear infinite', willChange: 'transform' }}>
         {run.map((it, i) => <span key={i} style={{ display: 'inline-flex', gap: '7px', alignItems: 'center' }}><Lucide name={it.icon} size={14} color="var(--accent-300)" /> {it.t}</span>)}
       </div>
     </div>
+  );
+}
+
+function CatMenu({ activeCat, onClose, onCat, onCollection, onNear, onLists, onEvents }) {
+  const pick = (fn) => () => { onClose(); fn(); };
+  const discover = [
+    { icon: 'store', label: 'I negozi', sub: 'Tutti i negozi locali', on: () => onNear() },
+    { icon: 'tag', label: 'Offerte', sub: 'Sconti della settimana', on: () => onCollection('promozioni') },
+    { icon: 'sparkles', label: 'Novità', sub: 'Appena arrivati', on: () => onCollection('novita') },
+    { icon: 'flame', label: 'Più venduti', sub: 'I preferiti a Piacenza', on: () => onCollection('piu-venduti') },
+    { icon: 'gift', label: 'Regali', sub: 'Idee da regalare', on: () => onCollection('regali') },
+    { icon: 'map-pin', label: 'Vicino a te', sub: 'Consegna in giornata', on: () => onNear() },
+    { icon: 'list', label: 'Le mie liste', sub: 'La spesa di sempre', on: () => onLists() },
+    { icon: 'calendar-days', label: 'Eventi', sub: 'Mercati e sagre', on: () => onEvents() },
+  ];
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-dropdown)', background: 'rgba(28,26,24,.18)' }} />
+      <div className="mc-catmenu" style={{ position: 'absolute', top: '100%', left: '20px', right: '20px', zIndex: 'calc(var(--z-dropdown) + 1)', background: 'var(--surface-0)', color: 'var(--ink-900)', borderRadius: '0 0 var(--radius-xl) var(--radius-xl)', boxShadow: 'var(--shadow-warm-xl)', overflow: 'hidden', animation: 'mc-pop-in var(--dur-fast) var(--ease-out-quint)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '0.85fr 1.4fr' }}>
+          <div style={{ padding: '18px 20px', background: 'var(--cream-100)', borderRight: '1px solid var(--cream-200)' }}>
+            <p style={menuLabel}>Categorie</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '10px' }}>
+              {window.MC_CATEGORIES.map((c) => (
+                <button key={c.slug} onClick={pick(() => onCat(c.slug))} style={menuRow(activeCat === c.slug)}>
+                  <span style={menuChip}><Lucide name={c.icon} size={17} color="var(--primary-700)" /></span>
+                  <span style={{ fontWeight: 600 }}>{c.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ padding: '18px 20px' }}>
+            <p style={menuLabel}>Scopri</p>
+            <div className="mc-catmenu-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginTop: '10px' }}>
+              {discover.map((d) => (
+                <button key={d.label} onClick={pick(d.on)} style={menuRow(false)}>
+                  <span style={menuChip}><Lucide name={d.icon} size={17} color="var(--primary-700)" /></span>
+                  <span style={{ minWidth: 0 }}><span style={{ display: 'block', fontWeight: 600 }}>{d.label}</span><span style={{ display: 'block', fontSize: '11.5px', color: 'var(--ink-400)' }}>{d.sub}</span></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </React.Fragment>
+  );
+}
+const menuLabel = { margin: 0, fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ink-400)' };
+const menuChip = { width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'var(--primary-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
+function menuRow(on) { return { display: 'flex', alignItems: 'center', gap: '10px', width: '100%', textAlign: 'left', border: 0, background: on ? 'var(--primary-100)' : 'transparent', cursor: 'pointer', padding: '8px 10px', borderRadius: 'var(--radius-md)', fontFamily: 'var(--font-sans)', fontSize: '14px', color: 'var(--ink-800)' }; }
+
+function NotifPopover({ onClose, onSeeAll }) {
+  const items = window.MC_NOTIFICATIONS || [];
+  const tone = { primary: 'var(--primary-600)', secondary: 'var(--secondary-600)', accent: 'var(--accent-600)', olive: 'var(--olive-600)' };
+  const unread = items.filter((n) => n.unread).length;
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-dropdown)', background: 'transparent' }} />
+      <div className="mc-notif-pop" style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, width: '344px', maxWidth: '92vw', background: 'var(--surface-0)', color: 'var(--ink-900)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-warm-xl)', zIndex: 'calc(var(--z-dropdown) + 1)', overflow: 'hidden', animation: 'mc-pop-in var(--dur-fast) var(--ease-out-quint)' }}>
+        <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: '16px', color: 'var(--ink-900)' }}>Notifiche</span>
+          {unread > 0 && <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary-700)' }}>{unread} non lette</span>}
+        </div>
+        <div style={{ maxHeight: '360px', overflowY: 'auto' }}>
+          {items.map((n) => (
+            <button key={n.id} onClick={onSeeAll} style={{ display: 'flex', gap: '11px', width: '100%', textAlign: 'left', border: 0, borderBottom: '1px solid var(--cream-100)', background: n.unread ? 'var(--primary-50)' : 'transparent', cursor: 'pointer', padding: '12px 16px', fontFamily: 'var(--font-sans)' }}>
+              <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--cream-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={n.icon} size={16} color={tone[n.tone] || 'var(--primary-600)'} /></span>
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ display: 'block', fontWeight: 600, fontSize: '13.5px', color: 'var(--ink-900)' }}>{n.title}</span>
+                <span style={{ display: 'block', fontSize: '12.5px', color: 'var(--ink-500)', lineHeight: 1.4 }}>{n.body}</span>
+                <span style={{ display: 'block', fontSize: '11px', color: 'var(--ink-400)', marginTop: '2px' }}>{n.when}</span>
+              </span>
+              {n.unread && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)', flexShrink: 0, marginTop: '6px' }} />}
+            </button>
+          ))}
+        </div>
+        <button onClick={onSeeAll} style={{ width: '100%', border: 0, background: 'var(--cream-50)', cursor: 'pointer', padding: '13px', fontWeight: 700, fontSize: '13px', color: 'var(--primary-700)', fontFamily: 'var(--font-sans)' }}>Vedi tutte le notifiche</button>
+      </div>
+    </React.Fragment>
   );
 }
 
@@ -26,53 +153,69 @@ function NavIcon({ name, badge, onClick, title }) {
   );
 }
 
-function Navbar({ cartCount, onCart, onHome, activeCat, onCat, query, onQuery, onSubmitSearch, onAccount, onFav, onNotif, onCollection, onNear, onLists, onEvents, notifCount = 2 }) {
+function Navbar({ cartCount, onCart, onHome, activeCat, onCat, query, onQuery, onSubmitSearch, onAccount, onFav, onNotif, onCollection, onNear, onLists, onEvents, onPickProduct, onStorePick, notifCount = 2 }) {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
   return (
     <header style={{ position: 'sticky', top: 0, zIndex: 'var(--z-sticky)', boxShadow: 'var(--shadow-warm-sm)' }}>
       <PromoTicker />
       <div style={{ background: 'var(--primary-700)', color: '#fff' }}>
-        <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <a onClick={onHome} style={{ cursor: 'pointer', fontFamily: 'var(--font-serif)', fontSize: '24px', fontWeight: 800, letterSpacing: '-0.01em', whiteSpace: 'nowrap', lineHeight: 1 }}>
+        <div className="mc-topbar" style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          <a onClick={onHome} className="mc-logo" style={{ cursor: 'pointer', fontFamily: 'var(--font-serif)', fontSize: '24px', fontWeight: 800, letterSpacing: '-0.01em', whiteSpace: 'nowrap', lineHeight: 1 }}>
             <span style={{ color: 'var(--accent-300)' }}>My</span><span style={{ color: '#fff' }}>City</span>
           </a>
           <span className="mc-loc" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,.12)', padding: '7px 12px', borderRadius: 'var(--radius-full)', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap' }}>
             <Lucide name="map-pin" size={15} /> Piacenza · 29121
           </span>
-          <form onSubmit={(e) => { e.preventDefault(); onSubmitSearch && onSubmitSearch(); }} style={{ flex: 1, maxWidth: '560px', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', display: 'inline-flex', pointerEvents: 'none' }}><Lucide name="search" size={18} color="var(--ink-400)" /></span>
-            <input value={query} onChange={(e) => onQuery(e.target.value)} placeholder="Cerca prodotti, negozi a Piacenza…"
-              style={{ width: '100%', boxSizing: 'border-box', border: 0, borderRadius: 'var(--radius-full)', padding: '11px 16px 11px 42px', fontSize: '15px', fontFamily: 'var(--font-sans)', background: '#fff', color: 'var(--ink-900)', outline: 'none' }} />
-          </form>
-          <nav style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '2px' }}>
-            <NavIcon name="heart" title="Preferiti" badge={3} onClick={onFav} />
-            <NavIcon name="bell" title="Notifiche" badge={notifCount} onClick={onNotif} />
-            <button onClick={onCart} style={{ marginLeft: '6px', display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'var(--accent-500)', color: 'var(--ink-900)', border: 0, padding: '9px 16px', borderRadius: 'var(--radius-full)', fontWeight: 700, fontSize: '14px', fontFamily: 'var(--font-sans)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              <Lucide name="shopping-cart" size={17} stroke={2.4} /> Carrello
+          <div className="mc-searchwrap" style={{ flex: 1, display: 'flex', minWidth: '180px' }}>
+            <SearchBox query={query} onQuery={onQuery} onSubmitSearch={onSubmitSearch} onPickProduct={onPickProduct} onStore={onStorePick} />
+          </div>
+          <nav className="mc-navactions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '2px', position: 'relative' }}>
+            <span className="mc-navdesktop" style={{ display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+              <NavIcon name="heart" title="Preferiti" badge={3} onClick={onFav} />
+              <NavIcon name="bell" title="Notifiche" badge={notifCount} onClick={() => setNotifOpen((o) => !o)} />
+            </span>
+            <button onClick={onCart} className="mc-cartbtn" style={{ marginLeft: '6px', display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'var(--accent-500)', color: 'var(--ink-900)', border: 0, padding: '9px 16px', borderRadius: 'var(--radius-full)', fontWeight: 700, fontSize: '14px', fontFamily: 'var(--font-sans)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              <Lucide name="shopping-cart" size={17} stroke={2.4} /> <span className="mc-cartlabel">Carrello</span>
               {cartCount > 0 && <span style={{ background: 'var(--ink-900)', color: 'var(--accent-400)', fontSize: '11px', fontWeight: 700, borderRadius: 'var(--radius-full)', minWidth: '18px', height: '18px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{cartCount}</span>}
             </button>
-            <button onClick={onAccount} title="Account" aria-label="Account" style={{ marginLeft: '8px', width: '36px', height: '36px', borderRadius: 'var(--radius-full)', background: 'var(--cream-200)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0, border: 0, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{window.MC_USER ? window.MC_USER.initials : 'L'}</button>
+            <button onClick={onAccount} title="Account" aria-label="Account" className="mc-accountbtn" style={{ marginLeft: '8px', width: '36px', height: '36px', borderRadius: 'var(--radius-full)', background: 'var(--cream-200)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, flexShrink: 0, border: 0, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{window.MC_USER ? window.MC_USER.initials : 'L'}</button>
+            {notifOpen && <NotifPopover onClose={() => setNotifOpen(false)} onSeeAll={() => { setNotifOpen(false); onNotif(); }} />}
           </nav>
         </div>
-        <div style={{ borderTop: '1px solid rgba(255,255,255,.14)' }}>
-          <div className="mc-catbar" style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '0 20px', display: 'flex', gap: '2px', overflowX: 'auto' }}>
-            <button onClick={() => onCat(null)} style={catBtn(!activeCat)}><Lucide name="layout-grid" size={16} stroke={2.2} color={!activeCat ? 'var(--accent-300)' : 'rgba(255,255,255,.88)'} /> Tutto</button>
-            {window.MC_CATEGORIES.map((c) => {
+        <div className="mc-mobilebar" style={{ display: 'none', alignItems: 'center', gap: '10px', padding: '0 14px 10px' }}>
+          <button onClick={onNear} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,.14)', color: '#fff', border: 0, padding: '8px 12px', borderRadius: 'var(--radius-full)', fontSize: '13px', fontWeight: 600, fontFamily: 'var(--font-sans)', cursor: 'pointer', minHeight: '38px' }}>
+            <Lucide name="map-pin" size={15} color="var(--accent-300)" /> Piacenza · 29121 <Lucide name="chevron-down" size={14} color="rgba(255,255,255,.7)" />
+          </button>
+          <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: '2px', position: 'relative' }}>
+            <NavIcon name="heart" title="Preferiti" badge={3} onClick={onFav} />
+            <NavIcon name="bell" title="Notifiche" badge={notifCount} onClick={() => setNotifOpen((o) => !o)} />
+            {notifOpen && <NotifPopover onClose={() => setNotifOpen(false)} onSeeAll={() => { setNotifOpen(false); onNotif(); }} />}
+          </div>
+        </div>
+        <div className="mc-catwrap" style={{ borderTop: '1px solid rgba(255,255,255,.14)', position: 'relative' }}>
+          <div className="mc-catbar" style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '0 20px', display: 'flex', gap: '2px', overflowX: 'auto', alignItems: 'center' }}>
+            <button onClick={() => setMenuOpen((o) => !o)} aria-expanded={menuOpen} aria-label="Tutte le categorie" style={{ ...catBtn(menuOpen), fontWeight: 700 }}>
+              <Lucide name="layout-grid" size={16} stroke={2.2} color={menuOpen ? 'var(--accent-300)' : 'rgba(255,255,255,.88)'} /> Tutto
+              <Lucide name="chevron-down" size={14} color="rgba(255,255,255,.7)" style={{ transition: 'transform var(--dur-fast) var(--ease-out)', transform: menuOpen ? 'rotate(180deg)' : 'none' }} />
+            </button>
+            <span style={{ width: '1px', background: 'rgba(255,255,255,.18)', margin: '8px 6px', flexShrink: 0 }} />
+            <button onClick={() => { setMenuOpen(false); onNear(); }} style={catBtn(false)}><Lucide name="store" size={16} stroke={2.2} color="rgba(255,255,255,.88)" /> I negozi</button>
+            {window.MC_CATEGORIES.filter((c) => ['alimentari', 'gastronomia', 'cantina'].includes(c.slug)).map((c) => {
               const on = activeCat === c.slug;
               return (
                 <button key={c.slug} onClick={() => onCat(on ? null : c.slug)} style={catBtn(on)}>
-                  <Lucide name={c.icon} size={16} stroke={2.2} color={on ? 'var(--accent-300)' : 'rgba(255,255,255,.88)'} /> {c.label}
+                  <Lucide name={c.icon} size={16} stroke={2.2} color={on ? 'var(--accent-300)' : 'rgba(255,255,255,.88)'} /> {c.label === 'Vini & Cantina' ? 'Vini' : c.label}
                 </button>
               );
             })}
-            <span style={{ width: '1px', background: 'rgba(255,255,255,.18)', margin: '8px 6px' }} />
             <button onClick={() => onCollection('promozioni')} style={catBtn(false)}><Lucide name="tag" size={16} stroke={2.2} color="rgba(255,255,255,.88)" /> Offerte</button>
-            <button onClick={() => onCollection('novita')} style={catBtn(false)}><Lucide name="sparkles" size={16} stroke={2.2} color="rgba(255,255,255,.88)" /> Novità</button>
             <button onClick={() => onCollection('piu-venduti')} style={catBtn(false)}><Lucide name="flame" size={16} stroke={2.2} color="rgba(255,255,255,.88)" /> Più venduti</button>
             <button onClick={() => onCollection('regali')} style={catBtn(false)}><Lucide name="gift" size={16} stroke={2.2} color="rgba(255,255,255,.88)" /> Regali</button>
             <button onClick={onNear} style={catBtn(false)}><Lucide name="map-pin" size={16} stroke={2.2} color="rgba(255,255,255,.88)" /> Vicino a te</button>
-            <button onClick={onLists} style={catBtn(false)}><Lucide name="list" size={16} stroke={2.2} color="rgba(255,255,255,.88)" /> Liste</button>
             <button onClick={onEvents} style={catBtn(false)}><Lucide name="calendar-days" size={16} stroke={2.2} color="rgba(255,255,255,.88)" /> Eventi</button>
           </div>
+          {menuOpen && <CatMenu activeCat={activeCat} onClose={() => setMenuOpen(false)} onCat={onCat} onCollection={onCollection} onNear={onNear} onLists={onLists} onEvents={onEvents} />}
         </div>
       </div>
     </header>

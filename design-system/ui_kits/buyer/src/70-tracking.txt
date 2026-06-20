@@ -9,8 +9,9 @@ const MC_FLOW = [
   { status: 'DELIVERED', label: 'Consegnato', icon: 'check-circle-2', sub: 'Consegnato — grazie!' },
 ];
 
-function OrderTracking({ order, onContinue, onHome }) {
+function OrderTracking({ order, onContinue, onHome, onReorder }) {
   const [step, setStep] = React.useState(0);
+  const [contact, setContact] = React.useState(null);
   React.useEffect(() => {
     if (step >= MC_FLOW.length - 1) return;
     const t = setTimeout(() => setStep((s) => Math.min(MC_FLOW.length - 1, s + 1)), step === 0 ? 2600 : 3400);
@@ -20,7 +21,13 @@ function OrderTracking({ order, onContinue, onHome }) {
   const store = storeBy(order.items[0].store) || {};
   const current = MC_FLOW[step];
   const delivered = current.status === 'DELIVERED';
-  const eta = delivered ? 'Consegnato' : (store.deliveryToday ? 'Oggi, entro le 19:30' : 'Domani, 24–48h');
+  const riderPhase = ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'].includes(current.status);
+  const enRoute = current.status === 'OUT_FOR_DELIVERY';
+  const riderMin = current.status === 'ASSIGNED' ? 14 : current.status === 'PICKED_UP' ? 8 : current.status === 'OUT_FOR_DELIVERY' ? 4 : 0;
+  const riderFrac = current.status === 'ASSIGNED' ? 0.06 : current.status === 'PICKED_UP' ? 0.42 : current.status === 'OUT_FOR_DELIVERY' ? 0.84 : 0;
+  const riderLeft = 18 + (78 - 18) * riderFrac;
+  const riderTop = 75 - (75 - 29) * riderFrac;
+  const eta = delivered ? 'Consegnato' : deliveryEta(store).label;
 
   return (
     <div style={{ maxWidth: '880px', margin: '0 auto', padding: '28px 20px' }}>
@@ -76,6 +83,35 @@ function OrderTracking({ order, onContinue, onHome }) {
 
         {/* summary */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {riderPhase && (
+            <Card variant="elevated" padding="none" style={{ overflow: 'hidden' }}>
+              <div aria-hidden style={{ position: 'relative', height: '150px', background: 'linear-gradient(135deg, var(--olive-50), var(--cream-100))', overflow: 'hidden' }}>
+                {/* schematic streets */}
+                <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(var(--cream-300) 1.5px, transparent 1.5px), linear-gradient(90deg, var(--cream-300) 1.5px, transparent 1.5px)', backgroundSize: '34px 34px', opacity: .7 }} />
+                <div style={{ position: 'absolute', left: '-5%', right: '-5%', top: '58%', height: '8px', background: 'var(--cream-400)', transform: 'rotate(-7deg)', borderRadius: '4px' }} />
+                <div style={{ position: 'absolute', left: '22%', top: '-10%', bottom: '-10%', width: '8px', background: 'var(--cream-400)', transform: 'rotate(9deg)', borderRadius: '4px' }} />
+                {/* route */}
+                <svg viewBox="0 0 320 150" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}><path d="M58 112 C 120 90, 150 70, 250 44" fill="none" stroke="var(--primary-500)" strokeWidth="3.5" strokeDasharray="7 7" strokeLinecap="round" /></svg>
+                {/* destination pin */}
+                <span style={{ position: 'absolute', left: 'calc(78% - 10px)', top: 'calc(29% - 10px)', width: '20px', height: '20px', borderRadius: '50%', background: 'var(--secondary-500)', border: '3px solid #fff', boxShadow: 'var(--shadow-sm)' }} />
+                {/* rider marker */}
+                <span style={{ position: 'absolute', left: `calc(${riderLeft}% - 17px)`, top: `calc(${riderTop}% - 17px)`, width: '34px', height: '34px', borderRadius: '50%', background: 'var(--primary-600)', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '3px solid #fff', boxShadow: 'var(--shadow-warm-md)', transition: 'left 1.2s var(--ease-out-quint), top 1.2s var(--ease-out-quint)' }}><Lucide name="bike" size={17} color="#fff" /></span>
+                <span style={{ position: 'absolute', top: '10px', left: '10px', display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,.92)', borderRadius: 'var(--radius-full)', padding: '4px 10px', fontSize: '12px', fontWeight: 700, color: 'var(--ink-900)' }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--olive-500)' }} /> {enRoute ? `Rider a ~${riderMin} min` : 'Rider assegnato'}
+                </span>
+              </div>
+              <div style={{ padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ width: '38px', height: '38px', borderRadius: '50%', background: 'var(--cream-200)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px', fontFamily: 'var(--font-sans)' }}>MR</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Marco · il tuo rider</p>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{enRoute ? `A ~${riderMin} min · verso ${order.address ? order.address.street : 'Via Roma 12'}` : 'Sta arrivando in negozio'}</p>
+                  </div>
+                  <button onClick={() => setContact({ kind: 'rider', name: 'Marco', sub: 'Il tuo rider', phone: '+39 0523 555 014' })} aria-label="Chiama il rider" style={{ width: '40px', height: '40px', flexShrink: 0, borderRadius: '50%', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', color: 'var(--primary-700)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="phone" size={17} color="var(--primary-700)" /></button>
+                </div>
+              </div>
+            </Card>
+          )}
           <Card variant="bordered" padding="lg">
             <h2 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>Riepilogo</h2>
             {order.items.map((it) => (
@@ -102,9 +138,33 @@ function OrderTracking({ order, onContinue, onHome }) {
               <Lucide name="map-pin" size={15} color="var(--primary-600)" /> Consegna in {order.address ? `${order.address.street}, ${order.address.city}` : 'Via Roma 12, Piacenza'}
             </div>
           </Card>
+          {delivered && onReorder
+            ? <Button variant="primary" size="lg" fullWidth icon="rotate-ccw" onClick={onReorder}>Ordina di nuovo</Button>
+            : null}
           <Button variant="secondary" fullWidth onClick={onContinue}>Continua lo shopping</Button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Button variant="ghost" fullWidth icon="message-circle" onClick={() => setContact({ kind: 'store', name: order.items[0].store, sub: 'Negozio verificato', phone: '+39 0523 320 188' })}>Contatta il negozio</Button>
+            <Button variant="ghost" fullWidth icon="life-buoy" onClick={() => setContact({ kind: 'help', name: 'Assistenza MyCity', sub: 'Tutti i giorni 8:00–22:00', phone: '800 152 152' })}>Serve aiuto?</Button>
+          </div>
         </div>
       </div>
+      {contact && (
+        <div onClick={() => setContact(null)} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', animation: 'mc-fade-in var(--dur-fast) ease-out' }}>
+          <div onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" style={{ width: '100%', maxWidth: '420px', background: 'var(--surface-0)', borderRadius: '20px 20px 0 0', padding: '20px 20px calc(20px + env(safe-area-inset-bottom, 0px))', boxShadow: 'var(--shadow-warm-xl)', animation: 'mc-slide-up var(--dur-medium) var(--ease-out-quint)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <span style={{ width: '44px', height: '44px', flexShrink: 0, borderRadius: '50%', background: 'var(--primary-100)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={contact.kind === 'rider' ? 'bike' : contact.kind === 'store' ? 'store' : 'life-buoy'} size={22} color="var(--primary-700)" /></span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{contact.name}</p>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-500)' }}>{contact.sub}</p>
+              </div>
+              <button onClick={() => setContact(null)} aria-label="Chiudi" style={{ border: 0, background: 'transparent', color: 'var(--ink-400)', cursor: 'pointer', display: 'inline-flex' }}><Lucide name="x" size={22} /></button>
+            </div>
+            <a href={`tel:${contact.phone.replace(/\s/g, '')}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'var(--primary-700)', color: '#fff', fontWeight: 700, fontSize: '15px', padding: '14px', borderRadius: 'var(--radius-full)', textDecoration: 'none', fontFamily: 'var(--font-sans)' }}><Lucide name="phone" size={17} color="#fff" /> Chiama {contact.phone}</a>
+            {contact.kind !== 'help' && <button onClick={() => setContact(null)} style={{ width: '100%', marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: 'transparent', color: 'var(--ink-700)', fontWeight: 600, fontSize: '14px', padding: '12px', borderRadius: 'var(--radius-full)', border: '1px solid var(--cream-300)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}><Lucide name="message-circle" size={16} color="var(--ink-600)" /> Invia un messaggio</button>}
+            <p style={{ margin: '12px 0 0', fontSize: '12px', color: 'var(--ink-400)', textAlign: 'center' }}>Numero dedicato a questo ordine · {order.id}</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

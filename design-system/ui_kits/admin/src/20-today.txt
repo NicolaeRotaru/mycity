@@ -75,11 +75,11 @@ function OrdersTable({ rows }) {
           {rows.map((o) => (
             <tr key={o.id} style={{ borderBottom: '1px solid var(--cream-200)' }}>
               <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--primary-700)', fontWeight: 600 }}>#{o.id}</td>
-              <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-800)' }}>{o.cust}</td>
-              <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{o.store}</td>
-              <td style={{ padding: '11px 16px' }}><OrderStatusBadge status={o.status} size="sm" /></td>
-              <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(o.total)}</td>
-              <td style={{ padding: '11px 16px', textAlign: 'right', fontSize: '12px', color: 'var(--ink-400)' }}>{o.when}</td>
+              <td data-label="Cliente" style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-800)' }}>{o.cust}</td>
+              <td data-label="Negozio" style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{o.store}</td>
+              <td data-label="Stato" style={{ padding: '11px 16px' }}><OrderStatusBadge status={o.status} size="sm" /></td>
+              <td data-label="Totale" style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(o.total)}</td>
+              <td data-label="Ora" style={{ padding: '11px 16px', textAlign: 'right', fontSize: '12px', color: 'var(--ink-400)' }}>{o.when}</td>
             </tr>
           ))}
         </tbody>

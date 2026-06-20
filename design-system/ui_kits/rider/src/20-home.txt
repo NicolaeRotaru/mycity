@@ -54,6 +54,24 @@ function Home({ online, onToggle, active, onOpenActive, onClaim }) {
       {/* available orders */}
       {online ? (
         <div style={{ margin: '0 16px' }}>
+          {window.RD_AVAILABLE.length >= 2 && (() => {
+            const batch = window.RD_AVAILABLE.slice(0, 2);
+            const sum = batch.reduce((t, o) => t + o.fee, 0);
+            return (
+              <button onClick={() => onClaim(batch[0])} style={{ width: '100%', textAlign: 'left', border: '1.5px solid var(--primary-300)', background: 'linear-gradient(135deg, var(--primary-50), var(--cream-50))', borderRadius: 'var(--radius-xl)', padding: '14px', cursor: 'pointer', fontFamily: 'var(--font-sans)', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <span style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--primary-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="layers" size={16} color="#fff" /></span>
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--ink-900)' }}>Giro intelligente · 2 consegne</span>
+                  <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, color: 'var(--primary-700)', background: 'var(--surface-0)', padding: '3px 8px', borderRadius: '999px' }}>+15% efficienza</span>
+                </div>
+                <p style={{ margin: '0 0 10px', fontSize: '12.5px', color: 'var(--ink-600)', lineHeight: 1.45 }}>Entrambi diretti in <strong>Centro</strong>, a pochi minuti l'uno dall'altro. Accettali insieme e fai un solo giro.</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--ink-500)' }}><Lucide name="navigation" size={13} color="var(--ink-400)" /> ~2,3 km totali</span>
+                  <span style={{ fontWeight: 800, color: 'var(--olive-700)', fontSize: '16px' }}>{fmt(sum)}</span>
+                </div>
+              </button>
+            );
+          })()}
           <SectionLabel>Ordini disponibili ({window.RD_AVAILABLE.length})</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {window.RD_AVAILABLE.map((o) => (

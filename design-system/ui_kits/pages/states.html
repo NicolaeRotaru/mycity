@@ -30,6 +30,14 @@
   .sk-line { height: 11px; border-radius: 6px; margin: 10px; background: linear-gradient(90deg, var(--cream-200) 0px, var(--cream-100) 200px, var(--cream-200) 400px); background-size: 1000px 100%; animation: mc-shimmer 2s linear infinite; }
   .sk-line.short { width: 50%; }
   .spinner { width: 44px; height: 44px; border: 4px solid var(--cream-300); border-top-color: var(--primary-600); border-radius: 50%; animation: mc-spin .8s linear infinite; margin: 0 auto 20px; }
+  html, body { overflow-x: hidden; }
+  @media (max-width: 640px) {
+    .stage { padding: 16px; }
+    .skeleton { max-width: 100%; }
+    .sk-row { grid-template-columns: repeat(2, 1fr); }
+    .big { font-size: 64px; }
+    .state h1 { font-size: 26px; }
+  }
 </style>
 </head>
 <body>

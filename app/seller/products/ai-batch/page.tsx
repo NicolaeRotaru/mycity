@@ -198,7 +198,7 @@ export default function CatalogAiBatchPage() {
                 {isModerate ? (
                   r.flagged
                     ? <span className="inline-flex items-center gap-1.5 text-rose-600"><AlertTriangle size={14} aria-hidden /> {r.reason ?? 'Da rivedere'}</span>
-                    : <span className="inline-flex items-center gap-1.5 text-emerald-600"><Check size={14} strokeWidth={2.4} aria-hidden /> ok</span>
+                    : <span className="inline-flex items-center gap-1.5 text-olive-600"><Check size={14} strokeWidth={2.4} aria-hidden /> ok</span>
                 ) : (
                   <span>{r.summary ?? (r.patch && Object.keys(r.patch).length ? 'Modifiche proposte' : 'Nessuna modifica')}</span>
                 )}
@@ -218,7 +218,7 @@ export default function CatalogAiBatchPage() {
             </button>
           )}
           {job.status === 'applied' && (
-            <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
+            <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-olive-600">
               <Check size={16} strokeWidth={2.6} aria-hidden /> Applicato.
             </p>
           )}

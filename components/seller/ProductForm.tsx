@@ -962,7 +962,7 @@ export default function ProductForm({
               <button
                 type="submit"
                 disabled={busy}
-                className="flex-1 inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-700 hover:to-purple-700 disabled:opacity-40 text-white py-3 rounded-lg font-bold shadow"
+                className="flex-1 inline-flex items-center justify-center gap-2 bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 disabled:opacity-40 text-white py-3 rounded-lg font-bold shadow"
               >
                 <Save size={18} aria-hidden /> {submitting ? 'Salvataggio…' : 'Salva modifiche'}
               </button>

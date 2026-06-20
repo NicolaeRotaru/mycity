@@ -64,60 +64,114 @@ const SC_NAV = [
   ] },
 ];
 
+const SC_NOTIFS = [
+  { id: 'sn1', icon: 'receipt', tone: 'primary', title: 'Nuovo ordine #PC-2461', body: '2 articoli · 18,40 € · paga alla consegna', when: '3 min fa', unread: true, cta: 'Vedi ordine', go: 'orders' },
+  { id: 'sn2', icon: 'star', tone: 'accent', title: 'Nuova recensione 5★', body: '"Coppa eccezionale, consegna puntuale"', when: '1 ora fa', unread: true, cta: 'Rispondi', go: 'reviews' },
+  { id: 'sn3', icon: 'wallet', tone: 'olive', title: 'Pagamento accreditato', body: 'Bonifico di 342,10 € in arrivo', when: 'Ieri', unread: false, cta: 'Apri guadagni', go: 'earnings' },
+  { id: 'sn4', icon: 'package', tone: 'secondary', title: 'Scorta in esaurimento', body: 'Gutturnio DOC · 3 pezzi rimasti', when: 'Ieri', unread: false, cta: 'Rifornisci', go: 'products' },
+];
+function SellerNotifPopover({ onClose, onNav }) {
+  const items = SC_NOTIFS;
+  const tone = { primary: 'var(--primary-600)', secondary: 'var(--secondary-600)', accent: 'var(--accent-600)', olive: 'var(--olive-600)' };
+  const unread = items.filter((n) => n.unread).length;
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-dropdown)', background: 'transparent' }} />
+      <div className="mc-notif-pop" style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, width: '330px', maxWidth: '88vw', background: 'var(--surface-0)', color: 'var(--ink-900)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-warm-xl)', border: '1px solid var(--cream-200)', zIndex: 'calc(var(--z-dropdown) + 1)', overflow: 'hidden' }}>
+        <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: '16px' }}>Notifiche</span>
+          {unread > 0 && <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary-700)' }}>{unread} non lette</span>}
+        </div>
+        <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
+          {items.map((n) => (
+            <div key={n.id} style={{ display: 'flex', gap: '11px', padding: '12px 16px', borderBottom: '1px solid var(--cream-100)', background: n.unread ? 'var(--cream-50)' : 'transparent' }}>
+              <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--cream-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={n.icon} size={16} color={tone[n.tone] || 'var(--primary-600)'} /></span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: '13.5px', color: 'var(--ink-900)' }}>{n.title}</p>
+                <p style={{ margin: '1px 0 0', fontSize: '12.5px', color: 'var(--ink-500)', lineHeight: 1.4 }}>{n.body}</p>
+                <p style={{ margin: '3px 0 0', fontSize: '11px', color: 'var(--ink-400)' }}>{n.when}</p>
+                {n.cta && <button onClick={() => { onClose && onClose(); onNav && onNav(n.go); }} style={{ marginTop: '7px', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', color: 'var(--primary-700)', fontWeight: 700, fontSize: '12px', padding: '5px 11px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{n.cta}</button>}
+              </div>
+              {n.unread && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)', flexShrink: 0, marginTop: '5px' }} />}
+            </div>
+          ))}
+        </div>
+        <button onClick={() => { onClose && onClose(); onNav && onNav('reviews'); }} style={{ width: '100%', border: 0, borderTop: '1px solid var(--cream-200)', background: 'var(--cream-50)', color: 'var(--ink-700)', fontWeight: 600, fontSize: '13px', padding: '11px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>Centro notifiche</button>
+      </div>
+    </React.Fragment>
+  );
+}
 function SellerShell({ view, onNav, onNewProduct, onCopilot, children }) {
   const store = window.SC_STORE;
   const todo = window.SC_ORDERS.filter((o) => ['NEW', 'ACCEPTED', 'READY'].includes(o.status)).length;
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const [navOpen, setNavOpen] = React.useState(false);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '248px 1fr', minHeight: '100vh', background: 'var(--cream-100)' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `${collapsed ? '76px' : '248px'} 1fr`, minHeight: '100vh', background: 'var(--cream-100)', transition: 'grid-template-columns var(--dur-base) var(--ease-out)' }}>
       {/* sidebar */}
-      <aside style={{ background: 'var(--ink-900)', color: '#fff', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
-        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
-          <div style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.01em' }}>
-            <span style={{ color: 'var(--accent-300)' }}>My</span><span style={{ color: '#fff' }}>City</span>
-            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 700, color: 'var(--ink-300)', textTransform: 'uppercase', letterSpacing: '0.08em', marginLeft: '6px' }}>Seller</span>
-          </div>
-        </div>
-        {/* Copilot — destinazione di primo piano */}
-        <div style={{ padding: '12px 12px 4px', flexShrink: 0 }}>
-          <button onClick={onCopilot} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '10px', border: 0, borderRadius: 'var(--radius-lg)', padding: '12px 14px', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', color: '#fff', background: view === 'copilot' ? 'linear-gradient(135deg, var(--primary-600), var(--secondary-600))' : 'linear-gradient(135deg, var(--primary-700), var(--secondary-700))', boxShadow: view === 'copilot' ? '0 0 0 2px rgba(244,188,83,.5)' : 'var(--shadow-warm)' }}>
-            <span style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="sparkles" size={18} color="#fff" /></span>
-            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 800, fontSize: '14px' }}>Copilot</span><span style={{ display: 'block', fontSize: '11px', color: 'rgba(255,255,255,.8)' }}>Gestisci parlando</span></span>
+      <aside className={navOpen ? 'mc-nav-open' : ''} style={{ background: 'var(--ink-900)', color: '#fff', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ padding: collapsed ? '18px 10px 14px' : '20px 16px 14px', borderBottom: '1px solid rgba(255,255,255,.1)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'space-between', gap: '8px' }}>
+          {!collapsed && (
+            <div style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.01em' }}>
+              <span style={{ color: 'var(--accent-300)' }}>My</span><span style={{ color: '#fff' }}>City</span>
+              <span style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 700, color: 'var(--ink-300)', textTransform: 'uppercase', letterSpacing: '0.08em', marginLeft: '6px' }}>Seller</span>
+            </div>
+          )}
+          <button className="mc-collapse-btn" onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? 'Espandi menu' : 'Comprimi menu'} title={collapsed ? 'Espandi menu' : 'Comprimi menu'} style={{ border: 0, background: 'rgba(255,255,255,.08)', color: '#fff', cursor: 'pointer', width: '34px', height: '34px', borderRadius: 'var(--radius-md)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Lucide name={collapsed ? 'panel-left-open' : 'panel-left-close'} size={18} color="#fff" />
           </button>
         </div>
-        <nav style={{ flex: 1, padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
+        {/* Copilot — destinazione di primo piano */}
+        <div style={{ padding: collapsed ? '12px 10px 4px' : '12px 12px 4px', flexShrink: 0 }}>
+          <button onClick={onCopilot} title="Copilot" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '10px', border: 0, borderRadius: 'var(--radius-lg)', padding: collapsed ? '10px' : '12px 14px', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', color: '#fff', background: view === 'copilot' ? 'linear-gradient(135deg, var(--primary-600), var(--secondary-600))' : 'linear-gradient(135deg, var(--primary-700), var(--secondary-700))', boxShadow: view === 'copilot' ? '0 0 0 2px rgba(244,188,83,.5)' : 'var(--shadow-warm)' }}>
+            <span style={{ width: '32px', height: '32px', borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="sparkles" size={18} color="#fff" /></span>
+            {!collapsed && <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: 'block', fontWeight: 800, fontSize: '14px' }}>Copilot</span><span style={{ display: 'block', fontSize: '11px', color: 'rgba(255,255,255,.8)' }}>Gestisci parlando</span></span>}
+          </button>
+        </div>
+        <nav style={{ flex: 1, padding: collapsed ? '8px' : '8px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
           {SC_NAV.map((sec) => (
             <div key={sec.group} style={{ marginBottom: '6px' }}>
-              <p style={{ margin: '6px 12px 4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,.38)' }}>{sec.group}</p>
+              {!collapsed && <p style={{ margin: '6px 12px 4px', fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(255,255,255,.38)' }}>{sec.group}</p>}
               {sec.items.map((n) => {
                 const on = view === n.id;
                 return (
-                  <button key={n.id} onClick={() => onNav(n.id)} style={{ display: 'flex', alignItems: 'center', gap: '11px', border: 0, background: on ? 'var(--primary-700)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.78)', fontWeight: on ? 700 : 500, fontSize: '13.5px', padding: '9px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', width: '100%' }}>
-                    <Lucide name={n.icon} size={17} stroke={2.2} color={on ? '#fff' : 'rgba(255,255,255,.7)'} /> {n.label}
-                    {n.badge === 'todo' && todo > 0 && <span style={{ marginLeft: 'auto', background: 'var(--accent-500)', color: 'var(--ink-900)', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{todo}</span>}
+                  <button key={n.id} onClick={() => { onNav(n.id); setNavOpen(false); }} title={n.label} style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '11px', border: 0, background: on ? 'var(--primary-700)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.78)', fontWeight: on ? 700 : 500, fontSize: '13.5px', padding: collapsed ? '11px' : '9px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', width: '100%' }}>
+                    <Lucide name={n.icon} size={17} stroke={2.2} color={on ? '#fff' : 'rgba(255,255,255,.7)'} /> {!collapsed && n.label}
+                    {!collapsed && n.badge === 'todo' && todo > 0 && <span style={{ marginLeft: 'auto', background: 'var(--accent-500)', color: 'var(--ink-900)', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{todo}</span>}
+                    {collapsed && n.badge === 'todo' && todo > 0 && <span style={{ position: 'absolute', top: '6px', right: '8px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent-500)' }} />}
                   </button>
                 );
               })}
             </div>
           ))}
         </nav>
-        <div style={{ padding: '12px', borderTop: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
-          <a href="../buyer/index.html" style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'rgba(255,255,255,.7)', fontSize: '13px', padding: '8px 12px', textDecoration: 'none' }}>
-            <Lucide name="external-link" size={16} color="rgba(255,255,255,.6)" /> Vai al marketplace
+        <div className="mc-aside-footer" style={{ padding: collapsed ? '10px 8px' : '12px', borderTop: '1px solid rgba(255,255,255,.1)', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '2px' }}>
+          <a href="../buyer/index.html" title="Vai al marketplace" style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '10px', color: 'rgba(255,255,255,.7)', fontSize: '13px', padding: '9px 12px', textDecoration: 'none', borderRadius: 'var(--radius-md)' }}>
+            <Lucide name="external-link" size={16} color="rgba(255,255,255,.6)" /> {!collapsed && <span className="mc-aside-flabel">Vai al marketplace</span>}
+          </a>
+          <a href="../buyer/index.html" title="Esci" style={{ display: 'flex', alignItems: 'center', justifyContent: collapsed ? 'center' : 'flex-start', gap: '10px', color: 'rgba(255,255,255,.7)', fontSize: '13px', padding: '9px 12px', textDecoration: 'none', borderRadius: 'var(--radius-md)' }}>
+            <Lucide name="log-out" size={16} color="rgba(255,255,255,.6)" /> {!collapsed && <span className="mc-aside-flabel">Esci</span>}
           </a>
         </div>
       </aside>
 
+      {navOpen && <div className="mc-nav-backdrop" onClick={() => setNavOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 'calc(var(--z-modal) - 1)' }} />}
+
       {/* main */}
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <header style={{ position: 'sticky', top: 0, zIndex: 'var(--z-sticky)', background: 'var(--surface-0)', borderBottom: '1px solid var(--cream-300)', padding: '12px 28px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <button className="mc-hamburger" onClick={() => setNavOpen(true)} aria-label="Menu" style={{ display: 'none', border: 0, background: 'transparent', cursor: 'pointer', padding: '6px', marginRight: '2px' }}><Lucide name="menu" size={22} color="var(--ink-700)" /></button>
           <div className="mc-topsearch" style={{ position: 'relative', flex: 1, maxWidth: '380px' }}>
             <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><Lucide name="search" size={17} color="var(--ink-400)" /></span>
             <input placeholder="Cerca ordini, prodotti, clienti…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '9px 14px 9px 38px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--cream-50)' }} />
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Button variant="secondary" size="sm" icon="sparkles" onClick={onCopilot}>Chiedi al Copilot</Button>
-            <Button variant="primary" size="sm" icon="plus" onClick={onNewProduct}>Pubblica prodotto</Button>
-            <button style={{ position: 'relative', border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex', padding: '6px' }}><Lucide name="bell" size={20} color="var(--ink-600)" /><span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)' }} /></button>
+            <button className="mc-hdr-btn mc-new-btn" onClick={onNewProduct} title="Pubblica prodotto" style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', border: 0, background: 'var(--primary-700)', color: '#fff', fontWeight: 700, fontSize: '13px', padding: '9px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap' }}><Lucide name="plus" size={16} color="#fff" /><span className="mc-hdr-label">Pubblica prodotto</span></button>
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setNotifOpen((o) => !o)} aria-label="Notifiche" style={{ position: 'relative', border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex', padding: '6px' }}><Lucide name="bell" size={20} color="var(--ink-600)" /><span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)' }} /></button>
+              {notifOpen && <SellerNotifPopover onClose={() => setNotifOpen(false)} onNav={onNav} />}
+            </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{store.initials}</span>
               <div style={{ lineHeight: 1.1 }}>
@@ -132,7 +186,7 @@ function SellerShell({ view, onNav, onNewProduct, onCopilot, children }) {
 
       {/* floating Copilot — sempre raggiungibile */}
       {view !== 'copilot' && (
-        <button onClick={onCopilot} title="Chiedi al Copilot" style={{ position: 'fixed', right: '24px', bottom: '24px', zIndex: 'var(--z-overlay)', display: 'inline-flex', alignItems: 'center', gap: '9px', border: 0, cursor: 'pointer', background: 'linear-gradient(135deg, var(--primary-600), var(--secondary-600))', color: '#fff', padding: '14px 18px', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-warm-xl)', fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: '14px' }}>
+        <button onClick={onCopilot} title="Chiedi al Copilot" className="mc-copilot-fab" style={{ position: 'fixed', right: '24px', bottom: '24px', zIndex: 'var(--z-overlay)', display: 'inline-flex', alignItems: 'center', gap: '9px', border: 0, cursor: 'pointer', background: 'linear-gradient(135deg, var(--primary-600), var(--secondary-600))', color: '#fff', padding: '14px 18px', borderRadius: 'var(--radius-full)', boxShadow: 'var(--shadow-warm-xl)', fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: '14px' }}>
           <Lucide name="sparkles" size={19} color="#fff" /> Copilot
         </button>
       )}
@@ -158,7 +212,7 @@ function Dashboard({ onNav, onNewProduct }) {
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <Button variant="secondary" icon="plus" onClick={onNewProduct}>Pubblica prodotto</Button>
-              <button style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.25)', color: '#fff', fontWeight: 600, padding: '10px 16px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '14px' }}><Lucide name="external-link" size={16} /> Vetrina</button>
+              <button onClick={() => onNav('vetrina')} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(255,255,255,.15)', border: '1px solid rgba(255,255,255,.25)', color: '#fff', fontWeight: 600, padding: '10px 16px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '14px' }}><Lucide name="store" size={16} /> Vetrina</button>
             </div>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginTop: '22px' }}>
@@ -285,6 +339,12 @@ function Ring({ value }) {
 // ===== Orders (grouped + detail drawer with status advancement) =====
 const SC_NEXT = { NEW: 'ACCEPTED', ACCEPTED: 'READY', READY: 'ASSIGNED' };
 const SC_NEXT_LABEL = { NEW: 'Accetta ordine', ACCEPTED: 'Segna come pronto', READY: 'Assegna al rider' };
+const DELIV_FLOW = [
+  { s: 'ASSIGNED', label: 'Rider assegnato', icon: 'bike', sub: 'Un rider sta arrivando in negozio' },
+  { s: 'PICKED_UP', label: 'Ordine ritirato', icon: 'package-check', sub: 'Il rider ha ritirato l’ordine' },
+  { s: 'OUT_FOR_DELIVERY', label: 'In consegna', icon: 'truck', sub: 'In viaggio verso il cliente' },
+  { s: 'DELIVERED', label: 'Consegnato', icon: 'check-circle-2', sub: 'Consegna completata' },
+];
 const SC_GROUPS = [
   { label: 'Da fare', statuses: ['NEW', 'ACCEPTED', 'READY'] },
   { label: 'In consegna', statuses: ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY'] },
@@ -334,21 +394,50 @@ function Orders({ orders, onAdvance }) {
   );
 }
 
+function printTicket(o) {
+  const rows = o.items.map((it) => '<tr><td class="q">' + it.q + '×</td><td class="n">' + it.name + '</td><td class="p">' + fmt(it.price * it.q) + '</td></tr>').join('');
+  const html = '<!doctype html><html><head><meta charset="utf-8"><title>Ticket ' + o.id + '</title><style>' +
+    '@page{size:58mm auto;margin:0}body{width:58mm;margin:0;padding:6mm 4mm;font-family:ui-monospace,Menlo,monospace;color:#000;font-size:12px}' +
+    'h1{font-size:15px;text-align:center;margin:0 0 2mm}.muted{color:#444;text-align:center;margin:0 0 3mm;font-size:11px}' +
+    'hr{border:0;border-top:1px dashed #000;margin:3mm 0}table{width:100%;border-collapse:collapse}td{padding:1mm 0;vertical-align:top}' +
+    '.q{width:9mm;font-weight:700}.p{text-align:right;white-space:nowrap}.tot{display:flex;justify-content:space-between;font-weight:700;font-size:14px;margin-top:2mm}' +
+    '.cod{margin-top:3mm;padding:2mm;border:1px solid #000;text-align:center;font-weight:700}.foot{text-align:center;margin-top:4mm;font-size:11px}</style></head><body>' +
+    '<h1>MyCity · ' + window.SC_STORE.name + '</h1><p class="muted">Ordine #' + o.id + ' · ' + (o.when || '') + '</p><hr>' +
+    '<p style="margin:0 0 2mm"><strong>' + o.cust + '</strong><br>' + (o.addr || '') + '</p><hr>' +
+    '<table>' + rows + '</table><hr><div class="tot"><span>TOTALE</span><span>' + fmt(o.total) + '</span></div>' +
+    (o.pay === 'cod' ? '<div class="cod">CONTANTI · incassa ' + fmt(o.total) + '</div>' : '<p class="muted" style="margin-top:3mm">Pagato con carta</p>') +
+    '<p class="foot">Grazie! · mycity.it</p></body></html>';
+  const w = window.open('', '_blank', 'width=380,height=640');
+  if (!w) return;
+  w.document.write(html); w.document.close();
+  w.focus(); setTimeout(() => { try { w.print(); } catch (e) {} }, 250);
+}
 function OrderDrawer({ order, onClose, onAdvance }) {
+  const [track, setTrack] = React.useState(false);
+  React.useEffect(() => { setTrack(false); }, [order]);
   if (!order) return null;
   const o = order;
   const next = SC_NEXT[o.status];
+  const inDelivery = ['ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(o.status);
   return ReactDOM.createPortal(
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', background: 'rgba(0,0,0,.4)', backdropFilter: 'blur(2px)', display: 'flex', justifyContent: 'flex-end', animation: 'mc-fade-in var(--dur-fast) ease-out' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '440px', maxWidth: '92vw', height: '100%', background: 'var(--surface-0)', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-warm-xl)', animation: 'mc-slide-right var(--dur-medium) var(--ease-out-quint)' }}>
         <header style={{ padding: '18px 20px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>#{o.id}</p>
-            <h2 style={{ margin: '2px 0 0', fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)' }}>{o.cust}</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            {track && <button onClick={() => setTrack(false)} aria-label="Indietro" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)', display: 'inline-flex' }}><Lucide name="arrow-left" size={20} /></button>}
+            <div style={{ minWidth: 0 }}>
+              <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--ink-400)' }}>#{o.id}</p>
+              <h2 style={{ margin: '2px 0 0', fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)' }}>{track ? 'Traccia consegna' : o.cust}</h2>
+            </div>
           </div>
-          <button onClick={onClose} aria-label="Chiudi" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)' }}><Lucide name="x" size={22} /></button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button onClick={() => printTicket(o)} aria-label="Stampa ticket" title="Stampa ticket cucina" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)', display: 'inline-flex', padding: '4px' }}><Lucide name="printer" size={20} /></button>
+            <button onClick={onClose} aria-label="Chiudi" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--ink-500)' }}><Lucide name="x" size={22} /></button>
+          </div>
         </header>
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {track ? <DeliveryTrack o={o} /> : (
+          <React.Fragment>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <OrderStatusBadge status={o.status} />
             <span style={{ fontSize: '13px', color: 'var(--ink-500)' }}>{o.when}</span>
@@ -371,15 +460,46 @@ function OrderDrawer({ order, onClose, onAdvance }) {
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 800, color: 'var(--ink-900)', marginTop: '4px' }}><span>Totale</span><span>{fmt(o.total)}</span></div>
           </div>
           {o.pay === 'cod' && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--olive-50)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '13px', color: 'var(--olive-800)' }}><Lucide name="banknote" size={16} color="var(--olive-700)" /> Il rider incassa <strong>{fmt(o.total)}</strong> in contanti.</div>}
+          </React.Fragment>
+          )}
         </div>
         <footer style={{ padding: '16px 20px', borderTop: '1px solid var(--cream-200)', display: 'flex', gap: '8px' }}>
-          {next ? <Button variant="primary" size="lg" fullWidth iconRight="arrow-right" onClick={() => onAdvance(o)}>{SC_NEXT_LABEL[o.status]}</Button>
-            : <div style={{ flex: 1, textAlign: 'center', fontSize: '14px', color: 'var(--ink-500)', padding: '10px' }}>{o.status === 'DELIVERED' ? 'Ordine consegnato ✓' : o.status === 'CANCELED' ? 'Ordine annullato' : 'In gestione al rider'}</div>}
-          {o.status === 'NEW' && <Button variant="danger" size="lg" icon="x">Rifiuta</Button>}
+          {track
+            ? <Button variant="secondary" size="lg" fullWidth icon="arrow-left" onClick={() => setTrack(false)}>Torna ai dettagli</Button>
+            : next ? <Button variant="primary" size="lg" fullWidth iconRight="arrow-right" onClick={() => onAdvance(o)}>{SC_NEXT_LABEL[o.status]}</Button>
+              : inDelivery ? <Button variant="primary" size="lg" fullWidth icon="map-pin" onClick={() => setTrack(true)}>Traccia consegna</Button>
+                : <div style={{ flex: 1, textAlign: 'center', fontSize: '14px', color: 'var(--ink-500)', padding: '10px' }}>{o.status === 'CANCELED' ? 'Ordine annullato' : 'Ordine concluso ✓'}</div>}
+          {!track && o.status === 'NEW' && <Button variant="danger" size="lg" icon="x">Rifiuta</Button>}
         </footer>
       </div>
     </div>,
     document.body,
+  );
+}
+function DeliveryTrack({ o }) {
+  const idx = Math.max(0, DELIV_FLOW.findIndex((f) => f.s === o.status));
+  const eta = o.status === 'DELIVERED' ? 'Consegnato' : o.status === 'OUT_FOR_DELIVERY' ? 'Arrivo stimato ~10 min' : 'Arrivo stimato ~25 min';
+  return (
+    <React.Fragment>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--primary-50)', border: '1px solid var(--primary-100)', borderRadius: 'var(--radius-lg)', padding: '12px 14px' }}>
+        <span style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="bike" size={20} color="#fff" /></span>
+        <div style={{ flex: 1, minWidth: 0 }}><p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Marco · rider MyCity</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{eta}</p></div>
+        <a href="tel:+390523555014" aria-label="Chiama il rider" style={{ width: '38px', height: '38px', flexShrink: 0, borderRadius: '50%', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', color: 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="phone" size={16} color="var(--primary-700)" /></a>
+      </div>
+      <div style={{ position: 'relative', paddingLeft: '8px' }}>
+        {DELIV_FLOW.map((f, i) => {
+          const done = i < idx, active = i === idx;
+          return (
+            <div key={f.s} style={{ display: 'flex', gap: '14px', paddingBottom: i === DELIV_FLOW.length - 1 ? 0 : '22px', position: 'relative' }}>
+              {i < DELIV_FLOW.length - 1 && <span style={{ position: 'absolute', left: '15px', top: '32px', bottom: '-4px', width: '2px', background: done ? 'var(--olive-400)' : 'var(--cream-300)' }} />}
+              <span style={{ width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: done ? 'var(--olive-500)' : active ? 'var(--primary-600)' : 'var(--cream-200)', color: (done || active) ? '#fff' : 'var(--ink-400)', boxShadow: active ? '0 0 0 4px var(--primary-100)' : 'none', zIndex: 1 }}><Lucide name={done ? 'check' : f.icon} size={16} stroke={done ? 3 : 2.2} color={(done || active) ? '#fff' : 'var(--ink-400)'} /></span>
+              <div style={{ paddingTop: '4px' }}><p style={{ margin: 0, fontSize: '14px', fontWeight: active ? 700 : 600, color: active ? 'var(--ink-900)' : done ? 'var(--ink-700)' : 'var(--ink-400)' }}>{f.label}</p><p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>{f.sub}</p></div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--ink-600)', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}><Lucide name="map-pin" size={15} color="var(--primary-600)" /> Consegna a {o.cust} · {o.addr}</div>
+    </React.Fragment>
   );
 }
 function Row({ label, val }) { return <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '14px' }}><span style={{ color: 'var(--ink-500)' }}>{label}</span><span style={{ fontWeight: 600, color: 'var(--ink-800)', textAlign: 'right' }}>{val}</span></div>; }
@@ -387,20 +507,29 @@ function Row({ label, val }) { return <div style={{ display: 'flex', justifyCont
 // ===== Products (catalogue table + new-product modal) =====
 function Products({ products, onNewProduct, onToggle }) {
   const [filter, setFilter] = React.useState('all');
+  const [bulk, setBulk] = React.useState(false);
+  const [edits, setEdits] = React.useState({});
   const tabs = [['all', 'Tutti'], ['available', 'In vendita'], ['soldout', 'Esauriti'], ['draft', 'Bozze']];
   const list = products.filter((p) => filter === 'all' || p.status === filter);
   const STATUS = { available: ['var(--olive-50)', 'var(--olive-700)', 'In vendita'], soldout: ['var(--secondary-50)', 'var(--secondary-600)', 'Esaurito'], draft: ['var(--surface-100)', 'var(--ink-500)', 'Bozza'] };
+  const editCount = Object.keys(edits).length;
+  const setField = (id, k, v) => setEdits((e) => ({ ...e, [id]: { ...(e[id] || {}), [k]: v } }));
+  const valOf = (p, k) => (edits[p.id] && edits[p.id][k] != null ? edits[p.id][k] : (k === 'price' ? String(p.price).replace('.', ',') : String(p[k])));
+  const cancelBulk = () => { setBulk(false); setEdits({}); };
+  const saveBulk = () => { setBulk(false); setEdits({}); };
+  const bulkInput = { width: '74px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '6px 8px', fontSize: '13px', fontWeight: 600, textAlign: 'right', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none' };
   return (
-    <div>
+    <div style={bulk ? { paddingBottom: '76px' } : null}>
       <PageTitle eyebrow="Catalogo" title="Prodotti" sub={`${products.length} prodotti a catalogo`}
-        action={<div style={{ display: 'flex', gap: '8px' }}><Button variant="secondary" icon="upload">Importa CSV</Button><Button variant="primary" icon="plus" onClick={onNewProduct}>Nuovo prodotto</Button></div>} />
+        action={<div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>{bulk ? <Button variant="ghost" icon="x" onClick={cancelBulk}>Annulla</Button> : <Button variant="secondary" icon="sliders-horizontal" onClick={() => setBulk(true)}>Modifica in blocco</Button>}<Button variant="secondary" icon="upload">Importa CSV</Button><Button variant="primary" icon="plus" onClick={onNewProduct}>Nuovo prodotto</Button></div>} />
+      {bulk && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--primary-50)', border: '1px solid var(--primary-200)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: 'var(--primary-800)' }}><Lucide name="sliders-horizontal" size={15} color="var(--primary-700)" /> Modifica prezzo e scorte direttamente nella lista, poi salva tutto in una volta.</div>}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '16px' }}>
         {tabs.map(([id, label]) => (
           <button key={id} onClick={() => setFilter(id)} style={{ border: 0, background: filter === id ? 'var(--primary-700)' : 'var(--surface-0)', color: filter === id ? '#fff' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: filter === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{label}</button>
         ))}
       </div>
       <Card variant="bordered" padding="none">
-        <div style={{ overflowX: 'auto' }}>
+        <div className="mc-prod-table" style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
             <thead>
               <tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>
@@ -422,10 +551,9 @@ function Products({ products, onNewProduct, onToggle }) {
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                      <span style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(fp)}</span>
-                      {p.discount > 0 && <span style={{ display: 'block', fontSize: '11px', color: 'var(--secondary-600)', fontWeight: 600 }}>-{p.discount}%</span>}
+                      {bulk ? <input value={valOf(p, 'price')} onChange={(e) => setField(p.id, 'price', e.target.value)} style={bulkInput} /> : <><span style={{ fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(fp)}</span>{p.discount > 0 && <span style={{ display: 'block', fontSize: '11px', color: 'var(--secondary-600)', fontWeight: 600 }}>-{p.discount}%</span>}</>}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: p.stock === 0 ? 'var(--secondary-600)' : p.stock <= 3 ? 'var(--accent-700)' : 'var(--ink-700)' }}>{p.stock}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: p.stock === 0 ? 'var(--secondary-600)' : p.stock <= 3 ? 'var(--accent-700)' : 'var(--ink-700)' }}>{bulk ? <input value={valOf(p, 'stock')} onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''))} style={bulkInput} /> : p.stock}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', color: 'var(--ink-600)' }}>{p.sold}</td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{lbl}</span></td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -438,33 +566,139 @@ function Products({ products, onNewProduct, onToggle }) {
             </tbody>
           </table>
         </div>
+        <div className="mc-prod-cards" style={{ display: 'none', flexDirection: 'column' }}>
+          {list.map((p) => {
+            const [bg, fg, lbl] = STATUS[p.status];
+            const fp = p.discount > 0 ? p.price * (1 - p.discount / 100) : p.price;
+            return (
+              <div key={p.id} style={{ display: 'flex', gap: '12px', padding: '14px 16px', borderBottom: '1px solid var(--cream-200)' }}>
+                <img src={img(p.kw, p.lock)} alt={p.name} style={{ width: '58px', height: '58px', borderRadius: 'var(--radius-md)', objectFit: 'cover', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
+                    <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)' }}>{p.name}</p>
+                    <span style={{ fontSize: '11px', fontWeight: 600, background: bg, color: fg, padding: '3px 9px', borderRadius: '999px', whiteSpace: 'nowrap', flexShrink: 0 }}>{lbl}</span>
+                  </div>
+                  <p style={{ margin: '2px 0 8px', fontSize: '12px', color: 'var(--ink-400)' }}>{p.cat}</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>
+                    <span style={{ color: 'var(--ink-900)', fontWeight: 700 }}>{fmt(fp)}{p.discount > 0 && <span style={{ color: 'var(--secondary-600)', fontWeight: 600, marginLeft: '5px' }}>-{p.discount}%</span>}</span>
+                    <span>Stock: <strong style={{ color: p.stock === 0 ? 'var(--secondary-600)' : p.stock <= 3 ? 'var(--accent-700)' : 'var(--ink-700)' }}>{p.stock}</strong></span>
+                    <span>Venduti: <strong>{p.sold}</strong></span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                    <button title="Modifica" style={{ border: '1px solid var(--cream-300)', background: 'var(--surface-0)', cursor: 'pointer', padding: '7px 12px', borderRadius: 'var(--radius-md)', display: 'inline-flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-sans)' }}><Lucide name="pencil" size={15} color="var(--ink-600)" /> <span style={{ fontSize: '13px', color: 'var(--ink-700)' }}>Modifica</span></button>
+                    <button title="Altro" style={{ border: '1px solid var(--cream-300)', background: 'var(--surface-0)', cursor: 'pointer', padding: '7px 11px', borderRadius: 'var(--radius-md)', display: 'inline-flex' }}><Lucide name="more-horizontal" size={16} color="var(--ink-500)" /></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </Card>
+      {bulk && (
+        <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 'var(--z-sticky)', background: 'var(--surface-0)', borderTop: '1px solid var(--cream-300)', boxShadow: '0 -4px 18px -6px rgba(28,26,24,.18)', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <span style={{ fontSize: '13px', color: 'var(--ink-600)' }}>{editCount > 0 ? <><strong style={{ color: 'var(--ink-900)' }}>{editCount}</strong> {editCount === 1 ? 'prodotto modificato' : 'prodotti modificati'}</> : 'Nessuna modifica'}</span>
+          <div style={{ display: 'flex', gap: '8px' }}><Button variant="ghost" onClick={cancelBulk}>Annulla</Button><Button variant="primary" icon="check" onClick={saveBulk} disabled={editCount === 0}>Salva modifiche</Button></div>
+        </div>
+      )}
     </div>
   );
 }
 const iconBtn = { border: 0, background: 'transparent', cursor: 'pointer', padding: '6px', borderRadius: 'var(--radius-md)', display: 'inline-flex' };
 
 function NewProductModal({ open, onClose, onSave }) {
+  const FRESH = { name: '', price: '', stock: '', cat: 'Salumi', desc: '', free: false };
+  const [mode, setMode] = React.useState('manual');
+  const [form, setForm] = React.useState(FRESH);
+  const [busy, setBusy] = React.useState(false);
+  const [note, setNote] = React.useState(null);
+  const [url, setUrl] = React.useState('');
+  const [market, setMarket] = React.useState('');
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  React.useEffect(() => { if (!open) { setMode('manual'); setForm(FRESH); setBusy(false); setNote(null); setUrl(''); setMarket(''); } }, [open]);
+
+  const PHOTO_FILL = { name: 'Coppa Piacentina DOP 200g', price: '8,90', stock: '12', cat: 'Salumi', desc: 'Stagionata 90 giorni, taglio a mano, sottovuoto fresco di giornata. Dolce e profumata, perfetta con un calice di Gutturnio.', free: true };
+  const URL_FILL = { name: 'Olio extravergine d’oliva bio 750ml', price: '12,50', stock: '30', cat: 'Conserve', desc: 'Estratto a freddo, acidità <0,3%. Dati, foto e tempo di consegna recuperati automaticamente dal marketplace.', free: false };
+  function runPhoto() { setBusy(true); setTimeout(() => { setForm((f) => ({ ...f, ...PHOTO_FILL })); setNote({ icon: 'images', text: 'Riconosciuto da 2 foto dall’AI · rivedi e pubblica' }); setBusy(false); setMode('manual'); }, 1400); }
+  function runUrl() { if (url.trim().length < 3) return; setBusy(true); setTimeout(() => { setForm((f) => ({ ...f, ...URL_FILL })); setNote({ icon: 'sparkles', text: 'Importato da ' + (market || 'Amazon') + ' · controlla e pubblica' }); setBusy(false); setMode('manual'); }, 1500); }
+
+  const MODES = [
+    { id: 'photo', icon: 'images', label: 'Da foto', desc: 'L’AI riconosce il prodotto' },
+    { id: 'url', icon: 'link-2', label: 'Da link', desc: 'Importa da Amazon / eBay' },
+    { id: 'manual', icon: 'pencil', label: 'Manuale', desc: 'Compila tu i campi' },
+  ];
+  const canPublish = form.name.trim().length > 0;
+  const Spin = () => <span style={{ display: 'inline-flex', animation: 'mc-spin 0.8s linear infinite' }}><Lucide name="loader" size={18} color="#fff" /></span>;
+
   return (
-    <Modal open={open} onClose={onClose} title="Nuovo prodotto" description="Pubblica un articolo nella tua vetrina" size="lg"
-      footer={<><Button variant="secondary" onClick={onClose}>Annulla</Button><Button variant="primary" icon="check" onClick={onSave}>Pubblica prodotto</Button></>}>
+    <Modal open={open} onClose={onClose} title="Nuovo prodotto" description="Tre modi per inserirlo — l’AI fa il grosso, tu confermi" size="lg"
+      footer={<><Button variant="secondary" onClick={onClose}>Annulla</Button><Button variant="primary" icon="check" onClick={onSave} disabled={!canPublish}>Pubblica prodotto</Button></>}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
-          <div style={{ width: '88px', height: '88px', borderRadius: 'var(--radius-lg)', border: '1.5px dashed var(--cream-400)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-400)', flexShrink: 0, cursor: 'pointer' }}><Lucide name="camera" size={22} color="var(--ink-400)" /><span style={{ fontSize: '10px', marginTop: '4px' }}>Foto</span></div>
-          <div style={{ flex: 1 }}><Input label="Nome prodotto" placeholder="Es. Coppa Piacentina DOP 200g" /></div>
+        {/* selettore delle 3 modalità */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+          {MODES.map((m) => {
+            const on = mode === m.id;
+            return (
+              <button key={m.id} onClick={() => setMode(m.id)} disabled={busy} style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '6px', border: `1.5px solid ${on ? 'var(--primary-400)' : 'var(--cream-300)'}`, background: on ? 'var(--primary-50)' : 'var(--surface-0)', borderRadius: 'var(--radius-lg)', padding: '12px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                <span style={{ width: '34px', height: '34px', borderRadius: 'var(--radius-md)', background: on ? 'var(--primary-600)' : 'var(--cream-100)', color: on ? '#fff' : 'var(--primary-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={m.icon} size={18} color={on ? '#fff' : 'var(--primary-700)'} /></span>
+                <span><span style={{ display: 'block', fontWeight: 700, fontSize: '13.5px', color: 'var(--ink-900)' }}>{m.label}</span><span style={{ display: 'block', fontSize: '11.5px', color: 'var(--ink-500)' }}>{m.desc}</span></span>
+              </button>
+            );
+          })}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-          <Input label="Prezzo (€)" type="number" placeholder="8,90" />
-          <Input label="Stock disponibile" type="number" placeholder="12" />
-        </div>
-        <Select label="Categoria" defaultValue="Salumi">
-          <option>Salumi</option><option>Formaggi</option><option>Conserve</option><option>Pasta fresca</option><option>Vini</option>
-        </Select>
-        <div>
-          <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink-700)', display: 'block', marginBottom: '5px' }}>Descrizione</label>
-          <textarea rows="3" placeholder="Racconta il prodotto: origine, stagionatura, abbinamenti…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '15px', fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none' }} />
-        </div>
-        <Checkbox label="Spedizione gratuita per questo prodotto" />
+
+        {/* MODE: da foto */}
+        {mode === 'photo' && (
+          <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--secondary-200)', background: 'var(--secondary-50)', padding: '18px' }}>
+            <p style={{ margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: 'var(--secondary-900)' }}><Lucide name="package-plus" size={18} color="var(--secondary-700)" /> Crea dalle foto</p>
+            <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.5 }}>Carica le foto del prodotto (di solito 2: fronte + retro). L’AI riconosce nome, categoria e prezzo suggerito: tu controlli e pubblichi.</p>
+            <button onClick={runPhoto} disabled={busy} style={{ width: '100%', borderRadius: 'var(--radius-lg)', border: '1.5px dashed var(--secondary-300)', background: 'var(--surface-0)', padding: '26px', cursor: busy ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', fontFamily: 'var(--font-sans)' }}>
+              {busy ? <><span style={{ display: 'inline-flex', animation: 'mc-spin 0.8s linear infinite' }}><Lucide name="loader" size={26} color="var(--secondary-700)" /></span><span style={{ fontSize: '13px', color: 'var(--ink-600)' }}>Analizzo le foto…</span></>
+                : <><span style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--secondary-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="images" size={24} color="var(--secondary-700)" /></span><span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>Carica le foto</span><span style={{ fontSize: '12px', color: 'var(--ink-400)' }}>JPG o PNG · fino a 12 foto</span></>}
+            </button>
+          </div>
+        )}
+
+        {/* MODE: da link */}
+        {mode === 'url' && (
+          <div style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--primary-200)', background: 'var(--primary-50)', padding: '18px' }}>
+            <p style={{ margin: '0 0 4px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: 'var(--primary-800)' }}><Lucide name="sparkles" size={18} color="var(--primary-700)" /> Importa da Amazon / eBay</p>
+            <p style={{ margin: '0 0 14px', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.5 }}>Incolla il link del prodotto (o il nome): recuperiamo nome, descrizione, prezzo, foto, caratteristiche e il <strong>tempo di consegna</strong>.</p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: '200px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '0 12px' }}>
+                <Lucide name="link-2" size={16} color="var(--ink-400)" />
+                <input value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') runUrl(); }} placeholder="https://www.amazon.it/… o nome prodotto" style={{ flex: 1, border: 0, outline: 'none', padding: '10px 0', fontSize: '14px', fontFamily: 'var(--font-sans)', background: 'transparent', color: 'var(--ink-900)' }} />
+              </div>
+              <select value={market} onChange={(e) => setMarket(e.target.value)} style={{ border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '14px', fontFamily: 'var(--font-sans)', background: 'var(--surface-0)' }}>
+                <option value="">Rileva auto</option><option>Amazon</option><option>eBay</option><option>AliExpress</option><option>Altro</option>
+              </select>
+              <Button variant="primary" onClick={runUrl} disabled={busy || url.trim().length < 3}>{busy ? 'Importo…' : 'Importa'}</Button>
+            </div>
+            {busy && <p style={{ margin: '10px 0 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--primary-700)' }}><span style={{ display: 'inline-flex', animation: 'mc-spin 0.8s linear infinite' }}><Lucide name="loader" size={15} color="var(--primary-700)" /></span> Recupero i dati dal marketplace…</p>}
+          </div>
+        )}
+
+        {/* MODE: manuale (anche destinazione dopo foto/link) */}
+        {mode === 'manual' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {note && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--olive-50)', border: '1px solid var(--olive-200)', borderRadius: 'var(--radius-md)', padding: '9px 12px', fontSize: '13px', color: 'var(--olive-800)' }}><Lucide name={note.icon} size={15} color="var(--olive-700)" /> {note.text}</div>}
+            <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+              <div style={{ width: '88px', height: '88px', borderRadius: 'var(--radius-lg)', border: '1.5px dashed var(--cream-400)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--ink-400)', flexShrink: 0, cursor: 'pointer', background: note ? 'var(--cream-100)' : 'transparent' }}><Lucide name="camera" size={22} color="var(--ink-400)" /><span style={{ fontSize: '10px', marginTop: '4px' }}>Foto</span></div>
+              <div style={{ flex: 1 }}><Input label="Nome prodotto" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Es. Coppa Piacentina DOP 200g" /></div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <Input label="Prezzo (€)" value={form.price} onChange={(e) => set('price', e.target.value)} placeholder="8,90" />
+              <Input label="Stock disponibile" value={form.stock} onChange={(e) => set('stock', e.target.value)} placeholder="12" />
+            </div>
+            <Select label="Categoria" value={form.cat} onChange={(e) => set('cat', e.target.value)}>
+              <option>Salumi</option><option>Formaggi</option><option>Conserve</option><option>Pasta fresca</option><option>Vini</option><option>Pane e forno</option><option>Parafarmacia</option>
+            </Select>
+            <div>
+              <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--ink-700)', display: 'block', marginBottom: '5px' }}>Descrizione</label>
+              <textarea rows="3" value={form.desc} onChange={(e) => set('desc', e.target.value)} placeholder="Racconta il prodotto: origine, stagionatura, abbinamenti…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '15px', fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', color: 'var(--ink-900)' }} />
+            </div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--ink-700)', cursor: 'pointer' }}><input type="checkbox" checked={form.free} onChange={(e) => set('free', e.target.checked)} style={{ width: '16px', height: '16px', accentColor: 'var(--primary-600)' }} /> Spedizione gratuita per questo prodotto</label>
+          </div>
+        )}
       </div>
     </Modal>
   );
@@ -475,11 +709,41 @@ function Analytics() {
   const rev = window.SC_REVENUE_7D;
   const max = Math.max(...rev);
   const days = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
-  const top = window.SC_PRODUCTS.slice().sort((a, b) => b.sold - a.sold).slice(0, 5);
+  const prods = window.SC_PRODUCTS;
+  const top = prods.slice().sort((a, b) => b.sold - a.sold).slice(0, 5);
   const maxSold = top[0].sold;
+  // insight prescrittivi
+  const pushP = top[0];
+  const restockP = prods.filter((p) => p.status === 'soldout' || (p.status === 'available' && p.stock <= 3)).sort((a, b) => b.sold - a.sold)[0];
+  const slowP = prods.filter((p) => p.status === 'available' && p.sold > 0).sort((a, b) => a.sold - b.sold)[0];
+  const insights = [
+    pushP && { icon: 'trending-up', tone: 'olive', title: `Spingi "${pushP.name}"`, body: `È il tuo best-seller (${pushP.sold} venduti). Sponsorizzalo per restare in cima alle ricerche.`, cta: 'Sponsorizza' },
+    restockP && { icon: 'package-x', tone: 'secondary', title: restockP.status === 'soldout' ? `Riassortisci "${restockP.name}"` : `Scorta bassa: "${restockP.name}"`, body: restockP.status === 'soldout' ? `Esaurito ma ha venduto ${restockP.sold} pezzi: stai perdendo ordini.` : `Solo ${restockP.stock} rimasti. Riassortisci prima del weekend.`, cta: 'Aggiorna stock' },
+    slowP && { icon: 'trending-down', tone: 'accent', title: `"${slowP.name}" vende poco`, body: `Solo ${slowP.sold} venduti. Prova uno sconto, una foto migliore o un bundle.`, cta: 'Metti in offerta' },
+  ].filter(Boolean);
+  const peakHours = [['12–13', 62], ['13–14', 40], ['18–19', 88], ['19–20', 100], ['20–21', 54]];
+  const tone = { olive: ['var(--olive-50)', 'var(--olive-200)', 'var(--olive-700)'], secondary: ['var(--secondary-50)', 'var(--secondary-200)', 'var(--secondary-600)'], accent: ['var(--accent-50)', 'var(--accent-200)', 'var(--accent-700)'] };
   return (
     <div>
       <PageTitle eyebrow="Insight" title="Analisi" sub="Andamento delle vendite e prodotti migliori" />
+      {insights.length > 0 && (
+        <div style={{ marginBottom: '20px' }}>
+          <h2 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)', display: 'inline-flex', alignItems: 'center', gap: '8px' }}><Lucide name="sparkles" size={18} color="var(--primary-600)" /> Consigli per te</h2>
+          <div className="mc-insight-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+            {insights.map((it, i) => {
+              const [bg, bd, fg] = tone[it.tone];
+              return (
+                <div key={i} style={{ background: bg, border: '1px solid ' + bd, borderRadius: 'var(--radius-lg)', padding: '16px' }}>
+                  <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--surface-0)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}><Lucide name={it.icon} size={18} color={fg} /></span>
+                  <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>{it.title}</p>
+                  <p style={{ margin: '4px 0 12px', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.45 }}>{it.body}</p>
+                  <button style={{ border: 0, background: fg, color: '#fff', fontWeight: 700, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{it.cta}</button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '20px' }}>
         {[['Fatturato 7gg', fmt(window.SC_KPI.revenue7), '+12%', 'olive'], ['Ordini 7gg', window.SC_KPI.orders7, '+8%', 'primary'], ['Scontrino medio', fmt(23.9), '+3%', 'accent'], ['Tasso reso', '1,4%', '−0,2%', 'secondary']].map(([l, v, d, t]) => (
         <Card key={l} variant="bordered" padding="md">
@@ -520,6 +784,21 @@ function Analytics() {
           </div>
         </Card>
       </div>
+      <Card variant="bordered" padding="lg" style={{ marginTop: '20px' }}>
+        <h2 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '18px', fontWeight: 700, color: 'var(--ink-900)' }}>Ore di punta</h2>
+        <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--ink-500)' }}>Quando arrivano i tuoi ordini — assicurati di essere pronto e disponibile.</p>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '10px', height: '120px' }}>
+          {peakHours.map(([h, v]) => (
+            <div key={h} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', height: '100%' }}>
+              <div style={{ flex: 1, width: '100%', display: 'flex', alignItems: 'flex-end' }}>
+                <div style={{ width: '100%', height: `${v}%`, background: v >= 88 ? 'linear-gradient(180deg, var(--secondary-400), var(--secondary-600))' : 'linear-gradient(180deg, var(--accent-300), var(--accent-500))', borderRadius: 'var(--radius-sm) var(--radius-sm) 0 0', minHeight: '6px' }} />
+              </div>
+              <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--ink-500)' }}>{h}</span>
+            </div>
+          ))}
+        </div>
+        <p style={{ margin: '12px 0 0', fontSize: '13px', color: 'var(--olive-800)', background: 'var(--olive-50)', borderRadius: 'var(--radius-md)', padding: '10px 12px', display: 'inline-flex', alignItems: 'center', gap: '7px' }}><Lucide name="lightbulb" size={15} color="var(--olive-700)" /> Picco tra le <strong>19 e le 20</strong>: tieni il negozio online e lo stock pronto.</p>
+      </Card>
     </div>
   );
 }
@@ -566,7 +845,7 @@ function Earnings() {
           <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Storico pagamenti</h2>
           <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>Stato del bonifico per ogni ordine carta</p>
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+        <table className="mc-prod-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
           <thead><tr style={{ background: 'var(--cream-50)' }}>{['Ordine', 'Data', 'Netto', 'Stato'].map((h, i) => <th key={h} style={{ textAlign: i >= 2 ? 'right' : 'left', padding: '10px 18px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
           <tbody>
             {payouts.map((p) => { const [bg, fg, lbl] = STATUS[p.status]; return (
@@ -579,6 +858,20 @@ function Earnings() {
             ); })}
           </tbody>
         </table>
+        <div className="mc-prod-cards" style={{ display: 'none', flexDirection: 'column' }}>
+          {payouts.map((p) => { const [bg, fg, lbl] = STATUS[p.status]; return (
+            <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '14px 18px', borderBottom: '1px solid var(--cream-200)' }}>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ margin: 0, fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--ink-800)', fontWeight: 600 }}>#{p.id}</p>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>{p.when}</p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: 800, color: 'var(--olive-700)' }}>{fmt(p.net)}</p>
+                <span style={{ fontSize: '11px', fontWeight: 600, background: bg, color: fg, padding: '3px 9px', borderRadius: '999px' }}>{p.status === 'TRANSFERRED' ? `Pagato ${p.paidOn}` : lbl}</span>
+              </div>
+            </div>
+          ); })}
+        </div>
       </Card>
     </div>
   );
@@ -595,12 +888,71 @@ function EStat({ label, value, hint, tone, highlight }) {
 }
 
 // ===== Promotions · Reviews · Customers =====
-function Promotions({ onNew }) {
+function NewPromoModal({ open, onClose, onToast }) {
+  const [type, setType] = React.useState('discount');
+  const [pct, setPct] = React.useState(15);
+  const [prod, setProd] = React.useState((window.SC_PRODUCTS[0] || {}).name || '');
+  const [from, setFrom] = React.useState('18:00');
+  const [to, setTo] = React.useState('20:00');
+  if (!open) return null;
+  const types = [
+    { id: 'discount', icon: 'tag', label: 'Sconto %', desc: 'Riduci il prezzo di un prodotto' },
+    { id: 'bundle', icon: 'package-plus', label: 'Bundle', desc: '2 prodotti a prezzo speciale' },
+    { id: 'happy', icon: 'clock', label: 'Happy hour', desc: 'Sconto in una fascia oraria' },
+  ];
+  const inp = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '14px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none' };
+  return ReactDOM.createPortal(
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-modal)', background: 'rgba(28,26,24,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '520px', maxWidth: '100%', maxHeight: '88vh', overflowY: 'auto', background: 'var(--surface-0)', borderRadius: 'var(--radius-xl)', boxShadow: 'var(--shadow-warm-xl)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--cream-200)' }}>
+          <h2 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)' }}>Nuova promozione</h2>
+          <button onClick={onClose} aria-label="Chiudi" style={{ border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex' }}><Lucide name="x" size={20} color="var(--ink-500)" /></button>
+        </div>
+        <div style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+            {types.map((t) => (
+              <button key={t.id} onClick={() => setType(t.id)} style={{ textAlign: 'left', border: '1.5px solid ' + (type === t.id ? 'var(--primary-500)' : 'var(--cream-300)'), background: type === t.id ? 'var(--primary-50)' : 'var(--surface-0)', borderRadius: 'var(--radius-lg)', padding: '12px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+                <Lucide name={t.icon} size={20} color={type === t.id ? 'var(--primary-700)' : 'var(--ink-500)'} />
+                <p style={{ margin: '8px 0 2px', fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>{t.label}</p>
+                <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)', lineHeight: 1.35 }}>{t.desc}</p>
+              </button>
+            ))}
+          </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '5px' }}>Prodotto</label>
+            <select value={prod} onChange={(e) => setProd(e.target.value)} style={inp}>{window.SC_PRODUCTS.map((p) => <option key={p.name}>{p.name}</option>)}</select>
+          </div>
+          {type !== 'bundle' && (
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '5px' }}>Sconto · {pct}%</label>
+              <input type="range" min="5" max="50" step="5" value={pct} onChange={(e) => setPct(+e.target.value)} style={{ width: '100%', accentColor: 'var(--primary-600)' }} />
+            </div>
+          )}
+          {type === 'happy' && (
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ flex: 1 }}><label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '5px' }}>Dalle</label><input value={from} onChange={(e) => setFrom(e.target.value)} style={inp} /></div>
+              <div style={{ flex: 1 }}><label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--ink-700)', marginBottom: '5px' }}>Alle</label><input value={to} onChange={(e) => setTo(e.target.value)} style={inp} /></div>
+            </div>
+          )}
+          <div style={{ background: 'var(--cream-50)', border: '1px solid var(--cream-200)', borderRadius: 'var(--radius-md)', padding: '12px 14px', fontSize: '13px', color: 'var(--ink-600)' }}>
+            <Lucide name="eye" size={14} color="var(--ink-400)" /> Anteprima: <strong style={{ color: 'var(--ink-900)' }}>{type === 'bundle' ? `Bundle su "${prod}"` : type === 'happy' ? `-${pct}% su "${prod}" dalle ${from} alle ${to}` : `-${pct}% su "${prod}"`}</strong>
+          </div>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', padding: '16px 22px', borderTop: '1px solid var(--cream-200)' }}>
+          <Button variant="ghost" onClick={onClose}>Annulla</Button>
+          <Button variant="primary" icon="check" onClick={() => { onClose(); onToast && onToast('Promozione creata'); }}>Crea promozione</Button>
+        </div>
+      </div>
+    </div>, document.body);
+}
+function Promotions({ onNew, onToast }) {
   const promos = window.SC_PROMOS;
+  const [modal, setModal] = React.useState(false);
   return (
     <div>
+      <NewPromoModal open={modal} onClose={() => setModal(false)} onToast={onToast} />
       <PageTitle eyebrow="Marketing" title="Promozioni" sub="Sconti e offerte a tempo per i tuoi prodotti"
-        action={<Button variant="primary" icon="plus" onClick={onNew}>Nuova promo</Button>} />
+        action={<Button variant="primary" icon="plus" onClick={() => setModal(true)}>Nuova promo</Button>} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {promos.map((p) => (
           <Card key={p.id} variant="bordered" padding="lg">
@@ -630,6 +982,34 @@ function Promotions({ onNew }) {
   );
 }
 
+function ReviewReply({ initial }) {
+  const [reply, setReply] = React.useState(initial || null);
+  const [editing, setEditing] = React.useState(false);
+  const [text, setText] = React.useState('');
+  if (reply && !editing) {
+    return (
+      <div style={{ background: 'var(--cream-50)', borderLeft: '3px solid var(--primary-400)', borderRadius: '0 var(--radius-md) var(--radius-md) 0', padding: '8px 12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: 'var(--primary-700)' }}>La tua risposta</p>
+          <button onClick={() => { setEditing(true); setText(reply); }} style={{ border: 0, background: 'transparent', color: 'var(--ink-400)', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>Modifica</button>
+        </div>
+        <p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-600)' }}>{reply}</p>
+      </div>
+    );
+  }
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Scrivi una risposta pubblica…" style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '9px 12px', fontSize: '13px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', resize: 'vertical', outline: 'none' }} />
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button variant="primary" size="sm" icon="check" onClick={() => { if (text.trim()) { setReply(text.trim()); setEditing(false); } }}>Pubblica</Button>
+          <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Annulla</Button>
+        </div>
+      </div>
+    );
+  }
+  return <Button variant="ghost" size="sm" icon="reply" onClick={() => { setEditing(true); setText(''); }}>Rispondi</Button>;
+}
 function Reviews() {
   const reviews = window.SC_REVIEWS;
   const avg = window.SC_STORE.rating;
@@ -664,9 +1044,7 @@ function Reviews() {
                 </div>
               </div>
               <p style={{ margin: '0 0 10px', fontSize: '14px', lineHeight: 1.55, color: 'var(--ink-700)' }}>{r.text}</p>
-              {r.reply
-                ? <div style={{ background: 'var(--cream-50)', borderLeft: '3px solid var(--primary-400)', borderRadius: '0 var(--radius-md) var(--radius-md) 0', padding: '8px 12px' }}><p style={{ margin: 0, fontSize: '12px', fontWeight: 700, color: 'var(--primary-700)' }}>La tua risposta</p><p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-600)' }}>{r.reply}</p></div>
-                : <Button variant="ghost" size="sm" icon="reply">Rispondi</Button>}
+              <ReviewReply initial={r.reply} />
             </Card>
           ))}
         </div>
@@ -681,7 +1059,7 @@ function Customers() {
     <div>
       <PageTitle eyebrow="Relazioni" title="Clienti" sub="Chi compra dal tuo negozio" />
       <Card variant="bordered" padding="none">
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+        <table className="mc-prod-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
           <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Cliente', 'Ordini', 'Speso', 'Ultimo'].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '12px 18px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
           <tbody>
             {custs.map((c) => (
@@ -699,6 +1077,18 @@ function Customers() {
             ))}
           </tbody>
         </table>
+        <div className="mc-prod-cards" style={{ display: 'none', flexDirection: 'column' }}>
+          {custs.map((c) => (
+            <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderBottom: '1px solid var(--cream-200)' }}>
+              <span style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '14px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{c.initials}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)' }}>{c.name}</p>
+                <p style={{ margin: '2px 0 0', fontSize: '12.5px', color: 'var(--ink-500)' }}>{c.orders} ordini · ultimo {c.last}</p>
+              </div>
+              <span style={{ fontSize: '15px', fontWeight: 800, color: 'var(--ink-900)', flexShrink: 0 }}>{fmt(c.spent)}</span>
+            </div>
+          ))}
+        </div>
       </Card>
     </div>
   );
@@ -1307,53 +1697,254 @@ function Stories({ onToast }) {
   );
 }
 
-// ── Vetrina: editor del negozio pubblico (app/seller/site) ──
+// ── Vetrina: editor a blocchi stile WordPress (app/seller/site) ──
+const VET_ACCENTS = [
+  { id: 'terracotta', label: 'Terracotta', v: 'var(--primary-600)' },
+  { id: 'oliva', label: 'Oliva', v: 'var(--olive-600)' },
+  { id: 'senape', label: 'Senape', v: 'var(--accent-600)' },
+  { id: 'prugna', label: 'Prugna', v: 'var(--secondary-600)' },
+];
+const VET_TYPES = {
+  cover: { label: 'Copertina', icon: 'image' },
+  about: { label: 'Chi siamo', icon: 'text' },
+  products: { label: 'Prodotti', icon: 'grid-3x3' },
+  hours: { label: 'Orari', icon: 'clock' },
+  stories: { label: 'Storie', icon: 'camera' },
+  reviews: { label: 'Recensioni', icon: 'star' },
+  contact: { label: 'Dove siamo', icon: 'map-pin' },
+  banner: { label: 'Banner promo', icon: 'megaphone' },
+};
+function vetDefault(type, store) {
+  if (type === 'cover') return { title: store.name, tagline: 'Salumi e formaggi piacentini, tagliati a mano ogni giorno.' };
+  if (type === 'about') return { heading: 'Chi siamo', text: 'Nel cuore del centro storico dal 1962. Selezioniamo solo produttori del territorio e tagliamo a mano ogni giorno.' };
+  if (type === 'products') return { heading: 'In vetrina', cols: 3 };
+  if (type === 'hours') return { heading: 'Orari', text: 'Lun–Sab 8:00–19:30 · Domenica chiuso' };
+  if (type === 'stories') return { heading: 'Le nostre storie' };
+  if (type === 'reviews') return { heading: 'Cosa dicono i clienti' };
+  if (type === 'contact') return { heading: 'Dove siamo', text: 'Via Roma 18, Centro storico · Piacenza' };
+  if (type === 'banner') return { text: '€5 di sconto sul primo ordine — questa settimana' };
+  return {};
+}
 function Vetrina({ onToast }) {
   const store = window.SC_STORE;
-  const [cover, setCover] = React.useState(true);
-  const [showReviews, setShowReviews] = React.useState(true);
-  const [showStories, setShowStories] = React.useState(true);
+  const [blocks, setBlocks] = React.useState([
+    { id: 'b1', type: 'cover', on: true, ...vetDefault('cover', store) },
+    { id: 'b2', type: 'about', on: true, ...vetDefault('about', store) },
+    { id: 'b3', type: 'products', on: true, ...vetDefault('products', store) },
+    { id: 'b4', type: 'hours', on: true, ...vetDefault('hours', store) },
+    { id: 'b5', type: 'stories', on: true, ...vetDefault('stories', store) },
+    { id: 'b6', type: 'reviews', on: true, ...vetDefault('reviews', store) },
+    { id: 'b7', type: 'contact', on: true, ...vetDefault('contact', store) },
+  ]);
+  const [sel, setSel] = React.useState('b1');
+  const [accent, setAccent] = React.useState('terracotta');
+  const [pv, setPv] = React.useState('desktop');
+  const [adding, setAdding] = React.useState(false);
+  const accentV = (VET_ACCENTS.find((a) => a.id === accent) || VET_ACCENTS[0]).v;
+  const selBlock = blocks.find((b) => b.id === sel);
+  const patch = (id, p) => setBlocks((bs) => bs.map((b) => b.id === id ? { ...b, ...p } : b));
+  const move = (i, d) => setBlocks((bs) => { const n = [...bs]; const j = i + d; if (j < 0 || j >= n.length) return bs; [n[i], n[j]] = [n[j], n[i]]; return n; });
+  const del = (id) => setBlocks((bs) => bs.filter((b) => b.id !== id));
+  const add = (type) => { const id = 'b' + Date.now(); setBlocks((bs) => [...bs, { id, type, on: true, ...vetDefault(type, store) }]); setSel(id); setAdding(false); };
+
+  const fieldLabel = { display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--ink-600)', marginBottom: '4px' };
+  const inp = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '9px 11px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none', color: 'var(--ink-900)' };
+
   return (
     <div>
-      <PageTitle eyebrow="Contenuti" title="La tua vetrina" sub="Personalizza come appare il negozio agli acquirenti"
-        action={<Button variant="secondary" icon="external-link">Vedi vetrina</Button>} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '20px', alignItems: 'start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <Card variant="bordered" padding="lg">
-            <h3 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Informazioni</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <Input label="Nome negozio" defaultValue={store.name} />
-              <div><label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: 'var(--ink-700)', marginBottom: '4px' }}>Descrizione</label><textarea rows="3" defaultValue="Salumi e formaggi piacentini selezionati, tagliati a mano ogni giorno nel cuore del centro storico." style={{ width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '9px 11px', fontSize: '14px', fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none' }} /></div>
-              <Input label="Orari" defaultValue={`8:00 – ${store.closeAt}`} />
+      <PageTitle eyebrow="Negozio" title="La tua vetrina" sub="Costruiscila a blocchi — trascina, modifica e vedi l'anteprima dal vivo"
+        action={<div style={{ display: 'flex', gap: '8px' }}><Button variant="secondary" icon="external-link" onClick={() => { window.location.href = '../buyer/index.html?store=' + encodeURIComponent(store.name); }}>Vedi vetrina</Button><Button variant="primary" icon="save" onClick={() => onToast && onToast('Vetrina pubblicata')}>Salva vetrina</Button></div>} />
+      <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: '20px', alignItems: 'start' }}>
+        {/* ── editor a blocchi ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <Card variant="bordered" padding="md">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>Blocchi</h3>
+              <button onClick={() => setAdding((v) => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', border: 0, background: 'var(--primary-100)', color: 'var(--primary-700)', fontWeight: 700, fontSize: '12.5px', padding: '6px 10px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}><Lucide name={adding ? 'x' : 'plus'} size={14} color="var(--primary-700)" /> {adding ? 'Chiudi' : 'Aggiungi'}</button>
+            </div>
+            {adding && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--cream-200)' }}>
+                {Object.keys(VET_TYPES).map((t) => (
+                  <button key={t} onClick={() => add(t)} style={{ display: 'flex', alignItems: 'center', gap: '7px', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', borderRadius: 'var(--radius-md)', padding: '8px 10px', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '12.5px', color: 'var(--ink-800)', textAlign: 'left' }}><Lucide name={VET_TYPES[t].icon} size={14} color="var(--primary-600)" /> {VET_TYPES[t].label}</button>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              {blocks.map((b, i) => {
+                const on = sel === b.id;
+                return (
+                  <div key={b.id} onClick={() => setSel(b.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: 'var(--radius-md)', cursor: 'pointer', background: on ? 'var(--primary-50)' : 'var(--cream-50)', border: '1px solid ' + (on ? 'var(--primary-300)' : 'transparent') }}>
+                    <Lucide name="grip-vertical" size={15} color="var(--ink-300)" />
+                    <Lucide name={VET_TYPES[b.type].icon} size={15} color={b.on ? 'var(--primary-600)' : 'var(--ink-300)'} />
+                    <span style={{ flex: 1, minWidth: 0, fontSize: '13px', fontWeight: on ? 700 : 500, color: b.on ? 'var(--ink-900)' : 'var(--ink-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{VET_TYPES[b.type].label}</span>
+                    <button onClick={(e) => { e.stopPropagation(); move(i, -1); }} aria-label="Su" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex', opacity: i === 0 ? 0.3 : 1 }}><Lucide name="chevron-up" size={15} color="var(--ink-500)" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); move(i, 1); }} aria-label="Giù" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex', opacity: i === blocks.length - 1 ? 0.3 : 1 }}><Lucide name="chevron-down" size={15} color="var(--ink-500)" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); patch(b.id, { on: !b.on }); }} aria-label="Mostra/nascondi" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex' }}><Lucide name={b.on ? 'eye' : 'eye-off'} size={15} color={b.on ? 'var(--olive-600)' : 'var(--ink-300)'} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); del(b.id); }} aria-label="Elimina" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '2px', display: 'inline-flex' }}><Lucide name="trash-2" size={14} color="var(--ink-400)" /></button>
+                  </div>
+                );
+              })}
             </div>
           </Card>
-          <Card variant="bordered" padding="lg">
-            <h3 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Sezioni della vetrina</h3>
-            {[['Foto di copertina', cover, setCover], ['Recensioni', showReviews, setShowReviews], ['Storie', showStories, setShowStories]].map(([l, v, set]) => (
-              <div key={l} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--cream-200)' }}>
-                <span style={{ fontSize: '14px', color: 'var(--ink-800)' }}>{l}</span>
-                <button onClick={() => set((x) => !x)} style={{ border: 0, cursor: 'pointer', width: '44px', height: '26px', borderRadius: '999px', background: v ? 'var(--olive-500)' : 'var(--cream-400)', position: 'relative' }}><span style={{ position: 'absolute', top: '3px', left: v ? '21px' : '3px', width: '20px', height: '20px', borderRadius: '50%', background: '#fff', transition: 'left var(--dur-base)', boxShadow: 'var(--shadow-sm)' }} /></button>
+
+          {/* editor del blocco selezionato */}
+          {selBlock && (
+            <Card variant="bordered" padding="md">
+              <h3 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)', display: 'flex', alignItems: 'center', gap: '7px' }}><Lucide name={VET_TYPES[selBlock.type].icon} size={16} color="var(--primary-600)" /> {VET_TYPES[selBlock.type].label}</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {selBlock.type === 'cover' && (<React.Fragment>
+                  <button style={{ width: '100%', height: '70px', borderRadius: 'var(--radius-md)', border: '1.5px dashed var(--cream-400)', background: 'var(--cream-50)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--ink-500)', fontFamily: 'var(--font-sans)', fontSize: '13px' }}><Lucide name="image-plus" size={18} color="var(--ink-400)" /> Cambia foto di copertina</button>
+                  <div><label style={fieldLabel}>Titolo</label><input value={selBlock.title} onChange={(e) => patch(selBlock.id, { title: e.target.value })} style={inp} /></div>
+                  <div><label style={fieldLabel}>Sottotitolo</label><textarea rows="2" value={selBlock.tagline} onChange={(e) => patch(selBlock.id, { tagline: e.target.value })} style={{ ...inp, resize: 'vertical' }} /></div>
+                </React.Fragment>)}
+                {(selBlock.type === 'about' || selBlock.type === 'hours' || selBlock.type === 'contact') && (<React.Fragment>
+                  <div><label style={fieldLabel}>Titolo sezione</label><input value={selBlock.heading} onChange={(e) => patch(selBlock.id, { heading: e.target.value })} style={inp} /></div>
+                  <div><label style={fieldLabel}>Testo</label><textarea rows="3" value={selBlock.text} onChange={(e) => patch(selBlock.id, { text: e.target.value })} style={{ ...inp, resize: 'vertical' }} /></div>
+                </React.Fragment>)}
+                {selBlock.type === 'banner' && (<div><label style={fieldLabel}>Testo del banner</label><input value={selBlock.text} onChange={(e) => patch(selBlock.id, { text: e.target.value })} style={inp} /></div>)}
+                {selBlock.type === 'products' && (<React.Fragment>
+                  <div><label style={fieldLabel}>Titolo sezione</label><input value={selBlock.heading} onChange={(e) => patch(selBlock.id, { heading: e.target.value })} style={inp} /></div>
+                  <div><label style={fieldLabel}>Colonne</label><div style={{ display: 'flex', gap: '6px' }}>{[2, 3, 4].map((c) => <button key={c} onClick={() => patch(selBlock.id, { cols: c })} style={{ flex: 1, border: '1px solid ' + (selBlock.cols === c ? 'var(--primary-400)' : 'var(--cream-300)'), background: selBlock.cols === c ? 'var(--primary-50)' : 'var(--surface-0)', color: selBlock.cols === c ? 'var(--primary-700)' : 'var(--ink-600)', fontWeight: 700, padding: '8px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '13px' }}>{c}</button>)}</div></div>
+                </React.Fragment>)}
+                {(selBlock.type === 'stories' || selBlock.type === 'reviews') && (<React.Fragment>
+                  <div><label style={fieldLabel}>Titolo sezione</label><input value={selBlock.heading} onChange={(e) => patch(selBlock.id, { heading: e.target.value })} style={inp} /></div>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)', display: 'flex', alignItems: 'center', gap: '6px' }}><Lucide name="sparkles" size={13} color="var(--ink-400)" /> Contenuti aggiornati in automatico dal negozio.</p>
+                </React.Fragment>)}
               </div>
-            ))}
+            </Card>
+          )}
+
+          {/* tema colore */}
+          <Card variant="bordered" padding="md">
+            <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-serif)', fontSize: '15px', fontWeight: 700, color: 'var(--ink-900)' }}>Tema</h3>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {VET_ACCENTS.map((a) => (
+                <button key={a.id} onClick={() => setAccent(a.id)} title={a.label} aria-label={a.label} style={{ width: '34px', height: '34px', borderRadius: '50%', background: a.v, cursor: 'pointer', border: '3px solid ' + (accent === a.id ? 'var(--ink-900)' : 'transparent'), boxShadow: 'var(--shadow-sm)' }} />
+              ))}
+            </div>
           </Card>
         </div>
-        {/* anteprima vetrina */}
+
+        {/* ── anteprima live ── */}
         <Card variant="bordered" padding="none" style={{ position: 'sticky', top: '90px', overflow: 'hidden' }}>
-          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--cream-200)', background: 'var(--cream-50)', display: 'flex', alignItems: 'center', gap: '8px' }}><Lucide name="eye" size={14} color="var(--ink-500)" /><span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)' }}>Anteprima</span></div>
-          {cover && <div style={{ height: '90px', background: 'linear-gradient(135deg, var(--primary-300), var(--accent-300))' }} />}
-          <div style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{store.initials}</span><div><p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{store.name}</p><p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)' }}>{store.rating.toFixed(1).replace('.', ',')}★ · {store.area}</p></div></div>
-            {showStories && <div style={{ display: 'flex', gap: '6px', marginTop: '12px' }}>{[0,1,2].map((i) => <div key={i} style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--cream-200)', border: '2px solid var(--secondary-400)' }} />)}</div>}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '12px' }}>{[0,1,2,3].map((i) => <div key={i} style={{ height: '50px', borderRadius: 'var(--radius-md)', background: 'var(--surface-100)', border: '1px solid var(--cream-300)' }} />)}</div>
-            {showReviews && <div style={{ marginTop: '12px', padding: '8px 10px', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)', fontSize: '11px', color: 'var(--ink-500)' }}>★★★★★ "Prodotti top, consegna puntuale"</div>}
+          <div style={{ padding: '9px 14px', borderBottom: '1px solid var(--cream-200)', background: 'var(--cream-50)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ display: 'flex', gap: '5px' }}>{['#ef6f5b', '#f4bc53', '#7fae5a'].map((c) => <span key={c} style={{ width: '10px', height: '10px', borderRadius: '50%', background: c }} />)}</span>
+            <span style={{ flex: 1, textAlign: 'center', fontSize: '11px', color: 'var(--ink-400)', fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>mycity.it/negozio/{store.name.toLowerCase().replace(/[^a-z]+/g, '-')}</span>
+            <div style={{ display: 'inline-flex', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '2px', flexShrink: 0 }}>
+              {[['desktop', 'monitor'], ['mobile', 'smartphone']].map(([k, ic]) => (
+                <button key={k} onClick={() => setPv(k)} aria-label={k} title={k === 'desktop' ? 'Anteprima desktop' : 'Anteprima mobile'} style={{ border: 0, background: pv === k ? 'var(--primary-700)' : 'transparent', color: pv === k ? '#fff' : 'var(--ink-500)', cursor: 'pointer', padding: '5px 9px', borderRadius: 'var(--radius-full)', display: 'inline-flex', alignItems: 'center' }}><Lucide name={ic} size={14} color={pv === k ? '#fff' : 'var(--ink-500)'} /></button>
+              ))}
+            </div>
+          </div>
+          <div style={{ maxHeight: '640px', overflowY: 'auto', background: pv === 'mobile' ? 'var(--cream-200)' : 'var(--surface-50)', padding: pv === 'mobile' ? '20px 0' : 0, display: pv === 'mobile' ? 'flex' : 'block', justifyContent: 'center' }}>
+            <div style={pv === 'mobile' ? { width: '320px', maxWidth: '100%', background: 'var(--surface-50)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', boxShadow: 'var(--shadow-warm-lg)', border: '5px solid var(--ink-900)' } : { width: '100%' }}>
+            {blocks.filter((b) => b.on).map((b) => <VetBlock key={b.id} b={b} accent={accentV} store={store} />)}
+            {blocks.filter((b) => b.on).length === 0 && <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--ink-400)', fontSize: '13px' }}>Nessun blocco attivo — aggiungine uno per iniziare.</div>}
+            </div>
           </div>
         </Card>
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}><Button variant="primary" icon="save" onClick={() => onToast && onToast('Vetrina aggiornata')}>Salva vetrina</Button></div>
     </div>
   );
 }
-
+function VetBlock({ b, accent, store }) {
+  if (b.type === 'cover') return (
+    <div>
+      <div style={{ height: '120px', background: 'linear-gradient(135deg, ' + accent + ', var(--accent-300))', position: 'relative' }} />
+      <div style={{ padding: '0 16px', marginTop: '-30px' }}>
+        <span style={{ width: '60px', height: '60px', borderRadius: 'var(--radius-lg)', background: '#fff', border: '3px solid #fff', boxShadow: 'var(--shadow-card)', color: accent, fontWeight: 800, fontSize: '22px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-serif)' }}>{store.initials}</span>
+        <h2 style={{ margin: '10px 0 2px', fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, color: 'var(--ink-900)' }}>{b.title}</h2>
+        <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-500)', lineHeight: 1.5 }}>{b.tagline}</p>
+      </div>
+    </div>
+  );
+  if (b.type === 'banner') return (
+    <div style={{ margin: '14px 16px', padding: '12px 14px', borderRadius: 'var(--radius-lg)', background: accent, color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, fontSize: '13px' }}><Lucide name="megaphone" size={16} color="#fff" /> {b.text}</div>
+  );
+  if (b.type === 'products') return (
+    <div style={{ padding: '16px' }}>
+      <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{b.heading}</h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(' + (b.cols || 3) + ', 1fr)', gap: '8px' }}>
+        {Array.from({ length: (b.cols || 3) * 2 }).map((_, i) => (
+          <div key={i} style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#fff', border: '1px solid var(--cream-300)' }}>
+            <div style={{ aspectRatio: '1', background: 'var(--surface-100)' }} />
+            <div style={{ padding: '6px' }}><div style={{ height: '7px', width: '80%', background: 'var(--cream-300)', borderRadius: '3px' }} /><div style={{ height: '7px', width: '40%', background: accent, borderRadius: '3px', marginTop: '5px', opacity: 0.7 }} /></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  if (b.type === 'stories') return (
+    <div style={{ padding: '16px' }}>
+      <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{b.heading}</h3>
+      <div style={{ display: 'flex', gap: '8px' }}>{[0, 1, 2, 3].map((i) => <div key={i} style={{ width: '52px', height: '52px', borderRadius: '50%', background: 'var(--surface-100)', border: '2px solid ' + accent, flexShrink: 0 }} />)}</div>
+    </div>
+  );
+  if (b.type === 'reviews') return (
+    <div style={{ padding: '16px' }}>
+      <h3 style={{ margin: '0 0 10px', fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>{b.heading}</h3>
+      <div style={{ background: '#fff', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '12px' }}>
+        <div style={{ color: 'var(--accent-500)', fontSize: '13px', letterSpacing: '2px' }}>★★★★★</div>
+        <p style={{ margin: '6px 0 0', fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.5 }}>“Prodotti top, consegna puntuale. Pago comodamente alla porta.”</p>
+        <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--ink-400)' }}>— Marco B.</p>
+      </div>
+    </div>
+  );
+  // about / hours / contact
+  return (
+    <div style={{ padding: '16px' }}>
+      <h3 style={{ margin: '0 0 6px', fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)', display: 'flex', alignItems: 'center', gap: '7px' }}>{b.type === 'contact' && <Lucide name="map-pin" size={16} color={accent} />}{b.type === 'hours' && <Lucide name="clock" size={16} color={accent} />}{b.heading}</h3>
+      <p style={{ margin: 0, fontSize: '13.5px', color: 'var(--ink-600)', lineHeight: 1.6 }}>{b.text}</p>
+      {b.type === 'contact' && <div style={{ height: '90px', marginTop: '10px', borderRadius: 'var(--radius-md)', background: 'linear-gradient(135deg, var(--cream-200), var(--surface-100))', border: '1px solid var(--cream-300)', position: 'relative', overflow: 'hidden' }}><span style={{ position: 'absolute', left: '50%', top: '50%', transform: 'translate(-50%,-50%)' }}><Lucide name="map-pin" size={24} color={accent} /></span></div>}
+    </div>
+  );
+}
+// ── Orari & disponibilità (self-service) ──
+function SellerHours({ onToast }) {
+  const DAYS = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+  const [hours, setHours] = React.useState(DAYS.map((d, i) => ({ d, on: i < 6, from: '08:00', to: '19:30' })));
+  const [paused, setPaused] = React.useState(false);
+  const [vacation, setVacation] = React.useState(false);
+  const toggleDay = (i) => setHours((h) => h.map((x, j) => j === i ? { ...x, on: !x.on } : x));
+  const setT = (i, k, v) => setHours((h) => h.map((x, j) => j === i ? { ...x, [k]: v } : x));
+  const tInp = { border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-sm)', padding: '5px 7px', fontSize: '13px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none', width: '78px' };
+  const statusLabel = vacation ? 'In ferie' : paused ? 'In pausa' : 'Aperto secondo orari';
+  const statusColor = vacation ? 'var(--secondary-600)' : paused ? 'var(--accent-700)' : 'var(--olive-700)';
+  return (
+    <Card variant="bordered" padding="lg">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Orari & disponibilità</h3>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: statusColor }}><span style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor }} />{statusLabel}</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px', opacity: vacation ? 0.5 : 1, pointerEvents: vacation ? 'none' : 'auto' }}>
+        {hours.map((h, i) => (
+          <div key={h.d} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button onClick={() => toggleDay(i)} style={{ width: '54px', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 700, color: h.on ? 'var(--ink-900)' : 'var(--ink-300)' }}>{h.d}</button>
+            <span onClick={() => toggleDay(i)} style={{ position: 'relative', width: '36px', height: '21px', borderRadius: '999px', background: h.on ? 'var(--olive-500)' : 'var(--cream-400)', cursor: 'pointer', flexShrink: 0 }}><span style={{ position: 'absolute', top: '2px', left: h.on ? '17px' : '2px', width: '17px', height: '17px', borderRadius: '50%', background: '#fff', transition: 'left var(--dur-base)' }} /></span>
+            {h.on ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                <input value={h.from} onChange={(e) => setT(i, 'from', e.target.value)} style={tInp} />
+                <span style={{ color: 'var(--ink-400)' }}>–</span>
+                <input value={h.to} onChange={(e) => setT(i, 'to', e.target.value)} style={tInp} />
+              </span>
+            ) : <span style={{ fontSize: '13px', color: 'var(--ink-400)' }}>Chiuso</span>}
+          </div>
+        ))}
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'var(--accent-50)', border: '1px solid var(--accent-200)', borderRadius: 'var(--radius-md)', marginBottom: '8px', cursor: 'pointer' }}>
+        <Lucide name="pause" size={16} color="var(--accent-700)" />
+        <span style={{ flex: 1, fontSize: '13px', color: 'var(--accent-900)' }}><strong>Pausa ordini</strong> · chiudi temporaneamente (es. troppi ordini)</span>
+        <span onClick={() => setPaused((v) => !v)} style={{ position: 'relative', width: '40px', height: '23px', borderRadius: '999px', background: paused ? 'var(--accent-600)' : 'var(--cream-400)', cursor: 'pointer', flexShrink: 0 }}><span style={{ position: 'absolute', top: '2px', left: paused ? '19px' : '2px', width: '19px', height: '19px', borderRadius: '50%', background: '#fff' }} /></span>
+      </label>
+      <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', background: 'var(--secondary-50)', border: '1px solid var(--secondary-200)', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}>
+        <Lucide name="palmtree" size={16} color="var(--secondary-600)" />
+        <span style={{ flex: 1, fontSize: '13px', color: 'var(--secondary-700)' }}><strong>Modalità ferie</strong> · il negozio risulta chiuso ai clienti</span>
+        <span onClick={() => setVacation((v) => !v)} style={{ position: 'relative', width: '40px', height: '23px', borderRadius: '999px', background: vacation ? 'var(--secondary-600)' : 'var(--cream-400)', cursor: 'pointer', flexShrink: 0 }}><span style={{ position: 'absolute', top: '2px', left: vacation ? '19px' : '2px', width: '19px', height: '19px', borderRadius: '50%', background: '#fff' }} /></span>
+      </label>
+      <div style={{ marginTop: '14px' }}><Button variant="primary" size="sm" icon="save" onClick={() => onToast && onToast('Orari aggiornati · visibili ai clienti')}>Salva orari</Button></div>
+    </Card>
+  );
+}
 // ── Profilo venditore (app/seller/profile) ──
 function SellerProfile({ onToast }) {
   const store = window.SC_STORE;
@@ -1373,6 +1964,7 @@ function SellerProfile({ onToast }) {
           </div>
         </Card>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <SellerHours onToast={onToast} />
           <Card variant="bordered" padding="lg">
             <h3 style={{ margin: '0 0 12px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Pagamenti</h3>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--olive-50)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--olive-200)' }}>
@@ -1451,7 +2043,7 @@ function App() {
       {view === 'orders' && <Orders orders={orders} onAdvance={advance} />}
       {view === 'products' && <Products products={window.SC_PRODUCTS} onNewProduct={() => setNewProd(true)} />}
       {view === 'ai' && <AiStudio onToast={showToast} />}
-      {view === 'promotions' && <Promotions onNew={() => showToast('Editor promo (demo)')} />}
+      {view === 'promotions' && <Promotions onToast={showToast} />}
       {view === 'promote' && <Promote onToast={showToast} />}
       {view === 'stories' && <Stories onToast={showToast} />}
       {view === 'analytics' && <Analytics />}

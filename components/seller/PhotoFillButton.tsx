@@ -101,7 +101,7 @@ const PhotoFillButton = ({ onFilled, onImages }: Props) => {
   const busy = state === 'analyzing';
 
   return (
-    <div className="bg-gradient-to-r from-primary-600 to-purple-600 text-white rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
+    <div className="bg-gradient-to-r from-primary-600 to-secondary-600 text-white rounded-lg p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
       <div className="flex-1">
         <p className="font-bold text-base sm:text-lg flex items-center gap-2">
           <Camera size={20} aria-hidden />
@@ -122,7 +122,7 @@ const PhotoFillButton = ({ onFilled, onImages }: Props) => {
         >
           {busy ? (
             <>
-              <span className="inline-block w-4 h-4 border-2 border-indigo-700/30 border-t-indigo-700 rounded-full animate-spin" />
+              <span className="inline-block w-4 h-4 border-2 border-primary-700/30 border-t-primary-700 rounded-full animate-spin" />
               <span>Analizzo...</span>
             </>
           ) : (

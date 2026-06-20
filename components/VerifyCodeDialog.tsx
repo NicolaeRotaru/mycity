@@ -87,7 +87,7 @@ const VerifyCodeDialog = ({
               setError(null);
             }}
             placeholder="000000"
-            className="w-full text-center font-mono text-4xl tracking-[0.5em] font-bold border-2 border-cream-300 rounded-xl py-4 focus:outline-none focus:border-indigo-500"
+            className="w-full text-center font-mono text-4xl tracking-[0.5em] font-bold border-2 border-cream-300 rounded-xl py-4 focus:outline-none focus:border-primary-500"
             autoComplete="one-time-code"
           />
           {error && (

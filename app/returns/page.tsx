@@ -24,7 +24,7 @@ export default function ReturnsPage() {
         <p className="text-ink-600">Hai 14 giorni di tempo per ripensarci. Ecco come funziona.</p>
       </div>
 
-      <div className="bg-gradient-to-r from-primary-50 to-purple-50 border border-primary-200 rounded-2xl p-6 mb-10">
+      <div className="bg-gradient-to-r from-primary-50 to-secondary-50 border border-primary-200 rounded-2xl p-6 mb-10">
         <div className="flex items-start gap-4">
           <Calendar size={32} className="text-primary-600 shrink-0" aria-hidden />
           <div>

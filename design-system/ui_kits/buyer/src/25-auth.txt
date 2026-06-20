@@ -36,7 +36,7 @@ function AuthPage({ mode = 'login', onAuth, onBack, onSwitch }) {
           <Input label="Email" type="email" placeholder="nome@email.it" leading={<Lucide name="mail" size={18} color="var(--ink-400)" />} />
           <Input label="Password" type="password" placeholder="••••••••" leading={<Lucide name="lock" size={18} color="var(--ink-400)" />}
             labelAction={isLogin ? <a onClick={() => onSwitch('reset')} style={{ cursor: 'pointer' }}>Password dimenticata?</a> : null} />
-          {!isLogin && <Checkbox label={<>Accetto i <a style={{ cursor: 'pointer' }}>termini</a> e la <a style={{ cursor: 'pointer' }}>privacy</a>.</>} defaultChecked />}
+          {!isLogin && <Checkbox label={<>Accetto i <a href="pages/legal.html" target="_blank" style={{ cursor: 'pointer', color: 'var(--primary-700)' }}>termini</a> e la <a href="pages/legal.html" target="_blank" style={{ cursor: 'pointer', color: 'var(--primary-700)' }}>privacy</a>.</>} defaultChecked />}
           <Button variant="primary" size="lg" type="submit" fullWidth iconRight="arrow-right">{isLogin ? 'Accedi' : 'Crea account'}</Button>
         </form>
         )}
@@ -49,11 +49,27 @@ function AuthPage({ mode = 'login', onAuth, onBack, onSwitch }) {
           <Button variant="secondary" fullWidth icon="smartphone">SPID</Button>
           <Button variant="secondary" fullWidth onClick={onAuth}>Continua con Google</Button>
         </div>
+        <button onClick={onAuth} style={{ marginTop: '10px', maxWidth: '380px', width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', color: 'var(--ink-900)', fontWeight: 700, fontSize: '14px', padding: '12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+          <Lucide name="message-square-text" size={18} color="var(--primary-700)" /> Accedi con codice via SMS
+        </button>
 
         <p style={{ margin: '22px 0 0', fontSize: '14px', color: 'var(--ink-600)' }}>
           {isLogin ? 'Non hai un account? ' : 'Hai già un account? '}
           <a onClick={() => onSwitch(isLogin ? 'register' : 'login')} style={{ cursor: 'pointer', fontWeight: 700 }}>{isLogin ? 'Registrati' : 'Accedi'}</a>
         </p>
+        <div style={{ marginTop: '20px', maxWidth: '380px', borderTop: '1px solid var(--cream-300)', paddingTop: '18px' }}>
+          <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 700, color: 'var(--ink-700)' }}>Vuoi lavorare con MyCity?</p>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <a href="../seller/registrati.html" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '12px', textDecoration: 'none', background: 'var(--surface-0)' }}>
+              <span style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-md)', background: 'var(--primary-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="store" size={18} color="var(--primary-700)" /></span>
+              <span style={{ minWidth: 0 }}><span style={{ display: 'block', fontWeight: 700, fontSize: '13.5px', color: 'var(--ink-900)' }}>Diventa venditore</span><span style={{ display: 'block', fontSize: '12px', color: 'var(--ink-500)' }}>Apri il tuo negozio</span></span>
+            </a>
+            <a href="../rider/registrati.html" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '10px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '12px', textDecoration: 'none', background: 'var(--surface-0)' }}>
+              <span style={{ width: '36px', height: '36px', borderRadius: 'var(--radius-md)', background: 'var(--primary-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="bike" size={18} color="var(--primary-700)" /></span>
+              <span style={{ minWidth: 0 }}><span style={{ display: 'block', fontWeight: 700, fontSize: '13.5px', color: 'var(--ink-900)' }}>Diventa rider</span><span style={{ display: 'block', fontSize: '12px', color: 'var(--ink-500)' }}>Consegna e guadagna</span></span>
+            </a>
+          </div>
+        </div>
         </>}
       </div>
 

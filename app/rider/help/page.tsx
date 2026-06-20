@@ -88,7 +88,7 @@ export default function RiderHelpPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-3">
-        <Link href="/contact" className="bg-gradient-to-br from-accent-500 to-orange-500 text-white rounded-xl p-5 hover:shadow-lg transition-all">
+        <Link href="/contact" className="bg-gradient-to-br from-accent-500 to-accent-600 text-white rounded-xl p-5 hover:shadow-lg transition-all">
           <div className="mb-2"><Mail size={24} strokeWidth={2.2} aria-hidden /></div>
           <p className="font-bold">Contatta il supporto</p>
           <p className="text-xs text-accent-100 mt-1">Risposta entro 24h</p>
@@ -98,7 +98,7 @@ export default function RiderHelpPage() {
           <p className="font-bold text-ink-900">Emergenza</p>
           <p className="text-xs text-ink-500 mt-1">+39 0523 000000 · 24/7</p>
         </a>
-        <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
+        <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-olive-300 transition-all">
           <div className="mb-2"><MessageCircle size={24} strokeWidth={2.2} aria-hidden /></div>
           <p className="font-bold text-ink-900">WhatsApp rider</p>
           <p className="text-xs text-ink-500 mt-1">Lun-Dom 7-23</p>

@@ -28,6 +28,35 @@ function Audit() {
     <div>
       <PageTitle eyebrow="Sistema" title="Audit log" sub="Registro immutabile delle azioni amministrative"
         action={<Button variant="secondary" icon="download">Esporta</Button>} />
+      <Card variant="bordered" padding="lg" style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Lucide name="tag" size={17} color="var(--primary-700)" />
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>Modifiche prezzo & catalogo</h3>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-700)', background: 'var(--accent-50)', padding: '2px 8px', borderRadius: '999px' }}>anti-frode</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[
+            { store: 'Cantina Pace', prod: 'Gutturnio DOC 2021', from: 7.5, to: 11.9, when: '2 ore fa', flag: true },
+            { store: 'Salumeria Verdi', prod: 'Coppa Piacentina DOP', from: 8.9, to: 8.4, when: '5 ore fa', flag: false },
+            { store: 'Bottega Emilia', prod: 'Tortelli con la coda', from: 6.0, to: 9.2, when: 'Ieri', flag: true },
+            { store: 'Forno Borgo', prod: 'Miccone 500g', from: 2.2, to: 2.4, when: 'Ieri', flag: false },
+          ].map((c, i) => {
+            const delta = Math.round(((c.to - c.from) / c.from) * 100);
+            const up = delta > 0;
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 13px', border: '1px solid ' + (c.flag ? 'var(--secondary-200)' : 'var(--cream-300)'), background: c.flag ? 'var(--secondary-50)' : 'var(--surface-0)', borderRadius: 'var(--radius-lg)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{c.prod}</p>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{c.store} · {c.when}</p>
+                </div>
+                <span style={{ fontSize: '13px', color: 'var(--ink-500)' }}>{fmt(c.from)} → <strong style={{ color: 'var(--ink-900)' }}>{fmt(c.to)}</strong></span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px', fontWeight: 700, color: up ? (c.flag ? 'var(--secondary-600)' : 'var(--accent-700)') : 'var(--olive-700)' }}><Lucide name={up ? 'trending-up' : 'trending-down'} size={13} color={up ? (c.flag ? 'var(--secondary-600)' : 'var(--accent-700)') : 'var(--olive-700)'} /> {up ? '+' : ''}{delta}%</span>
+                {c.flag && <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--secondary-700)', background: 'var(--surface-0)', border: '1px solid var(--secondary-200)', padding: '3px 8px', borderRadius: '999px', flexShrink: 0 }}>Rincaro sospetto</span>}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
       <Card variant="bordered" padding="none">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
           <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Operatore', 'Evento', 'Dettaglio', 'IP', 'Quando'].map((h) => <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>

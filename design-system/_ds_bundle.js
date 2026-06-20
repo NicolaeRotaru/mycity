@@ -1,4 +1,4 @@
-/* @ds-bundle: {"format":3,"namespace":"MyCityDesignSystem_105480","components":[{"name":"OrderStatusBadge","sourcePath":"components/commerce/OrderStatusBadge.jsx"},{"name":"ProductCard","sourcePath":"components/commerce/ProductCard.jsx"},{"name":"Badge","sourcePath":"components/core/Badge.jsx"},{"name":"Button","sourcePath":"components/core/Button.jsx"},{"name":"Card","sourcePath":"components/core/Card.jsx"},{"name":"EmptyState","sourcePath":"components/feedback/EmptyState.jsx"},{"name":"Modal","sourcePath":"components/feedback/Modal.jsx"},{"name":"Checkbox","sourcePath":"components/forms/Checkbox.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Field","sourcePath":"components/forms/Input.jsx"},{"name":"Select","sourcePath":"components/forms/Select.jsx"}],"sourceHashes":{"components/commerce/OrderStatusBadge.jsx":"ad69353454af","components/commerce/ProductCard.jsx":"fec64a4007bd","components/core/Badge.jsx":"b348f03b7cfa","components/core/Button.jsx":"216766976591","components/core/Card.jsx":"d09bb7b8cb01","components/feedback/EmptyState.jsx":"18a2b1af6820","components/feedback/Modal.jsx":"03a503d742dd","components/forms/Checkbox.jsx":"166ad0d13723","components/forms/Input.jsx":"7b34d4c20c7a","components/forms/Select.jsx":"baada32a54f5","deck/deck-stage.js":"208980974db4"},"inlinedExternals":[],"unexposedExports":[]} */
+/* @ds-bundle: {"format":3,"namespace":"MyCityDesignSystem_105480","components":[{"name":"OrderStatusBadge","sourcePath":"components/commerce/OrderStatusBadge.jsx"},{"name":"ProductCard","sourcePath":"components/commerce/ProductCard.jsx"},{"name":"Badge","sourcePath":"components/core/Badge.jsx"},{"name":"Button","sourcePath":"components/core/Button.jsx"},{"name":"Card","sourcePath":"components/core/Card.jsx"},{"name":"EmptyState","sourcePath":"components/feedback/EmptyState.jsx"},{"name":"Modal","sourcePath":"components/feedback/Modal.jsx"},{"name":"Checkbox","sourcePath":"components/forms/Checkbox.jsx"},{"name":"Input","sourcePath":"components/forms/Input.jsx"},{"name":"Field","sourcePath":"components/forms/Input.jsx"},{"name":"Select","sourcePath":"components/forms/Select.jsx"}],"sourceHashes":{"components/commerce/OrderStatusBadge.jsx":"ad69353454af","components/commerce/ProductCard.jsx":"e610bae4b815","components/core/Badge.jsx":"b348f03b7cfa","components/core/Button.jsx":"216766976591","components/core/Card.jsx":"d09bb7b8cb01","components/feedback/EmptyState.jsx":"18a2b1af6820","components/feedback/Modal.jsx":"03a503d742dd","components/forms/Checkbox.jsx":"166ad0d13723","components/forms/Input.jsx":"7b34d4c20c7a","components/forms/Select.jsx":"baada32a54f5","deck/deck-stage.js":"208980974db4"},"inlinedExternals":[],"unexposedExports":[]} */
 
 (() => {
 
@@ -275,6 +275,7 @@ function ProductCard({
   storeName,
   discountPercent,
   stock,
+  eta,
   isNew = false,
   freeShipping = false,
   onAdd,
@@ -367,10 +368,10 @@ function ProductCard({
     },
     style: {
       position: 'absolute',
-      top: '8px',
-      right: '8px',
-      width: '28px',
-      height: '28px',
+      top: '6px',
+      right: '6px',
+      width: '36px',
+      height: '36px',
       borderRadius: 'var(--radius-full)',
       border: 0,
       background: 'rgba(255,255,255,.95)',
@@ -381,15 +382,43 @@ function ProductCard({
       justifyContent: 'center'
     }
   }, /*#__PURE__*/React.createElement("svg", {
-    width: "14",
-    height: "14",
+    width: "18",
+    height: "18",
     viewBox: "0 0 24 24",
     fill: fav ? 'var(--secondary-500)' : 'none',
     stroke: fav ? 'var(--secondary-500)' : 'var(--ink-400)',
     strokeWidth: "2"
   }, /*#__PURE__*/React.createElement("path", {
     d: "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.5 4.04 3 5.5l7 7Z"
-  })))), /*#__PURE__*/React.createElement("div", {
+  }))), eta && !outOfStock && /*#__PURE__*/React.createElement("span", {
+    style: {
+      position: 'absolute',
+      left: '8px',
+      bottom: '8px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      background: 'rgba(255,255,255,.95)',
+      color: eta.today ? 'var(--olive-700)' : 'var(--ink-700)',
+      fontSize: '11px',
+      fontWeight: 700,
+      padding: '4px 8px',
+      borderRadius: 'var(--radius-full)',
+      boxShadow: 'var(--shadow-sm)',
+      fontFamily: 'var(--font-sans)'
+    }
+  }, /*#__PURE__*/React.createElement("svg", {
+    width: "12",
+    height: "12",
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: eta.today ? 'var(--olive-600)' : 'var(--ink-500)',
+    strokeWidth: "2.4",
+    strokeLinecap: "round",
+    strokeLinejoin: "round"
+  }, /*#__PURE__*/React.createElement("path", {
+    d: "M5 17h14M3 12h2l1-7h12l1 7h2M7 17a2 2 0 1 0 4 0M13 17a2 2 0 1 0 4 0"
+  })), eta.short === 'Oggi' ? 'Oggi' : eta.short === 'Domani' ? 'Domani' : '24–48h')), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexDirection: 'column',
@@ -495,8 +524,8 @@ function ProductCard({
     },
     style: {
       marginLeft: 'auto',
-      width: '28px',
-      height: '28px',
+      width: '44px',
+      height: '44px',
       flexShrink: 0,
       borderRadius: 'var(--radius-md)',
       border: 0,
@@ -509,8 +538,8 @@ function ProductCard({
       boxShadow: 'var(--shadow-sm)'
     }
   }, /*#__PURE__*/React.createElement("svg", {
-    width: "16",
-    height: "16",
+    width: "20",
+    height: "20",
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",

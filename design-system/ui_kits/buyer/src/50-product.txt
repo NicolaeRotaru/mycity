@@ -1,6 +1,7 @@
 // ===== Product detail page (PDP) — gallery, buy box, ETA, reviews, cross-sell =====
 function ProductPage({ product: p, onBack, onAdd, onOpen, onStore }) {
   const [qty, setQty] = React.useState(1);
+  const [following, setFollowing] = React.useState(false);
   const [activeImg, setActiveImg] = React.useState(0);
   const store = storeBy(p.store) || {};
   const fp = finalPrice(p);
@@ -45,10 +46,26 @@ function ProductPage({ product: p, onBack, onAdd, onOpen, onStore }) {
 
         {/* buy box */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div onClick={() => onStore(store)} style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start' }}>
-            <StoreChip name={p.store} size={24} />
-            {store.verified && <Lucide name="badge-check" size={16} color="var(--primary-600)" />}
+          <div onClick={() => onStore(store)} className="mc-card-hover" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', alignSelf: 'stretch', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '10px 12px', background: 'var(--surface-0)' }}>
+            <StoreChip name={p.store} size={40} hideLabel />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--ink-900)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.store}</span>
+                {store.verified && <Lucide name="badge-check" size={16} color="var(--primary-600)" />}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '3px 10px', fontSize: '12px', color: 'var(--ink-500)', marginTop: '2px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}><Lucide name="star" size={12} color="var(--accent-500)" /> <strong style={{ color: 'var(--ink-700)' }}>{store.rating}</strong> ({store.reviews})</span>
+                {store.since && <span>· dal {store.since}</span>}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--olive-700)' }}><Lucide name="badge-check" size={12} color="var(--olive-600)" /> {Math.min(99, 94 + (store.reviews % 6))}% puntuale</span>
+              </div>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); setFollowing((v) => !v); }} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '5px', border: '1.5px solid ' + (following ? 'var(--primary-600)' : 'var(--cream-300)'), background: following ? 'var(--primary-600)' : 'var(--surface-0)', color: following ? '#fff' : 'var(--primary-700)', fontWeight: 700, fontSize: '13px', padding: '7px 13px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
+              <Lucide name={following ? 'check' : 'plus'} size={14} color={following ? '#fff' : 'var(--primary-700)'} /> {following ? 'Segui già' : 'Segui'}
+            </button>
           </div>
+          {following ? (
+            <div style={{ marginTop: '-6px', fontSize: '12px', color: 'var(--olive-700)', display: 'flex', alignItems: 'center', gap: '5px' }}><Lucide name="bell" size={13} color="var(--olive-600)" /><span>Ti avviseremo su nuovi prodotti e offerte di {p.store}.</span></div>
+          ) : null}
           <h1 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '34px', fontWeight: 700, lineHeight: 1.1, color: 'var(--ink-900)' }}>{p.name}</h1>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--ink-500)' }}>
             <Stars value={p.rating} size={16} /> <strong style={{ color: 'var(--ink-800)' }}>{String(p.rating).replace('.', ',')}</strong> · {p.reviews} recensioni
@@ -88,7 +105,7 @@ function ProductPage({ product: p, onBack, onAdd, onOpen, onStore }) {
           {/* ETA box */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'var(--olive-50)', borderRadius: 'var(--radius-lg)', padding: '14px 16px' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '14px', fontWeight: 600, color: 'var(--olive-800)' }}>
-              <Lucide name="truck" size={17} color="var(--olive-700)" /> {store.deliveryToday ? 'Ordina entro le 18:00 → a casa domani' : 'Consegna in 24–48h'}
+              <Lucide name="truck" size={17} color="var(--olive-700)" /> {deliveryEta(store).cta}
             </span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--olive-800)' }}>
               <Lucide name="banknote" size={16} color="var(--olive-700)" /> Paghi al rider alla consegna · contanti
@@ -97,6 +114,34 @@ function ProductPage({ product: p, onBack, onAdd, onOpen, onStore }) {
               <Lucide name="rotate-ccw" size={16} color="var(--olive-700)" /> Reso gratuito entro 14 giorni
             </span>
           </div>
+
+          {/* ingredienti & allergeni (prodotti food) */}
+          {['Alimentari', 'Gastronomia', 'Vini', 'Panificio'].includes(p.cat) && (() => {
+            const allerg = p.cat === 'Vini' ? ['Solfiti'] : p.cat === 'Panificio' ? ['Glutine', 'Uova', 'Latte'] : ['Glutine', 'Latte'];
+            const conserv = p.cat === 'Vini' ? 'Luogo fresco e asciutto, lontano da fonti di calore.' : 'In frigorifero 0–4 °C. Consumare entro la data in etichetta.';
+            return (
+              <details style={{ border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+                <summary style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '13px 16px', cursor: 'pointer', fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)', listStyle: 'none' }}>
+                  <Lucide name="leaf" size={16} color="var(--olive-600)" /> Ingredienti e allergeni
+                  <Lucide name="chevron-down" size={16} color="var(--ink-400)" style={{ marginLeft: 'auto' }} />
+                </summary>
+                <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div>
+                    <p style={{ margin: '0 0 4px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ink-400)' }}>Allergeni</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {allerg.map((a) => <span key={a} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--secondary-700)', background: 'var(--secondary-50)', border: '1px solid var(--secondary-200)', padding: '3px 9px', borderRadius: 'var(--radius-full)' }}>{a}</span>)}
+                    </div>
+                    <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--ink-400)' }}>Può contenere tracce di frutta a guscio.</p>
+                  </div>
+                  <div>
+                    <p style={{ margin: '0 0 2px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ink-400)' }}>Conservazione</p>
+                    <p style={{ margin: 0, fontSize: '13px', color: 'var(--ink-600)', lineHeight: 1.45 }}>{conserv}</p>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '11px', color: 'var(--ink-400)', fontStyle: 'italic' }}>Verifica sempre l'etichetta sul prodotto: gli allergeni sono indicati dal produttore.</p>
+                </div>
+              </details>
+            );
+          })()}
         </div>
       </div>
 
@@ -130,9 +175,14 @@ function ProductPage({ product: p, onBack, onAdd, onOpen, onStore }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {reviews.length === 0
               ? <EmptyState icon="message-circle" title="Ancora nessuna recensione" description="Sii il primo a recensire questo prodotto dopo l’acquisto." />
-              : reviews.map((r, i) => <ReviewItem key={i} r={r} />)}
+              : <ReviewsList reviews={reviews} />}
           </div>
         </div>
+      </Section>
+
+      {/* Q&A */}
+      <Section title="Domande e risposte">
+        <ProductQA storeName={p.store} />
       </Section>
 
       {/* same store */}
@@ -143,6 +193,20 @@ function ProductPage({ product: p, onBack, onAdd, onOpen, onStore }) {
           </div>
         </Section>
       )}
+
+      {/* sticky add-to-cart — mobile only */}
+      <div className="mc-pdp-sticky" style={{ display: 'none', position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 'var(--z-sticky)', background: 'var(--surface-0)', borderTop: '1px solid var(--cream-300)', boxShadow: '0 -4px 16px -6px rgba(28,26,24,.18)', padding: '10px 14px calc(10px + env(safe-area-inset-bottom, 0px))', alignItems: 'center', gap: '12px' }}>
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ fontSize: '11px', color: 'var(--ink-400)', lineHeight: 1 }}>{out ? '' : `${qty} × ${fmt(fp)}`}</div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: hasDisc ? 'var(--secondary-600)' : 'var(--ink-900)', lineHeight: 1.1 }}>{fmt(fp * qty)}</div>
+        </div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', overflow: 'hidden', opacity: out ? .4 : 1 }}>
+          <button disabled={out} onClick={() => setQty((q) => Math.max(1, q - 1))} style={{ ...qtyBtn, width: '36px' }}><Lucide name="minus" size={16} /></button>
+          <span style={{ minWidth: '26px', textAlign: 'center', fontWeight: 700, color: 'var(--ink-900)' }}>{qty}</span>
+          <button disabled={out || qty >= p.stock} onClick={() => setQty((q) => Math.min(p.stock, q + 1))} style={{ ...qtyBtn, width: '36px', opacity: qty >= p.stock ? .4 : 1 }}><Lucide name="plus" size={16} /></button>
+        </div>
+        <Button variant="accent" size="lg" icon="shopping-cart" disabled={out} fullWidth onClick={() => onAdd(p, qty)}>{out ? 'Esaurito' : 'Aggiungi'}</Button>
+      </div>
     </div>
   );
 }
@@ -158,5 +222,62 @@ function Section({ title, action, children }) {
       </div>
       {children}
     </section>
+  );
+}
+
+function ProductQA({ storeName }) {
+  const seed = [
+    { q: 'Il prodotto è sottovuoto? Quanto dura in frigo?', a: 'Sì, confezionato sottovuoto. In frigo si conserva 10–12 giorni dalla consegna.', by: storeName, when: '3 giorni fa', votes: 8 },
+    { q: 'È adatto a chi è intollerante al lattosio?', a: 'Stagionato oltre 18 mesi: il lattosio è praticamente assente, ma per certezza chiedi al tuo medico.', by: storeName, when: '1 settimana fa', votes: 5 },
+  ];
+  const [items, setItems] = React.useState(seed);
+  const [text, setText] = React.useState('');
+  const ask = () => { const t = text.trim(); if (!t) return; setItems((l) => [{ q: t, a: null, by: null, when: 'ora', votes: 0 }, ...l]); setText(''); };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ask(); }} placeholder="Fai una domanda sul prodotto…" style={{ flex: 1, minWidth: '200px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '11px 14px', fontSize: '14px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none' }} />
+        <Button variant="secondary" icon="message-circle-question" onClick={ask}>Chiedi</Button>
+      </div>
+      {items.map((it, i) => (
+        <Card key={i} variant="flat" padding="md">
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)', display: 'flex', gap: '8px' }}><span style={{ color: 'var(--primary-700)', fontWeight: 800 }}>D:</span> {it.q}</p>
+          {it.a ? (
+            <p style={{ margin: '8px 0 0', fontSize: '13.5px', color: 'var(--ink-700)', lineHeight: 1.5, display: 'flex', gap: '8px' }}><span style={{ color: 'var(--olive-700)', fontWeight: 800 }}>R:</span> <span>{it.a} <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginLeft: '4px', fontSize: '12px', color: 'var(--ink-400)' }}>· {it.by} <Lucide name="badge-check" size={12} color="var(--primary-600)" /></span></span></p>
+          ) : (
+            <p style={{ margin: '8px 0 0', fontSize: '13px', color: 'var(--ink-400)', fontStyle: 'italic' }}>In attesa di risposta dal negozio…</p>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginTop: '10px', fontSize: '12px', color: 'var(--ink-400)' }}>
+            <span>{it.when}</span>
+            {it.a && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}><Lucide name="thumbs-up" size={13} color="var(--ink-400)" /> Utile ({it.votes})</span>}
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+function ReviewsList({ reviews }) {
+  const [sort, setSort] = React.useState('helpful');
+  const [onlyPhoto, setOnlyPhoto] = React.useState(false);
+  let list = onlyPhoto ? reviews.filter((r) => r.photo) : [...reviews];
+  if (sort === 'helpful') list.sort((a, b) => (b.helpful || 0) - (a.helpful || 0));
+  else if (sort === 'top') list.sort((a, b) => b.rating - a.rating);
+  else if (sort === 'low') list.sort((a, b) => a.rating - b.rating);
+  const photoCount = reviews.filter((r) => r.photo).length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--ink-500)' }}>
+          Ordina
+          <select value={sort} onChange={(e) => setSort(e.target.value)} style={{ border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '6px 10px', fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)', fontFamily: 'var(--font-sans)', cursor: 'pointer', background: 'var(--surface-0)' }}>
+            <option value="helpful">Più utili</option>
+            <option value="top">Voto più alto</option>
+            <option value="low">Voto più basso</option>
+          </select>
+        </label>
+        {photoCount > 0 && <button onClick={() => setOnlyPhoto((v) => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', border: `1px solid ${onlyPhoto ? 'var(--primary-400)' : 'var(--cream-300)'}`, background: onlyPhoto ? 'var(--primary-50)' : 'var(--surface-0)', color: onlyPhoto ? 'var(--primary-700)' : 'var(--ink-600)', fontSize: '13px', fontWeight: 600, padding: '6px 12px', borderRadius: '999px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}><Lucide name="image" size={14} color={onlyPhoto ? 'var(--primary-700)' : 'var(--ink-500)'} /> Con foto · {photoCount}</button>}
+      </div>
+      {list.map((r, i) => <ReviewItem key={i} r={r} />)}
+    </div>
   );
 }

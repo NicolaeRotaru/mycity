@@ -300,7 +300,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       )}
       {/* CODICE CONSEGNA (visibile quando rider sta arrivando) */}
       {showDeliveryCode && deliveryCode?.code && (
-        <div className="bg-gradient-to-br from-olive-500 to-teal-600 text-white rounded-2xl p-6 shadow-lg">
+        <div className="bg-gradient-to-br from-olive-500 to-olive-600 text-white rounded-2xl p-6 shadow-lg">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
               <p className="text-xs uppercase tracking-widest text-olive-100 font-semibold">Codice consegna</p>

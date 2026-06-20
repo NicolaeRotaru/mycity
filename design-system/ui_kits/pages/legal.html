@@ -35,6 +35,13 @@
   .toc a { display: block; padding: 4px 0; color: var(--ink-600); text-decoration: none; }
   footer { background: var(--cream-200); border-top: 1px solid var(--cream-300); padding: 18px 0; }
   footer .row { max-width: 980px; margin: 0 auto; padding: 0 20px; font-size: 12px; color: var(--ink-500); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  html, body { overflow-x: hidden; }
+  @media (max-width: 720px) {
+    .topbar .row { gap: 12px; }
+    .hero { padding-top: 8px; }
+    .hero h1 { font-size: clamp(28px, 8vw, 40px); }
+    .toc { float: none; width: auto; margin: 0 0 20px 0; }
+  }
 </style>
 </head>
 <body>

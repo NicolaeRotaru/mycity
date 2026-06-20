@@ -120,7 +120,7 @@ export default function CartPage() {
                       <Trash2 size={15} aria-hidden /> Rimuovi
                     </button>
                   </div>
-                  <span className="font-bold text-ink-900 text-lg">{formatPrice(item.price * item.quantity)}</span>
+                  <span className="font-bold font-serif text-ink-900 text-lg">{formatPrice(item.price * item.quantity)}</span>
                 </div>
               </div>
             </div>
@@ -158,7 +158,7 @@ export default function CartPage() {
             <div className="border-t pt-3 flex justify-between items-baseline">
               <span className="font-bold">Totale</span>
               <div className="text-right">
-                <div className="text-2xl font-extrabold text-primary-800">{formatPrice(finalTotal)}</div>
+                <div className="text-2xl font-extrabold font-serif text-primary-800">{formatPrice(finalTotal)}</div>
                 <div className="text-[10px] text-ink-400 uppercase">IVA inclusa</div>
               </div>
             </div>

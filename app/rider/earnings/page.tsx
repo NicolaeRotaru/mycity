@@ -104,17 +104,17 @@ export default function RiderEarningsPage() {
       </div>
 
       {/* Big number + KPI */}
-      <section className="bg-gradient-to-br from-accent-50 via-orange-50 to-rose-50 border-2 border-accent-200 rounded-2xl p-6">
+      <section className="bg-gradient-to-br from-accent-50 via-accent-100 to-secondary-50 border-2 border-accent-200 rounded-2xl p-6">
         <p className="text-xs uppercase tracking-widest font-bold text-accent-700">Hai guadagnato</p>
-        <p className="text-5xl md:text-6xl font-extrabold text-accent-900 mt-1">{formatPrice(totalEarned)}</p>
+        <p className="text-5xl md:text-6xl font-extrabold font-serif text-accent-900 mt-1">{formatPrice(totalEarned)}</p>
         <div className="grid grid-cols-2 gap-4 mt-5">
           <div className="bg-white/60 rounded-lg p-3">
             <p className="text-xs text-ink-500 uppercase">Consegne</p>
-            <p className="text-2xl font-bold text-ink-900">{filtered.length}</p>
+            <p className="text-2xl font-bold font-serif text-ink-900">{filtered.length}</p>
           </div>
           <div className="bg-white/60 rounded-lg p-3">
             <p className="text-xs text-ink-500 uppercase">Media per consegna</p>
-            <p className="text-2xl font-bold text-ink-900">{formatPrice(avgPerDelivery)}</p>
+            <p className="text-2xl font-bold font-serif text-ink-900">{formatPrice(avgPerDelivery)}</p>
           </div>
         </div>
       </section>
@@ -129,7 +129,7 @@ export default function RiderEarningsPage() {
               <div key={day} className="flex-1 flex flex-col items-center gap-1">
                 <div className="flex-1 w-full flex items-end">
                   <div
-                    className="w-full bg-gradient-to-t from-accent-500 to-orange-400 rounded-t"
+                    className="w-full bg-gradient-to-t from-accent-500 to-accent-400 rounded-t"
                     style={{ height: `${Math.max(pct, 4)}%` }}
                     title={`${formatPrice(v.total)} · ${v.count} consegne`}
                   />
@@ -163,7 +163,7 @@ export default function RiderEarningsPage() {
       </section>
 
       {/* Tips */}
-      <section className="bg-gradient-to-r from-primary-50 to-purple-50 border border-primary-200 rounded-xl p-5">
+      <section className="bg-gradient-to-r from-primary-50 to-secondary-50 border border-primary-200 rounded-xl p-5">
         <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-1.5">
           <Rocket size={16} strokeWidth={2.2} aria-hidden /> Guadagna di più
         </h3>

@@ -9,7 +9,7 @@ const MC_ACCOUNT_NAV = [
   { id: 'profilo', icon: 'user', label: 'Profilo' },
 ];
 
-function AccountPage({ section = 'ordini', onSection, products, onOpen, onAdd, onStore, onOpenOrder }) {
+function AccountPage({ section = 'ordini', onSection, products, onOpen, onAdd, onStore, onOpenOrder, onLogout }) {
   const u = window.MC_USER;
   return (
     <div style={{ maxWidth: 'var(--container-max)', margin: '0 auto', padding: '24px 20px', display: 'grid', gridTemplateColumns: '260px 1fr', gap: '28px', alignItems: 'start' }}>
@@ -33,7 +33,7 @@ function AccountPage({ section = 'ordini', onSection, products, onOpen, onAdd, o
               </button>
             );
           })}
-          <button style={{ display: 'flex', alignItems: 'center', gap: '10px', border: 0, background: 'transparent', color: 'var(--ink-500)', fontSize: '14px', padding: '10px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', marginTop: '8px' }}><Lucide name="log-out" size={18} color="var(--ink-400)" /> Esci</button>
+          <button onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: '10px', border: 0, background: 'transparent', color: 'var(--ink-500)', fontSize: '14px', padding: '10px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', marginTop: '8px' }}><Lucide name="log-out" size={18} color="var(--ink-400)" /> Esci</button>
         </nav>
       </aside>
 
@@ -134,15 +134,22 @@ function NotificationsView() {
 }
 
 function MessagesView() {
-  const [active, setActive] = React.useState(window.MC_THREADS[0].id);
-  const thread = window.MC_THREADS.find((t) => t.id === active);
+  const [threads, setThreads] = React.useState(() => window.MC_THREADS.map((t) => ({ ...t, msgs: [...t.msgs] })));
+  const [active, setActive] = React.useState(threads[0].id);
+  const [draft, setDraft] = React.useState('');
+  const thread = threads.find((t) => t.id === active);
+  function send() {
+    const text = draft.trim(); if (!text) return;
+    setThreads((ts) => ts.map((t) => t.id === active ? { ...t, msgs: [...t.msgs, { me: true, text, when: 'ora' }], last: text, when: 'ora' } : t));
+    setDraft('');
+  }
   return (
     <div>
       <PageHead title="Messaggi" sub="Scrivi direttamente ai negozi" />
       <Card variant="bordered" padding="none">
         <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', height: '440px' }}>
           <div style={{ borderRight: '1px solid var(--cream-200)', overflowY: 'auto' }}>
-            {window.MC_THREADS.map((t) => (
+            {threads.map((t) => (
               <button key={t.id} onClick={() => setActive(t.id)} style={{ display: 'flex', gap: '10px', width: '100%', textAlign: 'left', border: 0, borderBottom: '1px solid var(--cream-100)', background: active === t.id ? 'var(--primary-50)' : 'transparent', padding: '12px 14px', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>
                 <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(t.store)}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -166,8 +173,8 @@ function MessagesView() {
               ))}
             </div>
             <div style={{ padding: '12px 16px', borderTop: '1px solid var(--cream-200)', display: 'flex', gap: '8px' }}>
-              <input placeholder="Scrivi un messaggio…" style={{ flex: 1, border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '10px 14px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none' }} />
-              <Button variant="primary" icon="send">Invia</Button>
+              <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } }} placeholder="Scrivi un messaggio…" style={{ flex: 1, border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-full)', padding: '10px 14px', fontSize: '14px', fontFamily: 'var(--font-sans)', outline: 'none' }} />
+              <Button variant="primary" icon="send" onClick={send}>Invia</Button>
             </div>
           </div>
         </div>
@@ -177,21 +184,59 @@ function MessagesView() {
 }
 
 function AddressesView() {
+  const [addrs, setAddrs] = React.useState(() => window.MC_ADDRESSES.map((a) => ({ ...a })));
+  const [editing, setEditing] = React.useState(null);
+  const [form, setForm] = React.useState({ label: '', name: '', street: '', city: '', phone: '' });
+  const set = (key, v) => setForm((f) => ({ ...f, [key]: v }));
+  function startNew() { setForm({ label: 'Casa', name: window.MC_USER.name, street: '', city: 'Piacenza', phone: window.MC_USER.phone }); setEditing('new'); }
+  function startEdit(a) { setForm({ label: a.label, name: a.name, street: a.street, city: a.city, phone: a.phone }); setEditing(a.id); }
+  function save() {
+    if (!form.street.trim() || !form.name.trim()) return;
+    if (editing === 'new') setAddrs((l) => [...l, { ...form, id: 'a' + Date.now(), def: l.length === 0 }]);
+    else setAddrs((l) => l.map((a) => a.id === editing ? { ...a, ...form } : a));
+    setEditing(null);
+  }
+  function del(id) { setAddrs((l) => { const n = l.filter((a) => a.id !== id); if (n.length && !n.some((a) => a.def)) n[0].def = true; return n; }); }
+  const inp = { width: '100%', boxSizing: 'border-box', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '10px 12px', fontSize: '15px', fontFamily: 'var(--font-sans)', outline: 'none', color: 'var(--ink-900)' };
   return (
     <div>
       <PageHead title="Indirizzi" sub="Dove consegniamo i tuoi ordini" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '14px' }}>
-        {window.MC_ADDRESSES.map((a) => (
+        {addrs.map((a) => (
           <Card key={a.id} variant="bordered" padding="lg">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}><Badge variant="local">{a.label}</Badge>{a.def && <Badge variant="new">Predefinito</Badge>}</div>
-            <p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{a.name}</p>
-            <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--ink-600)' }}>{a.street}</p>
-            <p style={{ margin: '2px 0 0', fontSize: '14px', color: 'var(--ink-600)' }}>{a.city}</p>
-            <p style={{ margin: '8px 0 14px', fontSize: '13px', color: 'var(--ink-500)' }}>{a.phone}</p>
-            <div style={{ display: 'flex', gap: '8px' }}><Button variant="secondary" size="sm" icon="pencil">Modifica</Button><Button variant="ghost" size="sm" icon="trash-2">Elimina</Button></div>
+            {editing === a.id ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <input value={form.label} onChange={(e) => set('label', e.target.value)} placeholder="Etichetta (Casa, Ufficio…)" style={inp} />
+                <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Nome e cognome" style={inp} />
+                <input value={form.street} onChange={(e) => set('street', e.target.value)} placeholder="Via e numero" style={inp} />
+                <input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Città" style={inp} />
+                <input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="Telefono" style={inp} />
+                <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}><Button variant="primary" size="sm" onClick={save}>Salva</Button><Button variant="ghost" size="sm" onClick={() => setEditing(null)}>Annulla</Button></div>
+              </div>
+            ) : (<>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}><Badge variant="local">{a.label}</Badge>{a.def && <Badge variant="new">Predefinito</Badge>}</div>
+              <p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)' }}>{a.name}</p>
+              <p style={{ margin: '4px 0 0', fontSize: '14px', color: 'var(--ink-600)' }}>{a.street}</p>
+              <p style={{ margin: '2px 0 0', fontSize: '14px', color: 'var(--ink-600)' }}>{a.city}</p>
+              <p style={{ margin: '8px 0 14px', fontSize: '13px', color: 'var(--ink-500)' }}>{a.phone}</p>
+              <div style={{ display: 'flex', gap: '8px' }}><Button variant="secondary" size="sm" icon="pencil" onClick={() => startEdit(a)}>Modifica</Button><Button variant="ghost" size="sm" icon="trash-2" onClick={() => del(a.id)}>Elimina</Button></div>
+            </>)}
           </Card>
         ))}
-        <button style={{ border: '1.5px dashed var(--cream-400)', borderRadius: 'var(--radius-lg)', background: 'transparent', color: 'var(--primary-700)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', minHeight: '160px', fontFamily: 'var(--font-sans)', fontWeight: 600 }}><Lucide name="plus" size={24} /> Aggiungi indirizzo</button>
+        {editing === 'new' ? (
+          <Card variant="bordered" padding="lg">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <input value={form.label} onChange={(e) => set('label', e.target.value)} placeholder="Etichetta (Casa, Ufficio…)" style={inp} />
+              <input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Nome e cognome" style={inp} />
+              <input value={form.street} onChange={(e) => set('street', e.target.value)} placeholder="Via e numero" style={inp} />
+              <input value={form.city} onChange={(e) => set('city', e.target.value)} placeholder="Città" style={inp} />
+              <input value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="Telefono" style={inp} />
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}><Button variant="primary" size="sm" onClick={save}>Aggiungi</Button><Button variant="ghost" size="sm" onClick={() => setEditing(null)}>Annulla</Button></div>
+            </div>
+          </Card>
+        ) : (
+          <button onClick={startNew} style={{ border: '1.5px dashed var(--cream-400)', borderRadius: 'var(--radius-lg)', background: 'transparent', color: 'var(--primary-700)', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', minHeight: '160px', fontFamily: 'var(--font-sans)', fontWeight: 600 }}><Lucide name="plus" size={24} /> Aggiungi indirizzo</button>
+        )}
       </div>
     </div>
   );
@@ -199,6 +244,8 @@ function AddressesView() {
 
 function ProfileView() {
   const u = window.MC_USER;
+  const [k, setK] = React.useState(0);
+  const [saved, setSaved] = React.useState(false);
   return (
     <div>
       <PageHead title="Profilo" />
@@ -207,11 +254,12 @@ function ProfileView() {
           <span style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--primary-500), var(--primary-700))', color: '#fff', fontWeight: 700, fontSize: '24px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{u.initials}</span>
           <div><p style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '20px', fontWeight: 700, color: 'var(--ink-900)' }}>{u.name}</p><p style={{ margin: '2px 0 0', fontSize: '13px', color: 'var(--ink-500)' }}>Cliente dal {u.since}</p></div>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <Input label="Nome e cognome" defaultValue={u.name} />
-          <Input label="Email" defaultValue={u.email} type="email" />
-          <Input label="Telefono" defaultValue={u.phone} />
-          <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}><Button variant="primary">Salva modifiche</Button><Button variant="ghost">Annulla</Button></div>
+        <div key={k} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <Input label="Nome e cognome" defaultValue={u.name} onChange={() => setSaved(false)} />
+          <Input label="Email" defaultValue={u.email} type="email" onChange={() => setSaved(false)} />
+          <Input label="Telefono" defaultValue={u.phone} onChange={() => setSaved(false)} />
+          {saved && <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--olive-700)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}><Lucide name="check-circle-2" size={15} color="var(--olive-600)" /> Modifiche salvate</p>}
+          <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}><Button variant="primary" onClick={() => setSaved(true)}>Salva modifiche</Button><Button variant="ghost" onClick={() => { setK((x) => x + 1); setSaved(false); }}>Annulla</Button></div>
         </div>
       </Card>
     </div>

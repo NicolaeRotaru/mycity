@@ -41,6 +41,7 @@ const AD_NAV = [
     { id: 'disputes', icon: 'gavel', label: 'Reclami', badge: 'disputes' },
     { id: 'moderation', icon: 'shield-alert', label: 'Moderazione' },
     { id: 'cod', icon: 'banknote', label: 'Rimesse COD' },
+    { id: 'payouts', icon: 'landmark', label: 'Payout venditori' },
     { id: 'sos', icon: 'siren', label: 'SOS rider', badge: 'sos' },
   ] },
   { group: 'Crescita', items: [
@@ -56,6 +57,7 @@ const AD_NAV = [
     { id: 'pages', icon: 'file-text', label: 'Pagine' },
     { id: 'categories', icon: 'folder-tree', label: 'Categorie' },
     { id: 'branding', icon: 'palette', label: 'Branding' },
+    { id: 'delivery', icon: 'map', label: 'Zone & tariffe' },
   ] },
   { group: 'Sistema', items: [
     { id: 'activity', icon: 'rss', label: 'Attività' },
@@ -64,18 +66,57 @@ const AD_NAV = [
   ] },
 ];
 
+const AD_NOTIFS = [
+  { id: 'an1', icon: 'siren', tone: 'secondary', title: 'SOS rider attivo', body: 'Marco D. · zona Stradone Farnese', when: 'ora', unread: true },
+  { id: 'an2', icon: 'gavel', tone: 'accent', title: 'Nuovo reclamo aperto', body: 'Ordine #PC-2459 · richiesta rimborso', when: '12 min fa', unread: true },
+  { id: 'an3', icon: 'store', tone: 'primary', title: 'Nuovo negozio in attesa', body: 'Panetteria Sant’Eufemia · da verificare', when: '1 ora fa', unread: true },
+  { id: 'an4', icon: 'banknote', tone: 'olive', title: 'Rimessa COD ricevuta', body: '342,10 € riconciliati da 3 rider', when: 'Ieri', unread: false },
+];
+function AdminNotifPopover({ onClose }) {
+  const items = AD_NOTIFS;
+  const tone = { primary: 'var(--primary-600)', secondary: 'var(--secondary-600)', accent: 'var(--accent-600)', olive: 'var(--olive-600)' };
+  const unread = items.filter((n) => n.unread).length;
+  return (
+    <React.Fragment>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 'var(--z-dropdown)', background: 'transparent' }} />
+      <div className="mc-notif-pop" style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, width: '330px', maxWidth: '88vw', background: 'var(--surface-0)', color: 'var(--ink-900)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-warm-xl)', border: '1px solid var(--cream-200)', zIndex: 'calc(var(--z-dropdown) + 1)', overflow: 'hidden' }}>
+        <div style={{ padding: '13px 16px', borderBottom: '1px solid var(--cream-200)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ fontFamily: 'var(--font-serif)', fontWeight: 700, fontSize: '16px' }}>Notifiche</span>
+          {unread > 0 && <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary-700)' }}>{unread} non lette</span>}
+        </div>
+        <div style={{ maxHeight: '340px', overflowY: 'auto' }}>
+          {items.map((n) => (
+            <div key={n.id} style={{ display: 'flex', gap: '11px', padding: '12px 16px', borderBottom: '1px solid var(--cream-100)', background: n.unread ? 'var(--cream-50)' : 'transparent' }}>
+              <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--cream-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={n.icon} size={16} color={tone[n.tone] || 'var(--primary-600)'} /></span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={{ margin: 0, fontWeight: 600, fontSize: '13.5px', color: 'var(--ink-900)' }}>{n.title}</p>
+                <p style={{ margin: '1px 0 0', fontSize: '12.5px', color: 'var(--ink-500)', lineHeight: 1.4 }}>{n.body}</p>
+                <p style={{ margin: '3px 0 0', fontSize: '11px', color: 'var(--ink-400)' }}>{n.when}</p>
+              </div>
+              {n.unread && <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)', flexShrink: 0, marginTop: '5px' }} />}
+            </div>
+          ))}
+        </div>
+      </div>
+    </React.Fragment>
+  );
+}
 function AdminShell({ view, onNav, children }) {
   const a = window.AD_ADMIN;
   const d = window.AD_TODAY;
   const badgeFor = (id) => id === 'disputes' ? d.disputesOpen : id === 'sos' ? d.sosActive : 0;
+  const [navOpen, setNavOpen] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const totalAlerts = d.disputesOpen + d.sosActive;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '248px 1fr', minHeight: '100vh', background: 'var(--cream-100)' }}>
-      <aside style={{ background: 'var(--ink-900)', color: '#fff', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
-        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,.1)', flexShrink: 0 }}>
+      <aside className={navOpen ? 'mc-nav-open' : ''} style={{ background: 'var(--ink-900)', color: '#fff', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, height: '100vh' }}>
+        <div style={{ padding: '20px 20px 14px', borderBottom: '1px solid rgba(255,255,255,.1)', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <div style={{ fontFamily: 'var(--font-serif)', fontSize: '22px', fontWeight: 800, letterSpacing: '-0.01em' }}>
             <span style={{ color: 'var(--accent-300)' }}>My</span><span style={{ color: '#fff' }}>City</span>
             <span style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 700, color: '#F09593', textTransform: 'uppercase', letterSpacing: '0.08em', marginLeft: '6px' }}>Admin</span>
           </div>
+          <button className="mc-drawer-close" onClick={() => setNavOpen(false)} aria-label="Chiudi menu" style={{ display: 'none', border: 0, background: 'rgba(255,255,255,.08)', color: '#fff', cursor: 'pointer', width: '34px', height: '34px', borderRadius: 'var(--radius-md)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="x" size={18} color="#fff" /></button>
         </div>
         <nav style={{ flex: 1, padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
           {AD_NAV.map((sec) => (
@@ -84,7 +125,7 @@ function AdminShell({ view, onNav, children }) {
               {sec.items.map((n) => {
                 const on = view === n.id; const b = badgeFor(n.id);
                 return (
-                  <button key={n.id} onClick={() => onNav(n.id)} style={{ display: 'flex', alignItems: 'center', gap: '11px', border: 0, background: on ? 'var(--primary-700)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.78)', fontWeight: on ? 700 : 500, fontSize: '13.5px', padding: '9px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', width: '100%' }}>
+                  <button key={n.id} onClick={() => { onNav(n.id); setNavOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '11px', border: 0, background: on ? 'var(--primary-700)' : 'transparent', color: on ? '#fff' : 'rgba(255,255,255,.78)', fontWeight: on ? 700 : 500, fontSize: '13.5px', padding: '9px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer', fontFamily: 'var(--font-sans)', textAlign: 'left', width: '100%' }}>
                     <Lucide name={n.icon} size={17} stroke={2.2} color={on ? '#fff' : 'rgba(255,255,255,.7)'} /> {n.label}
                     {b > 0 && <span style={{ marginLeft: 'auto', background: 'var(--secondary-600)', color: '#fff', fontSize: '11px', fontWeight: 700, borderRadius: '999px', minWidth: '20px', height: '20px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px' }}>{b}</span>}
                   </button>
@@ -98,9 +139,23 @@ function AdminShell({ view, onNav, children }) {
             <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--secondary-600)', color: '#fff', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{a.initials}</span>
             <div style={{ minWidth: 0 }}><p style={{ margin: 0, fontSize: '13px', fontWeight: 700, color: '#fff' }}>{a.name}</p><p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,.5)' }}>{a.role}</p></div>
           </div>
+          <a href="../buyer/index.html" className="mc-drawer-only" style={{ display: 'none', alignItems: 'center', gap: '10px', color: 'rgba(255,255,255,.7)', fontSize: '13px', padding: '9px 8px', textDecoration: 'none', borderRadius: 'var(--radius-md)' }}><Lucide name="external-link" size={16} color="rgba(255,255,255,.6)" /> Vai al marketplace</a>
+          <a href="../buyer/index.html" className="mc-drawer-only" style={{ display: 'none', alignItems: 'center', gap: '10px', color: 'rgba(255,255,255,.7)', fontSize: '13px', padding: '9px 8px', textDecoration: 'none', borderRadius: 'var(--radius-md)' }}><Lucide name="log-out" size={16} color="rgba(255,255,255,.6)" /> Esci</a>
         </div>
       </aside>
+      {navOpen && <div className="mc-nav-backdrop" onClick={() => setNavOpen(false)} style={{ display: 'none', position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 'calc(var(--z-modal) - 1)' }} />}
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <header className="mc-admin-topbar" style={{ display: 'none', alignItems: 'center', gap: '10px', padding: '10px 14px', background: 'var(--surface-0)', borderBottom: '1px solid var(--cream-200)', position: 'sticky', top: 0, zIndex: 50 }}>
+          <button className="mc-hamburger" onClick={() => setNavOpen(true)} aria-label="Menu" style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '6px', display: 'inline-flex' }}><Lucide name="menu" size={22} color="var(--ink-700)" /></button>
+          <div style={{ fontFamily: 'var(--font-serif)', fontSize: '19px', fontWeight: 800, letterSpacing: '-0.01em' }}>
+            <span style={{ color: 'var(--primary-700)' }}>My</span><span style={{ color: 'var(--ink-900)' }}>City</span>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '10px', fontWeight: 700, color: 'var(--secondary-600)', textTransform: 'uppercase', letterSpacing: '0.08em', marginLeft: '5px' }}>Admin</span>
+          </div>
+          <div style={{ marginLeft: 'auto', position: 'relative' }}>
+            <button onClick={() => setNotifOpen((o) => !o)} aria-label="Notifiche" style={{ position: 'relative', border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex', padding: '6px' }}><Lucide name="bell" size={20} color="var(--ink-600)" />{totalAlerts > 0 && <span style={{ position: 'absolute', top: '2px', right: '2px', width: '8px', height: '8px', borderRadius: '50%', background: 'var(--secondary-600)' }} />}</button>
+            {notifOpen && <AdminNotifPopover onClose={() => setNotifOpen(false)} />}
+          </div>
+        </header>
         <main style={{ flex: 1, padding: '28px', maxWidth: '1080px', width: '100%', boxSizing: 'border-box' }}>{children}</main>
       </div>
     </div>
@@ -184,11 +239,11 @@ function OrdersTable({ rows }) {
           {rows.map((o) => (
             <tr key={o.id} style={{ borderBottom: '1px solid var(--cream-200)' }}>
               <td style={{ padding: '11px 16px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--primary-700)', fontWeight: 600 }}>#{o.id}</td>
-              <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-800)' }}>{o.cust}</td>
-              <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{o.store}</td>
-              <td style={{ padding: '11px 16px' }}><OrderStatusBadge status={o.status} size="sm" /></td>
-              <td style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(o.total)}</td>
-              <td style={{ padding: '11px 16px', textAlign: 'right', fontSize: '12px', color: 'var(--ink-400)' }}>{o.when}</td>
+              <td data-label="Cliente" style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-800)' }}>{o.cust}</td>
+              <td data-label="Negozio" style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{o.store}</td>
+              <td data-label="Stato" style={{ padding: '11px 16px' }}><OrderStatusBadge status={o.status} size="sm" /></td>
+              <td data-label="Totale" style={{ padding: '11px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(o.total)}</td>
+              <td data-label="Ora" style={{ padding: '11px 16px', textAlign: 'right', fontSize: '12px', color: 'var(--ink-400)' }}>{o.when}</td>
             </tr>
           ))}
         </tbody>
@@ -198,12 +253,44 @@ function OrdersTable({ rows }) {
 }
 
 // ===== Overview (marketplace-wide totals) =====
+function HealthTile({ icon, tone, label, value, delta, up, hint }) {
+  const [bg, fg] = TINT[tone];
+  const good = up;
+  return (
+    <div style={{ background: 'var(--surface-0)', border: '2px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <span style={{ width: '34px', height: '34px', borderRadius: 'var(--radius-md)', background: bg, color: fg, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name={icon} size={17} stroke={2.2} color={fg} /></span>
+        {delta != null && <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px', fontWeight: 700, color: good ? 'var(--olive-700)' : 'var(--secondary-600)' }}><Lucide name={good ? 'trending-up' : 'trending-down'} size={13} color={good ? 'var(--olive-600)' : 'var(--secondary-600)'} /> {delta}</span>}
+      </div>
+      <p style={{ margin: 0, fontSize: '24px', fontWeight: 800, color: 'var(--ink-900)', lineHeight: 1 }}>{value}</p>
+      <p style={{ margin: '5px 0 0', fontSize: '12px', color: 'var(--ink-500)' }}>{label}</p>
+      {hint && <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'var(--ink-400)' }}>{hint}</p>}
+    </div>
+  );
+}
 function Overview({ onNav }) {
   const T = window.AD_TOTALS;
   const STATUS_LABEL = { NEW: 'In attesa', ACCEPTED: 'In preparazione', READY: 'Pronto', ASSIGNED: 'Rider assegnato', PICKED_UP: 'Ritirato', OUT_FOR_DELIVERY: 'In consegna', DELIVERED: 'Consegnato', CANCELED: 'Annullato' };
+  const gmv = T.revenue;
+  const takeRate = 0.14;
+  const commissione = gmv * takeRate;
+  const aov = gmv / T.orders;
+  const canceled = (window.AD_STATUS_BREAKDOWN.find((b) => b.s === 'CANCELED') || { n: 0 }).n;
+  const onTime = (100 - (canceled / T.orders) * 100 - 3.1);
   return (
     <div>
       <PageTitle eyebrow="Marketplace" title="Panoramica" sub="Tutti i numeri del marketplace, in tempo reale" />
+
+      <SectionLabel icon="activity" color="var(--primary-700)">Salute del marketplace</SectionLabel>
+      <div className="mc-health-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '10px' }}>
+        <HealthTile icon="euro" tone="olive" label="GMV totale" value={fmt(gmv)} delta="+8,4%" up hint={'AOV ' + fmt(aov)} />
+        <HealthTile icon="percent" tone="primary" label={'Commissioni (take-rate ' + Math.round(takeRate * 100) + '%)'} value={fmt(commissione)} delta="+6,1%" up />
+        <HealthTile icon="timer" tone="accent" label="Consegne puntuali" value={onTime.toFixed(1).replace('.', ',') + '%'} delta="-1,2%" up={false} hint="obiettivo ≥ 95%" />
+        <HealthTile icon="store" tone="secondary" label="Churn negozi (30g)" value="2,8%" delta="-0,4%" up hint="4 negozi inattivi" />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--accent-50)', border: '1px solid var(--accent-200)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '24px', fontSize: '13px', color: 'var(--accent-900)' }}>
+        <Lucide name="info" size={15} color="var(--accent-700)" /> Le consegne puntuali sono sotto l'obiettivo: <strong style={{ marginLeft: '3px' }}>controlla i rider con più SOS</strong> nella sezione Moderazione.
+      </div>
 
       <SectionLabel icon="users" color="var(--primary-700)">Utenti · {T.users.toLocaleString('it-IT')}</SectionLabel>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px', marginBottom: '24px' }}>
@@ -286,10 +373,10 @@ function Users() {
                       <div><p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--ink-900)' }}>{u.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)' }}>{u.email}</p></div>
                     </div>
                   </td>
-                  <td style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{rl}</span></td>
-                  <td style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{u.orders}</td>
-                  <td style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{u.joined}</td>
-                  <td style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: sbg, color: sfg, padding: '3px 10px', borderRadius: '999px' }}>{sl}</span></td>
+                  <td data-label="Ruolo" style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: bg, color: fg, padding: '3px 10px', borderRadius: '999px' }}>{rl}</span></td>
+                  <td data-label="Ordini" style={{ padding: '11px 16px', textAlign: 'right', color: 'var(--ink-700)' }}>{u.orders}</td>
+                  <td data-label="Iscritto" style={{ padding: '11px 16px', fontSize: '13px', color: 'var(--ink-500)' }}>{u.joined}</td>
+                  <td data-label="Stato" style={{ padding: '11px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: sbg, color: sfg, padding: '3px 10px', borderRadius: '999px' }}>{sl}</span></td>
                   <td style={{ padding: '11px 16px', textAlign: 'right' }}>{u.status === 'pending' ? <Button variant="primary" size="sm" icon="check">Approva</Button> : <button style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: '6px' }}><Lucide name="more-horizontal" size={16} color="var(--ink-500)" /></button>}</td>
                 </tr>
               );
@@ -311,6 +398,35 @@ function Disputes({ onToast }) {
   return (
     <div>
       <PageTitle eyebrow="Tutela" title="Reclami" sub="Gestisci le controversie tra clienti e venditori" />
+      <div style={{ background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '16px', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Lucide name="shield-alert" size={17} color="var(--secondary-600)" />
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>Segnali di rischio</h3>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--secondary-700)', background: 'var(--secondary-50)', padding: '2px 8px', borderRadius: '999px' }}>auto</span>
+        </div>
+        <div className="mc-risk-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
+          {[
+            { icon: 'siren', sev: 'high', title: 'Rider · Marco D.', body: '3 SOS in 7 giorni — sopra la soglia (1). Verifica account.', cta: 'Apri profilo' },
+            { icon: 'gavel', sev: 'high', title: 'Negozio · Bottega Emilia', body: 'Tasso reclami 9,2% (media 1,8%). Possibile problema qualità.', cta: 'Esamina' },
+            { icon: 'repeat', sev: 'med', title: 'Cliente · L. Moretti', body: '4 rimborsi richiesti in 30 giorni. Pattern sospetto.', cta: 'Rivedi' },
+          ].map((r, i) => {
+            const hi = r.sev === 'high';
+            const bd = hi ? 'var(--secondary-200)' : 'var(--accent-200)';
+            const bg = hi ? 'var(--secondary-50)' : 'var(--accent-50)';
+            const fg = hi ? 'var(--secondary-600)' : 'var(--accent-700)';
+            return (
+              <div key={i} style={{ background: bg, border: '1px solid ' + bd, borderRadius: 'var(--radius-md)', padding: '13px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '6px' }}>
+                  <Lucide name={r.icon} size={15} color={fg} />
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-900)' }}>{r.title}</span>
+                </div>
+                <p style={{ margin: '0 0 10px', fontSize: '12.5px', color: 'var(--ink-600)', lineHeight: 1.45 }}>{r.body}</p>
+                <button style={{ border: 0, background: fg, color: '#fff', fontWeight: 700, fontSize: '12px', padding: '6px 12px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)' }}>{r.cta}</button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', flexWrap: 'wrap' }}>
         {tabs.map(([id, label]) => <button key={id} onClick={() => setFilter(id)} style={{ border: 0, background: filter === id ? 'var(--primary-700)' : 'var(--surface-0)', color: filter === id ? '#fff' : 'var(--ink-600)', fontWeight: 600, fontSize: '13px', padding: '8px 14px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', boxShadow: filter === id ? 'none' : 'inset 0 0 0 1px var(--cream-300)' }}>{label}</button>)}
       </div>
@@ -387,6 +503,92 @@ function CodRemittance({ onToast }) {
   );
 }
 
+function DeliveryConfig({ onToast }) {
+  const [base, setBase] = React.useState(1.5);
+  const [todayFee, setTodayFee] = React.useState(1);
+  const [zones, setZones] = React.useState([
+    { name: 'Centro storico', cap: '29121', on: true, perKm: 1.0 },
+    { name: 'Borgo / Farnesiana', cap: '29122', on: true, perKm: 1.5 },
+    { name: 'Periferia', cap: '29100', on: true, perKm: 2.0 },
+    { name: 'Comuni limitrofi', cap: '29010', on: false, perKm: 3.0 },
+  ]);
+  const toggleZone = (i) => setZones((z) => z.map((x, j) => j === i ? { ...x, on: !x.on } : x));
+  const setKm = (i, v) => setZones((z) => z.map((x, j) => j === i ? { ...x, perKm: v } : x));
+  const tiers = [['Fino a 10 prodotti', '1,00 €'], ['11–20 prodotti', '2,00 €'], ['21–30 prodotti', '3,00 €'], ['Oltre 30', '4,00 €']];
+  const num = { width: '80px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-md)', padding: '7px 10px', fontSize: '14px', fontWeight: 700, textAlign: 'right', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none' };
+  return (
+    <div>
+      <PageTitle eyebrow="Operatività" title="Zone & tariffe di consegna" sub="Configura le tariffe applicate al checkout, per zona e per volume" />
+      <div className="mc-deliv-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+        <Card variant="bordered" padding="lg">
+          <h3 style={{ margin: '0 0 14px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Costi base</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}><div><p style={{ margin: 0, fontWeight: 600, color: 'var(--ink-900)', fontSize: '14px' }}>Infrastruttura delivery</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>Quota fissa su ogni ordine</p></div><input type="number" step="0.5" value={base} onChange={(e) => setBase(+e.target.value)} style={num} /></div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}><div><p style={{ margin: 0, fontWeight: 600, color: 'var(--ink-900)', fontSize: '14px' }}>Supplemento "in giornata"</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>Consegna oggi / slot orario</p></div><input type="number" step="0.5" value={todayFee} onChange={(e) => setTodayFee(+e.target.value)} style={num} /></div>
+          </div>
+          <h3 style={{ margin: '20px 0 10px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Tariffa per volume</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {tiers.map(([l, v]) => <div key={l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', padding: '8px 12px', background: 'var(--cream-50)', borderRadius: 'var(--radius-md)' }}><span style={{ color: 'var(--ink-600)' }}>{l}</span><strong style={{ color: 'var(--ink-900)' }}>{v}</strong></div>)}
+          </div>
+        </Card>
+        <Card variant="bordered" padding="lg">
+          <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Zone attive</h3>
+          <p style={{ margin: '0 0 14px', fontSize: '12px', color: 'var(--ink-500)' }}>Solo le zone attive vedono i negozi al checkout. La tariffa distanza è €/km.</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {zones.map((z, i) => (
+              <div key={z.cap} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 13px', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', opacity: z.on ? 1 : 0.55 }}>
+                <span onClick={() => toggleZone(i)} style={{ position: 'relative', width: '38px', height: '22px', borderRadius: '999px', background: z.on ? 'var(--olive-500)' : 'var(--cream-400)', cursor: 'pointer', flexShrink: 0 }}><span style={{ position: 'absolute', top: '2px', left: z.on ? '18px' : '2px', width: '18px', height: '18px', borderRadius: '50%', background: '#fff' }} /></span>
+                <div style={{ flex: 1, minWidth: 0 }}><p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{z.name}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)', fontFamily: 'var(--font-mono)' }}>CAP {z.cap}</p></div>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: 'var(--ink-600)' }}><input type="number" step="0.5" value={z.perKm} onChange={(e) => setKm(i, +e.target.value)} style={{ ...num, width: '64px' }} />€/km</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      <div style={{ marginTop: '18px' }}><Button variant="primary" icon="save" onClick={() => onToast && onToast('Tariffe di consegna aggiornate')}>Salva configurazione</Button></div>
+    </div>
+  );
+}
+function SellerPayouts({ onToast }) {
+  const seed = [
+    { store: 'Salumeria Verdi', period: '8–14 giu', gross: 1284.50, fee: 0, net: 1284.50, status: 'ready', iban: 'IT60•••4821' },
+    { store: 'Pasta Fresca Anita', period: '8–14 giu', gross: 942.00, fee: 0, net: 942.00, status: 'ready', iban: 'IT22•••7733' },
+    { store: 'Cantina Pace', period: '8–14 giu', gross: 1730.80, fee: 0, net: 1730.80, status: 'hold', iban: 'IT91•••1290', note: 'In attesa rimessa COD' },
+    { store: 'Bottega Emilia', period: '1–7 giu', gross: 612.40, fee: 0, net: 612.40, status: 'paid', iban: 'IT08•••5512', when: '9 giu' },
+  ];
+  const [rows, setRows] = React.useState(seed);
+  const pay = (i) => { setRows((r) => r.map((x, j) => j === i ? { ...x, status: 'paid', when: 'oggi' } : x)); onToast && onToast('Bonifico avviato'); };
+  const STT = { ready: ['Pronto al pagamento', 'var(--olive-50)', 'var(--olive-700)'], hold: ['In sospeso', 'var(--accent-50)', 'var(--accent-700)'], paid: ['Pagato', 'var(--surface-100)', 'var(--ink-500)'] };
+  const due = rows.filter((r) => r.status === 'ready').reduce((s, r) => s + r.net, 0);
+  const held = rows.filter((r) => r.status === 'hold').reduce((s, r) => s + r.net, 0);
+  return (
+    <div>
+      <PageTitle eyebrow="Finanza" title="Payout venditori" sub="Riconciliazione settimanale e bonifici ai negozi (commissione 0%)" />
+      <div className="mc-payout-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '18px' }}>
+        <div style={{ background: 'var(--surface-0)', border: '2px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '16px' }}><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>Da pagare ora</p><p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--olive-700)' }}>{fmt(due)}</p></div>
+        <div style={{ background: 'var(--surface-0)', border: '2px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '16px' }}><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>In sospeso (COD)</p><p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--accent-700)' }}>{fmt(held)}</p></div>
+        <div style={{ background: 'var(--surface-0)', border: '2px solid var(--cream-300)', borderRadius: 'var(--radius-xl)', padding: '16px' }}><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>Negozi attivi</p><p style={{ margin: '4px 0 0', fontSize: '24px', fontWeight: 800, color: 'var(--ink-900)' }}>{rows.length}</p></div>
+      </div>
+      <Card variant="bordered" padding="none">
+        <table className="mc-prod-table" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+          <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Negozio', 'Periodo', 'Lordo', 'Netto', 'Stato', ''].map((h, i) => <th key={i} style={{ textAlign: i >= 2 && i <= 3 ? 'right' : 'left', padding: '12px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
+          <tbody>
+            {rows.map((r, i) => { const [sl, sbg, sfg] = STT[r.status]; return (
+              <tr key={r.store} style={{ borderBottom: '1px solid var(--cream-200)' }}>
+                <td data-label="Negozio" style={{ padding: '12px 16px' }}><div><p style={{ margin: 0, fontWeight: 700, color: 'var(--ink-900)', fontSize: '14px' }}>{r.store}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-400)', fontFamily: 'var(--font-mono)' }}>{r.iban}</p></div></td>
+                <td data-label="Periodo" style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--ink-600)' }}>{r.period}</td>
+                <td data-label="Lordo" style={{ padding: '12px 16px', textAlign: 'right', fontSize: '13px', color: 'var(--ink-600)' }}>{fmt(r.gross)}</td>
+                <td data-label="Netto" style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: 'var(--ink-900)' }}>{fmt(r.net)}</td>
+                <td data-label="Stato" style={{ padding: '12px 16px' }}><span style={{ fontSize: '12px', fontWeight: 600, background: sbg, color: sfg, padding: '3px 10px', borderRadius: '999px' }}>{sl}</span>{r.note && <span style={{ display: 'block', fontSize: '11px', color: 'var(--ink-400)', marginTop: '3px' }}>{r.note}</span>}{r.when && <span style={{ display: 'block', fontSize: '11px', color: 'var(--ink-400)', marginTop: '3px' }}>{r.when}</span>}</td>
+                <td data-label="" style={{ padding: '12px 16px', textAlign: 'right' }}>{r.status === 'ready' ? <Button variant="primary" size="sm" icon="send" onClick={() => pay(i)}>Paga</Button> : r.status === 'hold' ? <Button variant="ghost" size="sm" icon="clock" disabled>In attesa</Button> : <span style={{ color: 'var(--olive-700)', fontWeight: 700, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}><Lucide name="check" size={15} color="var(--olive-700)" /> Pagato</span>}</td>
+              </tr>
+            ); })}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
 function Sos({ onToast }) {
   const [resolved, setResolved] = React.useState(false);
   return (
@@ -416,7 +618,7 @@ function Sos({ onToast }) {
 }
 
 // ===== Growth & marketing: Funnel · Coupons · Sponsored · Daily drops · Shop of month · Events =====
-function Funnel() {
+function Funnel({ onToast }) {
   const f = window.AD_FUNNEL;
   const a7 = (f.firstOrder7d / f.signups) * 100;
   const aEver = (f.firstOrderEver / f.signups) * 100;
@@ -432,6 +634,27 @@ function Funnel() {
     <div>
       <PageTitle eyebrow="Crescita" title="Funnel & Cohort" sub="Activation buyer e retention per coorte mensile"
         action={<Select defaultValue="90"><option value="30">Ultimi 30 giorni</option><option value="90">Ultimi 90 giorni</option><option value="365">Ultimo anno</option></Select>} />
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', background: 'var(--secondary-50)', border: '1px solid var(--secondary-200)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: '18px' }}>
+        <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--secondary-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="user-x" size={18} color="#fff" /></span>
+        <div style={{ flex: 1 }}>
+          <p style={{ margin: 0, fontWeight: 800, color: 'var(--secondary-700)', fontSize: '15px' }}>Alert churn · 38 buyer a rischio</p>
+          <p style={{ margin: '3px 0 0', fontSize: '13px', color: 'var(--ink-700)', lineHeight: 1.5 }}>Hanno ordinato ogni settimana ma sono inattivi da oltre <strong>21 giorni</strong>. Il valore stimato a rischio è <strong>1.240 €/mese</strong>. Invia un coupon di richiamo prima che se ne vadano.</p>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <Button variant="primary" size="sm" icon="ticket" onClick={() => onToast && onToast('Coupon di richiamo inviato a 38 buyer')}>Invia coupon di richiamo</Button>
+            <Button variant="secondary" size="sm" icon="download" onClick={() => onToast && onToast('Segmento esportato (CSV)')}>Esporta segmento</Button>
+          </div>
+        </div>
+      </div>
+      <div style={{ marginBottom: '18px' }}>
+        <p style={{ margin: '0 0 8px', fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-500)' }}>Segmenti</p>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          {[['Nuovi (7gg)', 412, 'primary'], ['Attivi', 196, 'olive'], ['Ricorrenti', 92, 'accent'], ['A rischio churn', 38, 'secondary'], ['Inattivi', 64, 'ink']].map(([l, n, t]) => (
+            <button key={l} onClick={() => onToast && onToast('Segmento "' + l + '" · ' + n + ' utenti')} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', border: '1px solid var(--cream-300)', background: 'var(--surface-0)', borderRadius: 'var(--radius-full)', padding: '7px 13px', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600, color: 'var(--ink-800)' }}>
+              {l} <span style={{ background: 'var(--cream-100)', color: 'var(--ink-600)', borderRadius: '999px', padding: '1px 8px', fontSize: '12px', fontWeight: 700 }}>{n}</span>
+            </button>
+          ))}
+        </div>
+      </div>
       <Card variant="bordered" padding="lg" style={{ marginBottom: '20px' }}>
         <h3 style={{ margin: '0 0 16px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Funnel activation</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -455,7 +678,7 @@ function Funnel() {
       <Card variant="bordered" padding="lg">
         <h3 style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '17px', fontWeight: 700, color: 'var(--ink-900)' }}>Cohort retention</h3>
         <p style={{ margin: '0 0 14px', fontSize: '12px', color: 'var(--ink-500)' }}>% buyer di una coorte che ha riordinato nei mesi successivi.</p>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
+        <table className="mc-cohort" style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
           <thead><tr>{['Coorte', 'Signup', 'M+1', 'M+2', 'M+3'].map((h, i) => <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '8px 10px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
           <tbody>
             {f.cohorts.map((c) => { const cell = (n) => { const p = c.size > 0 ? (n / c.size) * 100 : 0; const [bg, fg] = col(p); return n === 0 ? <span style={{ color: 'var(--ink-300)' }}>—</span> : <span style={{ background: bg, color: fg, padding: '2px 8px', borderRadius: '999px', fontWeight: 600, fontSize: '12px' }}>{p.toFixed(0)}%</span>; }; return (
@@ -953,6 +1176,35 @@ function Audit() {
     <div>
       <PageTitle eyebrow="Sistema" title="Audit log" sub="Registro immutabile delle azioni amministrative"
         action={<Button variant="secondary" icon="download">Esporta</Button>} />
+      <Card variant="bordered" padding="lg" style={{ marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <Lucide name="tag" size={17} color="var(--primary-700)" />
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-serif)', fontSize: '16px', fontWeight: 700, color: 'var(--ink-900)' }}>Modifiche prezzo & catalogo</h3>
+          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--accent-700)', background: 'var(--accent-50)', padding: '2px 8px', borderRadius: '999px' }}>anti-frode</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[
+            { store: 'Cantina Pace', prod: 'Gutturnio DOC 2021', from: 7.5, to: 11.9, when: '2 ore fa', flag: true },
+            { store: 'Salumeria Verdi', prod: 'Coppa Piacentina DOP', from: 8.9, to: 8.4, when: '5 ore fa', flag: false },
+            { store: 'Bottega Emilia', prod: 'Tortelli con la coda', from: 6.0, to: 9.2, when: 'Ieri', flag: true },
+            { store: 'Forno Borgo', prod: 'Miccone 500g', from: 2.2, to: 2.4, when: 'Ieri', flag: false },
+          ].map((c, i) => {
+            const delta = Math.round(((c.to - c.from) / c.from) * 100);
+            const up = delta > 0;
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '11px 13px', border: '1px solid ' + (c.flag ? 'var(--secondary-200)' : 'var(--cream-300)'), background: c.flag ? 'var(--secondary-50)' : 'var(--surface-0)', borderRadius: 'var(--radius-lg)' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{c.prod}</p>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{c.store} · {c.when}</p>
+                </div>
+                <span style={{ fontSize: '13px', color: 'var(--ink-500)' }}>{fmt(c.from)} → <strong style={{ color: 'var(--ink-900)' }}>{fmt(c.to)}</strong></span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', fontSize: '12px', fontWeight: 700, color: up ? (c.flag ? 'var(--secondary-600)' : 'var(--accent-700)') : 'var(--olive-700)' }}><Lucide name={up ? 'trending-up' : 'trending-down'} size={13} color={up ? (c.flag ? 'var(--secondary-600)' : 'var(--accent-700)') : 'var(--olive-700)'} /> {up ? '+' : ''}{delta}%</span>
+                {c.flag && <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--secondary-700)', background: 'var(--surface-0)', border: '1px solid var(--secondary-200)', padding: '3px 8px', borderRadius: '999px', flexShrink: 0 }}>Rincaro sospetto</span>}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
       <Card variant="bordered" padding="none">
         <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)' }}>
           <thead><tr style={{ background: 'var(--cream-50)', borderBottom: '1px solid var(--cream-300)' }}>{['Operatore', 'Evento', 'Dettaglio', 'IP', 'Quando'].map((h) => <th key={h} style={{ textAlign: 'left', padding: '11px 16px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-500)' }}>{h}</th>)}</tr></thead>
@@ -1033,8 +1285,10 @@ function App() {
       {view === 'disputes' && <Disputes onToast={showToast} />}
       {view === 'moderation' && <ProductModeration onToast={showToast} />}
       {view === 'cod' && <CodRemittance onToast={showToast} />}
+      {view === 'payouts' && <SellerPayouts onToast={showToast} />}
+      {view === 'delivery' && <DeliveryConfig onToast={showToast} />}
       {view === 'sos' && <Sos onToast={showToast} />}
-      {view === 'funnel' && <Funnel />}
+      {view === 'funnel' && <Funnel onToast={showToast} />}
       {view === 'coupons' && <Coupons onToast={showToast} />}
       {view === 'sponsored' && <Sponsored />}
       {view === 'drops' && <DailyDrops />}

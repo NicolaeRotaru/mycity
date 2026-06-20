@@ -15,7 +15,7 @@ const TrustBar = () => (
     <div className="container mx-auto px-4 py-2 flex items-center justify-start sm:justify-center gap-6 overflow-x-auto scrollbar-hide whitespace-nowrap">
       {messages.map(({ Icon, text }, i) => (
         <span key={i} className="flex items-center gap-1.5 shrink-0">
-          <Icon size={14} strokeWidth={2} className="text-indigo-400" />
+          <Icon size={14} strokeWidth={2} className="text-accent-400" />
           <span className="font-medium">{text}</span>
         </span>
       ))}

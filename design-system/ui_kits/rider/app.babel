@@ -112,6 +112,24 @@ function Home({ online, onToggle, active, onOpenActive, onClaim }) {
       {/* available orders */}
       {online ? (
         <div style={{ margin: '0 16px' }}>
+          {window.RD_AVAILABLE.length >= 2 && (() => {
+            const batch = window.RD_AVAILABLE.slice(0, 2);
+            const sum = batch.reduce((t, o) => t + o.fee, 0);
+            return (
+              <button onClick={() => onClaim(batch[0])} style={{ width: '100%', textAlign: 'left', border: '1.5px solid var(--primary-300)', background: 'linear-gradient(135deg, var(--primary-50), var(--cream-50))', borderRadius: 'var(--radius-xl)', padding: '14px', cursor: 'pointer', fontFamily: 'var(--font-sans)', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <span style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--primary-600)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name="layers" size={16} color="#fff" /></span>
+                  <span style={{ fontSize: '14px', fontWeight: 800, color: 'var(--ink-900)' }}>Giro intelligente · 2 consegne</span>
+                  <span style={{ marginLeft: 'auto', fontSize: '11px', fontWeight: 700, color: 'var(--primary-700)', background: 'var(--surface-0)', padding: '3px 8px', borderRadius: '999px' }}>+15% efficienza</span>
+                </div>
+                <p style={{ margin: '0 0 10px', fontSize: '12.5px', color: 'var(--ink-600)', lineHeight: 1.45 }}>Entrambi diretti in <strong>Centro</strong>, a pochi minuti l'uno dall'altro. Accettali insieme e fai un solo giro.</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: 'var(--ink-500)' }}><Lucide name="navigation" size={13} color="var(--ink-400)" /> ~2,3 km totali</span>
+                  <span style={{ fontWeight: 800, color: 'var(--olive-700)', fontSize: '16px' }}>{fmt(sum)}</span>
+                </div>
+              </button>
+            );
+          })()}
           <SectionLabel>Ordini disponibili ({window.RD_AVAILABLE.length})</SectionLabel>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {window.RD_AVAILABLE.map((o) => (
@@ -189,6 +207,16 @@ function LiveDelivery({ order, onAdvance, onClose }) {
   const stepIdx = RD_FLOW.indexOf(o.status);
   const action = RD_ACTION[o.status];
   const done = o.status === 'DELIVERED';
+  const [chat, setChat] = React.useState(false);
+  const [proof, setProof] = React.useState(false);
+  const [chatMsgs, setChatMsgs] = React.useState([
+    { me: false, t: 'Buongiorno! Sono a casa, citofono Neri.' },
+    { me: true, t: 'Perfetto, arrivo tra pochi minuti 🛵' },
+  ]);
+  const [chatText, setChatText] = React.useState('');
+  const sendChat = () => { const t = chatText.trim(); if (!t) return; setChatMsgs((m) => [...m, { me: true, t }]); setChatText(''); };
+  const isFinalStep = o.status === 'OUT_FOR_DELIVERY';
+  const onPrimary = () => { if (isFinalStep) { setProof(true); } else { onAdvance(o); } };
   return (
     <div style={{ position: 'absolute', inset: 0, top: '44px', background: 'var(--surface-50)', zIndex: 20, display: 'flex', flexDirection: 'column', animation: 'mc-slide-up var(--dur-medium) var(--ease-out-quint)' }}>
       {/* map placeholder */}
@@ -226,6 +254,7 @@ function LiveDelivery({ order, onAdvance, onClose }) {
             <div style={{ display: 'flex', gap: '8px' }}>
               <Button variant="secondary" size="sm" icon="navigation" fullWidth>Naviga</Button>
               <Button variant="secondary" size="sm" icon="phone" fullWidth>Chiama</Button>
+              <Button variant="secondary" size="sm" icon="message-circle" fullWidth onClick={() => setChat(true)}>Chat</Button>
             </div>
           </Card>
         )}
@@ -255,8 +284,52 @@ function LiveDelivery({ order, onAdvance, onClose }) {
       <div style={{ flexShrink: 0, padding: '14px 18px 24px', borderTop: '1px solid var(--cream-200)', background: 'var(--surface-0)' }}>
         {done
           ? <Button variant="primary" size="lg" fullWidth onClick={onClose}>Torna alle consegne</Button>
-          : <Button variant={o.status === 'OUT_FOR_DELIVERY' ? 'success' : 'primary'} size="lg" fullWidth icon={action.icon} onClick={() => onAdvance(o)}>{action.label}</Button>}
+          : <Button variant={o.status === 'OUT_FOR_DELIVERY' ? 'success' : 'primary'} size="lg" fullWidth icon={action.icon} onClick={onPrimary}>{action.label}</Button>}
       </div>
+
+      {/* chat in-app rider↔cliente */}
+      {chat && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 30, background: 'var(--surface-50)', display: 'flex', flexDirection: 'column', animation: 'mc-slide-up var(--dur-base) var(--ease-out-quint)' }}>
+          <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '10px', padding: '14px 16px', borderBottom: '1px solid var(--cream-200)', background: 'var(--surface-0)' }}>
+            <button onClick={() => setChat(false)} aria-label="Indietro" style={{ border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex' }}><Lucide name="chevron-left" size={22} color="var(--ink-700)" /></button>
+            <span style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'var(--olive-100)', color: 'var(--olive-700)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px' }}>{initials(o.cust)}</span>
+            <div style={{ flex: 1, minWidth: 0 }}><p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{o.cust}</p><p style={{ margin: 0, fontSize: '12px', color: 'var(--olive-700)' }}>Cliente · #{o.id}</p></div>
+            <button aria-label="Chiama" style={{ border: 0, background: 'transparent', cursor: 'pointer', display: 'inline-flex' }}><Lucide name="phone" size={19} color="var(--primary-700)" /></button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {chatMsgs.map((m, i) => (
+              <div key={i} style={{ alignSelf: m.me ? 'flex-end' : 'flex-start', maxWidth: '78%', background: m.me ? 'var(--primary-600)' : 'var(--surface-0)', color: m.me ? '#fff' : 'var(--ink-900)', border: m.me ? 'none' : '1px solid var(--cream-300)', borderRadius: m.me ? '14px 14px 4px 14px' : '14px 14px 14px 4px', padding: '9px 13px', fontSize: '14px', lineHeight: 1.4 }}>{m.t}</div>
+            ))}
+          </div>
+          <div style={{ flexShrink: 0, display: 'flex', gap: '8px', padding: '12px 14px 22px', borderTop: '1px solid var(--cream-200)', background: 'var(--surface-0)' }}>
+            <input value={chatText} onChange={(e) => setChatText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') sendChat(); }} placeholder="Scrivi un messaggio…" style={{ flex: 1, border: '1px solid var(--cream-300)', borderRadius: '999px', padding: '10px 16px', fontSize: '14px', fontFamily: 'var(--font-sans)', color: 'var(--ink-900)', outline: 'none' }} />
+            <button onClick={sendChat} aria-label="Invia" style={{ flexShrink: 0, width: '42px', height: '42px', borderRadius: '50%', border: 0, background: 'var(--primary-600)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Lucide name="send" size={18} color="#fff" /></button>
+          </div>
+        </div>
+      )}
+
+      {/* prova di consegna (foto/firma) */}
+      {proof && (
+        <div onClick={() => setProof(false)} style={{ position: 'absolute', inset: 0, zIndex: 32, background: 'rgba(28,26,24,.5)', display: 'flex', alignItems: 'flex-end' }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: 'var(--surface-0)', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '20px 18px 26px', animation: 'mc-slide-up var(--dur-base) var(--ease-out-quint)' }}>
+            <div style={{ width: '40px', height: '4px', borderRadius: '999px', background: 'var(--cream-300)', margin: '0 auto 16px' }} />
+            <p style={{ margin: '0 0 4px', fontFamily: 'var(--font-serif)', fontSize: '19px', fontWeight: 800, color: 'var(--ink-900)' }}>Prova di consegna</p>
+            <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--ink-500)' }}>Scatta una foto del pacco consegnato o fai firmare il cliente.{o.pay === 'cod' ? ' Conferma anche l\u2019incasso contanti.' : ''}</p>
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
+              <button style={{ flex: 1, border: '1.5px dashed var(--cream-400)', background: 'var(--cream-50)', borderRadius: 'var(--radius-lg)', padding: '18px', cursor: 'pointer', fontFamily: 'var(--font-sans)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' }}><Lucide name="camera" size={24} color="var(--primary-700)" /><span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-800)' }}>Scatta foto</span></button>
+              <button style={{ flex: 1, border: '1.5px dashed var(--cream-400)', background: 'var(--cream-50)', borderRadius: 'var(--radius-lg)', padding: '18px', cursor: 'pointer', fontFamily: 'var(--font-sans)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '7px' }}><Lucide name="pen-line" size={24} color="var(--primary-700)" /><span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--ink-800)' }}>Firma cliente</span></button>
+            </div>
+            {o.pay === 'cod' && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--accent-50)', border: '1px solid var(--accent-200)', borderRadius: 'var(--radius-md)', padding: '12px 14px', marginBottom: '14px', cursor: 'pointer' }}>
+                <Lucide name="banknote" size={18} color="var(--accent-800)" />
+                <span style={{ flex: 1, fontSize: '13px', color: 'var(--accent-900)' }}>Ho incassato <strong>{fmt(o.total)}</strong> in contanti</span>
+                <Lucide name="check-circle-2" size={18} color="var(--olive-600)" />
+              </label>
+            )}
+            <Button variant="success" size="lg" fullWidth icon="check" onClick={() => { setProof(false); onAdvance(o); }}>Conferma consegna</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -281,6 +354,39 @@ function Earnings() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '16px' }}>
           <div style={{ background: 'rgba(255,255,255,.6)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}><p style={{ margin: 0, fontSize: '10px', textTransform: 'uppercase', color: 'var(--ink-500)', fontWeight: 700 }}>Consegne</p><p style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'var(--ink-900)' }}>{k.weekDeliveries}</p></div>
           <div style={{ background: 'rgba(255,255,255,.6)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}><p style={{ margin: 0, fontSize: '10px', textTransform: 'uppercase', color: 'var(--ink-500)', fontWeight: 700 }}>Media/consegna</p><p style={{ margin: 0, fontSize: '20px', fontWeight: 800, color: 'var(--ink-900)' }}>{fmt(k.avgPerDelivery)}</p></div>
+        </div>
+      </div>
+
+      {/* obiettivo + bonus giornaliero */}
+      <div style={{ margin: '0 16px 16px' }}>
+        <Card variant="bordered" padding="md">
+          {(() => {
+            const goal = 5, done = k.todayDeliveries, pct = Math.min(100, (done / goal) * 100), left = Math.max(0, goal - done), reached = done >= goal;
+            return (
+              <React.Fragment>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                  <span style={{ width: '32px', height: '32px', borderRadius: '50%', background: reached ? 'var(--olive-100)' : 'var(--accent-100)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={reached ? 'check' : 'zap'} size={16} color={reached ? 'var(--olive-700)' : 'var(--accent-700)'} /></span>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--ink-900)' }}>Bonus giornaliero</p>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{reached ? 'Obiettivo raggiunto: +2,00 € sbloccati!' : `Ancora ${left} ${left === 1 ? 'consegna' : 'consegne'} per +2,00 €`}</p>
+                  </div>
+                  <span style={{ fontWeight: 800, fontSize: '16px', color: reached ? 'var(--olive-700)' : 'var(--accent-800)' }}>+{fmt(2)}</span>
+                </div>
+                <div style={{ height: '8px', borderRadius: '999px', background: 'var(--cream-200)', overflow: 'hidden' }}>
+                  <div style={{ width: pct + '%', height: '100%', background: reached ? 'var(--olive-500)' : 'linear-gradient(90deg, var(--accent-400), var(--accent-600))', borderRadius: '999px', transition: 'width var(--dur-base)' }} />
+                </div>
+                <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--ink-400)', textAlign: 'right' }}>{done}/{goal} consegne oggi</p>
+              </React.Fragment>
+            );
+          })()}
+        </Card>
+      </div>
+
+      {/* proiezione settimanale */}
+      <div style={{ margin: '0 16px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--primary-50)', border: '1px solid var(--primary-200)', borderRadius: 'var(--radius-lg)', padding: '12px 14px' }}>
+          <Lucide name="trending-up" size={18} color="var(--primary-700)" />
+          <p style={{ margin: 0, fontSize: '13px', color: 'var(--primary-900)', lineHeight: 1.45 }}>Di questo passo chiudi la settimana intorno a <strong>{fmt(k.weekEarned / Math.max(1, k.weekDeliveries) * (k.weekDeliveries + 14))}</strong>. Resta online nelle ore di punta (19–20) per arrivarci prima.</p>
         </div>
       </div>
 
@@ -385,7 +491,32 @@ function Profile({ onNav }) {
         <InfoTile icon="bike" label="Veicolo" value={r.vehicle} />
         <InfoTile icon="map-pin" label="Zona base" value={r.zone} />
       </div>
-      <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+      <div style={{ padding: '16px 16px 0' }}>
+        <SectionLabel>Documenti & compliance</SectionLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {[
+            { icon: 'id-card', label: 'Patente di guida', sub: 'Scade 03/2028', status: 'ok' },
+            { icon: 'shield-check', label: 'Assicurazione RC', sub: 'Scade 14/07/2026', status: 'soon' },
+            { icon: 'file-check', label: 'Documento identità', sub: 'Verificato', status: 'ok' },
+            { icon: 'hard-hat', label: 'Idoneità sanitaria', sub: 'Da caricare', status: 'missing' },
+          ].map((d) => {
+            const meta = { ok: ['var(--olive-50)', 'var(--olive-700)', 'OK', 'circle-check'], soon: ['var(--accent-50)', 'var(--accent-700)', 'In scadenza', 'clock'], missing: ['var(--secondary-50)', 'var(--secondary-600)', 'Mancante', 'circle-alert'] }[d.status];
+            return (
+              <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--surface-0)', border: '1px solid var(--cream-300)', borderRadius: 'var(--radius-lg)', padding: '12px 14px' }}>
+                <span style={{ width: '38px', height: '38px', borderRadius: '50%', background: meta[0], display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Lucide name={d.icon} size={18} color={meta[1]} /></span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ margin: 0, fontWeight: 700, fontSize: '14px', color: 'var(--ink-900)' }}>{d.label}</p>
+                  <p style={{ margin: 0, fontSize: '12px', color: 'var(--ink-500)' }}>{d.sub}</p>
+                </div>
+                {d.status === 'missing'
+                  ? <button style={{ border: 0, background: meta[1], color: '#fff', fontWeight: 700, fontSize: '12px', padding: '7px 12px', borderRadius: 'var(--radius-full)', cursor: 'pointer', fontFamily: 'var(--font-sans)', flexShrink: 0 }}>Carica</button>
+                  : <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 700, color: meta[1], flexShrink: 0 }}><Lucide name={meta[3]} size={14} color={meta[1]} /> {meta[2]}</span>}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div style={{ padding: '16px 16px 0', display: 'flex', flexDirection: 'column', gap: '2px' }}>
         {[['star', 'Le mie recensioni', 'reviews'], ['history', 'Storico consegne', 'history'], ['user', 'Dati personali', null], ['landmark', 'IBAN e compensi', null], ['life-buoy', 'Aiuto', 'help'], ['log-out', 'Esci', null]].map(([ic, l, dest]) => (
           <button key={l} onClick={() => dest && go(dest)} style={{ display: 'flex', alignItems: 'center', gap: '12px', border: 0, borderBottom: '1px solid var(--cream-200)', background: 'transparent', padding: '14px 4px', cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '15px', color: l === 'Esci' ? 'var(--secondary-600)' : 'var(--ink-800)', textAlign: 'left', width: '100%' }}>
             <Lucide name={ic} size={19} color={l === 'Esci' ? 'var(--secondary-600)' : 'var(--ink-500)'} /> <span style={{ flex: 1 }}>{l}</span>

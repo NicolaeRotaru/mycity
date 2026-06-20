@@ -102,7 +102,7 @@ export default function SellerOrdersPage() {
                           </div>
                           <div className="flex items-center gap-3">
                             <OrderStatusBadge status={o.delivery_status} size="sm" />
-                            <span className="font-bold text-ink-900">{formatPrice(o.total_price)}</span>
+                            <span className="font-bold font-serif text-ink-900">{formatPrice(o.total_price)}</span>
                           </div>
                         </div>
                       </Link>
