@@ -30,6 +30,9 @@ import SimilarProducts from '@/components/SimilarProducts';
 import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
+import { SellerCard } from '@/components/products/SellerCard';
+import { AllergensAccordion } from '@/components/products/AllergensAccordion';
+import { FrequentlyBoughtTogether } from '@/components/products/FrequentlyBoughtTogether';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -40,6 +43,10 @@ import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { SocialProof } from '@/components/ui/SocialProof';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+
+// Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
+// escluse dalla griglia generica "Caratteristiche" per non duplicarle.
+const ALLERGEN_ACCORDION_KEYS = ['allergeni', 'ingredienti', 'conservazione', 'valori_nutrizionali'];
 
 export default function ProductPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -464,17 +471,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
         {/* INFO */}
         <div className="space-y-4">
-          {product.profiles && (
-            <Link
-              href={`/store/${product.profiles.id}`}
-              className="inline-flex items-center gap-2 text-sm text-primary-700 hover:underline bg-primary-50 px-3 py-1.5 rounded-full"
-            >
-              <Store size={14} strokeWidth={2.2} aria-hidden /> {product.profiles.store_name}
-            </Link>
+          {/* Scheda venditore: avatar, valutazione (reale, da store_reviews),
+              "dal AAAA" (created_at), link al negozio. */}
+          {(sellerProfile?.id ?? product.seller_id) && (
+            <SellerCard
+              sellerId={(sellerProfile?.id ?? product.seller_id) as string}
+              storeName={product.profiles?.store_name ?? 'Negozio'}
+              verified={product.profiles?.is_approved ?? undefined}
+            />
           )}
 
           <div className="flex items-start justify-between gap-3">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-ink-900 flex-1">{product.name}</h1>
+            <h1 className="flex-1 font-serif text-3xl font-bold leading-tight text-ink-900 md:text-4xl">{product.name}</h1>
             <button
               type="button"
               onClick={() => {
@@ -612,17 +620,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <p className="text-ink-700 leading-relaxed whitespace-pre-line">{product.description}</p>
           </div>
 
-          {/* Caratteristiche */}
+          {/* Caratteristiche — esclude le chiavi food mostrate nell'accordion
+              "Ingredienti e allergeni" per evitare duplicazioni. */}
           {product.attributes &&
             typeof product.attributes === 'object' &&
-            Object.keys(product.attributes).length > 0 && (
-              <div>
-                <h3 className="font-bold text-sm uppercase tracking-wide text-ink-500 mb-2">
-                  Caratteristiche
-                </h3>
-                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                  {Object.entries(product.attributes as Record<string, unknown>).map(
-                    ([key, value]) => (
+            (() => {
+              const entries = Object.entries(product.attributes as Record<string, unknown>).filter(
+                ([key]) => !ALLERGEN_ACCORDION_KEYS.includes(key),
+              );
+              if (entries.length === 0) return null;
+              return (
+                <div>
+                  <h3 className="font-bold text-sm uppercase tracking-wide text-ink-500 mb-2">
+                    Caratteristiche
+                  </h3>
+                  <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                    {entries.map(([key, value]) => (
                       <div
                         key={key}
                         className="flex justify-between items-baseline gap-3 py-1.5 border-b border-cream-200"
@@ -632,11 +645,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                           {formatAttributeValue(value)}
                         </dd>
                       </div>
-                    ),
-                  )}
-                </dl>
-              </div>
-            )}
+                    ))}
+                  </dl>
+                </div>
+              );
+            })()}
+
+          {/* Ingredienti & allergeni — solo se valorizzati dal venditore (dato reale) */}
+          <AllergensAccordion attributes={product.attributes} />
 
           {/* Trust signals — riga leggera, senza box, per non distrarre dalla CTA */}
           <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-xs text-ink-500">
@@ -731,10 +747,20 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         </div>
       </div>
 
+      {/* SPESSO COMPRATI INSIEME — altri prodotti disponibili dello stesso negozio
+          (dato reale: nessun co-acquisto inventato). */}
+      {(sellerProfile?.id ?? product.seller_id) && (
+        <FrequentlyBoughtTogether
+          productId={id}
+          sellerId={(sellerProfile?.id ?? product.seller_id) as string}
+          storeName={product.profiles?.store_name ?? undefined}
+        />
+      )}
+
       {/* RECENSIONI */}
       <section className="mt-12 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <h2 className="text-2xl font-extrabold">
+          <h2 className="font-serif text-2xl font-bold text-ink-900">
             Recensioni
             {reviews.length > 0 && (
               <span className="ml-3 text-base font-normal text-ink-500">

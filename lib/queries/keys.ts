@@ -43,6 +43,8 @@ export const queryKeys = {
                               [...queryKeys.products.all, 'search', q, filters] as const,
     similar: (id: string, categoryId?: string | null, sellerId?: string | null) =>
                               [...queryKeys.products.all, 'similar', id, categoryId ?? null, sellerId ?? null] as const,
+    boughtTogether: (id: string, sellerId?: string | null) =>
+                              [...queryKeys.products.all, 'bought-together', id, sellerId ?? null] as const,
     activeDiscount: (id: string) => ['product-active-discount', id] as const,
     external: (id: string)   => ['product-external', id] as const,
   },
@@ -50,6 +52,7 @@ export const queryKeys = {
   stores: {
     all:                     ['stores'] as const,
     detail:  (id: string)    => [...queryKeys.stores.all, id] as const,
+    sellerCard: (id: string) => [...queryKeys.stores.all, 'seller-card', id] as const,
     nearby:  (lat: number, lng: number) =>
                               [...queryKeys.stores.all, 'nearby', lat, lng] as const,
     page:                    ['stores', 'page-v4'] as const,
