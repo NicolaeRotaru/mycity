@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MapPin, Phone } from 'lucide-react';
+import { MapPin, Phone, Pencil, Trash2, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
@@ -115,24 +114,16 @@ export default function AddressesPage() {
   if (isLoading) return <LoadingState />;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <Link href="/profile" className="text-sm text-primary-700 hover:underline">← Profilo</Link>
-          <h1 className="text-2xl font-bold text-ink-900 mt-1">I tuoi indirizzi</h1>
-        </div>
-        {!showForm && (
-          <Button
-            onClick={() => { setEditing(null); setForm(empty); setShowForm(true); }}
-            size="sm"
-          >+ Nuovo</Button>
-        )}
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-serif text-2xl font-bold text-ink-900">I tuoi indirizzi</h1>
+        <p className="mt-1 text-sm text-ink-500">Dove consegniamo i tuoi ordini</p>
       </div>
 
       {showForm && (
         <form
           onSubmit={(e) => { e.preventDefault(); save.mutate(); }}
-          className="bg-white border rounded-xl p-5 space-y-3"
+          className="bg-white border border-cream-300 rounded-xl p-5 space-y-3"
         >
           <h2 className="font-bold">{editing ? 'Modifica indirizzo' : 'Nuovo indirizzo'}</h2>
           <Input
@@ -197,50 +188,62 @@ export default function AddressesPage() {
         </form>
       )}
 
-      {addresses.length === 0 ? (
-        <div className="bg-white border rounded-xl p-8 text-center text-ink-500">
-          Nessun indirizzo salvato.
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {addresses.map((a) => (
-            <div key={a.id} className="bg-white border rounded-xl p-4 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-bold text-ink-900 flex items-center gap-2">
-                  <MapPin size={18} className="text-primary-600" aria-hidden />
-                  {a.label}
-                  {a.is_default && <span className="text-xs bg-olive-100 text-olive-700 px-2 py-0.5 rounded-full font-semibold">Predefinito</span>}
-                </p>
-                <p className="text-sm text-ink-700 mt-1">{a.full_name}</p>
-                <p className="text-sm text-ink-600">{a.address}, {a.zip} {a.city}</p>
-                <p className="text-sm text-ink-500 flex items-center gap-1.5">
-                  <Phone size={14} className="text-ink-500" aria-hidden />
-                  {a.phone}
-                </p>
-                {a.notes && <p className="text-xs text-ink-400 italic mt-1">{a.notes}</p>}
-              </div>
-              <div className="flex flex-col gap-1 shrink-0">
-                <button onClick={() => startEdit(a)} className="text-xs text-primary-700 hover:underline">{tActions('edit')}</button>
-                <button
-                  onClick={async () => {
-                    const ok = await confirmDialog({
-                      title: 'Eliminare questo indirizzo?',
-                      message: a.label ? `Stai per rimuovere "${a.label}".` : undefined,
-                      confirmLabel: 'Sì, elimina',
-                      danger: true,
-                      icon: MapPin,
-                    });
-                    if (ok) remove.mutate(a.id);
-                  }}
-                  className="text-xs text-rose-600 hover:underline"
-                >
-                  Elimina
-                </button>
-              </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {addresses.map((a) => (
+          <div key={a.id} className="flex flex-col rounded-xl border border-cream-300 bg-white p-5">
+            <div className="mb-2 flex items-center gap-2">
+              <MapPin size={18} className="text-primary-600 shrink-0" aria-hidden />
+              <span className="font-bold text-ink-900">{a.label}</span>
+              {a.is_default && (
+                <span className="rounded-full bg-olive-100 px-2 py-0.5 text-xs font-semibold text-olive-700">
+                  Predefinito
+                </span>
+              )}
             </div>
-          ))}
-        </div>
-      )}
+            <p className="text-sm font-medium text-ink-700">{a.full_name}</p>
+            <p className="text-sm text-ink-600">{a.address}, {a.zip} {a.city}</p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-ink-500">
+              <Phone size={14} className="text-ink-500 shrink-0" aria-hidden />
+              {a.phone}
+            </p>
+            {a.notes && <p className="mt-1 text-xs italic text-ink-400">{a.notes}</p>}
+            <div className="mt-auto flex gap-2 pt-4">
+              <Button variant="secondary" size="sm" icon={Pencil} onClick={() => startEdit(a)}>
+                {tActions('edit')}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={Trash2}
+                onClick={async () => {
+                  const ok = await confirmDialog({
+                    title: 'Eliminare questo indirizzo?',
+                    message: a.label ? `Stai per rimuovere "${a.label}".` : undefined,
+                    confirmLabel: 'Sì, elimina',
+                    danger: true,
+                    icon: MapPin,
+                  });
+                  if (ok) remove.mutate(a.id);
+                }}
+              >
+                Elimina
+              </Button>
+            </div>
+          </div>
+        ))}
+
+        {/* Tile tratteggiato "aggiungi indirizzo" */}
+        {!showForm && (
+          <button
+            type="button"
+            onClick={() => { setEditing(null); setForm(empty); setShowForm(true); }}
+            className="flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cream-400 bg-transparent font-semibold text-primary-700 transition-colors hover:border-primary-300 hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
+          >
+            <Plus size={24} strokeWidth={2.4} aria-hidden />
+            Aggiungi indirizzo
+          </button>
+        )}
+      </div>
     </div>
   );
 }

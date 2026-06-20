@@ -74,9 +74,30 @@ export default function ProfilePage() {
     return null;
   }
 
+  const displayName = (profile.full_name as string | null)?.trim() || 'Il mio account';
+  const initials =
+    displayName.split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase() || 'U';
+  const since = (profile.created_at as string | undefined)
+    ? new Date(profile.created_at as string).getFullYear()
+    : null;
+
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-2xl">
-      <h1 className="text-2xl font-bold mb-6">Il tuo account</h1>
+    <div className="max-w-2xl">
+      {/* Header con avatar + "Cliente dal" */}
+      <div className="mb-6 flex items-center gap-4">
+        <span
+          aria-hidden
+          className="inline-flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-2xl font-bold text-white"
+        >
+          {initials}
+        </span>
+        <div className="min-w-0">
+          <h1 className="font-serif text-2xl font-bold text-ink-900">{displayName}</h1>
+          <p className="mt-0.5 text-sm text-ink-500">
+            {since ? `Cliente dal ${since}` : profile.email}
+          </p>
+        </div>
+      </div>
 
       <div className="space-y-6">
         <Link
