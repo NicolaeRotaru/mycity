@@ -1,7 +1,6 @@
 import Link from 'next/link';
 import {
-  Store, Truck, Banknote, Search, ShoppingCart, Package,
-  Handshake, Leaf, ShieldCheck, Users, ShoppingBag,
+  Sparkles, MapPin, Handshake, Banknote, Briefcase, Store, ArrowRight,
 } from 'lucide-react';
 import { loadPublishedCmsPage } from '@/lib/cms';
 import CmsPageView from '@/components/cms/CmsPageView';
@@ -20,6 +19,32 @@ export const metadata = {
   },
 };
 
+// Copy marketing statica della pagina chi-siamo (non sono metriche live).
+const STATS = [
+  { value: '24-48h', label: 'tempi di consegna' },
+  { value: '100%', label: 'venditori locali verificati' },
+  { value: '0€', label: 'commissioni mensili per i negozi' },
+  { value: 'Pay-on-delivery', label: 'paghi alla consegna, anche in contanti' },
+];
+
+const VALUES = [
+  {
+    Icon: MapPin,
+    title: 'Locale, davvero',
+    body: 'Solo commercianti del territorio, verificati uno a uno. Niente rivenditori anonimi: dietro ogni prodotto c’è una persona che conosci.',
+  },
+  {
+    Icon: Handshake,
+    title: 'Equi con i negozi',
+    body: 'Commissioni trasparenti e incassi rapidi. Il valore resta in città, nelle tasche di chi lo crea.',
+  },
+  {
+    Icon: Banknote,
+    title: 'Semplice per tutti',
+    body: 'Paghi alla consegna, in contanti se vuoi. Nessun account obbligatorio per iniziare: la tecnologia sparisce, resta il servizio.',
+  },
+];
+
 export default async function AboutPage() {
   // Se l'admin ha pubblicato una versione a blocchi di questa pagina, usala;
   // altrimenti resta il contenuto predefinito qui sotto (nessuna regressione).
@@ -27,117 +52,146 @@ export default async function AboutPage() {
   if (cms) return <CmsPageView page={cms} />;
 
   return (
-    <div className="container mx-auto px-6 py-10 max-w-4xl">
-      <div className="text-center mb-12">
-        <h1 className="text-3xl md:text-5xl font-extrabold text-ink-900 mb-4">
-          Il mercato locale della tua città, <span className="bg-gradient-to-r from-primary-600 to-secondary-600 bg-clip-text text-transparent">online</span>
-        </h1>
-        <p className="text-lg text-ink-600 max-w-2xl mx-auto">
-          MyCity collega chi vende e chi compra nella stessa città. Ordini online, paghi alla consegna, ricevi a casa in 24-48h.
-        </p>
+    <div>
+      {/* Hero gradient */}
+      <header className="bg-gradient-to-br from-primary-700 to-secondary-700 text-white">
+        <div className="container mx-auto px-6 max-w-5xl pt-16 pb-20">
+          <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-label text-accent-300 mb-3.5">
+            <Sparkles size={14} strokeWidth={2.4} aria-hidden /> La nostra storia
+          </span>
+          <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[1.05] mb-4 max-w-[16ch]">
+            Il quartiere, a portata di mano.
+          </h1>
+          <p className="text-lg md:text-xl leading-relaxed text-white/90 max-w-[52ch]">
+            MyCity nasce a Piacenza per dare ai negozi di vicinato lo stesso superpotere dei grandi
+            e-commerce: vendere online e consegnare a casa, restando ciò che sono — la salumeria
+            di fiducia, il fornaio sotto casa, l’enoteca all’angolo.
+          </p>
+        </div>
+      </header>
+
+      {/* Stats row, overlapping the hero */}
+      <div className="container mx-auto px-6 max-w-5xl -mt-10 relative z-10">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {STATS.map((s) => (
+            <div
+              key={s.label}
+              className="bg-white border border-cream-300 rounded-xl px-5 py-5 shadow-warm"
+            >
+              <div className="font-serif text-2xl md:text-3xl font-extrabold text-primary-700 leading-none">
+                {s.value}
+              </div>
+              <div className="text-sm text-ink-500 mt-1.5">{s.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 mb-12">
-        <div className="bg-white border rounded-xl p-6 text-center">
-          <Store className="mx-auto mb-2 text-primary-600" size={32} strokeWidth={2} aria-hidden />
-          <div className="text-2xl font-extrabold font-serif text-primary-700">100%</div>
-          <div className="text-sm text-ink-600">Venditori locali</div>
-        </div>
-        <div className="bg-white border rounded-xl p-6 text-center">
-          <Truck className="mx-auto mb-2 text-secondary-600" size={32} strokeWidth={2} aria-hidden />
-          <div className="text-2xl font-extrabold font-serif text-secondary-600">24-48h</div>
-          <div className="text-sm text-ink-600">Consegna</div>
-        </div>
-        <div className="bg-white border rounded-xl p-6 text-center">
-          <Banknote className="mx-auto mb-2 text-secondary-600" size={32} strokeWidth={2} aria-hidden />
-          <div className="text-2xl font-extrabold font-serif text-secondary-600">0€</div>
-          <div className="text-sm text-ink-600">Commissioni mensili</div>
-        </div>
+      <div className="container mx-auto px-6 max-w-5xl">
+        {/* Perché esistiamo */}
+        <section className="py-14 md:py-16 grid md:grid-cols-[1.1fr_1fr] gap-10 md:gap-12 items-center">
+          <div>
+            <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-4">
+              Perché esistiamo
+            </h2>
+            <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch]">
+              Ogni saracinesca che si abbassa è una storia, un mestiere, un pezzo di città che si
+              spegne. Le grandi piattaforme hanno reso comodo comprare lontano; noi vogliamo rendere
+              altrettanto comodo comprare <strong>vicino</strong>.
+            </p>
+            <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch] mt-3.5">
+              Con MyCity un negoziante pubblica i suoi prodotti in pochi minuti — anche da una foto
+              — e i suoi clienti li ricevono a casa in giornata. Niente vetrine digitali complicate,
+              niente commissioni assurde: solo il quartiere che torna a girare.
+            </p>
+          </div>
+          <div
+            className="rounded-2xl aspect-[4/3] bg-gradient-to-br from-cream-200 via-cream-100 to-primary-100 border border-cream-300 shadow-card flex items-center justify-center"
+            aria-hidden
+          >
+            <Store size={64} strokeWidth={1.4} className="text-primary-400/70" />
+          </div>
+        </section>
       </div>
 
-      <section className="prose prose-gray max-w-none mb-12">
-        <h2 className="text-2xl font-bold text-ink-900 mb-4">La nostra missione</h2>
-        <p className="text-ink-700 leading-relaxed mb-4">
-          Crediamo che il commercio locale sia il cuore di ogni città. Quando compri sotto casa, sostieni famiglie,
-          mantieni vive le strade del centro e riduci l'impatto ambientale delle spedizioni a lunga distanza.
-        </p>
-        <p className="text-ink-700 leading-relaxed">
-          MyCity dà ai negozi di quartiere gli stessi strumenti dei grandi marketplace: vetrina online, gestione ordini,
-          consegne con rider, recensioni, pagamenti, statistiche. Senza commissioni mensili e senza vincoli.
-        </p>
-      </section>
-
-      <section className="mb-12">
-        <h2 className="text-2xl font-bold text-ink-900 mb-6">Come funziona</h2>
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="bg-primary-50 rounded-xl p-5">
-            <Search className="mb-2 text-primary-600" size={28} strokeWidth={2} aria-hidden />
-            <div className="font-bold mb-1">1. Cerchi</div>
-            <p className="text-sm text-ink-700">Scopri i negozi vicino a te, leggi recensioni e confronta prezzi.</p>
-          </div>
-          <div className="bg-secondary-50 rounded-xl p-5">
-            <ShoppingCart className="mb-2 text-secondary-600" size={28} strokeWidth={2} aria-hidden />
-            <div className="font-bold mb-1">2. Ordini</div>
-            <p className="text-sm text-ink-700">Aggiungi al carrello, scegli consegna o ritiro, conferma. Paghi alla consegna.</p>
-          </div>
-          <div className="bg-secondary-50 rounded-xl p-5">
-            <Package className="mb-2 text-secondary-600" size={28} strokeWidth={2} aria-hidden />
-            <div className="font-bold mb-1">3. Ricevi</div>
-            <p className="text-sm text-ink-700">In 24-48h il rider ti consegna a casa, oppure ritiri in negozio con sconto.</p>
-          </div>
-        </div>
-        <div className="mt-4">
-          <Link href="/come-funziona" className="inline-flex items-center gap-1.5 font-semibold text-primary-700 hover:underline">
-            Scopri come funziona nel dettaglio <span aria-hidden>→</span>
-          </Link>
-        </div>
-      </section>
-
-      <section className="mb-12">
-        <h2 className="text-2xl font-bold text-ink-900 mb-6">I nostri valori</h2>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="flex gap-3 bg-white border rounded-xl p-5">
-            <Handshake className="shrink-0 text-primary-600" size={24} strokeWidth={2} aria-hidden />
-            <div>
-              <div className="font-bold mb-1">Trasparenza</div>
-              <p className="text-sm text-ink-700">Prezzi chiari, commissioni trasparenti, nessuna sorpresa.</p>
-            </div>
-          </div>
-          <div className="flex gap-3 bg-white border rounded-xl p-5">
-            <Leaf className="shrink-0 text-olive-600" size={24} strokeWidth={2} aria-hidden />
-            <div>
-              <div className="font-bold mb-1">Sostenibilità</div>
-              <p className="text-sm text-ink-700">Consegne brevi, meno emissioni, supporto al territorio.</p>
-            </div>
-          </div>
-          <div className="flex gap-3 bg-white border rounded-xl p-5">
-            <ShieldCheck className="shrink-0 text-primary-600" size={24} strokeWidth={2} aria-hidden />
-            <div>
-              <div className="font-bold mb-1">Privacy</div>
-              <p className="text-sm text-ink-700">I tuoi dati restano tuoi. Conformità GDPR sin dal primo giorno.</p>
-            </div>
-          </div>
-          <div className="flex gap-3 bg-white border rounded-xl p-5">
-            <Users className="shrink-0 text-primary-600" size={24} strokeWidth={2} aria-hidden />
-            <div>
-              <div className="font-bold mb-1">Comunità</div>
-              <p className="text-sm text-ink-700">Ogni acquisto sostiene un negozio reale della tua città.</p>
-            </div>
+      {/* I nostri valori — banda */}
+      <section className="bg-cream-100 border-y border-cream-300">
+        <div className="container mx-auto px-6 max-w-5xl py-14 md:py-16">
+          <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-3">
+            I nostri valori
+          </h2>
+          <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch]">
+            Tre principi guidano ogni decisione di prodotto.
+          </p>
+          <div className="grid md:grid-cols-3 gap-4 mt-6">
+            {VALUES.map(({ Icon, title, body }) => (
+              <div key={title} className="bg-white border border-cream-300 rounded-xl p-6">
+                <span className="w-12 h-12 rounded-lg bg-primary-100 text-primary-700 inline-flex items-center justify-center mb-3.5">
+                  <Icon size={22} strokeWidth={2.2} aria-hidden />
+                </span>
+                <h3 className="text-lg font-bold text-ink-900 mb-1.5">{title}</h3>
+                <p className="text-sm leading-relaxed text-ink-600">{body}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Link href="/sign-up" className="block bg-gradient-to-br from-primary-600 to-secondary-600 text-white rounded-2xl p-6 hover:shadow-lg transition-all">
-          <ShoppingBag className="mb-2" size={28} strokeWidth={2} aria-hidden />
-          <h3 className="text-lg font-bold mb-1">Inizia a comprare</h3>
-          <p className="text-primary-100 text-sm">Crea un account in 30 secondi.</p>
-        </Link>
-        <Link href="/sell" className="block bg-gradient-to-br from-secondary-600 to-accent-500 text-white rounded-2xl p-6 hover:shadow-lg transition-all">
-          <Store className="mb-2" size={28} strokeWidth={2} aria-hidden />
-          <h3 className="text-lg font-bold mb-1">Diventa venditore</h3>
-          <p className="text-secondary-100 text-sm">Vetrina professionale, niente commissioni, approvazione 48h.</p>
-        </Link>
+      <div className="container mx-auto px-6 max-w-5xl">
+        {/* Come siamo arrivati qui */}
+        <section className="py-14 md:py-16 grid md:grid-cols-[1fr_1.1fr] gap-10 md:gap-12 items-center">
+          <div
+            className="order-2 md:order-1 rounded-2xl aspect-[4/3] bg-gradient-to-br from-secondary-100 via-cream-100 to-accent-100 border border-cream-300 shadow-card flex items-center justify-center"
+            aria-hidden
+          >
+            <MapPin size={64} strokeWidth={1.4} className="text-secondary-500/70" />
+          </div>
+          <div className="order-1 md:order-2">
+            <h2 className="font-serif text-3xl md:text-4xl font-extrabold text-ink-900 mb-4">
+              Come siamo arrivati qui
+            </h2>
+            <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch]">
+              Tutto è partito da una domanda semplice di un gruppo di piacentini: <em>perché posso
+              farmi arrivare qualsiasi cosa dall’altra parte del mondo, ma non un etto di coppa dal
+              salumiere di fronte?</em>
+            </p>
+            <p className="text-[17px] leading-relaxed text-ink-700 max-w-[64ch] mt-3.5">
+              Abbiamo messo insieme i primi negozi del centro storico, una flotta di rider in bici e
+              un’app pensata per chi non ha tempo da perdere. Oggi MyCity cresce quartiere dopo
+              quartiere, sempre con la stessa bussola: la prossimità.
+            </p>
+          </div>
+        </section>
+
+        {/* CTA band scura */}
+        <section className="pb-16">
+          <div className="bg-ink-900 text-white rounded-2xl p-8 md:p-11 flex flex-col md:flex-row md:items-center md:justify-between gap-7">
+            <div>
+              <h2 className="font-serif text-2xl md:text-3xl font-extrabold text-white mb-2">
+                Vuoi farne parte?
+              </h2>
+              <p className="text-white/80 text-[15px] max-w-[46ch]">
+                Che tu abbia un negozio, una bici o voglia di costruire qualcosa di utile per la tua
+                città — c’è posto per te.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/lavora-con-noi"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 font-bold text-[15px] bg-accent-500 text-ink-900 hover:bg-accent-400 transition-colors"
+              >
+                <Briefcase size={18} strokeWidth={2.2} aria-hidden /> Lavora con noi
+              </Link>
+              <Link
+                href="/sell"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-3 font-bold text-[15px] bg-white/10 text-white border border-white/25 hover:bg-white/20 transition-colors"
+              >
+                <Store size={18} strokeWidth={2.2} aria-hidden /> Apri un negozio
+                <ArrowRight size={16} strokeWidth={2.2} aria-hidden />
+              </Link>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
