@@ -2,9 +2,28 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { Star, User, BadgeCheck, ThumbsUp } from 'lucide-react';
+import { Star, StarHalf, User, BadgeCheck, ThumbsUp } from 'lucide-react';
 import { sizedImage } from '@/lib/image-url';
 import type { SectionContext, SectionReview } from './SectionContext';
+
+/**
+ * Media a stelle con mezza-stella: arrotonda al mezzo punto (es. 4,3 → 4,5) e
+ * rende 5 icone — piene, una mezza, vuote. Parità token col mockup: accent-500.
+ */
+function AverageStars({ value }: { value: number }) {
+  const rounded = Math.round(value * 2) / 2;
+  const full = Math.floor(rounded);
+  const hasHalf = rounded - full === 0.5;
+  return (
+    <span className="inline-flex items-center" aria-label={`${value.toFixed(1)} su 5 stelle`}>
+      {Array.from({ length: 5 }, (_, i) => {
+        if (i < full) return <Star key={i} size={16} className="fill-accent-500 text-accent-500" aria-hidden />;
+        if (i === full && hasHalf) return <StarHalf key={i} size={16} className="fill-accent-500 text-accent-500" aria-hidden />;
+        return <Star key={i} size={16} className="fill-cream-200 text-cream-200" aria-hidden />;
+      })}
+    </span>
+  );
+}
 
 /**
  * Recensione singola arricchita: avatar, stelle, pill "Acquisto verificato"
@@ -96,13 +115,10 @@ export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
           <Star size={18} className="fill-accent-400 text-accent-500" aria-hidden />
           Recensioni clienti
         </h2>
-        <div className="flex items-center gap-1">
-          <span className="text-lg text-accent-400" aria-hidden>
-            {'★'.repeat(Math.round(avgRating))}
-            {'☆'.repeat(5 - Math.round(avgRating))}
-          </span>
+        <div className="flex items-center gap-1.5">
+          <AverageStars value={avgRating} />
           <span className="text-sm font-medium text-ink-600">
-            {avgRating.toFixed(1)} ({reviews.length})
+            {avgRating.toFixed(1).replace('.', ',')} ({reviews.length})
           </span>
         </div>
       </div>

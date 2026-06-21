@@ -116,7 +116,7 @@ function HomeBlock({
                     ctaId="hero_secondary"
                     location="hero"
                     variant={heroVariant}
-                    className="inline-flex items-center gap-2 bg-white hover:bg-surface-100 text-ink-900 border border-surface-300 px-6 py-3 rounded-full font-semibold transition-colors"
+                    className="inline-flex items-center gap-2 bg-white hover:bg-cream-50 text-ink-900 border border-cream-300 px-6 py-3 rounded-full font-semibold transition-colors"
                   >
                     <Store size={18} strokeWidth={2.2} />
                     Esplora i negozi

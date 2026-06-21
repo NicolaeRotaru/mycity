@@ -11,8 +11,18 @@ import type { ReactNode } from 'react';
 
 export type TocItem = { id: string; label: string };
 
+/** Documenti legali fratelli — la tab bar li collega tutti dalla cima di ognuno. */
+const LEGAL_DOCS: { href: string; label: string }[] = [
+  { href: '/terms', label: 'Termini' },
+  { href: '/privacy', label: 'Privacy' },
+  { href: '/cookies', label: 'Cookie' },
+  { href: '/accessibility', label: 'Accessibilità' },
+];
+
 type Props = {
   title: string;
+  /** Route del documento corrente (es. "/privacy") → evidenzia la tab attiva. */
+  active?: string;
   /** Riga meta sotto al titolo (versione / data / riferimenti normativi). */
   meta?: ReactNode;
   /** Riepilogo "In breve" — sintesi non vincolante in cima alla pagina. */
@@ -22,7 +32,7 @@ type Props = {
   children: ReactNode;
 };
 
-export function LegalLayout({ title, meta, summary, toc, children }: Props) {
+export function LegalLayout({ title, active, meta, summary, toc, children }: Props) {
   return (
     <div className="container mx-auto px-6 py-10 max-w-4xl">
       <div className="mb-2">
@@ -30,6 +40,27 @@ export function LegalLayout({ title, meta, summary, toc, children }: Props) {
       </div>
       <h1 className="font-serif text-3xl md:text-5xl font-extrabold text-ink-900 mb-2">{title}</h1>
       {meta && <p className="text-sm text-ink-500 mb-6">{meta}</p>}
+
+      {/* Tab bar documenti legali fratelli — attiva = underline primary-600. */}
+      <nav aria-label="Documenti legali" className="flex flex-wrap gap-1 border-b border-cream-300 mb-8 -mt-2">
+        {LEGAL_DOCS.map((doc) => {
+          const isActive = doc.href === active;
+          return (
+            <Link
+              key={doc.href}
+              href={doc.href}
+              aria-current={isActive ? 'page' : undefined}
+              className={`-mb-px border-b-2 px-4 py-3 text-sm font-semibold transition-colors ${
+                isActive
+                  ? 'border-primary-600 text-primary-700'
+                  : 'border-transparent text-ink-500 hover:text-ink-800'
+              }`}
+            >
+              {doc.label}
+            </Link>
+          );
+        })}
+      </nav>
 
       {/* Callout "In breve" */}
       <div className="bg-cream-50 border border-cream-300 border-l-[3px] border-l-primary-500 rounded-r-md px-4 py-3.5 mb-8 text-sm leading-relaxed text-ink-700">

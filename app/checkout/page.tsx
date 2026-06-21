@@ -18,7 +18,7 @@ import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Textarea } from '@/components/ui/Field';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { StepCard } from '@/components/checkout/StepCard';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
@@ -649,37 +649,11 @@ export default function CheckoutPage() {
               onChange={(m) => { setPaymentMethod(m); trackCheckoutStep('payment_method', { method: m }); }}
               stripeAvailable={stripeAvailable}
               multiSeller={groups.length > 1}
+              pickupInStore={pickupInStore}
+              onPickupChange={setPickupInStore}
+              pickupDiscount={pickupDiscount}
+              pickupDiscountPercent={PICKUP_DISCOUNT_PERCENT}
             />
-
-            {/* RITIRO IN NEGOZIO — tile metodo con quadrato-icona colorato + badge */}
-            <label className={`mt-3 flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
-              pickupInStore ? 'border-olive-400 bg-olive-50' : 'border-cream-300 bg-white hover:border-olive-200'
-            }`}>
-              <input
-                type="checkbox"
-                checked={pickupInStore}
-                onChange={(e) => setPickupInStore(e.target.checked)}
-                className="mt-2.5 w-4 h-4 accent-olive-600"
-              />
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
-                <Store size={20} aria-hidden />
-              </span>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
-                  {pickupInStore ? (
-                    <span className="bg-olive-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
-                      −{formatPrice(pickupDiscount)}
-                    </span>
-                  ) : (
-                    <Badge variant="new">Sconto {PICKUP_DISCOUNT_PERCENT}%</Badge>
-                  )}
-                </div>
-                <p className="text-sm text-ink-600 mt-0.5">
-                  Niente spedizione, sconto subito. Vai tu al negozio quando l&apos;ordine è pronto.
-                </p>
-              </div>
-            </label>
 
             {/* Credito MyCity — solo COD in questo flusso */}
             {paymentMethod === 'cod' && walletEuro > 0 && (
@@ -701,6 +675,21 @@ export default function CheckoutPage() {
                 </div>
               </label>
             )}
+
+            {/* NOTE PER IL RIDER — spostate qui (step conferma) come da mockup.
+                Stesso `name="notes"` + handler: aggiorna `form.notes` nello state,
+                che è ciò che le mutation di submit leggono. Nessun cambio di logica. */}
+            <div className="mt-4">
+              <Textarea
+                label="Note per il rider (opzionale)"
+                name="notes"
+                value={form.notes}
+                onChange={handleChange}
+                rows={2}
+                placeholder="Es. citofono Rossi, suonare al 2° piano…"
+                className="resize-none"
+              />
+            </div>
           </StepCard>
 
           {/* RIEPILOGO PER NEGOZIO */}

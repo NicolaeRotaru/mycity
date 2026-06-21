@@ -64,6 +64,11 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
 
   const cover = media.find((m) => m.type === 'image') ?? null;
 
+  // "Categoria" nella riga meta: lo schema profili non ha un campo categoria del
+  // negozio, ma i badge sono dati reali scelti dal venditore (tipo attività). Usiamo
+  // il primo badge come etichetta-categoria SOLO se presente; altrimenti si omette.
+  const category = badges.length > 0 ? badgeLabel(badges[0]) : null;
+
   return (
     <div className="overflow-hidden rounded-2xl border border-cream-300 bg-white shadow-warm">
       {/* Striscia colore brand del negozio */}
@@ -144,6 +149,13 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
                 </span>
               )}
             </h1>
+            {/* Riga meta: rating · categoria · zona. Allinea al mockup (rating · cat · area).
+                NOTE backend-gated:
+                  - "categoria" del negozio non ha colonna nello schema (profiles): renderizzata
+                    solo se presente almeno un badge del negozio (dato reale, usato come tag tipo
+                    attività); se assente si salta — non si inventa.
+                  - "dal {since}" è anch'essa senza colonna → omessa (vedi SellerCard per "membro dal"
+                    derivato da created_at, qui non disponibile nel SectionContext). */}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-white/90">
               {avgRating !== null && (
                 <span className="inline-flex items-center gap-1">
@@ -152,9 +164,15 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
                   <span className="text-white/80">· {reviews.length} {reviews.length === 1 ? 'recensione' : 'recensioni'}</span>
                 </span>
               )}
+              {category && (
+                <span className="inline-flex items-center gap-1 text-white/85">
+                  {avgRating !== null && <span aria-hidden>·</span>}
+                  {category}
+                </span>
+              )}
               {street && (
                 <span className="inline-flex items-center gap-1">
-                  {avgRating !== null && <span aria-hidden>·</span>}
+                  {(avgRating !== null || category) && <span aria-hidden>·</span>}
                   <MapPin size={14} aria-hidden /> {street}
                 </span>
               )}

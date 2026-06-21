@@ -91,14 +91,14 @@ const Footer = () => {
   if (pathname?.startsWith('/admin') || pathname?.startsWith('/seller') || pathname?.startsWith('/rider')) return null;
 
   return (
-    <footer className="bg-ink-900 text-ink-300 mt-12">
+    <footer className="bg-cream-200 border-t border-cream-300 text-ink-700 mt-12">
       <div className={`container mx-auto px-6 py-12 grid grid-cols-2 ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-2 md:col-span-1">
-          <h3 className="font-serif font-bold text-white mb-3 flex items-center gap-2 text-lg">
-            <span className="text-accent-400 text-xl">●</span> <span><span className="text-accent-400">{branding.wordmark.accent}</span>{branding.wordmark.rest}</span>
+          <h3 className="font-serif font-bold mb-3 text-2xl">
+            <span className="text-accent-500">{branding.wordmark.accent}</span><span className="text-ink-900">{branding.wordmark.rest}</span>
           </h3>
-          <p className="text-sm text-ink-400 mb-4 leading-relaxed">
+          <p className="text-sm text-ink-500 mb-4 leading-relaxed">
             {branding.footerTagline}
           </p>
           {/* Social icons */}
@@ -111,7 +111,7 @@ const Footer = () => {
                 rel="noopener noreferrer"
                 title={s.name}
                 aria-label={s.name}
-                className={`w-9 h-9 bg-white/5 ${s.color} hover:text-white rounded-full flex items-center justify-center transition-all duration-200`}
+                className={`w-9 h-9 bg-white ring-1 ring-cream-300 text-ink-500 ${s.color} hover:text-white rounded-full flex items-center justify-center transition-all duration-200`}
               >
                 {s.svg}
               </a>
@@ -121,15 +121,15 @@ const Footer = () => {
 
         {/* Esplora */}
         <div>
-          <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Esplora</h3>
+          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Esplora</h3>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
-            <li><Link href="/stores" className="hover:text-white transition-colors">Negozi locali</Link></li>
-            <li><Link href="/near" className="hover:text-white transition-colors">Vicino a te</Link></li>
-            <li><Link href="/shop-of-month" className="hover:text-white transition-colors">Negozio del mese</Link></li>
-            <li><Link href="/events" className="hover:text-white transition-colors">Eventi MyCity</Link></li>
-            <li><Link href="/lists" className="hover:text-white transition-colors">Liste curate</Link></li>
-            <li><Link href="/search" className="hover:text-white transition-colors">Tutti i prodotti</Link></li>
+            <li><Link href="/" className="text-ink-600 hover:text-primary-700 transition-colors">Home</Link></li>
+            <li><Link href="/stores" className="text-ink-600 hover:text-primary-700 transition-colors">Negozi locali</Link></li>
+            <li><Link href="/near" className="text-ink-600 hover:text-primary-700 transition-colors">Vicino a te</Link></li>
+            <li><Link href="/shop-of-month" className="text-ink-600 hover:text-primary-700 transition-colors">Negozio del mese</Link></li>
+            <li><Link href="/events" className="text-ink-600 hover:text-primary-700 transition-colors">Eventi MyCity</Link></li>
+            <li><Link href="/lists" className="text-ink-600 hover:text-primary-700 transition-colors">Liste curate</Link></li>
+            <li><Link href="/search" className="text-ink-600 hover:text-primary-700 transition-colors">Tutti i prodotti</Link></li>
           </ul>
         </div>
 
@@ -137,89 +137,89 @@ const Footer = () => {
             del loro mestiere è nella sidebar dedicata, niente duplicati qui. */}
         {!isSellerArea && (
           <div>
-            <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Categorie</h3>
+            <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Categorie</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/category/alimentari" className="inline-flex items-center gap-2 hover:text-white transition-colors"><Apple size={14} strokeWidth={2.2} className="text-accent-400" />Alimentari</Link></li>
-              <li><Link href="/category/abbigliamento" className="inline-flex items-center gap-2 hover:text-white transition-colors"><Shirt size={14} strokeWidth={2.2} className="text-accent-400" />Abbigliamento</Link></li>
-              <li><Link href="/category/casa" className="inline-flex items-center gap-2 hover:text-white transition-colors"><HomeIcon size={14} strokeWidth={2.2} className="text-accent-400" />Casa &amp; Cucina</Link></li>
-              <li><Link href="/category/elettronica" className="inline-flex items-center gap-2 hover:text-white transition-colors"><Smartphone size={14} strokeWidth={2.2} className="text-accent-400" />Elettronica</Link></li>
-              <li><Link href="/category/libri" className="inline-flex items-center gap-2 hover:text-white transition-colors"><BookOpen size={14} strokeWidth={2.2} className="text-accent-400" />Libri</Link></li>
+              <li><Link href="/category/alimentari" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><Apple size={14} strokeWidth={2.2} className="text-primary-600" />Alimentari</Link></li>
+              <li><Link href="/category/abbigliamento" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><Shirt size={14} strokeWidth={2.2} className="text-primary-600" />Abbigliamento</Link></li>
+              <li><Link href="/category/casa" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><HomeIcon size={14} strokeWidth={2.2} className="text-primary-600" />Casa &amp; Cucina</Link></li>
+              <li><Link href="/category/elettronica" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><Smartphone size={14} strokeWidth={2.2} className="text-primary-600" />Elettronica</Link></li>
+              <li><Link href="/category/libri" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><BookOpen size={14} strokeWidth={2.2} className="text-primary-600" />Libri</Link></li>
             </ul>
           </div>
         )}
 
         {/* Aiuto */}
         <div>
-          <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Aiuto</h3>
+          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Aiuto</h3>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/help" className="hover:text-white transition-colors">Centro assistenza</Link></li>
-            <li><Link href="/faq" className="hover:text-white transition-colors">Domande frequenti</Link></li>
-            <li><Link href="/contact" className="hover:text-white transition-colors">Contattaci</Link></li>
+            <li><Link href="/help" className="text-ink-600 hover:text-primary-700 transition-colors">Centro assistenza</Link></li>
+            <li><Link href="/faq" className="text-ink-600 hover:text-primary-700 transition-colors">Domande frequenti</Link></li>
+            <li><Link href="/contact" className="text-ink-600 hover:text-primary-700 transition-colors">Contattaci</Link></li>
             <li>
               <a
                 href={`https://wa.me/${(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '393000000000').replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Ciao MyCity, ho una domanda')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-white transition-colors inline-flex items-center gap-1.5"
+                className="text-ink-600 hover:text-primary-700 transition-colors inline-flex items-center gap-1.5"
               >
                 <MessageCircle size={14} strokeWidth={2} aria-hidden /> WhatsApp Business
               </a>
             </li>
-            <li><Link href="/shipping" className="hover:text-white transition-colors">Spedizioni</Link></li>
-            <li><Link href="/returns" className="hover:text-white transition-colors">Resi e rimborsi</Link></li>
-            <li><Link href="/status" className="hover:text-white transition-colors">Stato servizi</Link></li>
+            <li><Link href="/shipping" className="text-ink-600 hover:text-primary-700 transition-colors">Spedizioni</Link></li>
+            <li><Link href="/returns" className="text-ink-600 hover:text-primary-700 transition-colors">Resi e rimborsi</Link></li>
+            <li><Link href="/status" className="text-ink-600 hover:text-primary-700 transition-colors">Stato servizi</Link></li>
             {isAuthenticated && (
-              <li><Link href="/profile/settings" className="hover:text-white transition-colors">Impostazioni account</Link></li>
+              <li><Link href="/profile/settings" className="text-ink-600 hover:text-primary-700 transition-colors">Impostazioni account</Link></li>
             )}
           </ul>
         </div>
 
         {/* Azienda + Legale */}
         <div>
-          <h3 className="font-bold text-white mb-3 text-sm uppercase tracking-wide">Azienda</h3>
+          <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Azienda</h3>
           <ul className="space-y-2 text-sm">
-            <li><Link href="/about" className="hover:text-white transition-colors">Chi siamo</Link></li>
-            <li><Link href="/come-funziona" className="hover:text-white transition-colors">Come funziona</Link></li>
+            <li><Link href="/about" className="text-ink-600 hover:text-primary-700 transition-colors">Chi siamo</Link></li>
+            <li><Link href="/come-funziona" className="text-ink-600 hover:text-primary-700 transition-colors">Come funziona</Link></li>
             {!isSellerArea && (
-              <li><Link href="/sell" className="hover:text-white transition-colors">Vendi su MyCity</Link></li>
+              <li><Link href="/sell" className="text-ink-600 hover:text-primary-700 transition-colors">Vendi su MyCity</Link></li>
             )}
-            <li><Link href="/lavora-con-noi" className="hover:text-white transition-colors">Lavora con noi</Link></li>
-            <li><Link href="/terms" className="hover:text-white transition-colors">Termini di servizio</Link></li>
-            <li><Link href="/privacy" className="hover:text-white transition-colors">Privacy policy</Link></li>
-            <li><Link href="/cookies" className="hover:text-white transition-colors">Cookie policy</Link></li>
-            <li><Link href="/accessibility" className="hover:text-white transition-colors">Dichiarazione accessibilità</Link></li>
+            <li><Link href="/lavora-con-noi" className="text-ink-600 hover:text-primary-700 transition-colors">Lavora con noi</Link></li>
+            <li><Link href="/terms" className="text-ink-600 hover:text-primary-700 transition-colors">Termini di servizio</Link></li>
+            <li><Link href="/privacy" className="text-ink-600 hover:text-primary-700 transition-colors">Privacy policy</Link></li>
+            <li><Link href="/cookies" className="text-ink-600 hover:text-primary-700 transition-colors">Cookie policy</Link></li>
+            <li><Link href="/accessibility" className="text-ink-600 hover:text-primary-700 transition-colors">Dichiarazione accessibilità</Link></li>
           </ul>
         </div>
       </div>
 
       {/* Newsletter */}
       {!isSellerArea && (
-        <div className="border-t border-gray-800 bg-gray-950">
+        <div className="border-t border-cream-300 bg-cream-100">
           <div className="container mx-auto px-6 py-6 max-w-2xl">
-            <NewsletterForm />
+            <NewsletterForm variant="light" />
           </div>
         </div>
       )}
 
       {/* Trust strip + contatti compatti */}
-      <div className="border-t border-gray-800">
-        <div className="container mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-ink-400">
+      <div className="border-t border-cream-300">
+        <div className="container mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-ink-600">
           <div className="flex items-center gap-5 flex-wrap justify-center">
             <span className="flex items-center gap-1.5">
-              <Banknote size={14} strokeWidth={2} /> Pagamento alla consegna
+              <Banknote size={14} strokeWidth={2} className="text-olive-600" /> Pagamento alla consegna
             </span>
             <span className="flex items-center gap-1.5">
-              <Truck size={14} strokeWidth={2} /> Spedizione 24-48h
+              <Truck size={14} strokeWidth={2} className="text-olive-600" /> Spedizione 24-48h
             </span>
             <span className="flex items-center gap-1.5">
-              <Lock size={14} strokeWidth={2} /> Acquisto sicuro
+              <Lock size={14} strokeWidth={2} className="text-olive-600" /> Acquisto sicuro
             </span>
             <span className="flex items-center gap-1.5">
-              <RotateCcw size={14} strokeWidth={2} /> Reso entro 14 giorni
+              <RotateCcw size={14} strokeWidth={2} className="text-olive-600" /> Reso entro 14 giorni
             </span>
           </div>
           <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-ink-500 justify-center">
-            <a href="mailto:info@mycity.it" className="inline-flex items-center gap-1.5 hover:text-ink-300 transition-colors">
+            <a href="mailto:info@mycity.it" className="inline-flex items-center gap-1.5 hover:text-primary-700 transition-colors">
               <Mail size={13} strokeWidth={2} /> info@mycity.it
             </a>
             <span className="inline-flex items-center gap-1.5">
@@ -233,18 +233,18 @@ const Footer = () => {
       </div>
 
       {/* Dati legali azienda */}
-      <div className="border-t border-gray-800 py-5 text-center text-xs text-ink-500 space-y-1 px-4">
+      <div className="border-t border-cream-300 py-5 text-center text-xs text-ink-500 space-y-1 px-4">
         <div>
-          © {new Date().getFullYear()} <span className="font-semibold text-ink-400">MyCity S.r.l.</span> · Il mercato locale della tua città
+          © {new Date().getFullYear()} <span className="font-semibold text-ink-700">MyCity S.r.l.</span> · Il mercato locale della tua città
         </div>
         <div>
           Sede legale: Via Roma 1, 29121 Piacenza (PC), Italia · P.IVA / C.F. IT00000000000 · REA PC-000000
         </div>
         <div>
           Capitale sociale € 10.000 i.v. · PEC: mycity@pec.it ·{' '}
-          <Link href="/terms" className="underline hover:text-ink-300">Termini</Link> ·{' '}
-          <Link href="/privacy" className="underline hover:text-ink-300">Privacy</Link> ·{' '}
-          <Link href="/cookies" className="underline hover:text-ink-300">Cookie</Link>
+          <Link href="/terms" className="underline hover:text-primary-700">Termini</Link> ·{' '}
+          <Link href="/privacy" className="underline hover:text-primary-700">Privacy</Link> ·{' '}
+          <Link href="/cookies" className="underline hover:text-primary-700">Cookie</Link>
         </div>
         {/*
           LocaleSwitcher NON esposto finché la migrazione i18n non è completa.

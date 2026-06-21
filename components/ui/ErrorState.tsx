@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, RotateCcw, ArrowLeft } from 'lucide-react';
+import { AlertTriangle, RotateCcw, ArrowLeft, LifeBuoy } from 'lucide-react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from './Button';
@@ -20,6 +20,8 @@ type Props = {
   retry?: () => void;
   backHref?: string;
   backLabel?: string;
+  /** CTA secondaria "Contatta il supporto". Default: /faq. Passa `null` per nasconderla. */
+  supportHref?: string | null;
 };
 
 export function ErrorState({
@@ -28,6 +30,7 @@ export function ErrorState({
   retry,
   backHref,
   backLabel,
+  supportHref = '/faq',
 }: Props) {
   const tErrors = useTranslations('errors');
   const tActions = useTranslations('actions');
@@ -52,6 +55,15 @@ export function ErrorState({
           >
             <ArrowLeft size={14} strokeWidth={2.4} aria-hidden />
             {_back}
+          </Link>
+        )}
+        {supportHref && (
+          <Link
+            href={supportHref}
+            className="inline-flex items-center gap-1.5 bg-white border border-cream-300 hover:bg-cream-50 text-ink-700 px-4 py-2.5 rounded-lg font-semibold text-sm"
+          >
+            <LifeBuoy size={14} strokeWidth={2.4} aria-hidden />
+            Contatta il supporto
           </Link>
         )}
       </div>

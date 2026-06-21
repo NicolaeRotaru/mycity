@@ -32,22 +32,31 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   NEW:              'In attesa di conferma',
   ACCEPTED:         'In preparazione',
   READY:            'Pronto per il pickup',
-  ASSIGNED:         'Rider in arrivo al negozio',
+  ASSIGNED:         'Rider in arrivo',
   PICKED_UP:        'Ritirato dal negozio',
   OUT_FOR_DELIVERY: 'In consegna',
   DELIVERED:        'Consegnato',
   CANCELED:         'Annullato',
 };
 
-export const ORDER_STATUS_COLOR: Record<OrderStatus, { bg: string; text: string; ring: string }> = {
-  NEW:              { bg: 'bg-amber-50',    text: 'text-amber-700',    ring: 'ring-amber-200' },
-  ACCEPTED:         { bg: 'bg-blue-50',     text: 'text-blue-700',     ring: 'ring-blue-200' },
-  READY:            { bg: 'bg-violet-50',   text: 'text-violet-700',   ring: 'ring-violet-200' },
-  ASSIGNED:         { bg: 'bg-indigo-50',   text: 'text-indigo-700',   ring: 'ring-indigo-200' },
-  PICKED_UP:        { bg: 'bg-cyan-50',     text: 'text-cyan-700',     ring: 'ring-cyan-200' },
-  OUT_FOR_DELIVERY: { bg: 'bg-purple-50',   text: 'text-purple-700',   ring: 'ring-purple-200' },
-  DELIVERED:        { bg: 'bg-emerald-50',  text: 'text-emerald-700',  ring: 'ring-emerald-200' },
-  CANCELED:         { bg: 'bg-rose-50',     text: 'text-rose-700',     ring: 'ring-rose-200' },
+/**
+ * Colori semantici dello stato ordine — sorgente unica dei token `--status-*`
+ * definiti in app/globals.css (allineati a design-system OrderStatusBadge.jsx).
+ *
+ * `color`: testo + icona + anello (via currentColor) → token `--status-*`.
+ * `bg`:    tinta chiara di sfondo del pill.
+ * Niente classi off-palette (amber/blue/violet/...): i colori sono semantici e
+ * vivono nei token del design system, applicati via inline style.
+ */
+export const ORDER_STATUS_COLOR: Record<OrderStatus, { color: string; bg: string }> = {
+  NEW:              { color: 'var(--status-new)',       bg: '#FFFBEB' },
+  ACCEPTED:         { color: 'var(--status-accepted)',  bg: '#EFF6FF' },
+  READY:            { color: 'var(--status-ready)',     bg: '#F5F3FF' },
+  ASSIGNED:         { color: 'var(--status-assigned)',  bg: '#EEF2FF' },
+  PICKED_UP:        { color: 'var(--status-pickedup)',  bg: '#ECFEFF' },
+  OUT_FOR_DELIVERY: { color: 'var(--status-delivery)',  bg: '#FAF5FF' },
+  DELIVERED:        { color: 'var(--status-delivered)', bg: '#ECFDF5' },
+  CANCELED:         { color: 'var(--status-canceled)',  bg: '#FFF1F2' },
 };
 
 // I 6 step principali mostrati nella timeline al buyer (NEW e CANCELED sono casi a parte)

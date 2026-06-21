@@ -14,7 +14,8 @@
  */
 
 import { Badge } from '@/components/ui/Badge';
-import { Banknote, CreditCard, Info } from 'lucide-react';
+import { formatPrice } from '@/lib/format';
+import { Banknote, CreditCard, Info, Store } from 'lucide-react';
 
 type PaymentMethod = 'cod' | 'card';
 
@@ -24,9 +25,25 @@ type Props = {
   stripeAvailable: boolean;
   /** Informativo: mostra al buyer che con card sarà 1 charge / N ordini. */
   multiSeller: boolean;
+  /** Ritiro in negozio: stato + handler (la matematica dello sconto resta nel parent). */
+  pickupInStore: boolean;
+  onPickupChange: (next: boolean) => void;
+  /** Sconto ritiro in euro (>0 quando pickupInStore è attivo). */
+  pickupDiscount: number;
+  /** Percentuale sconto ritiro, per il badge quando non ancora attivo. */
+  pickupDiscountPercent: number;
 };
 
-export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiSeller }: Props) {
+export function PaymentMethodSelector({
+  value,
+  onChange,
+  stripeAvailable,
+  multiSeller,
+  pickupInStore,
+  onPickupChange,
+  pickupDiscount,
+  pickupDiscountPercent,
+}: Props) {
   return (
     <div className="space-y-3">
       {stripeAvailable && (
@@ -86,6 +103,40 @@ export function PaymentMethodSelector({ value, onChange, stripeAvailable, multiS
             <Badge variant="cod">Zero rischio</Badge>
           </div>
           <p className="text-sm text-ink-600">Paghi al rider quando ricevi il pacco.</p>
+        </div>
+      </label>
+
+      {/* RITIRO IN NEGOZIO — consolidato come terza tile-metodo (stesso stile
+          row delle altre). Lo stato e la matematica dello sconto restano nel
+          parent: qui è solo il controllo + la presentazione. */}
+      <label
+        className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
+          pickupInStore ? 'border-olive-400 bg-olive-50' : 'border-cream-300 bg-white hover:border-olive-200'
+        }`}
+      >
+        <input
+          type="checkbox"
+          checked={pickupInStore}
+          onChange={(e) => onPickupChange(e.target.checked)}
+          className="mt-2.5 w-4 h-4 accent-olive-600"
+        />
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
+          <Store size={20} aria-hidden />
+        </span>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
+            {pickupInStore && pickupDiscount > 0 ? (
+              <span className="bg-olive-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
+                −{formatPrice(pickupDiscount)}
+              </span>
+            ) : (
+              <Badge variant="new">Sconto {pickupDiscountPercent}%</Badge>
+            )}
+          </div>
+          <p className="text-sm text-ink-600">
+            Niente spedizione, sconto subito. Vai tu al negozio quando l&apos;ordine è pronto.
+          </p>
         </div>
       </label>
     </div>

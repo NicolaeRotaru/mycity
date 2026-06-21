@@ -4,7 +4,7 @@ import { Home, Search, Store, BookOpen, Lightbulb, Mail, MapPin, Package, Shoppi
 
 export default function NotFound() {
   return (
-    <div className="container mx-auto px-6 py-20 max-w-2xl text-center">
+    <div className="container mx-auto px-6 py-20 max-w-2xl text-center min-h-[70vh] flex flex-col items-center justify-center">
       <p className="font-serif text-7xl md:text-9xl font-extrabold text-primary-700 leading-none tracking-[-0.02em] mb-2">
         404
       </p>

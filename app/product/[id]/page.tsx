@@ -5,13 +5,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flame, Package, ShieldCheck, Star } from 'lucide-react';
+import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flame, Package, ShieldCheck, Star, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD } from '@/lib/constants';
+import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
@@ -57,6 +57,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  // "Nuovo" calcolato post-hydration (come ProductCard): Date.now() differisce
+  // server/client e su prodotti vicini al limite NEW_PRODUCT_DAYS causa mismatch.
+  const [isNew, setIsNew] = useState(false);
   // Carosello: contenitore scroll-snap della foto principale + swipe nel lightbox.
   const galleryRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
@@ -68,6 +71,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
+
+  // Ordinamento + filtro "Con foto" delle recensioni (client-side, sui dati già caricati).
+  const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
+  const [reviewsOnlyPhoto, setReviewsOnlyPhoto] = useState(false);
 
   const { data: product, isLoading } = useQuery({
     queryKey: queryKeys.products.detail(id),
@@ -171,6 +178,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     if (el) el.scrollTo({ left: activeImg * el.clientWidth, behavior: 'auto' });
   }, [lightbox, activeImg]);
 
+  // Badge "Nuovo" sulla galleria: prodotto creato da meno di NEW_PRODUCT_DAYS.
+  const createdAt = (product as { created_at?: string | null } | undefined)?.created_at ?? null;
+  useEffect(() => {
+    if (!createdAt) return;
+    const age = (Date.now() - new Date(createdAt).getTime()) / 86400000;
+    setIsNew(age < NEW_PRODUCT_DAYS);
+  }, [createdAt]);
+
   if (isLoading) {
     return (
       <div className="container mx-auto px-6 py-8">
@@ -211,6 +226,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const avgRating = reviews.length
     ? reviews.reduce((s: number, r) => s + Number(r.rating), 0) / reviews.length
     : 0;
+
+  // Recensioni filtrate ("Con foto") + ordinate (recenti / voto alto / voto basso),
+  // tutto client-side sui dati già caricati: nessuna query né dato aggiuntivo.
+  const photoReviewCount = reviews.filter((r) => Array.isArray(r.photo_urls) && r.photo_urls.length > 0).length;
+  const visibleReviews = (reviewsOnlyPhoto
+    ? reviews.filter((r) => Array.isArray(r.photo_urls) && r.photo_urls.length > 0)
+    : [...reviews]
+  ).sort((a, b) => {
+    if (reviewSort === 'top') return Number(b.rating) - Number(a.rating);
+    if (reviewSort === 'low') return Number(a.rating) - Number(b.rating);
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   const price = Number(product.price);
   const freeShipping = price >= FREE_SHIPPING_THRESHOLD;
@@ -364,14 +391,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 </div>
               ))}
             </div>
-            {isOutOfStock && (
-              <Badge variant="soldout" size="md" className="absolute top-4 left-4 z-[2]">ESAURITO</Badge>
-            )}
-            {isLowStock && !isOutOfStock && (
-              <Badge variant="lowstock" size="md" className="absolute top-4 left-4 z-[2]">
-                {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}
-              </Badge>
-            )}
+            {/* Overlay badge in alto a sinistra: sconto (−N%) + "Nuovo" (parità con le
+                card), poi gli stati di stock. Impilati in colonna come nel mockup. */}
+            <div className="absolute top-4 left-4 z-[2] flex flex-col gap-1.5">
+              {compareValid && <Badge variant="discount" size="md">-{comparePct}%</Badge>}
+              {isNew && !isOutOfStock && <Badge variant="new" size="md">Nuovo</Badge>}
+              {isOutOfStock && <Badge variant="soldout" size="md">ESAURITO</Badge>}
+              {isLowStock && !isOutOfStock && (
+                <Badge variant="lowstock" size="md">
+                  {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}
+                </Badge>
+              )}
+            </div>
             {/* Pallini indicatore (mobile) */}
             {images.length > 1 && (
               <div className="absolute bottom-3 left-1/2 z-[2] flex -translate-x-1/2 gap-1.5 sm:hidden">
@@ -541,6 +572,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <>
                   <span className="text-lg text-ink-400 line-through">{formatPrice(compareAtNum)}</span>
                   <span className="text-sm font-bold text-secondary-600">-{comparePct}%</span>
+                  <span className="text-sm font-bold text-secondary-600">Risparmi {formatPrice(compareAtNum - price)}</span>
                 </>
               )}
               <span className="text-sm text-ink-400">IVA inclusa</span>
@@ -553,16 +585,21 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             {/* Promo attiva del negozio (prezzo barrato + nuovo prezzo) */}
             <ActivePromoBadge productId={id} basePrice={price} />
 
-            {/* Zero rischio: la leva più forte di questo marketplace (COD) */}
-            <div className="flex items-center gap-2.5 rounded-lg bg-olive-50 border border-olive-200 px-3 py-2.5">
-              <Banknote size={20} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-              <p className="text-sm text-olive-800">
-                <strong>Paghi alla consegna in contanti</strong> — zero rischio, zero carta.
-              </p>
+            {/* Card rassicurazione consolidata (mockup 50-product): ETA consegna +
+                pagamento alla consegna + reso, in un unico riquadro olive. Le righe
+                dinamiche restano tali (DeliveryCutoff conserva la sua logica). */}
+            <div className="flex flex-col gap-2 rounded-lg bg-olive-50 border border-olive-200 px-3.5 py-3">
+              {/* Consegna: marketplace esterno se importato, altrimenti Express/Standard */}
+              <DeliveryCutoff variant="inline" available={!isOutOfStock && expressEligible} externalDeliveryLabel={external?.delivery_label} />
+              <span className="inline-flex items-center gap-2 text-sm text-olive-800">
+                <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
+                <span><strong>Paghi alla consegna in contanti</strong> — zero rischio, zero carta.</span>
+              </span>
+              <span className="inline-flex items-center gap-2 text-sm text-olive-800">
+                <RotateCcw size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
+                Reso gratuito entro 14 giorni
+              </span>
             </div>
-
-            {/* Consegna: marketplace esterno se importato, altrimenti Express/Standard */}
-            <DeliveryCutoff variant="inline" available={!isOutOfStock && expressEligible} externalDeliveryLabel={external?.delivery_label} />
 
             {/* Barra spedizione gratis reattiva alla quantità — versione leggera */}
             <FreeShippingProgress subtotal={price * qty} />
@@ -654,19 +691,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           {/* Ingredienti & allergeni — solo se valorizzati dal venditore (dato reale) */}
           <AllergensAccordion attributes={product.attributes} />
 
-          {/* Trust signals — riga leggera, senza box, per non distrarre dalla CTA */}
+          {/* Provenienza — l'unico segnale non già coperto dalla card rassicurazione
+              olive sopra (ETA + COD + reso lì consolidati, per non duplicare). */}
           <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1 text-xs text-ink-500">
-            {[
-              { Icon: Banknote, label: 'Paghi alla consegna' },
-              { Icon: Store, label: 'Negozi di Piacenza' },
-              { Icon: Bike, label: 'Consegna oggi o domani' },
-              { Icon: RotateCcw, label: 'Reso entro 14 giorni' },
-            ].map((t) => (
-              <span key={t.label} className="inline-flex items-center gap-1.5">
-                <t.Icon size={14} strokeWidth={2} className="text-ink-400 shrink-0" aria-hidden />
-                {t.label}
-              </span>
-            ))}
+            <span className="inline-flex items-center gap-1.5">
+              <Store size={14} strokeWidth={2} className="text-ink-400 shrink-0" aria-hidden />
+              Negozi di Piacenza
+            </span>
           </div>
         </div>
 
@@ -790,8 +821,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 return (
                   <div key={star} className="flex items-center gap-3">
                     <span className="w-10 shrink-0 text-right text-xs font-semibold text-ink-600">{star}★</span>
-                    <div className="flex-1 h-2 bg-cream-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-accent-400 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    <div className="flex-1 h-2 bg-cream-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-accent-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                     </div>
                     <span className="w-8 shrink-0 text-xs text-ink-500">{count}</span>
                   </div>
@@ -849,6 +880,38 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           )}
         </div>
 
+        {/* Controlli lista: ordinamento + filtro "Con foto" (client-side) */}
+        {reviews.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="inline-flex items-center gap-1.5 text-sm text-ink-500">
+              Ordina
+              <select
+                value={reviewSort}
+                onChange={(e) => setReviewSort(e.target.value as 'recent' | 'top' | 'low')}
+                className="bg-white border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-400"
+              >
+                <option value="recent">Più recenti</option>
+                <option value="top">Voto più alto</option>
+                <option value="low">Voto più basso</option>
+              </select>
+            </label>
+            {photoReviewCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setReviewsOnlyPhoto((v) => !v)}
+                aria-pressed={reviewsOnlyPhoto}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  reviewsOnlyPhoto
+                    ? 'border-primary-400 bg-primary-50 text-primary-700'
+                    : 'border-cream-300 bg-white text-ink-600 hover:border-primary-300'
+                }`}
+              >
+                <ImageIcon size={14} strokeWidth={2.2} aria-hidden /> Con foto · {photoReviewCount}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Lista recensioni */}
         {reviews.length === 0 ? (
           <div className="bg-white border rounded-xl p-8 text-center">
@@ -856,9 +919,21 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <p className="text-ink-600 font-medium">Nessuna recensione ancora</p>
             <p className="text-sm text-ink-400">Sii il primo a condividere la tua esperienza</p>
           </div>
+        ) : visibleReviews.length === 0 ? (
+          <div className="bg-white border rounded-xl p-8 text-center">
+            <ImageIcon size={40} strokeWidth={1.5} className="mx-auto text-ink-300 mb-2" aria-hidden />
+            <p className="text-ink-600 font-medium">Nessuna recensione con foto</p>
+            <button
+              type="button"
+              onClick={() => setReviewsOnlyPhoto(false)}
+              className="text-sm text-primary-700 font-semibold hover:underline"
+            >
+              Mostra tutte le recensioni
+            </button>
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {reviews.map((r) => (
+            {visibleReviews.map((r) => (
               <div key={r.id} className="bg-white border border-cream-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
@@ -922,8 +997,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         />
       </section>
 
-      {/* Sticky CTA mobile */}
-      <StickyAddToCart price={price} available={canAdd} onAdd={handleAdd} note="Paghi alla consegna" />
+      {/* Sticky CTA mobile — con stepper quantità, "{qty}×{price}" e totale */}
+      <StickyAddToCart
+        price={price}
+        available={canAdd}
+        onAdd={handleAdd}
+        note="Paghi alla consegna"
+        qty={qty}
+        onDec={() => setQuantity(Math.max(1, qty - 1))}
+        onInc={() => setQuantity(Math.min(maxQty, qty + 1))}
+        canDec={qty > 1}
+        canInc={qty < maxQty}
+      />
 
       {/* Tracking view (side-effect only) */}
       <ProductViewTracker

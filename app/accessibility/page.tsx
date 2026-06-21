@@ -44,6 +44,7 @@ export default function AccessibilityStatementPage() {
   return (
     <LegalLayout
       title="Dichiarazione di accessibilità"
+      active="/accessibility"
       meta={<>Ultimo aggiornamento: {LAST_UPDATED}</>}
       summary="MyCity Piacenza è impegnata a rendere il sito accessibile in conformità all’European Accessibility Act e alle WCAG 2.1 livello AA. Il sito è attualmente parzialmente conforme; le limitazioni note sono elencate sotto."
       toc={TOC}

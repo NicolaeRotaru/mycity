@@ -1,6 +1,6 @@
 'use client';
 
-import { Phone, MapPin, ExternalLink } from 'lucide-react';
+import { Phone, MapPin, ExternalLink, Truck, Banknote } from 'lucide-react';
 import { streetFromAddress } from '@/lib/store-hours';
 import type { SectionContext } from './SectionContext';
 
@@ -56,6 +56,17 @@ export default function ContactSection({ ctx }: { ctx: SectionContext }) {
             <span className="font-medium text-ink-900">{store.store_phone}</span>
           </a>
         )}
+
+        {/* Righe di rassicurazione (default statici di piattaforma, non dato negozio):
+            valide per tutti gli ordini su MyCity — consegna locale + pagamento alla consegna. */}
+        <span className="inline-flex items-center gap-2.5 text-ink-700">
+          <Truck size={16} className="shrink-0 text-olive-600" aria-hidden />
+          Consegna in 24–48h
+        </span>
+        <span className="inline-flex items-center gap-2.5 text-ink-700">
+          <Banknote size={16} className="shrink-0 text-olive-600" aria-hidden />
+          Pagamento alla consegna
+        </span>
       </div>
     </section>
   );

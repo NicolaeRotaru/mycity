@@ -34,6 +34,7 @@ export default function PrivacyPage() {
   return (
     <LegalLayout
       title="Informativa sulla privacy"
+      active="/privacy"
       meta={
         <>
           Versione {VERSION} — in vigore dal {EFFECTIVE_DATE}

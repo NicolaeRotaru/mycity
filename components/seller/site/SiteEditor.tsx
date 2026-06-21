@@ -220,7 +220,7 @@ export default function SiteEditor() {
       {/* Tema */}
       <section className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <PanelHeader icon={Palette} tintBg="bg-accent-100" tintFg="text-accent-700" title="Tema del sito" desc="Lo stile generale della tua vetrina." />
-        <ThemePicker value={site.theme} onChange={(theme) => commit({ ...site, theme })} />
+        <ThemePicker value={site.theme} onChange={(theme) => commit({ ...site, theme })} accent={accent} />
         {/* Colore del negozio (accent): vive in store_customization, si modifica nei
             Dettagli negozio. Qui lo mostriamo per dare il quadro completo del look. */}
         <button
