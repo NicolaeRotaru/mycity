@@ -68,42 +68,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      audit_logs: {
-        Row: {
-          id: string;
-          actor_id: string | null;
-          action: string;
-          target_table: string | null;
-          target_id: string | null;
-          metadata: Json | null;
-          ip: string | null;
-          user_agent: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          actor_id?: string | null;
-          action: string;
-          target_table?: string | null;
-          target_id?: string | null;
-          metadata?: Json | null;
-          ip?: string | null;
-          user_agent?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          actor_id?: string | null;
-          action?: string;
-          target_table?: string | null;
-          target_id?: string | null;
-          metadata?: Json | null;
-          ip?: string | null;
-          user_agent?: string | null;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
       activity_events: {
         Row: {
           id: string;
@@ -178,6 +142,42 @@ export interface Database {
           city?: string | null;
           is_bot?: boolean;
           metadata?: Json | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      audit_logs: {
+        Row: {
+          id: string;
+          actor_id: string | null;
+          action: string;
+          target_table: string | null;
+          target_id: string | null;
+          metadata: Json | null;
+          ip: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          actor_id?: string | null;
+          action: string;
+          target_table?: string | null;
+          target_id?: string | null;
+          metadata?: Json | null;
+          ip?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          actor_id?: string | null;
+          action?: string;
+          target_table?: string | null;
+          target_id?: string | null;
+          metadata?: Json | null;
+          ip?: string | null;
+          user_agent?: string | null;
           created_at?: string;
         };
         Relationships: [];
@@ -284,6 +284,48 @@ export interface Database {
         };
         Relationships: [];
       };
+      catalog_ai_jobs: {
+        Row: {
+          id: string;
+          seller_id: string;
+          operation: string;
+          status: string;
+          batch_id: string | null;
+          target_lang: string | null;
+          total: number;
+          results: Json;
+          error: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          seller_id: string;
+          operation: string;
+          status?: string;
+          batch_id?: string | null;
+          target_lang?: string | null;
+          total?: number;
+          results?: Json;
+          error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          seller_id?: string;
+          operation?: string;
+          status?: string;
+          batch_id?: string | null;
+          target_lang?: string | null;
+          total?: number;
+          results?: Json;
+          error?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       categories: {
         Row: {
           id: string;
@@ -292,6 +334,7 @@ export interface Database {
           parent_id: string | null;
           icon: string | null;
           created_at: string | null;
+          sort_order: number;
         };
         Insert: {
           id?: string;
@@ -300,6 +343,7 @@ export interface Database {
           parent_id?: string | null;
           icon?: string | null;
           created_at?: string | null;
+          sort_order?: number;
         };
         Update: {
           id?: string;
@@ -308,6 +352,34 @@ export interface Database {
           parent_id?: string | null;
           icon?: string | null;
           created_at?: string | null;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
+      cms_pages: {
+        Row: {
+          slug: string;
+          title: string;
+          sections: Json;
+          status: string;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          slug: string;
+          title?: string;
+          sections?: Json;
+          status?: string;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          slug?: string;
+          title?: string;
+          sections?: Json;
+          status?: string;
+          updated_at?: string;
+          updated_by?: string | null;
         };
         Relationships: [];
       };
@@ -324,6 +396,7 @@ export interface Database {
           reviewed_by: string | null;
           reviewed_at: string | null;
           created_at: string | null;
+          remitted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -337,6 +410,7 @@ export interface Database {
           reviewed_by?: string | null;
           reviewed_at?: string | null;
           created_at?: string | null;
+          remitted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -350,6 +424,7 @@ export interface Database {
           reviewed_by?: string | null;
           reviewed_at?: string | null;
           created_at?: string | null;
+          remitted_at?: string | null;
         };
         Relationships: [];
       };
@@ -473,6 +548,21 @@ export interface Database {
           active?: boolean | null;
           description?: string | null;
           created_at?: string | null;
+        };
+        Relationships: [];
+      };
+      cron_heartbeats: {
+        Row: {
+          name: string;
+          last_run_at: string;
+        };
+        Insert: {
+          name: string;
+          last_run_at?: string;
+        };
+        Update: {
+          name?: string;
+          last_run_at?: string;
         };
         Relationships: [];
       };
@@ -600,6 +690,7 @@ export interface Database {
           cancelled_at: string | null;
           metadata: Json | null;
           created_at: string;
+          claimed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -610,6 +701,7 @@ export interface Database {
           cancelled_at?: string | null;
           metadata?: Json | null;
           created_at?: string;
+          claimed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -620,6 +712,7 @@ export interface Database {
           cancelled_at?: string | null;
           metadata?: Json | null;
           created_at?: string;
+          claimed_at?: string | null;
         };
         Relationships: [];
       };
@@ -656,6 +749,24 @@ export interface Database {
           user_id?: string;
           product_id?: string;
           created_at?: string | null;
+        };
+        Relationships: [];
+      };
+      follows: {
+        Row: {
+          user_id: string;
+          store_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          store_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          store_id?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -992,6 +1103,21 @@ export interface Database {
         };
         Relationships: [];
       };
+      operational_alert_log: {
+        Row: {
+          alert_key: string;
+          last_sent_at: string;
+        };
+        Insert: {
+          alert_key: string;
+          last_sent_at?: string;
+        };
+        Update: {
+          alert_key?: string;
+          last_sent_at?: string;
+        };
+        Relationships: [];
+      };
       order_delivery_codes: {
         Row: {
           order_id: string;
@@ -1049,36 +1175,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      product_variants: {
-        Row: {
-          id: string;
-          product_id: string;
-          options: Json;
-          label: string;
-          stock: number;
-          position: number;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          product_id: string;
-          options?: Json;
-          label?: string;
-          stock?: number;
-          position?: number;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          product_id?: string;
-          options?: Json;
-          label?: string;
-          stock?: number;
-          position?: number;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
       order_pickup_codes: {
         Row: {
           order_id: string;
@@ -1124,6 +1220,9 @@ export interface Database {
           disputed_at: string | null;
           rider_payout_status: string | null;
           refunded_amount_cents: number;
+          wallet_applied_cents: number;
+          delivery_fee_cents: number;
+          delivery_slot: string | null;
         };
         Insert: {
           id?: string;
@@ -1142,6 +1241,9 @@ export interface Database {
           disputed_at?: string | null;
           rider_payout_status?: string | null;
           refunded_amount_cents?: number;
+          wallet_applied_cents?: number;
+          delivery_fee_cents?: number;
+          delivery_slot?: string | null;
         };
         Update: {
           id?: string;
@@ -1160,6 +1262,9 @@ export interface Database {
           disputed_at?: string | null;
           rider_payout_status?: string | null;
           refunded_amount_cents?: number;
+          wallet_applied_cents?: number;
+          delivery_fee_cents?: number;
+          delivery_slot?: string | null;
         };
         Relationships: [];
       };
@@ -1313,6 +1418,36 @@ export interface Database {
         };
         Relationships: [];
       };
+      product_variants: {
+        Row: {
+          id: string;
+          product_id: string;
+          options: Json;
+          label: string;
+          stock: number;
+          position: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          options?: Json;
+          label?: string;
+          stock?: number;
+          position?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          options?: Json;
+          label?: string;
+          stock?: number;
+          position?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       product_views: {
         Row: {
           id: number;
@@ -1347,7 +1482,8 @@ export interface Database {
           category_id: string | null;
           attributes: Json | null;
           unit: string | null;
-          has_variants: boolean | null;
+          has_variants: boolean;
+          external_source_url: string | null;
         };
         Insert: {
           id?: string;
@@ -1361,7 +1497,8 @@ export interface Database {
           category_id?: string | null;
           attributes?: Json | null;
           unit?: string | null;
-          has_variants?: boolean | null;
+          has_variants?: boolean;
+          external_source_url?: string | null;
         };
         Update: {
           id?: string;
@@ -1375,7 +1512,8 @@ export interface Database {
           category_id?: string | null;
           attributes?: Json | null;
           unit?: string | null;
-          has_variants?: boolean | null;
+          has_variants?: boolean;
+          external_source_url?: string | null;
         };
         Relationships: [];
       };
@@ -1409,6 +1547,9 @@ export interface Database {
           notif_order_updates: boolean;
           offers_express: boolean;
           store_site: Json;
+          wallet_balance_cents: number;
+          stripe_customer_id: string | null;
+          founded_year: number | null;
         };
         Insert: {
           id: string;
@@ -1439,6 +1580,9 @@ export interface Database {
           notif_order_updates?: boolean;
           offers_express?: boolean;
           store_site?: Json;
+          wallet_balance_cents?: number;
+          stripe_customer_id?: string | null;
+          founded_year?: number | null;
         };
         Update: {
           id?: string;
@@ -1469,6 +1613,9 @@ export interface Database {
           notif_order_updates?: boolean;
           offers_express?: boolean;
           store_site?: Json;
+          wallet_balance_cents?: number;
+          stripe_customer_id?: string | null;
+          founded_year?: number | null;
         };
         Relationships: [];
       };
@@ -1613,6 +1760,24 @@ export interface Database {
           decided_by?: string | null;
           refunded_at?: string | null;
           decision_notes?: string | null;
+        };
+        Relationships: [];
+      };
+      review_helpful: {
+        Row: {
+          review_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          review_id: string;
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          review_id?: string;
+          user_id?: string;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -1868,6 +2033,30 @@ export interface Database {
         };
         Relationships: [];
       };
+      site_settings: {
+        Row: {
+          id: number;
+          home_site: Json;
+          branding: Json;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          id?: number;
+          home_site?: Json;
+          branding?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          id?: number;
+          home_site?: Json;
+          branding?: Json;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Relationships: [];
+      };
       sponsored_listings: {
         Row: {
           id: string;
@@ -1883,6 +2072,7 @@ export interface Database {
           clicks: number;
           status: string;
           created_at: string;
+          stripe_session_id: string | null;
         };
         Insert: {
           id?: string;
@@ -1898,6 +2088,7 @@ export interface Database {
           clicks?: number;
           status?: string;
           created_at?: string;
+          stripe_session_id?: string | null;
         };
         Update: {
           id?: string;
@@ -1913,6 +2104,7 @@ export interface Database {
           clicks?: number;
           status?: string;
           created_at?: string;
+          stripe_session_id?: string | null;
         };
         Relationships: [];
       };
@@ -1927,6 +2119,7 @@ export interface Database {
           created_at: string | null;
           seller_reply: string | null;
           seller_reply_at: string | null;
+          photo_urls: string;
         };
         Insert: {
           id?: string;
@@ -1938,6 +2131,7 @@ export interface Database {
           created_at?: string | null;
           seller_reply?: string | null;
           seller_reply_at?: string | null;
+          photo_urls?: string;
         };
         Update: {
           id?: string;
@@ -1949,6 +2143,7 @@ export interface Database {
           created_at?: string | null;
           seller_reply?: string | null;
           seller_reply_at?: string | null;
+          photo_urls?: string;
         };
         Relationships: [];
       };
@@ -2105,6 +2300,33 @@ export interface Database {
           user_id?: string;
           items?: Json;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      wallet_ledger: {
+        Row: {
+          id: string;
+          user_id: string;
+          delta_cents: number;
+          reason: string;
+          ref: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          delta_cents: number;
+          reason: string;
+          ref?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          delta_cents?: number;
+          reason?: string;
+          ref?: string | null;
+          created_at?: string;
         };
         Relationships: [];
       };
