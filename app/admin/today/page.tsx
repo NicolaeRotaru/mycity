@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
-import { ORDER_STATUS_LABEL, type OrderStatus } from '@/lib/order-status';
+import { type OrderStatus } from '@/lib/order-status';
+import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
@@ -50,7 +51,7 @@ export default function AdminTodayPage() {
         supabase.from('rider_sos_events').select('id', { count: 'exact', head: true }).is('resolved_at', null),
         supabase.from('disputes').select('id', { count: 'exact', head: true }).eq('status', 'open'),
         supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
-        supabase.from('orders').select('id, total_price, delivery_status, created_at, delivery_full_name').order('created_at', { ascending: false }).limit(10),
+        supabase.from('orders').select('id, total_price, delivery_status, created_at, delivery_full_name, seller:profiles!orders_seller_id_fkey ( store_name )').order('created_at', { ascending: false }).limit(10),
       ]);
 
       type TodayOrder = {
@@ -179,6 +180,7 @@ export default function AdminTodayPage() {
               <thead className="bg-cream-50 text-xs uppercase tracking-wider text-ink-600">
                 <tr>
                   <th className="px-4 py-2.5 text-left">Ordine</th>
+                  <th className="px-4 py-2.5 text-left">Negozio</th>
                   <th className="px-4 py-2.5 text-left">Cliente</th>
                   <th className="px-4 py-2.5 text-left">Stato</th>
                   <th className="px-4 py-2.5 text-right">Totale</th>
@@ -186,10 +188,11 @@ export default function AdminTodayPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-cream-100">
-                {(stats.recentOrders as Array<{
+                {(stats.recentOrders as unknown as Array<{
                   id: string; total_price: number | string | null;
                   delivery_status: string; created_at: string;
                   delivery_full_name: string | null;
+                  seller: { store_name: string | null } | null;
                 }>).map((o) => (
                   <tr key={o.id} className="hover:bg-cream-50">
                     <td className="px-4 py-3">
@@ -197,11 +200,10 @@ export default function AdminTodayPage() {
                         #{o.id.slice(0, 6).toUpperCase()}
                       </Link>
                     </td>
+                    <td className="px-4 py-3 text-ink-700">{o.seller?.store_name ?? '—'}</td>
                     <td className="px-4 py-3 text-ink-700">{o.delivery_full_name ?? '—'}</td>
                     <td className="px-4 py-3">
-                      <span className="inline-block rounded-full bg-cream-100 px-2 py-0.5 text-xs font-semibold text-ink-700">
-                        {ORDER_STATUS_LABEL[o.delivery_status as OrderStatus] ?? o.delivery_status}
-                      </span>
+                      <OrderStatusBadge status={o.delivery_status as OrderStatus} size="sm" />
                     </td>
                     <td className="px-4 py-3 text-right font-semibold">{formatPrice(Number(o.total_price ?? 0))}</td>
                     <td className="px-4 py-3 text-right text-xs text-ink-500">

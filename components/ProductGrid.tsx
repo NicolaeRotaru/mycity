@@ -12,7 +12,14 @@ import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { trackSearchPerformed } from '@/lib/analytics/events';
 
-export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating';
+export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating' | 'discount_desc';
+
+/**
+ * Numero massimo di colonne della griglia. `'default'` mantiene la scala storica
+ * della ricerca (fino a 6 col su xl); `4` cappa a 4 colonne — usato dalle pagine
+ * collezione/categoria, che hanno meno densità della SRP. Opt-in via prop `maxColumns`.
+ */
+export type GridMaxColumns = 'default' | 4;
 
 interface Props {
   categoryId?: string;
@@ -54,9 +61,14 @@ interface Props {
    * per la riga conteggio "N prodotti …" renderizzata fuori dalla griglia.
    */
   onCount?: (count: number) => void;
+  /**
+   * Cap colonne della griglia (solo layout, opt-in). `'default'` (storico) scala
+   * fino a 6 col su xl per la SRP; `4` cappa a 4 col per le pagine collezione/categoria.
+   */
+  maxColumns?: GridMaxColumns;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   const { data: products = [], isLoading } = useQuery({
     queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
     queryFn: async () => {
@@ -168,6 +180,16 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     return best;
   };
 
+  // Sconto effettivo (%) per l'ordinamento "Sconto maggiore": il maggiore tra
+  // lo sconto promo del negozio (solo in vetrina) e lo sconto da prezzo barrato.
+  const effectiveDiscount = (p: Prod): number => {
+    const promo = discountFor(p);
+    const cmp = p.compare_at_price != null ? Number(p.compare_at_price) : 0;
+    const price = Number(p.price);
+    const struck = cmp > price && cmp > 0 ? Math.round(((cmp - price) / cmp) * 100) : 0;
+    return Math.max(promo, struck);
+  };
+
   // Filtro client-side: orari aperti, rating minimo, ordinamento per rating
   const filtered = useMemo(() => {
     let arr = prods;
@@ -198,8 +220,12 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         return rb - ra;
       });
     }
+    if (sort === 'discount_desc') {
+      arr = [...arr].sort((a, b) => effectiveDiscount(b) - effectiveDiscount(a));
+    }
     return arr;
-  }, [prods, onlyOpenStores, minRating, ratings, sort, onlyPromo, onlyInStock, promoIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prods, onlyOpenStores, minRating, ratings, sort, onlyPromo, onlyInStock, promoIds, promos, sellerId]);
 
   // Notifica il conteggio visibile (post-filtro) al chiamante, per la riga
   // "N prodotti …" renderizzata fuori dalla griglia (SRP / categoria).
@@ -342,8 +368,15 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     );
   }
 
+  // Pagine collezione/categoria (maxColumns=4): cap a 4 col, meno denso della SRP.
+  // Default (SRP): scala storica fino a 6 col su xl.
+  const gridCols =
+    maxColumns === 4
+      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
+      : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+    <div className={`grid ${gridCols} gap-3`}>
       {filtered.map((p, i) => (
         <div key={p.id}>{renderCard(p, i)}</div>
       ))}

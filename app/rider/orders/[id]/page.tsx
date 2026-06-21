@@ -22,8 +22,9 @@ import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import {
   Package, Radio, MapPin, PackageCheck, Bike, CircleCheck, Navigation, Phone,
-  StickyNote, Banknote, Check, ChevronLeft, Store,
+  StickyNote, Banknote, Check, ChevronLeft, Store, MessageSquare, Clock,
 } from 'lucide-react';
+import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { queryKeys } from '@/lib/queries/keys';
 
 type OrderRow = {
@@ -239,6 +240,15 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
     : { lat: order.delivery_lat, lng: order.delivery_lng };
   const callPhone = targetIsStore ? order.seller?.store_phone : order.delivery_phone;
 
+  // Distanza·ETA della tratta negozio → cliente (entrambe le coordinate note):
+  // stima la lunghezza della consegna per la pill sulla mappa. Senza prep time.
+  const sLat = order.seller?.store_lat;
+  const sLng = order.seller?.store_lng;
+  const tripKm = sLat && sLng && order.delivery_lat && order.delivery_lng
+    ? haversineKm(sLat, sLng, order.delivery_lat, order.delivery_lng)
+    : null;
+  const tripEta = tripKm !== null ? deliveryEtaMinutes(tripKm, 0) : null;
+
   return (
     <div className="flex min-h-screen flex-col pb-[calc(80px+env(safe-area-inset-bottom,0px))]">
       {/* MAPPA in testa (map-led) */}
@@ -246,9 +256,21 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
         {points.length > 0 ? (
           <DeliveryMap points={points} className="z-0 h-56 w-full" />
         ) : (
-          <div className="flex h-56 w-full items-center justify-center bg-gradient-to-br from-olive-100 to-cream-200 text-ink-400">
+          <div className="flex h-56 w-full flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-olive-100 to-cream-200 px-6 text-center text-ink-500">
             <MapPin size={28} aria-hidden />
+            <p className="text-sm font-semibold text-ink-700">Mappa non disponibile</p>
+            <p className="text-xs text-ink-500">
+              Manca la posizione GPS per questo ordine. Usa l&apos;indirizzo qui sotto e tocca &quot;Naviga&quot;.
+            </p>
           </div>
+        )}
+        {/* Pill distanza · ETA della tratta (se entrambe le coordinate note). */}
+        {tripKm !== null && tripEta !== null && (
+          <span className="absolute bottom-3 left-3 z-[1] inline-flex items-center gap-1.5 rounded-full bg-ink-900/80 px-3 py-1.5 text-xs font-semibold text-white">
+            <Bike size={13} aria-hidden /> {tripKm.toFixed(1).replace('.', ',')} km
+            <span className="text-white/50">·</span>
+            <Clock size={13} aria-hidden /> ~{tripEta} min
+          </span>
         )}
         {/* Back flottante */}
         <Link
@@ -310,6 +332,17 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               {callPhone && (
                 <Button href={`tel:${callPhone}`} variant="secondary" size="sm" icon={Phone} fullWidth>
                   Chiama
+                </Button>
+              )}
+              {callPhone && (
+                <Button
+                  href={`sms:${callPhone}`}
+                  variant="secondary"
+                  size="sm"
+                  icon={MessageSquare}
+                  fullWidth
+                >
+                  Chat
                 </Button>
               )}
             </div>

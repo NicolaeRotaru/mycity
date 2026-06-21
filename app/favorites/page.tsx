@@ -64,7 +64,15 @@ export default function FavoritesPage() {
 
   return (
     <div>
-      <h1 className="mb-6 font-serif text-2xl font-bold text-ink-900">I tuoi preferiti ({products.length})</h1>
+      <header className="mb-6">
+        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Attività</p>
+        <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+          I tuoi preferiti
+        </h1>
+        <p className="mt-1 text-sm text-ink-500">
+          {products.length === 1 ? '1 prodotto salvato' : `${products.length} prodotti salvati`}
+        </p>
+      </header>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {products.map((p) => (
           <ProductCard

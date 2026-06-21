@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Gift } from 'lucide-react';
 import ProductGrid, { type SortOption } from '@/components/ProductGrid';
 import CollectionHeader from '@/components/CollectionHeader';
 import { useTranslations } from 'next-intl';
@@ -9,10 +9,8 @@ import { useTranslations } from 'next-intl';
 /** Opzioni di ordinamento della toolbar collezione (allineate a search/category). */
 const COLLECTION_SORTS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'discount_desc'];
 
-/**
- * Pagina "Novità": gli ultimi prodotti pubblicati nel marketplace.
- */
-export default function NovitaPage() {
+/** Corpo interattivo della pagina "Regali": header serif + toolbar + griglia. */
+export default function RegaliClient() {
   const t = useTranslations('search');
   const [sort, setSort] = useState<SortOption>('newest');
   const [count, setCount] = useState<number | null>(null);
@@ -20,11 +18,11 @@ export default function NovitaPage() {
   return (
     <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
       <CollectionHeader
-        icon={Sparkles}
-        eyebrow="Appena arrivati"
-        title="Novità dai negozi"
-        blurb="I prodotti più freschi pubblicati dai commercianti di Piacenza."
-        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Novità' }]}
+        icon={Gift}
+        eyebrow="Idee regalo"
+        title="Regali"
+        blurb="Pensieri buoni e artigianali, da Piacenza con gusto."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Regali' }]}
       >
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <span className="text-sm text-ink-500">
@@ -45,7 +43,7 @@ export default function NovitaPage() {
         </div>
       </CollectionHeader>
 
-      <ProductGrid sort={sort} maxColumns={4} onCount={setCount} />
+      <ProductGrid limit={40} sort={sort} maxColumns={4} onCount={setCount} />
     </div>
   );
 }

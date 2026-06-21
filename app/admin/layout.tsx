@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProfile } from '@/components/hooks/useProfile';
 import { LoadingState } from '@/components/ui/LoadingState';
-import AdminSidebar from '@/components/admin/AdminSidebar';
+import AdminSidebar, { AdminMobileTopbar } from '@/components/admin/AdminSidebar';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -38,8 +38,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-screen bg-cream-100 md:grid md:grid-cols-[248px_1fr]">
       <AdminSidebar />
-      <div className="min-w-0 px-4 py-6 sm:px-6 md:p-7">
-        <div className="mx-auto w-full max-w-[1080px] pb-24 md:pb-0">{children}</div>
+      <div className="min-w-0">
+        <AdminMobileTopbar />
+        <div className="px-4 py-6 sm:px-6 md:p-7">
+          <div className="mx-auto w-full max-w-[1080px] pb-24 md:pb-0">{children}</div>
+        </div>
       </div>
     </div>
   );

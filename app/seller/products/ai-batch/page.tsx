@@ -1,16 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   Sparkles, Loader2, Wand2, FileText, ShieldCheck, Languages, Check, AlertTriangle,
-  Mic, Camera, ScanBarcode, Link2, type LucideIcon,
+  Mic, Camera, ScanBarcode, Link2, ArrowRight, type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import CatalogCopilot from '@/components/seller/CatalogCopilot';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
+import ImportFromUrlBox, { type ImportResult } from '@/components/products/ImportFromUrlBox';
 import { Card } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
@@ -65,14 +66,18 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'copilot', label: 'Copilot' },
 ];
 
-// Le 4 modalità di creazione: l'AI compila la scheda, tu confermi. Tutte aprono
-// il flusso reale di creazione prodotto, dove vivono gli strumenti AI sul form.
+// Le 4 modalità di creazione: l'AI compila la scheda, tu confermi.
+//  - "url" è davvero in-linea: usa il box reale di import (/api/marketplace/import-fetch),
+//    mostra l'anteprima e passa i dati al form prodotto via autosave.
+//  - voce/foto/barcode vivono sul form prodotto (lì stanno i loro strumenti AI):
+//    la tile espande un pannello in stile mockup con azione primaria verso /seller/products/new.
+type CreateMethodId = 'voice' | 'photo' | 'barcode' | 'url';
 type CreateTone = 'primary' | 'accent' | 'olive' | 'secondary';
-const CREATE_METHODS: { id: string; icon: LucideIcon; title: string; desc: string; tone: CreateTone; href: string }[] = [
-  { id: 'voice', icon: Mic, title: 'Da voce', desc: 'Detta il prodotto a voce: l\'AI compila nome, prezzo e descrizione.', tone: 'primary', href: '/seller/products/new' },
-  { id: 'photo', icon: Camera, title: 'Da foto', desc: 'Carica una foto: riconosce il prodotto e crea la scheda.', tone: 'accent', href: '/seller/products/new' },
-  { id: 'barcode', icon: ScanBarcode, title: 'Da barcode', desc: 'Inquadra il codice a barre e recupera i dati del prodotto.', tone: 'olive', href: '/seller/products/new' },
-  { id: 'url', icon: Link2, title: 'Da link', desc: 'Incolla un URL e importa nome, foto e attributi.', tone: 'secondary', href: '/seller/products/new' },
+const CREATE_METHODS: { id: CreateMethodId; icon: LucideIcon; title: string; desc: string; tone: CreateTone }[] = [
+  { id: 'voice', icon: Mic, title: 'Da voce', desc: 'Detta il prodotto a voce: l\'AI compila nome, prezzo e descrizione.', tone: 'primary' },
+  { id: 'photo', icon: Camera, title: 'Da foto', desc: 'Carica una foto: riconosce il prodotto e crea la scheda.', tone: 'accent' },
+  { id: 'barcode', icon: ScanBarcode, title: 'Da barcode', desc: 'Inquadra il codice a barre e recupera i dati del prodotto.', tone: 'olive' },
+  { id: 'url', icon: Link2, title: 'Da link', desc: 'Incolla un URL e importa nome, foto e attributi.', tone: 'secondary' },
 ];
 const TONE: Record<CreateTone, string> = {
   primary:   'bg-primary-100 text-primary-700',
@@ -80,6 +85,10 @@ const TONE: Record<CreateTone, string> = {
   olive:     'bg-olive-100 text-olive-700',
   secondary: 'bg-secondary-100 text-secondary-600',
 };
+
+// Chiave dell'autosave del form "Nuovo prodotto": scrivendo qui prima di navigare,
+// il form reale ripristina la scheda importata (nessun endpoint finto, nessun handoff fragile).
+const NEW_PRODUCT_AUTOSAVE_KEY = 'mc_new_product_draft';
 
 async function authedFetch(path: string, init?: RequestInit) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -142,8 +151,10 @@ export default function CatalogAiBatchPage() {
   );
 }
 
-/* ---------------- Tab 1: crea con AI (entrate verso il form reale) ---------------- */
+/* ---------------- Tab 1: crea con AI (tile metodo + pannelli in-linea) ---------------- */
 function CreateTab() {
+  const [active, setActive] = useState<CreateMethodId | null>(null);
+
   return (
     <div className="max-w-3xl space-y-4">
       <p className="text-sm text-ink-600">
@@ -152,11 +163,16 @@ function CreateTab() {
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
         {CREATE_METHODS.map((m) => {
           const Icon = m.icon;
+          const on = active === m.id;
           return (
-            <Link
+            <button
               key={m.id}
-              href={m.href}
-              className="flex gap-3.5 rounded-xl border border-cream-300 bg-white p-[18px] transition-all hover:border-primary-300 hover:shadow-warm"
+              type="button"
+              onClick={() => setActive((cur) => (cur === m.id ? null : m.id))}
+              aria-pressed={on}
+              className={`flex gap-3.5 rounded-xl border bg-white p-[18px] text-left transition-all hover:shadow-warm ${
+                on ? 'border-primary-400 ring-2 ring-primary-100' : 'border-cream-300 hover:border-primary-300'
+              }`}
             >
               <span className={`inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-md ${TONE[m.tone]}`}>
                 <Icon size={22} strokeWidth={2.2} aria-hidden />
@@ -165,14 +181,141 @@ function CreateTab() {
                 <p className="font-bold text-ink-900">{m.title}</p>
                 <p className="mt-0.5 text-[13px] leading-snug text-ink-500">{m.desc}</p>
               </div>
-            </Link>
+            </button>
           );
         })}
       </div>
+
+      {active === 'url' && <UrlImportPanel />}
+      {active === 'voice' && (
+        <CaptureEntryPanel
+          icon={Mic}
+          title="Crea da voce"
+          hint="Detta nome, prezzo e descrizione: la registrazione e la trascrizione AI avvengono direttamente sul form prodotto."
+          cta="Apri il form e detta"
+        />
+      )}
+      {active === 'photo' && (
+        <CaptureEntryPanel
+          icon={Camera}
+          title="Crea da foto"
+          hint="Carica o scatta una foto: il riconoscimento prodotto e la compilazione AI della scheda avvengono sul form prodotto."
+          cta="Apri il form e carica una foto"
+        />
+      )}
+      {active === 'barcode' && (
+        <CaptureEntryPanel
+          icon={ScanBarcode}
+          title="Crea da barcode"
+          hint="Inquadra il codice a barre: il recupero dei dati prodotto avviene sul form prodotto."
+          cta="Apri il form e scansiona"
+        />
+      )}
+
       <p className="text-xs text-ink-400">
         Gli strumenti AI per la singola scheda (voce, foto, import da link, ottimizza per la ricerca,
         traduci, &laquo;perché non vende?&raquo;) sono disponibili nel form prodotto.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Pannello "entrata" per voce/foto/barcode: in stile mockup (icona + hint + CTA),
+ * ma con azione reale verso /seller/products/new dove vivono gli strumenti di cattura.
+ */
+function CaptureEntryPanel({ icon: Icon, title, hint, cta }: { icon: LucideIcon; title: string; hint: string; cta: string }) {
+  return (
+    <Card variant="bordered" padding="lg">
+      <div className="flex flex-col items-center gap-3 py-3 text-center">
+        <span className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-olive-50 text-olive-700">
+          <Icon size={30} strokeWidth={2} aria-hidden />
+        </span>
+        <p className="text-base font-semibold text-ink-900">{title}</p>
+        <p className="max-w-md text-sm leading-relaxed text-ink-500">{hint}</p>
+        <Button href="/seller/products/new" iconRight={ArrowRight} size="lg" className="mt-1">
+          {cta}
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Pannello "Da link" davvero in-linea: usa il box di import reale (stesso endpoint
+ * del form prodotto), mostra un'anteprima stile AiResultCard e, su conferma, passa
+ * la scheda importata al form reale tramite l'autosave (nessun endpoint finto).
+ */
+function UrlImportPanel() {
+  const router = useRouter();
+  const [imported, setImported] = useState<ImportResult | null>(null);
+
+  const continueToForm = () => {
+    if (!imported) return;
+    try {
+      // Stesso shape del Snapshot letto da /seller/products/new (loadAutosave).
+      localStorage.setItem(
+        NEW_PRODUCT_AUTOSAVE_KEY,
+        JSON.stringify({
+          name: imported.name,
+          description: imported.description,
+          price: imported.suggested_price ?? '',
+          category_id: imported.subcategory_id ?? imported.category_id ?? '',
+          imageUrls: imported.image_urls,
+          attributes: imported.attributes,
+          tags: imported.tags,
+          unit: 'pezzo',
+        }),
+      );
+    } catch { /* quota/Safari privata: il form parte vuoto */ }
+    router.push('/seller/products/new');
+  };
+
+  return (
+    <div className="space-y-4">
+      <ImportFromUrlBox onImported={setImported} />
+
+      {imported && (
+        <Card variant="elevated" padding="lg" className="border-olive-300">
+          <div className="mb-3 flex items-center gap-2">
+            <Sparkles size={16} className="text-olive-700" aria-hidden />
+            <span className="text-[13px] font-bold text-olive-800">Scheda importata dall&apos;AI</span>
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+              Bozza
+            </span>
+          </div>
+          <div className="flex gap-4">
+            {imported.image_urls[0] ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={imported.image_urls[0]} alt="" className="h-20 w-20 shrink-0 rounded-lg object-cover" />
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-ink-900">{imported.name || 'Prodotto importato'}</p>
+              {imported.suggested_price != null && (
+                <p className="mt-0.5 font-serif text-lg font-bold text-ink-900">€{imported.suggested_price}</p>
+              )}
+              {imported.description && (
+                <p className="mt-1 line-clamp-3 text-sm leading-snug text-ink-500">{imported.description}</p>
+              )}
+              {imported.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {imported.tags.slice(0, 6).map((t) => (
+                    <span key={t} className="inline-flex items-center rounded-full bg-cream-100 px-2 py-0.5 text-[11px] font-medium text-ink-600">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button icon={Check} iconRight={ArrowRight} onClick={continueToForm}>
+              Continua nel form prodotto
+            </Button>
+            <Button variant="secondary" onClick={() => setImported(null)}>Scarta</Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -149,25 +149,37 @@ export default function AdminFunnelPage() {
     ink: 'border-cream-300 text-ink-700',
   };
 
+  // Mappa STATICA dei toni del funnel: classi complete (non interpolate) così il
+  // JIT di Tailwind le include nel safelist. L'interpolazione `bg-${color}-50` con
+  // nomi warm a shade -50/-500 non veniva generata → medaglioni e barre incolori.
+  type FunnelTone = 'primary' | 'accent' | 'olive' | 'secondary';
+  const FUNNEL_TONE: Record<FunnelTone, { chip: string; bar: string }> = {
+    primary:   { chip: 'bg-primary-50 text-primary-700',     bar: 'bg-primary-500' },
+    accent:    { chip: 'bg-accent-50 text-accent-700',       bar: 'bg-accent-500' },
+    olive:     { chip: 'bg-olive-50 text-olive-700',         bar: 'bg-olive-500' },
+    secondary: { chip: 'bg-secondary-50 text-secondary-700', bar: 'bg-secondary-500' },
+  };
+
   const FunnelRow = ({ icon: Icon, label, value, total, color }: {
     icon: LucideIcon;
     label: string;
     value: number;
     total: number;
-    color: string;
+    color: FunnelTone;
   }) => {
     const pct = total > 0 ? (value / total) * 100 : 0;
+    const tone = FUNNEL_TONE[color];
     return (
       <div>
         <div className="flex items-center gap-3 mb-1">
-          <div className={`w-8 h-8 rounded-lg flex items-center justify-center bg-${color}-50 text-${color}-700`}>
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tone.chip}`}>
             <Icon size={16} strokeWidth={2.2} />
           </div>
           <span className="font-semibold text-ink-900 flex-1">{label}</span>
           <span className="text-sm font-bold">{value} <span className="text-ink-500 font-normal">/ {total} ({pct.toFixed(1)}%)</span></span>
         </div>
         <div className="w-full h-2 bg-cream-100 rounded-full overflow-hidden">
-          <div className={`h-full bg-${color}-500`} style={{ width: `${pct}%` }} />
+          <div className={`h-full ${tone.bar}`} style={{ width: `${pct}%` }} />
         </div>
       </div>
     );
@@ -236,7 +248,7 @@ export default function AdminFunnelPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-cream-200">
           <div>
             <p className="text-xs uppercase tracking-wider text-ink-500">Activation 7gg</p>
-            <p className={`text-3xl font-bold ${activation7d >= 30 ? 'text-olive-700' : activation7d >= 15 ? 'text-accent-700' : 'text-rose-700'}`}>
+            <p className={`text-3xl font-bold ${activation7d >= 30 ? 'text-olive-700' : activation7d >= 15 ? 'text-accent-700' : 'text-secondary-700'}`}>
               {activation7d.toFixed(1)}%
             </p>
             <p className="text-xs text-ink-500">target Glovo: 35-40%</p>
@@ -274,7 +286,7 @@ export default function AdminFunnelPage() {
               const m1pct = c.cohortSize > 0 ? (c.m1 / c.cohortSize) * 100 : 0;
               const m2pct = c.cohortSize > 0 ? (c.m2 / c.cohortSize) * 100 : 0;
               const m3pct = c.cohortSize > 0 ? (c.m3 / c.cohortSize) * 100 : 0;
-              const color = (pct: number) => pct >= 40 ? 'bg-olive-100 text-olive-800' : pct >= 20 ? 'bg-accent-100 text-accent-800' : pct > 0 ? 'bg-rose-100 text-rose-800' : 'text-ink-400';
+              const color = (pct: number) => pct >= 40 ? 'bg-olive-100 text-olive-800' : pct >= 20 ? 'bg-accent-100 text-accent-800' : pct > 0 ? 'bg-secondary-100 text-secondary-700' : 'text-ink-400';
               return (
                 <tr key={c.month}>
                   <td className="px-3 py-2 font-semibold capitalize">{c.month}</td>

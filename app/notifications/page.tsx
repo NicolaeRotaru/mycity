@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Bell, Inbox, Package, Tag, Gift, Sparkles, MessageCircle,
+  Bell, Inbox, Package, Tag, Gift, Sparkles, MessageCircle, CheckCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -76,7 +75,9 @@ export default function NotificationsPage() {
     },
   });
 
-  // Quando la pagina si carica, segna tutte come lette
+  // Segna tutte come lette — su azione esplicita dell'utente (bottone), NON
+  // automaticamente al montaggio: così la pagina resta consultabile come elenco
+  // senza azzerare il badge appena la apri.
   const markAllRead = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -93,13 +94,6 @@ export default function NotificationsPage() {
     },
   });
 
-  useEffect(() => {
-    if (data && data.some((n) => !n.is_read)) {
-      markAllRead.mutate();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
-
   if (isLoading) {
     return <LoadingState />;
   }
@@ -110,15 +104,29 @@ export default function NotificationsPage() {
   }
 
   const notifications = data ?? [];
+  const hasUnread = notifications.some((n) => !n.is_read);
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-6 flex items-center gap-3">
-        <Bell size={28} className="text-primary-600" aria-hidden />
-        <div>
-          <h1 className="font-serif text-2xl font-bold text-ink-900">Notifiche</h1>
-          <p className="text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
+      <div className="mb-6 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Bell size={28} className="text-primary-600" aria-hidden />
+          <div>
+            <h1 className="font-serif text-2xl font-bold text-ink-900">Notifiche</h1>
+            <p className="text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
+          </div>
         </div>
+        {hasUnread && (
+          <button
+            type="button"
+            onClick={() => markAllRead.mutate()}
+            disabled={markAllRead.isPending}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-cream-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-ink-700 transition-colors hover:bg-cream-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 disabled:opacity-60"
+          >
+            <CheckCheck size={15} strokeWidth={2.2} className="text-primary-600" aria-hidden />
+            Segna tutte come lette
+          </button>
+        )}
       </div>
 
       {notifications.length === 0 ? (

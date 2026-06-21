@@ -73,7 +73,7 @@ export default function AuditLogPage() {
         sub="Registro immutabile delle azioni amministrative. Per compliance e audit."
       />
 
-      <div className="bg-white border border-cream-300 rounded-2xl p-4">
+      <div className="bg-white border-2 border-cream-300 rounded-xl p-4">
         <label className="block text-xs font-semibold text-ink-700 mb-1">Filtra per azione</label>
         <select
           value={filterAction}
@@ -92,22 +92,25 @@ export default function AuditLogPage() {
           {[...Array(6)].map((_, i) => <div key={i} className="h-16 rounded-xl skeleton" />)}
         </div>
       ) : rows.length === 0 ? (
-        <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
+        <div className="bg-white border-2 border-cream-300 rounded-xl p-12 text-center">
           <Clock size={36} className="mx-auto text-ink-300 mb-3" />
           <p className="text-ink-600 font-medium">Nessuna voce nel log</p>
           <p className="text-sm text-ink-400 mt-1">Le azioni admin compariranno qui man mano.</p>
         </div>
       ) : (
-        <div className="bg-white border border-cream-300 rounded-2xl divide-y divide-cream-200 overflow-hidden">
+        <div className="bg-white border-2 border-cream-300 rounded-xl divide-y divide-cream-200 overflow-hidden">
           {rows.map((r) => (
             <div key={r.id} className="px-4 py-3 hover:bg-cream-50 transition-colors">
               <div className="flex items-baseline justify-between gap-3 flex-wrap">
                 <div className="min-w-0">
-                  <p className="font-semibold text-ink-900">{ACTION_LABEL[r.action] ?? r.action}</p>
-                  <p className="text-xs text-ink-500">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-semibold text-ink-900">{ACTION_LABEL[r.action] ?? r.action}</p>
+                    <span className="rounded bg-cream-100 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-ink-600">{r.action}</span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-ink-500">
                     da <strong>{r.actor?.full_name ?? r.actor?.email ?? 'sistema'}</strong>
                     {r.target_table && r.target_id && (
-                      <> · {r.target_table}/{r.target_id.slice(0, 8)}…</>
+                      <> · <span className="font-mono">{r.target_table}/{r.target_id.slice(0, 8)}…</span></>
                     )}
                   </p>
                 </div>

@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
-import { Gift } from 'lucide-react';
+import { Gift, Check } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -83,7 +83,16 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl">
-      {/* Header con avatar + "Cliente dal" */}
+      {/* Page header dell'hub account */}
+      <header className="mb-6">
+        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Account</p>
+        <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+          Profilo
+        </h1>
+        <p className="mt-1 text-sm text-ink-500">Gestisci i tuoi dati personali e di consegna.</p>
+      </header>
+
+      {/* Identità: avatar + "Cliente dal" */}
       <div className="mb-6 flex items-center gap-4">
         <span
           aria-hidden
@@ -92,7 +101,7 @@ export default function ProfilePage() {
           {initials}
         </span>
         <div className="min-w-0">
-          <h1 className="font-serif text-2xl font-bold text-ink-900">{displayName}</h1>
+          <p className="font-serif text-2xl font-bold text-ink-900">{displayName}</p>
           <p className="mt-0.5 text-sm text-ink-500">
             {since ? `Cliente dal ${since}` : profile.email}
           </p>
@@ -152,10 +161,15 @@ export default function ProfilePage() {
               containerClassName="sm:col-span-2"
               {...register('city')}
             />
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 space-y-2">
               <Button type="submit" loading={update.isPending} fullWidth>
                 Salva modifiche
               </Button>
+              {update.isSuccess && !update.isPending && (
+                <p className="flex items-center justify-center gap-1.5 text-sm font-semibold text-olive-700" role="status">
+                  <Check size={16} strokeWidth={2.4} aria-hidden /> Modifiche salvate
+                </p>
+              )}
             </div>
           </form>
         </div>

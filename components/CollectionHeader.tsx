@@ -18,6 +18,12 @@ interface CollectionHeaderProps {
   /** Icona lucide mostrata nel chip terracotta. */
   icon: LucideIcon;
   /**
+   * Emoji opzionale mostrata nel chip al posto dell'icona lucide (es. l'emoji
+   * di categoria). Quando presente ha priorità su `icon`; `icon` resta il
+   * fallback e mantiene la firma del componente coerente.
+   */
+  emoji?: string | null;
+  /**
    * Voci del breadcrumb. Per convenzione la prima è "Home" e l'ultima è la
    * pagina corrente (senza href). Se omesso, viene generato `Home › {title}`.
    */
@@ -47,6 +53,7 @@ export default function CollectionHeader({
   title,
   blurb,
   icon: Icon,
+  emoji,
   breadcrumb,
   children,
 }: CollectionHeaderProps) {
@@ -78,10 +85,10 @@ export default function CollectionHeader({
 
       <div className="flex items-center gap-3.5">
         <span
-          className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-primary-700"
+          className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-2xl text-primary-700"
           aria-hidden
         >
-          <Icon size={26} strokeWidth={2.2} />
+          {emoji ? emoji : <Icon size={26} strokeWidth={2.2} />}
         </span>
         <div className="min-w-0">
           <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">{eyebrow}</p>

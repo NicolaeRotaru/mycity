@@ -208,7 +208,7 @@ export default function AdminDisputesPage() {
       {isLoading ? (
         <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-32 rounded-xl skeleton" />)}</div>
       ) : disputes.length === 0 ? (
-        <div className="bg-white border border-cream-300 rounded-2xl p-12 text-center">
+        <div className="bg-white border-2 border-cream-300 rounded-xl p-12 text-center">
           <PartyPopper size={40} strokeWidth={2} className="mx-auto text-olive-500 mb-2" aria-hidden />
           <p className="text-ink-600 font-medium">Nessun reclamo in questo stato</p>
         </div>
@@ -218,7 +218,7 @@ export default function AdminDisputesPage() {
             const meta = STATUS_META[d.status];
             const StatusIcon = meta.icon;
             return (
-              <div key={d.id} className="bg-white border border-cream-300 rounded-2xl p-5 shadow-warm">
+              <div key={d.id} className="bg-white border-2 border-cream-300 rounded-xl p-5 shadow-warm">
                 <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">

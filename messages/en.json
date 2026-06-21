@@ -118,7 +118,8 @@
       "newest": "Newest",
       "price_asc": "Price: low to high",
       "price_desc": "Price: high to low",
-      "rating": "Most reviewed"
+      "rating": "Most reviewed",
+      "discount_desc": "Biggest discount"
     }
   },
   "marketing": {

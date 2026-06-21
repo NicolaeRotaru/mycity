@@ -49,6 +49,27 @@ export default function RiderProfilePage() {
     },
   });
 
+  // Hero stats: media rating + consegne completate (come la testata della home rider).
+  // Se non disponibili (rider nuovo / dati assenti) si ricade sull'email.
+  const { data: heroStats } = useQuery({
+    queryKey: ['rider', 'profile-hero-stats'],
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { avg: 0, ratingCount: 0, deliveries: 0 };
+      const [reviewsRes, deliveriesRes] = await Promise.all([
+        supabase.from('rider_reviews').select('rating').eq('rider_id', user.id),
+        supabase.from('orders').select('id', { count: 'exact', head: true })
+          .eq('rider_id', user.id).eq('delivery_status', 'DELIVERED'),
+      ]);
+      const ratings = (reviewsRes.data ?? []) as { rating: number }[];
+      const avg = ratings.length > 0
+        ? ratings.reduce((s, r) => s + Number(r.rating), 0) / ratings.length
+        : 0;
+      return { avg, ratingCount: ratings.length, deliveries: deliveriesRes.count ?? 0 };
+    },
+  });
+
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
 
@@ -133,7 +154,16 @@ export default function RiderProfilePage() {
           {initials}
         </span>
         <p className="mt-3 font-serif text-[22px] font-extrabold">{fullNameStr}</p>
-        <p className="mt-0.5 text-[13px] text-white/85">{profile?.email}</p>
+        {heroStats && (heroStats.ratingCount > 0 || heroStats.deliveries > 0) ? (
+          <p className="mt-0.5 inline-flex items-center gap-1.5 text-[13px] text-white/85">
+            <Star size={14} className="text-accent-300" fill="currentColor" aria-hidden />
+            {heroStats.ratingCount > 0 ? heroStats.avg.toFixed(1).replace('.', ',') : '—'}
+            {' · '}
+            {heroStats.deliveries} {heroStats.deliveries === 1 ? 'consegna' : 'consegne'}
+          </p>
+        ) : (
+          <p className="mt-0.5 text-[13px] text-white/85">{profile?.email}</p>
+        )}
       </div>
 
       {/* Mezzo + zona */}
