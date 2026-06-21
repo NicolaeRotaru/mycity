@@ -27,8 +27,9 @@ describe('OrderStatus constants', () => {
       expect(ORDER_STATUS_LABEL[s]).toBeTruthy();
       expect(ORDER_STATUS_ICON[s]).toBeDefined();
       expect(ORDER_STATUS_COLOR[s]).toBeDefined();
-      expect(ORDER_STATUS_COLOR[s].bg).toContain('bg-');
-      expect(ORDER_STATUS_COLOR[s].text).toContain('text-');
+      // Colore semantico via token del design system (--status-*) + tinta bg.
+      expect(ORDER_STATUS_COLOR[s].color).toContain('var(--status-');
+      expect(ORDER_STATUS_COLOR[s].bg).toMatch(/^#/);
     }
   });
 

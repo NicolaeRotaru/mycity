@@ -3,10 +3,11 @@ import { use, useRef, useState } from "react";
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Filter, RotateCcw, Truck, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
+import { Filter, RotateCcw, Truck, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid, { type SortOption } from '@/components/ProductGrid';
+import CollectionHeader from '@/components/CollectionHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -114,40 +115,22 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   if (onlyOpenStores) chips.push({ key: 'open', label: t('chip.openNow'), clear: () => setOnlyOpenStores(false) });
   if (sort !== 'relevance') chips.push({ key: 'sort', label: t(`sort.${sort}`), clear: () => setSort('relevance') });
 
-  // Header serif + breadcrumb condiviso tra hub e griglia.
+  // Header serif + breadcrumb condiviso tra hub e griglia — riusa CollectionHeader
+  // (stesso componente di novita/regali/promozioni). L'emoji di categoria viene
+  // mostrata nel chip terracotta; `Tag` resta il fallback lucide.
   const header = (
-    <header>
-      <nav aria-label="Breadcrumb" className="mb-2.5">
-        <ol className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink-500">
-          <li className="inline-flex items-center gap-1.5">
-            <Link href="/" className="hover:text-ink-700 transition-colors">{tn('home')}</Link>
-            <ChevronRight size={13} className="text-ink-400 shrink-0" aria-hidden />
-          </li>
-          <li className="inline-flex items-center gap-1.5">
-            <Link href="/categorie" className="hover:text-ink-700 transition-colors">Categorie</Link>
-            <ChevronRight size={13} className="text-ink-400 shrink-0" aria-hidden />
-          </li>
-          <li>
-            <span className="text-ink-700" aria-current="page">{category.name}</span>
-          </li>
-        </ol>
-      </nav>
-      <div className="flex items-center gap-3.5">
-        <span
-          className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-primary-100 text-2xl text-primary-700"
-          aria-hidden
-        >
-          {category.icon ?? <Tag size={26} strokeWidth={2.2} />}
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Categoria</p>
-          <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
-            {category.name}
-          </h1>
-          <p className="mt-1 text-sm text-ink-500">Esplora i prodotti della categoria dai negozi di Piacenza.</p>
-        </div>
-      </div>
-    </header>
+    <CollectionHeader
+      icon={Tag}
+      emoji={category.icon}
+      eyebrow="Categoria"
+      title={category.name}
+      blurb="Esplora i prodotti della categoria dai negozi di Piacenza."
+      breadcrumb={[
+        { label: tn('home'), href: '/' },
+        { label: 'Categorie', href: '/categorie' },
+        { label: category.name },
+      ]}
+    />
   );
 
   // Controlli filtro condivisi tra colonna desktop e bottom-sheet mobile.
@@ -165,6 +148,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
             <option value="newest">{t('sort.newest')}</option>
             <option value="price_asc">{t('sort.price_asc')}</option>
             <option value="price_desc">{t('sort.price_desc')}</option>
+            <option value="discount_desc">{t('sort.discount_desc')}</option>
             <option value="rating">{t('sort.rating')}</option>
           </select>
         </label>
@@ -447,6 +431,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
 
         <ProductGrid
           {...gridProps}
+          maxColumns={4}
           onCount={setResultCount}
           emptyTitle={t('noResultsGeneric')}
           emptyDescription={activeFilters > 0 ? t('noResultsFiltered') : t('noResultsDescription')}

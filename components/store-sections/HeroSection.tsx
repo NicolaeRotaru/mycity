@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import type { LucideIcon } from 'lucide-react';
-import { ArrowLeft, Instagram, Facebook, Globe, MessageCircle, Music2, Star, MapPin } from 'lucide-react';
+import { ArrowLeft, Instagram, Facebook, Globe, MessageCircle, Music2, Star, MapPin, Truck } from 'lucide-react';
 import StoreStoryRing from '@/components/StoreStoryRing';
 import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
@@ -51,6 +51,11 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
   const todayKey = DAY_KEYS[new Date().getDay()];
   const hasHours = HOUR_KEYS.some((k) => Array.isArray(hours[k]));
   const openNow = isOpenNow(hours[todayKey]);
+  // "Consegna oggi": derivata in modo sicuro dagli orari reali — il negozio ha
+  // almeno un intervallo configurato OGGI (todayKey). Se non riusciamo a leggere
+  // intervalli validi per oggi, il badge è semplicemente omesso (niente claim finto).
+  const todayIntervals = hours[todayKey];
+  const deliversToday = Array.isArray(todayIntervals) && todayIntervals.length > 0;
   const socials = socialLinks(custom);
   const badges = custom.badges ?? [];
 
@@ -62,7 +67,17 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
     ? reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length
     : null;
 
+  // "dal {anno}": dato reale da profiles.founded_year; renderizzato solo se valido.
+  const foundedYear = typeof store.founded_year === 'number' && store.founded_year > 0
+    ? store.founded_year
+    : null;
+
   const cover = media.find((m) => m.type === 'image') ?? null;
+
+  // "Categoria" nella riga meta: lo schema profili non ha un campo categoria del
+  // negozio, ma i badge sono dati reali scelti dal venditore (tipo attività). Usiamo
+  // il primo badge come etichetta-categoria SOLO se presente; altrimenti si omette.
+  const category = badges.length > 0 ? badgeLabel(badges[0]) : null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-cream-300 bg-white shadow-warm">
@@ -104,16 +119,25 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
           <ArrowLeft size={16} strokeWidth={2.2} aria-hidden /> Indietro
         </button>
 
-        {/* Badge stato (Aperto/Chiuso ora) in alto a destra — solo con orari reali */}
+        {/* Badge stato (Aperto/Chiuso ora) + "Consegna oggi" in alto a destra —
+            solo con orari reali. "Consegna oggi" è renderizzato quando il negozio
+            ha intervalli configurati per oggi (dato derivato da store_hours). */}
         {hasHours && (
-          <span
-            className={`absolute right-4 top-4 z-20 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold shadow ${
-              openNow ? 'bg-olive-500 text-white' : 'bg-black/60 text-white'
-            }`}
-          >
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden />
-            {openNow ? 'Aperto ora' : 'Chiuso ora'}
-          </span>
+          <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-1.5">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold shadow ${
+                openNow ? 'bg-olive-500 text-white' : 'bg-black/60 text-white'
+              }`}
+            >
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden />
+              {openNow ? 'Aperto ora' : 'Chiuso ora'}
+            </span>
+            {deliversToday && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-olive-700 shadow backdrop-blur-sm">
+                <Truck size={13} strokeWidth={2.4} aria-hidden /> Consegna oggi
+              </span>
+            )}
+          </div>
         )}
 
         {/* Riga overlay in basso: logo-tile + nome serif + meta */}
@@ -144,6 +168,13 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
                 </span>
               )}
             </h1>
+            {/* Riga meta: rating · categoria · "dal {founded_year}" · zona.
+                NOTE backend-gated:
+                  - "categoria" del negozio non ha colonna nello schema (profiles): renderizzata
+                    solo se presente almeno un badge del negozio (dato reale, usato come tag tipo
+                    attività); se assente si salta — non si inventa.
+                  - "dal {founded_year}" ora è dato reale (profiles.founded_year): renderizzato
+                    solo se valorizzato. */}
             <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm text-white/90">
               {avgRating !== null && (
                 <span className="inline-flex items-center gap-1">
@@ -152,9 +183,21 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
                   <span className="text-white/80">· {reviews.length} {reviews.length === 1 ? 'recensione' : 'recensioni'}</span>
                 </span>
               )}
+              {category && (
+                <span className="inline-flex items-center gap-1 text-white/85">
+                  {avgRating !== null && <span aria-hidden>·</span>}
+                  {category}
+                </span>
+              )}
+              {foundedYear && (
+                <span className="inline-flex items-center gap-1 text-white/85">
+                  {(avgRating !== null || category) && <span aria-hidden>·</span>}
+                  dal {foundedYear}
+                </span>
+              )}
               {street && (
                 <span className="inline-flex items-center gap-1">
-                  {avgRating !== null && <span aria-hidden>·</span>}
+                  {(avgRating !== null || category || foundedYear) && <span aria-hidden>·</span>}
                   <MapPin size={14} aria-hidden /> {street}
                 </span>
               )}

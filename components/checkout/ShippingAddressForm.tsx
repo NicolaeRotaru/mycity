@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
-import { Input, Textarea } from '@/components/ui/Field';
+import { Input } from '@/components/ui/Field';
 
 /**
  * Form indirizzo di consegna per checkout.
@@ -184,15 +184,10 @@ export function ShippingAddressForm({
           error={errors.phone}
           hint="Il rider ti chiamerà se serve per la consegna"
         />
-        <Textarea
-          label="Note per il rider (opzionale)"
-          name="notes"
-          value={form.notes}
-          onChange={onChange}
-          rows={2}
-          placeholder="Es. citofono Rossi, suonare al 2° piano…"
-          className="resize-none"
-        />
+        {/* NB: il campo "Note per il rider" vive ora nello step 3 (Come paghi),
+            allineato al mockup. Resta legato a `form.notes` via lo stesso
+            handler `onChange` del parent — la logica di submit è invariata
+            (le note sono lette dallo state, non dal DOM del form). */}
       </form>
     </div>
   );

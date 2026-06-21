@@ -1,19 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Bot, Loader2, Send, Check } from 'lucide-react';
+import { Sparkles, Loader2, Send, Check, PackagePlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 
 /**
- * Copilot del negozio: il venditore scrive un'istruzione di massa in linguaggio
- * naturale ("abbassa del 10% l'elettronica") e il copilot propone le modifiche
- * per i prodotti coinvolti. Applica via /api/ai/catalog-apply (lo stesso apply
- * validato della chat), una per prodotto, dopo conferma. Human-in-the-loop.
+ * Catalog Copilot — chat: il venditore scrive un'istruzione in linguaggio naturale
+ * ("abbassa del 10% l'elettronica") e il copilot propone le modifiche per i prodotti
+ * coinvolti, mostrate in una card di anteprima dentro la bolla della risposta.
+ * Applica via /api/ai/catalog-apply (lo stesso apply validato), una per prodotto,
+ * dopo conferma. Human-in-the-loop.
+ *
+ * Design: design-system/ui_kits/seller/src/80-ai.txt → AiCopilot (avatar gradient,
+ * stato "Online", bolle utente/assistente, puntini di digitazione, chip suggeriti,
+ * anteprime ricche in-linea). Tutta la logica /api/ai/copilot + catalog-apply resta.
  */
 
 type Change = { product_id: string; name: string; patch: Record<string, unknown> };
+
+type Message =
+  | { id: string; role: 'user'; text: string }
+  | { id: string; role: 'assistant'; text: string; changes: Change[]; applied?: boolean }
+  | { id: string; role: 'typing' };
+
+const SUGGESTIONS = [
+  'Abbassa del 10% l\'elettronica',
+  'Metti in bozza gli esauriti',
+  'Aggiungi il tag saldi all\'abbigliamento',
+  'Alza del 5% i salumi',
+];
 
 async function authedFetch(path: string, body: unknown) {
   const { data: { session } } = await supabase.auth.getSession();
@@ -34,35 +51,56 @@ function patchSummary(patch: Record<string, unknown>): string {
     .join(' · ');
 }
 
+let msgSeq = 0;
+const nextId = () => `m${++msgSeq}`;
+
 export default function CatalogCopilot() {
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: nextId(),
+      role: 'assistant',
+      text: 'Ciao! Sono il tuo copilota catalogo. Dammi un comando sull\'intero catalogo — aggiusto i prezzi, metto in bozza, aggiungo tag e altro. Tu confermi, al resto penso io.',
+      changes: [],
+    },
+  ]);
   const [instruction, setInstruction] = useState('');
   const [loading, setLoading] = useState(false);
-  const [applying, setApplying] = useState(false);
-  const [reply, setReply] = useState('');
-  const [changes, setChanges] = useState<Change[]>([]);
-  const [applied, setApplied] = useState(false);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const ask = async () => {
-    const text = instruction.trim();
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages]);
+
+  const ask = async (q?: string) => {
+    const text = (q ?? instruction).trim();
     if (!text || loading) return;
     setLoading(true);
-    setChanges([]);
-    setReply('');
-    setApplied(false);
+    setInstruction('');
+    const typingId = nextId();
+    setMessages((m) => [
+      ...m,
+      { id: nextId(), role: 'user', text },
+      { id: typingId, role: 'typing' },
+    ]);
     try {
       const json = await authedFetch('/api/ai/copilot', { instruction: text });
-      setReply(json.reply ?? '');
-      setChanges(Array.isArray(json.changes) ? json.changes : []);
+      const changes: Change[] = Array.isArray(json.changes) ? json.changes : [];
+      setMessages((m) => [
+        ...m.filter((x) => x.id !== typingId),
+        { id: nextId(), role: 'assistant', text: json.reply ?? '', changes },
+      ]);
     } catch (err) {
+      setMessages((m) => m.filter((x) => x.id !== typingId));
       toast.error(friendlyError(err));
     } finally {
       setLoading(false);
     }
   };
 
-  const applyAll = async () => {
+  const applyChanges = async (msgId: string, changes: Change[]) => {
     if (changes.length === 0) return;
-    setApplying(true);
+    setApplyingId(msgId);
     let ok = 0;
     try {
       for (const c of changes) {
@@ -72,74 +110,165 @@ export default function CatalogCopilot() {
         } catch { /* salta il singolo fallito, continua */ }
       }
       toast.success(`Applicato a ${ok} prodotti su ${changes.length}.`);
-      setApplied(true);
+      setMessages((m) =>
+        m.map((x) => (x.id === msgId && x.role === 'assistant' ? { ...x, applied: true } : x)),
+      );
     } finally {
-      setApplying(false);
+      setApplyingId(null);
     }
   };
 
   return (
-    <div className="rounded-lg border border-cream-200 bg-white p-4 shadow-warm">
-      <p className="flex items-center gap-2 font-semibold text-ink-800">
-        <Bot size={18} className="text-primary-600" aria-hidden /> Copilot del negozio
-      </p>
-      <p className="mt-0.5 text-sm text-ink-500">
-        Dai un comando sull&apos;intero catalogo. Es. &quot;abbassa del 10% l&apos;elettronica&quot;,
-        &quot;metti in bozza gli esauriti&quot;, &quot;aggiungi il tag saldi a tutto l&apos;abbigliamento&quot;.
-      </p>
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-cream-300 bg-white shadow-warm">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b border-cream-200 px-4 py-3">
+        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-secondary-600 text-white">
+          <Sparkles size={18} aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-ink-900">Catalog Copilot</p>
+          <p className="flex items-center gap-1 text-xs text-olive-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-olive-500" aria-hidden /> Online · vede il tuo catalogo
+          </p>
+        </div>
+      </div>
 
-      <div className="mt-3 flex items-end gap-2">
+      {/* Conversazione */}
+      <div ref={scrollRef} className="flex h-[440px] flex-col gap-3 overflow-y-auto bg-cream-50 p-4">
+        {messages.map((m) => {
+          if (m.role === 'typing') {
+            return (
+              <div key={m.id} className="self-start rounded-[14px_14px_14px_4px] border border-cream-300 bg-white px-3.5 py-2.5">
+                <span className="inline-flex gap-1" aria-label="Sta scrivendo">
+                  <Dot delay="0s" /><Dot delay="0.15s" /><Dot delay="0.3s" />
+                </span>
+              </div>
+            );
+          }
+          const isUser = m.role === 'user';
+          return (
+            <div
+              key={m.id}
+              className={`flex max-w-[88%] flex-col gap-2 ${isUser ? 'self-end items-end' : 'self-start items-start'}`}
+            >
+              {m.text && (
+                <div
+                  className={`px-3.5 py-2.5 text-sm leading-relaxed ${
+                    isUser
+                      ? 'rounded-[14px_14px_4px_14px] bg-primary-700 text-white'
+                      : 'rounded-[14px_14px_14px_4px] border border-cream-300 bg-white text-ink-800'
+                  }`}
+                >
+                  {m.text}
+                </div>
+              )}
+              {m.role === 'assistant' && m.changes.length > 0 && (
+                <ChangesPreview
+                  changes={m.changes}
+                  applied={!!m.applied}
+                  applying={applyingId === m.id}
+                  onApply={() => void applyChanges(m.id, m.changes)}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Chip suggeriti */}
+      <div className="flex flex-wrap gap-1.5 border-t border-cream-200 px-3.5 py-2.5">
+        {SUGGESTIONS.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => void ask(s)}
+            disabled={loading}
+            className="rounded-full border border-cream-300 bg-white px-3 py-1 text-xs font-semibold text-primary-700 transition-colors hover:bg-primary-50 disabled:opacity-40"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {/* Input */}
+      <div className="flex items-end gap-2 border-t border-cream-200 px-3.5 py-3">
         <textarea
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void ask(); } }}
-          rows={2}
-          placeholder="Scrivi un comando…"
-          className="flex-1 resize-none rounded-lg border border-cream-300 px-3 py-2 text-sm focus:border-primary-300 focus:outline-none"
+          rows={1}
+          placeholder="Chiedi al copilota…"
+          className="max-h-28 flex-1 resize-none rounded-full border border-cream-300 px-4 py-2.5 text-sm focus:border-primary-300 focus:outline-none"
         />
         <button
           type="button"
           onClick={() => void ask()}
           disabled={loading || !instruction.trim()}
-          aria-label="Chiedi al copilot"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-40"
+          aria-label="Invia al copilot"
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-600 text-white transition-colors hover:bg-primary-700 disabled:opacity-40"
         >
-          {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+          {loading ? <Loader2 size={18} className="animate-spin" aria-hidden /> : <Send size={18} aria-hidden />}
         </button>
       </div>
+    </div>
+  );
+}
 
-      {reply && <p className="mt-3 rounded-lg bg-cream-50 px-3 py-2 text-sm text-ink-700">{reply}</p>}
+function Dot({ delay }: { delay: string }) {
+  return (
+    <span
+      className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-ink-300"
+      style={{ animationDelay: delay }}
+      aria-hidden
+    />
+  );
+}
 
-      {changes.length > 0 && (
-        <div className="mt-3">
-          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-500">
-            {changes.length} modifiche proposte
+/** Anteprima ricca delle modifiche proposte, dentro la bolla dell'assistente. */
+function ChangesPreview({
+  changes, applied, applying, onApply,
+}: {
+  changes: Change[];
+  applied: boolean;
+  applying: boolean;
+  onApply: () => void;
+}) {
+  return (
+    <div className="w-full overflow-hidden rounded-xl border border-cream-300 bg-white shadow-warm-sm">
+      <div className="flex items-center gap-2 border-b border-cream-200 bg-cream-50 px-3.5 py-2.5">
+        <PackagePlus size={16} className="text-primary-700" aria-hidden />
+        <span className="flex-1 text-[13px] font-bold text-ink-900">
+          {changes.length} {changes.length === 1 ? 'modifica proposta' : 'modifiche proposte'}
+        </span>
+        <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+          Anteprima
+        </span>
+      </div>
+      <ul className="max-h-56 overflow-y-auto py-1">
+        {changes.map((c) => (
+          <li key={c.product_id} className="px-3.5 py-2 text-sm">
+            <span className="font-medium text-ink-900">{c.name}</span>
+            <span className="text-ink-500"> — {patchSummary(c.patch)}</span>
+          </li>
+        ))}
+      </ul>
+      <div className="border-t border-cream-200 px-3.5 py-2.5">
+        {applied ? (
+          <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-olive-600">
+            <Check size={16} strokeWidth={2.6} aria-hidden /> Applicato.
           </p>
-          <ul className="max-h-64 space-y-1 overflow-y-auto text-sm">
-            {changes.map((c) => (
-              <li key={c.product_id} className="border-b border-cream-100 py-1 last:border-0">
-                <span className="font-medium text-ink-800">{c.name}</span>
-                <span className="text-ink-500"> — {patchSummary(c.patch)}</span>
-              </li>
-            ))}
-          </ul>
-          {applied ? (
-            <p className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-600">
-              <Check size={16} strokeWidth={2.6} aria-hidden /> Applicato.
-            </p>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void applyAll()}
-              disabled={applying}
-              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-            >
-              {applying ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} strokeWidth={2.4} aria-hidden />}
-              Applica tutte
-            </button>
-          )}
-        </div>
-      )}
+        ) : (
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={applying}
+            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
+          >
+            {applying ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Check size={16} strokeWidth={2.4} aria-hidden />}
+            Applica tutte
+          </button>
+        )}
+      </div>
     </div>
   );
 }

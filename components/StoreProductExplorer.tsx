@@ -2,11 +2,15 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search, Filter, RotateCcw, Star } from 'lucide-react';
+import { Search, Filter, RotateCcw, Star, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductGrid, { type SortOption } from './ProductGrid';
 
-type Props = { sellerId: string };
+type Props = {
+  sellerId: string;
+  /** Riporta il numero di prodotti visibili (post-filtro) al chiamante. */
+  onCount?: (count: number) => void;
+};
 
 type StoreCategory = { id: string; name: string };
 
@@ -15,7 +19,7 @@ type StoreCategory = { id: string; name: string };
  * Usato nella vetrina del negozio. Riusa <ProductGrid> per il rendering e i
  * filtri lato query (search, categoryId, prezzo, rating, ordinamento).
  */
-export default function StoreProductExplorer({ sellerId }: Props) {
+export default function StoreProductExplorer({ sellerId, onCount }: Props) {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('relevance');
   const [categoryId, setCategoryId] = useState('');
@@ -68,8 +72,18 @@ export default function StoreProductExplorer({ sellerId }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca nei prodotti del negozio…"
-            className="w-full bg-white border border-cream-300 rounded-full pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full bg-white border border-cream-300 rounded-full pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch('')}
+              aria-label="Pulisci ricerca"
+              className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex text-ink-400 transition-colors hover:text-ink-700"
+            >
+              <X size={16} aria-hidden />
+            </button>
+          )}
         </div>
         <button
           type="button"
@@ -193,6 +207,24 @@ export default function StoreProductExplorer({ sellerId }: Props) {
         maxPrice={maxPrice < 500 ? maxPrice : undefined}
         minRating={minRating > 0 ? minRating : undefined}
         sort={sort}
+        maxColumns={4}
+        onCount={onCount}
+        // Stato vuoto su misura: distingue "nessun risultato per la ricerca" dal
+        // generico, e offre un'azione per azzerare ricerca + filtri.
+        emptyTitle={search ? `Nessun risultato per «${search}»` : undefined}
+        emptyDescription={
+          search
+            ? 'Prova con un altro termine o azzera la ricerca per vedere tutto il catalogo.'
+            : undefined
+        }
+        onReset={
+          search || activeFilters > 0
+            ? () => {
+                setSearch('');
+                reset();
+              }
+            : undefined
+        }
       />
     </div>
   );

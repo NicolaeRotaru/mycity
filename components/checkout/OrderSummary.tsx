@@ -51,7 +51,7 @@ export function OrderSummary({
         <div className="flex justify-between">
           <span className="text-ink-600">Spedizione</span>
           <span className={`font-semibold ${shipping === 0 ? 'text-olive-600' : ''}`}>
-            {shipping === 0 ? 'GRATUITA' : formatPrice(shipping)}
+            {shipping === 0 ? 'Gratis' : formatPrice(shipping)}
           </span>
         </div>
         {pickupDiscount > 0 && (

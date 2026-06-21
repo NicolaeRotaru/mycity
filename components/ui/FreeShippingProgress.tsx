@@ -23,7 +23,14 @@ export function FreeShippingProgress({
   const unlocked = remaining === 0;
 
   return (
-    <div className={cn('rounded-xl border border-olive-200 bg-olive-50 p-3', className)}>
+    <div
+      className={cn(
+        'rounded-xl border p-3',
+        // In-progress → accent (incoraggia ad aggiungere); sbloccato → olive (success).
+        unlocked ? 'border-olive-200 bg-olive-50' : 'border-accent-200 bg-accent-50',
+        className,
+      )}
+    >
       {unlocked ? (
         <p className="text-olive-700 font-semibold flex items-center gap-2 text-sm">
           <Truck size={16} strokeWidth={2.4} aria-hidden />
@@ -31,13 +38,16 @@ export function FreeShippingProgress({
         </p>
       ) : (
         <>
-          <p className="text-olive-800 text-sm font-medium mb-2">
-            Ti mancano <strong>{formatPrice(remaining)}</strong> alla{' '}
-            <strong>spedizione gratis</strong>
+          <p className="text-accent-700 text-sm font-medium mb-2 flex items-center gap-2">
+            <Truck size={16} strokeWidth={2.4} className="shrink-0" aria-hidden />
+            <span>
+              Ti mancano <strong>{formatPrice(remaining)}</strong> alla{' '}
+              <strong>spedizione gratis</strong>
+            </span>
           </p>
-          <div className="w-full bg-olive-100 rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-accent-100 rounded-full h-2 overflow-hidden">
             <div
-              className="bg-olive-500 h-2 rounded-full animate-progress-fill transition-[width] duration-500"
+              className="bg-accent-500 h-2 rounded-full animate-progress-fill transition-[width] duration-500"
               style={{ width: `${pct}%` }}
               role="progressbar"
               aria-valuenow={Math.round(pct)}

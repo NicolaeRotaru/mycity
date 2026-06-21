@@ -55,6 +55,31 @@ export default function SellerProductsPage() {
     },
   });
 
+  // "Venduti" reale: SOMMA(order_items.quantity) per gli ordini CONSEGNATI del
+  // venditore, raggruppata per prodotto. Stessa forma del calcolo "venduto" della
+  // dashboard (order_items + products!inner(seller_id)), filtrata a delivery_status
+  // = DELIVERED. Una sola query aggregata; la mappa risultante alimenta la colonna.
+  const { data: soldByProduct = {} } = useQuery({
+    queryKey: [...queryKeys.seller.products, 'sold'],
+    queryFn: async (): Promise<Record<string, number>> => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return {};
+      const { data, error } = await supabase
+        .from('order_items')
+        .select('product_id, quantity, products!inner(seller_id), orders!inner(delivery_status)')
+        .eq('products.seller_id', user.id)
+        .eq('orders.delivery_status', 'DELIVERED');
+      if (error) throw error;
+      const rows = (data ?? []) as unknown as { product_id: string | null; quantity: number }[];
+      const map: Record<string, number> = {};
+      for (const r of rows) {
+        if (!r.product_id) continue;
+        map[r.product_id] = (map[r.product_id] ?? 0) + Number(r.quantity);
+      }
+      return map;
+    },
+  });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('products').delete().eq('id', id);
@@ -282,7 +307,9 @@ export default function SellerProductsPage() {
                         p.stock ?? 0
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right text-ink-600">—</td>
+                    <td className="px-4 py-3 text-right font-semibold text-ink-700">
+                      {soldByProduct[p.id] ? soldByProduct[p.id] : <span className="font-normal text-ink-400">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-right"><StatusBadge status={p.status} /></td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <div className="inline-flex items-center gap-1">
@@ -376,6 +403,9 @@ export default function SellerProductsPage() {
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <span className="font-bold text-ink-900">{formatPrice(Number(p.price))}</span>
                         <span className="text-xs text-ink-500">· {p.stock ?? 0} pz</span>
+                        {soldByProduct[p.id] ? (
+                          <span className="text-xs text-ink-500">· {soldByProduct[p.id]} venduti</span>
+                        ) : null}
                       </div>
                     )}
                   </div>

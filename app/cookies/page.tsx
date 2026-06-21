@@ -20,6 +20,7 @@ export default function CookiesPage() {
   return (
     <LegalLayout
       title="Cookie policy"
+      active="/cookies"
       meta={<>Versione {VERSION} — in vigore dal {EFFECTIVE_DATE}</>}
       summary="Usiamo i cookie per far funzionare il sito, ricordare le tue preferenze e — solo col tuo consenso — misurare il traffico. Non usiamo cookie di profilazione pubblicitaria di terze parti."
       toc={TOC}

@@ -5,9 +5,12 @@ import { usePathname } from 'next/navigation';
 import {
   User, Package, MapPin, Heart, Bell, Sparkles,
   Gift, UserPlus, Settings, Trophy,
+  MessageCircle, RotateCcw,
   type LucideIcon,
 } from 'lucide-react';
 import AccountSidebar from '@/components/account/AccountSidebar';
+import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
+import { useMessagesUnread } from '@/components/hooks/useMessagesUnread';
 
 /**
  * Account shell acquirente — layout responsive 2 colonne: aside sticky ~260px
@@ -16,15 +19,19 @@ import AccountSidebar from '@/components/account/AccountSidebar';
  * orizzontale scrollabile in cima, sopra il contenuto.
  */
 
-type NavItem = { href: string; icon: LucideIcon; label: string };
+/** Chiave del badge "non letto" per agganciare il conteggio alla voce nav. */
+type NavBadge = 'notifications' | 'messages';
+type NavItem = { href: string; icon: LucideIcon; label: string; badge?: NavBadge };
 
 // Stesse rotte della sidebar, in forma piatta per la striscia mobile.
 const MOBILE_NAV: NavItem[] = [
   { href: '/profile', icon: User, label: 'Profilo' },
   { href: '/orders', icon: Package, label: 'Ordini' },
+  { href: '/returns', icon: RotateCcw, label: 'Resi' },
   { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
   { href: '/favorites', icon: Heart, label: 'Preferiti' },
-  { href: '/notifications', icon: Bell, label: 'Notifiche' },
+  { href: '/messages', icon: MessageCircle, label: 'Messaggi', badge: 'messages' },
+  { href: '/notifications', icon: Bell, label: 'Notifiche', badge: 'notifications' },
   { href: '/profile/loyalty', icon: Sparkles, label: 'Punti' },
   { href: '/profile/referral', icon: UserPlus, label: 'Inviti' },
   { href: '/profile/gift-cards', icon: Gift, label: 'Gift card' },
@@ -39,6 +46,15 @@ function isActive(pathname: string, href: string): boolean {
 
 function MobileAccountNav() {
   const pathname = usePathname() ?? '';
+  const notifCount = useNotificationsCount();
+  const messagesUnread = useMessagesUnread();
+
+  const badgeCount = (badge?: NavBadge): number => {
+    if (badge === 'notifications') return notifCount;
+    if (badge === 'messages') return messagesUnread;
+    return 0;
+  };
+
   return (
     <nav
       aria-label="Menu account"
@@ -48,6 +64,7 @@ function MobileAccountNav() {
         {MOBILE_NAV.map((n) => {
           const on = isActive(pathname, n.href);
           const Icon = n.icon;
+          const count = badgeCount(n.badge);
           return (
             <li key={n.href}>
               <Link
@@ -66,6 +83,14 @@ function MobileAccountNav() {
                   aria-hidden
                 />
                 {n.label}
+                {count > 0 && (
+                  <span
+                    className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1.5 text-[11px] font-bold leading-none text-white"
+                    aria-label={`${count} non lett${count === 1 ? 'a' : 'e'}`}
+                  >
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
               </Link>
             </li>
           );

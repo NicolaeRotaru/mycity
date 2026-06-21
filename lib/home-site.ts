@@ -40,7 +40,7 @@ export const PRODUCTS_MAX = 24;
 export const HOME_SECTION_TYPES = [
   // strutturali "core" (compongono la home di default)
   'hero', 'howItWorks', 'categories', 'dropOfDay', 'popularProducts',
-  'liveActivity', 'nearbyStores', 'trustRow', 'newsletter', 'sellerCta',
+  'liveActivity', 'nearbyStores', 'reorder', 'trustRow', 'newsletter', 'sellerCta',
   // strutturali "editoriali" (componenti pronti, non attivi di default)
   'shopOfMonth', 'stories', 'events', 'promo', 'trending',
   // contenuto (blocchi liberi)
@@ -58,6 +58,7 @@ export const HOME_SECTION_CATALOG: {
   { type: 'popularProducts', label: 'Prodotti popolari',   description: 'Griglia dei prodotti più amati',          group: 'struttura' },
   { type: 'liveActivity',    label: 'Attività live + Trust', description: 'Feed ordini in tempo reale + perché MyCity', group: 'struttura' },
   { type: 'nearbyStores',    label: 'Negozi vicini',       description: 'Vetrina dei negozi di Piacenza',          group: 'struttura' },
+  { type: 'reorder',         label: 'Ordina di nuovo',     description: 'Riordino rapido dai tuoi ordini recenti (si auto-nasconde)', group: 'struttura' },
   { type: 'trustRow',        label: 'Banda fiducia',       description: 'Striscia a 4 colonne con le garanzie',    group: 'struttura' },
   { type: 'newsletter',      label: 'Newsletter',          description: 'Iscrizione newsletter con incentivo',     group: 'struttura' },
   { type: 'sellerCta',       label: 'CTA venditore',       description: 'Banda "Diventa venditore"',               group: 'struttura' },
@@ -203,6 +204,7 @@ export const homeSectionSchema = z.discriminatedUnion('type', [
   section('popularProducts', popularProductsConfig),
   section('liveActivity', liveActivityConfig),
   section('nearbyStores', nearbyStoresConfig),
+  section('reorder', emptyConfig),
   section('trustRow', emptyConfig),
   section('newsletter', newsletterConfig),
   section('sellerCta', sellerCtaConfig),
@@ -231,7 +233,7 @@ export type HomeSite = z.infer<typeof homeSiteSchema>;
 /** Ordine fisso attuale di app/page.tsx (i testi di default sono nel renderer). */
 const DEFAULT_ORDER: HomeSectionType[] = [
   'hero', 'howItWorks', 'categories', 'dropOfDay', 'popularProducts',
-  'liveActivity', 'nearbyStores', 'trustRow', 'newsletter', 'sellerCta',
+  'liveActivity', 'nearbyStores', 'reorder', 'trustRow', 'newsletter', 'sellerCta',
 ];
 
 /** Home di default: riproduce il layout fisso attuale (id deterministici = type). */

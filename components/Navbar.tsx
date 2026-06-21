@@ -43,9 +43,9 @@ export default function Navbar() {
   const favCount = favorites.size;
   const branding = useBranding();
 
-  // Header statico (non sticky): resta in cima alla pagina e scorre via con il
-  // contenuto invece di seguire lo scroll. Su mobile la navigazione persistente
-  // è affidata alla MobileTabBar in fondo.
+  // Header: sticky su desktop (resta in cima allo scroll, come nel mockup
+  // buyer), statico su mobile dove la navigazione persistente è affidata alla
+  // MobileTabBar in fondo.
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -81,7 +81,7 @@ export default function Navbar() {
   const showCategoryBar = !isProArea;
 
   return (
-    <header className="relative z-40 shadow-warm-sm">
+    <header className="relative md:sticky md:top-0 z-sticky shadow-warm-sm">
       <PromoTicker />
 
       {/* MAIN — bg primary (terracotta), accenti accent (mustard) */}

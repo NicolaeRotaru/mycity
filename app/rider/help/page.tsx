@@ -5,10 +5,11 @@ import {
   Banknote,
   ShieldCheck,
   Star,
-  Lightbulb,
+  ArrowLeft,
   Mail,
   Phone,
   MessageCircle,
+  Headphones,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -79,51 +80,92 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
 
 export default function RiderHelpPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold text-ink-900 flex items-center gap-1.5">
-          <Lightbulb size={18} strokeWidth={2.2} aria-hidden /> Centro rider
-        </h1>
-        <p className="text-sm text-ink-500">Guide pratiche per consegnare al meglio.</p>
-      </div>
-
-      <div className="grid md:grid-cols-3 gap-3">
-        <Link href="/contact" className="bg-gradient-to-br from-accent-500 to-accent-600 text-white rounded-xl p-5 hover:shadow-lg transition-all">
-          <div className="mb-2"><Mail size={24} strokeWidth={2.2} aria-hidden /></div>
-          <p className="font-bold">Contatta il supporto</p>
-          <p className="text-xs text-accent-100 mt-1">Risposta entro 24h</p>
+    <div className="pb-5">
+      {/* Header serif con back, in stile telefono rider */}
+      <div className="flex items-center gap-2.5 px-4 pb-2 pt-3">
+        <Link
+          href="/rider/profile"
+          aria-label="Indietro"
+          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-ink-700 hover:bg-cream-100"
+        >
+          <ArrowLeft size={20} aria-hidden />
         </Link>
-        <a href="tel:+390523000000" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-rose-300 transition-all">
-          <div className="mb-2"><Phone size={24} strokeWidth={2.2} aria-hidden /></div>
-          <p className="font-bold text-ink-900">Emergenza</p>
-          <p className="text-xs text-ink-500 mt-1">+39 0523 000000 · 24/7</p>
-        </a>
-        <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-olive-300 transition-all">
-          <div className="mb-2"><MessageCircle size={24} strokeWidth={2.2} aria-hidden /></div>
-          <p className="font-bold text-ink-900">WhatsApp rider</p>
-          <p className="text-xs text-ink-500 mt-1">Lun-Dom 7-23</p>
-        </a>
+        <h1 className="font-serif text-[22px] font-extrabold text-ink-900">Aiuto</h1>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-3.5 px-4">
+        {/* FAQ accordions */}
         {TOPICS.map((topic) => (
-          <section key={topic.title} className="bg-white border rounded-xl p-5">
-            <h2 className="font-bold text-ink-900 mb-3 flex items-center gap-2 text-lg">
-              <topic.icon size={18} strokeWidth={2.2} aria-hidden /> {topic.title}
+          <section key={topic.title}>
+            <h2 className="mb-2 flex items-center gap-2 px-1 text-[13px] font-bold uppercase tracking-[0.03em] text-ink-700">
+              <topic.icon size={15} strokeWidth={2.2} aria-hidden /> {topic.title}
             </h2>
-            <div className="space-y-3">
+            <div className="flex flex-col gap-2">
               {topic.items.map((it) => (
-                <details key={it.q} className="group">
-                  <summary className="cursor-pointer font-semibold text-ink-800 hover:text-accent-600 list-none flex items-start justify-between gap-2">
+                <details
+                  key={it.q}
+                  className="group rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3"
+                >
+                  <summary className="flex cursor-pointer list-none items-start justify-between gap-2 text-sm font-semibold text-ink-900">
                     <span>{it.q}</span>
-                    <span className="text-ink-400 group-open:rotate-45 transition-transform text-xl leading-none">+</span>
+                    <span className="text-xl leading-none text-ink-400 transition-transform group-open:rotate-45">+</span>
                   </summary>
-                  <p className="text-sm text-ink-600 mt-2 leading-relaxed pl-1">{it.a}</p>
+                  <p className="mt-2 text-[13px] leading-relaxed text-ink-600">{it.a}</p>
                 </details>
               ))}
             </div>
           </section>
         ))}
+
+        {/* CTA piena larghezza: contatta il supporto rider */}
+        <Link
+          href="/contact"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary-700 px-4 py-3.5 text-sm font-bold text-white hover:bg-primary-800"
+        >
+          <Headphones size={18} strokeWidth={2.2} aria-hidden /> Contatta il supporto rider
+        </Link>
+
+        {/* Canali rapidi (link conservati) */}
+        <div className="flex flex-col gap-2">
+          <a
+            href="tel:+390523000000"
+            className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 hover:bg-cream-50"
+          >
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary-50">
+              <Phone size={17} className="text-secondary-600" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink-900">Emergenza</p>
+              <p className="text-xs text-ink-500">+39 0523 000000 · 24/7</p>
+            </div>
+          </a>
+          <a
+            href="https://wa.me/393000000000"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 hover:bg-cream-50"
+          >
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-olive-50">
+              <MessageCircle size={17} className="text-olive-700" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink-900">WhatsApp rider</p>
+              <p className="text-xs text-ink-500">Lun-Dom 7-23</p>
+            </div>
+          </a>
+          <Link
+            href="/contact"
+            className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 hover:bg-cream-50"
+          >
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-50">
+              <Mail size={17} className="text-accent-700" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink-900">Scrivi al supporto</p>
+              <p className="text-xs text-ink-500">Risposta entro 24h</p>
+            </div>
+          </Link>
+        </div>
       </div>
     </div>
   );

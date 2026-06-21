@@ -7,6 +7,7 @@ import { Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
+import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import ImportFromUrlBox, { type ImportResult } from '@/components/products/ImportFromUrlBox';
 import BulkPhotoCreate from '@/components/seller/BulkPhotoCreate';
 import { confirmDialog } from '@/components/ConfirmDialog';
@@ -196,7 +197,14 @@ function NewProductInner() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold">{fromId ? 'Duplica prodotto' : 'Nuovo prodotto'}</h1>
+      <SellerPageTitle
+        eyebrow="Catalogo"
+        title={fromId ? 'Duplica prodotto' : 'Nuovo prodotto'}
+        sub={fromId
+          ? 'Parti da una copia e modifica quello che serve.'
+          : 'Compila la scheda — o lascia che l\'AI la prepari per te da foto, voce o link.'}
+        className="mb-0"
+      />
 
       {!fromId && (
         <>

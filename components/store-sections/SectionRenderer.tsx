@@ -18,7 +18,16 @@ import VideoSection from './VideoSection';
 import FaqSection from './FaqSection';
 
 /** Mappa una singola sezione (unione discriminata) al suo componente. */
-function RenderSection({ section, ctx }: { section: SiteSection; ctx: SectionContext }) {
+function RenderSection({
+  section,
+  ctx,
+  onProductCount,
+}: {
+  section: SiteSection;
+  ctx: SectionContext;
+  /** Notifica al contenitore tab il numero di prodotti visibili (per il badge "Prodotti · N"). */
+  onProductCount?: (count: number) => void;
+}) {
   switch (section.type) {
     case 'hero':
       return <HeroSection config={section.config} ctx={ctx} />;
@@ -33,7 +42,7 @@ function RenderSection({ section, ctx }: { section: SiteSection; ctx: SectionCon
     case 'promotions':
       return <PromotionsSection ctx={ctx} />;
     case 'productGrid':
-      return <ProductGridSection ctx={ctx} />;
+      return <ProductGridSection ctx={ctx} onProductCount={onProductCount} />;
     case 'richText':
       return <RichTextSection config={section.config} />;
     case 'banner':
@@ -79,9 +88,23 @@ const TAB_LABEL: Record<TabKey, string> = {
 
 const TAB_ORDER: TabKey[] = ['prodotti', 'info', 'recensioni'];
 
+/**
+ * Etichetta della tab con conteggio per-sezione, allineata al mockup
+ * ("Prodotti · N", "Recensioni · N"). Il conteggio prodotti arriva dalla griglia
+ * (post-filtro server) via callback; finché non è noto la tab resta senza numero.
+ * "Info & orari" non ha un conteggio sensato → resta senza badge.
+ */
+function tabLabel(t: TabKey, ctx: SectionContext, productCount: number | null): string {
+  if (t === 'recensioni') return `${TAB_LABEL.recensioni} · ${ctx.reviews.length}`;
+  if (t === 'prodotti' && productCount !== null) return `${TAB_LABEL.prodotti} · ${productCount}`;
+  return TAB_LABEL[t];
+}
+
 function SectionTabs({ sections, ctx }: { sections: SiteSection[]; ctx: SectionContext }) {
   const baseId = useId();
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  // Conteggio prodotti visibili (per "Prodotti · N"), riportato dalla griglia.
+  const [productCount, setProductCount] = useState<number | null>(null);
 
   // Partiziona mantenendo l'ordine originale dentro ogni gruppo.
   const groups: Record<TabKey, SiteSection[]> = { prodotti: [], info: [], recensioni: [] };
@@ -97,7 +120,7 @@ function SectionTabs({ sections, ctx }: { sections: SiteSection[]; ctx: SectionC
     return (
       <>
         {sections.map((s) => (
-          <RenderSection key={s.id} section={s} ctx={ctx} />
+          <RenderSection key={s.id} section={s} ctx={ctx} onProductCount={setProductCount} />
         ))}
       </>
     );
@@ -141,9 +164,11 @@ function SectionTabs({ sections, ctx }: { sections: SiteSection[]; ctx: SectionC
                   ? 'font-bold text-ink-900'
                   : 'border-transparent font-medium text-ink-500 hover:text-ink-800'
               }`}
-              style={selected ? { borderColor: ctx.accent, color: ctx.accent } : undefined}
+              // L'accent del negozio colora SOLO la sottolineatura: il testo resta
+              // ink-900 (classe), così il contrasto è garantito anche con accent pallidi.
+              style={selected ? { borderColor: ctx.accent } : undefined}
             >
-              {TAB_LABEL[t]}
+              {tabLabel(t, ctx, productCount)}
             </button>
           );
         })}
@@ -161,7 +186,7 @@ function SectionTabs({ sections, ctx }: { sections: SiteSection[]; ctx: SectionC
           className={t === 'info' ? 'grid gap-4 sm:grid-cols-2 sm:items-start' : 'space-y-4'}
         >
           {groups[t].map((s) => (
-            <RenderSection key={s.id} section={s} ctx={ctx} />
+            <RenderSection key={s.id} section={s} ctx={ctx} onProductCount={setProductCount} />
           ))}
         </div>
       ))}

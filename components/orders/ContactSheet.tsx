@@ -123,7 +123,7 @@ export function ContactSheet({ target, onClose }: { target: ContactTarget; onClo
             onClick={onClose}
             className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-full border border-cream-300 px-4 py-3 text-sm font-semibold text-ink-700 transition-colors hover:bg-cream-50"
           >
-            <MessageCircle size={16} strokeWidth={2.2} aria-hidden /> Chiudi
+            <MessageCircle size={16} strokeWidth={2.2} aria-hidden /> Invia un messaggio
           </button>
         )}
 

@@ -3,13 +3,18 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, Coffee } from 'lucide-react';
+import { MapPin, Coffee, Star, Home as HomeIcon, Truck } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
+import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 
-type Store = { id: string; store_name: string | null; store_address: string | null; store_logo: string | null };
+type Store = {
+  id: string; store_name: string | null; store_address: string | null; store_logo: string | null;
+  store_hours?: unknown;
+};
 type Prod = { id: string; name: string; price: number | string; images: string[] | null };
+type Reviews = { avg: number; count: number };
 
 /**
  * Card "anteprima negozio" nell'hero della home.
@@ -23,7 +28,7 @@ export default function HeroStoreCard() {
   const { data } = useQuery({
     queryKey: ['home', 'hero-store'],
     staleTime: 10 * 60 * 1000,
-    queryFn: async (): Promise<{ store: Store; products: Prod[] } | null> => {
+    queryFn: async (): Promise<{ store: Store; products: Prod[]; reviews: Reviews | null } | null> => {
       const firstOfMonth = new Date();
       firstOfMonth.setDate(1);
       firstOfMonth.setHours(0, 0, 0, 0);
@@ -32,7 +37,7 @@ export default function HeroStoreCard() {
       // 1) Negozio del mese (pick admin), se presente.
       const { data: som } = await supabase
         .from('shop_of_month')
-        .select('seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_address, store_logo )')
+        .select('seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_address, store_logo, store_hours )')
         .eq('month', monthIso)
         .maybeSingle();
       let store = (som as unknown as { seller: Store | null } | null)?.seller ?? null;
@@ -41,7 +46,7 @@ export default function HeroStoreCard() {
       if (!store) {
         const { data: s } = await supabase
           .from('profiles')
-          .select('id, store_name, store_address, store_logo')
+          .select('id, store_name, store_address, store_logo, store_hours')
           .eq('role', 'seller')
           .eq('is_approved', true)
           .not('store_name', 'is', null)
@@ -52,19 +57,39 @@ export default function HeroStoreCard() {
       }
       if (!store) return null;
 
-      const { data: prods } = await supabase
-        .from('products')
-        .select('id, name, price, images')
-        .eq('seller_id', store.id)
-        .eq('status', 'available')
-        .limit(10);
-      return { store, products: (prods ?? []) as Prod[] };
+      // Prodotti reali + statistiche recensioni (RPC aggregata): la card mostra
+      // rating e numero recensioni solo se esistono recensioni vere.
+      const [prodsRes, reviewsRes] = await Promise.all([
+        supabase
+          .from('products')
+          .select('id, name, price, images')
+          .eq('seller_id', store.id)
+          .eq('status', 'available')
+          .limit(10),
+        supabase.rpc('store_review_stats', { p_store_ids: [store.id] }),
+      ]);
+
+      const stat = ((reviewsRes.data ?? []) as { store_id: string; avg: number | string; count: number }[])[0];
+      const reviews: Reviews | null = stat && Number(stat.count) > 0
+        ? { avg: Number(stat.avg), count: Number(stat.count) }
+        : null;
+
+      return { store, products: (prodsRes.data ?? []) as Prod[], reviews };
     },
   });
 
   if (!data?.store) return <HeroStorePlaceholder />;
 
-  const { store, products } = data;
+  const { store, products, reviews } = data;
+
+  // "Consegna oggi": derivata dagli orari del negozio (store_hours) SOLO se
+  // affidabilmente interpretabili — il negozio ha orari configurati per oggi ed
+  // è aperto adesso. Se gli orari mancano o non sono parseabili, il badge è
+  // omesso (niente promessa di consegna non supportata dai dati).
+  const todayKey = DAY_KEYS[new Date().getDay()];
+  const hours = (store.store_hours ?? null) as StoreHours | null;
+  const todayIntervals = hours && typeof hours === 'object' ? hours[todayKey] : undefined;
+  const deliveryToday = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);
   return (
     <div className="hidden md:flex justify-center">
       <div className="relative w-full max-w-sm">
@@ -92,6 +117,26 @@ export default function HeroStoreCard() {
               <span className="w-1.5 h-1.5 rounded-full bg-olive-600 animate-pulse-soft" />
               Aperto
             </span>
+          </div>
+
+          {/* Rating (solo con recensioni vere) + badge negozio locale + "Consegna
+              oggi" DERIVATO dagli orari del negozio (mostrato solo se aperto ora). */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
+            {reviews && (
+              <span className="inline-flex items-center gap-1 font-semibold text-ink-800">
+                <Star size={13} className="fill-accent-500 text-accent-500" aria-hidden />
+                {reviews.avg.toFixed(1)}
+                <span className="font-normal text-ink-400">({reviews.count} recensioni)</span>
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full ring-1 ring-primary-200">
+              <HomeIcon size={11} strokeWidth={2.4} aria-hidden /> Negozio locale
+            </span>
+            {deliveryToday && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200">
+                <Truck size={11} strokeWidth={2.4} aria-hidden /> Consegna oggi
+              </span>
+            )}
           </div>
 
           {products.length > 0 && (

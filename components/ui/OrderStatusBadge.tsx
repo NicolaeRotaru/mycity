@@ -43,7 +43,8 @@ export function OrderStatusBadge({ status, size = 'md', variant = 'pill', classN
       <Icon
         size={iconSize}
         strokeWidth={2.2}
-        className={cn(c.text, className)}
+        className={className}
+        style={{ color: c.color }}
         aria-label={label}
       />
     );
@@ -51,7 +52,7 @@ export function OrderStatusBadge({ status, size = 'md', variant = 'pill', classN
 
   if (variant === 'inline') {
     return (
-      <span className={cn('inline-flex items-center gap-1.5', c.text, className)}>
+      <span className={cn('inline-flex items-center gap-1.5', className)} style={{ color: c.color }}>
         <Icon size={iconSize} strokeWidth={2.2} aria-hidden />
         {label}
       </span>
@@ -61,11 +62,14 @@ export function OrderStatusBadge({ status, size = 'md', variant = 'pill', classN
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full font-medium ring-1',
+        'inline-flex items-center rounded-full font-medium',
         SIZES_PILL[size],
-        c.bg, c.text, c.ring,
         className,
       )}
+      // Colore semantico via token --status-*: testo + icona (color) e anello
+      // (inset box-shadow su currentColor), tinta di sfondo (bg). Nessuna
+      // classe off-palette: i colori vivono nei token del design system.
+      style={{ color: c.color, background: c.bg, boxShadow: 'inset 0 0 0 1px currentColor' }}
     >
       <Icon size={iconSize} strokeWidth={2.4} aria-hidden />
       {label}

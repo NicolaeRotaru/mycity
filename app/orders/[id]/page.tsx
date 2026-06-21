@@ -9,8 +9,9 @@ import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
 import SimpleQR from '@/components/SimpleQR';
 import ConfettiBurst from '@/components/ConfettiBurst';
 import { confirmDialog } from '@/components/ConfirmDialog';
-import { formatPrice, formatDate } from '@/lib/format';
+import { formatPrice } from '@/lib/format';
 import { addToCart, clearCart } from '@/lib/cart';
+import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { toast } from 'sonner';
 import {
   BUYER_TIMELINE,
@@ -205,6 +206,24 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const isCancellable = status === 'NEW';
   const riderPhase = order.rider_id && (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY' || status === 'ASSIGNED');
 
+  // ETA rider in minuti: DERIVATA dalla distanza rider→cliente (haversine su
+  // rider_lat/lng → delivery_lat/lng) a velocità media urbana (~25 km/h, vedi
+  // lib/geo.deliveryEtaMinutes con prep=0: il rider è già in viaggio). Mostrata
+  // SOLO in OUT_FOR_DELIVERY e solo se entrambe le coppie di coordinate esistono;
+  // altrimenti resta null e il chip "~N min" viene omesso (niente stime finte).
+  const riderEtaMin: number | null =
+    status === 'OUT_FOR_DELIVERY'
+    && order.rider_lat != null && order.rider_lng != null
+    && order.delivery_lat != null && order.delivery_lng != null
+      ? Math.max(
+          1,
+          deliveryEtaMinutes(
+            haversineKm(order.rider_lat, order.rider_lng, order.delivery_lat, order.delivery_lng),
+            0,
+          ),
+        )
+      : null;
+
   // Stato hero: serif heading + sottotitolo coerenti con lo stato corrente.
   const HeroIcon = isDelivered ? CheckCircle2 : ORDER_STATUS_ICON[status];
   const heroTitle = isDelivered
@@ -214,7 +233,51 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     : status === 'NEW'
     ? 'Ordine confermato!'
     : 'Ordine in corso';
-  const heroSub = ORDER_STATUS_LABEL[status];
+
+  // Sottotitolo per-stato (frase, non solo la label del badge): comunica cosa
+  // sta succedendo adesso. Nessuna data effettiva: lo schema non ha colonna ETA.
+  const HERO_SUBTITLE: Partial<Record<OrderStatus, string>> = {
+    NEW: 'Il negozio sta confermando il tuo ordine',
+    ACCEPTED: 'Il negozio sta preparando il tuo ordine',
+    READY: 'Pronto in negozio · un rider sta per ritirarlo',
+    ASSIGNED: 'Un rider sta arrivando in negozio',
+    PICKED_UP: 'Il rider ha ritirato il tuo ordine',
+    OUT_FOR_DELIVERY: 'Il rider è in viaggio verso di te',
+    DELIVERED: 'Consegnato — grazie!',
+    CANCELED: 'Questo ordine è stato annullato',
+  };
+  const heroSub = HERO_SUBTITLE[status] ?? ORDER_STATUS_LABEL[status];
+
+  // "Consegna stimata": in OUT_FOR_DELIVERY usiamo l'ETA DERIVATA (rider→cliente)
+  // se disponibile ("~N min"); altrimenti una finestra relativa coerente col copy
+  // del marketplace. Niente orari assoluti finti: solo derivazioni reali.
+  const etaLabel = isDelivered
+    ? 'Consegnato'
+    : isCancelled
+    ? '—'
+    : status === 'OUT_FOR_DELIVERY'
+    ? (riderEtaMin != null ? `~${riderEtaMin} min` : 'In arrivo a breve')
+    : 'Oggi se disponibile · 24-48h';
+  const etaCaption = isDelivered ? 'Stato consegna' : 'Consegna stimata';
+
+  // Hint relativo "consegna stimata" da accepted_at/ready_at, quando sensato:
+  // una volta accettato/pronto, una finestra indicativa relativa all'evento.
+  // Derivato dai soli timestamp esistenti; omesso se mancano o stato terminale.
+  const minutesSince = (iso: string | null): number | null =>
+    iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)) : null;
+  const prepHint: string | null = (() => {
+    if (isDelivered || isCancelled) return null;
+    if (status === 'OUT_FOR_DELIVERY' && riderEtaMin != null) return null; // già coperto dal chip ETA
+    if (status === 'READY' || status === 'ASSIGNED' || status === 'PICKED_UP') {
+      const m = minutesSince(order.ready_at);
+      return m != null ? 'Pronto, in consegna a breve' : null;
+    }
+    if (status === 'ACCEPTED') {
+      const m = minutesSince(order.accepted_at);
+      return m != null ? 'In preparazione · pronto entro ~30 min' : null;
+    }
+    return null;
+  })();
 
   const handleReorder = () => {
     clearCart();
@@ -268,8 +331,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             </p>
           </div>
           <div className="text-right">
-            <div className="text-xs font-bold uppercase tracking-label text-ink-500">Effettuato il</div>
-            <div className="text-base font-bold text-ink-900">{formatDate(order.created_at)}</div>
+            <div className="text-xs font-bold uppercase tracking-label text-ink-500">{etaCaption}</div>
+            <div className="text-base font-bold text-ink-900">{etaLabel}</div>
+            {prepHint && <div className="mt-0.5 text-xs text-ink-500">{prepHint}</div>}
           </div>
         </div>
       </Card>
@@ -452,7 +516,17 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                   <Bike size={20} strokeWidth={2} aria-hidden />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold text-ink-900">{order.rider?.full_name ?? 'Il tuo rider'}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-bold text-ink-900">{order.rider?.full_name ?? 'Il tuo rider'}</p>
+                    {/* Chip ETA "~N min": backend-gated (nessuna colonna eta a backend).
+                        Lo slot esiste e viene popolato solo se l'ETA è ricavabile;
+                        in assenza di un valore reale, viene omesso (niente orari finti). */}
+                    {riderEtaMin != null && (
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-olive-100 px-2 py-0.5 text-[11px] font-bold text-olive-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-olive-600" /> ~{riderEtaMin} min
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-ink-500">
                     {status === 'OUT_FOR_DELIVERY' ? 'In viaggio verso di te'
                       : status === 'PICKED_UP' ? 'Ha ritirato l\'ordine'

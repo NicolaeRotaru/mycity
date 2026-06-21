@@ -1,5 +1,5 @@
 'use client';;
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -18,7 +18,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
-import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock } from 'lucide-react';
+import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock, Banknote } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
@@ -28,6 +28,7 @@ type OrderRow = {
   total_price: number;
   shipping_cost: number;
   delivery_status: OrderStatus;
+  payment_method?: string | null;
   created_at: string;
   accepted_at: string | null;
   ready_at: string | null;
@@ -50,18 +51,82 @@ type OrderRow = {
   }[];
 };
 
+function isCod(method: string | null | undefined): boolean {
+  const m = (method ?? '').toLowerCase();
+  return m === 'cod' || m === 'cash';
+}
+
+/** Modale di rifiuto con motivo (sostituisce il prompt() nativo). Riusa la stessa mutation. */
+function RejectDialog({
+  open, pending, onCancel, onConfirm,
+}: {
+  open: boolean;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState('');
+  useEffect(() => { if (open) setReason(''); }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm animate-fadeIn sm:items-center"
+      onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reject-title"
+    >
+      <div
+        className="w-full overflow-hidden rounded-t-3xl bg-white shadow-2xl animate-slideUp sm:w-auto sm:min-w-[440px] sm:max-w-md sm:rounded-2xl sm:animate-popIn"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="h-1.5 bg-gradient-to-r from-rose-500 via-orange-500 to-accent-500" />
+        <div className="px-6 pb-2 pt-6">
+          <h2 id="reject-title" className="font-serif text-xl font-extrabold text-ink-900">
+            Rifiutare l&apos;ordine?
+          </h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-ink-500">
+            Il motivo sarà visibile al cliente. L&apos;azione non è reversibile.
+          </p>
+          <label className="mt-4 block text-xs font-semibold text-ink-600">Motivo del rifiuto (opzionale)</label>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            autoFocus
+            placeholder="Es. prodotto esaurito, fuori zona di consegna…"
+            className="mt-1.5 w-full resize-none rounded-xl border border-cream-300 px-3 py-2.5 text-sm text-ink-900 focus:border-primary-300 focus:outline-none"
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3 px-6 pb-6 pt-4">
+          <Button variant="secondary" onClick={onCancel} disabled={pending}>Annulla</Button>
+          <Button variant="danger" icon={X} loading={pending} onClick={() => onConfirm(reason.trim())}>
+            Rifiuta ordine
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SellerOrderDetailPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
   const { id } = params;
   const qc = useQueryClient();
+  const [rejectOpen, setRejectOpen] = useState(false);
 
   const { data: order, isLoading } = useQuery({
     queryKey: queryKeys.seller.order(id),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          id, user_id, total_price, shipping_cost, delivery_status, created_at,
+      const sel = (pay: string) => `
+          id, user_id, total_price, shipping_cost, delivery_status,${pay} created_at,
           accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           rider_id,
@@ -70,11 +135,14 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             id, quantity, unit_price,
             products ( name, images )
           )
-        `)
-        .eq('id', id)
-        .single();
-      if (error) throw error;
-      return data as unknown as OrderRow;
+        `;
+      // payment_method serve per la riga "Pagamento" + nota contanti. Se la colonna
+      // non è (ancora) presente in questo ambiente, ricadiamo sulla select senza romperci.
+      const withPay = await supabase.from('orders').select(sel(' payment_method,')).eq('id', id).single();
+      if (!withPay.error) return withPay.data as unknown as OrderRow;
+      const fallback = await supabase.from('orders').select(sel('')).eq('id', id).single();
+      if (fallback.error) throw fallback.error;
+      return fallback.data as unknown as OrderRow;
     },
     refetchInterval: 30_000,
   });
@@ -119,6 +187,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       if (!r.ok) throw new Error(r.reason ?? 'Impossibile rifiutare');
     },
     onSuccess: () => {
+      setRejectOpen(false);
       qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
       qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
       toast.success('Ordine rifiutato');
@@ -157,20 +226,28 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   if (!order) return <EmptyState icon={Package} title="Ordine non trovato" description="L'ordine non esiste o non hai i permessi per vederlo." ctaLabel="Tutti gli ordini" ctaHref="/seller/orders" />;
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
+  const cod = isCod(order.payment_method);
 
   const showPickupCode = ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status) && pickupCode?.code;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/seller/orders" className="text-sm text-primary-700 hover:underline">← Tutti gli ordini</Link>
-          <h1 className="text-2xl font-bold text-ink-900 mt-1">
+          <h1 className="mt-1 font-serif text-2xl font-extrabold text-ink-900">
             Ordine #{order.id.slice(0, 6).toUpperCase()}
           </h1>
           <p className="text-sm text-ink-500">{formatDate(order.created_at)}</p>
         </div>
-        <OrderStatusBadge status={order.delivery_status} />
+        <div className="flex items-center gap-2">
+          {cod && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-olive-50 px-3 py-1 text-xs font-semibold text-olive-700 ring-1 ring-inset ring-olive-200">
+              <Banknote size={14} aria-hidden /> Contanti
+            </span>
+          )}
+          <OrderStatusBadge status={order.delivery_status} />
+        </div>
       </div>
       <OrderTimeline
         status={order.delivery_status}
@@ -204,16 +281,14 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             >
               Accetta ordine
             </Button>
-            <button
-              onClick={() => {
-                const reason = prompt('Motivo del rifiuto (visibile al cliente):');
-                if (reason !== null) reject.mutate(reason || undefined);
-              }}
+            <Button
+              variant="danger"
+              icon={X}
+              onClick={() => setRejectOpen(true)}
               disabled={reject.isPending}
-              className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
             >
-              <X size={16} aria-hidden /> Rifiuta
-            </button>
+              Rifiuta
+            </Button>
           </div>
         </div>
       )}
@@ -262,7 +337,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         </div>
       )}
       {order.delivery_status === 'READY' && !order.rider_id && (
-        <div className="bg-violet-50 border border-violet-200 rounded-xl p-4 text-sm text-violet-800 flex items-center gap-2">
+        <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-800 flex items-center gap-2">
           <Clock size={16} aria-hidden className="shrink-0" /> In attesa che un rider prenda in carico questo ordine.
         </div>
       )}
@@ -271,9 +346,16 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           <Bike size={16} aria-hidden className="shrink-0" /> <span>Rider <strong>{order.rider?.full_name ?? 'assegnato'}</strong> sta gestendo la consegna.</span>
         </div>
       )}
+      {/* CONTANTI: avviso incasso al rider */}
+      {cod && order.delivery_status !== 'CANCELED' && (
+        <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 text-sm text-olive-800 flex items-center gap-2">
+          <Banknote size={16} aria-hidden className="shrink-0 text-olive-700" />
+          <span>Il rider incassa <strong>{formatPrice(order.total_price)}</strong> in contanti alla consegna.</span>
+        </div>
+      )}
       {/* CLIENTE + INDIRIZZO */}
       <div className="bg-white border border-cream-300 rounded-xl p-6">
-        <h2 className="font-semibold text-ink-900 mb-3">Cliente</h2>
+        <h2 className="font-serif font-bold text-ink-900 mb-3">Cliente</h2>
         <div className="text-sm space-y-1 text-ink-700">
           <p className="font-medium text-ink-900">{order.delivery_full_name}</p>
           <p className="flex items-center gap-1.5"><Phone size={14} aria-hidden className="shrink-0 text-ink-400" /> <a href={`tel:${order.delivery_phone}`} className="text-primary-700 hover:underline">{order.delivery_phone}</a></p>
@@ -284,7 +366,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       {/* PRODOTTI */}
       <div className="bg-white border border-cream-300 rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-cream-200">
-          <h2 className="font-semibold text-ink-900">Da preparare</h2>
+          <h2 className="font-serif font-bold text-ink-900">Da preparare</h2>
         </div>
         <div className="divide-y divide-cream-100">
           {order.order_items.map((it) => {
@@ -299,6 +381,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-ink-900 truncate">{it.products?.name ?? 'Prodotto'}</p>
+                  <p className="text-xs text-ink-500">{formatPrice(Number(it.unit_price))} × {it.quantity}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="font-bold font-serif text-lg text-ink-900">×{it.quantity}</p>
@@ -311,9 +394,17 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         <div className="px-6 py-4 border-t border-cream-200 bg-cream-50 text-sm space-y-1">
           <div className="flex justify-between"><span className="text-ink-600">Subtotale</span><span>{formatPrice(subtotal)}</span></div>
           <div className="flex justify-between"><span className="text-ink-600">Spedizione</span><span>{order.shipping_cost > 0 ? formatPrice(order.shipping_cost) : 'GRATUITA'}</span></div>
+          <div className="flex justify-between"><span className="text-ink-600">Pagamento</span><span className="font-medium text-ink-800">{cod ? 'Contanti alla consegna' : 'Carta (online)'}</span></div>
           <div className="flex justify-between font-bold text-base pt-1 border-t border-cream-300"><span>Totale</span><span className="font-serif text-primary-800">{formatPrice(order.total_price)}</span></div>
         </div>
       </div>
+
+      <RejectDialog
+        open={rejectOpen}
+        pending={reject.isPending}
+        onCancel={() => setRejectOpen(false)}
+        onConfirm={(reason) => reject.mutate(reason || undefined)}
+      />
     </div>
   );
 }

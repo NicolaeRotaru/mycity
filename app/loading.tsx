@@ -7,9 +7,10 @@ import { LoadingState } from '@/components/ui/LoadingState';
  */
 export default function RootLoading() {
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-12">
+    <div className="container mx-auto px-4 sm:px-6 py-12 min-h-[70vh] flex flex-col justify-center">
       <LoadingState
         variant="cards"
+        cards={4}
         message="Stiamo caricando…"
         description="Prepariamo i prodotti dei negozi vicino a te."
       />

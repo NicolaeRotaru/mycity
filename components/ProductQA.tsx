@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Send } from 'lucide-react';
+import { MessageSquare, Send, ThumbsUp, BadgeCheck } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { useProfile } from './hooks/useProfile';
@@ -44,6 +44,17 @@ export default function ProductQA({ productId, sellerId }: Props) {
   const { isAuthenticated, profile } = useProfile();
   const [text, setText] = useState('');
   const [answerText, setAnswerText] = useState<Record<string, string>>({});
+  // Voto "Utile" sulle risposte: stato locale OTTIMISTICO (UI-only). Non esiste
+  // ancora una colonna/endpoint per il conteggio voti su product_questions; quando
+  // ci sarà, basta sostituire questo Set con la mutation persistente.
+  const [helpfulVotes, setHelpfulVotes] = useState<Set<string>>(new Set());
+  const toggleHelpful = (qid: string) =>
+    setHelpfulVotes((prev) => {
+      const next = new Set(prev);
+      if (next.has(qid)) next.delete(qid);
+      else next.add(qid);
+      return next;
+    });
 
   const { data: questions = [], isLoading } = useQuery({
     queryKey: queryKeys.qa.product(productId),
@@ -197,11 +208,29 @@ export default function ProductQA({ productId, sellerId }: Props) {
                     <span className="text-xs text-olive-700 font-semibold uppercase tracking-wider">
                       Risposta del venditore
                     </span>
+                    {/* Badge "verificato": la risposta proviene dal venditore del
+                        prodotto (RLS DB-side garantisce che solo lui possa rispondere). */}
+                    <span className="inline-flex items-center gap-1 rounded-full bg-olive-50 px-2 py-0.5 text-[10px] font-bold text-olive-700">
+                      <BadgeCheck size={11} aria-hidden /> Venditore verificato
+                    </span>
                     {q.answered_at && (
                       <span className="text-xs text-ink-400">· {formatDate(q.answered_at)}</span>
                     )}
                   </div>
                   <p className="text-ink-700 ml-9">{q.answer}</p>
+                  {/* Affordance "Utile" (voto locale ottimistico, vedi nota in helpfulVotes) */}
+                  <button
+                    type="button"
+                    onClick={() => toggleHelpful(q.id)}
+                    aria-pressed={helpfulVotes.has(q.id)}
+                    className={`ml-9 mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
+                      helpfulVotes.has(q.id)
+                        ? 'border-primary-400 bg-primary-50 text-primary-700'
+                        : 'border-cream-300 text-ink-500 hover:text-ink-800'
+                    }`}
+                  >
+                    <ThumbsUp size={13} aria-hidden /> Utile{helpfulVotes.has(q.id) ? ' · 1' : ''}
+                  </button>
                 </div>
               ) : isSellerOfThis ? (
                 <div className="pl-9 border-l-2 border-accent-300 ml-3">

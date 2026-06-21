@@ -7,12 +7,17 @@ import { useQuery } from '@tanstack/react-query';
 import {
   User, Package, MapPin, Heart, Bell, Sparkles,
   Gift, UserPlus, Settings, Trophy, LogOut,
+  MessageCircle, RotateCcw,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
+import { useNotificationsCount } from '@/components/hooks/useNotificationsCount';
+import { useMessagesUnread } from '@/components/hooks/useMessagesUnread';
 
-type NavItem = { href: string; icon: LucideIcon; label: string };
+/** Chiave del badge "non letto" per agganciare il conteggio alla voce nav. */
+type NavBadge = 'notifications' | 'messages';
+type NavItem = { href: string; icon: LucideIcon; label: string; badge?: NavBadge };
 type NavGroup = { group: string; items: NavItem[] };
 
 /**
@@ -26,11 +31,13 @@ const NAV: NavGroup[] = [
   { group: 'Account', items: [
     { href: '/profile', icon: User, label: 'Profilo' },
     { href: '/orders', icon: Package, label: 'Ordini' },
+    { href: '/returns', icon: RotateCcw, label: 'Resi' },
     { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
   ] },
   { group: 'Attività', items: [
     { href: '/favorites', icon: Heart, label: 'Preferiti' },
-    { href: '/notifications', icon: Bell, label: 'Notifiche' },
+    { href: '/messages', icon: MessageCircle, label: 'Messaggi', badge: 'messages' },
+    { href: '/notifications', icon: Bell, label: 'Notifiche', badge: 'notifications' },
   ] },
   { group: 'Premi', items: [
     { href: '/profile/loyalty', icon: Sparkles, label: 'Punti' },
@@ -75,6 +82,15 @@ export default function AccountSidebar() {
   const router = useRouter();
   const { profile, userEmail } = useProfile();
   const since = useMemberSince();
+  const notifCount = useNotificationsCount();
+  const messagesUnread = useMessagesUnread();
+
+  // Conteggio "non letto" per la pill accanto alla voce nav (0 = nessuna pill).
+  const badgeCount = (badge?: NavBadge): number => {
+    if (badge === 'notifications') return notifCount;
+    if (badge === 'messages') return messagesUnread;
+    return 0;
+  };
 
   const name = profile?.full_name || profile?.email || userEmail || 'Il mio account';
   const email = profile?.email || userEmail || '';
@@ -130,6 +146,7 @@ export default function AccountSidebar() {
               {sec.items.map((n) => {
                 const on = isActive(pathname, n.href);
                 const Icon = n.icon;
+                const count = badgeCount(n.badge);
                 return (
                   <li key={n.href}>
                     <Link
@@ -148,6 +165,14 @@ export default function AccountSidebar() {
                         aria-hidden
                       />
                       {n.label}
+                      {count > 0 && (
+                        <span
+                          className="ml-auto inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1.5 text-[11px] font-bold leading-none text-white"
+                          aria-label={`${count} non lett${count === 1 ? 'a' : 'e'}`}
+                        >
+                          {count > 99 ? '99+' : count}
+                        </span>
+                      )}
                     </Link>
                   </li>
                 );

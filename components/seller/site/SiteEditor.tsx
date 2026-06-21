@@ -12,6 +12,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { LoadingState } from '@/components/ui/LoadingState';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { normalizeSite, storeSiteSchema, type StoreSite, type SitePage } from '@/lib/store-site';
+import { normalizeCustomization, accentHex } from '@/lib/store-customization';
 import ThemePicker from './ThemePicker';
 import PageListEditor from './PageListEditor';
 import PageEditor from './PageEditor';
@@ -116,6 +117,13 @@ export default function SiteEditor() {
   const setEditingPage = (next: SitePage) =>
     commit({ ...site, pages: site.pages.map((p) => (p.id === next.id ? next : p)) });
 
+  // Accent + nome del negozio per tingere/intestare l'anteprima dal vivo. L'accent
+  // vive in store_customization (salvato a parte dalla schermata "Dettagli negozio"):
+  // qui lo leggiamo in sola lettura per l'anteprima, senza toccarne la persistenza.
+  const accent = accentHex(normalizeCustomization(profile?.store_customization));
+  const storeName = (profile?.store_name as string | null) ?? '';
+  const storeSlug = storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'il-tuo-negozio';
+
   // mr-16 su mobile: lascia libero l'angolo in basso a destra dove sta il FAB
   // assistenza (SupportChatButton, fixed bottom-24 right-4), così non copre il
   // bottone. Badge impilato sopra per non rubare larghezza.
@@ -153,7 +161,16 @@ export default function SiteEditor() {
   if (editing) {
     return (
       <div className="space-y-6">
-        <PageEditor site={site} page={editing} onChange={setEditingPage} onBack={backToOverview} />
+        <PageEditor
+          site={site}
+          page={editing}
+          onChange={setEditingPage}
+          onBack={backToOverview}
+          theme={site.theme}
+          accent={accent}
+          storeName={storeName}
+          storeSlug={storeSlug}
+        />
         {saveBar}
       </div>
     );
@@ -203,7 +220,21 @@ export default function SiteEditor() {
       {/* Tema */}
       <section className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
         <PanelHeader icon={Palette} tintBg="bg-accent-100" tintFg="text-accent-700" title="Tema del sito" desc="Lo stile generale della tua vetrina." />
-        <ThemePicker value={site.theme} onChange={(theme) => commit({ ...site, theme })} />
+        <ThemePicker value={site.theme} onChange={(theme) => commit({ ...site, theme })} accent={accent} />
+        {/* Colore del negozio (accent): vive in store_customization, si modifica nei
+            Dettagli negozio. Qui lo mostriamo per dare il quadro completo del look. */}
+        <button
+          type="button"
+          onClick={openDetails}
+          className="group mt-4 flex w-full items-center gap-3 rounded-xl border border-cream-200 bg-cream-50/60 px-4 py-3 text-left transition-colors hover:border-primary-300"
+        >
+          <span className="h-7 w-7 shrink-0 rounded-full ring-2 ring-white shadow-warm-sm" style={{ backgroundColor: accent }} aria-hidden />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-ink-900">Colore del negozio</span>
+            <span className="block text-xs text-ink-500">Tinge intestazione, badge e pulsanti. Si cambia nei Dettagli negozio.</span>
+          </span>
+          <ChevronRight size={18} className="shrink-0 text-ink-300 transition-all group-hover:text-primary-600 group-hover:translate-x-0.5" aria-hidden />
+        </button>
       </section>
 
       {/* Pagine */}

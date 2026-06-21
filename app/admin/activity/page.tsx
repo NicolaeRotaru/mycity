@@ -37,15 +37,28 @@ type EventRow = {
   user: { full_name: string | null; store_name: string | null; role: string | null } | null;
 };
 
-const CATEGORY_META: Record<string, { label: string; icon: typeof Eye; color: string }> = {
-  visitor:    { label: 'Visite',      icon: Globe,        color: 'sky' },
-  auth:       { label: 'Accessi',     icon: LogIn,        color: 'violet' },
-  commerce:   { label: 'Commercio',   icon: ShoppingBag,  color: 'emerald' },
-  catalog:    { label: 'Catalogo',    icon: Package,      color: 'amber' },
-  content:    { label: 'Contenuti',   icon: MessageSquare,color: 'pink' },
-  user:       { label: 'Utenti',      icon: Users,        color: 'indigo' },
-  moderation: { label: 'Moderazione', icon: ShieldAlert,  color: 'rose' },
-  system:     { label: 'Sistema',     icon: Cpu,          color: 'slate' },
+type Tone = 'primary' | 'accent' | 'olive' | 'secondary';
+
+/**
+ * Classi STATICHE per tono (niente `bg-${color}-…` interpolato: il JIT di Tailwind
+ * non lo includerebbe nel safelist). Allineato alla palette warm del mockup admin.
+ */
+const TONE: Record<Tone, { soft: string; icon: string; kpiBorder: string; chip: string; chipText: string }> = {
+  primary:   { soft: 'bg-primary-100',   icon: 'text-primary-600',   kpiBorder: 'border-primary-200',   chip: 'bg-primary-100',   chipText: 'text-primary-700' },
+  accent:    { soft: 'bg-accent-100',    icon: 'text-accent-600',    kpiBorder: 'border-accent-200',    chip: 'bg-accent-100',    chipText: 'text-accent-700' },
+  olive:     { soft: 'bg-olive-100',     icon: 'text-olive-600',     kpiBorder: 'border-olive-200',     chip: 'bg-olive-100',     chipText: 'text-olive-700' },
+  secondary: { soft: 'bg-secondary-100', icon: 'text-secondary-600', kpiBorder: 'border-secondary-200', chip: 'bg-secondary-100', chipText: 'text-secondary-700' },
+};
+
+const CATEGORY_META: Record<string, { label: string; icon: typeof Eye; color: Tone }> = {
+  visitor:    { label: 'Visite',      icon: Globe,        color: 'primary' },
+  auth:       { label: 'Accessi',     icon: LogIn,        color: 'accent' },
+  commerce:   { label: 'Commercio',   icon: ShoppingBag,  color: 'olive' },
+  catalog:    { label: 'Catalogo',    icon: Package,      color: 'accent' },
+  content:    { label: 'Contenuti',   icon: MessageSquare,color: 'primary' },
+  user:       { label: 'Utenti',      icon: Users,        color: 'primary' },
+  moderation: { label: 'Moderazione', icon: ShieldAlert,  color: 'secondary' },
+  system:     { label: 'Sistema',     icon: Cpu,          color: 'olive' },
 };
 
 const DEVICE_ICON: Record<string, typeof Eye> = {
@@ -218,11 +231,11 @@ export default function AdminActivityPage() {
 
       {/* KPI in tempo reale */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <Kpi icon={Radio} label="Online ora" value={summary.online} color="emerald" hint="ultimi 5 min" />
-        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="sky" hint="unici" />
-        <Kpi icon={LogIn} label="Accessi 24h" value={summary.logins} color="violet" />
-        <Kpi icon={Globe} label="Viste anonime" value={summary.anonViews} color="amber" />
-        <Kpi icon={Activity} label="Viste loggati" value={summary.loggedInViews} color="indigo" />
+        <Kpi icon={Radio} label="Online ora" value={summary.online} color="olive" hint="ultimi 5 min" />
+        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="primary" hint="unici" />
+        <Kpi icon={LogIn} label="Accessi 24h" value={summary.logins} color="accent" />
+        <Kpi icon={Globe} label="Viste anonime" value={summary.anonViews} color="primary" />
+        <Kpi icon={Activity} label="Viste loggati" value={summary.loggedInViews} color="secondary" />
       </div>
 
       {/* Categorie (clic per filtrare) */}
@@ -240,7 +253,7 @@ export default function AdminActivityPage() {
                   active ? 'border-primary-400 bg-primary-50' : 'border-cream-300 bg-white hover:bg-cream-50'
                 }`}
               >
-                <Icon size={16} className={`text-${meta.color}-600`} strokeWidth={2.2} aria-hidden />
+                <Icon size={16} className={TONE[meta.color].icon} strokeWidth={2.2} aria-hidden />
                 <span className="text-lg font-bold text-ink-900 leading-none">{summary.byCategory[key] ?? 0}</span>
                 <span className="text-[11px] text-ink-500 truncate w-full">{meta.label}</span>
               </button>
@@ -379,11 +392,12 @@ export default function AdminActivityPage() {
   );
 }
 
-function Kpi({ icon: Icon, label, value, color, hint }: { icon: typeof Eye; label: string; value: number; color: string; hint?: string }) {
+function Kpi({ icon: Icon, label, value, color, hint }: { icon: typeof Eye; label: string; value: number; color: Tone; hint?: string }) {
+  const t = TONE[color];
   return (
-    <div className={`bg-white border-2 border-${color}-200 rounded-xl p-4`}>
+    <div className={`bg-white border-2 ${t.kpiBorder} rounded-xl p-4`}>
       <div className="flex items-center justify-between">
-        <Icon size={18} className={`text-${color}-600`} aria-hidden />
+        <Icon size={18} className={t.icon} aria-hidden />
         {hint && <span className="text-[10px] uppercase tracking-wide text-ink-400">{hint}</span>}
       </div>
       <p className="text-2xl font-bold text-ink-900 mt-1">{value}</p>
@@ -414,8 +428,8 @@ function FeedRow({ row: r }: { row: EventRow }) {
     <div className="px-4 py-3 hover:bg-cream-50 transition-colors">
       <div className="flex items-baseline justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex items-start gap-2">
-          <span className={`mt-0.5 inline-flex items-center justify-center w-6 h-6 rounded-lg bg-${meta.color}-100 shrink-0`}>
-            <Icon size={13} className={`text-${meta.color}-700`} aria-hidden />
+          <span className={`mt-0.5 inline-flex items-center justify-center w-6 h-6 rounded-lg ${TONE[meta.color].chip} shrink-0`}>
+            <Icon size={13} className={TONE[meta.color].chipText} aria-hidden />
           </span>
           <div className="min-w-0">
             <p className="font-semibold text-ink-900 text-sm break-words">{r.summary ?? r.event_type}</p>

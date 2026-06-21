@@ -130,7 +130,7 @@ export default function CartPage() {
                     <div className="flex-1 flex flex-col justify-between min-w-0">
                       <Link
                         href={`/product/${item.id}`}
-                        className="font-semibold hover:text-primary-700 line-clamp-2"
+                        className="text-base font-semibold leading-snug text-ink-900 hover:text-primary-700 line-clamp-2"
                       >
                         {item.name}
                       </Link>
@@ -142,19 +142,19 @@ export default function CartPage() {
                       </p>
                       <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                         <div className="flex items-center gap-2">
-                          <div className="flex items-center border border-cream-300 rounded-lg">
+                          <div className="flex items-center border border-cream-300 rounded-full">
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity - 1, item.variantId)}
                               aria-label="Diminuisci quantità"
-                              className="w-8 h-8 hover:bg-cream-100 rounded-l-lg"
+                              className="w-8 h-8 hover:bg-cream-100 rounded-l-full"
                             >−</button>
                             <span className="w-8 text-center font-semibold">{item.quantity}</span>
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
                               aria-label="Aumenta quantità"
-                              className="w-8 h-8 hover:bg-cream-100 rounded-r-lg"
+                              className="w-8 h-8 hover:bg-cream-100 rounded-r-full"
                             >+</button>
                           </div>
                           <button
@@ -199,9 +199,14 @@ export default function CartPage() {
                 <span className="font-semibold">{formatPrice(total)}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-ink-600">Spedizione</span>
+                <span className="text-ink-600">
+                  Spedizione
+                  {!freeShipping && (
+                    <span className="block text-2xs text-ink-400 font-normal">stima · calcolata al checkout</span>
+                  )}
+                </span>
                 <span className={`font-semibold ${freeShipping ? 'text-olive-600' : 'text-ink-900'}`}>
-                  {freeShipping ? 'GRATUITA' : formatPrice(shippingCost)}
+                  {freeShipping ? 'Gratis' : formatPrice(shippingCost)}
                 </span>
               </div>
             </div>

@@ -43,6 +43,7 @@ export default function TermsPage() {
   return (
     <LegalLayout
       title="Termini di servizio"
+      active="/terms"
       meta={<>Versione {VERSION} — in vigore dal {EFFECTIVE_DATE}</>}
       summary="MyCity mette in contatto te e i negozi di Piacenza: paghi alla consegna, hai 14 giorni per il recesso e i tuoi dati restano tuoi. Il contratto di vendita si conclude direttamente con il negozio."
       toc={TOC}

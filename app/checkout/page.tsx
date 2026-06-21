@@ -18,11 +18,12 @@ import { validateCoupon, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
+import { Textarea } from '@/components/ui/Field';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { StepCard } from '@/components/checkout/StepCard';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
+import { DeliverySlotPicker, resolveSlotLabel, SLOT_DEFAULTS } from '@/components/checkout/DeliverySlotPicker';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
@@ -308,6 +309,15 @@ export default function CheckoutPage() {
   // Ritiro in negozio (-10%, no spedizione)
   const [pickupInStore, setPickupInStore] = useState(false);
 
+  // Fascia di consegna ("Quando vuoi riceverlo", step 2). Solo presentazione
+  // lato client + una stringa leggibile persistita su orders.delivery_slot.
+  // Nessun impatto su totali/spedizione: la matematica resta invariata.
+  const [slotDay, setSlotDay] = useState<'now' | 'today' | 'tomorrow'>('today');
+  const [slotTodayTime, setSlotTodayTime] = useState(SLOT_DEFAULTS.todayTime);
+  const [slotTomorrowTime, setSlotTomorrowTime] = useState(SLOT_DEFAULTS.tomorrowTime);
+  // null quando ritiro in negozio (nessuna consegna) o non applicabile.
+  const deliverySlot = resolveSlotLabel(slotDay, slotTodayTime, slotTomorrowTime, pickupInStore);
+
   // Usa il credito MyCity (opt-in, default sì): applicato solo agli ordini COD.
   const [useCredit, setUseCredit] = useState(true);
 
@@ -407,6 +417,7 @@ export default function CheckoutPage() {
           couponCode: appliedCoupon?.coupon.code ?? null,
           pickupInStore,
           useCredit,
+          deliverySlot,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -490,6 +501,7 @@ export default function CheckoutPage() {
           couponDiscountCents,
           pickupDiscountCents,
           pickupInStore,
+          deliverySlot,
         }),
       });
       const data = await res.json();
@@ -630,15 +642,29 @@ export default function CheckoutPage() {
                 <Store size={16} className="text-olive-700 shrink-0" aria-hidden /> Ritiro in negozio selezionato — nessun costo di consegna. Vai tu quando l&apos;ordine è pronto.
               </div>
             ) : (
-              <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3">
-                <div>
-                  <p className="font-bold text-ink-900">Consegna a domicilio</p>
-                  <p className="text-sm text-ink-600">Standard 24–48h{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
+              <>
+                {/* Chooser fascia di consegna (day tiles + finestre orarie). Solo
+                    a domicilio: il ritiro in negozio non richiede una fascia. */}
+                <DeliverySlotPicker
+                  day={slotDay}
+                  onDayChange={setSlotDay}
+                  todayTime={slotTodayTime}
+                  onTodayTimeChange={setSlotTodayTime}
+                  tomorrowTime={slotTomorrowTime}
+                  onTomorrowTimeChange={setSlotTomorrowTime}
+                />
+
+                {/* Metodo + costo di consegna (invariato). */}
+                <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
+                  <div>
+                    <p className="font-bold text-ink-900">Consegna a domicilio</p>
+                    <p className="text-sm text-ink-600">Standard 24–48h{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
+                  </div>
+                  <span className="font-serif text-lg font-extrabold text-ink-900">
+                    {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
+                  </span>
                 </div>
-                <span className="font-serif text-lg font-extrabold text-ink-900">
-                  {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
-                </span>
-              </div>
+              </>
             )}
           </StepCard>
 
@@ -649,37 +675,11 @@ export default function CheckoutPage() {
               onChange={(m) => { setPaymentMethod(m); trackCheckoutStep('payment_method', { method: m }); }}
               stripeAvailable={stripeAvailable}
               multiSeller={groups.length > 1}
+              pickupInStore={pickupInStore}
+              onPickupChange={setPickupInStore}
+              pickupDiscount={pickupDiscount}
+              pickupDiscountPercent={PICKUP_DISCOUNT_PERCENT}
             />
-
-            {/* RITIRO IN NEGOZIO — tile metodo con quadrato-icona colorato + badge */}
-            <label className={`mt-3 flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
-              pickupInStore ? 'border-olive-400 bg-olive-50' : 'border-cream-300 bg-white hover:border-olive-200'
-            }`}>
-              <input
-                type="checkbox"
-                checked={pickupInStore}
-                onChange={(e) => setPickupInStore(e.target.checked)}
-                className="mt-2.5 w-4 h-4 accent-olive-600"
-              />
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-olive-100 text-olive-700">
-                <Store size={20} aria-hidden />
-              </span>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
-                  {pickupInStore ? (
-                    <span className="bg-olive-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
-                      −{formatPrice(pickupDiscount)}
-                    </span>
-                  ) : (
-                    <Badge variant="new">Sconto {PICKUP_DISCOUNT_PERCENT}%</Badge>
-                  )}
-                </div>
-                <p className="text-sm text-ink-600 mt-0.5">
-                  Niente spedizione, sconto subito. Vai tu al negozio quando l&apos;ordine è pronto.
-                </p>
-              </div>
-            </label>
 
             {/* Credito MyCity — solo COD in questo flusso */}
             {paymentMethod === 'cod' && walletEuro > 0 && (
@@ -701,6 +701,21 @@ export default function CheckoutPage() {
                 </div>
               </label>
             )}
+
+            {/* NOTE PER IL RIDER — spostate qui (step conferma) come da mockup.
+                Stesso `name="notes"` + handler: aggiorna `form.notes` nello state,
+                che è ciò che le mutation di submit leggono. Nessun cambio di logica. */}
+            <div className="mt-4">
+              <Textarea
+                label="Note per il rider (opzionale)"
+                name="notes"
+                value={form.notes}
+                onChange={handleChange}
+                rows={2}
+                placeholder="Es. citofono Rossi, suonare al 2° piano…"
+                className="resize-none"
+              />
+            </div>
           </StepCard>
 
           {/* RIEPILOGO PER NEGOZIO */}

@@ -23,6 +23,7 @@ import StoriesCarousel from '@/components/home/StoriesCarousel';
 import HomeEvents from '@/components/home/HomeEvents';
 import PromoDeals from '@/components/home/PromoDeals';
 import TrendingNow from '@/components/home/TrendingNow';
+import ReorderRail from '@/components/home-sections/ReorderRail';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
 
 /**
@@ -116,7 +117,7 @@ function HomeBlock({
                     ctaId="hero_secondary"
                     location="hero"
                     variant={heroVariant}
-                    className="inline-flex items-center gap-2 bg-white hover:bg-surface-100 text-ink-900 border border-surface-300 px-6 py-3 rounded-full font-semibold transition-colors"
+                    className="inline-flex items-center gap-2 bg-white hover:bg-cream-50 text-ink-900 border border-cream-300 px-6 py-3 rounded-full font-semibold transition-colors"
                   >
                     <Store size={18} strokeWidth={2.2} />
                     Esplora i negozi
@@ -298,6 +299,11 @@ function HomeBlock({
         </section>
       );
     }
+
+    /* --------------------------------------------------------- ORDINA DI NUOVO */
+    // Rail di riordino: self-fetch + self-hide (ospiti / zero ordini) nel componente.
+    case 'reorder':
+      return <ReorderRail />;
 
     /* -------------------------------------------------------------- NEWSLETTER */
     case 'newsletter': {

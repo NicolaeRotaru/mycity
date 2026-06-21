@@ -1,30 +1,44 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, ChevronDown } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Settings2 } from 'lucide-react';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
-import { slugify, RESERVED_SLUGS, homePage, type StoreSite, type SitePage } from '@/lib/store-site';
+import { slugify, RESERVED_SLUGS, homePage, type StoreSite, type SitePage, type ThemeKey } from '@/lib/store-site';
 import PageSectionsEditor from './PageSectionsEditor';
+import SitePreview from './SitePreview';
 
 /**
- * Schermata di editing di una singola pagina: freccia indietro alla panoramica,
- * impostazioni della pagina (titolo, slug, visibilità, SEO) in un pannello
- * collassabile e l'editor delle sezioni. Usata da SiteEditor quando si "entra" in
- * una pagina (vista a schermate separate).
+ * Schermata di editing di una singola pagina, in layout a due colonne (≥lg):
+ *  - sinistra: freccia indietro, impostazioni pagina (collassabili) ed editor dei
+ *    blocchi/sezioni;
+ *  - destra: anteprima dal vivo (sticky) che rispecchia la bozza in tempo reale.
+ *
+ * Su mobile le due colonne si impilano (anteprima sotto l'editor). La sezione
+ * selezionata nell'editor viene evidenziata nell'anteprima.
  */
 export default function PageEditor({
   site,
   page,
   onChange,
   onBack,
+  theme,
+  accent,
+  storeName,
+  storeSlug,
 }: {
   site: StoreSite;
   page: SitePage;
   onChange: (p: SitePage) => void;
   onBack: () => void;
+  theme: ThemeKey;
+  accent: string;
+  storeName: string;
+  storeSlug: string;
 }) {
   const isHome = homePage(site).id === page.id;
   const [showSettings, setShowSettings] = useState(false);
+  // Sezione "in modifica": evidenziata nell'anteprima (lifted da PageSectionsEditor).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const setPage = (patch: Partial<SitePage>) => onChange({ ...page, ...patch });
 
   const slugError = (): string | undefined => {
@@ -50,47 +64,64 @@ export default function PageEditor({
         <span className="text-xs text-ink-400">{isHome ? '/' : `/${page.slug}`}</span>
       </div>
 
-      {/* Impostazioni pagina — collassabili, così non rubano spazio all'editing delle sezioni */}
-      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowSettings((s) => !s)}
-          aria-expanded={showSettings}
-          className="w-full flex items-center justify-between gap-2 px-5 py-4 text-left"
-        >
-          <span className="font-semibold text-ink-900">Impostazioni pagina</span>
-          <ChevronDown size={18} className={`text-ink-400 transition-transform ${showSettings ? 'rotate-180' : ''}`} aria-hidden />
-        </button>
-        {showSettings && (
-          <div className="border-t border-cream-200 px-5 py-4 space-y-3">
-            <Input label="Titolo" value={page.title} maxLength={60} onChange={(e) => setPage({ title: e.target.value })} />
-            {!isHome && (
-              <>
-                <Input
-                  label="Indirizzo pagina (slug)"
-                  value={page.slug}
-                  onChange={(e) => setPage({ slug: slugify(e.target.value) })}
-                  error={slugError()}
-                  hint={`La pagina sarà su /store/…/${page.slug || '…'}`}
-                />
-                <Checkbox
-                  label="Pagina nascosta (raggiungibile solo con il link diretto, non nel menu)"
-                  checked={page.visibility === 'hidden'}
-                  onChange={(e) => setPage({ visibility: e.target.checked ? 'hidden' : 'public' })}
-                />
-              </>
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(360px,440px)]">
+        {/* ── Colonna editor ── */}
+        <div className="space-y-4">
+          {/* Impostazioni pagina — collassabili, così non rubano spazio ai blocchi */}
+          <div className="bg-white border border-cream-300 rounded-2xl shadow-warm overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowSettings((s) => !s)}
+              aria-expanded={showSettings}
+              className="w-full flex items-center justify-between gap-2 px-5 py-4 text-left"
+            >
+              <span className="inline-flex items-center gap-2 font-semibold text-ink-900">
+                <Settings2 size={16} className="text-ink-400" aria-hidden /> Impostazioni pagina
+              </span>
+              <ChevronDown size={18} className={`text-ink-400 transition-transform ${showSettings ? 'rotate-180' : ''}`} aria-hidden />
+            </button>
+            {showSettings && (
+              <div className="border-t border-cream-200 px-5 py-4 space-y-3">
+                <Input label="Titolo" value={page.title} maxLength={60} onChange={(e) => setPage({ title: e.target.value })} />
+                {!isHome && (
+                  <>
+                    <Input
+                      label="Indirizzo pagina (slug)"
+                      value={page.slug}
+                      onChange={(e) => setPage({ slug: slugify(e.target.value) })}
+                      error={slugError()}
+                      hint={`La pagina sarà su /store/…/${page.slug || '…'}`}
+                    />
+                    <Checkbox
+                      label="Pagina nascosta (raggiungibile solo con il link diretto, non nel menu)"
+                      checked={page.visibility === 'hidden'}
+                      onChange={(e) => setPage({ visibility: e.target.checked ? 'hidden' : 'public' })}
+                    />
+                  </>
+                )}
+                <Input label="Titolo SEO (opzionale)" value={page.seo?.title ?? ''} maxLength={70} onChange={(e) => setPage({ seo: { ...page.seo, title: e.target.value } })} />
+                <Textarea label="Descrizione SEO (opzionale)" rows={2} maxLength={180} value={page.seo?.description ?? ''} onChange={(e) => setPage({ seo: { ...page.seo, description: e.target.value } })} />
+              </div>
             )}
-            <Input label="Titolo SEO (opzionale)" value={page.seo?.title ?? ''} maxLength={70} onChange={(e) => setPage({ seo: { ...page.seo, title: e.target.value } })} />
-            <Textarea label="Descrizione SEO (opzionale)" rows={2} maxLength={180} value={page.seo?.description ?? ''} onChange={(e) => setPage({ seo: { ...page.seo, description: e.target.value } })} />
           </div>
-        )}
-      </div>
 
-      {/* Sezioni della pagina */}
-      <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">
-        <h2 className="font-semibold text-ink-900 mb-1">Sezioni</h2>
-        <p className="text-sm text-ink-500 mb-4">Aggiungi, riordina, mostra/nascondi e configura i blocchi di questa pagina.</p>
-        <PageSectionsEditor page={page} onChange={onChange} />
+          {/* Blocchi della pagina */}
+          <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-5 sm:p-6">
+            <h2 className="font-serif text-lg font-bold text-ink-900">Blocchi</h2>
+            <p className="text-sm text-ink-500 mb-4">Aggiungi, riordina, mostra/nascondi e configura i blocchi di questa pagina.</p>
+            <PageSectionsEditor page={page} onChange={onChange} selectedId={selectedId} onSelect={setSelectedId} />
+          </div>
+        </div>
+
+        {/* ── Colonna anteprima ── */}
+        <SitePreview
+          page={page}
+          theme={theme}
+          accent={accent}
+          storeName={storeName}
+          storeSlug={storeSlug}
+          selectedId={selectedId}
+        />
       </div>
     </div>
   );
