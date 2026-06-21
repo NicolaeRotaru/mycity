@@ -45,6 +45,10 @@ const Body = z.object({
   // Opt-in: usa il credito MyCity (gift card / punti convertiti) per scalare il
   // totale. L'importo applicato è deciso SERVER-SIDE (addebito atomico), mai dal client.
   useCredit: z.boolean().default(false),
+  // Fascia di consegna scelta (es. "Oggi · 18:00–20:00"). Etichetta informativa
+  // persistita su orders.delivery_slot; null per ritiro o se non scelta. Non
+  // influisce su prezzi/spedizione.
+  deliverySlot: z.string().max(120).optional().nullable(),
 });
 
 /**
@@ -307,6 +311,8 @@ export const POST = withAuthRateLimit(
           wallet_applied_cents: walletAppliedCents,
           coupon_code: validatedCouponCode,
           pickup_in_store: body.pickupInStore,
+          // Fascia di consegna scelta dal buyer (null per ritiro / non scelta).
+          delivery_slot: body.pickupInStore ? null : (body.deliverySlot ?? null),
           payment_method: 'cod',
           payment_status: 'PENDING',
           delivery_status: 'NEW',

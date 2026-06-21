@@ -31,7 +31,7 @@ describe('normalizeHomeSite / defaultHomeSite', () => {
     const site = defaultHomeSite();
     expect(site.sections.map((s) => s.type)).toEqual([
       'hero', 'howItWorks', 'categories', 'dropOfDay', 'popularProducts',
-      'liveActivity', 'nearbyStores', 'trustRow', 'newsletter', 'sellerCta',
+      'liveActivity', 'nearbyStores', 'reorder', 'trustRow', 'newsletter', 'sellerCta',
     ]);
     expect(site.sections.every((s) => s.enabled)).toBe(true);
   });

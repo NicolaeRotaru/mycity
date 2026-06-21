@@ -11,6 +11,7 @@ import ConfettiBurst from '@/components/ConfettiBurst';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { formatPrice } from '@/lib/format';
 import { addToCart, clearCart } from '@/lib/cart';
+import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { toast } from 'sonner';
 import {
   BUYER_TIMELINE,
@@ -205,11 +206,23 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const isCancellable = status === 'NEW';
   const riderPhase = order.rider_id && (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY' || status === 'ASSIGNED');
 
-  // ETA rider in minuti: backend-gated. Lo schema ordini non espone un'ETA né
-  // dati (distanza/velocità) da cui derivarla in modo affidabile lato client,
-  // quindi resta null e il chip "~N min" viene omesso finché non c'è un valore
-  // reale. Quando il backend esporrà una colonna eta, valorizzare qui.
-  const riderEtaMin: number | null = null;
+  // ETA rider in minuti: DERIVATA dalla distanza rider→cliente (haversine su
+  // rider_lat/lng → delivery_lat/lng) a velocità media urbana (~25 km/h, vedi
+  // lib/geo.deliveryEtaMinutes con prep=0: il rider è già in viaggio). Mostrata
+  // SOLO in OUT_FOR_DELIVERY e solo se entrambe le coppie di coordinate esistono;
+  // altrimenti resta null e il chip "~N min" viene omesso (niente stime finte).
+  const riderEtaMin: number | null =
+    status === 'OUT_FOR_DELIVERY'
+    && order.rider_lat != null && order.rider_lng != null
+    && order.delivery_lat != null && order.delivery_lng != null
+      ? Math.max(
+          1,
+          deliveryEtaMinutes(
+            haversineKm(order.rider_lat, order.rider_lng, order.delivery_lat, order.delivery_lng),
+            0,
+          ),
+        )
+      : null;
 
   // Stato hero: serif heading + sottotitolo coerenti con lo stato corrente.
   const HeroIcon = isDelivered ? CheckCircle2 : ORDER_STATUS_ICON[status];
@@ -235,17 +248,36 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   };
   const heroSub = HERO_SUBTITLE[status] ?? ORDER_STATUS_LABEL[status];
 
-  // "Consegna stimata": nessuna colonna ETA a backend → niente orario finto.
-  // Mostriamo "Consegnato" a consegna avvenuta, altrimenti una finestra
-  // relativa coerente con il copy del marketplace (oggi se disponibile, 24-48h).
+  // "Consegna stimata": in OUT_FOR_DELIVERY usiamo l'ETA DERIVATA (rider→cliente)
+  // se disponibile ("~N min"); altrimenti una finestra relativa coerente col copy
+  // del marketplace. Niente orari assoluti finti: solo derivazioni reali.
   const etaLabel = isDelivered
     ? 'Consegnato'
     : isCancelled
     ? '—'
     : status === 'OUT_FOR_DELIVERY'
-    ? 'In arrivo a breve'
+    ? (riderEtaMin != null ? `~${riderEtaMin} min` : 'In arrivo a breve')
     : 'Oggi se disponibile · 24-48h';
   const etaCaption = isDelivered ? 'Stato consegna' : 'Consegna stimata';
+
+  // Hint relativo "consegna stimata" da accepted_at/ready_at, quando sensato:
+  // una volta accettato/pronto, una finestra indicativa relativa all'evento.
+  // Derivato dai soli timestamp esistenti; omesso se mancano o stato terminale.
+  const minutesSince = (iso: string | null): number | null =>
+    iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)) : null;
+  const prepHint: string | null = (() => {
+    if (isDelivered || isCancelled) return null;
+    if (status === 'OUT_FOR_DELIVERY' && riderEtaMin != null) return null; // già coperto dal chip ETA
+    if (status === 'READY' || status === 'ASSIGNED' || status === 'PICKED_UP') {
+      const m = minutesSince(order.ready_at);
+      return m != null ? 'Pronto, in consegna a breve' : null;
+    }
+    if (status === 'ACCEPTED') {
+      const m = minutesSince(order.accepted_at);
+      return m != null ? 'In preparazione · pronto entro ~30 min' : null;
+    }
+    return null;
+  })();
 
   const handleReorder = () => {
     clearCart();
@@ -301,6 +333,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
           <div className="text-right">
             <div className="text-xs font-bold uppercase tracking-label text-ink-500">{etaCaption}</div>
             <div className="text-base font-bold text-ink-900">{etaLabel}</div>
+            {prepHint && <div className="mt-0.5 text-xs text-ink-500">{prepHint}</div>}
           </div>
         </div>
       </Card>

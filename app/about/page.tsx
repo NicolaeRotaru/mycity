@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { loadPublishedCmsPage } from '@/lib/cms';
 import CmsPageView from '@/components/cms/CmsPageView';
+import { getServerSupabase } from '@/lib/supabase/server';
 
 export const metadata = {
   title: 'Chi siamo · MyCity',
@@ -19,13 +20,42 @@ export const metadata = {
   },
 };
 
-// Copy marketing statica della pagina chi-siamo (non sono metriche live).
+// Copy marketing statica della pagina chi-siamo. Una metrica ("negozi attivi")
+// viene resa LIVE da una count query (vedi buildStats); le altre restano claim.
 const STATS = [
   { value: '24-48h', label: 'tempi di consegna' },
   { value: '100%', label: 'venditori locali verificati' },
   { value: '0€', label: 'commissioni mensili per i negozi' },
   { value: 'Pay-on-delivery', label: 'paghi alla consegna, anche in contanti' },
 ];
+
+/**
+ * Conteggio REALE per la riga stat (nessuno schema nuovo): negozi attivi =
+ * profili venditore approvati, via una count query (head: true, niente payload).
+ * Le "zone" NON sono derivabili in modo affidabile (profiles ha solo
+ * `store_address` free-text, nessuna colonna città/provincia) → non vengono
+ * fabbricate. Se la query fallisce o ritorna 0, si tiene la copy statica come
+ * fallback (nessuna regressione, nessun "0" finto in pagina).
+ */
+async function buildStats(): Promise<typeof STATS> {
+  try {
+    const supa = await getServerSupabase();
+    const { count: storeCount } = await supa
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('role', 'seller')
+      .eq('is_approved', true);
+
+    const stats = [...STATS];
+    if (typeof storeCount === 'number' && storeCount > 0) {
+      // Sostituisce il claim "100%" col numero reale di negozi attivi.
+      stats[1] = { value: `${storeCount}`, label: storeCount === 1 ? 'negozio locale attivo' : 'negozi locali attivi' };
+    }
+    return stats;
+  } catch {
+    return STATS; // fallback: copy statica
+  }
+}
 
 const VALUES = [
   {
@@ -51,6 +81,8 @@ export default async function AboutPage() {
   const cms = await loadPublishedCmsPage('about');
   if (cms) return <CmsPageView page={cms} />;
 
+  const stats = await buildStats();
+
   return (
     <div>
       {/* Hero gradient */}
@@ -73,7 +105,7 @@ export default async function AboutPage() {
       {/* Stats row, overlapping the hero */}
       <div className="container mx-auto px-6 max-w-5xl -mt-10 relative z-10">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {STATS.map((s) => (
+          {stats.map((s) => (
             <div
               key={s.label}
               className="bg-white border border-cream-300 rounded-xl px-5 py-5 shadow-warm"

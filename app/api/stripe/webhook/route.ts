@@ -179,6 +179,10 @@ type PendingDelivery = {
   notes: string | null;
   lat: number | null;
   lng: number | null;
+  // Fascia di consegna scelta dal buyer (es. "Oggi · 18:00–20:00"); null per
+  // ritiro / non scelta. Scritta su orders.delivery_slot. Opzionale per
+  // retro-compatibilità coi pending_checkouts creati prima di questa colonna.
+  slot?: string | null;
 };
 
 type PendingB2B = {
@@ -273,6 +277,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         discount_amount: (g.couponPortionCents + g.pickupPortionCents) / 100,
         coupon_code: couponCode,
         pickup_in_store: pickupInStore,
+        // Fascia di consegna scelta dal buyer (dal pending_checkout.delivery.slot).
+        delivery_slot: pickupInStore ? null : (delivery.slot ?? null),
         payment_status: 'PAID',
         payment_method: 'card',
         delivery_status: 'NEW',

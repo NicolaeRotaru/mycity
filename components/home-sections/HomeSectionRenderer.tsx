@@ -23,6 +23,7 @@ import StoriesCarousel from '@/components/home/StoriesCarousel';
 import HomeEvents from '@/components/home/HomeEvents';
 import PromoDeals from '@/components/home/PromoDeals';
 import TrendingNow from '@/components/home/TrendingNow';
+import ReorderRail from '@/components/home-sections/ReorderRail';
 import { DeliveryCutoff } from '@/components/ui/DeliveryCutoff';
 
 /**
@@ -298,6 +299,11 @@ function HomeBlock({
         </section>
       );
     }
+
+    /* --------------------------------------------------------- ORDINA DI NUOVO */
+    // Rail di riordino: self-fetch + self-hide (ospiti / zero ordini) nel componente.
+    case 'reorder':
+      return <ReorderRail />;
 
     /* -------------------------------------------------------------- NEWSLETTER */
     case 'newsletter': {

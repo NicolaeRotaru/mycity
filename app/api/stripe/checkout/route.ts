@@ -56,6 +56,10 @@ const Body = z.object({
   couponDiscountCents: z.number().int().nonnegative().default(0),
   pickupDiscountCents: z.number().int().nonnegative().default(0),
   pickupInStore: z.boolean().default(false),
+  // Fascia di consegna scelta (es. "Oggi · 18:00–20:00"). Etichetta informativa
+  // persistita nel pending_checkout (delivery.slot) e poi su orders.delivery_slot
+  // dal webhook; null per ritiro o se non scelta. Non influisce su prezzi.
+  deliverySlot: z.string().max(120).optional().nullable(),
   b2b: B2BSchema,
 });
 
@@ -350,6 +354,9 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         notes: body.delivery.notes ?? null,
         lat: body.delivery.lat ?? null,
         lng: body.delivery.lng ?? null,
+        // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
+        // scrive su orders.delivery_slot. null per ritiro / non scelta.
+        slot: body.pickupInStore ? null : (body.deliverySlot ?? null),
       },
       pickup_in_store: body.pickupInStore,
       status: 'PENDING',

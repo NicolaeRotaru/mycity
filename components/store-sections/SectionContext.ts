@@ -20,6 +20,7 @@ export type StoreContextRow = {
   store_media: unknown;
   store_description: string | null;
   is_approved: boolean | null;
+  founded_year: number | null;
 };
 
 export type SectionReview = {
@@ -28,6 +29,12 @@ export type SectionReview = {
   comment: string | null;
   created_at: string;
   seller_reply: string | null;
+  // Dati arricchiti (schema store_reviews + profilo autore unito client-side).
+  user_id: string | null;
+  order_id: string | null;
+  photo_urls: string[] | null;
+  helpful_count: number;
+  author: string | null;
 };
 
 export type SectionPromo = {

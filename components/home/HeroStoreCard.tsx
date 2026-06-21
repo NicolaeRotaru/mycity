@@ -3,12 +3,16 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, Coffee, Star, Home as HomeIcon } from 'lucide-react';
+import { MapPin, Coffee, Star, Home as HomeIcon, Truck } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
+import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 
-type Store = { id: string; store_name: string | null; store_address: string | null; store_logo: string | null };
+type Store = {
+  id: string; store_name: string | null; store_address: string | null; store_logo: string | null;
+  store_hours?: unknown;
+};
 type Prod = { id: string; name: string; price: number | string; images: string[] | null };
 type Reviews = { avg: number; count: number };
 
@@ -33,7 +37,7 @@ export default function HeroStoreCard() {
       // 1) Negozio del mese (pick admin), se presente.
       const { data: som } = await supabase
         .from('shop_of_month')
-        .select('seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_address, store_logo )')
+        .select('seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_address, store_logo, store_hours )')
         .eq('month', monthIso)
         .maybeSingle();
       let store = (som as unknown as { seller: Store | null } | null)?.seller ?? null;
@@ -42,7 +46,7 @@ export default function HeroStoreCard() {
       if (!store) {
         const { data: s } = await supabase
           .from('profiles')
-          .select('id, store_name, store_address, store_logo')
+          .select('id, store_name, store_address, store_logo, store_hours')
           .eq('role', 'seller')
           .eq('is_approved', true)
           .not('store_name', 'is', null)
@@ -77,6 +81,15 @@ export default function HeroStoreCard() {
   if (!data?.store) return <HeroStorePlaceholder />;
 
   const { store, products, reviews } = data;
+
+  // "Consegna oggi": derivata dagli orari del negozio (store_hours) SOLO se
+  // affidabilmente interpretabili — il negozio ha orari configurati per oggi ed
+  // è aperto adesso. Se gli orari mancano o non sono parseabili, il badge è
+  // omesso (niente promessa di consegna non supportata dai dati).
+  const todayKey = DAY_KEYS[new Date().getDay()];
+  const hours = (store.store_hours ?? null) as StoreHours | null;
+  const todayIntervals = hours && typeof hours === 'object' ? hours[todayKey] : undefined;
+  const deliveryToday = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);
   return (
     <div className="hidden md:flex justify-center">
       <div className="relative w-full max-w-sm">
@@ -106,8 +119,8 @@ export default function HeroStoreCard() {
             </span>
           </div>
 
-          {/* Rating (solo con recensioni vere) + badge negozio locale.
-              "Consegna oggi" è backend-gated → non mostrato qui. */}
+          {/* Rating (solo con recensioni vere) + badge negozio locale + "Consegna
+              oggi" DERIVATO dagli orari del negozio (mostrato solo se aperto ora). */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
             {reviews && (
               <span className="inline-flex items-center gap-1 font-semibold text-ink-800">
@@ -119,6 +132,11 @@ export default function HeroStoreCard() {
             <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full ring-1 ring-primary-200">
               <HomeIcon size={11} strokeWidth={2.4} aria-hidden /> Negozio locale
             </span>
+            {deliveryToday && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200">
+                <Truck size={11} strokeWidth={2.4} aria-hidden /> Consegna oggi
+              </span>
+            )}
           </div>
 
           {products.length > 0 && (

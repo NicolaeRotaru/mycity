@@ -23,6 +23,7 @@ import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicat
 import { StepCard } from '@/components/checkout/StepCard';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
+import { DeliverySlotPicker, resolveSlotLabel, SLOT_DEFAULTS } from '@/components/checkout/DeliverySlotPicker';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
@@ -308,6 +309,15 @@ export default function CheckoutPage() {
   // Ritiro in negozio (-10%, no spedizione)
   const [pickupInStore, setPickupInStore] = useState(false);
 
+  // Fascia di consegna ("Quando vuoi riceverlo", step 2). Solo presentazione
+  // lato client + una stringa leggibile persistita su orders.delivery_slot.
+  // Nessun impatto su totali/spedizione: la matematica resta invariata.
+  const [slotDay, setSlotDay] = useState<'now' | 'today' | 'tomorrow'>('today');
+  const [slotTodayTime, setSlotTodayTime] = useState(SLOT_DEFAULTS.todayTime);
+  const [slotTomorrowTime, setSlotTomorrowTime] = useState(SLOT_DEFAULTS.tomorrowTime);
+  // null quando ritiro in negozio (nessuna consegna) o non applicabile.
+  const deliverySlot = resolveSlotLabel(slotDay, slotTodayTime, slotTomorrowTime, pickupInStore);
+
   // Usa il credito MyCity (opt-in, default sì): applicato solo agli ordini COD.
   const [useCredit, setUseCredit] = useState(true);
 
@@ -407,6 +417,7 @@ export default function CheckoutPage() {
           couponCode: appliedCoupon?.coupon.code ?? null,
           pickupInStore,
           useCredit,
+          deliverySlot,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -490,6 +501,7 @@ export default function CheckoutPage() {
           couponDiscountCents,
           pickupDiscountCents,
           pickupInStore,
+          deliverySlot,
         }),
       });
       const data = await res.json();
@@ -630,15 +642,29 @@ export default function CheckoutPage() {
                 <Store size={16} className="text-olive-700 shrink-0" aria-hidden /> Ritiro in negozio selezionato — nessun costo di consegna. Vai tu quando l&apos;ordine è pronto.
               </div>
             ) : (
-              <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3">
-                <div>
-                  <p className="font-bold text-ink-900">Consegna a domicilio</p>
-                  <p className="text-sm text-ink-600">Standard 24–48h{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
+              <>
+                {/* Chooser fascia di consegna (day tiles + finestre orarie). Solo
+                    a domicilio: il ritiro in negozio non richiede una fascia. */}
+                <DeliverySlotPicker
+                  day={slotDay}
+                  onDayChange={setSlotDay}
+                  todayTime={slotTodayTime}
+                  onTodayTimeChange={setSlotTodayTime}
+                  tomorrowTime={slotTomorrowTime}
+                  onTomorrowTimeChange={setSlotTomorrowTime}
+                />
+
+                {/* Metodo + costo di consegna (invariato). */}
+                <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
+                  <div>
+                    <p className="font-bold text-ink-900">Consegna a domicilio</p>
+                    <p className="text-sm text-ink-600">Standard 24–48h{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
+                  </div>
+                  <span className="font-serif text-lg font-extrabold text-ink-900">
+                    {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
+                  </span>
                 </div>
-                <span className="font-serif text-lg font-extrabold text-ink-900">
-                  {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
-                </span>
-              </div>
+              </>
             )}
           </StepCard>
 
