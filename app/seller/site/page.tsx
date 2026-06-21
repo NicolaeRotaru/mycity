@@ -6,7 +6,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function SellerSitePage() {
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-6xl">
       <Suspense fallback={<LoadingState />}>
         <SiteEditor />
       </Suspense>
