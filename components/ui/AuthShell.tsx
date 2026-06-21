@@ -1,4 +1,10 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 import {
   ArrowLeft,
   Banknote,
@@ -92,12 +98,29 @@ export function AuthShell({
 }
 
 /**
- * Divider "oppure" + provider alternativi (SPID / Google / SMS).
- * Questi provider non sono ancora collegati nel backend: i pulsanti sono
- * volutamente disabilitati (nessun handler fittizio). Vengono mostrati per
- * coerenza con il design e attivati quando il provider sarà disponibile.
+ * Divider "oppure" + provider alternativi.
+ * Google è collegato via Supabase OAuth (redirect su /auth/callback). SPID e
+ * SMS restano visibili come "presto" finché non si collegano i rispettivi
+ * provider (nessun handler fittizio).
  */
 export function AuthAlternatives() {
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogle = async () => {
+    setGoogleLoading(true);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) throw error;
+      // In caso di successo il browser viene rediretto a Google: non resettiamo.
+    } catch (e) {
+      toast.error(friendlyError(e));
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="my-5 flex items-center gap-3">
@@ -106,16 +129,23 @@ export function AuthAlternatives() {
         <span className="h-px flex-1 bg-cream-300" />
       </div>
       <div className="flex gap-2.5">
-        <Button variant="secondary" icon={Smartphone} fullWidth disabled>
+        <Button variant="secondary" icon={Smartphone} fullWidth disabled title="SPID — presto disponibile">
           SPID
         </Button>
-        <Button variant="secondary" icon={Chrome} fullWidth disabled>
-          Google
+        <Button
+          variant="secondary"
+          icon={Chrome}
+          fullWidth
+          onClick={handleGoogle}
+          disabled={googleLoading}
+        >
+          {googleLoading ? 'Apertura…' : 'Google'}
         </Button>
       </div>
       <button
         type="button"
         disabled
+        title="Accesso via SMS — presto disponibile"
         className="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-cream-300 bg-white px-3 py-3 text-sm font-bold text-ink-900 transition-colors hover:bg-cream-50 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <MessageSquareText size={18} className="text-primary-700" aria-hidden />
