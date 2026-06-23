@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -27,6 +28,10 @@ type JobRow = {
 };
 
 export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
+  // 🟡-17: rate-limit sul polling (ogni chiamata fa poll Anthropic + scritture DB).
+  const rl = await rateLimitAsync({ key: `ai-catalog-batch-status:${user.id}`, max: 60, windowMs: 60_000 });
+  if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
+
   const jobId = new URL(req.url).searchParams.get('jobId') ?? '';
   if (!jobId) return ApiErrors.invalidRequest('Job mancante.');
 
