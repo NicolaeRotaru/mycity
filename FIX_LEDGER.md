@@ -23,7 +23,7 @@
 | 🟠-17 | Guard route group solo client-side | 🟠 | TODO | | | | |
 | 🟠-18 | `/profile/**` non protetto da middleware/layout | 🟠 | TODO | | | | |
 | 🟠-19 | Resilienza sottile (error/loading boundary) | 🟠 | TODO | | | | |
-| 🟠-20 | `orders/[id]/return` spinner infinito su id KO | 🟠 | TODO | | | | |
+| 🟠-20 | `orders/[id]/return` spinner infinito su id KO | 🟠 | FATTO | app/orders/[id]/return/page.tsx | (git) | typecheck; stato loaded + EmptyState | distingue loading da not-found |
 | 🟠-21 | Numerazione fattura non a norma (rollover anno) | 🟠 | TODO | | | | |
 | 🟠-22 | Recesso 14gg rifiutabile dal seller | 🟠 | TODO | | | | decisione legale |
 | 🟠-23 | KYC/payout non scritti in audit log | 🟠 | TODO | | | | |
