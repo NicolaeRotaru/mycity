@@ -116,7 +116,7 @@ export function Modal({
         aria-describedby={descId}
         onClick={(e) => e.stopPropagation()}
         className={cn(
-          'bg-white w-full rounded-t-2xl sm:rounded-2xl shadow-warm-lg overflow-hidden max-h-[90vh] flex flex-col animate-slide-up',
+          'bg-white w-full rounded-t-2xl sm:rounded-2xl shadow-warm-xl overflow-hidden max-h-[90vh] flex flex-col animate-slide-up',
           SIZES[size],
         )}
       >

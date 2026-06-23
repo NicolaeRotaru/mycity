@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/Button';
  * - Accessibility: "role='status' non serve, è informativo non live."
  */
 
+type Tone = 'primary' | 'olive' | 'accent' | 'secondary';
+
 type Props = {
   icon: LucideIcon;
   title: string;
@@ -21,6 +23,14 @@ type Props = {
   secondaryLabel?: string;
   secondaryHref?: string;
   variant?: 'default' | 'compact';
+  tone?: Tone;
+};
+
+const TONES: Record<Tone, string> = {
+  primary:   'bg-primary-50 text-primary-700',
+  olive:     'bg-olive-50 text-olive-700',
+  accent:    'bg-accent-50 text-accent-600',
+  secondary: 'bg-secondary-50 text-secondary-700',
 };
 
 export default function EmptyState({
@@ -32,14 +42,15 @@ export default function EmptyState({
   secondaryLabel,
   secondaryHref,
   variant = 'default',
+  tone = 'primary',
 }: Props) {
   const isCompact = variant === 'compact';
   return (
     <div className={`text-center ${isCompact ? 'py-6' : 'py-12'} px-4`}>
-      <div className={`mx-auto rounded-full bg-cream-100 flex items-center justify-center text-ink-400 mb-3 ${
+      <div className={`mx-auto rounded-full flex items-center justify-center mb-3 ${TONES[tone]} ${
         isCompact ? 'w-12 h-12' : 'w-16 h-16'
       }`}>
-        <Icon size={isCompact ? 22 : 30} strokeWidth={1.7} />
+        <Icon size={isCompact ? 22 : 28} strokeWidth={2} />
       </div>
       <h3 className={`font-serif text-ink-900 font-bold ${isCompact ? 'text-base' : 'text-lg'}`}>{title}</h3>
       {description && (

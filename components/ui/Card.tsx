@@ -32,11 +32,21 @@ type Props = {
   className?: string;
   children: React.ReactNode;
   as?: 'div' | 'article' | 'section' | 'aside';
+  /** Aggiunge sollevamento + ombra al passaggio del mouse (per card cliccabili). */
+  hover?: boolean;
 };
 
-export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div' }: Props) {
+export function Card({ variant = 'bordered', padding = 'md', className, children, as: Tag = 'div', hover = false }: Props) {
   return (
-    <Tag className={cn('rounded-xl', VARIANTS[variant], PADDINGS[padding], className)}>
+    <Tag
+      className={cn(
+        'rounded-lg',
+        VARIANTS[variant],
+        PADDINGS[padding],
+        hover && 'transition-transform hover:-translate-y-[3px] hover:shadow-[var(--shadow-hover)]',
+        className,
+      )}
+    >
       {children}
     </Tag>
   );

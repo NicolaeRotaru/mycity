@@ -13,7 +13,8 @@ export type BadgeVariant =
   | 'discount'   // -X% sconto
   | 'new'        // prodotto nuovo
   | 'soldout'    // esaurito
-  | 'lowstock'   // ultimi N (con pulse)
+  | 'lowstock'   // ultimi N — pill piena ad alta visibilità (con pulse)
+  | 'lowstocksoft' // ultimi N — pill soft inline (es. ProductCard)
   | 'free'       // spedizione gratis
   | 'cod'        // paga alla consegna / zero rischio
   | 'local'      // venditore locale
@@ -22,14 +23,15 @@ export type BadgeVariant =
 type BadgeSize = 'sm' | 'md';
 
 const VARIANTS: Record<BadgeVariant, string> = {
-  discount: 'bg-secondary-600 text-white uppercase tracking-wide',
-  new:      'bg-olive-600 text-white uppercase tracking-wide',
-  soldout:  'bg-ink-700 text-white uppercase tracking-wide',
-  lowstock: 'bg-secondary-500 text-white uppercase tracking-wide',
-  free:     'bg-olive-50 text-olive-700',
-  cod:      'bg-olive-50 text-olive-700',
-  local:    'bg-primary-50 text-primary-700',
-  urgency:  'bg-accent-500 text-ink-900',
+  discount:     'bg-secondary-600 text-white uppercase tracking-wide',
+  new:          'bg-olive-600 text-white uppercase tracking-wide',
+  soldout:      'bg-ink-700 text-white uppercase tracking-wide',
+  lowstock:     'bg-secondary-500 text-white uppercase tracking-wide',
+  lowstocksoft: 'bg-secondary-50 text-secondary-700',
+  free:         'bg-olive-50 text-olive-700',
+  cod:          'bg-olive-50 text-olive-700',
+  local:        'bg-primary-50 text-primary-700',
+  urgency:      'bg-accent-500 text-ink-900',
 };
 
 const SIZES: Record<BadgeSize, string> = {
