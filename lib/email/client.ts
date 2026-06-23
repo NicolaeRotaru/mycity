@@ -42,24 +42,31 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
     return { ok: false, skipped: true, reason: 'RESEND_API_KEY non configurata' };
   }
 
-  try {
-    const { data, error } = await resend.emails.send({
-      from: env.resendFrom(),
-      to: input.to,
-      subject: input.subject,
-      html: input.html,
-      text: input.text,
-      reply_to: input.replyTo ?? env.resendReplyTo(),
-      tags: input.tags,
-    });
-    if (error) {
-      // 🟡-12: errori invio instradati a Sentry via logger (non persi in stdout).
-      logger.error('[email] resend error', { message: error.message ?? 'resend error' });
-      return { ok: false, error: error.message ?? 'resend error' };
+  // 🟠-9: un retry su errore transitorio (rete/5xx/429) riduce la perdita di
+  // email critiche su blip momentanei di Resend. Gli errori non vengono più
+  // silenziati (vanno a Sentry via logger) e operational-alerts vigila il
+  // backlog della coda lifecycle. (Outbox durevole per le email transazionali =
+  // enhancement futuro: la coda attuale è template-based per user_id.)
+  const payload = {
+    from: env.resendFrom(),
+    to: input.to,
+    subject: input.subject,
+    html: input.html,
+    text: input.text,
+    reply_to: input.replyTo ?? env.resendReplyTo(),
+    tags: input.tags,
+  };
+  let lastErr = 'unknown';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const { data, error } = await resend.emails.send(payload);
+      if (!error) return { ok: true, id: data?.id ?? '' };
+      lastErr = error.message ?? 'resend error';
+    } catch (err) {
+      lastErr = err instanceof Error ? err.message : 'unknown';
     }
-    return { ok: true, id: data?.id ?? '' };
-  } catch (err) {
-    logger.error('[email] exception', { message: err instanceof Error ? err.message : 'unknown' });
-    return { ok: false, error: err instanceof Error ? err.message : 'unknown' };
+    if (attempt === 0) await new Promise((r) => setTimeout(r, 300)); // breve backoff
   }
+  logger.error('[email] invio fallito dopo retry', { message: lastErr });
+  return { ok: false, error: lastErr };
 }
