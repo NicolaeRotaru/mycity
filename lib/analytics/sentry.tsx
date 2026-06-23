@@ -32,6 +32,9 @@ async function initSentry() {
     replaysSessionSampleRate: 0.05,
     replaysOnErrorSampleRate: 1.0,
     environment: process.env.NODE_ENV,
+    // 🟡-11: non inviare PII di default (IP/cookie/header). Esplicito anche se è
+    // il default dell'SDK, così non regredisce se cambia in futuro.
+    sendDefaultPii: false,
     ignoreErrors: [
       // Errori "rumorosi" che non sono actionable
       'ResizeObserver loop limit exceeded',
@@ -40,8 +43,18 @@ async function initSentry() {
       'NetworkError when attempting to fetch resource',
     ],
     beforeSend(event) {
-      // Strip PII basico
-      if (event.request?.cookies) delete event.request.cookies;
+      // 🟡-11: scrub difensivo di PII — cookie, header (Authorization), body e
+      // identità utente (teniamo solo l'id per correlare, mai email/ip).
+      if (event.request) {
+        delete event.request.cookies;
+        delete event.request.headers;
+        delete (event.request as { data?: unknown }).data;
+      }
+      if (event.user) {
+        delete event.user.email;
+        delete event.user.ip_address;
+        delete (event.user as { username?: unknown }).username;
+      }
       return event;
     },
   });

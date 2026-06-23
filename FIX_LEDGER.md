@@ -27,17 +27,17 @@
 | 🟠-21 | Numerazione fattura non a norma (rollover anno) | 🟠 | TODO | | | | |
 | 🟠-22 | Recesso 14gg rifiutabile dal seller | 🟠 | TODO | | | | decisione legale |
 | 🟠-23 | KYC/payout non scritti in audit log | 🟠 | TODO | | | | |
-| 🟡-1 | `withInternalAuth` usa SERVICE_ROLE_KEY come shared secret | 🟡 | TODO | | | | |
+| 🟡-1 | `withInternalAuth` usa SERVICE_ROLE_KEY come shared secret | 🟡 | FATTO | lib/api/middleware.ts, .env.example | (git) | typecheck+test middleware | INTERNAL_API_SECRET dedicato con fallback compat |
 | 🟡-2 | `/api/contact` senza CAPTCHA | 🟡 | TODO | | | | |
 | 🟡-3 | `gift_cards` manca CHECK(balance<=amount) | 🟡 | FATTO | migrations/103_gift_card_balance_cap.sql | (git) | SQL idempotente | conferma runtime: applicare migrazione |
 | 🟡-4 | definer-fn storiche senza search_path | 🟡 | TODO | | | | verifica runtime |
 | 🟡-5 | expire-checkouts non rilascia stock varianti | 🟡 | FATTO | app/api/cron/expire-checkouts/route.ts | (git) | typecheck; mirror webhook:857 | aggiunto variant_id alla map restore_stock |
 | 🟡-6 | refund parziale Dashboard multi-seller → no update | 🟡 | TODO | | | | |
 | 🟡-7 | riconciliazione COD assi temporali diversi | 🟡 | TODO | | | | |
-| 🟡-8 | `/api/track` senza consent server-side | 🟡 | TODO | | | | |
+| 🟡-8 | `/api/track` senza consent server-side | 🟡 | FATTO | app/api/track/route.ts | (git) | typecheck | eventi visitor gated su consenso analytics (cookie); auth funzionali |
 | 🟡-9 | operational-alerts non vigila email_queue backlog | 🟡 | TODO | | | | |
 | 🟡-10 | logger non strutturato, no redaction PII | 🟡 | TODO | | | | |
-| 🟡-11 | Sentry client beforeSend minimale + captureError context | 🟡 | TODO | | | | |
+| 🟡-11 | Sentry client beforeSend minimale + captureError context | 🟡 | FATTO | lib/analytics/sentry.tsx | (git) | typecheck | sendDefaultPii:false + scrub headers/data/email/ip |
 | 🟡-12 | email destinatario loggata in console in prod | 🟡 | FATTO | lib/email/client.ts | (git) | typecheck+suite | console→logger; niente PII (to) nei log; errori a Sentry |
 | 🟡-13 | export dati incompleto (chat/contact/KYC) | 🟡 | TODO | | | | |
 | 🟡-14 | oblio parziale (free-text PII) | 🟡 | TODO | | | | |
@@ -57,4 +57,7 @@
 | 🟢-5 | /store/[id]/[slug] solo canonical SEO | 🟢 | FATTO | (nessuno) | — | analisi nav | comportamento atteso (canonical SEO), no-action |
 
 ## Note di auto-analisi
-- (init) Baseline pulito: typecheck/lint/test tutti verdi, 698 test. Buona rete di sicurezza.
+- (init) Baseline pulito: 698 test verdi.
+- (checkpoint 1) 6 fix: 700→705 test. Verificato che il cambio mock middleware non rompe altri test.
+- (checkpoint 2) cluster email/push: 708 test. Reso sendPushToUser piu ricco senza rompere chiamanti (solo cron lo usa).
+- (checkpoint 3) 17/50 chiusi. Scoperti 2 falsi positivi/no-action (🟡-22 prefisso RQ, 🟢-3/4/5). Nessuna regressione. Coerenza pattern mantenuta (logger, AbortSignal, rateLimitAsync, EmptyState).

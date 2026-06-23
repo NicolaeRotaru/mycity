@@ -222,13 +222,16 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
 }
 
 /**
- * Wrapper: richiede x-internal-secret = SUPABASE_SERVICE_ROLE_KEY.
- * Per endpoint server-to-server (trigger DB, cron interni, edge functions).
- * Non esponi mai a client browser.
+ * Wrapper: richiede x-internal-secret per endpoint server-to-server (trigger DB,
+ * cron interni, edge functions). Non esporre mai a client browser.
+ *
+ * 🟡-1: usa un secret DEDICATO `INTERNAL_API_SECRET` (rotabile indipendentemente,
+ * blast-radius ridotto). Fallback a `SUPABASE_SERVICE_ROLE_KEY` per retro-
+ * compatibilità con i caller esistenti finché non viene configurato il dedicato.
  */
 export function withInternalAuth(handler: (req: NextRequest) => Promise<NextResponse>) {
   return async (req: NextRequest): Promise<NextResponse> => {
-    const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const expected = process.env.INTERNAL_API_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
     const provided = req.headers.get('x-internal-secret');
     if (!secretsMatch(provided, expected)) {
       return ApiErrors.forbidden();
