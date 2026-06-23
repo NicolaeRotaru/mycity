@@ -101,7 +101,7 @@ export default function OrdersPage() {
 
   if (orders.length === 0) {
     return (
-      <div className="container mx-auto py-12 max-w-2xl">
+      <div className="py-8">
         <Suspense fallback={null}><StripeReturnHandler /></Suspense>
         <EmptyState
           icon={Package}
@@ -117,9 +117,17 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-8 max-w-4xl space-y-4">
+    <div className="space-y-4">
       <Suspense fallback={null}><StripeReturnHandler /></Suspense>
-      <h1 className="text-2xl font-bold text-ink-900">I tuoi ordini</h1>
+      <header className="mb-6">
+        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Attività</p>
+        <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+          I tuoi ordini
+        </h1>
+        <p className="mt-1 text-sm text-ink-500">
+          {orders.length === 1 ? '1 ordine' : `${orders.length} ordini`}
+        </p>
+      </header>
 
       {orders.map((order) => {
         const status = order.delivery_status;
