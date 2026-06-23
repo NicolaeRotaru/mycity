@@ -29,17 +29,24 @@ Il connettore risponde **`livemode: true`**: è collegato all'account **LIVE**, 
 ### 🔴 2. Webhook Stripe di produzione da confermare
 Senza webhook configurato (endpoint `/api/stripe/webhook` + `STRIPE_WEBHOOK_SECRET` di prod), **i pagamenti carta non creano ordini**. → **Azione:** Dashboard Stripe → Developers → Webhooks: verifica endpoint, secret e che l'evento `checkout.session.completed` arrivi (lo vedi nel test #1).
 
-### 🟠 3. Cron `expire-stale-orders` fermo da ~8 giorni
-7 cron su 8 girano regolarmente (release-payouts 22h fa, send-emails 0h…), ma **`expire-stale-orders` non parte da 191h**. Impatto: ordini NEW mai accettati dal seller non si auto-annullano → stock resta riservato. → **Azione:** verifica la schedulazione di quel job (Render/Vercel cron) e che risponda 200.
+### 🟠 3. Cron mancanti nello scheduler esterno (cron-job.org) — AZIONE TUA
+I cron NON girano su Render: sono **POST esterni schedulati su cron-job.org** (vedi `render.yaml`), ognuno con `Authorization: Bearer <CRON_SECRET>`. Dai heartbeat live:
+- **`expire-stale-orders`** (atteso ogni 30 min) → ultimo run **191h fa**: ordini NEW mai accettati non si auto-annullano (stock resta riservato).
+- **`external-price-alerts`** (atteso ogni 1h) → **nessun heartbeat** (mai schedulato).
+- Gli altri 7 girano regolarmente (release-payouts 22h, send-emails/expire-checkouts/operational-alerts 0h…).
+→ **Non risolvibile dal codice** (config esterna): su **cron-job.org** aggiungi/riattiva i due job verso `https://mycity-marketplace.com/api/cron/expire-stale-orders` e `/external-price-alerts` con l'header Bearer CRON_SECRET.
 
 ### 🟠 4. Pulire i 21 ordini di test legacy
 Tutti gli ordini attuali sono dati di test (23/05–11/06, 2 account), molti precedenti alle colonne fee → non riconciliano. → **Azione:** elimina i dati di test prima di aprire, così la riconciliazione finanziaria parte da zero. (È una scrittura su prod: fallo tu o autorizzami esplicitamente.)
 
-## 🟡 Consigliati (non bloccano)
-- **`npm audit fix`**: 1 vuln high (`undici`, transitiva) + 14 moderate.
-- **Supabase Auth → attiva "Leaked password protection"** (1 click, HaveIBeenPwned).
-- **Hardening RPC**: revoca `EXECUTE` su funzioni-trigger esposte (`notify_buyer_on_order_status`, `reward_referrer_on_delivery`, `touch_loyalty_streak`); sposta `pg_trgm` fuori da `public`.
-- **Perf advisor** (differibile): wrap `auth.uid()` → `(select auth.uid())` in 11 policy; consolida policy multiple su `products/orders/profiles`.
+## ✅ Fix applicati in questa sessione (2026-06-23, post-report)
+- **`npm audit fix`** → **produzione 0 vulnerabilità** (risolti `undici` high + `protobufjs`). Restano 6 *low* solo in dev-deps (Storybook), richiederebbero `--force` breaking → lasciate. typecheck/lint/build/715 unit verdi dopo l'update.
+- **Hardening RPC (migrazione 106, applicata al DB)**: revocato `EXECUTE` a anon/authenticated su 4 funzioni-trigger esposte (`notify_buyer_on_order_status`, `reward_referrer_on_delivery`, `sync_review_helpful_count`, `log_activity_change`). `touch_loyalty_streak` **mantenuta** (è una RPC volutamente chiamata dall'app). Verificato via `has_function_privilege`.
+
+## 🟡 Consigliati rimasti (azione tua / differibili)
+- **Supabase Auth → attiva "Leaked password protection"** (1 click dashboard; non c'è tool MCP per attivarla da qui).
+- **`pg_trgm` in `public`**: spostarlo è rischioso (dipende la ricerca) → lasciato, WARN minore accettato.
+- **Perf advisor** (differibile): wrap `auth.uid()` → `(select auth.uid())` in 11 policy; consolida policy multiple su `products/orders/profiles`. NON rifatte ora di proposito: riscrivere RLS la notte prima del lancio è rischioso e non bloccante.
 - **Test 🔧 da scrivere**: ~15 moduli `lib/*` senza unit; flussi e2e completi; RPC comportamentali (quando avrai un progetto Supabase di test).
 
 ## ⛔ Cosa NON è stato testabile qui (e come chiuderlo)
@@ -58,11 +65,13 @@ Tutti gli ordini attuali sono dati di test (23/05–11/06, 2 account), molti pre
 6. **Verdetto↔prove:** ogni riga sostenuta da prova nel ledger. ✅
 
 ## Checklist go-live domattina (prima di aprire)
-- [ ] **Acquisto reale di prova** end-to-end (poi rimborso) — chiude 🔴1
-- [ ] **Webhook Stripe** verificato in Dashboard — chiude 🔴2
-- [ ] **Riattiva/verifica `expire-stale-orders`** — chiude 🟠3
-- [ ] **Pulisci i dati di test** — chiude 🟠4
-- [ ] (consigliato) `npm audit fix` + leaked-password ON
+- [ ] **Acquisto reale di prova** end-to-end (poi rimborso) — chiude 🔴1 — *azione tua*
+- [ ] **Webhook Stripe** verificato in Dashboard — chiude 🔴2 — *azione tua*
+- [ ] **cron-job.org**: aggiungi/riattiva `expire-stale-orders` + `external-price-alerts` — chiude 🟠3 — *azione tua*
+- [ ] **Pulisci i dati di test** (21 ordini + 7 checkout pendenti) — 🟠4 — *in attesa del tuo OK esplicito (bloccato dal classificatore di sicurezza)*
+- [ ] **Supabase Auth → Leaked password protection ON** — *azione tua (1 click)*
+- [x] **`npm audit fix`** (0 vuln prod) — ✅ fatto
+- [x] **Hardening RPC (migr. 106)** — ✅ fatto
 - [ ] Tieni aperti **Sentry** e gli **alert operativi** il giorno-1
 
 *Campagna eseguita in READ-ONLY sul progetto reale (advisor, policy, invarianti, riconciliazione) + suite del repo. Nessun dato di produzione modificato. Dettaglio per voce in `TEST_LEDGER.md`.*

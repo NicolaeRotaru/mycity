@@ -11,7 +11,7 @@ Legenda: ✅ PASS · ❌ FAIL · ⛔ BLOCCATO · severità 🔴🟠🟡🟢
 | A4 | Static | Integrità migrazioni | ✅ | `migrations-integrity.test.ts` nella suite |
 | A5 | Static | Tipi generati = schema | ✅ | `database-types.test.ts` + rigenerati post-105 |
 | A6 | Static | Drift schema↔migrazioni | ⛔ | `db:check-drift` SKIP (manca `SUPABASE_DB_URL`); sostituito da audit connettore |
-| A7 | Static | `npm audit` dipendenze | ⚠️🟡 | 15 vuln (14 mod, **1 high: `undici`** transitiva). `npm audit fix` |
+| A7 | Static | `npm audit` dipendenze | ✅ | **RISOLTO** via `npm audit fix`: prod 0 vuln (undici/protobufjs ok); restano 6 *low* dev-only (Storybook) |
 | B1 | Unit | Suite completa | ✅ | **715/715, 82 file** |
 | B2 | Unit | Soldi (fee/payout/refund/economics/coupon/promozioni) | ✅ | incl. nuovi test split su subtotale |
 | B3 | Unit | Sicurezza utils (ssrf/safe-redirect/captcha/rate-limit) | ✅ | nella suite |
@@ -42,7 +42,7 @@ Legenda: ✅ PASS · ❌ FAIL · ⛔ BLOCCATO · severità 🔴🟠🟡🟢
 | G4 | Security | Cron protetti | ✅ | 9/9 con CRON_SECRET/Bearer |
 | G5 | Security | Header + CSP | ✅ | HSTS preload, X-Frame DENY, nosniff, Permissions-Policy, **CSP nonce+strict-dynamic** |
 | G6 | Security | PCI / no dato carta | ✅ | nessuna cattura carta (Stripe hosted, SAQ-A); `logger` redige card/cvv/iban/token |
-| G7 | Security | RPC trigger esposte ad anon/auth | ⚠️🟡 | revoke EXECUTE su notify_*/reward_*/touch_loyalty_streak; pg_trgm in public; leaked-password OFF |
+| G7 | Security | RPC trigger esposte ad anon/auth | ✅ | **RISOLTO** migr.106: revoke EXECUTE su notify_buyer/reward_referrer/sync_review_helpful/log_activity (touch_loyalty_streak tenuta = RPC app). Resta: pg_trgm in public (accettato), leaked-password OFF (azione tua) |
 | H1 | Perf | Load/Lighthouse/N+1 | ⛔🟡 | serve app + tool di carico; advisor perf = 0 ERROR |
 | I1 | Resilienza | Fault injection (Supabase/Stripe/Resend giù, race, doppio cron) | ⛔🟡 | non iniettabile da qui; idempotenza webhook/payout verificata da unit |
 | K1 | Compliance | Export/erasure GDPR | ✅🟡 | pipeline presente (api/account/export+delete, cron); test comportamentale ⛔ |
