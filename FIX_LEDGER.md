@@ -21,7 +21,7 @@
 | 🟠-15 | Nominatim geocoding dal browser | 🟠 | TODO | | | | |
 | 🟠-16 | Costo AI non capato (web_search + product JSON) | 🟠 | TODO | | | | |
 | 🟠-17 | Guard route group solo client-side | 🟠 | TODO | | | | |
-| 🟠-18 | `/profile/**` non protetto da middleware/layout | 🟠 | TODO | | | | |
+| 🟠-18 | `/profile/**` non protetto da middleware/layout | 🟠 | FATTO | middleware.ts | (git) | typecheck | aggiunto AUTH_REQUIRED=[/profile] nel middleware (auth sì, ruolo no), returnTo preciso |
 | 🟠-19 | Resilienza sottile (error/loading boundary) | 🟠 | TODO | | | | |
 | 🟠-20 | `orders/[id]/return` spinner infinito su id KO | 🟠 | FATTO | app/orders/[id]/return/page.tsx | (git) | typecheck; stato loaded + EmptyState | distingue loading da not-found |
 | 🟠-21 | Numerazione fattura non a norma (rollover anno) | 🟠 | FATTO | migrations/104_invoice_sequence_per_year.sql | (git) | SQL idempotente | PK (seller_id,year) + upsert atomico + search_path; preparatorio (RPC non ancora usata) |

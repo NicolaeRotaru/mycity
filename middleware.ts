@@ -33,6 +33,11 @@ const ROLE_PROTECTED: Array<{ prefix: string; allowed: ('admin' | 'seller' | 'ri
   { prefix: '/rider',  allowed: ['rider', 'admin'] },
 ];
 
+// Rotte che richiedono solo l'autenticazione (qualsiasi ruolo), non un ruolo
+// specifico. 🟠-18: /profile/** era senza guard server-side (protezione
+// per-pagina incoerente). Qui la centralizziamo con returnTo preciso.
+const AUTH_REQUIRED = ['/profile'];
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -133,7 +138,8 @@ export async function middleware(req: NextRequest) {
   // Il refresh del cookie sessione sulle rotte pubbliche resta coperto dal client
   // supabase-js nel browser (auto-refresh) e dai server component su rotte protette.
   const roleRule = findRoleRule(pathname);
-  if (!roleRule) return res;
+  const needsAuth = !!roleRule || AUTH_REQUIRED.some((p) => pathname.startsWith(p));
+  if (!needsAuth) return res;
 
   if (!SUPABASE_URL || !SUPABASE_KEY) return res;
 
@@ -177,20 +183,24 @@ export async function middleware(req: NextRequest) {
     return withCsp(NextResponse.redirect(url));
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, is_approved')
-    .eq('id', user.id)
-    .single();
+  // Il role-check si applica SOLO alle rotte role-protected (/admin,/seller,/rider).
+  // Per le rotte solo-auth (/profile) basta l'utente autenticato verificato sopra.
+  if (roleRule) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, is_approved')
+      .eq('id', user.id)
+      .single();
 
-  type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
-  const role = profile?.role as ProfileRole | undefined;
-  const approved = !!profile?.is_approved;
+    type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
+    const role = profile?.role as ProfileRole | undefined;
+    const approved = !!profile?.is_approved;
 
-  if (!role || !roleRule.allowed.includes(role as ProfileRole & ('admin' | 'seller' | 'rider')) || !approved) {
-    const url = req.nextUrl.clone();
-    url.pathname = '/';
-    return withCsp(NextResponse.redirect(url));
+    if (!role || !roleRule.allowed.includes(role as ProfileRole & ('admin' | 'seller' | 'rider')) || !approved) {
+      const url = req.nextUrl.clone();
+      url.pathname = '/';
+      return withCsp(NextResponse.redirect(url));
+    }
   }
 
   return res;
