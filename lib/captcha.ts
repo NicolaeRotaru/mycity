@@ -38,6 +38,7 @@ export async function verifyTurnstileToken(token: string | null | undefined, rem
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
       cache: 'no-store',
+      signal: AbortSignal.timeout(5_000), // 🟡-19: niente hang sulla verifica CAPTCHA
     });
     const data = await r.json();
     if (data?.success === true) return { ok: true };

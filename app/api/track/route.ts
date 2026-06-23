@@ -3,6 +3,7 @@ import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { getCurrentUser } from '@/lib/supabase/server';
 import { recordActivity, type ActivityCategory } from '@/lib/activity';
 import { parseUserAgent } from '@/lib/user-agent';
+import { parseConsentCookie, CONSENT_COOKIE } from '@/lib/consent';
 
 export const runtime = 'nodejs';
 
@@ -78,6 +79,15 @@ export async function POST(request: Request) {
   const eventType = typeof body.event_type === 'string' ? body.event_type : '';
   const category = ALLOWED_EVENTS[eventType];
   if (!category) return noContent(); // tipo non in allowlist → ignora
+
+  // 🟡-8: defense-in-depth GDPR. Gli eventi di analitica/sorveglianza ('visitor':
+  // page_view, session_start) richiedono il consenso 'analytics' anche lato
+  // server, non solo nel client. Gli eventi 'auth' (login/logout/signup) sono
+  // funzionali/di sicurezza e non sono soggetti a consenso.
+  if (category === 'visitor') {
+    const consent = parseConsentCookie(readCookie(request.headers.get('cookie'), CONSENT_COOKIE) ?? undefined);
+    if (!consent.analytics) return noContent();
+  }
 
   const path = typeof body.path === 'string' ? body.path.slice(0, 500) : null;
   const referrer = typeof body.referrer === 'string' ? body.referrer.slice(0, 500) : null;

@@ -3,6 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { getKycProvider, viesVatLookup } from '@/lib/kyc/providers';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { writeAudit } from '@/lib/audit';
 
 export const runtime = 'nodejs';
 
@@ -116,6 +117,19 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
       kyc_provider_checked_at: new Date().toISOString(),
     })
     .eq('id', user.id);
+
+  // 🟠-23: traccia in audit_logs la decisione KYC terminale. A questo stadio il
+  // provider può rispondere solo PENDING o APPROVED (il rifiuto arriverebbe via
+  // webhook provider, non ancora implementato): audit sull'approvazione.
+  if (result.status === 'APPROVED') {
+    await writeAudit({
+      actorId: user.id,
+      action: 'kyc.approve',
+      targetTable: 'profiles',
+      targetId: user.id,
+      metadata: { role: profile.role, providerCheckId: result.providerCheckId ?? null, via: 'start-check' },
+    });
+  }
 
   return NextResponse.json({ status: result.status, providerCheckId: result.providerCheckId, vatCheck }, { status: 200 });
 });

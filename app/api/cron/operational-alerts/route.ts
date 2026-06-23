@@ -193,6 +193,24 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     });
   }
 
+  // 9) Backlog coda email (audit 🟡-9): se send-emails non gira o Resend è giù,
+  // le email lifecycle si accumulano. Segnaliamo se troppe restano non inviate.
+  const emailBacklogCutoff = new Date(Date.now() - 30 * 60_000).toISOString();
+  const { count: emailBacklog } = await admin
+    .from('email_queue')
+    .select('id', { count: 'exact', head: true })
+    .is('sent_at', null)
+    .is('cancelled_at', null)
+    .lte('send_at', emailBacklogCutoff);
+  if ((emailBacklog ?? 0) >= 50) {
+    alerts.push({
+      key: `EMAIL_BACKLOG|${new Date().toISOString().slice(0, 13)}`,
+      type: 'EMAIL_BACKLOG',
+      detail: `Coda email: ${emailBacklog} messaggi non inviati da oltre 30 min. send-emails fermo o Resend down?`,
+      url: '/admin/today',
+    });
+  }
+
   if (alerts.length === 0) {
     return NextResponse.json({ ok: true, alerts: 0, message: 'No anomalies detected' });
   }

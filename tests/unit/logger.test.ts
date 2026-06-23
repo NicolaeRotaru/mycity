@@ -38,10 +38,12 @@ describe('logger', () => {
   });
 
   describe('info', () => {
-    it('logs to console in non-production', () => {
+    it('logs to console in non-production (JSON strutturato)', () => {
       setNodeEnv('development');
       logger.info('msg', { foo: 1 });
-      expect(consoleSpy.log).toHaveBeenCalledWith('[info] msg', { foo: 1 });
+      expect(consoleSpy.log).toHaveBeenCalledTimes(1);
+      const parsed = JSON.parse(consoleSpy.log.mock.calls[0][0] as string);
+      expect(parsed).toMatchObject({ level: 'info', msg: 'msg', foo: 1 });
     });
 
     it('is silent in production', () => {
@@ -52,10 +54,26 @@ describe('logger', () => {
   });
 
   describe('warn', () => {
-    it('warns in development', () => {
+    it('warns in development (JSON strutturato)', () => {
       setNodeEnv('development');
       logger.warn('careful', { reason: 'slow' });
-      expect(consoleSpy.warn).toHaveBeenCalledWith('[warn] careful', { reason: 'slow' });
+      expect(consoleSpy.warn).toHaveBeenCalledTimes(1);
+      const parsed = JSON.parse(consoleSpy.warn.mock.calls[0][0] as string);
+      expect(parsed).toMatchObject({ level: 'warn', msg: 'careful', reason: 'slow' });
+    });
+  });
+
+  describe('redaction PII (audit 🟡-10)', () => {
+    it('maschera le chiavi sensibili nel contesto inviato a Sentry', async () => {
+      setNodeEnv('production');
+      vi.stubEnv('NEXT_PUBLIC_SENTRY_DSN', '');
+      vi.stubEnv('SENTRY_DSN', 'https://x@o1.ingest.sentry.io/1');
+      logger.error(new Error('boom'), { email: 'a@b.com', orderId: 'o1', nested: { token: 'secret' } });
+      await vi.waitFor(() =>
+        expect(captureExceptionMock).toHaveBeenCalledWith(expect.any(Error), {
+          extra: { email: '[redacted]', orderId: 'o1', nested: { token: '[redacted]' } },
+        }),
+      );
     });
   });
 

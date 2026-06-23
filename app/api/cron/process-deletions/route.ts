@@ -68,6 +68,26 @@ const KYC_FIELDS = {
 export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
   const admin = getAdminSupabase();
 
+  // 🟡-15: enforcement della retention documentata (privacy §3) per i log che
+  // contengono PII (IP/user-agent). I periodi sono dichiarati nella privacy:
+  // log di sicurezza/accesso 12 mesi, analitica 14 mesi. Qui rimuoviamo l'IP/UA
+  // oltre quei periodi (l'azione/evento resta, la PII no). Best-effort, idempotente.
+  try {
+    const monthsAgo = (m: number) => new Date(Date.now() - m * 30 * 86_400_000).toISOString();
+    await admin
+      .from('activity_events')
+      .update({ ip: null, user_agent: null })
+      .lt('created_at', monthsAgo(14))
+      .not('ip', 'is', null);
+    await admin
+      .from('audit_logs')
+      .update({ ip: null, user_agent: null })
+      .lt('created_at', monthsAgo(12))
+      .not('ip', 'is', null);
+  } catch (e) {
+    logger.warn('[cron-deletions] prune retention IP/UA parziale', { e });
+  }
+
   // Chiama la function SQL che ritorna gli userId scaduti
   const { data: expired, error: rpcErr } = await admin.rpc('process_expired_deletions');
   if (rpcErr) {
@@ -94,6 +114,21 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         continue;
       }
     }
+
+    // 1b) 🟡-14: anonimizza il free-text PII dell'utente oltre al profilo (Art.17).
+    // Recensioni/resi/chat/contact possono contenere dati personali in chiaro.
+    // Best-effort: non blocca la cancellazione se una singola tabella fallisce.
+    await Promise.all([
+      admin.from('reviews').update({ comment: null }).eq('user_id', userId),
+      admin.from('store_reviews').update({ comment: null }).eq('user_id', userId),
+      admin.from('rider_reviews').update({ comment: null }).eq('user_id', userId),
+      admin.from('returns').update({ notes: null }).eq('buyer_id', userId),
+      admin.from('messages').update({ body: '[messaggio rimosso]' }).eq('sender_id', userId),
+      admin
+        .from('contact_messages')
+        .update({ name: '[eliminato]', email: '[eliminato]', message: '[rimosso]' })
+        .eq('user_id', userId),
+    ]).catch((e) => logger.warn('[cron-deletions] anonimizzazione free-text parziale', { userId, e }));
 
     // 2) Hard delete auth.users
     const { error: delErr } = await admin.auth.admin.deleteUser(userId);

@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { NextRequest } from 'next/server';
 
-// Mock supabase: factory self-contained per evitare hoisting issue
+// Mock supabase: factory self-contained per evitare hoisting issue.
+// NB (audit 🔴-1): la lettura del profilo avviene via service-role
+// (getAdminSupabase), NON via client anon. Quindi `mockProfileSingle` è
+// cablato sul client admin; `mockAnonProfileSingle` rappresenta cosa vedrebbe
+// il client anon (RLS) e NON deve essere usato per il profilo.
 const mockAuthGetUser = vi.fn();
-const mockProfileSingle = vi.fn();
+const mockProfileSingle = vi.fn(); // profilo letto via admin (post-fix)
+const mockAnonProfileSingle = vi.fn(); // client anon: non usato per il profilo
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({
@@ -11,7 +16,7 @@ vi.mock('@supabase/supabase-js', () => ({
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
-          single: mockProfileSingle,
+          single: mockAnonProfileSingle,
         })),
       })),
     })),
@@ -20,6 +25,15 @@ vi.mock('@supabase/supabase-js', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   getCurrentUser: vi.fn(),
+  getAdminSupabase: vi.fn(() => ({
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: mockProfileSingle,
+        })),
+      })),
+    })),
+  })),
 }));
 
 // Per disabilitare rate limit cross-test (in-memory persiste)
@@ -58,6 +72,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockAuthGetUser.mockReset();
   mockProfileSingle.mockReset();
+  mockAnonProfileSingle.mockReset();
+  // Default: il client anon NON espone il profilo (simula RLS con auth.uid()=NULL)
+  mockAnonProfileSingle.mockResolvedValue({ data: null });
   __resetRateLimitBuckets();
 });
 
@@ -91,6 +108,35 @@ describe('withAuth', () => {
     const handler = vi.fn();
     const wrapped = withAuth(handler);
     const res = await wrapped(makeReq({ authorization: 'Bearer x' }));
+    expect(res.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('[🔴-1] legge il profilo via service-role: un buyer non-pubblico (invisibile ad anon) passa', async () => {
+    // RLS: il client anon NON vede la riga del buyer (auth.uid()=NULL).
+    mockAnonProfileSingle.mockResolvedValue({ data: null });
+    // Il client admin (service-role) bypassa RLS e trova il profilo.
+    mockAuthGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
+    mockProfileSingle.mockResolvedValue({ data: mockBuyerProfile });
+
+    const handler = vi.fn(async () => ({ status: 200 } as unknown as Response));
+    await withAuth(handler as never)(makeReq({ authorization: 'Bearer x' }));
+
+    // Col codice vecchio (profilo letto via anon → null) questo sarebbe 403.
+    expect(handler).toHaveBeenCalledOnce();
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ user: mockUser, profile: mockBuyerProfile }),
+    );
+  });
+
+  it('[🔴-1] la lettura del profilo NON dipende dal client anon', async () => {
+    // Anche se l'anon restituisse un profilo, conta solo l'admin.
+    mockAnonProfileSingle.mockResolvedValue({ data: { id: 'x', role: 'admin', is_approved: true } });
+    mockAuthGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
+    mockProfileSingle.mockResolvedValue({ data: null }); // admin non trova → 403
+
+    const handler = vi.fn();
+    const res = await withAuth(handler)(makeReq({ authorization: 'Bearer x' }));
     expect(res.status).toBe(403);
     expect(handler).not.toHaveBeenCalled();
   });

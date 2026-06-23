@@ -32,7 +32,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const supa = await getServerSupabase();
   const { data: ret, error } = await supa
     .from('returns')
-    .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents')
+    .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents')
     .eq('id', params.id)
     .single();
 
@@ -44,6 +44,16 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
   if (ret.status !== 'REQUESTED') {
     return ApiErrors.conflict(`Reso gia' in stato ${ret.status}`);
+  }
+
+  // 🟠-22: il recesso (CHANGED_MIND) entro 14 giorni è INCONDIZIONATO (Cod. Cons.
+  // art. 52-59): il venditore non può rifiutarlo. Può solo approvarlo ed elaborare
+  // il rimborso (eventualmente alla restituzione del bene). Gli altri motivi
+  // (danneggiato, sbagliato, ecc.) restano valutabili.
+  if (ret.reason === 'CHANGED_MIND' && body.decision === 'REJECTED') {
+    return ApiErrors.invalidRequest(
+      'Il recesso entro 14 giorni è incondizionato e non può essere rifiutato (Cod. Cons. art. 52-59): approva ed elabora il rimborso.',
+    );
   }
 
   const admin = getAdminSupabase();

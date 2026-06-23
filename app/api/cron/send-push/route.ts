@@ -41,18 +41,28 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
   if (!pending?.length) return NextResponse.json({ ok: true, sent: 0, processed: 0 });
 
   let sent = 0;
+  let retried = 0;
   const nowIso = new Date().toISOString();
   for (const n of pending as { id: string; user_id: string; title: string; body: string | null; link: string | null }[]) {
-    sent += await sendPushToUser(supa, n.user_id, {
+    const r = await sendPushToUser(supa, n.user_id, {
       title: n.title,
       body: n.body ?? undefined,
       url: n.link ?? '/',
       tag: n.id,
     });
-    await supa.from('notifications').update({ pushed_at: nowIso }).eq('id', n.id);
+    sent += r.delivered;
+    // 🟠-10: marca pushed_at SOLO se almeno una push è stata consegnata, o se non
+    // c'erano subscription (niente da consegnare). Se c'erano subscription ma 0
+    // consegne (fallimento transitorio), NON marcare: verrà ritentato al giro
+    // successivo. La finestra di 1h sulla query limita naturalmente i retry.
+    if (r.delivered > 0 || r.total === 0) {
+      await supa.from('notifications').update({ pushed_at: nowIso }).eq('id', n.id);
+    } else {
+      retried++;
+    }
   }
 
-  return NextResponse.json({ ok: true, sent, processed: pending.length });
+  return NextResponse.json({ ok: true, sent, processed: pending.length, retried });
 });
 
 export const GET = handler;

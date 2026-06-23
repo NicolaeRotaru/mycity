@@ -80,13 +80,97 @@ jobs:
       - name: Install deps
         run: npm ci --legacy-peer-deps
 
-      # Test d'integrazione di sicurezza (RLS + grant EXECUTE su SECURITY DEFINER).
-      # Usano i secret REALI (niente placeholder): se non configurati, i test si
-      # auto-skippano (vedi hasEnv) e il job resta verde. Quando i secret ci sono,
-      # girano contro il DB e intercettano regressioni come una migration di
-      # lockdown non applicata.
+      # 🔴-4: i test RLS/grant non devono auto-skipparsi in SILENZIO (CI verde con
+      # RLS rotta). Se ci sono i secret di un progetto Supabase DI TEST → girano e
+      # fanno enforcement. Se mancano → warning VISIBILE + skip: niente false-green
+      # silenzioso, ma non blocchiamo i merge di chi non ha ancora un DB di test.
+      - name: Check RLS secrets
+        id: rls
+        env:
+          URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          ANON: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SR: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$ANON" ] || [ -z "$SR" ]; then
+            echo "::warning::Test RLS/grant SALTATI: mancano i secret di un progetto Supabase di TEST (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY). Aggiungili in Settings -> Secrets and variables -> Actions per attivare l'enforcement (audit 🔴-4)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Test d'integrazione di sicurezza (RLS + grant EXECUTE su SECURITY DEFINER)
+      # contro il DB di test. Girano SOLO se i secret ci sono (vedi step sopra).
       - name: Integration tests
+        if: steps.rls.outputs.enabled == 'true'
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run test:integration
+
+  e2e-tests:
+    name: E2E smoke (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      # 🔴-4: gli smoke e2e richiedono un backend reale (la home/cart/auth
+      # renderizzano dati dal DB). Se ci sono i secret di un Supabase di TEST →
+      # build + avvio app + Playwright. Se mancano → warning VISIBILE + skip,
+      # così il job non blocca i merge ma resta pronto ad attivarsi.
+      - name: Check E2E secrets
+        id: e2e
+        env:
+          URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          ANON: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$ANON" ]; then
+            echo "::warning::E2E smoke SALTATI: gli smoke richiedono un backend reale (Supabase di TEST). Configura NEXT_PUBLIC_SUPABASE_URL/ANON_KEY (e idealmente un DB seedato) in Actions per attivarli (audit 🔴-4)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Playwright (chromium)
+        if: steps.e2e.outputs.enabled == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        if: steps.e2e.outputs.enabled == 'true'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+        run: npm run build
+
+      - name: Start app + run e2e
+        if: steps.e2e.outputs.enabled == 'true'
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          E2E_BASE_URL: "http://localhost:3000"
+          CRON_SECRET: "ci-e2e-cron-secret"
+        run: |
+          npm start &
+          APP_PID=$!
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          set +e
+          npm run test:e2e -- --project=chromium
+          STATUS=$?
+          kill $APP_PID 2>/dev/null || true
+          exit $STATUS

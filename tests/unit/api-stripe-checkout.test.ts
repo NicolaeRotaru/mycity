@@ -202,3 +202,25 @@ describe('POST /api/stripe/checkout — anti-tampering importi', () => {
     expect(res.status).toBe(503);
   });
 });
+
+describe('POST /api/stripe/checkout — rifiuta ordini vuoti (audit 🟠-8)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    state.user = { id: 'buyer-1', email: 'b@x.com', email_confirmed_at: '2020-01-01T00:00:00Z' };
+    state.stripeConfigured = true;
+    state.products = [{ id: P1, name: 'A', price: 10, images: [], seller_id: S1, stock: 50, status: 'available' }];
+    state.sellers = [{ id: S1, store_name: 'A', full_name: null, store_lat: 45, store_lng: 9 }];
+  });
+
+  it('[🟠-8] groups vuoto → 400, nessuna sessione creata', async () => {
+    const res = await POST(makeReq(tamperedBody({ groups: [] })));
+    expect(res.status).toBe(400);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+
+  it('[🟠-8] gruppo con items vuoto → 400, nessuna sessione creata', async () => {
+    const res = await POST(makeReq(tamperedBody({ groups: [{ sellerId: S1, items: [] }] })));
+    expect(res.status).toBe(400);
+    expect(createSession).not.toHaveBeenCalled();
+  });
+});

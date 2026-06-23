@@ -15,11 +15,29 @@ import { captureError } from '@/lib/analytics/sentry';
 
 type LogContext = Record<string, unknown> | unknown;
 
+// 🟡-10: chiavi che non devono MAI finire in log/Sentry in chiaro.
+const PII_KEYS = /^(email|password|pass|token|authorization|auth|cookie|phone|tel|iban|card|card_number|cvv|secret|api_?key|access_token|refresh_token|ssn|fiscal_?code|vat)$/i;
+
+function redact(value: unknown, depth = 0): unknown {
+  if (depth > 4 || value == null) return value;
+  if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = PII_KEYS.test(k) ? '[redacted]' : redact(v, depth + 1);
+    }
+    return out;
+  }
+  return value;
+}
+
 function toCtx(ctx: unknown): Record<string, unknown> | undefined {
   if (ctx === undefined || ctx === null) return undefined;
-  if (typeof ctx === 'string') return { detail: ctx };
-  if (typeof ctx === 'object') return ctx as Record<string, unknown>;
-  return { value: ctx };
+  let obj: Record<string, unknown>;
+  if (typeof ctx === 'string') obj = { detail: ctx };
+  else if (typeof ctx === 'object') obj = ctx as Record<string, unknown>;
+  else obj = { value: ctx };
+  return redact(obj) as Record<string, unknown>;
 }
 
 /**
@@ -39,22 +57,27 @@ async function captureServerError(err: unknown, ctx?: Record<string, unknown>): 
   Sentry?.captureException(err, ctx ? { extra: ctx } : undefined);
 }
 
+// Emette una riga di log strutturata (JSON) con contesto redatto (🟡-10).
+function line(level: string, msg: string, ctx?: LogContext): string {
+  return JSON.stringify({ level, msg, ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
+}
+
 export const logger = {
   info: (msg: string, ctx?: LogContext) => {
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[info] ${msg}`, ctx ?? '');
+      console.log(line('info', msg, ctx));
     }
   },
 
   warn: (msg: string, ctx?: LogContext) => {
     if (typeof window !== 'undefined' || process.env.NODE_ENV !== 'production') {
-      console.warn(`[warn] ${msg}`, ctx ?? '');
+      console.warn(line('warn', msg, ctx));
     }
   },
 
   error: (err: unknown, ctx?: LogContext) => {
     if (process.env.NODE_ENV !== 'production') {
-      console.error('[error]', err, ctx ?? '');
+      console.error(line('error', err instanceof Error ? err.message : String(err), ctx));
     }
     const c = toCtx(ctx);
     if (typeof window === 'undefined') {

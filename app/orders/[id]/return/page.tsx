@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/ui/Field';
 import { apiErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
@@ -30,6 +31,7 @@ export default function NewReturnPage() {
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [order, setOrder] = useState<any>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -39,6 +41,7 @@ export default function NewReturnPage() {
         .eq('id', params.id)
         .single();
       setOrder(data);
+      setLoaded(true);
     })();
   }, [params.id]);
 
@@ -83,7 +86,21 @@ export default function NewReturnPage() {
     }
   }
 
-  if (!order) return <LoadingState />;
+  // audit 🟠-20: distinguere "in caricamento" da "non trovato" (prima: spinner
+  // infinito su id inesistente o ordine altrui bloccato da RLS).
+  if (!loaded) return <LoadingState />;
+  if (!order)
+    return (
+      <div className="container mx-auto max-w-xl px-4 py-12">
+        <EmptyState
+          icon={Package}
+          title="Ordine non trovato"
+          description="L'ordine non esiste o non hai i permessi per vederlo."
+          ctaLabel="Tutti gli ordini"
+          ctaHref="/orders"
+        />
+      </div>
+    );
 
   return (
     <div className="container mx-auto max-w-xl px-4 py-8">

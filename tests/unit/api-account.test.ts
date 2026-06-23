@@ -21,7 +21,7 @@ vi.mock('@/lib/api/middleware', () => ({
 const fromResults: Record<string, unknown> = {};
 function makeChain(table: string) {
   const chain: Record<string, unknown> = {};
-  const methods = ['select', 'eq', 'single', 'update', 'insert', 'order', 'limit'];
+  const methods = ['select', 'eq', 'or', 'single', 'update', 'insert', 'order', 'limit'];
   for (const m of methods) {
     chain[m] = vi.fn(() => {
       // single() / update().eq() risolvono la promise; gli altri sono chainable
@@ -84,12 +84,24 @@ describe('GET /api/account/export (GDPR Art.20)', () => {
   it('payload include tutte le sezioni dati richieste', async () => {
     const res = await (exportGET as unknown as () => Promise<Response>)();
     const json = await res.json();
-    for (const key of ['profile', 'addresses', 'orders_as_buyer', 'orders_as_seller', 'orders_as_rider', 'reviews', 'favorites', 'referrals', 'notifications']) {
+    for (const key of ['profile', 'addresses', 'orders_as_buyer', 'orders_as_seller', 'orders_as_rider', 'reviews', 'favorites', 'referrals', 'notifications', 'chat', 'contact_messages']) {
       expect(json).toHaveProperty(key);
     }
     expect(json.reviews).toHaveProperty('products');
     expect(json.reviews).toHaveProperty('stores');
     expect(json.reviews).toHaveProperty('riders');
+    // 🟡-13: chat (conversations + messaggi) e contact form inclusi nell'export.
+    expect(json.chat).toHaveProperty('conversations');
+    expect(json.chat).toHaveProperty('messages_sent');
+  });
+
+  it('[🟡-13] interroga store_reviews/rider_reviews con user_id (non reviewer_id)', async () => {
+    await (exportGET as unknown as () => Promise<Response>)();
+    const tablesQueried = adminFromMock.mock.calls.map((c) => c[0]);
+    expect(tablesQueried).toContain('store_reviews');
+    expect(tablesQueried).toContain('rider_reviews');
+    expect(tablesQueried).toContain('conversations');
+    expect(tablesQueried).toContain('contact_messages');
   });
 
   it('query addresses usa user_addresses (NON addresses — bug fix)', async () => {

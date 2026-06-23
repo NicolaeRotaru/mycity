@@ -33,6 +33,11 @@ const ROLE_PROTECTED: Array<{ prefix: string; allowed: ('admin' | 'seller' | 'ri
   { prefix: '/rider',  allowed: ['rider', 'admin'] },
 ];
 
+// Rotte che richiedono solo l'autenticazione (qualsiasi ruolo), non un ruolo
+// specifico. 🟠-18: /profile/** era senza guard server-side (protezione
+// per-pagina incoerente). Qui la centralizziamo con returnTo preciso.
+const AUTH_REQUIRED = ['/profile'];
+
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -66,7 +71,9 @@ function buildCsp(nonce: string, isDev: boolean): string {
     "font-src 'self' data:",
     // <video srcObject=MediaStream> per la fotocamera in-app + blob URL anteprime.
     "media-src 'self' blob:",
-    `connect-src 'self' https://${supaHost} wss://${supaHost} https://nominatim.openstreetmap.org https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`,
+    // 🟠-15: nominatim rimosso — il geocoding ora passa dal proxy server-side
+    // (/api/geocode), il browser non chiama più direttamente Nominatim.
+    `connect-src 'self' https://${supaHost} wss://${supaHost} https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`,
     // youtube-nocookie + vimeo: embed del blocco "video" della vetrina (VideoSection).
     "frame-src 'self' https://challenges.cloudflare.com https://js.stripe.com https://hooks.stripe.com https://connect.stripe.com https://www.youtube-nocookie.com https://player.vimeo.com",
     "frame-ancestors 'none'",
@@ -133,7 +140,8 @@ export async function middleware(req: NextRequest) {
   // Il refresh del cookie sessione sulle rotte pubbliche resta coperto dal client
   // supabase-js nel browser (auto-refresh) e dai server component su rotte protette.
   const roleRule = findRoleRule(pathname);
-  if (!roleRule) return res;
+  const needsAuth = !!roleRule || AUTH_REQUIRED.some((p) => pathname.startsWith(p));
+  if (!needsAuth) return res;
 
   if (!SUPABASE_URL || !SUPABASE_KEY) return res;
 
@@ -177,20 +185,24 @@ export async function middleware(req: NextRequest) {
     return withCsp(NextResponse.redirect(url));
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, is_approved')
-    .eq('id', user.id)
-    .single();
+  // Il role-check si applica SOLO alle rotte role-protected (/admin,/seller,/rider).
+  // Per le rotte solo-auth (/profile) basta l'utente autenticato verificato sopra.
+  if (roleRule) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, is_approved')
+      .eq('id', user.id)
+      .single();
 
-  type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
-  const role = profile?.role as ProfileRole | undefined;
-  const approved = !!profile?.is_approved;
+    type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
+    const role = profile?.role as ProfileRole | undefined;
+    const approved = !!profile?.is_approved;
 
-  if (!role || !roleRule.allowed.includes(role as ProfileRole & ('admin' | 'seller' | 'rider')) || !approved) {
-    const url = req.nextUrl.clone();
-    url.pathname = '/';
-    return withCsp(NextResponse.redirect(url));
+    if (!role || !roleRule.allowed.includes(role as ProfileRole & ('admin' | 'seller' | 'rider')) || !approved) {
+      const url = req.nextUrl.clone();
+      url.pathname = '/';
+      return withCsp(NextResponse.redirect(url));
+    }
   }
 
   return res;

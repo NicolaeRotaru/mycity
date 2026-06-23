@@ -4,6 +4,7 @@ import { sendEmail } from '@/lib/email/client';
 import { env, requireSupabaseService } from '@/lib/env';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { logger } from '@/lib/logger';
 
 /**
  * Cron endpoint per inviare email lifecycle dalla queue.
@@ -76,17 +77,11 @@ const handler = withCronAuth(async (req): Promise<NextResponse> => {
   // 1) Claim batch (atomic UPDATE … RETURNING per evitare double-send)
   const { data: batch, error: claimErr } = await supa.rpc('claim_pending_emails', { p_max: 50 });
   if (claimErr) {
-    // Fallback: select + manual lock window
-    const { data: pending } = await supa
-      .from('email_queue')
-      .select('id, user_id, template')
-      .lte('send_at', new Date().toISOString())
-      .is('sent_at', null)
-      .is('cancelled_at', null)
-      .limit(50);
-    if (!pending?.length) return NextResponse.json({ ok: true, sent: 0, claimed: 0 });
-    // Process without atomic claim
-    return await processBatch(supa, pending as any[]);
+    // 🟠-11: NIENTE fallback "select senza claim" — in multi-istanza due run
+    // sovrapposti invierebbero la stessa email due volte. Meglio fallire e
+    // ritentare al giro successivo (il claim atomico è l'unico path sicuro).
+    logger.error('[cron] claim_pending_emails fallita', { message: claimErr.message });
+    return ApiErrors.unavailable('Email queue claim non disponibile');
   }
 
   return await processBatch(supa, (batch ?? []) as any[]);

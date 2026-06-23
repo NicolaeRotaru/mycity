@@ -8,7 +8,7 @@ import {
   Sun, LayoutDashboard, Receipt, Users, Gavel, Banknote, Siren, Wallet, MapPin,
   TrendingUp, Ticket, Megaphone, Zap, Crown, CalendarDays,
   LayoutTemplate, FileText, FolderTree, Palette, Rss, ScrollText, LifeBuoy,
-  Home, LogOut, Menu, X,
+  Home, LogOut, Menu, X, MessageCircle,
   type LucideIcon,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -57,6 +57,7 @@ const NAV: NavGroup[] = [
     { href: '/admin/activity', icon: Rss, label: 'Attività' },
     { href: '/admin/audit', icon: ScrollText, label: 'Audit log' },
     { href: '/admin/support', icon: LifeBuoy, label: 'Supporto' },
+    { href: '/admin/support-chat', icon: MessageCircle, label: 'Chat supporto' }, // 🟡-21: era orfana
   ] },
 ];
 

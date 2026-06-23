@@ -86,6 +86,16 @@ export default function TermsPage() {
           di apertura; (e) eventuale acquisto di posizionamento sponsorizzato (chiaramente etichettato
           come &quot;Sponsorizzato&quot;).
         </p>
+        <p>
+          <strong>Importanza relativa dei parametri</strong> (art. 5 P2B): per i risultati
+          <em>organici</em> il fattore prevalente è la rilevanza rispetto alla query, seguita dalla
+          distanza geografica (un marketplace locale privilegia la prossimità per tempi e costi di
+          consegna), poi dal rating del Venditore e dalla disponibilità/orari. I contenuti
+          <em>sponsorizzati</em> NON alterano l&apos;ordine dei risultati organici: appaiono in spazi
+          separati ed etichettati &quot;Sponsorizzato&quot;, e il pagamento influenza solo quegli
+          spazi dedicati, mai il posizionamento organico. Nessun parametro consente a un Venditore di
+          ottenere un posizionamento organico migliore tramite pagamento diretto a MyCity.
+        </p>
       </LegalSection>
 
       <LegalSection id="registrazione" heading="3. Registrazione e account">

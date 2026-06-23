@@ -11,6 +11,15 @@ const HOLD_HOURS = 1;
 const BATCH_LIMIT = 200;
 const OPEN_RETURN_STATUSES = ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'];
 const OPEN_DISPUTE_STATUSES = ['open', 'under_review'];
+/**
+ * Filtro payout sui chargeback Stripe (colonna orders.dispute_status):
+ * solo 'OPEN' blocca il payout. 'WON' (contestazione vinta) deve tornare
+ * eleggibile, e 'LOST' è già escluso perché l'ordine viene annullato
+ * (delivery_status='CANCELED'). NB: non usare .neq('OPEN'), perché in SQL
+ * `dispute_status <> 'OPEN'` è NULL per le righe null → le escluderebbe tutte.
+ * Vedi audit 🟠-6.
+ */
+const PAYOUT_DISPUTE_FILTER = 'dispute_status.is.null,dispute_status.eq.WON';
 
 /**
  * Cron: rilascia automaticamente i payout SCT ai venditori per gli ordini
@@ -24,7 +33,7 @@ const OPEN_DISPUTE_STATUSES = ['open', 'under_review'];
  *   AND payment_method = 'card'        (i COD non passano da Stripe)
  *   AND delivery_status = 'DELIVERED'
  *   AND delivered_at <= now() - 1h
- *   AND dispute_status IS NULL         (nessun chargeback Stripe aperto)
+ *   AND (dispute_status IS NULL OR = 'WON')   (nessun chargeback Stripe APERTO)
  * Esclusioni applicative: ordini con un reso aperto o una dispute interna
  * aperta vengono saltati (i fondi restano HELD).
  *
@@ -51,7 +60,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .in('payout_status', ['HELD', 'PENDING_SELLER_ONBOARDING'])
     .eq('payment_method', 'card')
     .eq('delivery_status', 'DELIVERED')
-    .is('dispute_status', null)
+    .or(PAYOUT_DISPUTE_FILTER)
     .lte('delivered_at', cutoffIso)
     .limit(BATCH_LIMIT);
 
@@ -98,7 +107,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   // --- COMPENSO RIDER: transfer della quota shipping_cost ai rider ---
   // Ordini card consegnati con rider, non ancora pagati (o da ritentare).
   // Niente blocco su resi (il rider ha comunque effettuato la consegna); i
-  // chargeback sono già esclusi via dispute_status IS NULL.
+  // chargeback APERTI sono esclusi via PAYOUT_DISPUTE_FILTER (null o WON ok).
   let riderReleased = 0;
   let riderSkipped = 0;
   let riderFailed = 0;
@@ -109,7 +118,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .eq('delivery_status', 'DELIVERED')
     .not('rider_id', 'is', null)
     .or('rider_payout_status.is.null,rider_payout_status.eq.PENDING_RIDER_ONBOARDING,rider_payout_status.eq.FAILED')
-    .is('dispute_status', null)
+    .or(PAYOUT_DISPUTE_FILTER)
     .lte('delivered_at', cutoffIso)
     .limit(BATCH_LIMIT);
 
@@ -140,7 +149,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .eq('payout_status', 'HELD')
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
-    .is('dispute_status', null)
+    .or(PAYOUT_DISPUTE_FILTER)
     .limit(BATCH_LIMIT);
   const codIds = (codCands ?? []).map((o) => o.id as string);
   if (codIds.length > 0) {

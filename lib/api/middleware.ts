@@ -63,17 +63,26 @@ async function authenticate(req: NextRequest): Promise<
 
   if (!user) return { ok: false, response: ApiErrors.unauthorized() };
 
-  // Fetch profile (sempre via admin per evitare RLS recursion)
-  const supa = getSupabaseAuthClient();
-  if (!supa) return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
-  const { data: profile } = await supa
-    .from('profiles')
-    .select('id, role, is_approved')
-    .eq('id', user.id)
-    .single();
+  // Fetch profile via service-role (admin), NON via client anon. Il client anon
+  // non porta la sessione utente: con auth.uid()=NULL le policy RLS di `profiles`
+  // non espongono la riga di un buyer/rider ordinario (solo i seller approvati
+  // sono pubblici), quindi ogni route withAuth* risponderebbe 403 "Profilo non
+  // trovato". L'admin bypassa RLS in modo sicuro (server-only). Vedi audit 🔴-1.
+  let profile: Profile | null = null;
+  try {
+    const { getAdminSupabase } = await import('@/lib/supabase/server');
+    const { data } = await getAdminSupabase()
+      .from('profiles')
+      .select('id, role, is_approved')
+      .eq('id', user.id)
+      .single();
+    profile = (data as Profile | null) ?? null;
+  } catch {
+    return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+  }
   if (!profile) return { ok: false, response: ApiErrors.forbidden('Profilo non trovato') };
 
-  return { ok: true, user, profile: profile as Profile };
+  return { ok: true, user, profile };
 }
 
 /**
@@ -213,13 +222,16 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
 }
 
 /**
- * Wrapper: richiede x-internal-secret = SUPABASE_SERVICE_ROLE_KEY.
- * Per endpoint server-to-server (trigger DB, cron interni, edge functions).
- * Non esponi mai a client browser.
+ * Wrapper: richiede x-internal-secret per endpoint server-to-server (trigger DB,
+ * cron interni, edge functions). Non esporre mai a client browser.
+ *
+ * 🟡-1: usa un secret DEDICATO `INTERNAL_API_SECRET` (rotabile indipendentemente,
+ * blast-radius ridotto). Fallback a `SUPABASE_SERVICE_ROLE_KEY` per retro-
+ * compatibilità con i caller esistenti finché non viene configurato il dedicato.
  */
 export function withInternalAuth(handler: (req: NextRequest) => Promise<NextResponse>) {
   return async (req: NextRequest): Promise<NextResponse> => {
-    const expected = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const expected = process.env.INTERNAL_API_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
     const provided = req.headers.get('x-internal-secret');
     if (!secretsMatch(provided, expected)) {
       return ApiErrors.forbidden();
