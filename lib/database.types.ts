@@ -182,39 +182,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      business_orders: {
-        Row: {
-          id: string;
-          order_id: string;
-          company_name: string;
-          vat_number: string;
-          sdi_code: string | null;
-          pec: string | null;
-          invoice_required: boolean;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          order_id: string;
-          company_name: string;
-          vat_number: string;
-          sdi_code?: string | null;
-          pec?: string | null;
-          invoice_required?: boolean;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          order_id?: string;
-          company_name?: string;
-          vat_number?: string;
-          sdi_code?: string | null;
-          pec?: string | null;
-          invoice_required?: boolean;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
       cashback_campaigns: {
         Row: {
           id: string;
@@ -884,27 +851,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      invoice_sequences: {
-        Row: {
-          seller_id: string;
-          year: number;
-          last_number: number;
-          updated_at: string | null;
-        };
-        Insert: {
-          seller_id: string;
-          year: number;
-          last_number?: number;
-          updated_at?: string | null;
-        };
-        Update: {
-          seller_id?: string;
-          year?: number;
-          last_number?: number;
-          updated_at?: string | null;
-        };
-        Relationships: [];
-      };
       loyalty_accounts: {
         Row: {
           user_id: string;
@@ -1278,7 +1224,6 @@ export interface Database {
           currency: string;
           groups: Json;
           coupon_code: string | null;
-          b2b: Json | null;
           delivery: Json;
           pickup_in_store: boolean;
           status: string;
@@ -1295,7 +1240,6 @@ export interface Database {
           currency?: string;
           groups: Json;
           coupon_code?: string | null;
-          b2b?: Json | null;
           delivery: Json;
           pickup_in_store?: boolean;
           status?: string;
@@ -1312,7 +1256,6 @@ export interface Database {
           currency?: string;
           groups?: Json;
           coupon_code?: string | null;
-          b2b?: Json | null;
           delivery?: Json;
           pickup_in_store?: boolean;
           status?: string;
