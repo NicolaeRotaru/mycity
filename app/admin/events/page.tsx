@@ -130,7 +130,7 @@ export default function AdminEventsPage() {
 
   const STATUS_BADGE: Record<EventRow['status'], string> = {
     scheduled: 'bg-primary-100 text-primary-900',
-    live: 'bg-rose-100 text-rose-800',
+    live: 'bg-secondary-100 text-secondary-800',
     ended: 'bg-cream-100 text-ink-600',
     cancelled: 'bg-accent-100 text-accent-800',
   };
@@ -169,7 +169,7 @@ export default function AdminEventsPage() {
                 </td>
                 <td className="px-4 py-3 text-right space-x-2">
                   {ev.status === 'scheduled' && (
-                    <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'live' })} className="text-rose-700 hover:text-rose-800 text-xs font-semibold inline-flex items-center gap-1">
+                    <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'live' })} className="text-secondary-700 hover:text-secondary-800 text-xs font-semibold inline-flex items-center gap-1">
                       <Play size={12} strokeWidth={2.4} /> Vai live
                     </button>
                   )}
@@ -195,7 +195,7 @@ export default function AdminEventsPage() {
                       });
                       if (ok) del.mutate(ev.id);
                     }}
-                    className="text-rose-700 hover:text-rose-800 text-xs font-semibold inline-flex items-center gap-1"
+                    className="text-secondary-700 hover:text-secondary-800 text-xs font-semibold inline-flex items-center gap-1"
                   >
                     <Trash2 size={12} strokeWidth={2.4} /> Elimina
                   </button>
@@ -221,7 +221,7 @@ export default function AdminEventsPage() {
             </p>
             <div className="flex items-center gap-2 mt-3 pt-3 border-t border-cream-100 flex-wrap">
               {ev.status === 'scheduled' && (
-                <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'live' })} className="flex-1 min-w-[90px] inline-flex items-center justify-center gap-1 bg-rose-50 text-rose-700 font-semibold py-2 rounded-lg text-sm">
+                <button onClick={() => changeStatus.mutate({ id: ev.id, status: 'live' })} className="flex-1 min-w-[90px] inline-flex items-center justify-center gap-1 bg-secondary-50 text-secondary-700 font-semibold py-2 rounded-lg text-sm">
                   <Play size={14} strokeWidth={2.4} /> Vai live
                 </button>
               )}
@@ -248,7 +248,7 @@ export default function AdminEventsPage() {
                   if (ok) del.mutate(ev.id);
                 }}
                 aria-label="Elimina"
-                className="px-3 py-2 text-rose-700 bg-rose-50 rounded-lg"
+                className="px-3 py-2 text-secondary-700 bg-secondary-50 rounded-lg"
               >
                 <Trash2 size={16} strokeWidth={2.4} />
               </button>

@@ -196,7 +196,7 @@ export default function AdminSponsoredPage() {
                         <Play size={12} strokeWidth={2.4} /> Riprendi
                       </button>
                     )}
-                    <button onClick={() => del.mutate(l.id)} className="text-rose-700 hover:text-rose-800 text-xs font-semibold inline-flex items-center gap-1">
+                    <button onClick={() => del.mutate(l.id)} className="text-secondary-600 hover:text-secondary-700 text-xs font-semibold inline-flex items-center gap-1">
                       <Trash2 size={12} strokeWidth={2.4} /> Elimina
                     </button>
                   </td>

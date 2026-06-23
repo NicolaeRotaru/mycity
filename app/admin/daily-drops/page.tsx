@@ -164,7 +164,7 @@ export default function AdminDailyDropsPage() {
                   type="button"
                   onClick={() => { if (window.confirm('Eliminare questo drop?')) remove.mutate(d.drop_date); }}
                   aria-label="Elimina drop"
-                  className="p-2 text-ink-400 hover:text-red-600"
+                  className="p-2 text-ink-400 hover:text-secondary-600"
                 >
                   <Trash2 size={16} aria-hidden />
                 </button>

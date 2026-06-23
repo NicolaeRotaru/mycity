@@ -128,7 +128,7 @@ export default function AdminBrandingPage() {
               maxLength={60}
               onChange={(e) => setItems(items.map((x, k) => (k === i ? { ...x, text: e.target.value } : x)))}
             />
-            <button type="button" onClick={() => setItems(items.filter((_, k) => k !== i))} aria-label="Rimuovi elemento" className="mb-1 p-2 text-ink-400 hover:text-red-600">
+            <button type="button" onClick={() => setItems(items.filter((_, k) => k !== i))} aria-label="Rimuovi elemento" className="mb-1 p-2 text-ink-400 hover:text-secondary-600">
               <Trash2 size={16} aria-hidden />
             </button>
           </div>
@@ -162,7 +162,7 @@ export default function AdminBrandingPage() {
       <div className="sticky z-30 flex justify-end bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
         <div className="flex flex-col items-end gap-2 mr-16 md:mr-0">
           {dirty && (
-            <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 shadow-warm-sm">
+            <span className="text-xs font-semibold text-accent-800 bg-accent-50 border border-accent-200 rounded-full px-3 py-1.5 shadow-warm-sm">
               Modifiche non salvate
             </span>
           )}
