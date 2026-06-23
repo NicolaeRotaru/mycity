@@ -135,33 +135,23 @@ async function upsertReconciliation(admin: AdminSupabase, riderId: string, isoDa
   const start = `${isoDate}T00:00:00Z`;
   const end = `${isoDate}T23:59:59Z`;
 
-  // ATTESO: tutti i COD consegnati quel giorno (per delivered_at), ANCHE quelli mai
-  // confermati. Così un rider che semplicemente "non conferma" e tiene i contanti
-  // emerge come ammanco, invece di sparire dalla riconciliazione.
+  // 🟡-7: atteso E incassato sono ancorati allo STESSO insieme di ordini —
+  // quelli consegnati quel giorno (per delivered_at). Prima l'incassato usava
+  // cash_confirmed_at: un ordine consegnato a fine giornata e confermato dopo
+  // mezzanotte cadeva in atteso[X] ma incassato[X+1] → falso MISMATCH ricorrente.
+  // Includere i COD consegnati ANCHE se mai confermati (cash_collected_cents=0)
+  // fa emergere come ammanco un rider che non conferma, invece di farlo sparire.
   const { data: deliveredRows } = await admin
     .from('orders')
-    .select('total_price')
+    .select('total_price, cash_collected_cents')
     .eq('rider_id', riderId)
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
     .gte('delivered_at', start)
     .lte('delivered_at', end);
-  const expected = (deliveredRows ?? []).reduce(
-    (s, r) => s + Math.round(Number((r as ReconciliationRow).total_price) * 100), 0,
-  );
-
-  // INCASSATO: somma dichiarata sugli ordini confermati quel giorno.
-  const { data: confirmedRows } = await admin
-    .from('orders')
-    .select('cash_collected_cents')
-    .eq('rider_id', riderId)
-    .eq('payment_method', 'cod')
-    .eq('delivery_status', 'DELIVERED')
-    .gte('cash_confirmed_at', start)
-    .lte('cash_confirmed_at', end);
-  const collected = (confirmedRows ?? []).reduce(
-    (s, r) => s + Number((r as ReconciliationRow).cash_collected_cents ?? 0), 0,
-  );
+  const rows = (deliveredRows ?? []) as ReconciliationRow[];
+  const expected = rows.reduce((s, r) => s + Math.round(Number(r.total_price) * 100), 0);
+  const collected = rows.reduce((s, r) => s + Number(r.cash_collected_cents ?? 0), 0);
 
   const status = Math.abs(expected - collected) <= 50 ? 'OK' : 'MISMATCH';
 

@@ -32,8 +32,8 @@
 | 🟡-3 | `gift_cards` manca CHECK(balance<=amount) | 🟡 | FATTO | migrations/103_gift_card_balance_cap.sql | (git) | SQL idempotente | conferma runtime: applicare migrazione |
 | 🟡-4 | definer-fn storiche senza search_path | 🟡 | TODO | | | | verifica runtime |
 | 🟡-5 | expire-checkouts non rilascia stock varianti | 🟡 | FATTO | app/api/cron/expire-checkouts/route.ts | (git) | typecheck; mirror webhook:857 | aggiunto variant_id alla map restore_stock |
-| 🟡-6 | refund parziale Dashboard multi-seller → no update | 🟡 | TODO | | | | |
-| 🟡-7 | riconciliazione COD assi temporali diversi | 🟡 | TODO | | | | |
+| 🟡-6 | refund parziale Dashboard multi-seller → no update | 🟡 | FATTO | app/api/stripe/webhook/route.ts | (git) | typecheck | warn→Sentry su parziale out-of-band; doc: usare flusso interno (auto-riconciliazione non possibile, charge non attribuibile a 1 ordine) |
+| 🟡-7 | riconciliazione COD assi temporali diversi | 🟡 | FATTO | app/api/rider/cash-confirm/route.ts | (git) | typecheck+test COD | atteso e incassato ancorati a delivered_at (stesso insieme) |
 | 🟡-8 | `/api/track` senza consent server-side | 🟡 | FATTO | app/api/track/route.ts | (git) | typecheck | eventi visitor gated su consenso analytics (cookie); auth funzionali |
 | 🟡-9 | operational-alerts non vigila email_queue backlog | 🟡 | TODO | | | | |
 | 🟡-10 | logger non strutturato, no redaction PII | 🟡 | TODO | | | | |

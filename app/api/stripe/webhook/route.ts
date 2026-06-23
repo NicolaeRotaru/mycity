@@ -652,7 +652,18 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   // multi-seller.
   const fullyRefunded = charge.refunded === true || (charge.amount_refunded ?? 0) >= (charge.amount ?? 0);
   if (!fullyRefunded) {
-    logger.info('[stripe] charge.refunded parziale: nessun blanket-cancel', { pi, amountRefunded: charge.amount_refunded });
+    // 🟡-6: un refund PARZIALE su una charge multi-seller non è auto-riconciliabile
+    // qui (Stripe non dice a quale dei N ordini si riferisce). I refund parziali
+    // DEVONO passare dal flusso interno (returns/decide, disputes/resolve), che
+    // chiama refundOrder con reversal proporzionale per-ordine. Se arriva un
+    // parziale "out-of-band" (es. dal Dashboard), lo segnaliamo come warning
+    // (→ Sentry) per la riconciliazione manuale, invece di ignorarlo in silenzio.
+    logger.warn('[stripe] charge.refunded PARZIALE fuori dal flusso interno: riconciliare a mano', {
+      pi,
+      chargeId: charge.id,
+      amountRefunded: charge.amount_refunded,
+      amount: charge.amount,
+    });
     return;
   }
 
