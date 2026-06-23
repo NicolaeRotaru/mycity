@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
-  Store, Check, ShieldCheck, MapPin, ArrowRight, Heart, Sparkles, Gift,
+  Store, Check, ShieldCheck, ArrowRight, Heart, Sparkles, Gift,
   Banknote, Home as HomeIcon, Truck, RotateCcw,
 } from 'lucide-react';
 import { sizedImage } from '@/lib/image-url';
@@ -117,7 +117,7 @@ function HomeBlock({
                     ctaId="hero_secondary"
                     location="hero"
                     variant={heroVariant}
-                    className="inline-flex items-center gap-2 bg-white hover:bg-cream-50 text-ink-900 border border-cream-300 px-6 py-3 rounded-full font-semibold transition-colors"
+                    className="inline-flex items-center gap-2 bg-secondary-700 hover:bg-secondary-800 text-white px-6 py-3 rounded-full font-semibold transition-colors shadow-warm"
                   >
                     <Store size={18} strokeWidth={2.2} />
                     Esplora i negozi
@@ -281,7 +281,7 @@ function HomeBlock({
           <div className="flex justify-between items-end mb-5 gap-4 flex-wrap">
             <div>
               <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
-                <MapPin size={14} strokeWidth={2.4} />
+                <Store size={14} strokeWidth={2.4} />
                 {c.eyebrow || 'Vicino a te'}
               </span>
               <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mt-1">

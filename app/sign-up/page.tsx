@@ -3,7 +3,7 @@
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ShoppingCart, Store, Bike, Gift, Mail, ArrowRight, type LucideIcon } from 'lucide-react';
+import { ShoppingCart, Store, Bike, Gift, Mail, User, ArrowRight, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
@@ -37,6 +37,7 @@ function SignUpInner() {
   const roleParam = searchParams.get('role');
   const initialRole: Role = isRole(roleParam) ? roleParam : 'buyer';
 
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [acceptTos, setAcceptTos] = useState(false);
@@ -71,7 +72,7 @@ function SignUpInner() {
         email,
         password,
         options: {
-          data: { role },
+          data: { role, full_name: fullName.trim() || undefined },
           captchaToken: captchaToken || undefined,
           emailRedirectTo,
         },
@@ -138,6 +139,16 @@ function SignUpInner() {
       </fieldset>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          id="signup-name"
+          label="Nome e cognome"
+          type="text"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          placeholder="Mario Rossi"
+          autoComplete="name"
+          leading={<User size={18} aria-hidden />}
+        />
         <Input
           id="signup-email"
           label="Email"

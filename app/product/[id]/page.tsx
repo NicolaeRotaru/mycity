@@ -221,7 +221,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   const images: string[] = Array.isArray(product.images) && product.images.length > 0
     ? (product.images as string[])
-    : ['https://placehold.co/600x600/eef2ff/6366f1?text=Foto+prodotto'];
+    : ['https://placehold.co/600x600/F5EDD9/78716C?text=Foto+prodotto'];
 
   const avgRating = reviews.length
     ? reviews.reduce((s: number, r) => s + Number(r.rating), 0) / reviews.length
@@ -571,7 +571,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               {compareValid && (
                 <>
                   <span className="text-lg text-ink-400 line-through">{formatPrice(compareAtNum)}</span>
-                  <span className="text-sm font-bold text-secondary-600">-{comparePct}%</span>
                   <span className="text-sm font-bold text-secondary-600">Risparmi {formatPrice(compareAtNum - price)}</span>
                 </>
               )}

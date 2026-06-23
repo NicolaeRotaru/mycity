@@ -3,7 +3,7 @@ import { use, type CSSProperties } from 'react';
 
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Megaphone, PencilLine } from 'lucide-react';
+import { Megaphone, PencilLine, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { announcementActive } from '@/lib/store-customization';
 import { homePage, enabledSections } from '@/lib/store-site';
@@ -12,6 +12,7 @@ import StoreNav from '@/components/store-sections/StoreNav';
 import { useStorePageData } from '@/components/store-sections/useStorePageData';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import EmptyState from '@/components/EmptyState';
 
 export default function StorePage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
@@ -34,8 +35,14 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
   }
   if (!data.approved || !data.ctx || !data.store) {
     return (
-      <div className="container mx-auto px-4 py-16 text-center text-ink-500">
-        Negozio non trovato.
+      <div className="container mx-auto px-4 py-16 max-w-xl">
+        <EmptyState
+          icon={Store}
+          title="Negozio non trovato"
+          description="Questo negozio non esiste o non è più disponibile."
+          ctaLabel="Vedi tutti i negozi"
+          ctaHref="/stores"
+        />
       </div>
     );
   }

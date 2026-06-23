@@ -376,7 +376,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
 
   return (
-    <div className={`grid ${gridCols} gap-3`}>
+    <div className={`grid ${gridCols} gap-4`}>
       {filtered.map((p, i) => (
         <div key={p.id}>{renderCard(p, i)}</div>
       ))}
