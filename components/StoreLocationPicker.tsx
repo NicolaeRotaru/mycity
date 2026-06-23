@@ -128,17 +128,19 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
       const hasCountry = /italia|italy/i.test(address);
       const parts = [address];
       if (!hasCountry) parts.push('Italia');
-      const q = encodeURIComponent(parts.join(', '));
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=it`
-      );
+      // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
+      const res = await fetch('/api/geocode', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ q: parts.join(', ') }),
+      });
       const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) {
+      if (!data || data.lat == null || data.lng == null) {
         setError('Indirizzo non trovato. Prova ad essere più specifico o sposta il pin sulla mappa.');
         return;
       }
-      const lat = parseFloat(data[0].lat);
-      const lng = parseFloat(data[0].lon);
+      const lat = data.lat as number;
+      const lng = data.lng as number;
       if (!isValidLatLng(lat, lng)) {
         setError('Posizione non valida ricevuta dal servizio. Sposta il pin sulla mappa.');
         return;

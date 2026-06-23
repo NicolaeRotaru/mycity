@@ -381,14 +381,16 @@ export default function CheckoutPage() {
       let deliveryLng: number | null = form.lng;
       if (deliveryLat == null || deliveryLng == null) {
         try {
-          const q = encodeURIComponent(`${form.address}, ${form.zip} ${form.city}, Italia`);
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=it`,
-          );
+          // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
+          const res = await fetch('/api/geocode', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ q: `${form.address}, ${form.zip} ${form.city}, Italia` }),
+          });
           const json = await res.json();
-          if (Array.isArray(json) && json[0]) {
-            deliveryLat = parseFloat(json[0].lat);
-            deliveryLng = parseFloat(json[0].lon);
+          if (json && json.lat != null && json.lng != null) {
+            deliveryLat = json.lat;
+            deliveryLng = json.lng;
           }
         } catch {}
       }

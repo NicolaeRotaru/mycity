@@ -18,7 +18,7 @@
 | 🟠-12 | Rate-limit non condiviso multi-istanza; Upstash assente render.yaml | 🟠 | FATTO | render.yaml | (git) | UPSTASH_* aggiunte + nota scale-out | codice gia fa fallback in-memory→Upstash; ora wiring deploy |
 | 🟠-13 | Moderazione AI scritta ma non cablata | 🟠 | TODO | | | | (ex 🔴-5) |
 | 🟠-14 | KYC Onfido + VIES senza timeout | 🟠 | FATTO | lib/kyc/providers.ts | (git) | typecheck | AbortSignal.timeout(10s) sulle 3 fetch |
-| 🟠-15 | Nominatim geocoding dal browser | 🟠 | TODO | | | | |
+| 🟠-15 | Nominatim geocoding dal browser | 🟠 | FATTO | app/api/geocode/route.ts, app/checkout/page.tsx, app/profile/addresses/page.tsx, components/StoreLocationPicker.tsx, middleware.ts | (git) | typecheck | proxy server-side (UA+rate-limit+timeout); 3 client aggiornati (incl. 1 non citato); nominatim tolto da CSP |
 | 🟠-16 | Costo AI non capato (web_search + product JSON) | 🟠 | FATTO | lib/ai/productContext.ts | (git) | typecheck | cap 4000 char su JSON.stringify(product) |
 | 🟠-17 | Guard route group solo client-side | 🟠 | TODO | | | | |
 | 🟠-18 | `/profile/**` non protetto da middleware/layout | 🟠 | FATTO | middleware.ts | (git) | typecheck | aggiunto AUTH_REQUIRED=[/profile] nel middleware (auth sì, ruolo no), returnTo preciso |

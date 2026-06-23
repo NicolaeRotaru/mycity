@@ -64,12 +64,16 @@ export default function AddressesPage() {
       let lat: number | null = form.lat;
       let lng: number | null = form.lng;
       try {
-        const q = encodeURIComponent(`${form.address}, ${form.zip} ${form.city}, Italia`);
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=it`);
+        // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
+        const res = await fetch('/api/geocode', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ q: `${form.address}, ${form.zip} ${form.city}, Italia` }),
+        });
         const json = await res.json();
-        if (Array.isArray(json) && json[0]) {
-          lat = parseFloat(json[0].lat);
-          lng = parseFloat(json[0].lon);
+        if (json && json.lat != null && json.lng != null) {
+          lat = json.lat;
+          lng = json.lng;
         }
       } catch {}
 
