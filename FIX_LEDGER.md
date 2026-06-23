@@ -11,7 +11,7 @@
 | 🔴-4 | CI senza e2e/SQL + RLS auto-skip | 🔴 | TODO | | | | |
 | 🟠-6 | Chargeback WON blocca payout per sempre | 🟠 | FATTO | app/api/cron/release-payouts/route.ts, tests/unit/api-cron-release-payouts-cod.test.ts | (git) | 3 test [🟠-6] | filtro PAYOUT_DISPUTE_FILTER (null o WON) sui 3 pass |
 | 🟠-7 | Fee 10% grava su spedizione+delivery fee | 🟠 | TODO | | | | decisione prodotto |
-| 🟠-8 | Nessun constraint ordine ≥1 item | 🟠 | TODO | | | | |
+| 🟠-8 | Nessun constraint ordine ≥1 item | 🟠 | FATTO | tests/unit/api-stripe-checkout.test.ts | (git) | 2 test [🟠-8] | enforce a livello app: zod min(1) su groups/items in checkout+COD; DB-constraint non aggiunto perche ordine/items sono insert in tx separate (romperebbe la creazione) |
 | 🟠-9 | Email best-effort, errori swallowed, no retry | 🟠 | TODO | | | | |
 | 🟠-10 | send-push marca pushed_at su fallimento transitorio | 🟠 | TODO | | | | |
 | 🟠-11 | send-emails fallback non idempotente | 🟠 | TODO | | | | |
@@ -29,7 +29,7 @@
 | 🟠-23 | KYC/payout non scritti in audit log | 🟠 | TODO | | | | |
 | 🟡-1 | `withInternalAuth` usa SERVICE_ROLE_KEY come shared secret | 🟡 | TODO | | | | |
 | 🟡-2 | `/api/contact` senza CAPTCHA | 🟡 | TODO | | | | |
-| 🟡-3 | `gift_cards` manca CHECK(balance<=amount) | 🟡 | TODO | | | | |
+| 🟡-3 | `gift_cards` manca CHECK(balance<=amount) | 🟡 | FATTO | migrations/103_gift_card_balance_cap.sql | (git) | SQL idempotente | conferma runtime: applicare migrazione |
 | 🟡-4 | definer-fn storiche senza search_path | 🟡 | TODO | | | | verifica runtime |
 | 🟡-5 | expire-checkouts non rilascia stock varianti | 🟡 | FATTO | app/api/cron/expire-checkouts/route.ts | (git) | typecheck; mirror webhook:857 | aggiunto variant_id alla map restore_stock |
 | 🟡-6 | refund parziale Dashboard multi-seller → no update | 🟡 | TODO | | | | |
