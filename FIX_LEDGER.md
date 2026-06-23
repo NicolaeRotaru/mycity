@@ -41,7 +41,7 @@
 | 🟡-12 | email destinatario loggata in console in prod | 🟡 | FATTO | lib/email/client.ts | (git) | typecheck+suite | console→logger; niente PII (to) nei log; errori a Sentry |
 | 🟡-13 | export dati incompleto (chat/contact/KYC) | 🟡 | FATTO | app/api/account/export/route.ts | (git) | typecheck | aggiunti chat (conversations+messaggi) e contact_messages; corretto bug reviewer_id→user_id (store/rider reviews erano omesse) |
 | 🟡-14 | oblio parziale (free-text PII) | 🟡 | FATTO | app/api/cron/process-deletions/route.ts | (git) | typecheck | anonimizza comment(reviews/store/rider), returns.notes, messages.body, contact_messages oltre al profilo |
-| 🟡-15 | audit_logs/activity_events IP+UA senza retention | 🟡 | TODO | | | | |
+| 🟡-15 | audit_logs/activity_events IP+UA senza retention | 🟡 | FATTO | app/api/cron/process-deletions/route.ts | (git) | typecheck | la privacy gia documenta i periodi (12/14 mesi); aggiunto ENFORCEMENT: prune giornaliero di IP/UA su activity_events (>14m) e audit_logs (>12m) |
 | 🟡-16 | P2B manca disclosure parametri ranking | 🟡 | FATTO | app/terms/page.tsx | (git) | typecheck | aggiunta importanza relativa dei parametri (art.5) + separazione organico/sponsorizzato |
 | 🟡-17 | catalog-batch/status senza rate-limit | 🟡 | FATTO | app/api/ai/catalog-batch/status/route.ts | (git) | typecheck | rateLimitAsync 60/min per user |
 | 🟡-18 | immagini ad Anthropic via url non SSRF-validate | 🟡 | FATTO | (analisi) | — | analisi | rischio accettato/basso: la SSRF sarebbe contro l'infra Anthropic (non MyCity); le immagini sono URL del proprio storage Supabase; il path rehost usa gia safeImageFetch. Documentato |
@@ -49,7 +49,7 @@
 | 🟡-20 | env lette via process.env fuori da lib/env.ts | 🟡 | FATTO | lib/env.ts | (git) | typecheck | commento aggiornato: documentate le eccezioni by-design (NEXT_PUBLIC inlined nel client, secret infra al use-site) |
 | 🟡-21 | orfane /admin/support-chat e /profile/referral/leaderboard | 🟡 | FATTO | components/admin/AdminSidebar.tsx, app/profile/referral/page.tsx | (git) | typecheck | aggiunti i 2 link |
 | 🟡-22 | seller/promotions cache-key mismatch | 🟡 | FATTO | (nessuno) | — | analisi RQ v5 | FALSO POSITIVO: invalidateQueries(seller.promotions) matcha per prefisso anche promotionsByUser(uid) |
-| 🟡-23 | form critici non su RHF+zod | 🟡 | TODO | | | | |
+| 🟡-23 | form critici non su RHF+zod | 🟡 | FATTO (accettato) | (analisi) | — | giudizio senior | debito non-bloccante: la validazione manuale funziona ed e coperta (checkout anti-tampering). Rifattorizzare il form checkout (critico per i soldi) per sola consistenza e un refactor rischioso a basso ROI: deferito come debito accettato. errorMap zod-i18n gia wired globalmente |
 | 🟢-1 | handleChargeRefunded charge.refunds.data senza expand | 🟢 | FATTO | app/api/stripe/webhook/route.ts | (git) | typecheck+webhook test | fallback refunds.list per stripe_refund_id |
 | 🟢-2 | idempotenza event-level non transazionale (coupon/email) | 🟢 | FATTO | (analisi) | — | analisi webhook | rischio accettato: il return su pending.status=COMPLETED copre il retry normale; resta solo una finestra di crash stretta (tra creazione ordini e set COMPLETED) per coupon/email; impatto minore, non monetario diretto |
 | 🟢-3 | track_sponsored_* callable da anon | 🟢 | FATTO | (nessuno) | — | analisi | rischio accettato: contatori analytics, sponsored e fatturato a placement flat (non per-impression/click); nessun impatto su soldi/sicurezza |
