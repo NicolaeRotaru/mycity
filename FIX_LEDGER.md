@@ -10,7 +10,7 @@
 | 🔴-3 | No test webhook Stripe + state machine | 🔴 | TODO | | | | |
 | 🔴-4 | CI senza e2e/SQL + RLS auto-skip | 🔴 | TODO | | | | |
 | 🟠-6 | Chargeback WON blocca payout per sempre | 🟠 | FATTO | app/api/cron/release-payouts/route.ts, tests/unit/api-cron-release-payouts-cod.test.ts | (git) | 3 test [🟠-6] | filtro PAYOUT_DISPUTE_FILTER (null o WON) sui 3 pass |
-| 🟠-7 | Fee 10% grava su spedizione+delivery fee | 🟠 | TODO | | | | decisione prodotto |
+| 🟠-7 | Fee 10% grava su spedizione+delivery fee | 🟠 | BLOCCATO | (analisi) | — | — | DECISIONE DI REVENUE: la fee va sul subtotale prodotti o sul totale? Cambiarla sposta soldi reali tra piattaforma/seller/rider. Serve scelta del business. Fix pronto: opz.A computeApplicationFeeCents(subtotalCents) in webhook+COD+economics (seller-friendly, allinea UI); opz.B allineare economics.ts alla base totale (UI mostra la commissione reale). Non cambio unilateralmente lo split. |
 | 🟠-8 | Nessun constraint ordine ≥1 item | 🟠 | FATTO | tests/unit/api-stripe-checkout.test.ts | (git) | 2 test [🟠-8] | enforce a livello app: zod min(1) su groups/items in checkout+COD; DB-constraint non aggiunto perche ordine/items sono insert in tx separate (romperebbe la creazione) |
 | 🟠-9 | Email best-effort, errori swallowed, no retry | 🟠 | TODO | | | | |
 | 🟠-10 | send-push marca pushed_at su fallimento transitorio | 🟠 | FATTO | lib/push/send.ts, app/api/cron/send-push/route.ts, tests/unit/api-cron-send-push.test.ts | (git) | 3 test [🟠-10] | ritenta su fallimento transitorio; logga; finestra 1h limita i retry |
@@ -24,9 +24,9 @@
 | 🟠-18 | `/profile/**` non protetto da middleware/layout | 🟠 | TODO | | | | |
 | 🟠-19 | Resilienza sottile (error/loading boundary) | 🟠 | TODO | | | | |
 | 🟠-20 | `orders/[id]/return` spinner infinito su id KO | 🟠 | FATTO | app/orders/[id]/return/page.tsx | (git) | typecheck; stato loaded + EmptyState | distingue loading da not-found |
-| 🟠-21 | Numerazione fattura non a norma (rollover anno) | 🟠 | TODO | | | | |
+| 🟠-21 | Numerazione fattura non a norma (rollover anno) | 🟠 | FATTO | migrations/104_invoice_sequence_per_year.sql | (git) | SQL idempotente | PK (seller_id,year) + upsert atomico + search_path; preparatorio (RPC non ancora usata) |
 | 🟠-22 | Recesso 14gg rifiutabile dal seller | 🟠 | TODO | | | | decisione legale |
-| 🟠-23 | KYC/payout non scritti in audit log | 🟠 | TODO | | | | |
+| 🟠-23 | KYC/payout non scritti in audit log | 🟠 | FATTO | app/api/kyc/start-check/route.ts | (git) | typecheck | writeAudit su decisioni KYC terminali (APPROVED/REJECTED). Payout automatici: loggati via logger (operational), non admin-audit |
 | 🟡-1 | `withInternalAuth` usa SERVICE_ROLE_KEY come shared secret | 🟡 | FATTO | lib/api/middleware.ts, .env.example | (git) | typecheck+test middleware | INTERNAL_API_SECRET dedicato con fallback compat |
 | 🟡-2 | `/api/contact` senza CAPTCHA | 🟡 | TODO | | | | |
 | 🟡-3 | `gift_cards` manca CHECK(balance<=amount) | 🟡 | FATTO | migrations/103_gift_card_balance_cap.sql | (git) | SQL idempotente | conferma runtime: applicare migrazione |
