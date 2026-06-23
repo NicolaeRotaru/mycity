@@ -1,12 +1,20 @@
 /**
- * Centralizza lettura env vars. Server-only quando non hanno prefisso
- * NEXT_PUBLIC_. Importare solo da codice server (API routes, server
- * components, middleware) se contiene secret.
+ * Punto di lettura PREFERITO delle env vars dell'app. Server-only quando non
+ * hanno prefisso NEXT_PUBLIC_. Importare solo da codice server (API routes,
+ * server components, middleware) se contiene secret.
  *
  * Le funzioni `requireXxx()` lanciano se manca una var critica.
  * Le funzioni `xxxOrNull()` restituiscono null se manca, utili per
  * feature opzionali (es. Stripe / Resend / Turnstile) che vanno
  * abilitate solo quando le chiavi sono configurate.
+ *
+ * Eccezioni note (lette direttamente da process.env per design — audit 🟡-20):
+ *  - `NEXT_PUBLIC_*` dentro i Client Component (es. PostHog, WhatsApp): Next le
+ *    inline-a a build-time nel bundle, quindi si leggono al punto d'uso.
+ *  - Secret infrastrutturali letti al loro use-site per località: `CRON_SECRET`
+ *    e `INTERNAL_API_SECRET` (lib/api/middleware), `UPSTASH_*` (lib/rate-limit),
+ *    `SUPABASE_*` nel root middleware (hot path, evita l'import del modulo env).
+ * Tutto il resto passa da qui.
  */
 
 function readEnv(name: string): string | undefined {

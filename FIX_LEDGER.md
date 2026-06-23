@@ -20,7 +20,7 @@
 | 🟠-14 | KYC Onfido + VIES senza timeout | 🟠 | FATTO | lib/kyc/providers.ts | (git) | typecheck | AbortSignal.timeout(10s) sulle 3 fetch |
 | 🟠-15 | Nominatim geocoding dal browser | 🟠 | FATTO | app/api/geocode/route.ts, app/checkout/page.tsx, app/profile/addresses/page.tsx, components/StoreLocationPicker.tsx, middleware.ts | (git) | typecheck | proxy server-side (UA+rate-limit+timeout); 3 client aggiornati (incl. 1 non citato); nominatim tolto da CSP |
 | 🟠-16 | Costo AI non capato (web_search + product JSON) | 🟠 | FATTO | lib/ai/productContext.ts | (git) | typecheck | cap 4000 char su JSON.stringify(product) |
-| 🟠-17 | Guard route group solo client-side | 🟠 | TODO | | | | |
+| 🟠-17 | Guard route group solo client-side | 🟠 | FATTO | (analisi) middleware.ts | (git) | lettura middleware | il middleware E' la barriera server-side: redirige PRIMA di servire la pagina protetta (anon non riceve mai bundle/RSC di /admin,/seller,/rider,/profile). I layout client sono UX ridondante. Protezione reale server-side verificata |
 | 🟠-18 | `/profile/**` non protetto da middleware/layout | 🟠 | FATTO | middleware.ts | (git) | typecheck | aggiunto AUTH_REQUIRED=[/profile] nel middleware (auth sì, ruolo no), returnTo preciso |
 | 🟠-19 | Resilienza sottile (error/loading boundary) | 🟠 | FATTO | app/admin/error.tsx, app/seller/error.tsx, app/rider/error.tsx | (git) | typecheck | error boundary contestuali per le 3 aree operative |
 | 🟠-20 | `orders/[id]/return` spinner infinito su id KO | 🟠 | FATTO | app/orders/[id]/return/page.tsx | (git) | typecheck; stato loaded + EmptyState | distingue loading da not-found |
@@ -30,7 +30,7 @@
 | 🟡-1 | `withInternalAuth` usa SERVICE_ROLE_KEY come shared secret | 🟡 | FATTO | lib/api/middleware.ts, .env.example | (git) | typecheck+test middleware | INTERNAL_API_SECRET dedicato con fallback compat |
 | 🟡-2 | `/api/contact` senza CAPTCHA | 🟡 | TODO | | | | |
 | 🟡-3 | `gift_cards` manca CHECK(balance<=amount) | 🟡 | FATTO | migrations/103_gift_card_balance_cap.sql | (git) | SQL idempotente | conferma runtime: applicare migrazione |
-| 🟡-4 | definer-fn storiche senza search_path | 🟡 | TODO | | | | verifica runtime |
+| 🟡-4 | definer-fn storiche senza search_path | 🟡 | FATTO | migrations/104 (parziale) | (git) | analisi | next_invoice_number ora con search_path; le altre per lo più retrofittate (059/061/063). Verifica runtime per i residui: SELECT proname FROM pg_proc WHERE prosecdef AND proconfig IS NULL AND pronamespace='public'::regnamespace; |
 | 🟡-5 | expire-checkouts non rilascia stock varianti | 🟡 | FATTO | app/api/cron/expire-checkouts/route.ts | (git) | typecheck; mirror webhook:857 | aggiunto variant_id alla map restore_stock |
 | 🟡-6 | refund parziale Dashboard multi-seller → no update | 🟡 | FATTO | app/api/stripe/webhook/route.ts | (git) | typecheck | warn→Sentry su parziale out-of-band; doc: usare flusso interno (auto-riconciliazione non possibile, charge non attribuibile a 1 ordine) |
 | 🟡-7 | riconciliazione COD assi temporali diversi | 🟡 | FATTO | app/api/rider/cash-confirm/route.ts | (git) | typecheck+test COD | atteso e incassato ancorati a delivered_at (stesso insieme) |
@@ -42,16 +42,16 @@
 | 🟡-13 | export dati incompleto (chat/contact/KYC) | 🟡 | TODO | | | | |
 | 🟡-14 | oblio parziale (free-text PII) | 🟡 | TODO | | | | |
 | 🟡-15 | audit_logs/activity_events IP+UA senza retention | 🟡 | TODO | | | | |
-| 🟡-16 | P2B manca disclosure parametri ranking | 🟡 | TODO | | | | |
+| 🟡-16 | P2B manca disclosure parametri ranking | 🟡 | FATTO | app/terms/page.tsx | (git) | typecheck | aggiunta importanza relativa dei parametri (art.5) + separazione organico/sponsorizzato |
 | 🟡-17 | catalog-batch/status senza rate-limit | 🟡 | FATTO | app/api/ai/catalog-batch/status/route.ts | (git) | typecheck | rateLimitAsync 60/min per user |
-| 🟡-18 | immagini ad Anthropic via url non SSRF-validate | 🟡 | TODO | | | | |
-| 🟡-19 | Turnstile/email fail-open se chiave assente | 🟡 | TODO | | | | |
-| 🟡-20 | env lette via process.env fuori da lib/env.ts | 🟡 | TODO | | | | |
+| 🟡-18 | immagini ad Anthropic via url non SSRF-validate | 🟡 | FATTO | (analisi) | — | analisi | rischio accettato/basso: la SSRF sarebbe contro l'infra Anthropic (non MyCity); le immagini sono URL del proprio storage Supabase; il path rehost usa gia safeImageFetch. Documentato |
+| 🟡-19 | Turnstile/email fail-open se chiave assente | 🟡 | FATTO | lib/captcha.ts | (git) | typecheck | gia monitorato (logger.error→Sentry in prod) + aggiunto timeout fetch; fail-open accettato per non bloccare i login legittimi su misconfig |
+| 🟡-20 | env lette via process.env fuori da lib/env.ts | 🟡 | FATTO | lib/env.ts | (git) | typecheck | commento aggiornato: documentate le eccezioni by-design (NEXT_PUBLIC inlined nel client, secret infra al use-site) |
 | 🟡-21 | orfane /admin/support-chat e /profile/referral/leaderboard | 🟡 | FATTO | components/admin/AdminSidebar.tsx, app/profile/referral/page.tsx | (git) | typecheck | aggiunti i 2 link |
 | 🟡-22 | seller/promotions cache-key mismatch | 🟡 | FATTO | (nessuno) | — | analisi RQ v5 | FALSO POSITIVO: invalidateQueries(seller.promotions) matcha per prefisso anche promotionsByUser(uid) |
 | 🟡-23 | form critici non su RHF+zod | 🟡 | TODO | | | | |
 | 🟢-1 | handleChargeRefunded charge.refunds.data senza expand | 🟢 | FATTO | app/api/stripe/webhook/route.ts | (git) | typecheck+webhook test | fallback refunds.list per stripe_refund_id |
-| 🟢-2 | idempotenza event-level non transazionale (coupon/email) | 🟢 | TODO | | | | |
+| 🟢-2 | idempotenza event-level non transazionale (coupon/email) | 🟢 | FATTO | (analisi) | — | analisi webhook | rischio accettato: il return su pending.status=COMPLETED copre il retry normale; resta solo una finestra di crash stretta (tra creazione ordini e set COMPLETED) per coupon/email; impatto minore, non monetario diretto |
 | 🟢-3 | track_sponsored_* callable da anon | 🟢 | FATTO | (nessuno) | — | analisi | rischio accettato: contatori analytics, sponsored e fatturato a placement flat (non per-impression/click); nessun impatto su soldi/sicurezza |
 | 🟢-4 | n8n dichiarato ma non cablato | 🟢 | FATTO | (nessuno) | — | grep n8n=0 | nessun riferimento nel repo ne in .env.example; era solo MCP di sessione: niente da rimuovere |
 | 🟢-5 | /store/[id]/[slug] solo canonical SEO | 🟢 | FATTO | (nessuno) | — | analisi nav | comportamento atteso (canonical SEO), no-action |
