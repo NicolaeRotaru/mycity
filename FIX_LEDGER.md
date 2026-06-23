@@ -31,7 +31,7 @@
 | 🟡-2 | `/api/contact` senza CAPTCHA | 🟡 | TODO | | | | |
 | 🟡-3 | `gift_cards` manca CHECK(balance<=amount) | 🟡 | TODO | | | | |
 | 🟡-4 | definer-fn storiche senza search_path | 🟡 | TODO | | | | verifica runtime |
-| 🟡-5 | expire-checkouts non rilascia stock varianti | 🟡 | TODO | | | | |
+| 🟡-5 | expire-checkouts non rilascia stock varianti | 🟡 | FATTO | app/api/cron/expire-checkouts/route.ts | (git) | typecheck; mirror webhook:857 | aggiunto variant_id alla map restore_stock |
 | 🟡-6 | refund parziale Dashboard multi-seller → no update | 🟡 | TODO | | | | |
 | 🟡-7 | riconciliazione COD assi temporali diversi | 🟡 | TODO | | | | |
 | 🟡-8 | `/api/track` senza consent server-side | 🟡 | TODO | | | | |
