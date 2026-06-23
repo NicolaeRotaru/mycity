@@ -13,11 +13,11 @@
 | 🟠-7 | Fee 10% grava su spedizione+delivery fee | 🟠 | TODO | | | | decisione prodotto |
 | 🟠-8 | Nessun constraint ordine ≥1 item | 🟠 | FATTO | tests/unit/api-stripe-checkout.test.ts | (git) | 2 test [🟠-8] | enforce a livello app: zod min(1) su groups/items in checkout+COD; DB-constraint non aggiunto perche ordine/items sono insert in tx separate (romperebbe la creazione) |
 | 🟠-9 | Email best-effort, errori swallowed, no retry | 🟠 | TODO | | | | |
-| 🟠-10 | send-push marca pushed_at su fallimento transitorio | 🟠 | TODO | | | | |
-| 🟠-11 | send-emails fallback non idempotente | 🟠 | TODO | | | | |
-| 🟠-12 | Rate-limit non condiviso multi-istanza; Upstash assente render.yaml | 🟠 | TODO | | | | |
+| 🟠-10 | send-push marca pushed_at su fallimento transitorio | 🟠 | FATTO | lib/push/send.ts, app/api/cron/send-push/route.ts, tests/unit/api-cron-send-push.test.ts | (git) | 3 test [🟠-10] | ritenta su fallimento transitorio; logga; finestra 1h limita i retry |
+| 🟠-11 | send-emails fallback non idempotente | 🟠 | FATTO | app/api/cron/send-emails/route.ts | (git) | typecheck+suite | rimosso fallback senza claim; 503+log → retry |
+| 🟠-12 | Rate-limit non condiviso multi-istanza; Upstash assente render.yaml | 🟠 | FATTO | render.yaml | (git) | UPSTASH_* aggiunte + nota scale-out | codice gia fa fallback in-memory→Upstash; ora wiring deploy |
 | 🟠-13 | Moderazione AI scritta ma non cablata | 🟠 | TODO | | | | (ex 🔴-5) |
-| 🟠-14 | KYC Onfido + VIES senza timeout | 🟠 | TODO | | | | |
+| 🟠-14 | KYC Onfido + VIES senza timeout | 🟠 | FATTO | lib/kyc/providers.ts | (git) | typecheck | AbortSignal.timeout(10s) sulle 3 fetch |
 | 🟠-15 | Nominatim geocoding dal browser | 🟠 | TODO | | | | |
 | 🟠-16 | Costo AI non capato (web_search + product JSON) | 🟠 | TODO | | | | |
 | 🟠-17 | Guard route group solo client-side | 🟠 | TODO | | | | |
@@ -38,23 +38,23 @@
 | 🟡-9 | operational-alerts non vigila email_queue backlog | 🟡 | TODO | | | | |
 | 🟡-10 | logger non strutturato, no redaction PII | 🟡 | TODO | | | | |
 | 🟡-11 | Sentry client beforeSend minimale + captureError context | 🟡 | TODO | | | | |
-| 🟡-12 | email destinatario loggata in console in prod | 🟡 | TODO | | | | |
+| 🟡-12 | email destinatario loggata in console in prod | 🟡 | FATTO | lib/email/client.ts | (git) | typecheck+suite | console→logger; niente PII (to) nei log; errori a Sentry |
 | 🟡-13 | export dati incompleto (chat/contact/KYC) | 🟡 | TODO | | | | |
 | 🟡-14 | oblio parziale (free-text PII) | 🟡 | TODO | | | | |
 | 🟡-15 | audit_logs/activity_events IP+UA senza retention | 🟡 | TODO | | | | |
 | 🟡-16 | P2B manca disclosure parametri ranking | 🟡 | TODO | | | | |
-| 🟡-17 | catalog-batch/status senza rate-limit | 🟡 | TODO | | | | |
+| 🟡-17 | catalog-batch/status senza rate-limit | 🟡 | FATTO | app/api/ai/catalog-batch/status/route.ts | (git) | typecheck | rateLimitAsync 60/min per user |
 | 🟡-18 | immagini ad Anthropic via url non SSRF-validate | 🟡 | TODO | | | | |
 | 🟡-19 | Turnstile/email fail-open se chiave assente | 🟡 | TODO | | | | |
 | 🟡-20 | env lette via process.env fuori da lib/env.ts | 🟡 | TODO | | | | |
-| 🟡-21 | orfane /admin/support-chat e /profile/referral/leaderboard | 🟡 | TODO | | | | |
-| 🟡-22 | seller/promotions cache-key mismatch | 🟡 | TODO | | | | |
+| 🟡-21 | orfane /admin/support-chat e /profile/referral/leaderboard | 🟡 | FATTO | components/admin/AdminSidebar.tsx, app/profile/referral/page.tsx | (git) | typecheck | aggiunti i 2 link |
+| 🟡-22 | seller/promotions cache-key mismatch | 🟡 | FATTO | (nessuno) | — | analisi RQ v5 | FALSO POSITIVO: invalidateQueries(seller.promotions) matcha per prefisso anche promotionsByUser(uid) |
 | 🟡-23 | form critici non su RHF+zod | 🟡 | TODO | | | | |
 | 🟢-1 | handleChargeRefunded charge.refunds.data senza expand | 🟢 | TODO | | | | |
 | 🟢-2 | idempotenza event-level non transazionale (coupon/email) | 🟢 | TODO | | | | |
-| 🟢-3 | track_sponsored_* callable da anon | 🟢 | TODO | | | | |
-| 🟢-4 | n8n dichiarato ma non cablato | 🟢 | TODO | | | | |
-| 🟢-5 | /store/[id]/[slug] solo canonical SEO | 🟢 | TODO | | | | atteso, no-action |
+| 🟢-3 | track_sponsored_* callable da anon | 🟢 | FATTO | (nessuno) | — | analisi | rischio accettato: contatori analytics, sponsored e fatturato a placement flat (non per-impression/click); nessun impatto su soldi/sicurezza |
+| 🟢-4 | n8n dichiarato ma non cablato | 🟢 | FATTO | (nessuno) | — | grep n8n=0 | nessun riferimento nel repo ne in .env.example; era solo MCP di sessione: niente da rimuovere |
+| 🟢-5 | /store/[id]/[slug] solo canonical SEO | 🟢 | FATTO | (nessuno) | — | analisi nav | comportamento atteso (canonical SEO), no-action |
 
 ## Note di auto-analisi
 - (init) Baseline pulito: typecheck/lint/test tutti verdi, 698 test. Buona rete di sicurezza.

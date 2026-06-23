@@ -18,6 +18,8 @@ services:
     name: mycity-marketplace
     runtime: node
     plan: starter # $7/mese; per traffico reale → $25 standard
+    # ⚠️ Scale-out (più istanze): configurare PRIMA UPSTASH_* qui sotto, altrimenti
+    # il rate-limit in-memory non è condiviso tra istanze ed è aggirabile (🟠-12).
     region: frankfurt # EU per GDPR + latenza Italia
     branch: main
     autoDeploy: true
@@ -60,6 +62,12 @@ services:
       - key: NEXT_PUBLIC_APP_URL
         value: https://mycity-marketplace.com
       - key: NEXT_PUBLIC_WHATSAPP_NUMBER
+        sync: false
+      # Rate-limit distribuito (Upstash Redis). Opzionale su singola istanza
+      # (fallback in-memory), OBBLIGATORIO prima dello scale-out (🟠-12).
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
         sync: false
 
 # =============================================================================

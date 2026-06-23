@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Check, Clipboard, MessageCircle, Mail, Lightbulb } from 'lucide-react';
+import { Check, Clipboard, MessageCircle, Mail, Lightbulb, Trophy } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -67,6 +67,13 @@ export default function ReferralPage() {
         <Link href="/profile" className="text-sm text-primary-700 hover:underline">← Profilo</Link>
         <h1 className="text-2xl font-bold text-ink-900 mt-1">Invita amici, guadagnate entrambi €5</h1>
         <p className="text-sm text-ink-500">Condividi il tuo codice: tu ricevi €5 di credito, anche il tuo amico riceve €5 di sconto sul primo ordine.</p>
+        {/* 🟡-21: la pagina leaderboard era orfana (nessun link la raggiungeva). */}
+        <Link
+          href="/profile/referral/leaderboard"
+          className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:underline"
+        >
+          <Trophy size={16} aria-hidden /> Classifica inviti
+        </Link>
       </div>
 
       {/* CODICE */}
