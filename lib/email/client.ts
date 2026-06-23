@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
 
 let _resend: Resend | null = null;
 
@@ -36,10 +37,8 @@ export type SendEmailResult =
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const resend = getResend();
   if (!resend) {
-    console.warn('[email] skipped (RESEND_API_KEY non configurata):', {
-      to: input.to,
-      subject: input.subject,
-    });
+    // 🟡-12: niente PII (indirizzo destinatario) nei log; via logger, non console.
+    logger.warn('[email] skipped: RESEND_API_KEY non configurata', { subject: input.subject });
     return { ok: false, skipped: true, reason: 'RESEND_API_KEY non configurata' };
   }
 
@@ -54,12 +53,13 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
       tags: input.tags,
     });
     if (error) {
-      console.error('[email] resend error:', error);
+      // 🟡-12: errori invio instradati a Sentry via logger (non persi in stdout).
+      logger.error('[email] resend error', { message: error.message ?? 'resend error' });
       return { ok: false, error: error.message ?? 'resend error' };
     }
     return { ok: true, id: data?.id ?? '' };
   } catch (err) {
-    console.error('[email] exception:', err);
+    logger.error('[email] exception', { message: err instanceof Error ? err.message : 'unknown' });
     return { ok: false, error: err instanceof Error ? err.message : 'unknown' };
   }
 }
