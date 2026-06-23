@@ -95,6 +95,21 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       }
     }
 
+    // 1b) 🟡-14: anonimizza il free-text PII dell'utente oltre al profilo (Art.17).
+    // Recensioni/resi/chat/contact possono contenere dati personali in chiaro.
+    // Best-effort: non blocca la cancellazione se una singola tabella fallisce.
+    await Promise.all([
+      admin.from('reviews').update({ comment: null }).eq('user_id', userId),
+      admin.from('store_reviews').update({ comment: null }).eq('user_id', userId),
+      admin.from('rider_reviews').update({ comment: null }).eq('user_id', userId),
+      admin.from('returns').update({ notes: null }).eq('buyer_id', userId),
+      admin.from('messages').update({ body: '[messaggio rimosso]' }).eq('sender_id', userId),
+      admin
+        .from('contact_messages')
+        .update({ name: '[eliminato]', email: '[eliminato]', message: '[rimosso]' })
+        .eq('user_id', userId),
+    ]).catch((e) => logger.warn('[cron-deletions] anonimizzazione free-text parziale', { userId, e }));
+
     // 2) Hard delete auth.users
     const { error: delErr } = await admin.auth.admin.deleteUser(userId);
     if (delErr) {

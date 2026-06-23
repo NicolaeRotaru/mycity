@@ -39,8 +39,8 @@
 | 🟡-10 | logger non strutturato, no redaction PII | 🟡 | TODO | | | | |
 | 🟡-11 | Sentry client beforeSend minimale + captureError context | 🟡 | FATTO | lib/analytics/sentry.tsx | (git) | typecheck | sendDefaultPii:false + scrub headers/data/email/ip |
 | 🟡-12 | email destinatario loggata in console in prod | 🟡 | FATTO | lib/email/client.ts | (git) | typecheck+suite | console→logger; niente PII (to) nei log; errori a Sentry |
-| 🟡-13 | export dati incompleto (chat/contact/KYC) | 🟡 | TODO | | | | |
-| 🟡-14 | oblio parziale (free-text PII) | 🟡 | TODO | | | | |
+| 🟡-13 | export dati incompleto (chat/contact/KYC) | 🟡 | FATTO | app/api/account/export/route.ts | (git) | typecheck | aggiunti chat (conversations+messaggi) e contact_messages; corretto bug reviewer_id→user_id (store/rider reviews erano omesse) |
+| 🟡-14 | oblio parziale (free-text PII) | 🟡 | FATTO | app/api/cron/process-deletions/route.ts | (git) | typecheck | anonimizza comment(reviews/store/rider), returns.notes, messages.body, contact_messages oltre al profilo |
 | 🟡-15 | audit_logs/activity_events IP+UA senza retention | 🟡 | TODO | | | | |
 | 🟡-16 | P2B manca disclosure parametri ranking | 🟡 | FATTO | app/terms/page.tsx | (git) | typecheck | aggiunta importanza relativa dei parametri (art.5) + separazione organico/sponsorizzato |
 | 🟡-17 | catalog-batch/status senza rate-limit | 🟡 | FATTO | app/api/ai/catalog-batch/status/route.ts | (git) | typecheck | rateLimitAsync 60/min per user |

@@ -48,6 +48,9 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
     referralsOut,
     referralsIn,
     notifications,
+    conversations,
+    chatMessages,
+    contactMessages,
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
     admin.from('user_addresses').select('*').eq('user_id', userId),
@@ -55,12 +58,18 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
     admin.from('orders').select('id, created_at, total_price, delivery_status').eq('seller_id', userId),
     admin.from('orders').select('id, created_at, delivered_at, shipping_cost').eq('rider_id', userId),
     admin.from('reviews').select('*').eq('user_id', userId),
-    admin.from('store_reviews').select('*').eq('reviewer_id', userId),
-    admin.from('rider_reviews').select('*').eq('reviewer_id', userId),
+    // 🟡-13: store_reviews/rider_reviews usano user_id (non reviewer_id): prima
+    // l'export interrogava una colonna inesistente e ometteva queste recensioni.
+    admin.from('store_reviews').select('*').eq('user_id', userId),
+    admin.from('rider_reviews').select('*').eq('user_id', userId),
     admin.from('favorites').select('*').eq('user_id', userId),
     admin.from('referrals').select('*').eq('referrer_id', userId),
     admin.from('referrals').select('*').eq('referred_id', userId),
     admin.from('notifications').select('*').eq('user_id', userId),
+    // 🟡-13: chat e contact form fanno parte dei dati personali (Art. 15/20).
+    admin.from('conversations').select('*').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`),
+    admin.from('messages').select('*').eq('sender_id', userId),
+    admin.from('contact_messages').select('*').eq('user_id', userId),
   ]);
 
   // Anonimizza/maschera campi sensibili anche nell'export
@@ -93,6 +102,11 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
       as_referred: referralsIn.data ?? [],
     },
     notifications: notifications.data ?? [],
+    chat: {
+      conversations: conversations.data ?? [],
+      messages_sent: chatMessages.data ?? [],
+    },
+    contact_messages: contactMessages.data ?? [],
   };
 
   const today = new Date().toISOString().slice(0, 10);
