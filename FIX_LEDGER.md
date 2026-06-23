@@ -36,7 +36,7 @@
 | 🟡-7 | riconciliazione COD assi temporali diversi | 🟡 | FATTO | app/api/rider/cash-confirm/route.ts | (git) | typecheck+test COD | atteso e incassato ancorati a delivered_at (stesso insieme) |
 | 🟡-8 | `/api/track` senza consent server-side | 🟡 | FATTO | app/api/track/route.ts | (git) | typecheck | eventi visitor gated su consenso analytics (cookie); auth funzionali |
 | 🟡-9 | operational-alerts non vigila email_queue backlog | 🟡 | FATTO | app/api/cron/operational-alerts/route.ts | (git) | typecheck | alert EMAIL_BACKLOG se >=50 email non inviate da >30min |
-| 🟡-10 | logger non strutturato, no redaction PII | 🟡 | TODO | | | | |
+| 🟡-10 | logger non strutturato, no redaction PII | 🟡 | FATTO | lib/logger.ts, tests/unit/logger.test.ts | (git) | 9 test (incl. redaction) | output JSON + deny-list PII (email/token/iban/... ) ricorsiva prima di console/Sentry |
 | 🟡-11 | Sentry client beforeSend minimale + captureError context | 🟡 | FATTO | lib/analytics/sentry.tsx | (git) | typecheck | sendDefaultPii:false + scrub headers/data/email/ip |
 | 🟡-12 | email destinatario loggata in console in prod | 🟡 | FATTO | lib/email/client.ts | (git) | typecheck+suite | console→logger; niente PII (to) nei log; errori a Sentry |
 | 🟡-13 | export dati incompleto (chat/contact/KYC) | 🟡 | FATTO | app/api/account/export/route.ts | (git) | typecheck | aggiunti chat (conversations+messaggi) e contact_messages; corretto bug reviewer_id→user_id (store/rider reviews erano omesse) |
