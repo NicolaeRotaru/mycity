@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  Sun, LayoutDashboard, Receipt, Users, Gavel, Banknote, Siren,
+  Sun, LayoutDashboard, Receipt, Users, Gavel, Banknote, Siren, Wallet, MapPin,
   TrendingUp, Ticket, Megaphone, Zap, Crown, CalendarDays,
   LayoutTemplate, FileText, FolderTree, Palette, Rss, ScrollText, LifeBuoy,
   Home, LogOut, Menu, X,
@@ -13,7 +14,9 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 
-type NavItem = { href: string; icon: LucideIcon; label: string };
+/** Chiave su cui agganciare un badge "live" (pallino) calcolato da un conteggio. */
+type BadgeKey = 'disputes' | 'sos';
+type NavItem = { href: string; icon: LucideIcon; label: string; badge?: BadgeKey };
 type NavGroup = { group: string; items: NavItem[] };
 
 /**
@@ -30,9 +33,10 @@ const NAV: NavGroup[] = [
     { href: '/admin/users', icon: Users, label: 'Utenti' },
   ] },
   { group: 'Trust & Safety', items: [
-    { href: '/admin/disputes', icon: Gavel, label: 'Reclami' },
+    { href: '/admin/disputes', icon: Gavel, label: 'Reclami', badge: 'disputes' },
     { href: '/admin/cod-remittance', icon: Banknote, label: 'Rimesse COD' },
-    { href: '/admin/sos', icon: Siren, label: 'SOS rider' },
+    { href: '/admin/payouts', icon: Wallet, label: 'Payout venditori' },
+    { href: '/admin/sos', icon: Siren, label: 'SOS rider', badge: 'sos' },
   ] },
   { group: 'Crescita', items: [
     { href: '/admin/funnel', icon: TrendingUp, label: 'Funnel & Cohort' },
@@ -46,6 +50,7 @@ const NAV: NavGroup[] = [
     { href: '/admin/home', icon: LayoutTemplate, label: 'Home builder' },
     { href: '/admin/pages', icon: FileText, label: 'Pagine' },
     { href: '/admin/categories', icon: FolderTree, label: 'Categorie' },
+    { href: '/admin/delivery', icon: MapPin, label: 'Zone & tariffe' },
     { href: '/admin/branding', icon: Palette, label: 'Branding' },
   ] },
   { group: 'Sistema', items: [
@@ -73,8 +78,30 @@ function AdminLogo() {
   );
 }
 
+/**
+ * Conteggi live per i badge sidebar. Stesse query (head+count) usate dalla
+ * dashboard Today, leggere e cache-condivise via React Query. Servono solo a
+ * mostrare/nascondere un pallino quando il valore > 0; refresh ogni 60s.
+ */
+function useAdminBadgeCounts(): Record<BadgeKey, number> {
+  const { data } = useQuery({
+    queryKey: ['admin', 'sidebar-badges'],
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const [disputes, sos] = await Promise.all([
+        supabase.from('disputes').select('id', { count: 'exact', head: true }).eq('status', 'open'),
+        supabase.from('rider_sos_events').select('id', { count: 'exact', head: true }).is('resolved_at', null),
+      ]);
+      return { disputes: disputes.count ?? 0, sos: sos.count ?? 0 };
+    },
+  });
+  return { disputes: data?.disputes ?? 0, sos: data?.sos ?? 0 };
+}
+
 /** Lista di navigazione condivisa (sidebar desktop + drawer mobile). */
-function AdminNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function AdminNav({
+  pathname, onNavigate, badges,
+}: { pathname: string; onNavigate?: () => void; badges: Record<BadgeKey, number> }) {
   return (
     <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-3">
       {NAV.map((sec) => (
@@ -85,6 +112,7 @@ function AdminNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
           {sec.items.map((n) => {
             const on = isActive(pathname, n.href);
             const Icon = n.icon;
+            const count = n.badge ? badges[n.badge] : 0;
             return (
               <Link
                 key={n.href}
@@ -98,7 +126,15 @@ function AdminNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
                 }`}
               >
                 <Icon size={17} strokeWidth={2.2} className="shrink-0" aria-hidden />
-                {n.label}
+                <span className="flex-1">{n.label}</span>
+                {count > 0 && (
+                  <span
+                    className="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-secondary-600 px-1.5 text-[10px] font-bold leading-none text-white"
+                    aria-label={`${count} da gestire`}
+                  >
+                    {count > 99 ? '99+' : count}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -158,13 +194,14 @@ function useAdminIdentity() {
 export default function AdminSidebar() {
   const pathname = usePathname() ?? '';
   const { name, initials, handleSignOut } = useAdminIdentity();
+  const badges = useAdminBadgeCounts();
 
   return (
     <aside className="hidden md:flex sticky top-0 h-screen w-[248px] flex-col bg-ink-900 text-white">
       <div className="shrink-0 border-b border-white/10 px-5 pb-3.5 pt-5">
         <AdminLogo />
       </div>
-      <AdminNav pathname={pathname} />
+      <AdminNav pathname={pathname} badges={badges} />
       <AdminFooter name={name} initials={initials} onSignOut={handleSignOut} />
     </aside>
   );
@@ -178,6 +215,7 @@ export default function AdminSidebar() {
 export function AdminMobileTopbar() {
   const pathname = usePathname() ?? '';
   const { name, initials, handleSignOut } = useAdminIdentity();
+  const badges = useAdminBadgeCounts();
   const [open, setOpen] = useState(false);
 
   // Chiudi il drawer ad ogni cambio rotta e blocca lo scroll del body quando aperto.
@@ -223,7 +261,7 @@ export function AdminMobileTopbar() {
                 <X size={20} strokeWidth={2.2} aria-hidden />
               </button>
             </div>
-            <AdminNav pathname={pathname} onNavigate={() => setOpen(false)} />
+            <AdminNav pathname={pathname} badges={badges} onNavigate={() => setOpen(false)} />
             <AdminFooter name={name} initials={initials} onSignOut={handleSignOut} onNavigate={() => setOpen(false)} />
           </div>
         </div>
