@@ -30,7 +30,7 @@ Legenda: ✅ PASS · ❌ FAIL · ⛔ BLOCCATO · severità 🔴🟠🟡🟢
 | E7 | Runtime DB | Cap gift card | ✅ | `balance>amount` → 0 (constraint 103) |
 | E8 | Runtime DB | Orfani/FK | ✅ | order_items/seller/buyer orfani = 0 |
 | J1 | Finance | Invariante soldi per ordine (codice attuale) | ✅ | verificato da unit (split) |
-| J2 | Finance | Dati ordine live | ✅🟡 | 0 payout negativi; 12/21 "violazioni" = **dati legacy** pre-fee-columns (tutti < 2026-06-15) → pulire |
+| J2 | Finance | Dati ordine live | ✅ | **dati di test legacy CANCELLATI** (21 ordini + 7 pending, cascata verificata, tabelle a 0) → baseline pulita |
 | J3 | Finance | Wallet = ledger | ✅ | mismatch = 0 |
 | J4 | Finance | Riconciliazione Stripe↔DB | ✅ | 0 charge, balance 0 (pre-lancio, nulla da riconciliare) |
 | F1 | Stripe | Modalità test/live | ❌🔴 | **`livemode: true`** — connettore LIVE (tu dicevi test) |

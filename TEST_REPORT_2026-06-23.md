@@ -36,8 +36,8 @@ I cron NON girano su Render: sono **POST esterni schedulati su cron-job.org** (v
 - Gli altri 7 girano regolarmente (release-payouts 22h, send-emails/expire-checkouts/operational-alerts 0h…).
 → **Non risolvibile dal codice** (config esterna): su **cron-job.org** aggiungi/riattiva i due job verso `https://mycity-marketplace.com/api/cron/expire-stale-orders` e `/external-price-alerts` con l'header Bearer CRON_SECRET.
 
-### 🟠 4. Pulire i 21 ordini di test legacy
-Tutti gli ordini attuali sono dati di test (23/05–11/06, 2 account), molti precedenti alle colonne fee → non riconciliano. → **Azione:** elimina i dati di test prima di aprire, così la riconciliazione finanziaria parte da zero. (È una scrittura su prod: fallo tu o autorizzami esplicitamente.)
+### ✅ 4. Dati di test puliti (RISOLTO 2026-06-23)
+Cancellati con consenso esplicito: **21 ordini** (+ cascata: 24 righe, 21+21 codici, 1 reso) e **7 checkout pendenti**. Verificato: tutte le tabelle a 0, nessun orfano. Riconciliazione finanziaria parte da zero. Nessun account/profilo toccato.
 
 ## ✅ Fix applicati in questa sessione (2026-06-23, post-report)
 - **`npm audit fix`** → **produzione 0 vulnerabilità** (risolti `undici` high + `protobufjs`). Restano 6 *low* solo in dev-deps (Storybook), richiederebbero `--force` breaking → lasciate. typecheck/lint/build/715 unit verdi dopo l'update.
@@ -68,7 +68,7 @@ Tutti gli ordini attuali sono dati di test (23/05–11/06, 2 account), molti pre
 - [ ] **Acquisto reale di prova** end-to-end (poi rimborso) — chiude 🔴1 — *azione tua*
 - [ ] **Webhook Stripe** verificato in Dashboard — chiude 🔴2 — *azione tua*
 - [ ] **cron-job.org**: aggiungi/riattiva `expire-stale-orders` + `external-price-alerts` — chiude 🟠3 — *azione tua*
-- [ ] **Pulisci i dati di test** (21 ordini + 7 checkout pendenti) — 🟠4 — *in attesa del tuo OK esplicito (bloccato dal classificatore di sicurezza)*
+- [x] **Dati di test puliti** (21 ordini + 7 checkout pendenti, cascata verificata) — ✅ fatto
 - [ ] **Supabase Auth → Leaked password protection ON** — *azione tua (1 click)*
 - [x] **`npm audit fix`** (0 vuln prod) — ✅ fatto
 - [x] **Hardening RPC (migr. 106)** — ✅ fatto
