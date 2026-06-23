@@ -1,6 +1,9 @@
 import { env } from '@/lib/env';
 import type { KycProvider, KycSubject, KycDocs, KycCheckResult } from './types';
 
+/** Timeout per le fetch verso provider esterni KYC/VIES (audit 🟠-14). */
+const KYC_FETCH_TIMEOUT_MS = 10_000;
+
 /**
  * Mock provider: ritorna APPROVED se sono presenti idFrontUrl e
  * cognome (per simulare validazione minima). Utile in dev e CI.
@@ -50,6 +53,9 @@ class OnfidoProvider implements KycProvider {
           email: subject.email ?? undefined,
           dob: subject.birthDate ?? undefined,
         }),
+        // 🟠-14: timeout obbligatorio — un hang upstream non deve bloccare il
+        // worker (rate-limit KYC ~5/ora: pochi hang lo esaurirebbero).
+        signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS),
       });
       const applicant = await applicantRes.json();
       if (!applicantRes.ok) {
@@ -68,6 +74,7 @@ class OnfidoProvider implements KycProvider {
           // I documenti vanno caricati prima via POST /documents con file binari.
           // In MVP qui assumiamo che il caricamento sia gia' avvenuto via SDK frontend.
         }),
+        signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS), // 🟠-14
       });
       const check = await checkRes.json();
       if (!checkRes.ok) {
@@ -99,7 +106,7 @@ async function viesVatLookup(vat: string): Promise<{ valid: boolean; name?: stri
   try {
     const r = await fetch(
       `https://ec.europa.eu/taxation_customs/vies/rest-api/ms/${country}/vat/${number}`,
-      { cache: 'no-store' },
+      { cache: 'no-store', signal: AbortSignal.timeout(KYC_FETCH_TIMEOUT_MS) }, // 🟠-14
     );
     if (!r.ok) return { valid: false };
     const data = await r.json();
