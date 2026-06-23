@@ -35,7 +35,7 @@
 | 🟡-6 | refund parziale Dashboard multi-seller → no update | 🟡 | FATTO | app/api/stripe/webhook/route.ts | (git) | typecheck | warn→Sentry su parziale out-of-band; doc: usare flusso interno (auto-riconciliazione non possibile, charge non attribuibile a 1 ordine) |
 | 🟡-7 | riconciliazione COD assi temporali diversi | 🟡 | FATTO | app/api/rider/cash-confirm/route.ts | (git) | typecheck+test COD | atteso e incassato ancorati a delivered_at (stesso insieme) |
 | 🟡-8 | `/api/track` senza consent server-side | 🟡 | FATTO | app/api/track/route.ts | (git) | typecheck | eventi visitor gated su consenso analytics (cookie); auth funzionali |
-| 🟡-9 | operational-alerts non vigila email_queue backlog | 🟡 | TODO | | | | |
+| 🟡-9 | operational-alerts non vigila email_queue backlog | 🟡 | FATTO | app/api/cron/operational-alerts/route.ts | (git) | typecheck | alert EMAIL_BACKLOG se >=50 email non inviate da >30min |
 | 🟡-10 | logger non strutturato, no redaction PII | 🟡 | TODO | | | | |
 | 🟡-11 | Sentry client beforeSend minimale + captureError context | 🟡 | FATTO | lib/analytics/sentry.tsx | (git) | typecheck | sendDefaultPii:false + scrub headers/data/email/ip |
 | 🟡-12 | email destinatario loggata in console in prod | 🟡 | FATTO | lib/email/client.ts | (git) | typecheck+suite | console→logger; niente PII (to) nei log; errori a Sentry |
