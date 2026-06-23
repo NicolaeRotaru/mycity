@@ -118,11 +118,13 @@ export const POST = withAuthRateLimit({ name: 'kyc-start', max: 5, windowMs: 60 
     })
     .eq('id', user.id);
 
-  // 🟠-23: traccia in audit_logs le decisioni KYC terminali (prima non audited).
-  if (result.status === 'APPROVED' || result.status === 'REJECTED') {
+  // 🟠-23: traccia in audit_logs la decisione KYC terminale. A questo stadio il
+  // provider può rispondere solo PENDING o APPROVED (il rifiuto arriverebbe via
+  // webhook provider, non ancora implementato): audit sull'approvazione.
+  if (result.status === 'APPROVED') {
     await writeAudit({
       actorId: user.id,
-      action: result.status === 'APPROVED' ? 'kyc.approve' : 'kyc.reject',
+      action: 'kyc.approve',
       targetTable: 'profiles',
       targetId: user.id,
       metadata: { role: profile.role, providerCheckId: result.providerCheckId ?? null, via: 'start-check' },
