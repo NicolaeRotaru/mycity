@@ -185,13 +185,6 @@ type PendingDelivery = {
   slot?: string | null;
 };
 
-type PendingB2B = {
-  company_name: string;
-  vat_number: string;
-  sdi_code: string | null;
-  pec: string | null;
-} | null;
-
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const admin = getAdminSupabase();
   const stripe = getStripe();
@@ -204,7 +197,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Carica il record-of-intent
   const { data: pending, error: pendErr } = await admin
     .from('pending_checkouts')
-    .select('id, buyer_id, status, groups, coupon_code, b2b, delivery, pickup_in_store, total_cents, stripe_session_id')
+    .select('id, buyer_id, status, groups, coupon_code, delivery, pickup_in_store, total_cents, stripe_session_id')
     .eq('id', pendingCheckoutId)
     .single();
 
@@ -221,7 +214,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const groups = pending.groups as PendingGroup[];
   const delivery = pending.delivery as PendingDelivery;
-  const b2b = pending.b2b as PendingB2B;
   const pickupInStore = !!pending.pickup_in_store;
   const buyerId = pending.buyer_id as string;
   const couponCode = (pending.coupon_code as string | null) ?? null;
@@ -325,21 +317,6 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const { error: itemsErr } = await admin.from('order_items').insert(orderItemsRows);
     if (itemsErr) {
       logger.error(itemsErr, { context: 'stripe-order-items-insert', orderId: order.id });
-    }
-
-    // B2B: dettaglio fattura elettronica (se attivato)
-    if (b2b && b2b.company_name && b2b.vat_number) {
-      const { error: bErr } = await admin.from('business_orders').insert({
-        order_id: order.id,
-        company_name: b2b.company_name,
-        vat_number: b2b.vat_number,
-        sdi_code: b2b.sdi_code,
-        pec: b2b.pec,
-        invoice_required: true,
-      });
-      if (bErr && !bErr.message.includes('does not exist')) {
-        logger.warn('business_orders insert failed', { message: bErr.message });
-      }
     }
 
     createdOrderIds.push({

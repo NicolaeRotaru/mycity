@@ -29,7 +29,7 @@ import { ContactSheet, type ContactTarget } from '@/components/orders/ContactShe
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import {
-  Package, CheckCircle2, Star, Repeat, Undo2, AlertTriangle, FileText,
+  Package, CheckCircle2, Star, Repeat, Undo2, AlertTriangle,
   Clock, XCircle, Check, MapPin, Phone, Store, Bike, Trash2, Banknote,
   LifeBuoy, MessageCircle, ArrowLeft, ShoppingBag,
 } from 'lucide-react';
@@ -46,8 +46,6 @@ type OrderRow = {
   ready_at: string | null;
   picked_up_at: string | null;
   delivered_at: string | null;
-  invoice_pdf_url: string | null;
-  invoice_number: string | null;
   delivery_full_name: string | null;
   delivery_phone: string | null;
   delivery_address: string | null;
@@ -87,7 +85,6 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
       accepted_at, ready_at, picked_up_at, delivered_at,
       delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
       delivery_lat, delivery_lng,
-      invoice_pdf_url, invoice_number,
       rider_lat, rider_lng, rider_position_updated_at, rider_id,
       seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_phone, store_address, store_lat, store_lng ),
       rider:profiles!orders_rider_id_fkey ( full_name ),
@@ -338,7 +335,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         </div>
       </Card>
 
-      {/* CALLOUT consegnato: recensione / ripeti / reso / reclamo / fattura */}
+      {/* CALLOUT consegnato: recensione / ripeti / reso / reclamo */}
       {isDelivered && (
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-olive-200 bg-olive-50 p-4">
           <p className="inline-flex items-center gap-1.5 text-sm font-medium text-olive-800">
@@ -366,16 +363,6 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             >
               <AlertTriangle size={15} strokeWidth={2.2} aria-hidden /> Apri reclamo
             </Link>
-            {order.invoice_pdf_url && (
-              <a
-                href={order.invoice_pdf_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:bg-cream-50"
-              >
-                <FileText size={15} strokeWidth={2.2} aria-hidden /> Scarica fattura
-              </a>
-            )}
           </div>
         </div>
       )}

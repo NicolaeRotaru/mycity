@@ -104,7 +104,6 @@ export default function PrivacyPage() {
           <li><strong>Resend Inc.</strong> (Stati Uniti — SCC) — invio email transazionali.</li>
           <li><strong>Cloudflare Inc.</strong> (Stati Uniti — SCC) — CDN, protezione DDoS, CAPTCHA.</li>
           <li><strong>Anthropic PBC</strong> (Stati Uniti — SCC) — analisi immagini prodotto via AI (solo immagini caricate dai venditori; nessun dato personale dell&apos;acquirente).</li>
-          <li><strong>Provider SDI</strong> (FattureInCloud / Aruba) — fatturazione elettronica e conservazione sostitutiva a norma.</li>
           <li><strong>Provider KYC</strong> (Onfido / Jumio / Veriff) — verifica documenti d&apos;identità per Venditori e Rider.</li>
           <li><strong>OpenStreetMap Foundation</strong> (Regno Unito) — geocoding indirizzi.</li>
         </ul>

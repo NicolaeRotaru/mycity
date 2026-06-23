@@ -8,7 +8,6 @@ const SNAPSHOT_KEYS = [
   'NEXT_PUBLIC_APP_URL',
   'RESEND_FROM',
   'VAPID_SUBJECT',
-  'SDI_PROVIDER',
   'KYC_PROVIDER',
   'BG_REMOVAL_PROVIDER',
 ];
@@ -51,11 +50,6 @@ describe('env', () => {
   it('has default for resendFrom', () => {
     delete process.env.RESEND_FROM;
     expect(env.resendFrom()).toContain('@');
-  });
-
-  it('has default for sdiProvider (fattureincloud)', () => {
-    delete process.env.SDI_PROVIDER;
-    expect(env.sdiProvider()).toBe('fattureincloud');
   });
 
   it('has default for kycProvider (mock)', () => {

@@ -140,9 +140,11 @@ export default function TermsPage() {
           Google Pay e, dove indicato dal Venditore, pagamento alla consegna in contanti.
         </p>
         <p>
-          <strong>Fatturazione</strong>: per ogni ordine consegnato viene emessa fattura
-          elettronica via SDI dal Venditore. Su richiesta dell&apos;Acquirente con P.IVA, la
-          fattura è intestata all&apos;impresa indicata al checkout.
+          <strong>Documenti fiscali</strong>: MyCity è un intermediario e <strong>non emette
+          fatture</strong> per gli ordini. Ogni adempimento fiscale relativo alla vendita
+          (ricevuta, fattura, ecc.) è di esclusiva responsabilità del Venditore, secondo la
+          normativa applicabile. L&apos;Acquirente che necessiti di una fattura deve richiederla
+          direttamente al Venditore.
         </p>
       </LegalSection>
 
@@ -194,7 +196,7 @@ export default function TermsPage() {
         <p>I Venditori si impegnano a:</p>
         <ul className="list-disc list-inside space-y-1">
           <li>pubblicare informazioni veritiere, complete e non ingannevoli;</li>
-          <li>rispettare la normativa fiscale ed emettere regolare documentazione (scontrino/fattura via SDI);</li>
+          <li>rispettare la normativa fiscale ed emettere in proprio la documentazione richiesta (ricevuta/fattura) secondo la legge applicabile;</li>
           <li>garantire la conformità dei prodotti e rispondere della garanzia legale;</li>
           <li>evadere gli ordini entro i tempi indicati o, in caso di impossibilità, annullarli tempestivamente;</li>
           <li>non vendere prodotti contraffatti, illegali o vietati ai minori senza adeguati controlli;</li>
