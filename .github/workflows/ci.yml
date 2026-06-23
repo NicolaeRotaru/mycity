@@ -80,13 +80,77 @@ jobs:
       - name: Install deps
         run: npm ci --legacy-peer-deps
 
-      # Test d'integrazione di sicurezza (RLS + grant EXECUTE su SECURITY DEFINER).
-      # Usano i secret REALI (niente placeholder): se non configurati, i test si
-      # auto-skippano (vedi hasEnv) e il job resta verde. Quando i secret ci sono,
-      # girano contro il DB e intercettano regressioni come una migration di
-      # lockdown non applicata.
+      # 🔴-4: i test RLS/grant NON devono auto-skipparsi in silenzio, altrimenti
+      # la CI resta verde anche con RLS rotta (falsa sicurezza). Falliamo subito,
+      # con istruzioni, se i secret di un progetto Supabase DI TEST non ci sono.
+      - name: Verifica secret RLS configurati (no false-green)
+        env:
+          URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          ANON: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SR: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$ANON" ] || [ -z "$SR" ]; then
+            echo "::error::Secret Supabase di TEST mancanti: NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY."
+            echo "Senza questi i test RLS/grant si auto-skippavano e la CI restava verde con RLS potenzialmente rotta (audit 🔴-4)."
+            echo "Configurali in Settings -> Secrets and variables -> Actions (usa un PROGETTO SUPABASE DI TEST, MAI produzione)."
+            exit 1
+          fi
+
+      # Test d'integrazione di sicurezza (RLS + grant EXECUTE su SECURITY DEFINER)
+      # contro il DB di test. Ora ricevono anche SUPABASE_SERVICE_ROLE_KEY, così
+      # i controlli sui grant delle funzioni SECURITY DEFINER girano davvero.
       - name: Integration tests
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: npm run test:integration
+
+  e2e-tests:
+    name: E2E smoke (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      - name: Install Playwright (chromium)
+        run: npx playwright install --with-deps chromium
+
+      # 🔴-4: gli e2e prima non giravano mai in CI. Buildiamo, avviamo l'app e
+      # lanciamo gli smoke (home render, SEO/JSON-LD, header/CSP, shape /health).
+      # Env pubbliche placeholder: gli smoke non richiedono un DB reale.
+      - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+        run: npm run build
+
+      - name: Start app + run e2e
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          E2E_BASE_URL: "http://localhost:3000"
+        run: |
+          npm start &
+          APP_PID=$!
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          set +e
+          npm run test:e2e -- --project=chromium
+          STATUS=$?
+          kill $APP_PID 2>/dev/null || true
+          exit $STATUS
