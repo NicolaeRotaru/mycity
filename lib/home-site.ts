@@ -232,8 +232,8 @@ export type HomeSite = z.infer<typeof homeSiteSchema>;
 
 /** Ordine fisso attuale di app/page.tsx (i testi di default sono nel renderer). */
 const DEFAULT_ORDER: HomeSectionType[] = [
-  'hero', 'howItWorks', 'categories', 'dropOfDay', 'popularProducts',
-  'liveActivity', 'nearbyStores', 'reorder', 'trustRow', 'newsletter', 'sellerCta',
+  'hero', 'reorder', 'howItWorks', 'categories', 'dropOfDay', 'popularProducts',
+  'liveActivity', 'nearbyStores', 'trustRow', 'newsletter', 'sellerCta',
 ];
 
 /** Home di default: riproduce il layout fisso attuale (id deterministici = type). */
