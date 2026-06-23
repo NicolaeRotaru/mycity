@@ -65,14 +65,14 @@ const ROLE_LABELS: Record<string, { label: string; color: string; icon: LucideIc
   buyer:  { label: 'Acquirente', color: 'bg-primary-100 text-primary-800', icon: ShoppingCart },
   seller: { label: 'Venditore',  color: 'bg-secondary-100 text-secondary-700',     icon: Store },
   rider:  { label: 'Rider',      color: 'bg-accent-100 text-accent-700',   icon: Bike },
-  admin:  { label: 'Admin',      color: 'bg-rose-100 text-rose-700',     icon: Shield },
+  admin:  { label: 'Admin',      color: 'bg-secondary-100 text-secondary-700',     icon: Shield },
 };
 
 const APPROVAL_LABELS: Record<string, { label: string; color: string }> = {
   pending:   { label: 'In attesa',  color: 'bg-accent-100 text-accent-800' },
   approved:  { label: 'Approvato',  color: 'bg-olive-100 text-olive-800' },
   rejected:  { label: 'Rifiutato',  color: 'bg-rose-100 text-rose-800' },
-  suspended: { label: 'Sospeso',    color: 'bg-orange-100 text-orange-800' },
+  suspended: { label: 'Sospeso',    color: 'bg-secondary-50 text-secondary-600' },
 };
 
 function AdminUsersPageInner() {
@@ -352,7 +352,7 @@ function AdminUsersPageInner() {
             key={opt.key}
             onClick={() => setFilter(opt.key)}
             className={`px-3 py-1.5 rounded-full text-sm font-semibold transition-colors ${
-              filter === opt.key ? 'bg-rose-600 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
+              filter === opt.key ? 'bg-secondary-600 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
           >
             {opt.label}
@@ -448,7 +448,7 @@ function AdminUsersPageInner() {
                             });
                             if (ok) suspend.mutate(p.id);
                           }}
-                          className="text-xs bg-orange-100 hover:bg-orange-200 text-orange-800 px-2 py-1 rounded font-semibold"
+                          className="text-xs bg-accent-100 hover:bg-accent-200 text-accent-800 px-2 py-1 rounded font-semibold"
                         >
                           Sospendi
                         </button>
@@ -550,7 +550,7 @@ function AdminUsersPageInner() {
                       });
                       if (ok) suspend.mutate(p.id);
                     }}
-                    className="flex-1 min-w-[80px] text-center bg-orange-100 text-orange-800 font-semibold py-2 rounded-lg text-sm"
+                    className="flex-1 min-w-[80px] text-center bg-accent-100 text-accent-800 font-semibold py-2 rounded-lg text-sm"
                   >
                     Sospendi
                   </button>

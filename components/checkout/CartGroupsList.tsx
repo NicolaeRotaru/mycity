@@ -31,7 +31,7 @@ export function CartGroupsList({ groups }: Props) {
             <div key={item.id} className="flex gap-3 items-center pl-2 py-1">
               <div className="relative w-10 h-10 bg-cream-100 rounded shrink-0 overflow-hidden">
                 <Image
-                  src={sizedImage(item.image ?? 'https://placehold.co/100x100/eef2ff/6366f1?text=?', 'thumb')}
+                  src={sizedImage(item.image ?? 'https://placehold.co/100x100/F5EDD9/78716C?text=?', 'thumb')}
                   alt={item.name}
                   fill
                   sizes="40px"

@@ -16,11 +16,18 @@ interface Props {
   zoom?: number;
 }
 
+// Marker colors mapped to the MyCity brand palette (terracotta/burgundy/olive).
+// Color-KEY names are kept stable so call-sites don't break; only the hex
+// values are brand-aligned:
+//   indigo  → store  → olive-600     (#5A7C42)
+//   rose    → home/destination → secondary-600 burgundy (#B82A28)
+//   amber   → rider  → primary-600 terracotta (#C0492C)
+//   emerald → olive-600 (kept on-palette for any positive-state marker)
 const COLOR_HEX: Record<NonNullable<MapPoint['color']>, string> = {
-  indigo:  '#4f46e5',
-  rose:    '#e11d48',
-  emerald: '#10b981',
-  amber:   '#f59e0b',
+  indigo:  '#5A7C42',
+  rose:    '#B82A28',
+  emerald: '#5A7C42',
+  amber:   '#C0492C',
 };
 
 const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', zoom = 14 }: Props) => {

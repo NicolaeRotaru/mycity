@@ -93,32 +93,40 @@ export default function AdminSOSPage() {
             {active.map((s) => {
               const elapsed = Math.round((Date.now() - new Date(s.triggered_at).getTime()) / 60_000);
               return (
-                <li key={s.id} className="bg-rose-50 border-2 border-rose-300 rounded-xl p-4">
+                <li key={s.id} className="bg-secondary-50 border-2 border-secondary-300 rounded-xl p-4">
                   <div className="flex items-start justify-between flex-wrap gap-3">
-                    <div>
-                      <p className="font-bold text-rose-900 text-lg">
-                        {s.rider?.full_name ?? 'Rider sconosciuto'}
-                      </p>
-                      <p className="text-sm text-ink-700">
-                        Attivato: {new Date(s.triggered_at).toLocaleString('it-IT')}
-                      </p>
-                      <p className="text-sm font-semibold text-rose-700 flex items-center gap-1.5">
-                        <Clock size={14} strokeWidth={2.4} aria-hidden />
-                        {elapsed} min fa
-                      </p>
-                      {s.rider?.phone && (
-                        <a href={`tel:${s.rider.phone}`} className="inline-flex items-center gap-1.5 mt-1 text-sm text-primary-700 hover:underline">
-                          <Phone size={14} strokeWidth={2.4} aria-hidden />
-                          {s.rider.phone}
-                        </a>
-                      )}
+                    <div className="flex items-start gap-3">
+                      <span
+                        className="w-12 h-12 rounded-full bg-secondary-600 text-white inline-flex items-center justify-center shrink-0 animate-pulse-soft"
+                        aria-hidden
+                      >
+                        <Siren size={24} strokeWidth={2.4} />
+                      </span>
+                      <div>
+                        <p className="font-bold text-secondary-900 text-lg">
+                          {s.rider?.full_name ?? 'Rider sconosciuto'}
+                        </p>
+                        <p className="text-sm text-ink-700">
+                          Attivato: {new Date(s.triggered_at).toLocaleString('it-IT')}
+                        </p>
+                        <p className="text-sm font-semibold text-secondary-700 flex items-center gap-1.5">
+                          <Clock size={14} strokeWidth={2.4} aria-hidden />
+                          {elapsed} min fa
+                        </p>
+                        {s.rider?.phone && (
+                          <a href={`tel:${s.rider.phone}`} className="inline-flex items-center gap-1.5 mt-1 text-sm text-primary-700 hover:underline">
+                            <Phone size={14} strokeWidth={2.4} aria-hidden />
+                            {s.rider.phone}
+                          </a>
+                        )}
+                      </div>
                     </div>
                     {s.lat && s.lng && (
                       <a
                         href={`https://www.google.com/maps?q=${s.lat},${s.lng}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 bg-white border border-rose-300 text-rose-700 px-3 py-2 rounded-lg font-semibold text-sm"
+                        className="inline-flex items-center gap-1.5 bg-white border border-secondary-300 text-secondary-700 px-3 py-2 rounded-lg font-semibold text-sm"
                       >
                         <MapPin size={14} strokeWidth={2.4} /> Mappa posizione
                       </a>

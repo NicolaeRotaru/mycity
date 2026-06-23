@@ -1,6 +1,6 @@
 const SkeletonCard = () => (
-  <div className="bg-white border rounded-lg overflow-hidden animate-pulse">
-    <div className="w-full h-48 bg-cream-200" />
+  <div className="bg-white border border-cream-300 rounded-2xl overflow-hidden animate-pulse">
+    <div className="w-full h-48 bg-cream-200 rounded-t-2xl" />
     <div className="p-3 space-y-2">
       <div className="h-4 bg-cream-200 rounded w-3/4" />
       <div className="h-3 bg-cream-100 rounded w-1/2" />

@@ -323,7 +323,7 @@ export default function SellerAnalyticsPage() {
 const INSIGHT_TONE: Record<Insight['tone'], { bg: string; border: string; fg: string; btn: string }> = {
   olive:     { bg: 'bg-olive-50',     border: 'border-olive-200',     fg: 'text-olive-700',     btn: 'bg-olive-600 hover:bg-olive-700' },
   secondary: { bg: 'bg-secondary-50', border: 'border-secondary-200', fg: 'text-secondary-600', btn: 'bg-secondary-600 hover:bg-secondary-700' },
-  accent:    { bg: 'bg-accent-50',    border: 'border-accent-200',    fg: 'text-accent-700',    btn: 'bg-accent-500 hover:bg-accent-600 text-ink-900' },
+  accent:    { bg: 'bg-accent-50',    border: 'border-accent-200',    fg: 'text-accent-700',    btn: 'bg-accent-600 hover:bg-accent-700 text-white' },
 };
 
 function InsightCard({ icon: Icon, tone, title, body, ctaLabel, ctaHref }: Insight) {

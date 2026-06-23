@@ -77,8 +77,8 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   if (isSuspended) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
-        <div className="bg-white border-2 border-orange-200 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-orange-100 flex items-center justify-center mb-4">
+        <div className="bg-white border-2 border-accent-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-accent-100 flex items-center justify-center mb-4">
             <PauseCircle size={32} className="text-accent-500" aria-hidden />
           </div>
           <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Negozio temporaneamente sospeso</h1>
@@ -87,7 +87,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             Contatta il supporto per chiarimenti.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Link href="/contact" className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-lg font-bold shadow">
+            <Link href="/contact" className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-white px-5 py-2.5 rounded-lg font-bold shadow">
               <Mail size={16} aria-hidden /> Contatta il supporto
             </Link>
             <Link href="/" className="inline-flex items-center gap-1.5 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
@@ -102,13 +102,13 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
   if (isRejected) {
     return (
       <div className="container mx-auto p-6 max-w-2xl">
-        <div className="bg-white border-2 border-rose-200 rounded-2xl p-8 text-center">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-rose-100 flex items-center justify-center mb-4">
+        <div className="bg-white border-2 border-secondary-200 rounded-2xl p-8 text-center">
+          <div className="w-20 h-20 mx-auto rounded-2xl bg-secondary-100 flex items-center justify-center mb-4">
             <X size={32} className="text-secondary-600" aria-hidden />
           </div>
           <h1 className="text-2xl font-extrabold text-ink-900 mb-2">Richiesta non approvata</h1>
           {profileExt?.rejection_reason && (
-            <p className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 max-w-md mx-auto mb-3">
+            <p className="text-sm text-secondary-700 bg-secondary-50 border border-secondary-200 rounded-lg px-3 py-2 max-w-md mx-auto mb-3">
               <strong>Motivo:</strong> {profileExt?.rejection_reason}
             </p>
           )}

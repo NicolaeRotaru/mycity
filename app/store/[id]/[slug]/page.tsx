@@ -4,7 +4,7 @@ import { use, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Megaphone, EyeOff } from 'lucide-react';
+import { Megaphone, EyeOff, FileQuestion } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { announcementActive } from '@/lib/store-customization';
 import { pageBySlug, enabledSections } from '@/lib/store-site';
@@ -13,6 +13,7 @@ import StoreNav from '@/components/store-sections/StoreNav';
 import { useStorePageData } from '@/components/store-sections/useStorePageData';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
+import EmptyState from '@/components/EmptyState';
 
 export default function StoreCustomPage(props: { params: Promise<{ id: string; slug: string }> }) {
   const { id, slug } = use(props.params);
@@ -36,7 +37,15 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
   }
 
   const notFound = (
-    <div className="container mx-auto px-4 py-16 text-center text-ink-500">Pagina non trovata.</div>
+    <div className="container mx-auto px-4 py-16 max-w-xl">
+      <EmptyState
+        icon={FileQuestion}
+        title="Pagina non trovata"
+        description="Questa pagina non esiste o non è più disponibile."
+        ctaLabel="Vedi tutti i negozi"
+        ctaHref="/stores"
+      />
+    </div>
   );
 
   if (!data.approved || !data.ctx || !data.store) return notFound;
@@ -69,7 +78,7 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
       <StoreNav site={site} storeId={ctx.storeId} />
 
       {hidden && (
-        <div className="flex items-center gap-2 rounded-xl bg-amber-50 border border-amber-200 px-4 py-2.5 text-sm text-amber-800">
+        <div className="flex items-center gap-2 rounded-xl bg-accent-50 border border-accent-200 px-4 py-2.5 text-sm text-accent-800">
           <EyeOff size={16} aria-hidden /> Anteprima: questa pagina è nascosta e non è visibile al pubblico.
         </div>
       )}

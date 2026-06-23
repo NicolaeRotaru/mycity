@@ -71,7 +71,7 @@ function CatRow({ cat, tops, onDone }: { cat: Cat; tops: Cat[]; onDone: () => vo
         <Input label="Ordine" containerClassName="w-20" type="number" min={0} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} />
         <Checkbox containerClassName="mb-2.5" label="In evidenza" checked={featured} onChange={(e) => setFeatured(e.target.checked)} />
         <Button className="mb-0.5" size="sm" type="button" loading={save.isPending} onClick={() => save.mutate()}>Salva</Button>
-        <button type="button" onClick={() => { if (window.confirm(`Eliminare "${cat.name}"?`)) del.mutate(); }} aria-label="Elimina" className="mb-2 p-2 text-ink-400 hover:text-red-600">
+        <button type="button" onClick={() => { if (window.confirm(`Eliminare "${cat.name}"?`)) del.mutate(); }} aria-label="Elimina" className="mb-2 p-2 text-ink-400 hover:text-secondary-600">
           <Trash2 size={16} aria-hidden />
         </button>
       </div>

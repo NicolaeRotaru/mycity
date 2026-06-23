@@ -46,6 +46,12 @@ function formatDateTime(iso: string): string {
 }
 
 export default function AuditLogPage() {
+  // NOTE (design/backend-gated): la card "anti-frode price-change" del kit di
+  // design richiede dati di price-history per i prodotti. Questa pagina carica
+  // SOLO la tabella audit_logs e non dispone di quella sorgente; non viene
+  // fabbricata alcuna timeline prezzi qui. La card resta sbloccabile lato
+  // backend quando price-history sarà esposto (es. tabella product_price_history
+  // o evento audit dedicato).
   const [filterAction, setFilterAction] = useState<string>('');
 
   const { data: rows = [], isLoading } = useQuery({

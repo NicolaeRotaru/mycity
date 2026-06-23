@@ -87,7 +87,7 @@ function RejectDialog({
         className="w-full overflow-hidden rounded-t-3xl bg-white shadow-2xl animate-slideUp sm:w-auto sm:min-w-[440px] sm:max-w-md sm:rounded-2xl sm:animate-popIn"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="h-1.5 bg-gradient-to-r from-rose-500 via-orange-500 to-accent-500" />
+        <div className="h-1.5 bg-gradient-to-r from-secondary-600 via-primary-600 to-accent-500" />
         <div className="px-6 pb-2 pt-6">
           <h2 id="reject-title" className="font-serif text-xl font-extrabold text-ink-900">
             Rifiutare l&apos;ordine?

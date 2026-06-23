@@ -223,10 +223,12 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
 
   const points: MapPoint[] = [];
   if (order.seller?.store_lat && order.seller?.store_lng) {
-    points.push({ lat: order.seller.store_lat, lng: order.seller.store_lng, label: 'Negozio', color: 'indigo' });
+    // Store marker → terracotta (primary). 'amber' key maps to primary-600 in DeliveryMap.
+    points.push({ lat: order.seller.store_lat, lng: order.seller.store_lng, label: 'Negozio', color: 'amber' });
   }
   if (order.delivery_lat && order.delivery_lng) {
-    points.push({ lat: order.delivery_lat, lng: order.delivery_lng, label: 'Cliente', color: 'rose' });
+    // Customer marker → olive. 'emerald' key maps to olive-600 in DeliveryMap.
+    points.push({ lat: order.delivery_lat, lng: order.delivery_lng, label: 'Cliente', color: 'emerald' });
   }
 
   const done = order.delivery_status === 'DELIVERED';
@@ -369,7 +371,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 </p>
               </div>
               {sharing ? (
-                <button onClick={stopSharing} className="shrink-0 rounded-lg bg-rose-600 px-4 py-2 font-semibold text-white hover:bg-rose-700">
+                <button onClick={stopSharing} className="shrink-0 rounded-lg bg-secondary-600 px-4 py-2 font-semibold text-white hover:bg-secondary-700">
                   Disattiva
                 </button>
               ) : (
@@ -442,7 +444,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
           <button
             onClick={() => { if (confirm('Rilasciare questo ordine? Tornerà disponibile per altri rider.')) release.mutate(); }}
             disabled={release.isPending}
-            className="mb-2 w-full rounded-xl border border-rose-300 px-6 py-3 font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+            className="mb-2 w-full rounded-xl border border-secondary-300 px-6 py-3 font-semibold text-secondary-700 hover:bg-secondary-50 disabled:opacity-50"
           >
             Non posso completarlo — rilascia ordine
           </button>

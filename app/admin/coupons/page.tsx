@@ -12,6 +12,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { Button } from '@/components/ui/Button';
+import { Input, Select, Checkbox } from '@/components/ui/Field';
 
 type Coupon = {
   id: string;
@@ -121,81 +122,66 @@ export default function AdminCouponsPage() {
           className="bg-white border rounded-xl p-5 space-y-3"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-ink-700">Codice</label>
-              <input
-                value={form.code}
-                onChange={(e) => setForm({ ...form, code: e.target.value })}
-                placeholder="ESTATE25"
-                className="w-full border p-2 rounded mt-1 uppercase"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-ink-700">Tipo</label>
-              <select
-                value={form.type}
-                onChange={(e) => setForm({ ...form, type: e.target.value as 'PERCENT' | 'FIXED' | 'FREE_SHIPPING' })}
-                className="w-full border p-2 rounded mt-1"
-              >
-                <option value="PERCENT">Percentuale (%)</option>
-                <option value="FIXED">Sconto fisso (€)</option>
-                <option value="FREE_SHIPPING">Spedizione gratuita</option>
-              </select>
-            </div>
+            <Input
+              label="Codice"
+              value={form.code}
+              onChange={(e) => setForm({ ...form, code: e.target.value })}
+              placeholder="ESTATE25"
+              className="uppercase"
+              required
+            />
+            <Select
+              label="Tipo"
+              value={form.type}
+              onChange={(e) => setForm({ ...form, type: e.target.value as 'PERCENT' | 'FIXED' | 'FREE_SHIPPING' })}
+            >
+              <option value="PERCENT">Percentuale (%)</option>
+              <option value="FIXED">Sconto fisso (€)</option>
+              <option value="FREE_SHIPPING">Spedizione gratuita</option>
+            </Select>
             {form.type !== 'FREE_SHIPPING' && (
-              <div>
-                <label className="text-sm font-medium text-ink-700">Valore</label>
-                <input
-                  type="number"
-                  value={form.value}
-                  onChange={(e) => setForm({ ...form, value: Number(e.target.value) })}
-                  className="w-full border p-2 rounded mt-1"
-                  min={0}
-                  step={form.type === 'PERCENT' ? 1 : 0.5}
-                />
-              </div>
-            )}
-            <div>
-              <label className="text-sm font-medium text-ink-700">Spesa minima (€)</label>
-              <input
+              <Input
+                label="Valore"
                 type="number"
-                value={form.min_subtotal}
-                onChange={(e) => setForm({ ...form, min_subtotal: Number(e.target.value) })}
-                className="w-full border p-2 rounded mt-1"
+                value={form.value}
+                onChange={(e) => setForm({ ...form, value: Number(e.target.value) })}
                 min={0}
+                step={form.type === 'PERCENT' ? 1 : 0.5}
               />
-            </div>
-            <div>
-              <label className="text-sm font-medium text-ink-700">Usi max (vuoto = illimitato)</label>
-              <input
-                type="number"
-                value={form.max_uses ?? ''}
-                onChange={(e) => setForm({ ...form, max_uses: e.target.value ? Number(e.target.value) : null })}
-                className="w-full border p-2 rounded mt-1"
-                min={1}
-              />
-            </div>
-            <div className="sm:col-span-2">
-              <label className="text-sm font-medium text-ink-700">Descrizione (opzionale)</label>
-              <input
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className="w-full border p-2 rounded mt-1"
-              />
-            </div>
+            )}
+            <Input
+              label="Spesa minima (€)"
+              type="number"
+              value={form.min_subtotal}
+              onChange={(e) => setForm({ ...form, min_subtotal: Number(e.target.value) })}
+              min={0}
+            />
+            <Input
+              label="Usi max (vuoto = illimitato)"
+              type="number"
+              value={form.max_uses ?? ''}
+              onChange={(e) => setForm({ ...form, max_uses: e.target.value ? Number(e.target.value) : null })}
+              min={1}
+            />
+            <Input
+              label="Descrizione (opzionale)"
+              containerClassName="sm:col-span-2"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.first_order_only} onChange={(e) => setForm({ ...form, first_order_only: e.target.checked })} />
-            <span>Valido solo al primo ordine</span>
-          </label>
+          <Checkbox
+            label="Valido solo al primo ordine"
+            checked={form.first_order_only}
+            onChange={(e) => setForm({ ...form, first_order_only: e.target.checked })}
+          />
           <div className="flex gap-2">
-            <button type="submit" disabled={create.isPending} className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white px-5 py-2 rounded font-semibold">
+            <Button type="submit" variant="primary" loading={create.isPending}>
               {create.isPending ? 'Creazione…' : 'Crea coupon'}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)} className="text-ink-600 hover:text-ink-900 px-3">
+            </Button>
+            <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>
               Annulla
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -250,7 +236,7 @@ export default function AdminCouponsPage() {
                       });
                       if (ok) remove.mutate(c.id);
                     }}
-                    className="text-xs text-rose-600 hover:underline"
+                    className="text-xs text-secondary-600 hover:underline"
                   >
                     Elimina
                   </button>

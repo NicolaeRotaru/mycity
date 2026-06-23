@@ -201,7 +201,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   }
 
   return (
-    <div className="container mx-auto px-0 sm:px-4 max-w-2xl py-0 sm:py-6">
+    <div>
       <div className="bg-white sm:border sm:rounded-xl flex flex-col h-[calc(100dvh-160px)] sm:h-[calc(100dvh-200px)]">
         {/* HEADER */}
         <div className="flex items-center gap-3 p-4 border-b">
@@ -214,7 +214,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
             {counterpartName[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-ink-900 truncate">{counterpartName}</h2>
+            <h2 className="font-serif font-semibold text-ink-900 truncate">{counterpartName}</h2>
             <p className="text-xs text-ink-500">{iAmBuyer ? 'Negozio' : 'Cliente'}</p>
           </div>
         </div>

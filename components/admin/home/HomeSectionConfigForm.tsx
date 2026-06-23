@@ -115,7 +115,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
             <div key={i} className="rounded-lg border border-cream-200 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-ink-500">Vantaggio {i + 1}</span>
-                <button type="button" onClick={() => set({ bullets: bullets.filter((_, k) => k !== i) })} aria-label="Rimuovi vantaggio" className="text-ink-400 hover:text-red-600">
+                <button type="button" onClick={() => set({ bullets: bullets.filter((_, k) => k !== i) })} aria-label="Rimuovi vantaggio" className="text-ink-400 hover:text-secondary-600">
                   <Trash2 size={14} aria-hidden />
                 </button>
               </div>
@@ -214,7 +214,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
             <div key={i} className="rounded-lg border border-cream-200 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-ink-500">Immagine {i + 1}</span>
-                <button type="button" onClick={() => set({ items: items.filter((_, k) => k !== i) })} aria-label="Rimuovi immagine" className="text-ink-400 hover:text-red-600">
+                <button type="button" onClick={() => set({ items: items.filter((_, k) => k !== i) })} aria-label="Rimuovi immagine" className="text-ink-400 hover:text-secondary-600">
                   <Trash2 size={14} aria-hidden />
                 </button>
               </div>

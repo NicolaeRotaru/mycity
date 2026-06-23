@@ -119,7 +119,7 @@ export default function CartPage() {
                   <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-4 hover:shadow-card transition-shadow">
                     <div className="relative w-24 h-24 bg-cream-100 rounded-lg shrink-0 overflow-hidden">
                       <Image
-                        src={sizedImage(item.image ?? 'https://placehold.co/200x200/eef2ff/6366f1?text=Foto', 'thumb')}
+                        src={sizedImage(item.image ?? 'https://placehold.co/200x200/F5EDD9/78716C?text=Foto', 'thumb')}
                         alt={item.name}
                         fill
                         sizes="96px"

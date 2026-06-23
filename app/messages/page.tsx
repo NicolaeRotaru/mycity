@@ -98,14 +98,14 @@ export default function MessagesListPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8 max-w-3xl">
-      <div className="flex items-center gap-3 mb-6">
-        <MessageCircle size={28} className="text-primary-700" />
-        <div>
-          <h1 className="text-2xl font-bold">Messaggi</h1>
-          <p className="text-sm text-ink-500">Conversazioni con i negozi</p>
-        </div>
-      </div>
+    <div>
+      <header className="mb-6">
+        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Attività</p>
+        <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+          Messaggi
+        </h1>
+        <p className="mt-1 text-sm text-ink-500">Conversazioni con i negozi</p>
+      </header>
 
       {conversations.length === 0 ? (
         <div className="bg-white border rounded-xl p-12 text-center">
@@ -116,7 +116,7 @@ export default function MessagesListPage() {
           </p>
         </div>
       ) : (
-        <div className="bg-white border rounded-xl divide-y divide-cream-100 overflow-hidden">
+        <div className="bg-white border border-cream-300 rounded-xl divide-y divide-cream-100 overflow-hidden">
           {conversations.map((c) => {
             const iAmBuyer = c.buyer_id === userId;
             const counterpart = iAmBuyer ? c.seller : c.buyer;
@@ -150,7 +150,7 @@ export default function MessagesListPage() {
                     </p>
                   </div>
                   {unread > 0 && (
-                    <span className="shrink-0 bg-rose-500 text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
+                    <span className="shrink-0 bg-secondary-600 text-white text-xs font-bold rounded-full min-w-[20px] h-5 px-1.5 flex items-center justify-center">
                       {unread > 99 ? '99+' : unread}
                     </span>
                   )}

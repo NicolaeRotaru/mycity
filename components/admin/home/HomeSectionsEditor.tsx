@@ -123,7 +123,7 @@ export default function HomeSectionsEditor({
                 onClick={() => { if (window.confirm('Rimuovere questa sezione?')) remove(i); }}
                 aria-label="Rimuovi sezione"
                 title="Rimuovi"
-                className="p-1.5 text-ink-400 hover:text-red-600"
+                className="p-1.5 text-ink-400 hover:text-secondary-600"
               >
                 <Trash2 size={16} aria-hidden />
               </button>
