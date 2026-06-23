@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { getAdminSupabase, getCurrentUser } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
+import { verifyTurnstileToken } from '@/lib/captcha';
 import { logger } from '@/lib/logger';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -25,6 +26,8 @@ const Schema = z.object({
   message: z.string().trim().min(10, 'Messaggio troppo corto').max(5000),
   // Honeypot — se valorizzato è un bot
   company: z.string().optional(),
+  // 🟡-2: token CAPTCHA (come signup/signin). Opzionale: verificato sotto.
+  captchaToken: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -38,11 +41,16 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
   }
-  const { company, ...payload } = parsed.data;
+  const { company, captchaToken, ...payload } = parsed.data;
   if (company) {
     // Honeypot pieno → simula successo per non insospettire il bot
     return NextResponse.json({ ok: true });
   }
+
+  // 🟡-2: verifica CAPTCHA (come signup/signin). Se TURNSTILE_SECRET_KEY non è
+  // configurata, verifyTurnstileToken ritorna { ok:true, skipped:true }.
+  const cap = await verifyTurnstileToken(captchaToken, ip);
+  if (!cap.ok) return ApiErrors.invalidRequest('Verifica anti-bot fallita. Riprova.');
 
   const user = await getCurrentUser();
   const supa = getAdminSupabase();

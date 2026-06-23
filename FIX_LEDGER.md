@@ -28,7 +28,7 @@
 | 🟠-22 | Recesso 14gg rifiutabile dal seller | 🟠 | FATTO | app/api/returns/[id]/decide/route.ts, tests/unit/api-returns-decide.test.ts | (git) | 3 test [🟠-22] | il decide rifiuta REJECTED su CHANGED_MIND (recesso incondizionato); altri motivi ok |
 | 🟠-23 | KYC/payout non scritti in audit log | 🟠 | FATTO | app/api/kyc/start-check/route.ts | (git) | typecheck | writeAudit su decisioni KYC terminali (APPROVED/REJECTED). Payout automatici: loggati via logger (operational), non admin-audit |
 | 🟡-1 | `withInternalAuth` usa SERVICE_ROLE_KEY come shared secret | 🟡 | FATTO | lib/api/middleware.ts, .env.example | (git) | typecheck+test middleware | INTERNAL_API_SECRET dedicato con fallback compat |
-| 🟡-2 | `/api/contact` senza CAPTCHA | 🟡 | TODO | | | | |
+| 🟡-2 | `/api/contact` senza CAPTCHA | 🟡 | FATTO | app/contact/page.tsx, app/api/contact/route.ts | (git) | typecheck | Turnstile come signup (client) + verifyTurnstileToken (server) |
 | 🟡-3 | `gift_cards` manca CHECK(balance<=amount) | 🟡 | FATTO | migrations/103_gift_card_balance_cap.sql | (git) | SQL idempotente | conferma runtime: applicare migrazione |
 | 🟡-4 | definer-fn storiche senza search_path | 🟡 | FATTO | migrations/104 (parziale) | (git) | analisi | next_invoice_number ora con search_path; le altre per lo più retrofittate (059/061/063). Verifica runtime per i residui: SELECT proname FROM pg_proc WHERE prosecdef AND proconfig IS NULL AND pronamespace='public'::regnamespace; |
 | 🟡-5 | expire-checkouts non rilascia stock varianti | 🟡 | FATTO | app/api/cron/expire-checkouts/route.ts | (git) | typecheck; mirror webhook:857 | aggiunto variant_id alla map restore_stock |

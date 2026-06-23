@@ -4,14 +4,18 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import Honeypot from '@/components/Honeypot';
+import Turnstile from '@/components/Turnstile';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
 
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
   const [sending, setSending] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState(''); // 🟡-2
   const honeypotRef = useRef('');
   const startedAtRef = useRef(Date.now());
 
@@ -24,13 +28,15 @@ export default function ContactPage() {
     // Bot guards
     if (honeypotRef.current) { toast.success('Messaggio inviato! Ti risponderemo entro 24h.'); return; }
     if (Date.now() - startedAtRef.current < 2000) { toast.success('Messaggio inviato!'); return; }
+    // 🟡-2: CAPTCHA come su signup (se configurato).
+    if (TURNSTILE_SITE_KEY && !captchaToken) { toast.error('Completa la verifica anti-bot'); return; }
 
     setSending(true);
     try {
       const res = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ...form, company: honeypotRef.current }),
+        body: JSON.stringify({ ...form, company: honeypotRef.current, captchaToken: captchaToken || undefined }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -120,6 +126,15 @@ export default function ContactPage() {
             <p className="text-xs text-ink-500">
               Inviando il messaggio accetti la nostra <Link href="/privacy" className="text-primary-700 underline">Privacy Policy</Link>.
             </p>
+            {TURNSTILE_SITE_KEY && (
+              <div className="flex justify-center">
+                <Turnstile
+                  siteKey={TURNSTILE_SITE_KEY}
+                  onVerify={setCaptchaToken}
+                  onExpire={() => setCaptchaToken('')}
+                />
+              </div>
+            )}
             <Button type="submit" loading={sending} fullWidth size="lg">
               {sending ? 'Invio in corso...' : <span className="inline-flex items-center gap-2"><Mail size={18} aria-hidden /> Invia messaggio</span>}
             </Button>
