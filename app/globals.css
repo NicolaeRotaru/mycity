@@ -240,7 +240,7 @@ h3 { font-size: var(--text-xl);  font-weight: var(--weight-bold); line-height: v
   100% { transform: translateX(-50%); }
 }
 .animate-marquee {
-  animation: marquee 30s linear infinite;
+  animation: marquee 24s linear infinite;
 }
 .animate-marquee:hover {
   animation-play-state: paused;

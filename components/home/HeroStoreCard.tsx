@@ -3,18 +3,27 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
-import { MapPin, Coffee, Star, Home as HomeIcon, Truck } from 'lucide-react';
+import { MapPin, Star, Home as HomeIcon, Truck, Store as StoreIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
-import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
+import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 
+type StoreMediaItem = { type: 'image' | 'video'; url: string };
 type Store = {
   id: string; store_name: string | null; store_address: string | null; store_logo: string | null;
-  store_hours?: unknown;
+  store_hours?: unknown; store_media?: unknown;
 };
 type Prod = { id: string; name: string; price: number | string; images: string[] | null };
 type Reviews = { avg: number; count: number };
+
+/** Prima immagine di `store_media` (cover) — null se assente/non parseabile. */
+function coverFromMedia(media: unknown): string | null {
+  if (!Array.isArray(media)) return null;
+  const first = (media as StoreMediaItem[]).find((m) => m && m.type === 'image' && typeof m.url === 'string' && m.url.length > 0);
+  return first?.url ?? null;
+}
 
 /**
  * Card "anteprima negozio" nell'hero della home.
@@ -37,7 +46,7 @@ export default function HeroStoreCard() {
       // 1) Negozio del mese (pick admin), se presente.
       const { data: som } = await supabase
         .from('shop_of_month')
-        .select('seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_address, store_logo, store_hours )')
+        .select('seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_address, store_logo, store_hours, store_media )')
         .eq('month', monthIso)
         .maybeSingle();
       let store = (som as unknown as { seller: Store | null } | null)?.seller ?? null;
@@ -46,7 +55,7 @@ export default function HeroStoreCard() {
       if (!store) {
         const { data: s } = await supabase
           .from('profiles')
-          .select('id, store_name, store_address, store_logo, store_hours')
+          .select('id, store_name, store_address, store_logo, store_hours, store_media')
           .eq('role', 'seller')
           .eq('is_approved', true)
           .not('store_name', 'is', null)
@@ -82,88 +91,111 @@ export default function HeroStoreCard() {
 
   const { store, products, reviews } = data;
 
-  // "Consegna oggi": derivata dagli orari del negozio (store_hours) SOLO se
-  // affidabilmente interpretabili — il negozio ha orari configurati per oggi ed
-  // è aperto adesso. Se gli orari mancano o non sono parseabili, il badge è
-  // omesso (niente promessa di consegna non supportata dai dati).
+  // Stato apertura + "Consegna oggi": derivati dagli orari del negozio
+  // (store_hours) SOLO se affidabilmente interpretabili — il negozio ha orari
+  // configurati per oggi ed è aperto adesso. Se gli orari mancano o non sono
+  // parseabili, il badge "Consegna oggi" è omesso (niente promessa di consegna
+  // non supportata dai dati) e la pill mostra "Chiuso".
   const todayKey = DAY_KEYS[new Date().getDay()];
   const hours = (store.store_hours ?? null) as StoreHours | null;
   const todayIntervals = hours && typeof hours === 'object' ? hours[todayKey] : undefined;
-  const deliveryToday = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);
+  const openNow = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);
+  const deliveryToday = openNow;
+
+  const cover = coverFromMedia(store.store_media);
+  const zone = streetFromAddress(store.store_address);
+
   return (
     <div className="hidden md:flex justify-center">
       <div className="relative w-full max-w-sm">
         <Link
           href={`/store/${store.id}`}
-          className="block bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-6 space-y-4 overflow-hidden transition-shadow hover:shadow-warm"
+          className="block bg-white border border-cream-300 rounded-2xl shadow-warm-lg overflow-hidden transition-shadow hover:shadow-warm"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center overflow-hidden shrink-0">
-              {store.store_logo ? (
-                <Image src={sizedImage(store.store_logo, 'thumb')} alt="" width={48} height={48} unoptimized className="object-cover w-full h-full" />
-              ) : (
-                <Coffee size={22} strokeWidth={2} />
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-ink-900 truncate">{store.store_name ?? 'Negozio'}</p>
-              {store.store_address && (
-                <p className="text-xs text-ink-500 flex items-center gap-1 truncate">
-                  <MapPin size={12} strokeWidth={2} /> <span className="truncate">{store.store_address}</span>
-                </p>
-              )}
-            </div>
-            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-olive-600 animate-pulse-soft" />
-              Aperto
-            </span>
-          </div>
-
-          {/* Rating (solo con recensioni vere) + badge negozio locale + "Consegna
-              oggi" DERIVATO dagli orari del negozio (mostrato solo se aperto ora). */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
-            {reviews && (
-              <span className="inline-flex items-center gap-1 font-semibold text-ink-800">
-                <Star size={13} className="fill-accent-500 text-accent-500" aria-hidden />
-                {reviews.avg.toFixed(1)}
-                <span className="font-normal text-ink-400">({reviews.count} recensioni)</span>
-              </span>
-            )}
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full ring-1 ring-primary-200">
-              <HomeIcon size={11} strokeWidth={2.4} aria-hidden /> Negozio locale
-            </span>
-            {deliveryToday && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200">
-                <Truck size={11} strokeWidth={2.4} aria-hidden /> Consegna oggi
-              </span>
-            )}
-          </div>
-
-          {products.length > 0 && (
-            <div className="relative -mx-6 px-6">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
-                {products.map((p) => {
-                  const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
-                  return (
-                    <div key={p.id} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
-                      <div className="aspect-square rounded mb-1.5 overflow-hidden bg-gradient-to-br from-accent-100 to-primary-100 relative">
-                        {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" unoptimized className="object-cover" />}
-                      </div>
-                      <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
-                      <p className="text-xs font-semibold text-ink-900">{formatPrice(Number(p.price))}</p>
-                    </div>
-                  );
-                })}
-                <div aria-hidden className="shrink-0 w-2" />
+          {/* Cover full-width (foto reale del negozio o gradiente on-brand) con
+              pill "Aperto ora / Chiuso" sovrapposta in alto a sinistra. */}
+          <div className="relative h-44 w-full overflow-hidden">
+            {cover ? (
+              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="(max-width: 768px) 100vw, 384px" unoptimized className="object-cover" />
+            ) : (
+              <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600">
+                <span className="absolute inset-0 flex items-center justify-center text-white/40">
+                  <StoreIcon size={56} strokeWidth={1.4} aria-hidden />
+                </span>
               </div>
-              <div aria-hidden className="pointer-events-none absolute left-0 top-0 bottom-1 w-6 bg-gradient-to-r from-white to-transparent" />
-              <div aria-hidden className="pointer-events-none absolute right-0 top-0 bottom-1 w-6 bg-gradient-to-l from-white to-transparent" />
-            </div>
-          )}
+            )}
+            <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-ink-900/75 text-white backdrop-blur-sm">
+              <span className={`w-1.5 h-1.5 rounded-full ${openNow ? 'bg-olive-400 animate-pulse-soft' : 'bg-ink-300'}`} />
+              {openNow ? 'Aperto ora' : 'Chiuso'}
+            </span>
+          </div>
 
-          <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
-            <span className="text-ink-500">Consegna stimata</span>
-            <span className="font-semibold text-ink-900">oggi, entro 18:00</span>
+          <div className="p-5 space-y-3">
+            {/* Nome negozio in SERIF + badge verificato */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h3 className="font-serif font-bold text-lg text-ink-900 truncate">{store.store_name ?? 'Negozio'}</h3>
+              <VerifiedBadge size="sm" />
+            </div>
+
+            {/* Riga meta: rating · recensioni · zona (tutto data-driven) */}
+            {(reviews || zone) && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
+                {reviews && (
+                  <span className="inline-flex items-center gap-1 font-semibold text-ink-800">
+                    <Star size={13} className="fill-accent-500 text-accent-500" aria-hidden />
+                    {reviews.avg.toFixed(1)}
+                    <span className="font-normal text-ink-400">· {reviews.count} recensioni</span>
+                  </span>
+                )}
+                {reviews && zone && <span aria-hidden className="text-ink-300">·</span>}
+                {zone && (
+                  <span className="inline-flex items-center gap-1 truncate">
+                    <MapPin size={12} strokeWidth={2} aria-hidden /> <span className="truncate">{zone}</span>
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Badge "Negozio locale" (sempre) + "Consegna oggi" (data-driven,
+                derivato dagli orari: mostrato solo se aperto ora). */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full ring-1 ring-primary-200">
+                <HomeIcon size={11} strokeWidth={2.4} aria-hidden /> Negozio locale
+              </span>
+              {deliveryToday && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200">
+                  <Truck size={11} strokeWidth={2.4} aria-hidden /> Consegna oggi
+                </span>
+              )}
+            </div>
+
+            {products.length > 0 && (
+              <div className="relative -mx-5 px-5">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
+                  {products.map((p) => {
+                    const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
+                    return (
+                      <div key={p.id} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
+                        <div className="aspect-square rounded mb-1.5 overflow-hidden bg-gradient-to-br from-accent-100 to-primary-100 relative">
+                          {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" unoptimized className="object-cover" />}
+                        </div>
+                        <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
+                        <p className="text-xs font-semibold text-ink-900">{formatPrice(Number(p.price))}</p>
+                      </div>
+                    );
+                  })}
+                  <div aria-hidden className="shrink-0 w-2" />
+                </div>
+                <div aria-hidden className="pointer-events-none absolute left-0 top-0 bottom-1 w-6 bg-gradient-to-r from-white to-transparent" />
+                <div aria-hidden className="pointer-events-none absolute right-0 top-0 bottom-1 w-6 bg-gradient-to-l from-white to-transparent" />
+              </div>
+            )}
+
+            {/* Riga secondaria: consegna stimata. */}
+            <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
+              <span className="text-ink-500">Consegna stimata</span>
+              <span className="font-semibold text-ink-900">oggi, entro 18:00</span>
+            </div>
           </div>
         </Link>
         <div className="absolute -top-4 -right-4 bg-accent-500 text-ink-900 px-3 py-1.5 rounded-full font-bold text-xs shadow-warm-lg ring-2 ring-white">
@@ -187,39 +219,52 @@ function HeroStorePlaceholder() {
   return (
     <div className="hidden md:flex justify-center">
       <div className="relative w-full max-w-sm">
-        <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-6 space-y-4 overflow-hidden">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center">
-              <Coffee size={22} strokeWidth={2} />
-            </div>
-            <div className="min-w-0">
-              <p className="font-semibold text-ink-900 truncate">Salumeria del Borgo</p>
-              <p className="text-xs text-ink-500 flex items-center gap-1">
-                <MapPin size={12} strokeWidth={2} /> Via Calzolai 12 · 0.4 km
-              </p>
-            </div>
-            <span className="ml-auto inline-flex items-center gap-1 text-[10px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200 shrink-0">
-              <span className="w-1.5 h-1.5 rounded-full bg-olive-600 animate-pulse-soft" />
-              Aperto
+        <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg overflow-hidden">
+          <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600">
+            <span className="absolute inset-0 flex items-center justify-center text-white/40">
+              <StoreIcon size={56} strokeWidth={1.4} aria-hidden />
+            </span>
+            <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-ink-900/75 text-white backdrop-blur-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-olive-400 animate-pulse-soft" />
+              Aperto ora
             </span>
           </div>
-          <div className="relative -mx-6 px-6">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
-              {demo.map((p) => (
-                <div key={p.name} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
-                  <div className={`aspect-square rounded bg-gradient-to-br ${p.grad} mb-1.5`} />
-                  <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
-                  <p className="text-xs font-semibold text-ink-900">{p.price}</p>
-                </div>
-              ))}
-              <div aria-hidden className="shrink-0 w-2" />
+          <div className="p-5 space-y-3">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h3 className="font-serif font-bold text-lg text-ink-900 truncate">Salumeria del Borgo</h3>
+              <VerifiedBadge size="sm" />
             </div>
-            <div aria-hidden className="pointer-events-none absolute left-0 top-0 bottom-1 w-6 bg-gradient-to-r from-white to-transparent" />
-            <div aria-hidden className="pointer-events-none absolute right-0 top-0 bottom-1 w-6 bg-gradient-to-l from-white to-transparent" />
-          </div>
-          <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
-            <span className="text-ink-500">Consegna stimata</span>
-            <span className="font-semibold text-ink-900">oggi, entro 18:00</span>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
+              <span className="inline-flex items-center gap-1 truncate">
+                <MapPin size={12} strokeWidth={2} aria-hidden /> Via Calzolai
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full ring-1 ring-primary-200">
+                <HomeIcon size={11} strokeWidth={2.4} aria-hidden /> Negozio locale
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200">
+                <Truck size={11} strokeWidth={2.4} aria-hidden /> Consegna oggi
+              </span>
+            </div>
+            <div className="relative -mx-5 px-5">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
+                {demo.map((p) => (
+                  <div key={p.name} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
+                    <div className={`aspect-square rounded bg-gradient-to-br ${p.grad} mb-1.5`} />
+                    <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
+                    <p className="text-xs font-semibold text-ink-900">{p.price}</p>
+                  </div>
+                ))}
+                <div aria-hidden className="shrink-0 w-2" />
+              </div>
+              <div aria-hidden className="pointer-events-none absolute left-0 top-0 bottom-1 w-6 bg-gradient-to-r from-white to-transparent" />
+              <div aria-hidden className="pointer-events-none absolute right-0 top-0 bottom-1 w-6 bg-gradient-to-l from-white to-transparent" />
+            </div>
+            <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
+              <span className="text-ink-500">Consegna stimata</span>
+              <span className="font-semibold text-ink-900">oggi, entro 18:00</span>
+            </div>
           </div>
         </div>
         <div className="absolute -top-4 -right-4 bg-accent-500 text-ink-900 px-3 py-1.5 rounded-full font-bold text-xs shadow-warm-lg ring-2 ring-white">
