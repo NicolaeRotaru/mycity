@@ -8,6 +8,8 @@
  * Gestisce:
  *  - CREATE TABLE [IF NOT EXISTS] public.X (...)
  *  - ALTER TABLE [IF EXISTS] public.X ADD COLUMN [IF NOT EXISTS] col type
+ *  - DROP TABLE [IF EXISTS] public.X
+ *  - ALTER TABLE [IF EXISTS] public.X DROP COLUMN [IF EXISTS] col (anche multipli)
  *  - mapping tipi SQL → TS
  *  - nullable inference (NOT NULL / PRIMARY KEY → non-null; altrimenti null)
  *
@@ -96,6 +98,26 @@ function buildSchema() {
       if (!tables[table]) tables[table] = {};
       const parsed = parseColumnLine(`${colName} ${colDef}`);
       if (parsed) tables[table][parsed.name] = { tsType: parsed.tsType, nullable: parsed.nullable, hasDefault: parsed.hasDefault };
+    }
+
+    // --- DROP TABLE --- (riflette le rimozioni: lo schema netto, non solo le create)
+    const dropTableRe = /drop\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s*;/gi;
+    let dt;
+    while ((dt = dropTableRe.exec(sql)) !== null) {
+      delete tables[dt[1]];
+    }
+
+    // --- ALTER TABLE DROP COLUMN --- (uno o più drop nello stesso statement)
+    const alterDropRe = /alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+([\s\S]*?);/gi;
+    let ad;
+    while ((ad = alterDropRe.exec(sql)) !== null) {
+      const table = ad[1];
+      if (!tables[table]) continue;
+      const dropColRe = /drop\s+column\s+(?:if\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?/gi;
+      let dcol;
+      while ((dcol = dropColRe.exec(ad[2])) !== null) {
+        delete tables[table][dcol[1]];
+      }
     }
   }
   return tables;
