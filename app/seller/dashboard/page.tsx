@@ -16,6 +16,7 @@ import StoreAvatar from '@/components/StoreAvatar';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
 import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 
 export default function SellerDashboard() {
@@ -148,12 +149,14 @@ export default function SellerDashboard() {
             </div>
 
             <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-              <Link
+              <Button
                 href="/seller/products/new"
-                className="inline-flex items-center justify-center gap-2 bg-white text-primary-800 hover:bg-cream-100 font-semibold px-4 py-2.5 rounded-xl shadow-warm-sm transition-colors flex-1 sm:flex-none"
+                variant="secondary"
+                icon={Plus}
+                className="flex-1 sm:flex-none"
               >
-                <Plus size={18} strokeWidth={2.4} /> Pubblica prodotto
-              </Link>
+                Pubblica prodotto
+              </Button>
               {storeUrl && (
                 <Link
                   href={storeUrl}

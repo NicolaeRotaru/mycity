@@ -131,7 +131,7 @@ export default function SiteEditor() {
     <div className="sticky z-30 flex justify-end bottom-[calc(5rem+env(safe-area-inset-bottom))] md:bottom-4">
       <div className="flex flex-col items-end gap-2 mr-16 md:mr-0">
         {dirty && (
-          <span className="text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-full px-3 py-1.5 shadow-warm-sm">
+          <span className="text-xs font-semibold text-accent-800 bg-accent-50 border border-accent-200 rounded-full px-3 py-1.5 shadow-warm-sm">
             Modifiche non salvate
           </span>
         )}
@@ -263,7 +263,7 @@ function PanelHeader({ icon: Icon, title, desc, tintBg, tintFg }: {
         <Icon size={20} strokeWidth={2.2} aria-hidden />
       </div>
       <div className="min-w-0">
-        <h2 className="font-semibold text-ink-900">{title}</h2>
+        <h2 className="font-serif font-semibold text-ink-900">{title}</h2>
         <p className="text-sm text-ink-500">{desc}</p>
       </div>
     </div>

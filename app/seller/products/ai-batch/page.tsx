@@ -280,7 +280,7 @@ function UrlImportPanel() {
           <div className="mb-3 flex items-center gap-2">
             <Sparkles size={16} className="text-olive-700" aria-hidden />
             <span className="text-[13px] font-bold text-olive-800">Scheda importata dall&apos;AI</span>
-            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+            <span className="inline-flex items-center rounded-full bg-olive-100 px-2 py-0.5 text-[11px] font-semibold text-olive-800 ring-1 ring-inset ring-olive-200">
               Bozza
             </span>
           </div>

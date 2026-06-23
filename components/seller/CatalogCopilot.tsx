@@ -240,7 +240,7 @@ function ChangesPreview({
         <span className="flex-1 text-[13px] font-bold text-ink-900">
           {changes.length} {changes.length === 1 ? 'modifica proposta' : 'modifiche proposte'}
         </span>
-        <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+        <span className="inline-flex items-center rounded-full bg-olive-100 px-2 py-0.5 text-[11px] font-semibold text-olive-800 ring-1 ring-inset ring-olive-200">
           Anteprima
         </span>
       </div>
