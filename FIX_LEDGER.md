@@ -9,7 +9,7 @@
 | 🔴-2 | SDI fatturazione promessa ma inesistente | 🔴 | TODO | | | | esterno/decisione |
 | 🔴-3 | No test webhook Stripe + state machine | 🔴 | TODO | | | | |
 | 🔴-4 | CI senza e2e/SQL + RLS auto-skip | 🔴 | TODO | | | | |
-| 🟠-6 | Chargeback WON blocca payout per sempre | 🟠 | TODO | | | | |
+| 🟠-6 | Chargeback WON blocca payout per sempre | 🟠 | FATTO | app/api/cron/release-payouts/route.ts, tests/unit/api-cron-release-payouts-cod.test.ts | (git) | 3 test [🟠-6] | filtro PAYOUT_DISPUTE_FILTER (null o WON) sui 3 pass |
 | 🟠-7 | Fee 10% grava su spedizione+delivery fee | 🟠 | TODO | | | | decisione prodotto |
 | 🟠-8 | Nessun constraint ordine ≥1 item | 🟠 | TODO | | | | |
 | 🟠-9 | Email best-effort, errori swallowed, no retry | 🟠 | TODO | | | | |
