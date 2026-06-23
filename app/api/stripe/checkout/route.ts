@@ -36,13 +36,6 @@ const DeliverySchema = z.object({
   lng: z.number().min(-180).max(180).nullable().optional(),
 }).refine((d) => !(d.lat === 0 && d.lng === 0), { message: 'Coordinate di consegna non valide' });
 
-const B2BSchema = z.object({
-  company_name: z.string().min(1).max(200),
-  vat_number: z.string().min(1).max(40),
-  sdi_code: z.string().max(20).optional().nullable(),
-  pec: z.string().email().max(200).optional().nullable(),
-}).nullable().optional();
-
 const Body = z.object({
   groups: z.array(GroupSchema).min(1).max(10),
   delivery: DeliverySchema,
@@ -60,7 +53,6 @@ const Body = z.object({
   // persistita nel pending_checkout (delivery.slot) e poi su orders.delivery_slot
   // dal webhook; null per ritiro o se non scelta. Non influisce su prezzi.
   deliverySlot: z.string().max(120).optional().nullable(),
-  b2b: B2BSchema,
 });
 
 /**
@@ -344,7 +336,6 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       currency: 'eur',
       groups: groupPersisted,
       coupon_code: validatedCouponCode,
-      b2b: body.b2b ?? null,
       delivery: {
         full_name: body.delivery.fullName,
         address: body.delivery.address,

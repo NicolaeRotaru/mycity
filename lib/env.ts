@@ -48,11 +48,6 @@ export const env = {
   turnstileSiteKey: () => readEnv('NEXT_PUBLIC_TURNSTILE_SITE_KEY'),
   turnstileSecretKey: () => readEnv('TURNSTILE_SECRET_KEY'),
 
-  // SDI fatturazione (FattureInCloud di default)
-  sdiProvider: () => (readEnv('SDI_PROVIDER') ?? 'fattureincloud') as 'fattureincloud' | 'aruba' | 'mock',
-  sdiApiKey: () => readEnv('SDI_API_KEY'),
-  sdiCompanyId: () => readEnv('SDI_COMPANY_ID'),
-
   // KYC provider (Onfido di default)
   kycProvider: () => (readEnv('KYC_PROVIDER') ?? 'mock') as 'onfido' | 'jumio' | 'veriff' | 'mock',
   kycApiKey: () => readEnv('KYC_API_KEY'),
