@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownAZ, ArrowDownWideNarrow, TrendingUp, X, Tag, PackageCheck, Check, Search, ChevronRight } from 'lucide-react';
+import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownWideNarrow, X, Tag, PackageCheck, Check, Search, ChevronRight } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
 import { useQuery } from '@tanstack/react-query';
@@ -12,9 +12,9 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 
-type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating';
+type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating' | 'discount_desc';
 
-const SORT_OPTIONS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'rating'];
+const SORT_OPTIONS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'discount_desc', 'rating'];
 
 // Bottom-sheet mobile: scroll-lock + Esc, focus-trap e ritorno del focus al
 // trigger alla chiusura (WCAG 2.1.2 / 2.4.3). Condiviso tra pannello filtri e ordina.
@@ -161,6 +161,7 @@ function SearchInner() {
             <option value="newest">{t('sort.newest')}</option>
             <option value="price_asc">{t('sort.price_asc')}</option>
             <option value="price_desc">{t('sort.price_desc')}</option>
+            <option value="discount_desc">{t('sort.discount_desc')}</option>
             <option value="rating">{t('sort.rating')}</option>
           </select>
         </label>
@@ -420,22 +421,29 @@ function SearchInner() {
             </ol>
           </nav>
 
-          <div className="flex items-end justify-between gap-4 flex-wrap">
-            <h1 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">
-              {q ? t.rich('resultsFor', { q, hl: (chunks) => <span className="text-primary-700">{chunks}</span> }) : t('allProducts')}
-            </h1>
-            {sort !== 'relevance' && (
-              <span className="text-sm text-ink-500 inline-flex items-center gap-1">
-                {sort === 'price_asc' || sort === 'price_desc' ? <ArrowDownAZ size={14} /> : <TrendingUp size={14} />}
-                {t('sortedBy', { label: sort === 'newest' ? t('sort.newest') : sort === 'price_asc' ? t('sort.price_asc') : sort === 'price_desc' ? t('sort.price_desc') : t('sort.rating') })}
-              </span>
-            )}
-          </div>
+          <h1 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">
+            {q ? t.rich('resultsFor', { q, hl: (chunks) => <span className="text-primary-700">{chunks}</span> }) : t('allProducts')}
+          </h1>
 
-          {/* Riga conteggio: "N prodotti dai negozi di Piacenza" */}
-          {resultCount !== null && (
-            <p className="text-sm text-ink-500">{t('countLine', { count: resultCount })}</p>
-          )}
+          {/* Riga risultati: conteggio a sinistra + select "Ordina per" attivo a destra (desktop) */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            {resultCount !== null ? (
+              <p className="text-sm text-ink-500">{t('countLine', { count: resultCount })}</p>
+            ) : <span />}
+            <label className="hidden md:inline-flex items-center gap-2 text-[13px] text-ink-500">
+              {t('sortBy')}
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value as SortOption)}
+                aria-label={t('sortBy')}
+                className="bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-400 cursor-pointer"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{t(`sort.${opt}`)}</option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           {/* Chip dei filtri attivi (rimovibili) */}
           {chips.length > 0 && (
