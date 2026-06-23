@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createHmac } from 'node:crypto';
 import type Stripe from 'stripe';
-import { getStripe, computeApplicationFeeCents, computeSellerPayoutCents } from '@/lib/stripe/client';
+import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
 import { reverseOrderTransfer, applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
@@ -246,13 +246,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Crea N ordini, uno per gruppo
   for (const g of groups) {
     const deliveryFeeCents = g.deliveryFeeCents ?? 0;
-    const feeCents = computeApplicationFeeCents(g.totalCents);
-    // Split del denaro in un'unica funzione pura. Dal netto del venditore scaliamo
-    // la commissione, la fee di consegna trattenuta dalla piattaforma E la
-    // spedizione (g.shippingCents): quest'ultima è versata a parte al rider come
-    // compenso di consegna (releaseRiderPayout). Senza sottrarla, la spedizione
-    // verrebbe pagata due volte (al seller nel netto e al rider).
-    const payoutCents = computeSellerPayoutCents({
+    // Split del denaro in un'unica funzione pura. La commissione (10%) grava SOLO
+    // sul subtotale prodotti: la fee di consegna (alla piattaforma) e la spedizione
+    // (g.shippingCents, versata a parte al rider via releaseRiderPayout) NON sono
+    // gravate dalla commissione. Il netto venditore = 90% del subtotale.
+    const { applicationFeeCents: feeCents, sellerPayoutCents: payoutCents } = computeOrderSplit({
       totalCents: g.totalCents,
       deliveryFeeCents,
       shippingCents: g.shippingCents,

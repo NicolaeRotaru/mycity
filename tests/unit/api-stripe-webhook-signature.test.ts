@@ -24,6 +24,11 @@ vi.mock('@/lib/stripe/client', () => ({
     },
   }),
   computeApplicationFeeCents: (c: number) => Math.round((c * 800) / 10000),
+  computeOrderSplit: (a: { totalCents: number; deliveryFeeCents: number; shippingCents: number }) => {
+    const subtotalCents = Math.max(0, a.totalCents - a.deliveryFeeCents - a.shippingCents);
+    const applicationFeeCents = Math.round((subtotalCents * 800) / 10000);
+    return { subtotalCents, applicationFeeCents, sellerPayoutCents: Math.max(0, subtotalCents - applicationFeeCents) };
+  },
   isStripeConfigured: () => true,
 }));
 

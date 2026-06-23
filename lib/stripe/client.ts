@@ -255,10 +255,11 @@ export async function createConnectLoginLink(accountId: string): Promise<{ url: 
 }
 
 /**
- * Calcola la commissione marketplace (10% del totale, IVA esclusa
- * — semplificazione MVP). Da raffinare quando lo schema commissioni
- * diventa configurabile per seller/categoria. La costante è centralizzata in
- * lib/constants (client-safe) e qui ri-esportata per compatibilità.
+ * Aliquota commissione marketplace (10%, IVA esclusa — semplificazione MVP).
+ * Funzione PURA: applica solo la percentuale all'importo passato. La BASE
+ * imponibile (SOLO il subtotale prodotti, MAI spedizione/consegna) è decisa da
+ * computeOrderSplit. La costante è centralizzata in lib/constants (client-safe)
+ * e qui ri-esportata per compatibilità.
  */
 export { MARKETPLACE_FEE_BPS };
 
@@ -267,25 +268,42 @@ export function computeApplicationFeeCents(amountCents: number): number {
 }
 
 /**
- * Netto del venditore per UN ordine (centesimi interi). Fonte di verità UNICA
- * dello split del denaro: webhook e backfill la usano entrambi, così non possono
- * divergere.
+ * Split del denaro di UN ordine (centesimi interi). Fonte di verità UNICA:
+ * webhook (carta), COD e backfill la usano tutte, così non possono divergere.
+ *
+ * DECISIONE DI REVENUE: la commissione (10%) grava SOLO sul SUBTOTALE prodotti
+ * — NON sulla spedizione né sulla fee di consegna. Il venditore incassa quindi
+ * un netto pulito pari al 90% di ciò che vende.
  *
  * Il totale pagato dal buyer si scompone in quote che non si sovrappongono:
- *   commissione piattaforma (10%) + fee di consegna trattenuta dalla piattaforma
- *   + compenso del rider (= la spedizione, versata SEPARATAMENTE al rider via
- *   releaseRiderPayout) + netto venditore.
- * La spedizione NON fa parte del netto venditore: spetta al rider. Senza questa
- * sottrazione verrebbe pagata due volte (al seller dentro il netto e al rider).
+ *   subtotale prodotti = netto venditore (90%) + commissione piattaforma (10%);
+ *   + fee di consegna trattenuta dalla piattaforma;
+ *   + spedizione = compenso del rider (versata SEPARATAMENTE via releaseRiderPayout).
+ * La spedizione NON fa parte del netto venditore: spetta al rider; senza la
+ * separazione verrebbe pagata due volte (al seller nel netto e al rider).
  *
  * Invariante: sellerPayout + applicationFee + deliveryFee + shipping === total
+ */
+export function computeOrderSplit(args: {
+  totalCents: number;
+  deliveryFeeCents: number;
+  shippingCents: number;
+}): { subtotalCents: number; applicationFeeCents: number; sellerPayoutCents: number } {
+  const { totalCents, deliveryFeeCents, shippingCents } = args;
+  const subtotalCents = Math.max(0, totalCents - deliveryFeeCents - shippingCents);
+  const applicationFeeCents = computeApplicationFeeCents(subtotalCents);
+  const sellerPayoutCents = Math.max(0, subtotalCents - applicationFeeCents);
+  return { subtotalCents, applicationFeeCents, sellerPayoutCents };
+}
+
+/**
+ * Netto del venditore per UN ordine. Scorciatoia su computeOrderSplit, mantenuta
+ * per compatibilità con i chiamanti/test esistenti.
  */
 export function computeSellerPayoutCents(args: {
   totalCents: number;
   deliveryFeeCents: number;
   shippingCents: number;
 }): number {
-  const { totalCents, deliveryFeeCents, shippingCents } = args;
-  const fee = computeApplicationFeeCents(totalCents);
-  return Math.max(0, totalCents - fee - deliveryFeeCents - shippingCents);
+  return computeOrderSplit(args).sellerPayoutCents;
 }
