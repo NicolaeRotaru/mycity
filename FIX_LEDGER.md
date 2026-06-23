@@ -6,7 +6,7 @@
 | ID | Titolo | Sev | Stato | File toccati | Commit | Prova | Note |
 |---|---|---|---|---|---|---|---|
 | 🔴-1 | `authenticate()` legge profilo via anon → 403 buyer/rider | 🔴 | FATTO | lib/api/middleware.ts, tests/unit/middleware.test.ts | (vedi git) | test [🔴-1] regressione, 700/700 | profilo ora via getAdminSupabase(); conferma runtime: chiamata buyer a /api/orders/cod |
-| 🔴-2 | SDI fatturazione promessa ma inesistente | 🔴 | TODO | | | | esterno/decisione |
+| 🔴-2 | SDI fatturazione promessa ma inesistente | 🔴 | BLOCCATO | (vedi 🟠-21 prep) | — | — | DECISIONE + PROVIDER ESTERNO: implementare un client FatturaPA/SDI reale (FattureInCloud/Aruba) richiede account+credenziali e conservazione a norma, oppure decidere di gestire la fatturazione manualmente e RIMUOVERE le promesse fuorvianti (privacy + link PDF ordine). Preparato: numerazione corretta (migr.104). Serve scelta del business + credenziali provider |
 | 🔴-3 | No test webhook Stripe + state machine | 🔴 | TODO | | | | |
 | 🔴-4 | CI senza e2e/SQL + RLS auto-skip | 🔴 | FATTO | .github/workflows/ci.yml | (git) | YAML valido (4 job) | guard fail-fast se mancano i secret RLS (no false-green) + passa SERVICE_ROLE_KEY + nuovo job e2e Playwright. Conferma runtime: configurare i secret di un progetto Supabase di TEST in Actions |
 | 🟠-6 | Chargeback WON blocca payout per sempre | 🟠 | FATTO | app/api/cron/release-payouts/route.ts, tests/unit/api-cron-release-payouts-cod.test.ts | (git) | 3 test [🟠-6] | filtro PAYOUT_DISPUTE_FILTER (null o WON) sui 3 pass |
@@ -25,7 +25,7 @@
 | 🟠-19 | Resilienza sottile (error/loading boundary) | 🟠 | FATTO | app/admin/error.tsx, app/seller/error.tsx, app/rider/error.tsx | (git) | typecheck | error boundary contestuali per le 3 aree operative |
 | 🟠-20 | `orders/[id]/return` spinner infinito su id KO | 🟠 | FATTO | app/orders/[id]/return/page.tsx | (git) | typecheck; stato loaded + EmptyState | distingue loading da not-found |
 | 🟠-21 | Numerazione fattura non a norma (rollover anno) | 🟠 | FATTO | migrations/104_invoice_sequence_per_year.sql | (git) | SQL idempotente | PK (seller_id,year) + upsert atomico + search_path; preparatorio (RPC non ancora usata) |
-| 🟠-22 | Recesso 14gg rifiutabile dal seller | 🟠 | TODO | | | | decisione legale |
+| 🟠-22 | Recesso 14gg rifiutabile dal seller | 🟠 | FATTO | app/api/returns/[id]/decide/route.ts, tests/unit/api-returns-decide.test.ts | (git) | 3 test [🟠-22] | il decide rifiuta REJECTED su CHANGED_MIND (recesso incondizionato); altri motivi ok |
 | 🟠-23 | KYC/payout non scritti in audit log | 🟠 | FATTO | app/api/kyc/start-check/route.ts | (git) | typecheck | writeAudit su decisioni KYC terminali (APPROVED/REJECTED). Payout automatici: loggati via logger (operational), non admin-audit |
 | 🟡-1 | `withInternalAuth` usa SERVICE_ROLE_KEY come shared secret | 🟡 | FATTO | lib/api/middleware.ts, .env.example | (git) | typecheck+test middleware | INTERNAL_API_SECRET dedicato con fallback compat |
 | 🟡-2 | `/api/contact` senza CAPTCHA | 🟡 | TODO | | | | |
