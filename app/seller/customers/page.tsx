@@ -99,17 +99,17 @@ export default function SellerCustomersPage() {
       />
 
       <div className="grid grid-cols-3 gap-3">
-        <div className="bg-white border rounded-xl p-4 text-center">
+        <div className="bg-white border border-cream-300 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold font-serif text-primary-700">{customers.length}</p>
           <p className="text-xs text-ink-500 uppercase tracking-wide">Totali</p>
         </div>
-        <div className="bg-white border rounded-xl p-4 text-center">
+        <div className="bg-white border border-cream-300 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold font-serif text-accent-600">
             {customers.filter((c) => c.ordersCount >= 5).length}
           </p>
           <p className="text-xs text-ink-500 uppercase tracking-wide">VIP</p>
         </div>
-        <div className="bg-white border rounded-xl p-4 text-center">
+        <div className="bg-white border border-cream-300 rounded-xl p-4 text-center">
           <p className="text-2xl font-bold font-serif text-olive-600">{formatPrice(avgOrderValue)}</p>
           <p className="text-xs text-ink-500 uppercase tracking-wide">Ordine medio</p>
         </div>
@@ -132,13 +132,13 @@ export default function SellerCustomersPage() {
           placeholder="Cerca nome…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="ml-auto border rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-56"
+          className="ml-auto border border-cream-300 rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-56"
         />
       </div>
 
-      <div className="bg-white border rounded-xl overflow-hidden overflow-x-auto">
+      <div className="bg-white border border-cream-300 rounded-xl overflow-hidden overflow-x-auto">
         <table className="w-full text-sm min-w-[700px]">
-          <thead className="bg-cream-50 border-b text-xs uppercase tracking-wide text-ink-500">
+          <thead className="bg-cream-50 border-b border-cream-200 text-xs uppercase tracking-wide text-ink-500">
             <tr>
               <th className="p-3 text-left">Cliente</th>
               <th className="p-3 text-right">Ordini</th>
@@ -156,7 +156,7 @@ export default function SellerCustomersPage() {
                 const isVip = c.ordersCount >= 5;
                 const isInactive = daysAgo > 30;
                 return (
-                  <tr key={c.userId} className="border-t hover:bg-cream-50">
+                  <tr key={c.userId} className="border-t border-cream-200 hover:bg-cream-50">
                     <td className="p-3">
                       <p className="font-semibold text-ink-900">{c.fullName ?? 'Cliente'}</p>
                       <p className="text-xs text-ink-400">ID: {c.userId.slice(0, 8)}…</p>
