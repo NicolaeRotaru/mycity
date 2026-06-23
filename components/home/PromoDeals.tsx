@@ -38,7 +38,7 @@ export default function PromoDeals() {
     <section>
       <div className="flex items-end justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <span className="inline-flex items-center gap-1.5 text-rose-600 text-xs font-bold uppercase tracking-wider">
+          <span className="inline-flex items-center gap-1.5 text-primary-700 text-xs font-bold uppercase tracking-wider">
             <Percent size={14} strokeWidth={2.4} />
             Promozioni
           </span>

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Store, MapPin, Navigation, ArrowRight, Layers, Power, Package, ChefHat, Star,
+  Store, MapPin, Navigation, ArrowRight, Layers, Power, Package, ChefHat, Star, Banknote,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -26,6 +26,7 @@ type AvailableOrder = {
   delivery_status: OrderStatus;
   delivery_city: string | null;
   delivery_address: string | null;
+  payment_method: string | null;
   user_id: string;
   seller: {
     store_name: string | null;
@@ -76,7 +77,7 @@ export default function RiderDashboardPage() {
         .from('orders')
         .select(`
           id, total_price, shipping_cost, delivery_status,
-          delivery_city, delivery_address, user_id, rider_id,
+          delivery_city, delivery_address, payment_method, user_id, rider_id,
           seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_address ),
           order_items ( id, quantity )
         `)
@@ -356,7 +357,12 @@ export default function RiderDashboardPage() {
               {available.map((o) => (
                 <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5">
                   <div className="mb-2 flex items-center justify-between">
-                    <Badge variant="new" icon={Package}>Pronto</Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="new" icon={Package}>Pronto</Badge>
+                      {o.payment_method === 'cod' && (
+                        <Badge variant="cod" icon={Banknote}>Contanti</Badge>
+                      )}
+                    </div>
                     <span className="font-mono text-[11px] text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                   </div>
                   <DeliveryRoute

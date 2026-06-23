@@ -93,11 +93,11 @@ export function ConfirmDialogHost() {
     : (isDanger ? AlertTriangle : Check);
 
   const accentBar = isDanger
-    ? 'bg-gradient-to-r from-rose-500 via-orange-500 to-accent-500'
+    ? 'bg-gradient-to-r from-rose-500 via-rose-600 to-accent-500'
     : 'bg-gradient-to-r from-primary-600 via-primary-700 to-secondary-600';
 
   const iconBg = isDanger
-    ? 'bg-gradient-to-br from-rose-100 to-orange-100 text-rose-600 ring-rose-200'
+    ? 'bg-gradient-to-br from-rose-100 to-accent-100 text-rose-600 ring-rose-200'
     : 'bg-gradient-to-br from-primary-100 to-secondary-100 text-primary-700 ring-primary-200';
 
   return (
