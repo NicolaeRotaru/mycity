@@ -44,7 +44,15 @@ export function buildProductContext(
   const parts: string[] = [];
   if (opts.lead) parts.push(opts.lead);
   if (imageUrls.length) parts.push('Le immagini qui sopra sono le foto reali di questo prodotto.');
-  parts.push(`Stato attuale del prodotto (JSON):\n${JSON.stringify(input.product, null, 2)}`);
+  // 🟠-16: cap della serializzazione per evitare un blow-up di token (costo) se
+  // il prodotto ha campi molto grandi (descrizioni lunghe, molte varianti).
+  const productJson = JSON.stringify(input.product, null, 2);
+  const MAX_PRODUCT_JSON = 4000;
+  const cappedProductJson =
+    productJson.length > MAX_PRODUCT_JSON
+      ? `${productJson.slice(0, MAX_PRODUCT_JSON)}\n…(troncato per limite di lunghezza)`
+      : productJson;
+  parts.push(`Stato attuale del prodotto (JSON):\n${cappedProductJson}`);
   if (topCategories.length) {
     parts.push(
       `Categorie di primo livello disponibili (slug):\n${topCategories

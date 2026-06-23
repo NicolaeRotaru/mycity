@@ -657,8 +657,19 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 
   const refundAmount = (charge.amount_refunded ?? 0) / 100;
-  const refundReason = charge.refunds?.data?.[0]?.reason ?? null;
-  const refundId = charge.refunds?.data?.[0]?.id ?? null;
+  // 🟢-1: charge.refunds non è sempre espanso nel payload → fallback via API per
+  // non perdere stripe_refund_id (tracciabilità del rimborso).
+  let refund: Stripe.Refund | null = charge.refunds?.data?.[0] ?? null;
+  if (!refund && charge.id) {
+    try {
+      const list = await getStripe().refunds.list({ charge: charge.id, limit: 1 });
+      refund = list.data[0] ?? null;
+    } catch {
+      logger.warn('[stripe] refunds.list fallback fallito', { chargeId: charge.id });
+    }
+  }
+  const refundReason = refund?.reason ?? null;
+  const refundId = refund?.id ?? null;
 
   // Claw-back dei transfer già inviati (idempotente: no-op se non TRANSFERRED
   // o già revertito). reverseOrderTransfer porta quelli pagati a 'REVERSED'.

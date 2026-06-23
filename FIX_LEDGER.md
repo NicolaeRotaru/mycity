@@ -19,10 +19,10 @@
 | 🟠-13 | Moderazione AI scritta ma non cablata | 🟠 | TODO | | | | (ex 🔴-5) |
 | 🟠-14 | KYC Onfido + VIES senza timeout | 🟠 | FATTO | lib/kyc/providers.ts | (git) | typecheck | AbortSignal.timeout(10s) sulle 3 fetch |
 | 🟠-15 | Nominatim geocoding dal browser | 🟠 | TODO | | | | |
-| 🟠-16 | Costo AI non capato (web_search + product JSON) | 🟠 | TODO | | | | |
+| 🟠-16 | Costo AI non capato (web_search + product JSON) | 🟠 | FATTO | lib/ai/productContext.ts | (git) | typecheck | cap 4000 char su JSON.stringify(product) |
 | 🟠-17 | Guard route group solo client-side | 🟠 | TODO | | | | |
 | 🟠-18 | `/profile/**` non protetto da middleware/layout | 🟠 | FATTO | middleware.ts | (git) | typecheck | aggiunto AUTH_REQUIRED=[/profile] nel middleware (auth sì, ruolo no), returnTo preciso |
-| 🟠-19 | Resilienza sottile (error/loading boundary) | 🟠 | TODO | | | | |
+| 🟠-19 | Resilienza sottile (error/loading boundary) | 🟠 | FATTO | app/admin/error.tsx, app/seller/error.tsx, app/rider/error.tsx | (git) | typecheck | error boundary contestuali per le 3 aree operative |
 | 🟠-20 | `orders/[id]/return` spinner infinito su id KO | 🟠 | FATTO | app/orders/[id]/return/page.tsx | (git) | typecheck; stato loaded + EmptyState | distingue loading da not-found |
 | 🟠-21 | Numerazione fattura non a norma (rollover anno) | 🟠 | FATTO | migrations/104_invoice_sequence_per_year.sql | (git) | SQL idempotente | PK (seller_id,year) + upsert atomico + search_path; preparatorio (RPC non ancora usata) |
 | 🟠-22 | Recesso 14gg rifiutabile dal seller | 🟠 | TODO | | | | decisione legale |
@@ -50,7 +50,7 @@
 | 🟡-21 | orfane /admin/support-chat e /profile/referral/leaderboard | 🟡 | FATTO | components/admin/AdminSidebar.tsx, app/profile/referral/page.tsx | (git) | typecheck | aggiunti i 2 link |
 | 🟡-22 | seller/promotions cache-key mismatch | 🟡 | FATTO | (nessuno) | — | analisi RQ v5 | FALSO POSITIVO: invalidateQueries(seller.promotions) matcha per prefisso anche promotionsByUser(uid) |
 | 🟡-23 | form critici non su RHF+zod | 🟡 | TODO | | | | |
-| 🟢-1 | handleChargeRefunded charge.refunds.data senza expand | 🟢 | TODO | | | | |
+| 🟢-1 | handleChargeRefunded charge.refunds.data senza expand | 🟢 | FATTO | app/api/stripe/webhook/route.ts | (git) | typecheck+webhook test | fallback refunds.list per stripe_refund_id |
 | 🟢-2 | idempotenza event-level non transazionale (coupon/email) | 🟢 | TODO | | | | |
 | 🟢-3 | track_sponsored_* callable da anon | 🟢 | FATTO | (nessuno) | — | analisi | rischio accettato: contatori analytics, sponsored e fatturato a placement flat (non per-impression/click); nessun impatto su soldi/sicurezza |
 | 🟢-4 | n8n dichiarato ma non cablato | 🟢 | FATTO | (nessuno) | — | grep n8n=0 | nessun riferimento nel repo ne in .env.example; era solo MCP di sessione: niente da rimuovere |
