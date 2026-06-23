@@ -26,6 +26,11 @@ vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({ webhooks: { constructEvent: () => event() } }),
   computeApplicationFeeCents: (c: number) => Math.round((c * 1000) / 10000),
   computeSellerPayoutCents: () => 0,
+  computeOrderSplit: (a: { totalCents: number; deliveryFeeCents: number; shippingCents: number }) => {
+    const subtotalCents = Math.max(0, a.totalCents - a.deliveryFeeCents - a.shippingCents);
+    const applicationFeeCents = Math.round((subtotalCents * 1000) / 10000);
+    return { subtotalCents, applicationFeeCents, sellerPayoutCents: Math.max(0, subtotalCents - applicationFeeCents) };
+  },
   isStripeConfigured: () => true,
 }));
 vi.mock('@/lib/stripe/payout', () => ({
