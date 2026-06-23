@@ -109,12 +109,12 @@ export default function NotificationsPage() {
   return (
     <div className="max-w-3xl">
       <div className="mb-6 flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Bell size={28} className="text-primary-600" aria-hidden />
-          <div>
-            <h1 className="font-serif text-2xl font-bold text-ink-900">Notifiche</h1>
-            <p className="text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
-          </div>
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Attività</p>
+          <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+            Notifiche
+          </h1>
+          <p className="mt-1 text-sm text-ink-500">Aggiornamenti su ordini, prodotti e novità</p>
         </div>
         {hasUnread && (
           <button

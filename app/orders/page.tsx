@@ -4,10 +4,12 @@ import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Package, Store } from 'lucide-react';
+import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import EmptyState from '@/components/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { addToCart, clearCart } from '@/lib/cart';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   type OrderStatus,
@@ -21,7 +23,8 @@ type OrderItem = {
   id: string;
   quantity: number;
   unit_price: number;
-  products: { name: string } | null;
+  product_id: string | null;
+  products: { name: string; images: string[] | null } | null;
 };
 
 type Order = {
@@ -45,8 +48,8 @@ const fetchOrders = async (): Promise<Order[]> => {
       id, total_price, payment_status, delivery_status, created_at, seller_id,
       seller:profiles!orders_seller_id_fkey ( store_name, store_logo ),
       order_items (
-        id, quantity, unit_price,
-        products ( name )
+        id, quantity, unit_price, product_id,
+        products ( name, images )
       )
     `)
     .eq('user_id', user.id)
@@ -89,11 +92,45 @@ function StripeReturnHandler() {
   return null;
 }
 
+// Stati "in corso" per cui ha senso il tracking live (coerente col copy del
+// dettaglio ordine): ordine non ancora consegnato né annullato.
+const TRACKABLE: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
+  'NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY',
+]);
+
 export default function OrdersPage() {
+  const router = useRouter();
   const { data: orders = [], isLoading } = useQuery({
     queryKey: queryKeys.orders.all,
     queryFn: fetchOrders,
   });
+
+  // Riordino: riusa lo stesso modulo carrello (`@/lib/cart`) del dettaglio
+  // ordine — stesso shape di addToCart, nessuna logica duplicata. Svuota il
+  // carrello e reinserisce le righe dell'ordine, poi porta a /cart.
+  const handleReorder = (order: Order) => {
+    clearCart();
+    let added = 0;
+    for (const it of order.order_items) {
+      if (!it.product_id || !it.products?.name) continue;
+      addToCart({
+        id: it.product_id,
+        name: it.products.name,
+        price: Number(it.unit_price),
+        image: it.products.images?.[0],
+        quantity: it.quantity,
+        sellerId: order.seller_id ?? undefined,
+        storeName: order.seller?.store_name ?? undefined,
+      });
+      added++;
+    }
+    if (added === 0) {
+      toast.error('Nessun prodotto di questo ordine è più disponibile.');
+      return;
+    }
+    toast.success(`${added} ${added === 1 ? 'articolo aggiunto' : 'articoli aggiunti'} al carrello!`);
+    router.push('/cart');
+  };
 
   if (isLoading) {
     return <LoadingState />;
@@ -132,14 +169,21 @@ export default function OrdersPage() {
       {orders.map((order) => {
         const status = order.delivery_status;
         const itemCount = order.order_items.reduce((s, i) => s + i.quantity, 0);
+        const trackable = TRACKABLE.has(status);
+        // Massimo 4 thumbnail; le righe rimanenti diventano un chip "+N".
+        const thumbs = order.order_items.slice(0, 4);
+        const extra = order.order_items.length - thumbs.length;
 
         return (
-          <Link
+          <div
             key={order.id}
-            href={`/orders/${order.id}`}
-            className="block bg-white border border-cream-300 rounded-xl hover:shadow-md hover:border-primary-200 transition-all overflow-hidden"
+            className="bg-white border border-cream-300 rounded-xl hover:shadow-md hover:border-primary-200 transition-all overflow-hidden"
           >
-            <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* HEADER (link al dettaglio): negozio + data + stato */}
+            <Link
+              href={`/orders/${order.id}`}
+              className="px-5 pt-4 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+            >
               <div className="flex items-center gap-4 min-w-0 flex-1">
                 <div className="w-12 h-12 rounded-full bg-cream-100 shrink-0 overflow-hidden flex items-center justify-center text-xl">
                   {order.seller?.store_logo ? (
@@ -156,13 +200,61 @@ export default function OrdersPage() {
                   </p>
                 </div>
               </div>
+              <OrderStatusBadge status={status} size="sm" />
+            </Link>
 
-              <div className="flex items-center gap-3 shrink-0">
-                <OrderStatusBadge status={status} size="sm" />
-                <span className="font-bold text-ink-900">{formatPrice(order.total_price)}</span>
+            {/* FOOTER: striscia thumbnail + totale + azioni */}
+            <div className="px-5 pb-4 flex flex-wrap items-center gap-3 border-t border-cream-100 pt-3">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex gap-1.5">
+                  {thumbs.map((it) => {
+                    const img = it.products?.images?.[0];
+                    return (
+                      <div
+                        key={it.id}
+                        className="relative shrink-0"
+                        title={`${it.products?.name ?? 'Prodotto'} ×${it.quantity}`}
+                      >
+                        <div className="h-12 w-12 overflow-hidden rounded-lg bg-cream-100 flex items-center justify-center">
+                          {img ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={img} alt="" loading="lazy" className="h-full w-full object-cover" />
+                          ) : <Package size={18} className="text-ink-400" aria-hidden />}
+                        </div>
+                        <span className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-ink-900 px-1 text-[10px] font-bold text-white">
+                          {it.quantity}
+                        </span>
+                      </div>
+                    );
+                  })}
+                  {extra > 0 && (
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-cream-100 text-xs font-bold text-ink-500">
+                      +{extra}
+                    </div>
+                  )}
+                </div>
+                <span className="ml-1 text-lg font-extrabold text-ink-900">
+                  {formatPrice(order.total_price)}
+                </span>
+              </div>
+
+              <div className="flex shrink-0 gap-2">
+                {trackable && (
+                  <Button variant="secondary" size="sm" icon={MapPin} href={`/orders/${order.id}`}>
+                    Traccia
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={RotateCcw}
+                  onClick={() => handleReorder(order)}
+                >
+                  Riordina
+                </Button>
               </div>
             </div>
-          </Link>
+          </div>
         );
       })}
     </div>
