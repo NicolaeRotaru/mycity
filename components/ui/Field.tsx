@@ -9,7 +9,7 @@ import {
   type SelectHTMLAttributes,
   type ReactNode,
 } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 /**
@@ -183,17 +183,25 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   const fieldId = id ?? autoId;
   return (
     <Field id={fieldId} label={label} required={required} hint={hint} error={error} className={containerClassName} labelAction={labelAction}>
-      <select
-        ref={ref}
-        id={fieldId}
-        required={required}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy(fieldId, hint, error)}
-        className={cn(CONTROL_BASE, PAD, 'pr-8', error ? CONTROL_ERR : CONTROL_OK, className)}
-        {...props}
-      >
-        {children}
-      </select>
+      <div className="relative">
+        <select
+          ref={ref}
+          id={fieldId}
+          required={required}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy(fieldId, hint, error)}
+          className={cn(CONTROL_BASE, PAD, 'appearance-none pr-10', error ? CONTROL_ERR : CONTROL_OK, className)}
+          {...props}
+        >
+          {children}
+        </select>
+        <ChevronDown
+          size={18}
+          strokeWidth={2.2}
+          aria-hidden
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-primary-700"
+        />
+      </div>
     </Field>
   );
 });

@@ -7,7 +7,7 @@ import { useLocalStorage } from '@/lib/hooks';
 const STORAGE_KEY = 'mc_delivery_location';
 
 type Location = { city: string; zip: string };
-const DEFAULT_LOC: Location = { city: 'Piacenza', zip: '29100' };
+const DEFAULT_LOC: Location = { city: 'Piacenza', zip: '29121' };
 
 /**
  * Pill "Consegna a Piacenza 29100" cliccabile per cambiare CAP.
@@ -105,7 +105,7 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
               maxLength={5}
               inputMode="numeric"
               pattern="[0-9]{5}"
-              placeholder="29100"
+              placeholder="29121"
               className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
             <button

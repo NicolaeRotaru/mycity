@@ -80,7 +80,7 @@ export default function SellerReviewsPage() {
       {isLoading ? (
         <LoadingState />
       ) : reviews.length === 0 ? (
-        <div className="bg-white border rounded-xl p-12 text-center">
+        <div className="bg-white border border-cream-300 rounded-xl p-12 text-center">
           <FileText size={48} className="mx-auto mb-3 text-ink-300" aria-hidden />
           <p className="font-semibold text-ink-700">Nessuna recensione ancora</p>
           <p className="text-sm text-ink-500 mt-1">
@@ -90,7 +90,7 @@ export default function SellerReviewsPage() {
       ) : (
         <>
           {/* Riepilogo + distribuzione */}
-          <section className="bg-white border rounded-xl p-6 grid md:grid-cols-[200px_1fr] gap-6">
+          <section className="bg-white border border-cream-300 rounded-xl p-6 grid md:grid-cols-[200px_1fr] gap-6">
             <div className="text-center">
               <div className="text-6xl font-extrabold font-serif text-ink-900">{stats.avg.toFixed(1)}</div>
               <Stars rating={stats.avg} />
@@ -175,7 +175,7 @@ function ReviewCard({ review }: { review: Review }) {
   const initial = review.reviewer?.full_name?.[0]?.toUpperCase() ?? '?';
 
   return (
-    <article className="bg-white border rounded-xl p-5">
+    <article className="bg-white border border-cream-300 rounded-xl p-5">
       <header className="flex items-start gap-3 mb-2">
         <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-800 font-bold flex items-center justify-center shrink-0">
           {initial}
@@ -223,7 +223,7 @@ function ReviewCard({ review }: { review: Review }) {
             rows={3}
             maxLength={500}
             placeholder="Ringrazia il cliente o spiega cosa farete di diverso…"
-            className="w-full border rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full border border-cream-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
           />
           <div className="flex justify-end gap-2 mt-2">
             <button

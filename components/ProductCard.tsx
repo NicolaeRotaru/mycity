@@ -127,10 +127,10 @@ const ProductCard = ({
           type="button"
           onClick={handleFav}
           aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
-          className="absolute top-2 right-2 z-10 flex h-7 w-7 items-center justify-center rounded-full bg-white/95 shadow transition-transform hover:scale-110 hover:bg-white"
+          className="absolute top-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow transition-transform hover:scale-110 hover:bg-white"
         >
           <Heart
-            size={14}
+            size={16}
             strokeWidth={2}
             className={`${isFav ? 'fill-secondary-500 text-secondary-500' : 'text-ink-400'} ${heartBeat ? 'animate-heart-beat' : ''}`}
           />
@@ -144,10 +144,10 @@ const ProductCard = ({
             <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[8px] font-bold text-white">
               {initials}
             </span>
-            <span className="truncate text-[10px] font-semibold text-ink-500">{storeName}</span>
+            <span className="truncate text-[11px] font-semibold text-ink-500">{storeName}</span>
           </div>
         )}
-        <h3 className="line-clamp-2 min-h-[2.4em] text-xs font-semibold leading-snug text-ink-900 transition-colors group-hover:text-primary-700">
+        <h3 className="line-clamp-2 min-h-[2.6em] text-[13px] font-semibold leading-snug text-ink-900 transition-colors group-hover:text-primary-700">
           {name}
         </h3>
 
@@ -155,16 +155,14 @@ const ProductCard = ({
           {(freeShipping || (isLowStock && !isOutOfStock)) && (
             <div className="mb-1 flex flex-wrap items-center gap-1">
               {isLowStock && !isOutOfStock && (
-                <span className="inline-flex items-center gap-0.5 rounded bg-secondary-50 px-1.5 py-0.5 text-[10px] font-bold text-secondary-700">
-                  <Flame size={10} strokeWidth={2.4} aria-hidden />
+                <Badge variant="lowstocksoft" icon={Flame}>
                   {stock === 1 ? 'Ultimo pezzo' : `Ultimi ${stock}`}
-                </span>
+                </Badge>
               )}
               {freeShipping && (
-                <span className="inline-flex items-center gap-0.5 rounded bg-olive-50 px-1.5 py-0.5 text-[10px] font-semibold text-olive-700">
-                  <Truck size={10} strokeWidth={2.4} aria-hidden />
+                <Badge variant="free" icon={Truck}>
                   Sped. gratis
-                </span>
+                </Badge>
               )}
             </div>
           )}
@@ -182,9 +180,9 @@ const ProductCard = ({
               onClick={handleAdd}
               disabled={isOutOfStock}
               aria-label={hasVariants ? `Scegli le opzioni di ${name}` : `Aggiungi ${name} al carrello`}
-              className="ml-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
+              className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
             >
-              <Plus size={16} strokeWidth={2.6} aria-hidden />
+              <Plus size={18} strokeWidth={2.6} aria-hidden />
             </button>
           </div>
         </div>

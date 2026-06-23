@@ -116,7 +116,10 @@ export default function AddressesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-serif text-2xl font-bold text-ink-900">I tuoi indirizzi</h1>
+        <p className="text-xs font-bold uppercase tracking-[0.05em] text-primary-700">Account</p>
+        <h1 className="mt-0.5 font-serif text-3xl font-extrabold leading-tight text-ink-900 sm:text-[32px]">
+          I tuoi indirizzi
+        </h1>
         <p className="mt-1 text-sm text-ink-500">Dove consegniamo i tuoi ordini</p>
       </div>
 

@@ -29,11 +29,11 @@ export const ORDER_STATUS_ICON: Record<OrderStatus, LucideIcon> = {
 };
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
-  NEW:              'In attesa di conferma',
+  NEW:              'Ordine ricevuto',
   ACCEPTED:         'In preparazione',
-  READY:            'Pronto per il pickup',
+  READY:            'Pronto per il ritiro',
   ASSIGNED:         'Rider in arrivo',
-  PICKED_UP:        'Ritirato dal negozio',
+  PICKED_UP:        'Ritirato',
   OUT_FOR_DELIVERY: 'In consegna',
   DELIVERED:        'Consegnato',
   CANCELED:         'Annullato',
