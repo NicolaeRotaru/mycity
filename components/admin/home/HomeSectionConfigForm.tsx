@@ -1,9 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Trash2, CheckCircle2 } from 'lucide-react';
+import { useDropzone } from 'react-dropzone';
+import { Trash2, CheckCircle2, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { ImageUrlField } from '@/components/ImageUrlField';
+import { supabase } from '@/lib/supabase/client';
+import { friendlyError } from '@/lib/errors';
 import type { HomeSection } from '@/lib/home-site';
 
 /** Estrae provider + id da un URL YouTube/Vimeo (o da un id grezzo). */
@@ -20,11 +24,13 @@ function parseVideo(input: string): { provider: 'youtube' | 'vimeo'; id: string 
 
 function VideoField({ section, onChange }: { section: Extract<HomeSection, { type: 'video' }>; onChange: (s: HomeSection) => void }) {
   const c = section.config;
+  const isFile = c.provider === 'file';
   const initialUrl = c.videoId
     ? c.provider === 'youtube' ? `https://youtu.be/${c.videoId}` : `https://vimeo.com/${c.videoId}`
     : '';
   const [url, setUrl] = useState(initialUrl);
   const [err, setErr] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
 
   const onInput = (v: string) => {
@@ -35,11 +41,63 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
     else setErr('Link non riconosciuto. Incolla un URL di YouTube o Vimeo.');
   };
 
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: { 'video/mp4': ['.mp4'], 'video/webm': ['.webm'] },
+    maxFiles: 1,
+    multiple: false,
+    disabled: uploading,
+    onDrop: async (files) => {
+      const file = files[0];
+      if (!file) return;
+      setUploading(true);
+      try {
+        const ext = file.name.split('.').pop()?.toLowerCase() ?? 'mp4';
+        const path = `home/${Date.now()}.${ext}`;
+        const { error } = await supabase.storage.from('products').upload(path, file, { upsert: true, contentType: file.type });
+        if (error) throw error;
+        const { data } = supabase.storage.from('products').getPublicUrl(path);
+        onChange({ ...section, config: { ...c, provider: 'file', videoId: '', videoUrl: data.publicUrl } });
+        toast.success('Video caricato');
+      } catch (e) {
+        toast.error(friendlyError(e));
+      } finally {
+        setUploading(false);
+      }
+    },
+  });
+
+  const switchMode = (mode: 'link' | 'file') => {
+    if (mode === 'file') set({ provider: 'file', videoId: '' });
+    else set({ provider: 'youtube', videoUrl: '' });
+  };
+
   return (
     <div className="space-y-3">
       <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
-      <Input label="Link YouTube o Vimeo" value={url} onChange={(e) => onInput(e.target.value)} error={err ?? undefined} placeholder="https://youtu.be/… oppure https://vimeo.com/…" />
-      {c.videoId && <p className="text-xs text-olive-700 inline-flex items-center gap-1"><CheckCircle2 size={14} aria-hidden /> Video {c.provider} riconosciuto.</p>}
+      <Select label="Sorgente video" value={isFile ? 'file' : 'link'} onChange={(e) => switchMode(e.target.value as 'link' | 'file')}>
+        <option value="link">Link YouTube o Vimeo</option>
+        <option value="file">File MP4 (carica o URL)</option>
+      </Select>
+
+      {!isFile ? (
+        <>
+          <Input label="Link YouTube o Vimeo" value={url} onChange={(e) => onInput(e.target.value)} error={err ?? undefined} placeholder="https://youtu.be/… oppure https://vimeo.com/…" />
+          {c.videoId && <p className="text-xs text-olive-700 inline-flex items-center gap-1"><CheckCircle2 size={14} aria-hidden /> Video {c.provider} riconosciuto.</p>}
+        </>
+      ) : (
+        <>
+          <div
+            {...getRootProps()}
+            className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-3 py-3 text-sm cursor-pointer transition-colors ${isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 bg-cream-50 hover:border-primary-300'} ${uploading ? 'opacity-60 cursor-wait' : ''}`}
+          >
+            <input {...getInputProps()} />
+            <Upload size={16} strokeWidth={2.2} className="text-ink-500" aria-hidden />
+            <span className="text-ink-600">{uploading ? 'Caricamento…' : isDragActive ? 'Rilascia qui…' : 'Carica un MP4 da dispositivo'}</span>
+          </div>
+          <Input label="URL del file video (https)" value={c.videoUrl ?? ''} onChange={(e) => set({ videoUrl: e.target.value })} placeholder="https://….mp4" />
+          {c.videoUrl && <p className="text-xs text-olive-700 inline-flex items-center gap-1"><CheckCircle2 size={14} aria-hidden /> File video impostato.</p>}
+        </>
+      )}
     </div>
   );
 }
