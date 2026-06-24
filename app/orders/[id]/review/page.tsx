@@ -24,7 +24,7 @@ const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) 
         className="text-4xl transition-transform hover:scale-110"
         aria-label={`${n} ${n === 1 ? 'stella' : 'stelle'}`}
       >
-        <span className={n <= value ? 'text-accent-400' : 'text-ink-300'}>★</span>
+        <span className={n <= value ? 'text-accent-700' : 'text-ink-300'}>★</span>
       </button>
     ))}
   </div>

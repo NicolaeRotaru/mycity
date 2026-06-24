@@ -23,7 +23,7 @@ type Review = {
 };
 
 const Stars = ({ rating }: { rating: number }) => (
-  <span className="text-accent-500 tracking-tight">
+  <span className="text-accent-700 tracking-tight">
     {'★'.repeat(Math.round(rating))}
     <span className="text-ink-300">{'★'.repeat(5 - Math.round(rating))}</span>
   </span>

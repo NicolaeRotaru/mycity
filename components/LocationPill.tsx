@@ -53,7 +53,7 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
       <button
         type="button"
         onClick={() => { setOpen((v) => !v); dismissHint(); }}
-        className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-full text-xs font-medium ring-1 ring-white/15 transition-colors"
+        className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-full text-xs font-medium ring-1 ring-white/15 transition-colors focus-visible:outline-white"
         title="Cambia indirizzo di consegna"
       >
         <MapPin size={14} strokeWidth={2.2} className="text-accent-300" />

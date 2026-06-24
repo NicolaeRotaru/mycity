@@ -68,7 +68,7 @@ export function LegalLayout({ title, active, meta, summary, toc, children }: Pro
       </div>
 
       <div className="lg:grid lg:grid-cols-[1fr_220px] lg:gap-8 lg:items-start">
-        <div className="prose prose-gray max-w-none space-y-6 text-ink-700 leading-relaxed order-1">
+        <div className="max-w-none space-y-6 text-ink-700 leading-relaxed order-1">
           {children}
         </div>
 
@@ -114,7 +114,7 @@ export function LegalSection({
   return (
     <section id={id} className="scroll-mt-24">
       <h2 className="text-xl font-bold text-ink-900 mb-2">{heading}</h2>
-      {children}
+      <div className="space-y-4">{children}</div>
     </section>
   );
 }

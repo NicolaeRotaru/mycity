@@ -83,7 +83,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full rounded-lg bg-accent-500 px-4 py-3 text-sm font-semibold text-white hover:bg-accent-600 flex items-center justify-center gap-1.5"
+        className="w-full rounded-lg bg-accent-500 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-accent-600 flex items-center justify-center gap-1.5"
       >
         <Banknote size={16} strokeWidth={2.2} aria-hidden /> Conferma incasso contanti
       </button>
@@ -137,7 +137,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
           <button
             onClick={submit}
             disabled={submitting}
-            className="flex-1 rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-white hover:bg-accent-600 disabled:opacity-50"
+            className="flex-1 rounded-lg bg-accent-500 px-4 py-2 text-sm font-semibold text-ink-900 hover:bg-accent-600 disabled:opacity-50"
           >
             {submitting ? tStates('sending') : tActions('confirm')}
           </button>

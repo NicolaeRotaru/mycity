@@ -96,7 +96,7 @@ const Footer = () => {
         {/* Brand + descrizione */}
         <div className="col-span-2 md:col-span-1">
           <h3 className="font-serif font-bold mb-3 text-2xl">
-            <span className="text-accent-500">{branding.wordmark.accent}</span><span className="text-ink-900">{branding.wordmark.rest}</span>
+            <span className="text-accent-700">{branding.wordmark.accent}</span><span className="text-ink-900">{branding.wordmark.rest}</span>
           </h3>
           <p className="text-sm text-ink-500 mb-4 leading-relaxed">
             {branding.footerTagline}
