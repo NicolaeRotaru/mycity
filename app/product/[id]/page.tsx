@@ -575,9 +575,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             {reviews.length > 0 ? (
               <>
                 <RatingStars rating={avgRating} size={18} />
-                <span className="text-sm text-ink-600 underline cursor-pointer">
+                <a href="#recensioni" className="text-sm text-ink-600 underline hover:text-primary-700">
                   {reviews.length} recensioni
-                </span>
+                </a>
               </>
             ) : (
               <span className="text-sm text-ink-400">Sii il primo a recensire questo prodotto</span>
@@ -811,7 +811,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       )}
 
       {/* RECENSIONI */}
-      <section className="mt-12 space-y-6">
+      <section id="recensioni" className="mt-12 space-y-6 scroll-mt-[var(--header-height)]">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="font-serif text-2xl font-bold text-ink-900">
             Recensioni

@@ -52,7 +52,7 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
   return (
     <div
       className="md:hidden fixed left-0 right-0 z-30 transition-transform duration-300 animate-slide-up pb-safe"
-      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 56px)' }}
+      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--tabbar-height))' }}
       aria-label="Aggiungi al carrello (sticky)"
     >
       <div className="container mx-auto px-3">

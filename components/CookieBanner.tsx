@@ -60,7 +60,7 @@ export default function CookieBanner() {
       role="dialog"
       aria-labelledby="cookie-banner-title"
       aria-describedby="cookie-banner-desc"
-      className="fixed inset-x-0 bottom-0 z-[100] p-3 sm:p-4"
+      className="fixed inset-x-0 bottom-[var(--tabbar-height)] md:bottom-0 z-[100] p-3 sm:p-4"
     >
       <div className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-cream-300">
         <h2 id="cookie-banner-title" className="flex items-center gap-2 text-base font-semibold text-ink-900">

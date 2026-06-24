@@ -45,6 +45,7 @@ export function OrderStatusBadge({ status, size = 'md', variant = 'pill', classN
         strokeWidth={2.2}
         className={className}
         style={{ color: c.color }}
+        role="img"
         aria-label={label}
       />
     );
