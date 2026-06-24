@@ -94,9 +94,9 @@ const CategoryBar = () => {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-haspopup="menu"
-            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 font-semibold transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 font-semibold transition-colors focus-visible:outline-white ${
               open
-                ? 'border-accent-400 text-accent-300'
+                ? 'border-accent-400 text-accent-200'
                 : 'border-transparent text-white/90 hover:text-white'
             }`}
           >
@@ -113,9 +113,9 @@ const CategoryBar = () => {
                 key={e.href}
                 href={e.href}
                 aria-current={active ? 'page' : undefined}
-                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 transition-colors ${
+                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 transition-colors focus-visible:outline-white ${
                   active
-                    ? 'border-accent-400 font-semibold text-accent-300'
+                    ? 'border-accent-400 font-semibold text-accent-200'
                     : 'border-transparent font-medium text-white/90 hover:text-white'
                 }`}
               >

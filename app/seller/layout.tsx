@@ -87,7 +87,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             Contatta il supporto per chiarimenti.
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
-            <Link href="/contact" className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-white px-5 py-2.5 rounded-lg font-bold shadow">
+            <Link href="/contact" className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-lg font-bold shadow">
               <Mail size={16} aria-hidden /> Contatta il supporto
             </Link>
             <Link href="/" className="inline-flex items-center gap-1.5 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">

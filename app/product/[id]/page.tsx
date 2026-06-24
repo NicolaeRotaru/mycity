@@ -573,7 +573,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           <div className="flex items-center gap-3 flex-wrap">
             {reviews.length > 0 ? (
               <>
-                <span className="text-accent-500 text-lg">
+                <span className="text-accent-700 text-lg">
                   {'★'.repeat(Math.round(avgRating))}{'☆'.repeat(5 - Math.round(avgRating))}
                 </span>
                 <span className="text-sm text-ink-600 underline cursor-pointer">
@@ -818,7 +818,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             Recensioni
             {reviews.length > 0 && (
               <span className="ml-3 text-base font-normal text-ink-500">
-                <span className="text-accent-400">★</span> {avgRating.toFixed(1)} ({reviews.length})
+                <span className="text-accent-700">★</span> {avgRating.toFixed(1)} ({reviews.length})
               </span>
             )}
           </h2>
@@ -829,7 +829,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           <div className="bg-white border border-cream-200 rounded-xl p-5 grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="text-center sm:border-r sm:border-cream-200">
               <div className="text-5xl font-extrabold font-serif text-ink-900">{avgRating.toFixed(1)}</div>
-              <div className="text-accent-500 text-lg leading-none mt-1">
+              <div className="text-accent-700 text-lg leading-none mt-1">
                 {'★'.repeat(Math.round(avgRating))}
                 <span className="text-ink-300">{'★'.repeat(5 - Math.round(avgRating))}</span>
               </div>
@@ -879,7 +879,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     className="text-3xl hover:scale-110 transition-transform"
                     aria-label={`${n} stelle`}
                   >
-                    <span className={n <= reviewRating ? 'text-accent-400' : 'text-ink-300'}>★</span>
+                    <span className={n <= reviewRating ? 'text-accent-700' : 'text-ink-300'}>★</span>
                   </button>
                 ))}
               </div>
@@ -960,7 +960,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               <div key={r.id} className="bg-white border border-cream-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
-                    <p className="text-accent-500 text-lg">
+                    <p className="text-accent-700 text-lg">
                       {'★'.repeat(Math.round(Number(r.rating)))}{'☆'.repeat(5 - Math.round(Number(r.rating)))}
                     </p>
                     {/* Verified Purchase badge — Trust & Safety insight */}

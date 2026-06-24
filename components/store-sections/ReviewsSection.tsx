@@ -115,7 +115,7 @@ function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <strong className="text-sm text-ink-900">{author ?? 'Cliente'}</strong>
-            <span className="text-sm text-accent-400" aria-label={`${r.rating} su 5 stelle`}>
+            <span className="text-sm text-accent-700" aria-label={`${r.rating} su 5 stelle`}>
               {'★'.repeat(r.rating)}
               {'☆'.repeat(5 - r.rating)}
             </span>

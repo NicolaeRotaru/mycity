@@ -104,8 +104,8 @@ export default function Navbar() {
                     {/* Carrello raggiungibile anche dagli ospiti: il badge usa
                         useCartCount() (storage locale), funziona senza login. */}
                     <CartButton count={cartCount} />
-                    <Link href="/sign-in" className="px-3 py-2 hover:text-accent-300 font-medium">Accedi</Link>
-                    <Link href="/sign-up" className="bg-accent-500 hover:bg-accent-600 text-ink-900 px-4 py-2 rounded-full font-semibold transition-colors">
+                    <Link href="/sign-in" className="px-3 py-2 hover:text-accent-300 font-medium focus-visible:outline-white">Accedi</Link>
+                    <Link href="/sign-up" className="bg-accent-500 hover:bg-accent-600 text-ink-900 px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
                       Registrati
                     </Link>
                   </>
@@ -128,19 +128,19 @@ export default function Navbar() {
                       <CartButton count={cartCount} />
                     )}
                     {isSeller && (
-                      <Link href="/seller/orders" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold">
+                      <Link href="/seller/orders" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Package size={16} strokeWidth={2.2} />
                         Ordini
                       </Link>
                     )}
                     {isRider && (
-                      <Link href="/rider" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold">
+                      <Link href="/rider" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Bike size={16} strokeWidth={2.2} />
                         Consegne
                       </Link>
                     )}
                     {isAdmin && (
-                      <Link href="/admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold">
+                      <Link href="/admin" className="ml-1 inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-2 rounded-full text-sm font-semibold focus-visible:outline-white">
                         <Shield size={16} strokeWidth={2.2} />
                         Admin
                       </Link>
@@ -180,7 +180,7 @@ export default function Navbar() {
                 </Link>
               )}
               {!isAuthenticated && !isLoading && (
-                <Link href="/sign-in" className="ml-auto text-sm font-medium hover:text-accent-300">Accedi</Link>
+                <Link href="/sign-in" className="ml-auto text-sm font-medium hover:text-accent-300 focus-visible:outline-white">Accedi</Link>
               )}
             </div>
             <div className="mt-2">
