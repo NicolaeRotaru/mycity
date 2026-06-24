@@ -8,6 +8,7 @@ import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { addToCart, clearCart } from '@/lib/cart';
 import { formatPrice, formatDate } from '@/lib/format';
@@ -100,7 +101,7 @@ const TRACKABLE: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { data: orders = [], isLoading } = useQuery({
+  const { data: orders = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.orders.all,
     queryFn: fetchOrders,
   });
@@ -134,6 +135,30 @@ export default function OrdersPage() {
 
   if (isLoading) {
     return <LoadingState />;
+  }
+
+  // Distinguo "non autenticato" (→ accedi) da un errore di caricamento reale,
+  // invece di mostrare il fuorviante "Non hai ancora ordini".
+  if (isError) {
+    const isAuth = error instanceof Error && error.message === 'Non autenticato';
+    return (
+      <div className="py-8">
+        {isAuth ? (
+          <EmptyState
+            icon={Package}
+            title="Accedi per vedere i tuoi ordini"
+            description="Entra nel tuo account per ritrovare ordini e tracking."
+            ctaLabel="Accedi"
+            ctaHref="/sign-in?returnTo=/orders"
+          />
+        ) : (
+          <ErrorState
+            title="Impossibile caricare gli ordini"
+            onRetry={() => refetch()}
+          />
+        )}
+      </div>
+    );
   }
 
   if (orders.length === 0) {

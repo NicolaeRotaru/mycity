@@ -9,6 +9,7 @@ import ProductCard from './ProductCard';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
+import ErrorState from './ErrorState';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { trackSearchPerformed } from '@/lib/analytics/events';
 
@@ -69,7 +70,7 @@ interface Props {
 }
 
 const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
-  const { data: products = [], isLoading } = useQuery({
+  const { data: products = [], isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
     queryFn: async () => {
       let q = supabase
@@ -288,6 +289,19 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       );
     }
     return <SkeletonGrid count={limit ?? 8} />;
+  }
+
+  // Errore di rete/DB: le sezioni-rail si auto-nascondono (come quando sono vuote),
+  // altrove mostriamo un errore onesto con "Riprova" invece del falso "Nessun prodotto".
+  if (isError) {
+    if (isSection) return null;
+    return (
+      <ErrorState
+        title="Impossibile caricare i prodotti"
+        description="C'è stato un problema di caricamento. Controlla la connessione e riprova."
+        onRetry={() => refetch()}
+      />
+    );
   }
 
   if (filtered.length === 0) {

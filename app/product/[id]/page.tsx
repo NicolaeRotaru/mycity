@@ -13,6 +13,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
+import ErrorState from '@/components/ErrorState';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
 import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
@@ -76,7 +77,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
   const [reviewsOnlyPhoto, setReviewsOnlyPhoto] = useState(false);
 
-  const { data: product, isLoading } = useQuery({
+  const { data: product, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.products.detail(id),
     queryFn: async () => {
       const { data, error } = await supabase.from('products').select(`
@@ -203,7 +204,30 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     );
   }
 
-  if (!product) return <div className="container mx-auto p-8 text-center">Prodotto non trovato.</div>;
+  // Errore di rete/DB: messaggio onesto + "Riprova" (prima cadeva nel generico "Prodotto non trovato").
+  if (isError) {
+    return (
+      <div className="container mx-auto p-8 max-w-md text-center mt-8">
+        <ErrorState
+          title="Impossibile caricare il prodotto"
+          description="C'è stato un problema di caricamento. Controlla la connessione e riprova."
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
+  }
+
+  // Prodotto realmente assente: blocco coerente col design (come "Prodotto non disponibile").
+  if (!product) {
+    return (
+      <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
+        <Package size={48} strokeWidth={1.5} className="mx-auto text-ink-300 mb-3" aria-hidden />
+        <h1 className="text-xl font-bold text-ink-900 mb-2">Prodotto non trovato</h1>
+        <p className="text-sm text-ink-600 mb-5">Questo prodotto non esiste o è stato rimosso.</p>
+        <Button href="/">← Torna al marketplace</Button>
+      </div>
+    );
+  }
 
   // Negozio sospeso o non approvato → prodotto non acquistabile
   if (!product.profiles?.is_approved) {
