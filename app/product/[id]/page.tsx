@@ -14,6 +14,7 @@ import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
 import ErrorState from '@/components/ErrorState';
+import { RatingStars } from '@/components/ui/RatingStars';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
 import { deriveOptionGroups, findVariant } from '@/lib/products/variants';
@@ -573,9 +574,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           <div className="flex items-center gap-3 flex-wrap">
             {reviews.length > 0 ? (
               <>
-                <span className="text-accent-700 text-lg">
-                  {'★'.repeat(Math.round(avgRating))}{'☆'.repeat(5 - Math.round(avgRating))}
-                </span>
+                <RatingStars rating={avgRating} size={18} />
                 <span className="text-sm text-ink-600 underline cursor-pointer">
                   {reviews.length} recensioni
                 </span>
@@ -725,7 +724,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         </div>
 
         {/* CTA STICKY */}
-        <div className="lg:sticky lg:top-32 h-fit">
+        <div className="lg:sticky lg:top-[var(--header-height)] h-fit">
           <div className="bg-surface-0 border border-surface-200 rounded-xl p-5 shadow-card space-y-3">
             <div className="text-2xl font-extrabold font-serif text-ink-900">{formatPrice(price)}</div>
             {freeShipping && (
@@ -829,9 +828,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           <div className="bg-white border border-cream-200 rounded-xl p-5 grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="text-center sm:border-r sm:border-cream-200">
               <div className="text-5xl font-extrabold font-serif text-ink-900">{avgRating.toFixed(1)}</div>
-              <div className="text-accent-700 text-lg leading-none mt-1">
-                {'★'.repeat(Math.round(avgRating))}
-                <span className="text-ink-300">{'★'.repeat(5 - Math.round(avgRating))}</span>
+              <div className="mt-1 flex justify-center">
+                <RatingStars rating={avgRating} size={18} />
               </div>
               <p className="text-sm text-ink-500 mt-1">
                 {reviews.length} {reviews.length === 1 ? 'recensione' : 'recensioni'}
@@ -960,9 +958,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               <div key={r.id} className="bg-white border border-cream-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
-                    <p className="text-accent-700 text-lg">
-                      {'★'.repeat(Math.round(Number(r.rating)))}{'☆'.repeat(5 - Math.round(Number(r.rating)))}
-                    </p>
+                    <RatingStars rating={Number(r.rating)} size={16} />
                     {/* Verified Purchase badge — Trust & Safety insight */}
                     {r.verified_purchase && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold bg-olive-100 text-olive-800 px-2 py-0.5 rounded-full">

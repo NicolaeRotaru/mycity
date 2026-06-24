@@ -287,7 +287,7 @@ export default function SettingsPage() {
       <div className="grid md:grid-cols-[220px_1fr] gap-6">
         {/* Sidebar tabs */}
         <aside>
-          <nav className="bg-white border rounded-xl overflow-hidden md:sticky md:top-32">
+          <nav className="bg-white border rounded-xl overflow-hidden md:sticky md:top-[var(--header-height)]">
             {TABS.map((t) => {
               const Icon = t.icon;
               return (

@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import type { SectionContext, SectionReview } from './SectionContext';
+import { RatingStars } from '@/components/ui/RatingStars';
 
 /**
  * Media a stelle con mezza-stella: arrotonda al mezzo punto (es. 4,3 → 4,5) e
@@ -115,10 +116,7 @@ function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <strong className="text-sm text-ink-900">{author ?? 'Cliente'}</strong>
-            <span className="text-sm text-accent-700" aria-label={`${r.rating} su 5 stelle`}>
-              {'★'.repeat(r.rating)}
-              {'☆'.repeat(5 - r.rating)}
-            </span>
+            <RatingStars rating={r.rating} size={14} />
             {verified && (
               <span className="inline-flex items-center gap-1 rounded-full bg-olive-50 px-2 py-0.5 text-[11px] font-bold text-olive-700">
                 <BadgeCheck size={11} aria-hidden /> Acquisto verificato

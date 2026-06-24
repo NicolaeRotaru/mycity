@@ -26,7 +26,7 @@ const VARIANTS: Record<Variant, string> = {
   accent:    'bg-accent-400 hover:bg-accent-500 text-ink-900 shadow-sm hover:shadow-warm',
   secondary: 'bg-white border border-cream-300 hover:bg-cream-50 text-ink-900',
   ghost:     'text-primary-700 hover:bg-primary-50',
-  danger:    'bg-rose-600 hover:bg-rose-700 text-white',
+  danger:    'bg-red-600 hover:bg-red-700 text-white',
   success:   'bg-olive-600 hover:bg-olive-700 text-white',
 };
 

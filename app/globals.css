@@ -103,6 +103,7 @@
   --shadow-hover: 0 12px 32px -8px rgba(192,73,44,0.18);
   --focus-ring: 0 0 0 2px var(--surface-0), 0 0 0 4px var(--primary-400);
   --focus-outline: 2px solid var(--primary-600);
+  --header-height:      9rem;            /* header sticky reale (~144px) per offset coerenti */
 
   /* ---- Motion ----------------------------------------------------------- */
   --ease-out-quint: cubic-bezier(0.16, 1, 0.3, 1);
