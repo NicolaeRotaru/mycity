@@ -592,7 +592,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               <DeliveryCutoff variant="inline" available={!isOutOfStock && expressEligible} externalDeliveryLabel={external?.delivery_label} />
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-                <span><strong>Paghi alla consegna in contanti</strong> — zero rischio, zero carta.</span>
+                <span><strong>Puoi pagare alla consegna</strong> — carta o contanti, decidi tu.</span>
               </span>
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">
                 <RotateCcw size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />

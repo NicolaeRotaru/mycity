@@ -36,8 +36,8 @@ const STEPS = [
   },
   {
     icon: ShoppingCart,
-    title: 'Ordina, paga alla consegna',
-    body: 'Aggiungi al carrello e scegli "pagamento alla consegna" — niente carta obbligatoria. Consegna in 24-48h.',
+    title: 'Ordina, paghi come vuoi',
+    body: 'Aggiungi al carrello e al checkout scegli come pagare: carta o contanti alla consegna, decidi tu. Consegna in 24-48h.',
     cta: 'Inizia a esplorare',
     href: '/search',
   },

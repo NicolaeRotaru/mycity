@@ -200,13 +200,17 @@ export default function CartPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-ink-600">
-                  Spedizione
-                  {!freeShipping && (
-                    <span className="block text-2xs text-ink-400 font-normal">stima · calcolata al checkout</span>
+                  {/* Soglia spedizione gratis: qui è globale, al checkout è
+                      calcolata per-negozio → nel multi-negozio "Gratis" non è
+                      garantito. Onestà: etichetta come stima finché i due modelli
+                      non sono allineati. */}
+                  {freeShipping && multiStore ? 'Spedizione stimata' : 'Spedizione'}
+                  {(!freeShipping || multiStore) && (
+                    <span className="block text-2xs text-ink-400 font-normal">stima · potrebbe variare al checkout</span>
                   )}
                 </span>
                 <span className={`font-semibold ${freeShipping ? 'text-olive-600' : 'text-ink-900'}`}>
-                  {freeShipping ? 'Gratis' : formatPrice(shippingCost)}
+                  {freeShipping ? (multiStore ? 'Gratis*' : 'Gratis') : formatPrice(shippingCost)}
                 </span>
               </div>
             </div>
@@ -233,7 +237,7 @@ export default function CartPage() {
             </div>
 
             <div className="space-y-2 pt-2 text-xs text-ink-500">
-              <p className="flex items-center gap-2"><Banknote size={14} className="text-olive-600 shrink-0" aria-hidden /> Pagamento in contanti alla consegna</p>
+              <p className="flex items-center gap-2"><Banknote size={14} className="text-olive-600 shrink-0" aria-hidden /> Carta o contanti alla consegna, decidi tu</p>
               <p className="flex items-center gap-2"><ShieldCheck size={14} className="text-olive-600 shrink-0" aria-hidden /> I tuoi dati sono al sicuro</p>
               <p className="flex items-center gap-2"><RotateCcw size={14} className="text-olive-600 shrink-0" aria-hidden /> Reso facile entro 14 giorni</p>
               <p className="flex items-center gap-2"><Store size={14} className="text-olive-600 shrink-0" aria-hidden /> Supporti il commercio locale</p>

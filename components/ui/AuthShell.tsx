@@ -36,7 +36,7 @@ import { Button } from '@/components/ui/Button';
 type BackLink = { href: string; label: string };
 
 const BENEFITS: { Icon: LucideIcon; text: string }[] = [
-  { Icon: Banknote, text: 'Paghi alla consegna, nessuna carta' },
+  { Icon: Banknote, text: 'Carta o contanti, decidi tu' },
   { Icon: Truck, text: 'Consegna in 24–48h dai negozi della tua via' },
   { Icon: BadgeCheck, text: '100% commercianti locali verificati' },
   { Icon: RotateCcw, text: 'Reso gratuito entro 14 giorni' },

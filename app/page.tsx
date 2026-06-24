@@ -25,7 +25,7 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
     subhead: (
       <>
         Alimentari, abbigliamento, casa, elettronica: ordini dai commercianti
-        della tua via in pochi tap e <strong className="text-ink-900">paghi alla consegna</strong>.
+        della tua via in pochi tap e <strong className="text-ink-900">puoi pagare alla consegna</strong>.
         A casa in 24-48h.
       </>
     ),
@@ -36,13 +36,13 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
     headline: (
       <>
         Ordini dai negozi di Piacenza.<br />
-        <span className="text-primary-700 italic">Paghi alla consegna.</span>
+        <span className="text-primary-700 italic">Paghi come vuoi.</span>
       </>
     ),
     subhead: (
       <>
-        Niente carta, nessun rischio: scegli dai commercianti della tua città e
-        paghi <strong className="text-ink-900">quando il rider arriva</strong>. A casa in 24-48h.
+        Carta o contanti, decidi tu: scegli dai commercianti della tua città e
+        <strong className="text-ink-900"> puoi pagare alla consegna</strong>. A casa in 24-48h.
       </>
     ),
     ctaPrimary: 'Scopri cosa c’è oggi',

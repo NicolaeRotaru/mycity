@@ -28,6 +28,7 @@ type SuggestItem = {
   price: number;
   images: string[] | null;
   seller_id: string | null;
+  has_variants: boolean | null;
   profiles: { store_name: string | null; is_approved: boolean } | null;
 };
 
@@ -50,7 +51,7 @@ export function CartUpsell({ items }: Props) {
       const { data } = await supabase
         .from('products')
         .select(`
-          id, name, price, images, seller_id,
+          id, name, price, images, seller_id, has_variants,
           profiles!products_seller_id_fkey ( store_name, is_approved )
         `)
         .in('seller_id', sellerIds)
@@ -58,8 +59,11 @@ export function CartUpsell({ items }: Props) {
         .limit(24);
       const rows = (data ?? []) as unknown as SuggestItem[];
       const inCart = new Set(excludeIds);
+      // Escludi i prodotti con varianti: l'upsell aggiunge l'articolo SENZA
+      // scegliere l'opzione → finirebbe bloccato al checkout. Per quelli serve
+      // passare dalla scheda prodotto.
       return rows
-        .filter((p) => p.profiles?.is_approved && !inCart.has(p.id))
+        .filter((p) => p.profiles?.is_approved && !inCart.has(p.id) && !p.has_variants)
         .slice(0, 8);
     },
   });

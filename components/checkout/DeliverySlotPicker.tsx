@@ -1,16 +1,18 @@
 'use client';
 
+import { useEffect } from 'react';
+
 /**
  * Selettore della fascia di consegna ("Quando vuoi riceverlo", step 2).
  *
  * UI (vedi mockup design-system/ui_kits/buyer/src/35-checkout.txt):
  *  - 3 day-tile: Adesso (express ~30–45 min) / Oggi (scegli l'ora) / Domani.
- *  - sotto, la lista delle fasce orarie con un badge di capacità
- *    Disponibile / Quasi pieno / Al completo.
+ *  - sotto, la lista delle fasce orarie selezionabili.
  *
- * IMPORTANTE — i badge di capacità NON sono dati di prenotazione reali: sono
- * un'etichetta euristica deterministica (vedi SLOT_CAP qui sotto). È una label,
- * non un contatore live. Le fasce "Al completo" sono disabilitate.
+ * IMPORTANTE — non mostriamo badge di "capacità" (Disponibile/Quasi pieno/Al
+ * completo) né disabilitiamo slot in modo statico: erano scarsità FINTA, non
+ * dati reali di prenotazione. Mostriamo solo le fasce realmente proponibili,
+ * filtrando per "Oggi" quelle già trascorse rispetto all'ora corrente.
  *
  * Lo slot scelto viene comunicato al parent come stringa leggibile (es.
  * "Oggi · 18:00–20:00") via onChange, oppure null quando non applicabile
@@ -26,7 +28,12 @@ export type DeliverySlot = {
   label: string;
 };
 
-const TODAY_TIMES = ['In giornata · 15:00–18:00', 'Stasera · 18:00–20:00'];
+// Fasce di "Oggi": ogni voce ha l'ora di FINE (24h) così possiamo escludere
+// quelle già trascorse rispetto all'ora corrente. Nessuna capacità finta.
+const TODAY_SLOTS: { label: string; endHour: number }[] = [
+  { label: 'In giornata · 15:00–18:00', endHour: 18 },
+  { label: 'Stasera · 18:00–20:00', endHour: 20 },
+];
 const TOMORROW_TIMES = [
   'Domani · 9:00–12:00',
   'Domani · 12:00–15:00',
@@ -36,24 +43,11 @@ const TOMORROW_TIMES = [
 
 const NOW_LABEL = 'Adesso · arrivo in ~30–45 min';
 
-// Capacità delle fasce — euristica DETERMINISTICA (scarsità tipo food-delivery),
-// non un conteggio reale di prenotazioni: free = Disponibile, low = Quasi pieno,
-// full = Al completo (disabilitata). È una label statica, mai dati live.
-type Cap = 'free' | 'low' | 'full';
-const SLOT_CAP: Record<string, Cap> = {
-  'In giornata · 15:00–18:00': 'low',
-  'Stasera · 18:00–20:00': 'free',
-  'Domani · 9:00–12:00': 'free',
-  'Domani · 12:00–15:00': 'full',
-  'Domani · 15:00–18:30': 'low',
-  'Domani · 18:30–20:00': 'free',
-};
-
-const CAP_META: Record<Cap, { label: string; cls: string }> = {
-  free: { label: 'Disponibile', cls: 'text-olive-700 bg-olive-50' },
-  low: { label: 'Quasi pieno', cls: 'text-accent-700 bg-accent-50' },
-  full: { label: 'Al completo', cls: 'text-ink-400 bg-surface-100' },
-};
+/** Fasce di "Oggi" ancora future rispetto all'ora corrente. */
+function todayTimesAvailable(): string[] {
+  const nowHour = new Date().getHours();
+  return TODAY_SLOTS.filter((s) => s.endHour > nowHour).map((s) => s.label);
+}
 
 type Props = {
   /** giorno selezionato */
@@ -75,9 +69,20 @@ export function DeliverySlotPicker({
   tomorrowTime,
   onTomorrowTimeChange,
 }: Props) {
-  const times = day === 'today' ? TODAY_TIMES : TOMORROW_TIMES;
+  // Calcolato a render: le fasce di "Oggi" già trascorse sono escluse.
+  const todayTimes = todayTimesAvailable();
+  const times = day === 'today' ? todayTimes : TOMORROW_TIMES;
   const current = day === 'today' ? todayTime : tomorrowTime;
   const onTimeChange = day === 'today' ? onTodayTimeChange : onTomorrowTimeChange;
+
+  // Se si è su "Oggi" e la fascia selezionata non è (più) tra quelle future,
+  // scegli automaticamente la prima fascia futura disponibile.
+  useEffect(() => {
+    if (day !== 'today') return;
+    if (todayTimes.length === 0) return;
+    if (!todayTimes.includes(todayTime)) onTodayTimeChange(todayTimes[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [day, todayTime, todayTimes.join('|')]);
 
   return (
     <div className="space-y-3">
@@ -111,48 +116,39 @@ export function DeliverySlotPicker({
             Fascia oraria{' '}
             <span className="font-normal text-ink-400">· scegli quando ricevere</span>
           </legend>
-          <div className="flex flex-col gap-2">
-            {times.map((t) => {
-              const cap = SLOT_CAP[t] ?? 'free';
-              const full = cap === 'full';
-              const checked = current === t && !full;
-              const meta = CAP_META[cap];
-              return (
-                <label
-                  key={t}
-                  className={`flex items-center justify-between gap-2.5 rounded-lg border-[1.5px] px-3.5 py-2.5 transition-colors ${
-                    full
-                      ? 'cursor-not-allowed border-cream-300 bg-surface-50 opacity-60'
-                      : checked
+          {times.length === 0 ? (
+            <p className="text-sm text-ink-600">
+              Nessuna fascia disponibile per oggi — scegli <strong>Domani</strong>.
+            </p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {times.map((t) => {
+                const checked = current === t;
+                return (
+                  <label
+                    key={t}
+                    className={`flex items-center justify-between gap-2.5 rounded-lg border-[1.5px] px-3.5 py-2.5 transition-colors ${
+                      checked
                         ? 'cursor-pointer border-primary-500 bg-primary-50'
                         : 'cursor-pointer border-cream-300 bg-white hover:border-primary-200'
-                  }`}
-                >
-                  <span className="inline-flex items-center gap-2.5 text-sm font-semibold text-ink-900">
-                    <input
-                      type="radio"
-                      name="deliverySlot"
-                      value={t}
-                      checked={checked}
-                      disabled={full}
-                      onChange={() => onTimeChange(t)}
-                      className="w-4 h-4 accent-primary-600"
-                    />
-                    {t}
-                  </span>
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-2xs font-bold ${meta.cls}`}
+                    }`}
                   >
-                    <span
-                      className="inline-block h-1.5 w-1.5 rounded-full bg-current"
-                      aria-hidden
-                    />
-                    {meta.label}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
+                    <span className="inline-flex items-center gap-2.5 text-sm font-semibold text-ink-900">
+                      <input
+                        type="radio"
+                        name="deliverySlot"
+                        value={t}
+                        checked={checked}
+                        onChange={() => onTimeChange(t)}
+                        className="w-4 h-4 accent-primary-600"
+                      />
+                      {t}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
         </fieldset>
       )}
     </div>
@@ -209,7 +205,17 @@ export function resolveSlotLabel(
   return tomorrowTime;
 }
 
+// Default = prima fascia FUTURA di oggi (se ce ne sono ancora), altrimenti la
+// prima voce di "Oggi" come fallback neutro. L'effetto nel componente riallinea
+// comunque la selezione alle fasce realmente disponibili a runtime.
+function defaultTodayTime(): string {
+  const avail = todayTimesAvailable();
+  return avail[0] ?? TODAY_SLOTS[0].label;
+}
+
 export const SLOT_DEFAULTS = {
-  todayTime: TODAY_TIMES[1], // "Stasera · 18:00–20:00" (Disponibile)
+  get todayTime() {
+    return defaultTodayTime();
+  },
   tomorrowTime: TOMORROW_TIMES[2], // "Domani · 15:00–18:30"
 };

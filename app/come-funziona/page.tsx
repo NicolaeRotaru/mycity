@@ -20,8 +20,8 @@ export const metadata = {
 const REASSURANCE = [
   {
     Icon: Banknote,
-    title: 'Paghi alla consegna',
-    desc: 'In contanti al rider, quando arriva. Niente carta, nessun rischio.',
+    title: 'Puoi pagare alla consegna',
+    desc: 'Carta o contanti, decidi tu: paghi al rider quando arriva, oppure online al checkout.',
   },
   {
     Icon: RotateCcw,

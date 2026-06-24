@@ -105,7 +105,7 @@ function SignUpInner() {
         Crea il tuo account
       </h1>
       <p className="mt-1.5 mb-7 text-[15px] leading-relaxed text-ink-600">
-        Ti serve solo per confermare l&apos;ordine — paghi sempre alla consegna.
+        Ti serve solo per confermare l&apos;ordine — puoi pagare alla consegna.
       </p>
 
       {refCode && (
