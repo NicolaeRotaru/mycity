@@ -69,8 +69,9 @@ function buildCsp(nonce: string, isDev: boolean): string {
     "style-src 'self' 'unsafe-inline' https://unpkg.com",
     `img-src 'self' data: blob: https://${supaHost} https://placehold.co https://api.dicebear.com https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://unpkg.com https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,
     "font-src 'self' data:",
-    // <video srcObject=MediaStream> per la fotocamera in-app + blob URL anteprime.
-    "media-src 'self' blob:",
+    // <video srcObject=MediaStream> per la fotocamera in-app, blob URL anteprime,
+    // e i video MP4 self-hosted della home (Supabase Storage).
+    `media-src 'self' blob: https://${supaHost}`,
     // 🟠-15: nominatim rimosso — il geocoding ora passa dal proxy server-side
     // (/api/geocode), il browser non chiama più direttamente Nominatim.
     `connect-src 'self' https://${supaHost} wss://${supaHost} https://challenges.cloudflare.com https://api.stripe.com https://www.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`,

@@ -444,23 +444,36 @@ function HomeBlock({
 
     case 'video': {
       const c = section.config;
-      if (!c.videoId) return null;
-      const src = c.provider === 'youtube'
-        ? `https://www.youtube-nocookie.com/embed/${c.videoId}`
-        : `https://player.vimeo.com/video/${c.videoId}`;
+      const isFile = c.provider === 'file';
+      if (isFile ? !c.videoUrl : !c.videoId) return null;
+      const embedSrc = c.provider === 'vimeo'
+        ? `https://player.vimeo.com/video/${c.videoId}`
+        : `https://www.youtube-nocookie.com/embed/${c.videoId}`;
       return (
         <section className="container mx-auto px-4 sm:px-6 py-5">
           {c.heading && <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mb-4 text-center">{c.heading}</h2>}
           <div className="relative w-full aspect-video overflow-hidden rounded-2xl border border-cream-300 bg-black max-w-4xl mx-auto">
-            <iframe
-              src={src}
-              title={c.heading || 'Video'}
-              className="absolute inset-0 w-full h-full"
-              loading="lazy"
-              referrerPolicy="strict-origin-when-cross-origin"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            {isFile ? (
+              <video
+                src={c.videoUrl}
+                controls
+                playsInline
+                preload="metadata"
+                className="absolute inset-0 w-full h-full object-contain"
+              >
+                <track kind="captions" />
+              </video>
+            ) : (
+              <iframe
+                src={embedSrc}
+                title={c.heading || 'Video'}
+                className="absolute inset-0 w-full h-full"
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            )}
           </div>
         </section>
       );
