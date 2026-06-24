@@ -70,7 +70,7 @@ export const HOME_SECTION_CATALOG: {
   { type: 'richText',        label: 'Testo',               description: 'Titolo e testo formattato',               group: 'contenuto' },
   { type: 'banner',          label: 'Banner',              description: 'Immagine con titolo e pulsante',          group: 'contenuto' },
   { type: 'gallery',         label: 'Galleria',            description: 'Galleria di immagini',                    group: 'contenuto' },
-  { type: 'video',           label: 'Video',               description: 'Video YouTube o Vimeo',                   group: 'contenuto' },
+  { type: 'video',           label: 'Video',               description: 'Video YouTube, Vimeo o file MP4',         group: 'contenuto' },
 ];
 
 export function homeSectionLabel(type: string): string {
@@ -175,10 +175,14 @@ const galleryConfig = z.object({
 const videoConfig = z
   .object({
     heading: shortText(120),
-    provider: z.enum(['youtube', 'vimeo']).default('youtube'),
+    // 'youtube'/'vimeo' = embed via iframe (videoId). 'file' = MP4 self-hosted (videoUrl).
+    provider: z.enum(['youtube', 'vimeo', 'file']).default('youtube'),
     videoId: z.string().trim().max(32).default(''),
+    // URL https assoluto del file video (es. Supabase Storage) quando provider='file'.
+    videoUrl: optionalHttpsUrl.default(''),
   })
   .superRefine((v, ctx) => {
+    if (v.provider === 'file') return; // file: l'URL https è già validato dallo schema; vuoto = incompleto, il render salta
     if (!v.videoId) return; // vuoto = sezione incompleta, il render la salta
     const ok = v.provider === 'youtube'
       ? /^[A-Za-z0-9_-]{11}$/.test(v.videoId)
@@ -284,7 +288,7 @@ export function newHomeSection(type: HomeSectionType): HomeSection {
     case 'gallery':
       return { id, type, enabled: true, config: { heading: '', items: [] } };
     case 'video':
-      return { id, type, enabled: true, config: { heading: '', provider: 'youtube', videoId: '' } };
+      return { id, type, enabled: true, config: { heading: '', provider: 'youtube', videoId: '', videoUrl: '' } };
     case 'popularProducts':
       return { id, type, enabled: true, config: { limit: 12 } };
     default:
