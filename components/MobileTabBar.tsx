@@ -36,15 +36,18 @@ export default function MobileTabBar() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
 
-  // Hide in auth flow + thread chat. Su /seller e /rider la navigazione mobile è
-  // gestita dallo shell dedicato (drawer off-canvas SellerShell; bottom tab bar
-  // di RiderShell), quindi nascondiamo la tab bar globale per non avere doppia
-  // chrome.
+  // Hide in auth flow + checkout + thread chat. Su /checkout la bottom tab bar
+  // (fixed bottom-0, z-30) coprirebbe la CTA sticky "Conferma ordine / Paga"
+  // (z-sticky 20): il pulsante risultava parzialmente coperto su mobile (funnel
+  // critico). Su /seller e /rider la navigazione mobile è gestita dallo shell
+  // dedicato (drawer off-canvas SellerShell; bottom tab bar di RiderShell),
+  // quindi nascondiamo la tab bar globale per non avere doppia chrome.
   if (
     pathname.startsWith('/sign-in') ||
     pathname.startsWith('/sign-up') ||
     pathname.startsWith('/reset-password') ||
     pathname.startsWith('/auth/') ||
+    pathname.startsWith('/checkout') ||
     pathname.startsWith('/seller') ||
     pathname.startsWith('/rider') ||
     /^\/messages\/[^/]+/.test(pathname)
