@@ -11,6 +11,7 @@ import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import CollectionHeader from '@/components/CollectionHeader';
+import { Badge } from '@/components/ui/Badge';
 import { queryKeys } from '@/lib/queries/keys';
 
 /**
@@ -165,9 +166,9 @@ export default function EventsPage() {
                       </span>
                     )}
                     {ev.discount_percent ? (
-                      <span className="absolute top-3 right-3 bg-accent-500 text-ink-900 px-2 py-1 rounded-full text-xs font-bold">
+                      <Badge variant="discount" size="md" className="absolute top-3 right-3 rounded-full">
                         -{ev.discount_percent}%
-                      </span>
+                      </Badge>
                     ) : null}
                   </div>
                 ) : null}

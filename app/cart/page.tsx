@@ -186,7 +186,7 @@ export default function CartPage() {
         </div>
 
         {/* COLONNA DX: riepilogo sticky */}
-        <div className="space-y-4 lg:sticky lg:top-32 h-fit">
+        <div className="space-y-4 lg:sticky lg:top-[var(--header-height)] h-fit">
           <div className="bg-white border border-cream-300 rounded-xl p-6 space-y-4 shadow-card">
             <h2 className="font-serif text-lg font-bold text-ink-900 flex items-center justify-between">
               Riepilogo ordine

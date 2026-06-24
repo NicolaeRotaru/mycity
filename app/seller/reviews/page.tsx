@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
+import { RatingStars } from '@/components/ui/RatingStars';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Review = {
@@ -22,12 +23,7 @@ type Review = {
   seller_reply_at: string | null;
 };
 
-const Stars = ({ rating }: { rating: number }) => (
-  <span className="text-accent-700 tracking-tight">
-    {'★'.repeat(Math.round(rating))}
-    <span className="text-ink-300">{'★'.repeat(5 - Math.round(rating))}</span>
-  </span>
-);
+const Stars = ({ rating }: { rating: number }) => <RatingStars rating={rating} size={15} />;
 
 export default function SellerReviewsPage() {
   const [filter, setFilter] = useState<'all' | 5 | 4 | 3 | 2 | 1>('all');

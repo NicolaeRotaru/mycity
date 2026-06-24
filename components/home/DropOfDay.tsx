@@ -144,7 +144,7 @@ export default function DropOfDay() {
 
           <Link
             href={`/product/${drop.product.id}`}
-            className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-400 text-ink-900 px-6 py-3 rounded-full font-bold mt-3 transition-colors shadow-lg"
+            className="inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 text-ink-900 px-6 py-3 rounded-full font-bold mt-3 transition-colors shadow-lg"
           >
             Acquista subito
             <ArrowRight size={18} strokeWidth={2.4} />

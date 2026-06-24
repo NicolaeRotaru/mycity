@@ -109,7 +109,7 @@
 
   --success:                var(--olive-600);
   --warning:                var(--accent-500);
-  --danger:                 #DC2626;  /* rose-600 */
+  --danger:                 #DC2626;  /* red-600 */
   --info:                   var(--primary-700);
 
   /* Status palette per gli stati ordine (NEW → DELIVERED). Tinte tenui

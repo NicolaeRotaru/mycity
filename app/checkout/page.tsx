@@ -776,7 +776,7 @@ export default function CheckoutPage() {
         </div>
 
         {/* RIEPILOGO ORDINE */}
-        <div className="lg:sticky lg:top-32 h-fit space-y-4">
+        <div className="lg:sticky lg:top-[var(--header-height)] h-fit space-y-4">
           <div className="bg-white border border-surface-200 rounded-xl shadow-card overflow-hidden">
             <div className="bg-surface-50 border-b border-surface-200 px-5 py-3 flex justify-between items-center">
               <h2 className="font-serif text-lg font-bold text-ink-900">Riepilogo</h2>

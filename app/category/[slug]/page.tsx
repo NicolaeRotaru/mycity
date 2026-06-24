@@ -313,7 +313,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       )}
 
       {/* DESKTOP: colonna filtri faccettata */}
-      <aside className="hidden md:block md:col-span-1 bg-white border border-cream-300 rounded-2xl p-4 h-fit md:sticky md:top-32 shadow-warm">
+      <aside className="hidden md:block md:col-span-1 bg-white border border-cream-300 rounded-2xl p-4 h-fit md:sticky md:top-[var(--header-height)] shadow-warm">
         <div className="flex items-center justify-between pb-3 border-b border-cream-100 mb-1">
           <h2 className="font-serif font-bold text-ink-900 flex items-center gap-2">
             <Filter size={16} strokeWidth={2.2} className="text-primary-600" />
