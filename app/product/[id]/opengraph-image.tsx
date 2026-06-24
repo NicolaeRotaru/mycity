@@ -46,7 +46,7 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
           width: '100%',
           height: '100%',
           display: 'flex',
-          background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+          background: 'linear-gradient(135deg, #D55F3F 0%, #A03B25 100%)',
           color: 'white',
           fontFamily: 'system-ui, sans-serif',
         }}
@@ -70,7 +70,10 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
               style={{ objectFit: 'contain', maxWidth: '100%', maxHeight: '100%' }}
             />
           ) : (
-            <div style={{ fontSize: 160 }}>🛍️</div>
+            <div style={{ display: 'flex', fontSize: 96, fontWeight: 900 }}>
+              <span style={{ color: '#E8A33D' }}>My</span>
+              <span style={{ color: '#A03B25' }}>City</span>
+            </div>
           )}
         </div>
 
@@ -83,7 +86,7 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
           padding: '50px 50px 40px 50px',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 36, fontWeight: 800, color: '#fbbf24' }}>My</span>
+            <span style={{ fontSize: 36, fontWeight: 800, color: '#F4BC53' }}>My</span>
             <span style={{ fontSize: 36, fontWeight: 800 }}>City</span>
             <span style={{ fontSize: 18, opacity: 0.7, marginLeft: 8 }}>Piacenza</span>
           </div>
@@ -96,13 +99,13 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
               <div style={{
                 fontSize: 64,
                 fontWeight: 900,
-                color: '#fbbf24',
+                color: '#F4BC53',
               }}>{price}</div>
             )}
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 22, opacity: 0.9 }}>
-            <span>📦 Venduto da</span>
+            <span>Venduto da</span>
             <span style={{ fontWeight: 700 }}>{store}</span>
           </div>
         </div>

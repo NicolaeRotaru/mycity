@@ -41,14 +41,14 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          background: 'linear-gradient(135deg, #ec4899 0%, #f97316 100%)',
+          background: 'linear-gradient(135deg, #D55F3F 0%, #A03B25 100%)',
           color: 'white',
           fontFamily: 'system-ui, sans-serif',
           padding: 60,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 36, fontWeight: 800, color: '#fef9c3' }}>My</span>
+          <span style={{ fontSize: 36, fontWeight: 800, color: '#F4BC53' }}>My</span>
           <span style={{ fontSize: 36, fontWeight: 800 }}>City</span>
         </div>
 
@@ -68,7 +68,7 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logo} alt="" width={220} height={220} style={{ objectFit: 'cover' }} />
             ) : (
-              <div style={{ fontSize: 120 }}>🏪</div>
+              <div style={{ fontSize: 130, fontWeight: 900, color: '#A03B25' }}>My</div>
             )}
           </div>
 
@@ -80,7 +80,7 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
               {desc.length > 120 ? desc.slice(0, 117) + '…' : desc}
             </div>
             <div style={{ fontSize: 22, marginTop: 4, opacity: 0.9 }}>
-              📍 {city}
+              {city}
             </div>
           </div>
         </div>

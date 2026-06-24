@@ -73,7 +73,7 @@ export default function BuyerOnboardingTour() {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md shadow-warm-lg overflow-hidden animate-slide-up">
+      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md shadow-warm-lg overflow-hidden animate-slide-up">
         <div className="absolute top-3 right-3">
           <button onClick={close} aria-label="Chiudi tour" className="text-ink-400 hover:text-ink-700 p-1.5 rounded-full hover:bg-cream-100">
             <X size={18} />
