@@ -67,7 +67,7 @@ function buildCsp(nonce: string, isDev: boolean): string {
     // Tailwind + react-hook-form richiedono inline styles. Style-src e' meno
     // critico di script-src per XSS (style injection raramente exploitable).
     "style-src 'self' 'unsafe-inline' https://unpkg.com",
-    `img-src 'self' data: blob: https://${supaHost} https://placehold.co https://api.dicebear.com https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://unpkg.com https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,
+    `img-src 'self' data: blob: https://${supaHost} https://placehold.co https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://unpkg.com https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,
     "font-src 'self' data:",
     // <video srcObject=MediaStream> per la fotocamera in-app, blob URL anteprime,
     // e i video MP4 self-hosted della home (Supabase Storage).

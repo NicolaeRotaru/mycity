@@ -22,7 +22,7 @@ const VEHICLE_LABELS: Record<string, string> = { BIKE: 'Bici', EBIKE: 'E-bike', 
 const SETTINGS_LINKS: { href: string; Icon: LucideIcon; label: string }[] = [
   { href: '/rider/reviews', Icon: Star, label: 'Le mie recensioni' },
   { href: '/rider/history', Icon: Package, label: 'Storico consegne' },
-  { href: '/rider/availability', Icon: Clock, label: 'Disponibilità e zone' },
+  { href: '/rider/availability', Icon: Clock, label: 'Turni' },
   { href: '/rider/earnings', Icon: Banknote, label: 'Guadagni e compensi' },
   { href: '/rider/onboarding', Icon: FileText, label: 'Documenti e verifica' },
   { href: '/rider/help', Icon: HelpCircle, label: 'Aiuto' },

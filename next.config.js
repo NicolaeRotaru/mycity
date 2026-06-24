@@ -45,7 +45,6 @@ const nextConfig = {
         pathname: '/storage/v1/render/image/public/**',
       },
       { protocol: 'https', hostname: 'placehold.co' },
-      { protocol: 'https', hostname: 'api.dicebear.com' },
       { protocol: 'https', hostname: 'api.iconify.design' },
       { protocol: 'https', hostname: 'images.pexels.com' },
     ],

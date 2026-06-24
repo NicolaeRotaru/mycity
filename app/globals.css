@@ -243,7 +243,9 @@ h3 { font-size: var(--text-xl);  font-weight: var(--weight-bold); line-height: v
 .animate-marquee {
   animation: marquee 24s linear infinite;
 }
-.animate-marquee:hover {
+.animate-marquee:hover,
+.animate-marquee:focus-within,
+.animate-marquee:active {
   animation-play-state: paused;
 }
 
