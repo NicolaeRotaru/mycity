@@ -20,7 +20,7 @@ export default function CheckoutError({
     <div className="container mx-auto px-4 sm:px-6 py-12 max-w-2xl">
       <ErrorState
         title="Problema durante il checkout"
-        description="Il tuo carrello e' salvato. Riprova o contatta il supporto se il problema persiste."
+        description="Il tuo carrello è salvato. Riprova o contatta il supporto se il problema persiste."
         retry={reset}
         backHref="/cart"
         backLabel="Torna al carrello"

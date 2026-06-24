@@ -123,7 +123,7 @@ export default function LoyaltyPage() {
       </div>
 
       {/* HERO punti + tier */}
-      <div className="bg-gradient-to-br from-primary-700 to-secondary-700 text-white rounded-3xl p-8 shadow-warm-lg relative overflow-hidden">
+      <div className="bg-gradient-to-br from-primary-700 to-secondary-700 text-white rounded-2xl p-8 shadow-warm-lg relative overflow-hidden">
         <div aria-hidden className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-white/10" />
         <div aria-hidden className="absolute -bottom-16 -left-12 w-56 h-56 rounded-full bg-accent-400/20" />
 

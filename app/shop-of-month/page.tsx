@@ -138,7 +138,7 @@ export default function ShopOfMonthPage() {
 
       {/* Hero pick attuale */}
       {pick?.seller && (
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-900 via-primary-800 to-secondary-900 text-white shadow-warm-lg p-6 md:p-10">
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-900 via-primary-800 to-secondary-900 text-white shadow-warm-lg p-6 md:p-10">
           <div className="grid grid-cols-1 md:grid-cols-[1.1fr_1fr] gap-6 items-center">
             <div className="space-y-3">
               <span className="inline-flex items-center gap-1.5 bg-white text-primary-800 px-3 py-1 rounded-full text-xs font-bold">

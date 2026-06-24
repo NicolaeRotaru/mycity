@@ -113,7 +113,7 @@ export default function ReferralPage() {
           </a>
           <a
             href={`mailto:?subject=${encodeURIComponent('Iscriviti a MyCity Piacenza')}&body=${encodeURIComponent(shareText)}`}
-            className="inline-flex items-center justify-center gap-2 bg-gray-700 hover:bg-ink-800 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
+            className="inline-flex items-center justify-center gap-2 bg-ink-700 hover:bg-ink-800 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
           >
             <Mail size={16} className="text-white" aria-hidden />
             Email
