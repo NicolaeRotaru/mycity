@@ -157,7 +157,7 @@
   "newsletter": {
     "blurb": "What's on the plate in Piacenza — recipe + a shopkeeper's story + 3 deals. Every Friday.",
     "placeholder": "your@email.com",
-    "subscribe": "Subscribe · €5",
+    "subscribe": "Subscribe",
     "subscribed": "Subscribed! You'll get the newsletter every Friday.",
     "subscribedBox": "You're subscribed. You'll soon receive Piacenza's recipes in your inbox."
   }

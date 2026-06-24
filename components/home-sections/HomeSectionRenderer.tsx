@@ -52,7 +52,7 @@ const HERO_CHIPS = [
 ];
 
 const DEFAULT_TRUST_BULLETS = [
-  { Icon: Banknote,  color: 'olive',     t: 'Paghi alla consegna',      d: 'Niente carta: l’account serve solo per confermare l’ordine.' },
+  { Icon: Banknote,  color: 'olive',     t: 'Puoi pagare alla consegna', d: 'Carta o contanti, decidi tu: l’account serve solo per confermare l’ordine.' },
   { Icon: HomeIcon,  color: 'primary',   t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
   { Icon: Truck,     color: 'accent',    t: 'Consegna in 24-48h',       d: 'Rider del territorio, percorsi brevi.' },
   { Icon: RotateCcw, color: 'secondary', t: 'Reso entro 14 giorni',     d: 'Cambi idea? Ti rimborsiamo senza domande.' },

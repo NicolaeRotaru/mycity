@@ -101,6 +101,9 @@ export default function Navbar() {
               <nav className="ml-auto flex items-center gap-2 text-sm">
                 {!isAuthenticated && !isLoading && (
                   <>
+                    {/* Carrello raggiungibile anche dagli ospiti: il badge usa
+                        useCartCount() (storage locale), funziona senza login. */}
+                    <CartButton count={cartCount} />
                     <Link href="/sign-in" className="px-3 py-2 hover:text-accent-300 font-medium">Accedi</Link>
                     <Link href="/sign-up" className="bg-accent-500 hover:bg-accent-600 text-ink-900 px-4 py-2 rounded-full font-semibold transition-colors">
                       Registrati
