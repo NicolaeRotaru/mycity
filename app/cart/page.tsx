@@ -146,8 +146,9 @@ export default function CartPage() {
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity - 1, item.variantId)}
+                              disabled={item.quantity <= 1}
                               aria-label="Diminuisci quantità"
-                              className="w-10 h-10 hover:bg-cream-100 rounded-l-full"
+                              className="w-10 h-10 hover:bg-cream-100 rounded-l-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             >−</button>
                             <span className="w-8 text-center font-semibold">{item.quantity}</span>
                             <button

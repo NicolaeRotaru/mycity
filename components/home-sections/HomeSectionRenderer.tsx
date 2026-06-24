@@ -398,7 +398,8 @@ function HomeBlock({
       const c = section.config;
       if (!c.imageUrl) return null;
       const overlay = c.overlay ?? 'dark';
-      const overlayClass = overlay === 'dark' ? 'bg-black/40' : overlay === 'light' ? 'bg-white/30' : '';
+      // overlay 'none': velo minimo dal basso per garantire la leggibilità del testo bianco.
+      const overlayClass = overlay === 'dark' ? 'bg-black/40' : overlay === 'light' ? 'bg-white/30' : 'bg-gradient-to-t from-black/45 via-black/10 to-transparent';
       const textClass = overlay === 'light' ? 'text-ink-900' : 'text-white';
       const href = c.cta ? homeCtaHref(c.cta.href) : null;
       const external = !!href && /^https?:\/\//i.test(href);
