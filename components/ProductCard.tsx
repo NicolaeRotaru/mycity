@@ -127,7 +127,7 @@ const ProductCard = ({
           type="button"
           onClick={handleFav}
           aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
-          className="absolute top-2 right-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/95 shadow transition-transform hover:scale-110 hover:bg-white"
+          className="absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow transition-transform hover:scale-110 hover:bg-white"
         >
           <Heart
             size={16}

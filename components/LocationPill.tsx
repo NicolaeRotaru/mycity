@@ -106,6 +106,7 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
               inputMode="numeric"
               pattern="[0-9]{5}"
               placeholder="29121"
+              aria-label="Codice di avviamento postale (CAP)"
               className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
             />
             <button

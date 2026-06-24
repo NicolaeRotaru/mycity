@@ -80,7 +80,7 @@ export default async function PublicProfilePage(props: { params: Promise<{ handl
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 max-w-2xl space-y-6">
       {/* Hero profilo */}
-      <div className="bg-gradient-to-br from-primary-700 to-secondary-700 text-white rounded-3xl p-8 shadow-warm-lg text-center">
+      <div className="bg-gradient-to-br from-primary-700 to-secondary-700 text-white rounded-2xl p-8 shadow-warm-lg text-center">
         <div className="w-24 h-24 mx-auto rounded-full bg-white/20 ring-4 ring-white/30 overflow-hidden flex items-center justify-center text-3xl font-serif font-bold mb-3">
           {profile.public_avatar_url ? (
             <Image src={profile.public_avatar_url} alt={profile.public_handle ?? ''} width={96} height={96} unoptimized className="object-cover" />

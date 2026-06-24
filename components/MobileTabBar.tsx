@@ -140,7 +140,7 @@ export default function MobileTabBar() {
             </span>
           ) : null}
         </div>
-        <span className={`text-[10px] font-medium tracking-tight ${active ? 'font-semibold' : ''}`}>
+        <span className={`text-[11px] font-medium ${active ? 'font-semibold' : ''}`}>
           {tab.label}
         </span>
         {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary-600 rounded-b" />}

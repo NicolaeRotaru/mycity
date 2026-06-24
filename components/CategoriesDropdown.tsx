@@ -61,7 +61,7 @@ const CategoriesDropdown = ({ className = '' }: Props) => {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-2 bg-ink-800 hover:bg-gray-700 text-white px-3 py-2 rounded-md text-sm font-semibold whitespace-nowrap border border-gray-700"
+        className="flex items-center gap-2 bg-ink-800 hover:bg-ink-700 text-white px-3 py-2 rounded-md text-sm font-semibold whitespace-nowrap border border-ink-700"
       >
         <Menu size={18} strokeWidth={2.2} aria-hidden />
         <span>Categorie</span>

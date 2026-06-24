@@ -147,14 +147,14 @@ export default function CartPage() {
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity - 1, item.variantId)}
                               aria-label="Diminuisci quantità"
-                              className="w-8 h-8 hover:bg-cream-100 rounded-l-full"
+                              className="w-10 h-10 hover:bg-cream-100 rounded-l-full"
                             >−</button>
                             <span className="w-8 text-center font-semibold">{item.quantity}</span>
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
                               aria-label="Aumenta quantità"
-                              className="w-8 h-8 hover:bg-cream-100 rounded-r-full"
+                              className="w-10 h-10 hover:bg-cream-100 rounded-r-full"
                             >+</button>
                           </div>
                           <button
@@ -209,7 +209,7 @@ export default function CartPage() {
                     <span className="block text-2xs text-ink-400 font-normal">stima · potrebbe variare al checkout</span>
                   )}
                 </span>
-                <span className={`font-semibold ${freeShipping ? 'text-olive-600' : 'text-ink-900'}`}>
+                <span className={`font-semibold ${freeShipping ? 'text-olive-700' : 'text-ink-900'}`}>
                   {freeShipping ? (multiStore ? 'Gratis*' : 'Gratis') : formatPrice(shippingCost)}
                 </span>
               </div>

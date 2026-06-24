@@ -88,7 +88,7 @@ export default async function AboutPage() {
       {/* Hero gradient */}
       <header className="bg-gradient-to-br from-primary-700 to-secondary-700 text-white">
         <div className="container mx-auto px-6 max-w-5xl pt-16 pb-20">
-          <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-label text-accent-300 mb-3.5">
+          <span className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-label text-accent-200 mb-3.5">
             <Sparkles size={14} strokeWidth={2.4} aria-hidden /> La nostra storia
           </span>
           <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl font-extrabold leading-[1.05] mb-4 max-w-[16ch]">

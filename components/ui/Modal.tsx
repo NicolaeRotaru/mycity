@@ -129,7 +129,7 @@ export function Modal({
             type="button"
             onClick={onClose}
             aria-label="Chiudi"
-            className="text-ink-500 hover:text-ink-900 hover:bg-cream-100 rounded-full p-1.5 transition-colors flex-shrink-0 ml-3"
+            className="text-ink-500 hover:text-ink-900 hover:bg-cream-100 rounded-full p-2 transition-colors flex-shrink-0 ml-3"
           >
             <X size={20} />
           </button>

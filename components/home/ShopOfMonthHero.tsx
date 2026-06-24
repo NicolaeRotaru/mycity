@@ -59,7 +59,7 @@ export default function ShopOfMonthHero() {
   if (!seller) return null;
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-900 via-primary-800 to-secondary-900 text-white shadow-warm-lg">
+    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-900 via-primary-800 to-secondary-900 text-white shadow-warm-lg">
       <div aria-hidden className="absolute -top-20 -right-20 w-[400px] h-[400px] rounded-full bg-accent-400/20 blur-3xl" />
       <div aria-hidden className="absolute -bottom-32 -left-20 w-[420px] h-[420px] rounded-full bg-primary-400/20 blur-3xl" />
 

@@ -73,7 +73,7 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
           className={`flex-1 min-w-0 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 ${
             isLight
               ? 'bg-cream-50 border border-cream-300 text-ink-900 placeholder-ink-400 focus:ring-primary-400 focus:border-primary-400'
-              : 'bg-ink-800 border border-gray-700 text-white focus:ring-primary-400'
+              : 'bg-ink-800 border border-ink-700 text-white focus:ring-primary-400'
           }`}
         />
         <button

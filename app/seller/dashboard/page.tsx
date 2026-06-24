@@ -133,7 +133,7 @@ export default function SellerDashboard() {
   return (
     <div className="space-y-7">
       {/* ===== HERO ===== */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary-700 via-primary-600 to-secondary-700 text-white shadow-warm-lg">
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-700 via-primary-600 to-secondary-700 text-white shadow-warm-lg">
         <div className="absolute -top-16 -right-10 w-64 h-64 rounded-full bg-white/10 blur-2xl" aria-hidden />
         <div className="absolute -bottom-20 -left-10 w-56 h-56 rounded-full bg-accent-400/20 blur-2xl" aria-hidden />
 

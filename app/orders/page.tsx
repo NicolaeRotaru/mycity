@@ -169,7 +169,7 @@ export default function OrdersPage() {
           icon={Package}
           title="Non hai ancora ordini"
           description="Quando ordini qualcosa, lo vedrai qui con il tracking in tempo reale."
-          ctaLabel="Inizia ad esplorare"
+          ctaLabel="Inizia a esplorare"
           ctaHref="/search"
           secondaryLabel="€5 di benvenuto"
           secondaryHref="/profile/loyalty"

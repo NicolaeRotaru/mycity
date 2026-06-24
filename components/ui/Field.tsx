@@ -142,7 +142,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(fu
           aria-label={show ? 'Nascondi password' : 'Mostra password'}
           aria-pressed={show}
           tabIndex={-1}
-          className="text-ink-500 hover:text-ink-700 hover:bg-cream-100 rounded-md p-1.5 transition-colors"
+          className="text-ink-500 hover:text-ink-700 hover:bg-cream-100 rounded-md p-2 transition-colors"
         >
           {show ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
         </button>
