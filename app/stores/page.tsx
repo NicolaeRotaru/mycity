@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
+import ErrorState from '@/components/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Store = StoreCardData & {
@@ -22,12 +23,13 @@ type Category = { id: string; slug: string; name: string; parent_id: string | nu
 type SortMode = 'rating' | 'name' | 'most-products';
 
 const fetchStoresData = async () => {
-  const { data: storesRaw } = await supabase
+  const { data: storesRaw, error } = await supabase
     .from('profiles')
     .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media')
     .eq('is_approved', true)
     .not('store_name', 'is', null)
     .order('store_name');
+  if (error) throw error;
 
   const stores = (storesRaw ?? []) as Store[];
   const storeIds = stores.map((s) => s.id);
@@ -82,7 +84,7 @@ export default function StoresPage() {
   const [sort, setSort] = useState<SortMode>('rating');
   const [categoryId, setCategoryId] = useState<string>('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.stores.page,
     queryFn: fetchStoresData,
     staleTime: 30_000,
@@ -131,6 +133,17 @@ export default function StoresPage() {
 
   if (isLoading) {
     return <LoadingState />;
+  }
+
+  if (isError) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <ErrorState
+          title="Impossibile caricare i negozi"
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
   }
 
   return (

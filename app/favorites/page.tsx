@@ -6,16 +6,17 @@ import { Heart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from '@/components/ProductCard';
 import EmptyState from '@/components/EmptyState';
+import ErrorState from '@/components/ErrorState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 
 export default function FavoritesPage() {
-  const { data: products = [], isLoading } = useQuery({
+  const { data: products = [], isLoading, isError, refetch } = useQuery({
     queryKey: [...queryKeys.favorites.all, 'products'],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('favorites')
         .select(`
           product_id,
@@ -26,6 +27,7 @@ export default function FavoritesPage() {
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+      if (error) throw error;
       type FavRow = {
         product_id: string;
         products: {
@@ -45,6 +47,17 @@ export default function FavoritesPage() {
   });
 
   if (isLoading) return <LoadingState />;
+
+  if (isError) {
+    return (
+      <div className="py-8">
+        <ErrorState
+          title="Impossibile caricare i preferiti"
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
+  }
 
   if (products.length === 0) {
     return (
