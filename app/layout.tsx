@@ -42,8 +42,11 @@ export const metadata: Metadata = {
     'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 24-48h, pagamento alla consegna.',
   manifest: '/manifest.json',
   icons: {
-    icon: '/icon-192.svg',
-    apple: '/icon-192.svg',
+    icon: [
+      { url: '/icon-192.svg', type: 'image/svg+xml' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/apple-touch-icon.png',
   },
   alternates: { canonical: '/' },
   openGraph: {
@@ -55,7 +58,7 @@ export const metadata: Metadata = {
     url: '/',
   },
   twitter: {
-    card: 'summary',
+    card: 'summary_large_image',
     title: 'MyCity Piacenza',
     description: 'Compra dai negozi della tua città. Consegna rapida, pagamento alla consegna.',
   },
