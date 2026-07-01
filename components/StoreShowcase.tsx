@@ -11,10 +11,8 @@ type ProductLite = ProductPreview & { seller_id: string };
 
 const fetchShowcase = async () => {
   const { data: storesRaw, error } = await supabase
-    .from('profiles')
+    .from('seller_public_profiles')
     .select('id, store_name, store_address, store_logo, store_hours, store_media')
-    .eq('is_approved', true)
-    .not('store_name', 'is', null)
     .limit(6);
   if (error) throw error;
 

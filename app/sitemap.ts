@@ -48,18 +48,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const [products, stores, categories] = await Promise.all([
+  type ProductSlug = { id: string; created_at?: string | null; seller_id?: string };
+  type StoreSlug = { id: string; created_at?: string | null };
+  type CategorySlug = { slug: string };
+
+  const [storesRes, categoriesRes] = await Promise.all([
     supabase
-      .from('products')
-      .select('id, created_at, profiles!products_seller_id_fkey ( is_approved )')
-      .eq('status', 'available')
-      .order('created_at', { ascending: false })
-      .limit(5000),
-    supabase
-      .from('profiles')
+      .from('seller_public_profiles')
       .select('id, created_at')
-      .eq('role', 'seller')
-      .eq('is_approved', true)
       .limit(2000),
     supabase
       .from('categories')
@@ -67,12 +63,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .limit(200),
   ]);
 
-  type ProductSlug = { id: string; created_at?: string | null; profiles?: { is_approved?: boolean } | null };
-  type StoreSlug = { id: string; created_at?: string | null };
-  type CategorySlug = { slug: string };
+  const approvedSellerIds = ((storesRes.data ?? []) as StoreSlug[]).map((s) => s.id);
+  const products =
+    approvedSellerIds.length > 0
+      ? await supabase
+          .from('products')
+          .select('id, created_at, seller_id')
+          .eq('status', 'available')
+          .in('seller_id', approvedSellerIds)
+          .order('created_at', { ascending: false })
+          .limit(5000)
+      : { data: [] as ProductSlug[] };
+
+  const stores = storesRes;
+  const categories = categoriesRes;
 
   const productEntries: MetadataRoute.Sitemap = ((products.data ?? []) as unknown as ProductSlug[])
-    .filter((p) => p.profiles?.is_approved)
     .map((p) => ({
       url: `${APP_URL}/product/${p.id}`,
       lastModified: p.created_at ? new Date(p.created_at) : now,
