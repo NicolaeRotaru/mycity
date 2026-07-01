@@ -39,7 +39,7 @@ export async function fetchSellerPublicMap(
   if (error) throw error;
 
   const rows = (data ?? []) as unknown as SellerPublicProfile[];
-  for (const row of rows {
+  for (const row of rows) {
     map.set(row.id, row);
   }
   return map;
