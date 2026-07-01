@@ -38,7 +38,8 @@ export async function fetchSellerPublicMap(
     .in('id', unique);
   if (error) throw error;
 
-  for (const row of (data ?? []) as SellerPublicProfile[]) {
+  const rows = (data ?? []) as unknown as SellerPublicProfile[];
+  for (const row of rows {
     map.set(row.id, row);
   }
   return map;
