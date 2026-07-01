@@ -24,10 +24,8 @@ type SortMode = 'rating' | 'name' | 'most-products';
 
 const fetchStoresData = async () => {
   const { data: storesRaw, error } = await supabase
-    .from('profiles')
+    .from('seller_public_profiles')
     .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media')
-    .eq('is_approved', true)
-    .not('store_name', 'is', null)
     .order('store_name');
   if (error) throw error;
 

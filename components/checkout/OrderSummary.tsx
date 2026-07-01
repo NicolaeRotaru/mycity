@@ -15,6 +15,8 @@ import { formatPrice } from '@/lib/format';
 type Props = {
   subtotal: number;
   shipping: number;
+  /** Fee piattaforma €3/consegna per negozio (solo consegna a domicilio). */
+  platformDeliveryFee?: number;
   pickupDiscount: number;
   couponDiscount: number;
   /** Credito MyCity applicato (gift card / punti convertiti), in euro. */
@@ -30,6 +32,7 @@ type Props = {
 export function OrderSummary({
   subtotal,
   shipping,
+  platformDeliveryFee = 0,
   pickupDiscount,
   couponDiscount,
   creditApplied = 0,
@@ -54,6 +57,12 @@ export function OrderSummary({
             {shipping === 0 ? 'Gratis' : formatPrice(shipping)}
           </span>
         </div>
+        {platformDeliveryFee > 0 && (
+          <div className="flex justify-between">
+            <span className="text-ink-600">Consegna MyCity</span>
+            <span className="font-semibold">{formatPrice(platformDeliveryFee)}</span>
+          </div>
+        )}
         {pickupDiscount > 0 && (
           <div className="flex justify-between text-olive-700">
             <span>Sconto ritiro in negozio</span>

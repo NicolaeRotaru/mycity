@@ -22,7 +22,7 @@ async function fetchStore(id: string): Promise<StoreMeta | null> {
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data } = await supabase
-      .from('profiles')
+      .from('seller_public_profiles')
       .select('id, store_name, store_description, store_logo, store_address, is_approved, role')
       .eq('id', id)
       .single();

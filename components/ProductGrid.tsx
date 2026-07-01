@@ -11,6 +11,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
 import ErrorState from './ErrorState';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
+import { attachSellerProfiles, fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
 import { trackSearchPerformed } from '@/lib/analytics/events';
 
 export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating' | 'discount_desc';
@@ -76,11 +77,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       let q = supabase
         .from('products')
         .select(`
-          id, name, description, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id,
-          profiles!products_seller_id_fkey!inner ( store_name, store_hours, is_approved )
+          id, name, description, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id
         `)
-        .eq('status', 'available')
-        .eq('profiles.is_approved', true);
+        .eq('status', 'available');
 
       // Ordinamento dinamico (default: created_at desc)
       switch (sort) {
@@ -102,7 +101,13 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       if (limit)      q = q.limit(limit);
       const { data, error } = await q;
       if (error) throw error;
-      return data ?? [];
+      const rows = data ?? [];
+      const sellerMap = await fetchSellerPublicMap(
+        supabase,
+        rows.map((p) => p.seller_id as string),
+        'id, store_name, store_hours, is_approved',
+      );
+      return attachSellerProfiles(rows, sellerMap).filter((p) => p.profiles?.is_approved);
     },
   });
 
