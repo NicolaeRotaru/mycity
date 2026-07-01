@@ -57,10 +57,8 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
       const [productsRes, storesRes, categoriesRes] = await Promise.all([
         supabase.rpc('search_products_smart', { q: term, lim: 6 }),
         supabase
-          .from('profiles')
+          .from('seller_public_profiles')
           .select('id, store_name, store_logo')
-          .eq('role', 'seller')
-          .eq('is_approved', true)
           .ilike('store_name', pattern)
           .limit(3),
         supabase

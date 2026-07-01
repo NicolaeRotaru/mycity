@@ -86,15 +86,16 @@ export const POST = withAuthRateLimit(
 
     // --- 1. Carica i prodotti dal DB (mai trust client su prezzo/seller/stock).
     const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
+    const uniqueProductIds = [...new Set(allProductIds)];
     const { data: products, error: prodErr } = await supa
       .from('products')
       .select('id, name, price, seller_id, stock, status, has_variants')
-      .in('id', allProductIds);
+      .in('id', uniqueProductIds);
 
     if (prodErr || !products || products.length === 0) {
       return ApiErrors.notFound('Prodotti non trovati.');
     }
-    if (products.length !== allProductIds.length) {
+    if (products.length !== uniqueProductIds.length) {
       return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
     }
 
@@ -235,6 +236,29 @@ export const POST = withAuthRateLimit(
 
     // --- 5. Inserisci N ordini (uno per gruppo) con il client admin.
     const createdOrderIds: string[] = [];
+    const reservedStockPerGroup: Array<Array<{ product_id: string; variant_id: string | null; qty: number }>> = [];
+    const walletAppliedPerGroup: number[] = [];
+
+    const rollbackCreatedCodOrders = async () => {
+      for (let j = createdOrderIds.length - 1; j >= 0; j--) {
+        const oid = createdOrderIds[j];
+        await admin.from('order_items').delete().eq('order_id', oid);
+        await admin.from('orders').delete().eq('id', oid);
+        await admin.rpc('restore_stock', { p_items: reservedStockPerGroup[j] });
+        if (walletAppliedPerGroup[j] > 0) {
+          await admin.rpc('wallet_credit', {
+            p_user: user.id,
+            p_cents: walletAppliedPerGroup[j],
+            p_reason: 'order_cod_refund',
+            p_ref: oid,
+          });
+        }
+      }
+      createdOrderIds.length = 0;
+      reservedStockPerGroup.length = 0;
+      walletAppliedPerGroup.length = 0;
+    };
+
     for (let i = 0; i < body.groups.length; i++) {
       const g = body.groups[i];
       const subtotal = subtotalPerGroupCents[i];
@@ -328,9 +352,9 @@ export const POST = withAuthRateLimit(
         .single();
 
       if (orderErr || !order) {
-        await admin.rpc('restore_stock', { p_items: groupStockItems }); // rilascia la riserva del gruppo fallito
+        await rollbackCreatedCodOrders();
+        await admin.rpc('restore_stock', { p_items: groupStockItems });
         if (walletAppliedCents > 0) {
-          // Storna il credito addebitato per un ordine che non è stato creato.
           await admin.rpc('wallet_credit', {
             p_user: user.id,
             p_cents: walletAppliedCents,
@@ -341,6 +365,9 @@ export const POST = withAuthRateLimit(
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
         return ApiErrors.internal('Errore nella creazione ordine.');
       }
+
+      reservedStockPerGroup.push(groupStockItems);
+      walletAppliedPerGroup.push(walletAppliedCents);
 
       const itemsRows = itemsPerGroupCents[i].map((it) => ({
         order_id: order.id,
@@ -353,6 +380,20 @@ export const POST = withAuthRateLimit(
       const { error: itemsErr } = await admin.from('order_items').insert(itemsRows);
       if (itemsErr) {
         logger.error(itemsErr, { context: 'cod-order-items-insert', orderId: order.id });
+        await admin.from('orders').delete().eq('id', order.id);
+        await admin.rpc('restore_stock', { p_items: groupStockItems });
+        if (walletAppliedCents > 0) {
+          await admin.rpc('wallet_credit', {
+            p_user: user.id,
+            p_cents: walletAppliedCents,
+            p_reason: 'order_cod_refund',
+            p_ref: order.id,
+          });
+        }
+        reservedStockPerGroup.pop();
+        walletAppliedPerGroup.pop();
+        await rollbackCreatedCodOrders();
+        return ApiErrors.internal('Errore nella creazione ordine.');
       }
 
       // Notifica in-app al venditore — nuovo ordine COD ricevuto

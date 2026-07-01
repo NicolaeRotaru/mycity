@@ -295,13 +295,29 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     // Se la riga esiste già (es. webhook ri-eseguito), skip silenzioso.
     if (orderErr) {
       if (orderErr.code === '23505') {
-        logger.info('[stripe] order già presente per (session, seller), skip', { sessionId: session.id, sellerId: g.sellerId });
-        continue;
+        // Idempotenza retry webhook: ordine già creato in un tentativo precedente.
+        const { data: existing } = await admin
+          .from('orders')
+          .select('id')
+          .eq('stripe_session_id', session.id)
+          .eq('seller_id', g.sellerId)
+          .maybeSingle();
+        if (existing?.id) {
+          createdOrderIds.push({
+            orderId: existing.id,
+            sellerId: g.sellerId,
+            totalCents: g.totalCents,
+            itemsCount: g.items.reduce((s, it) => s + it.quantity, 0),
+          });
+          continue;
+        }
       }
       logger.error(orderErr, { context: 'stripe-order-insert', sellerId: g.sellerId });
-      continue;
+      throw new Error(`stripe-order-insert failed for seller ${g.sellerId}`);
     }
-    if (!order) continue;
+    if (!order) {
+      throw new Error(`stripe-order-insert returned null for seller ${g.sellerId}`);
+    }
 
     // order_items
     const orderItemsRows = g.items.map((it) => ({
@@ -315,6 +331,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     const { error: itemsErr } = await admin.from('order_items').insert(orderItemsRows);
     if (itemsErr) {
       logger.error(itemsErr, { context: 'stripe-order-items-insert', orderId: order.id });
+      await admin.from('orders').delete().eq('id', order.id);
+      throw new Error(`stripe-order-items-insert failed for order ${order.id}`);
     }
 
     createdOrderIds.push({
@@ -325,6 +343,16 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     });
   }
 
+  // Solo se TUTTI i gruppi hanno un ordine: altrimenti lascia PENDING e 500 → retry Stripe.
+  if (createdOrderIds.length !== groups.length) {
+    logger.error('[stripe] checkout parziale: ordini creati insufficienti', {
+      pendingCheckoutId,
+      expected: groups.length,
+      created: createdOrderIds.length,
+    });
+    throw new Error(`partial checkout: ${createdOrderIds.length}/${groups.length} orders created`);
+  }
+
   // Traccia l'uso del coupon (server-side authoritative). handleCheckoutCompleted
   // esce subito se il pending era già COMPLETED, quindi l'incremento è eseguito
   // una sola volta per checkout.
@@ -333,7 +361,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     if (cErr) logger.warn('[stripe] increment_coupon_usage fallito', { couponCode, message: cErr.message });
   }
 
-  // Marca pending_checkout come COMPLETED (idempotenza guard per re-delivery webhook)
+  // Marca pending_checkout come COMPLETED solo a checkout interamente riuscito.
   await admin
     .from('pending_checkouts')
     .update({
@@ -616,7 +644,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   // Multi-seller: una charge può avere N ordini (uno per seller).
   const { data: orders } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_id, payout_status, stripe_transfer_id, seller_payout_cents, stripe_reversal_id')
+    .select('id, user_id, total_price, seller_id, payout_status, payment_status, stripe_transfer_id, seller_payout_cents, stripe_reversal_id')
     .eq('stripe_payment_intent', pi);
 
   if (!orders || orders.length === 0) return;
@@ -695,9 +723,10 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     await admin.from('orders').update({ payout_status: 'REFUNDED' }).in('id', refundedIds);
   }
 
-  // Ripristina lo stock degli ordini annullati dal refund pieno (P0-4).
-  for (const id of allIds) {
-    await admin.rpc('restore_stock_for_order', { p_order_id: id });
+  // Ripristina lo stock solo se refundOrder non l'ha già fatto (evita doppio restore).
+  for (const o of orders) {
+    if (o.payment_status === 'REFUNDED') continue;
+    await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
   }
 
   // Email buyer (una sola email anche se sono N ordini — è la stessa charge)

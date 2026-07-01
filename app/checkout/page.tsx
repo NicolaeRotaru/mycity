@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
+import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { haversineKm, riderFee } from '@/lib/geo';
 import { isExpressEligible } from '@/lib/products/express';
 import { validateCoupon, type Coupon } from '@/lib/coupons';
@@ -358,8 +358,9 @@ export default function CheckoutPage() {
   const grandSubtotal = groups.reduce((s, g) => s + groupSubtotal(g), 0);
   const pickupDiscount = pickupInStore ? Math.round(grandSubtotal * (PICKUP_DISCOUNT_PERCENT / 100) * 100) / 100 : 0;
   const grandShipping = appliedCoupon?.freeShipping ? 0 : groups.reduce((s, g) => s + shippingFor(g), 0);
+  const platformDeliveryFee = pickupInStore ? 0 : groups.length * (PLATFORM_DELIVERY_FEE_CENTS / 100);
   const discount = appliedCoupon?.discount ?? 0;
-  const grandTotal = Math.max(0, grandSubtotal + grandShipping - discount - pickupDiscount);
+  const grandTotal = Math.max(0, grandSubtotal + grandShipping + platformDeliveryFee - discount - pickupDiscount);
   const walletEuro = (walletCents ?? 0) / 100;
   // Il credito si applica solo agli ordini COD in questo flusso (la carta passa da
   // Stripe, dove il credito arriverà più avanti). Mai più del totale dell'ordine.
@@ -803,6 +804,7 @@ export default function CheckoutPage() {
             <OrderSummary
               subtotal={grandSubtotal}
               shipping={grandShipping}
+              platformDeliveryFee={platformDeliveryFee}
               pickupDiscount={pickupDiscount}
               couponDiscount={discount}
               creditApplied={creditApplied}

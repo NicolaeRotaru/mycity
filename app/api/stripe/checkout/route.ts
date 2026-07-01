@@ -90,15 +90,16 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   // --- 1. Carica tutti i prodotti dal DB in un'unica query.
   const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
+  const uniqueProductIds = [...new Set(allProductIds)];
   const { data: products, error: prodErr } = await supa
     .from('products')
     .select('id, name, price, images, seller_id, stock, status, has_variants')
-    .in('id', allProductIds);
+    .in('id', uniqueProductIds);
 
   if (prodErr || !products || products.length === 0) {
     return ApiErrors.notFound('Prodotti non trovati.');
   }
-  if (products.length !== allProductIds.length) {
+  if (products.length !== uniqueProductIds.length) {
     return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
   }
 
