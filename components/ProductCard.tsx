@@ -11,6 +11,8 @@ import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { Badge } from './ui/Badge';
 import { useFavorites } from './hooks/useFavorites';
+import { useProfile } from './hooks/useProfile';
+import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 
 interface ProductCardProps {
   id: string;
@@ -57,15 +59,22 @@ const ProductCard = ({
   const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
   const img = sizedImage(rawImg, 'card');
   const { favorites, toggle } = useFavorites();
+  const { isSeller, isAdmin } = useProfile();
+  const shoppingMode = useShoppingMode(isSeller);
+  const canPurchase = useCanPurchase(isAdmin, isSeller, shoppingMode);
   const isFav = favorites.has(id);
   const [heartBeat, setHeartBeat] = useState(false);
 
   const handleAdd = (e: React.MouseEvent) => {
-    // Con varianti non si può scegliere taglia/colore dalla card: lascia che il
-    // click porti alla scheda prodotto (non blocchiamo la navigazione del Link).
     if (hasVariants) return;
     e.preventDefault();
     e.stopPropagation();
+    if (!canPurchase) {
+      toast.error(isAdmin
+        ? 'Gli account assistenza non possono acquistare sul marketplace.'
+        : 'Apri il marketplace dal pulsante «Vai al marketplace» nella dashboard negozio.');
+      return;
+    }
     addToCart({ id, name, price, image: img, sellerId, storeName });
     toast.success(`${name} aggiunto al carrello`, { duration: 2000 });
   };

@@ -23,6 +23,7 @@ import { loadProductVariants } from '@/lib/products/persistVariants';
 import { deriveQualityMarks } from '@/lib/products/qualityMarks';
 import { useFavorites } from '@/components/hooks/useFavorites';
 import { useProfile } from '@/components/hooks/useProfile';
+import { useShoppingMode, useCanPurchase } from '@/components/hooks/useShoppingMode';
 import ContactSellerButton from '@/components/ContactSellerButton';
 import ProductViewTracker from '@/components/ProductViewTracker';
 import ProductQA from '@/components/ProductQA';
@@ -65,7 +66,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   // Carosello: contenitore scroll-snap della foto principale + swipe nel lightbox.
   const galleryRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
-  const { isAuthenticated, profile } = useProfile();
+  const { isAuthenticated, profile, isSeller, isAdmin } = useProfile();
+  const shoppingMode = useShoppingMode(isSeller);
+  const mayPurchase = useCanPurchase(isAdmin, isSeller, shoppingMode);
   const { favorites, toggle: toggleFav } = useFavorites();
   const isFav = favorites.has(id);
 
@@ -288,7 +291,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     : (product.stock ?? undefined);
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
   const isOutOfStock = stock === 0;
-  const canAdd = !isOutOfStock && !needsVariantChoice;
+  const canAdd = !isOutOfStock && !needsVariantChoice && mayPurchase;
 
   // Marchi di qualità (DOP/DOC/IGP/Bio/Vegano…) derivati da tag + attributi.
   const qualityMarks = deriveQualityMarks(product);
@@ -305,7 +308,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     (sellerProfile as { offers_express?: boolean | null } | null)?.offers_express,
   );
 
+  const purchaseBlockedMessage = isAdmin
+    ? 'Gli account assistenza non possono acquistare sul marketplace.'
+    : 'Apri il marketplace dal pulsante «Vai al marketplace» nella dashboard negozio.';
+
   const handleAdd = () => {
+    if (!mayPurchase) {
+      toast.error(purchaseBlockedMessage);
+      return;
+    }
     if (needsVariantChoice) {
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di aggiungere`);
       return;
@@ -328,6 +339,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   };
 
   const handleBuyNow = () => {
+    if (!mayPurchase) {
+      toast.error(purchaseBlockedMessage);
+      return;
+    }
     if (needsVariantChoice) {
       toast.error(`Scegli ${optionGroups.map((g) => g.name.toLowerCase()).join(' e ')} prima di continuare`);
       return;

@@ -304,7 +304,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
         {/* Footer: marketplace + logout */}
         <div className={`shrink-0 border-t border-white/10 p-3 ${collapsed ? 'lg:px-2' : ''}`}>
           <Link
-            href="/"
+            href="/?shop=1"
             title="Vai al marketplace"
             className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-white/[0.78] transition-colors hover:bg-white/5 hover:text-white ${
               collapsed ? 'lg:justify-center lg:px-2.5' : ''

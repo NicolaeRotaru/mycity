@@ -3,6 +3,7 @@ import { createClient, type User } from '@supabase/supabase-js';
 import { timingSafeEqual } from 'node:crypto';
 import { ApiErrors } from './responses';
 import { rateLimitAsync } from '@/lib/rate-limit';
+import { purchaseBlockReason } from '@/lib/shopping-access';
 
 /** Confronto a tempo costante per secret (anti timing-attack). */
 function secretsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -83,6 +84,12 @@ async function authenticate(req: NextRequest): Promise<
   if (!profile) return { ok: false, response: ApiErrors.forbidden('Profilo non trovato') };
 
   return { ok: true, user, profile };
+}
+
+/** Blocco acquisto per ruolo (admin, rider, …). Null = può acquistare. */
+export function assertCanPurchase(profile: Profile): NextResponse | null {
+  const reason = purchaseBlockReason(profile.role);
+  return reason ? ApiErrors.forbidden(reason) : null;
 }
 
 /**

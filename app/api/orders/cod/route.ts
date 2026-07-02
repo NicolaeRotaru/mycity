@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { withAuthRateLimit } from '@/lib/api/middleware';
+import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
@@ -68,7 +68,9 @@ const Body = z.object({
  */
 export const POST = withAuthRateLimit(
   { name: 'orders-cod', max: 30, windowMs: 10 * 60_000 },
-  async ({ user, req }): Promise<NextResponse> => {
+  async ({ user, profile, req }): Promise<NextResponse> => {
+    const purchaseBlock = assertCanPurchase(profile);
+    if (purchaseBlock) return purchaseBlock;
     if (!user.email) return ApiErrors.unauthorized();
     if (!user.email_confirmed_at) {
       return ApiErrors.forbidden('Conferma la tua email prima di ordinare.');
