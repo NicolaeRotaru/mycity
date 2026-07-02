@@ -4,7 +4,7 @@ import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { createMultiSellerCheckoutSession, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
-import { withAuthRateLimit } from '@/lib/api/middleware';
+import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
@@ -69,7 +69,9 @@ const Body = z.object({
  *
  * Rate limit: 30 checkout / 10 min per utente.
  */
-export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
+export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, windowMs: 10 * 60_000 }, async ({ user, profile, req }): Promise<NextResponse> => {
+  const purchaseBlock = assertCanPurchase(profile);
+  if (purchaseBlock) return purchaseBlock;
   if (!isStripeConfigured()) {
     return ApiErrors.unavailable('Pagamenti elettronici non disponibili. Usa pagamento alla consegna.');
   }

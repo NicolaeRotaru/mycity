@@ -12,6 +12,7 @@ import { useMessagesUnread } from './hooks/useMessagesUnread';
 import MobileAccountSheet from './MobileAccountSheet';
 import SupportChatModal from './SupportChatModal';
 import type { MenuRole } from '@/lib/account-menu';
+import { useShoppingMode } from './hooks/useShoppingMode';
 
 type Tab = { href: string; icon: LucideIcon; label: string; badge?: number; isAccount?: boolean; isSupport?: boolean; exact?: boolean };
 
@@ -30,6 +31,8 @@ export default function MobileTabBar() {
   const pathname = usePathname() ?? '';
   const router = useRouter();
   const { profile, userEmail, isAuthenticated, isSeller, isRider, isAdmin, isBuyer } = useProfile();
+  const shoppingMode = useShoppingMode(isSeller);
+  const sellerShopping = isSeller && shoppingMode;
   const cartCount = useCartCount();
   const msgUnread = useMessagesUnread();
   const t = useTranslations('nav');
@@ -63,7 +66,7 @@ export default function MobileTabBar() {
       { href: '/messages',       icon: MessageCircle, label: t('messages'), badge: msgUnread },
       { href: '/admin/activity', icon: Eye,           label: t('surveillance') },
     ];
-  } else if (isSeller) {
+  } else if (isSeller && !sellerShopping) {
     tabs = [
       { href: '/seller/dashboard',    icon: Home,          label: t('home'), exact: true },
       { href: '/seller/products',     icon: Package,       label: t('products') },
@@ -109,7 +112,7 @@ export default function MobileTabBar() {
     null,
   );
 
-  const role: MenuRole = isAdmin ? 'admin' : isSeller ? 'seller' : isRider ? 'rider' : isAuthenticated ? 'buyer' : null;
+  const role: MenuRole = isAdmin ? 'admin' : (isSeller && !sellerShopping) ? 'seller' : isRider ? 'rider' : isAuthenticated ? 'buyer' : null;
   const displayName =
     profile?.full_name?.split(' ')[0] ??
     profile?.store_name ??

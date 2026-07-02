@@ -8,6 +8,14 @@ import {
   expHeaderName,
   EXP_COOKIE_MAX_AGE,
 } from '@/lib/experiments';
+import {
+  EXIT_SHOPPING_QUERY,
+  SHOPPING_MODE_COOKIE,
+  SHOPPING_MODE_MAX_AGE,
+  SHOPPING_MODE_QUERY,
+  isMarketplaceBrowsePath,
+  sellerMayBrowseMarketplace,
+} from '@/lib/shopping-access';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -135,14 +143,29 @@ export async function middleware(req: NextRequest) {
     });
   }
 
-  // Perf: solo /admin, /seller, /rider richiedono sessione + ruolo. Per ogni
-  // altra rotta (home, catalogo pubblico = ~90% del traffico) usciamo subito con
-  // la sola CSP, evitando la round-trip auth a Supabase (getUser) ad ogni request.
-  // Il refresh del cookie sessione sulle rotte pubbliche resta coperto dal client
-  // supabase-js nel browser (auto-refresh) e dai server component su rotte protette.
+  // Uscita esplicita dalla modalità acquisto venditore.
+  if (req.nextUrl.searchParams.get(EXIT_SHOPPING_QUERY) === '1') {
+    const url = req.nextUrl.clone();
+    url.pathname = '/seller/dashboard';
+    url.searchParams.delete(EXIT_SHOPPING_QUERY);
+    const exitRes = NextResponse.redirect(url);
+    exitRes.headers.set('Content-Security-Policy', csp);
+    exitRes.cookies.set({
+      name: SHOPPING_MODE_COOKIE,
+      value: '',
+      maxAge: 0,
+      path: '/',
+    });
+    return exitRes;
+  }
+
   const roleRule = findRoleRule(pathname);
   const needsAuth = !!roleRule || AUTH_REQUIRED.some((p) => pathname.startsWith(p));
-  if (!needsAuth) return res;
+  const needsSellerGate = isMarketplaceBrowsePath(pathname);
+
+  // Perf: la maggior parte del traffico pubblico esce subito (solo CSP).
+  // Eccezione: venditori loggati sul catalogo → gate modalità acquisto.
+  if (!needsAuth && !needsSellerGate) return res;
 
   if (!SUPABASE_URL || !SUPABASE_KEY) return res;
 
@@ -174,6 +197,8 @@ export async function middleware(req: NextRequest) {
   };
 
   if (!user) {
+    // Catalogo pubblico: ospiti ok. Solo le rotte protette richiedono login.
+    if (!needsAuth) return res;
     const url = req.nextUrl.clone();
     url.pathname = '/sign-in';
     url.searchParams.set('returnTo', pathname);
@@ -186,22 +211,53 @@ export async function middleware(req: NextRequest) {
     return withCsp(NextResponse.redirect(url));
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, is_approved')
+    .eq('id', user.id)
+    .single();
+
+  type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
+  const role = profile?.role as ProfileRole | undefined;
+  const approved = !!profile?.is_approved;
+
+  // Entrata modalità acquisto venditore (?shop=1 dal pulsante SellerShell).
+  if (role === 'seller' && req.nextUrl.searchParams.get(SHOPPING_MODE_QUERY) === '1') {
+    const cookieOpts = {
+      name: SHOPPING_MODE_COOKIE,
+      value: '1',
+      maxAge: SHOPPING_MODE_MAX_AGE,
+      path: '/',
+      sameSite: 'lax' as const,
+    };
+    if (isMarketplaceBrowsePath(pathname)) {
+      const url = req.nextUrl.clone();
+      url.searchParams.delete(SHOPPING_MODE_QUERY);
+      const enterRes = NextResponse.redirect(url);
+      enterRes.headers.set('Content-Security-Policy', csp);
+      enterRes.cookies.set(cookieOpts);
+      return enterRes;
+    }
+    res.cookies.set(cookieOpts);
+  }
+
+  // Venditori: catalogo/acquisto solo con cookie modalità (pulsante dedicato).
+  if (role === 'seller' && needsSellerGate) {
+    const hasShoppingMode = req.cookies.get(SHOPPING_MODE_COOKIE)?.value === '1';
+    if (!sellerMayBrowseMarketplace(hasShoppingMode)) {
+      const url = req.nextUrl.clone();
+      url.pathname = '/seller/dashboard';
+      return withCsp(NextResponse.redirect(url));
+    }
+  }
+
   // Il role-check si applica SOLO alle rotte role-protected (/admin,/seller,/rider).
   // Per le rotte solo-auth (/profile) basta l'utente autenticato verificato sopra.
   if (roleRule) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, is_approved')
-      .eq('id', user.id)
-      .single();
-
-    type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
-    const role = profile?.role as ProfileRole | undefined;
-    const approved = !!profile?.is_approved;
-
     if (!role || !roleRule.allowed.includes(role as ProfileRole & ('admin' | 'seller' | 'rider')) || !approved) {
       const url = req.nextUrl.clone();
-      url.pathname = '/';
+      // Buyer/rider fuori posto → home. Seller fuori posto → dashboard (non marketplace).
+      url.pathname = role === 'seller' ? '/seller/dashboard' : '/';
       return withCsp(NextResponse.redirect(url));
     }
   }

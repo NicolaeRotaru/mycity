@@ -2,6 +2,7 @@ import './globals.css';
 import { Inter, Fraunces } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
 import Navbar from '@/components/Navbar';
+import SellerShoppingBanner from '@/components/SellerShoppingBanner';
 import Footer from '@/components/Footer';
 import MobileTabBar from '@/components/MobileTabBar';
 import SupportChatButton from '@/components/SupportChatButton';
@@ -120,6 +121,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <NextIntlClientProvider locale={locale} messages={messages}>
           <QueryProvider>
             <Navbar />
+            <SellerShoppingBanner />
             <WelcomeCreditBanner />
             <main id="main-content" className="min-h-screen">{children}</main>
             <Footer />

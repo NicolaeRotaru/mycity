@@ -90,7 +90,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
             <Link href="/contact" className="inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-ink-900 px-5 py-2.5 rounded-lg font-bold shadow">
               <Mail size={16} aria-hidden /> Contatta il supporto
             </Link>
-            <Link href="/" className="inline-flex items-center gap-1.5 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
+            <Link href="/?shop=1" className="inline-flex items-center gap-1.5 bg-cream-100 hover:bg-cream-200 text-ink-900 px-5 py-2.5 rounded-lg font-semibold">
               <Home size={16} aria-hidden /> Vai al marketplace
             </Link>
           </div>
@@ -117,7 +117,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
             <Button href="/sell" icon={Pencil}>Ripresenta la richiesta</Button>
-            <Button href="/" variant="secondary" icon={Home}>Vai al marketplace</Button>
+            <Button href="/?shop=1" variant="secondary" icon={Home}>Vai al marketplace</Button>
           </div>
         </div>
       </div>
@@ -138,7 +138,7 @@ export default function SellerLayout({ children }: { children: React.ReactNode }
           </p>
           <div className="flex flex-wrap gap-2 justify-center text-sm mt-4">
             <Button href="/sell" variant="secondary" icon={Pencil}>Modifica richiesta</Button>
-            <Button href="/" icon={Home}>Vai al marketplace</Button>
+            <Button href="/?shop=1" icon={Home}>Vai al marketplace</Button>
             <Button href="/contact" variant="secondary" icon={Mail}>Contatti</Button>
           </div>
         </div>

@@ -20,6 +20,7 @@ import PromoTicker from './PromoTicker';
 import SearchBar from './SearchBar';
 import CategoryBar from './CategoryBar';
 import { getAccountMenuItems } from '@/lib/account-menu';
+import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
 
@@ -36,6 +37,8 @@ export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
   const { profile, userEmail, isAuthenticated, isLoading, isSeller, isRider, isAdmin } = useProfile();
+  const shoppingMode = useShoppingMode(isSeller);
+  const canPurchase = useCanPurchase(isAdmin, isSeller, shoppingMode);
   const cartCount = useCartCount();
   const notifCount = useNotificationsCount();
   const msgUnread = useMessagesUnread();
@@ -113,7 +116,7 @@ export default function Navbar() {
 
                 {isAuthenticated && (
                   <>
-                    {role === 'buyer' && (
+                    {(role === 'buyer' || (isSeller && shoppingMode)) && (
                       <IconButton href="/favorites" label="Preferiti" badge={favCount}>
                         <Heart size={20} strokeWidth={2} />
                       </IconButton>
@@ -124,7 +127,7 @@ export default function Navbar() {
                     <IconButton href="/notifications" label="Notifiche" badge={notifCount}>
                       <Bell size={20} strokeWidth={2} />
                     </IconButton>
-                    {role === 'buyer' && (
+                    {canPurchase && (
                       <CartButton count={cartCount} />
                     )}
                     {isSeller && (
@@ -169,7 +172,7 @@ export default function Navbar() {
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <LocationPill compact />
-              {isAuthenticated && role === 'buyer' && (
+              {isAuthenticated && canPurchase && (
                 <Link href="/cart" aria-label="Carrello" className="relative ml-auto p-2">
                   <ShoppingCart size={22} strokeWidth={2} />
                   {cartCount > 0 && (
