@@ -158,8 +158,8 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   if (!order.rider_id) return { ok: false, code: 'BAD_STATE', reason: 'Nessun rider assegnato' };
   if (order.rider_payout_status === 'TRANSFERRED') return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già versato' };
 
-  const feeCents = Math.round(Number(order.shipping_cost ?? 0) * 100);
-  if (feeCents <= 0) return { ok: false, code: 'INVALID_AMOUNT', reason: 'Compenso di consegna nullo' };
+  const RIDER_MIN_FEE_CENTS = parseInt(process.env.RIDER_MIN_FEE_CENTS ?? '150', 10);
+  const feeCents = Math.max(Math.round(Number(order.shipping_cost ?? 0) * 100), RIDER_MIN_FEE_CENTS);
 
   const { data: rider } = await admin
     .from('profiles')
@@ -245,26 +245,39 @@ export async function reverseOrderTransfer(
   if (order.payout_status !== 'TRANSFERRED' || !order.stripe_transfer_id) {
     return { reversalId: null, reversedCents: 0 };
   }
-  if (order.stripe_reversal_id) {
-    return { reversalId: order.stripe_reversal_id, reversedCents: 0 };
-  }
+  // Supporto a rimborsi parziali multipli: non bloccare sul primo reversal già registrato.
+  // Calcola quanto è già stato stornato e reversa solo il delta residuo.
+  const admin = getAdminSupabase();
+  const { data: freshOrder } = await admin
+    .from('orders')
+    .select('already_reversed_cents')
+    .eq('id', order.id)
+    .single();
+  const alreadyReversedCents: number = (freshOrder as { already_reversed_cents?: number | null } | null)?.already_reversed_cents ?? 0;
 
   const maxCents = order.seller_payout_cents ?? 0;
-  const reverseCents = Math.min(amountCents ?? maxCents, maxCents);
-  if (reverseCents <= 0) return { reversalId: null, reversedCents: 0 };
+  const requestedCents = Math.min(amountCents ?? maxCents, maxCents);
+  const reverseCents = Math.max(0, requestedCents - alreadyReversedCents);
+  if (reverseCents <= 0) {
+    return { reversalId: order.stripe_reversal_id ?? null, reversedCents: 0 };
+  }
 
   const stripe = getStripe();
   const reversal = await stripe.transfers.createReversal(
     order.stripe_transfer_id,
     { amount: reverseCents, metadata: { order_id: order.id } },
-    { idempotencyKey: `reversal_${order.id}` },
+    { idempotencyKey: `reversal_${order.id}_${alreadyReversedCents + reverseCents}` },
   );
 
-  const admin = getAdminSupabase();
-  const isFull = reverseCents >= maxCents;
+  const newAlreadyReversed = alreadyReversedCents + reverseCents;
+  const isFull = newAlreadyReversed >= maxCents;
   await admin
     .from('orders')
-    .update({ stripe_reversal_id: reversal.id, ...(isFull ? { payout_status: 'REVERSED' } : {}) })
+    .update({
+      stripe_reversal_id: reversal.id,
+      already_reversed_cents: newAlreadyReversed,
+      ...(isFull ? { payout_status: 'REVERSED' } : {}),
+    })
     .eq('id', order.id);
 
   return { reversalId: reversal.id, reversedCents: reverseCents };
@@ -325,11 +338,14 @@ export async function refundOrder(
 
   if (error || !order) throw new Error('refundOrder: ordine non trovato');
 
-  // Clamp di sicurezza: mai rimborsare più del totale dell'ordine (in multi-seller
-  // la charge è condivisa: un clamp per-ordine evita di prosciugare i fondi degli altri seller).
+  // Clamp al RESIDUO rimborsabile: mai superare (totale - già rimborsato).
+  // Un clamp solo al totale permetteva rimborsi multipli che sommati eccedevano il totale
+  // (vettore di over-accredito wallet su ordini COD).
   const orderTotalCents = Math.round(Number(order.total_price) * 100);
-  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents));
-  if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
+  const alreadyRefundedCents = order.refunded_amount_cents ?? 0;
+  const remainingCents = Math.max(0, orderTotalCents - alreadyRefundedCents);
+  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, remainingCents));
+  if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido o già rimborsato completamente');
 
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
   const newRefundedTotal = (order.refunded_amount_cents ?? 0) + safeAmountCents;
@@ -414,12 +430,19 @@ export async function refundOrder(
   const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
 
   const wasTransferred = order.payout_status === 'TRANSFERRED';
+  // Su rimborso parziale (isFull=false): decrementa seller_payout_cents della quota
+  // venditore rimborsata così il cron non paga l'importo pieno a valle.
+  const newSellerPayout =
+    !isFull && (order.seller_payout_cents ?? 0) > 0
+      ? Math.max(0, (order.seller_payout_cents ?? 0) - sellerShare)
+      : order.seller_payout_cents;
   await admin
     .from('orders')
     .update({
       stripe_refund_id: refund.id,
       refunded_amount_cents: newRefundedTotal,
       payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
+      seller_payout_cents: newSellerPayout,
       ...(isFull
         ? {
             payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED',

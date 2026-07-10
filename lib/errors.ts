@@ -40,21 +40,27 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
     if (e.message) {
       // Filter SQL codes leaking in messages
       if (/duplicate key value/i.test(e.message)) {
+        trackErrorShown('duplicate_key', e.message, context?.page);
         return SUPABASE_CODE_MAP['23505'];
       }
       if (/foreign key constraint/i.test(e.message)) {
+        trackErrorShown('foreign_key', e.message, context?.page);
         return SUPABASE_CODE_MAP['23503'];
       }
       if (/permission denied|insufficient_privilege|row.level security/i.test(e.message)) {
+        trackErrorShown('permission_denied', e.message, context?.page);
         return 'Non hai i permessi per questa azione.';
       }
       if (/network|fetch|timeout|aborted/i.test(e.message)) {
+        trackErrorShown('network', e.message, context?.page);
         return 'Problema di connessione. Controlla la rete e riprova.';
       }
       if (/rate.limit|too many/i.test(e.message)) {
+        trackErrorShown('rate_limit', e.message, context?.page);
         return 'Troppe richieste in poco tempo. Aspetta qualche secondo.';
       }
       if (/jwt|token|expired|unauthor/i.test(e.message)) {
+        trackErrorShown('session_expired', e.message, context?.page);
         return 'La sessione è scaduta. Accedi di nuovo.';
       }
       trackErrorShown(e.code ?? 'unknown', e.message, context?.page);
@@ -80,11 +86,11 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       }
     }
     if (e.status) {
-      if (e.status === 401) return 'Devi accedere per continuare.';
-      if (e.status === 403) return 'Non hai i permessi per questa azione.';
-      if (e.status === 404) return 'Non trovato.';
-      if (e.status === 429) return 'Troppe richieste. Aspetta un attimo.';
-      if (e.status >= 500) return 'Problema del server. Riproveremo tra poco.';
+      if (e.status === 401) { trackErrorShown('http_401', e.message ?? '', context?.page); return 'Devi accedere per continuare.'; }
+      if (e.status === 403) { trackErrorShown('http_403', e.message ?? '', context?.page); return 'Non hai i permessi per questa azione.'; }
+      if (e.status === 404) { trackErrorShown('http_404', e.message ?? '', context?.page); return 'Non trovato.'; }
+      if (e.status === 429) { trackErrorShown('http_429', e.message ?? '', context?.page); return 'Troppe richieste. Aspetta un attimo.'; }
+      if (e.status >= 500) { trackErrorShown('http_5xx', e.message ?? '', context?.page); return 'Problema del server. Riproveremo tra poco.'; }
     }
   }
 

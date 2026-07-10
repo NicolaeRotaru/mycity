@@ -1,7 +1,8 @@
 'use client';
-import { use, type CSSProperties } from 'react';
+import { use, useEffect, type CSSProperties } from 'react';
 
 import Link from 'next/link';
+import { safeJsonLd } from '@/lib/html-escape';
 import { useQuery } from '@tanstack/react-query';
 import { Megaphone, PencilLine, Store } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -13,6 +14,7 @@ import { useStorePageData } from '@/components/store-sections/useStorePageData';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import EmptyState from '@/components/EmptyState';
+import { trackStoreViewed } from '@/lib/analytics/events';
 
 export default function StorePage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
@@ -25,6 +27,14 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     queryFn: async () => (await supabase.auth.getUser()).data.user?.id ?? null,
     staleTime: 60_000,
   });
+
+  // Funnel: emetti store_viewed una sola volta quando la vetrina è disponibile.
+  useEffect(() => {
+    if (!data.isLoading && data.approved && data.store) {
+      trackStoreViewed(id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data.isLoading, data.approved, !!data.store]);
 
   if (data.isLoading) {
     return (
@@ -91,7 +101,7 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     >
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(localBusinessSchema) }}
       />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <Breadcrumb items={[

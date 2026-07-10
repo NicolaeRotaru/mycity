@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { readConsent } from '@/lib/consent';
 
 /**
  * Sentry minimal wrapper — installazione lazy.
@@ -16,21 +17,32 @@ import { useEffect } from 'react';
  *   2. Copia DSN (es. https://abc@o123.ingest.sentry.io/456)
  *   3. Aggiungi env Render: NEXT_PUBLIC_SENTRY_DSN=https://...
  *   4. Sentry inizializzato automaticamente al primo mount
+ *
+ * GDPR: replay e tracing si abilitano SOLO se l'utente ha dato consenso
+ * analytics (categoria 'analytics' nel banner cookie). Il report degli
+ * errori base (dsn + beforeSend scrub) non richiede consenso perché
+ * non traccia sessioni né performance (necessary per sicurezza del sito).
  */
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 let initialized = false;
+
+function getAnalyticsConsent(): boolean {
+  const consent = readConsent();
+  return !!(consent?.analytics);
+}
 
 async function initSentry() {
   if (initialized || !DSN || typeof window === 'undefined') return;
   initialized = true;
   const Sentry = await import('@sentry/nextjs').catch(() => null);
   if (!Sentry) return;
+  const analyticsConsent = getAnalyticsConsent();
   Sentry.init({
     dsn: DSN,
-    tracesSampleRate: 0.1,
-    replaysSessionSampleRate: 0.05,
-    replaysOnErrorSampleRate: 1.0,
+    tracesSampleRate: analyticsConsent ? 0.1 : 0,
+    replaysSessionSampleRate: analyticsConsent ? 0.05 : 0,
+    replaysOnErrorSampleRate: analyticsConsent ? 1.0 : 0,
     environment: process.env.NODE_ENV,
     // 🟡-11: non inviare PII di default (IP/cookie/header). Esplicito anche se è
     // il default dell'SDK, così non regredisce se cambia in futuro.
@@ -83,11 +95,44 @@ export async function setSentryUser(userId: string, email?: string) {
 
 export default function SentryProvider() {
   useEffect(() => {
-    initSentry();
-    // Catch unhandled promise rejections globally
+    // GDPR gate: inizializza Sentry (incluso il report degli errori base) SOLO
+    // dopo che l'utente ha dato consenso analytics. Prima del consenso nessun
+    // dato viene inviato a Sentry, processore terzo (Art.28 GDPR).
+    if (getAnalyticsConsent()) {
+      initSentry();
+    }
+
+    // Catch unhandled promise rejections globally (solo se già inizializzato)
     const onUnhandled = (e: PromiseRejectionEvent) => captureError(e.reason, { type: 'unhandledrejection' });
     window.addEventListener('unhandledrejection', onUnhandled);
-    return () => window.removeEventListener('unhandledrejection', onUnhandled);
+
+    // Quando l'utente cambia il consenso:
+    // - se lo concede → inizializza Sentry (idempotente grazie al flag `initialized`)
+    // - se lo revoca → aggiorna i sample rate a 0 sul client già vivo
+    //   (Sentry.init() non può essere chiamato due volte; modifichiamo le opzioni live)
+    const onConsentChange = async () => {
+      const Sentry = await import('@sentry/nextjs').catch(() => null);
+      if (!Sentry) return;
+      const analyticsConsent = getAnalyticsConsent();
+      if (analyticsConsent) {
+        // Primo consenso: avvia Sentry (no-op se già inizializzato)
+        initSentry();
+        return;
+      }
+      // Consenso revocato: azzera replay e tracing sul client live
+      const client = Sentry.getClient();
+      if (!client) return;
+      const opts = client.getOptions();
+      opts.tracesSampleRate = 0;
+      opts.replaysSessionSampleRate = 0;
+      opts.replaysOnErrorSampleRate = 0;
+    };
+    window.addEventListener('mc:consent-change', onConsentChange);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', onUnhandled);
+      window.removeEventListener('mc:consent-change', onConsentChange);
+    };
   }, []);
   return null;
 }

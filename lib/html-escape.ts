@@ -14,3 +14,26 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/**
+ * Serializza un oggetto JSON-LD per l'uso sicuro in <script type="application/ld+json">.
+ *
+ * JSON.stringify() non escapa < > & — se un dato controllato dall'utente (nome
+ * prodotto, descrizione, indirizzo…) contiene queste sequenze, un attaccante può
+ * iniettare HTML/script chiudendo il tag <script> prematuramente, e.g.:
+ *   name: "</script><script>alert(1)</script>"
+ *
+ * La soluzione è sostituire i caratteri critici con le rispettive escape Unicode,
+ * che i parser JSON interpretano correttamente ma i parser HTML trattano come
+ * contenuto opaco (non come markup). È lo stesso approccio usato da Django,
+ * Rails e Next.js stesso per i propri blocchi JSON-LD.
+ *
+ * Uso: dangerouslySetInnerHTML={{ __html: safeJsonLd(schema) }}
+ */
+export function safeJsonLd(data: unknown): string {
+  return JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/'/g, '\\u0027');
+}

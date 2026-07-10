@@ -190,8 +190,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const stripe = getStripe();
   const pendingCheckoutId = session.client_reference_id ?? session.metadata?.pending_checkout_id;
   if (!pendingCheckoutId) {
-    logger.warn('[stripe] checkout.session.completed senza pending_checkout_id', { sessionId: session.id });
-    return;
+    logger.error('[stripe] checkout.session.completed senza pending_checkout_id', { sessionId: session.id });
+    throw new Error(`checkout.session.completed senza pending_checkout_id: session=${session.id}`);
   }
 
   // Carica il record-of-intent
@@ -203,12 +203,30 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (pendErr || !pending) {
     logger.error('[stripe] pending_checkout non trovato', { pendingCheckoutId, err: pendErr });
-    return;
+    throw new Error(`pending_checkout non trovato: id=${pendingCheckoutId}`);
   }
 
   // Idempotenza checkout-level: se già processato, no-op.
   if (pending.status === 'COMPLETED') {
     logger.info('[stripe] pending_checkout già COMPLETED, skip', { pendingCheckoutId });
+    return;
+  }
+
+  // Safety: se il pending è scaduto (cron expire-checkouts ha già rilasciato lo stock),
+  // NON creare ordini su merce non più riservata. Emetti rimborso immediato.
+  if (pending.status === 'EXPIRED' || pending.status === 'CANCELED') {
+    logger.warn('[stripe] pending_checkout scaduto: rimborso immediato', { pendingCheckoutId, status: pending.status });
+    const paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+    if (paymentIntentId) {
+      try {
+        await stripe.refunds.create(
+          { payment_intent: paymentIntentId, reason: 'expired' },
+          { idempotencyKey: `expired_refund_${pendingCheckoutId}` },
+        );
+      } catch (e) {
+        logger.error('[stripe] rimborso pending scaduto fallito', { pendingCheckoutId, err: e });
+      }
+    }
     return;
   }
 
@@ -220,7 +238,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (!Array.isArray(groups) || groups.length === 0) {
     logger.error('[stripe] pending_checkout senza groups', { pendingCheckoutId });
-    return;
+    throw new Error(`pending_checkout senza groups validi: id=${pendingCheckoutId}`);
   }
 
   const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
@@ -356,9 +374,20 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Traccia l'uso del coupon (server-side authoritative). handleCheckoutCompleted
   // esce subito se il pending era già COMPLETED, quindi l'incremento è eseguito
   // una sola volta per checkout.
+  // increment_coupon_usage è atomico e condizionato (113): ritorna true se
+  // l'incremento è avvenuto, false se il coupon era già esaurito/scaduto.
+  // Qui il pagamento Stripe è già catturato: non possiamo annullare a valle;
+  // logghiamo l'anomalia come errore per revisione manuale.
   if (couponCode && createdOrderIds.length > 0) {
-    const { error: cErr } = await admin.rpc('increment_coupon_usage', { p_code: couponCode });
-    if (cErr) logger.warn('[stripe] increment_coupon_usage fallito', { couponCode, message: cErr.message });
+    const { data: couponIncremented, error: cErr } = await admin.rpc('increment_coupon_usage', { p_code: couponCode });
+    if (cErr) {
+      logger.warn('[stripe] increment_coupon_usage fallito', { couponCode, message: cErr.message });
+    } else if (couponIncremented === false) {
+      logger.error('[stripe] coupon esaurito sotto race condition — pagamento già catturato, revisione manuale necessaria', {
+        couponCode,
+        orderIds: createdOrderIds,
+      });
+    }
   }
 
   // Marca pending_checkout come COMPLETED solo a checkout interamente riuscito.
@@ -831,7 +860,20 @@ async function handleDisputeClosed(dispute: Stripe.Dispute) {
   const ids = orders.map((o) => o.id);
 
   if (dispute.status === 'won') {
-    await admin.from('orders').update({ dispute_status: 'WON' }).in('id', ids);
+    // Ripristina il payout per gli ordini il cui transfer era stato stornato
+    // (dispute.charge.dispute.created → reverseOrderTransfer → REVERSED).
+    // Senza questo, payout_status='REVERSED' non rientra mai nel cron release-payouts.
+    await admin
+      .from('orders')
+      .update({ dispute_status: 'WON', payout_status: 'HELD' })
+      .in('id', ids)
+      .eq('payout_status', 'REVERSED');
+    // Per gli ordini che non erano ancora stati pagati, aggiorna solo dispute_status.
+    await admin
+      .from('orders')
+      .update({ dispute_status: 'WON' })
+      .in('id', ids)
+      .neq('payout_status', 'REVERSED');
     await notifyAdmins('✓ Chargeback vinto', `Contestazione vinta su ordine ${ids[0]}. Payout sbloccato.`, '/admin/disputes');
   } else if (dispute.status === 'lost') {
     await admin

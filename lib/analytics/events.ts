@@ -86,9 +86,25 @@ export const trackRemoveFromCart = (productId: string) => {
   ga('remove_from_cart', { items: [{ item_id: productId }] });
 };
 
-export const trackCheckoutStarted = (totalCents: number, itemCount: number) => {
+export const trackCheckoutStarted = (
+  totalCents: number,
+  itemCount: number,
+  items?: Array<{ id: string; name: string; price: number; quantity: number; brand?: string }>,
+) => {
   track('checkout_started', { total_cents: totalCents, item_count: itemCount });
-  ga('begin_checkout', { currency: 'EUR', value: eur(totalCents) });
+  ga('begin_checkout', {
+    currency: 'EUR',
+    value: eur(totalCents),
+    ...(items && items.length > 0 ? {
+      items: items.map((it) => ({
+        item_id: it.id,
+        item_name: it.name,
+        price: eur(it.price),
+        quantity: it.quantity,
+        item_brand: it.brand,
+      })),
+    } : {}),
+  });
 };
 
 /** Step intermedi del checkout (indirizzo compilato, metodo scelto). */
@@ -109,7 +125,10 @@ export const trackOrderPlaced = (
   totalCents: number,
   paymentMethod: string,
   sellerId: string,
-  extra?: { coupon?: string },
+  extra?: {
+    coupon?: string;
+    items?: Array<{ id: string; name: string; price: number; quantity: number; brand?: string }>;
+  },
 ) => {
   track('order_placed', { order_id: orderId, total_cents: totalCents, payment_method: paymentMethod, seller_id: sellerId });
   ga('purchase', {
@@ -118,6 +137,15 @@ export const trackOrderPlaced = (
     value: eur(totalCents),
     payment_type: paymentMethod,
     coupon: extra?.coupon,
+    ...(extra?.items && extra.items.length > 0 ? {
+      items: extra.items.map((it) => ({
+        item_id: it.id,
+        item_name: it.name,
+        price: eur(it.price),
+        quantity: it.quantity,
+        item_brand: it.brand,
+      })),
+    } : {}),
   });
 };
 

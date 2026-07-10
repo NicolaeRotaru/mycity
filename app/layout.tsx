@@ -1,5 +1,6 @@
 import './globals.css';
 import { Inter, Fraunces } from 'next/font/google';
+import { safeJsonLd } from '@/lib/html-escape';
 import type { Metadata, Viewport } from 'next';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
@@ -115,7 +116,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </a>
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
+          dangerouslySetInnerHTML={{ __html: safeJsonLd(orgSchema) }}
         />
         <NextIntlClientProvider locale={locale} messages={messages}>
           <QueryProvider>

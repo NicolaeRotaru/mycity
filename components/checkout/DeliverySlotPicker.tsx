@@ -59,6 +59,12 @@ type Props = {
   /** fascia oraria selezionata per "domani" */
   tomorrowTime: string;
   onTomorrowTimeChange: (t: string) => void;
+  /**
+   * true = almeno un negozio nel carrello offre Express → mostra il tile "Adesso".
+   * false/undefined = nessun negozio Express disponibile → tile nascosto e la
+   * selezione viene automaticamente spostata su 'today' se era su 'now'.
+   */
+  expressAvailable?: boolean;
 };
 
 export function DeliverySlotPicker({

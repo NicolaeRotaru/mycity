@@ -1,8 +1,9 @@
 'use client';
 
 import { memo, useEffect, useState } from 'react';
-import Link from 'next/link';
 import Image from 'next/image';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
@@ -44,6 +45,7 @@ const ProductCard = ({
   id, name, price, images,
   stock, createdAt, storeName, sellerId, discountPercent, compareAtPrice, hasVariants, priority,
 }: ProductCardProps) => {
+  const router = useRouter();
   const hasDiscount = !!discountPercent && discountPercent > 0;
   const discountedPrice = hasDiscount ? price * (1 - (discountPercent as number) / 100) : price;
   // Prezzo pieno barrato del venditore (solo se non c'è già una promo attiva).
@@ -61,18 +63,16 @@ const ProductCard = ({
   const [heartBeat, setHeartBeat] = useState(false);
 
   const handleAdd = (e: React.MouseEvent) => {
-    // Con varianti non si può scegliere taglia/colore dalla card: lascia che il
-    // click porti alla scheda prodotto (non blocchiamo la navigazione del Link).
-    if (hasVariants) return;
-    e.preventDefault();
-    e.stopPropagation();
+    // Con varianti non si può scegliere taglia/colore dalla card: porta alla scheda.
+    if (hasVariants) {
+      router.push(`/product/${id}`);
+      return;
+    }
     addToCart({ id, name, price, image: img, sellerId, storeName });
     toast.success(`${name} aggiunto al carrello`, { duration: 2000 });
   };
 
-  const handleFav = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleFav = () => {
     // Trigger animazione heart-beat ad ogni click (anche unfavorite)
     setHeartBeat(true);
     setTimeout(() => setHeartBeat(false), 600);
@@ -99,9 +99,13 @@ const ProductCard = ({
   const initials = (storeName ?? '').trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
 
   return (
-    <Link
-      href={`/product/${id}`}
-      className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-surface-200 bg-white transition-all duration-200 hover:-translate-y-1 hover:border-primary-200 hover:shadow-warm-lg"
+    <div
+      role="article"
+      onClick={handleCardClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCardClick(); } }}
+      tabIndex={0}
+      aria-label={`${name}${storeName ? ` da ${storeName}` : ''}`}
+      className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-surface-200 bg-white transition-all duration-200 hover:-translate-y-1 hover:border-primary-200 hover:shadow-warm-lg cursor-pointer focus-visible:outline-2 focus-visible:outline-primary-500 focus-visible:outline-offset-2"
     >
       {/* Badge in alto a sinistra */}
       <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
@@ -187,7 +191,7 @@ const ProductCard = ({
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 };
 

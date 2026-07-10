@@ -165,6 +165,11 @@ export async function createMultiSellerCheckoutSession(
     discounts = [{ coupon: coupon.id }];
   }
 
+  // La sessione Stripe scade insieme al pending_checkout (default DB: 2h).
+  // Stripe richiede almeno 30 min; usiamo 110 min per stare sotto le 2h
+  // del TTL del pending con un piccolo margine.
+  const expiresAt = Math.floor(Date.now() / 1000) + 110 * 60;
+
   return await stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
@@ -173,6 +178,7 @@ export async function createMultiSellerCheckoutSession(
     customer_email: input.buyerEmail,
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
+    expires_at: expiresAt,
     client_reference_id: input.pendingCheckoutId,
     metadata: {
       buyer_user_id: input.buyerUserId,

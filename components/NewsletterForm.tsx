@@ -30,10 +30,10 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
     try {
       const { error } = await supabase
         .from('newsletter_subscribers')
-        .insert({ email: email.trim().toLowerCase() });
+        .insert({ email: email.trim().toLowerCase(), active: false });
       if (error && error.code !== '23505') throw error;
       setSubscribed(true);
-      toast.success(t('subscribed'));
+      toast.success(t('subscribedPendingConfirm'));
     } catch (err) {
       toast.error(friendlyError(err));
     } finally {
@@ -51,7 +51,7 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
           : 'bg-olive-500/20 border border-olive-400/40 text-olive-100 rounded-lg p-3 text-sm'
       }>
         <span className="inline-flex items-center gap-1.5">
-          <CheckCircle2 size={16} className="text-olive-600" aria-hidden /> {t('subscribedBox')}
+          <CheckCircle2 size={16} className="text-olive-600" aria-hidden /> {t('subscribedPendingConfirmBox')}
         </span>
       </div>
     );

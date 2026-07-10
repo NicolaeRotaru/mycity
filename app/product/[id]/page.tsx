@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, use, useRef, useEffect } from 'react';
+import { safeJsonLd } from '@/lib/html-escape';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -116,9 +117,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       const { data, error } = await supabase.from('reviews')
         .select('id, rating, comment, created_at, user_id, photo_urls, verified_purchase').eq('product_id', id)
         .order('verified_purchase', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(50);
       if (error) throw error;
       return (data ?? []) as ReviewRow[];
+    },
+  });
+
+  // Media e conteggio totale reale calcolati lato DB via RPC (non sull'array troncato
+  // a 50 elementi): evita che la media sia distorta quando il prodotto ha molte recensioni.
+  const { data: ratingStats } = useQuery<{ avg: number; count: number } | null>({
+    queryKey: queryKeys.products.ratings(id),
+    queryFn: async () => {
+      const { data } = await supabase.rpc('product_rating_stats', { p_product_ids: [id] });
+      const rows = (data ?? []) as Array<{ product_id: string; avg: number | string; count: number }>;
+      if (rows.length === 0) return null;
+      return { avg: Number(rows[0].avg), count: Number(rows[0].count) };
     },
   });
 
@@ -248,9 +262,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     ? (product.images as string[])
     : ['https://placehold.co/600x600/F5EDD9/78716C?text=Foto+prodotto'];
 
-  const avgRating = reviews.length
+  // Usa la media DB (su tutte le recensioni) se disponibile; fallback sull'array locale.
+  const avgRating = ratingStats?.avg ?? (reviews.length
     ? reviews.reduce((s: number, r) => s + Number(r.rating), 0) / reviews.length
-    : 0;
+    : 0);
+  // Conteggio totale reale (potrebbe essere > 50 se il prodotto ha molte recensioni).
+  const totalReviewCount = ratingStats?.count ?? reviews.length;
 
   // Recensioni filtrate ("Con foto") + ordinate (recenti / voto alto / voto basso),
   // tutto client-side sui dati già caricati: nessuna query né dato aggiuntivo.
@@ -366,7 +383,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     aggregateRating: avgRating > 0 ? {
       '@type': 'AggregateRating',
       ratingValue: avgRating.toFixed(1),
-      reviewCount: reviews.length,
+      reviewCount: totalReviewCount,
     } : undefined,
   };
 
@@ -374,7 +391,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     <div className="container mx-auto px-4 sm:px-6 py-6">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(productSchema) }}
       />
       <Breadcrumb className="mb-4" items={[
         { label: 'Home', href: '/' },
@@ -572,11 +589,11 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
           {/* Rating */}
           <div className="flex items-center gap-3 flex-wrap">
-            {reviews.length > 0 ? (
+            {totalReviewCount > 0 ? (
               <>
                 <RatingStars rating={avgRating} size={18} />
                 <a href="#recensioni" className="text-sm text-ink-600 underline hover:text-primary-700">
-                  {reviews.length} recensioni
+                  {totalReviewCount} recensioni
                 </a>
               </>
             ) : (
@@ -815,16 +832,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="font-serif text-2xl font-bold text-ink-900">
             Recensioni
-            {reviews.length > 0 && (
+            {totalReviewCount > 0 && (
               <span className="ml-3 text-base font-normal text-ink-500">
-                <span className="text-accent-700">★</span> {avgRating.toFixed(1)} ({reviews.length})
+                <span className="text-accent-700">★</span> {avgRating.toFixed(1)} ({totalReviewCount})
               </span>
             )}
           </h2>
         </div>
 
         {/* Riepilogo voti: media + distribuzione stelle (5★→1★) */}
-        {reviews.length > 0 && (
+        {totalReviewCount > 0 && (
           <div className="bg-white border border-cream-200 rounded-xl p-5 grid gap-5 sm:grid-cols-[200px_1fr]">
             <div className="text-center sm:border-r sm:border-cream-200">
               <div className="text-5xl font-extrabold font-serif text-ink-900">{avgRating.toFixed(1)}</div>
@@ -832,7 +849,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 <RatingStars rating={avgRating} size={18} />
               </div>
               <p className="text-sm text-ink-500 mt-1">
-                {reviews.length} {reviews.length === 1 ? 'recensione' : 'recensioni'}
+                {totalReviewCount} {totalReviewCount === 1 ? 'recensione' : 'recensioni'}
               </p>
             </div>
             <div className="space-y-1.5 self-center">

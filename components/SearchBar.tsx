@@ -35,8 +35,13 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
   const router = useRouter();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listboxId = 'searchbar-listbox';
+
+  // Reset active index when suggestions change
+  useEffect(() => { setActiveIdx(-1); }, [open]);
 
   // Debounce
   const [debounced, setDebounced] = useState('');
@@ -146,7 +151,34 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
     if (!q.trim()) return;
     router.push(`/search?q=${encodeURIComponent(q.trim())}`);
     setOpen(false);
+    setActiveIdx(-1);
     inputRef.current?.blur();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const isDropdownOpen = open && debounced.length >= 2 && suggestions.length > 0;
+    if (e.key === 'Escape') {
+      setOpen(false);
+      setActiveIdx(-1);
+      return;
+    }
+    if (!isDropdownOpen) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(i - 1, -1));
+    } else if (e.key === 'Enter' && activeIdx >= 0) {
+      e.preventDefault();
+      const s = suggestions[activeIdx];
+      if (s) {
+        const href = s.kind === 'product' ? `/product/${s.id}` : s.kind === 'store' ? `/store/${s.id}` : `/category/${s.slug}`;
+        router.push(href);
+        setOpen(false);
+        setActiveIdx(-1);
+      }
+    }
   };
 
   return (

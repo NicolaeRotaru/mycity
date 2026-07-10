@@ -34,6 +34,7 @@ import {
   LifeBuoy, MessageCircle, ArrowLeft, ShoppingBag,
 } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import { trackOrderCanceled } from '@/lib/analytics/events';
 
 type OrderRow = {
   id: string;

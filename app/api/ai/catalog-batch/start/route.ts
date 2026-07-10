@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { env } from '@/lib/env';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -32,7 +32,7 @@ type Body = { operation?: string; targetLang?: string };
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
   // Job pesante: pochi avvii per ora.
-  const rl = rateLimit({ key: `ai-catalog-batch-start:${user.id}`, max: 5, windowMs: 60 * 60_000 });
+  const rl = await rateLimitAsync({ key: `ai-catalog-batch-start:${user.id}`, max: 5, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let body: Body;

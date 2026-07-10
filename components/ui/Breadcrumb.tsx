@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/cn';
+import { safeJsonLd } from '@/lib/html-escape';
 
 /**
  * Breadcrumb primitive — navigazione gerarchica + Schema.org JSON-LD per SEO.
@@ -60,7 +61,7 @@ export function Breadcrumb({ items, className }: Props) {
       </nav>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+        dangerouslySetInnerHTML={{ __html: safeJsonLd(schema) }}
       />
     </>
   );

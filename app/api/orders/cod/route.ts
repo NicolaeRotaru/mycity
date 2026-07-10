@@ -453,9 +453,21 @@ export const POST = withAuthRateLimit(
     }
 
     // Traccia uso coupon (server-side authoritative).
+    // increment_coupon_usage è atomico e condizionato (113): ritorna true se
+    // l'incremento è avvenuto, false se il coupon era già esaurito/scaduto al
+    // momento del lock (race condition). In quel caso gli ordini sono già creati
+    // con lo sconto applicato: logghiamo l'anomalia come errore per revisione
+    // manuale (il caso è raro ma reale in burst concorrente).
     if (validatedCouponCode && createdOrderIds.length > 0) {
-      const { error: cErr } = await admin.rpc('increment_coupon_usage', { p_code: validatedCouponCode });
-      if (cErr) logger.warn('[cod] increment_coupon_usage fallito', { code: validatedCouponCode, message: cErr.message });
+      const { data: couponIncremented, error: cErr } = await admin.rpc('increment_coupon_usage', { p_code: validatedCouponCode });
+      if (cErr) {
+        logger.warn('[cod] increment_coupon_usage fallito', { code: validatedCouponCode, message: cErr.message });
+      } else if (couponIncremented === false) {
+        logger.error('[cod] coupon esaurito sotto race condition — ordini creati con sconto non più disponibile', {
+          code: validatedCouponCode,
+          orderIds: createdOrderIds,
+        });
+      }
     }
 
     return NextResponse.json({ orderIds: createdOrderIds }, { status: 200 });

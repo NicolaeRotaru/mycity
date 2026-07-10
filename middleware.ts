@@ -144,7 +144,12 @@ export async function middleware(req: NextRequest) {
   const needsAuth = !!roleRule || AUTH_REQUIRED.some((p) => pathname.startsWith(p));
   if (!needsAuth) return res;
 
-  if (!SUPABASE_URL || !SUPABASE_KEY) return res;
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    if (needsAuth) {
+      return NextResponse.redirect(new URL('/error?code=maintenance', req.url));
+    }
+    return res;
+  }
 
   // Client server-side che legge/scrive cookie su richiesta+risposta.
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_KEY, {

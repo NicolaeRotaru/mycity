@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, Suspense } from 'react';
+import { useEffect, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
+import { Package, Store, MapPin, RotateCcw, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import EmptyState from '@/components/EmptyState';
@@ -99,11 +99,30 @@ const TRACKABLE: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
   'NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY',
 ]);
 
+// Timeout massimo di polling dopo Stripe redirect (ms)
+const STRIPE_POLL_TIMEOUT_MS = 15_000;
+
 export default function OrdersPage() {
   const router = useRouter();
+  // Leggiamo il param ?stripe=success direttamente da window.location per non
+  // dover mettere questo componente in Suspense (useSearchParams lo richiederebbe).
+  const isStripeReturn =
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('stripe') === 'success';
+
+  // Timestamp di quando siamo arrivati qui con ?stripe=success.
+  const stripeArrivalRef = useRef<number | null>(isStripeReturn ? Date.now() : null);
+
   const { data: orders = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.orders.all,
     queryFn: fetchOrders,
+    // Polling attivo finché siamo nel contesto Stripe e non abbiamo ancora ordini.
+    refetchInterval: (query) => {
+      if (!stripeArrivalRef.current) return false;
+      if ((query.state.data ?? []).length > 0) return false;
+      const elapsed = Date.now() - stripeArrivalRef.current;
+      return elapsed < STRIPE_POLL_TIMEOUT_MS ? 2_000 : false;
+    },
   });
 
   // Riordino: riusa lo stesso modulo carrello (`@/lib/cart`) del dettaglio
@@ -161,19 +180,37 @@ export default function OrdersPage() {
     );
   }
 
+  // Dopo un redirect da Stripe, il webhook potrebbe non aver ancora creato
+  // l'ordine: mostriamo un loader invece dell'empty state per non confondere
+  // l'utente. Il polling (refetchInterval) aggiornerà la lista non appena
+  // l'ordine appare, o mostrerà l'empty state vero dopo il timeout.
+  const isWaitingForWebhook =
+    isStripeReturn &&
+    orders.length === 0 &&
+    stripeArrivalRef.current !== null &&
+    Date.now() - stripeArrivalRef.current < STRIPE_POLL_TIMEOUT_MS;
+
   if (orders.length === 0) {
     return (
       <div className="py-8">
         <Suspense fallback={null}><StripeReturnHandler /></Suspense>
-        <EmptyState
-          icon={Package}
-          title="Non hai ancora ordini"
-          description="Quando ordini qualcosa, lo vedrai qui con il tracking in tempo reale."
-          ctaLabel="Inizia a esplorare"
-          ctaHref="/search"
-          secondaryLabel="€5 di benvenuto"
-          secondaryHref="/profile/loyalty"
-        />
+        {isWaitingForWebhook ? (
+          <div className="flex flex-col items-center gap-4 py-16 text-ink-500">
+            <Loader2 size={36} className="animate-spin text-primary-600" />
+            <p className="text-base font-semibold text-ink-700">Stiamo confermando il tuo ordine...</p>
+            <p className="text-sm">Potrebbe richiedere qualche secondo. Non chiudere la pagina.</p>
+          </div>
+        ) : (
+          <EmptyState
+            icon={Package}
+            title="Non hai ancora ordini"
+            description="Quando ordini qualcosa, lo vedrai qui con il tracking in tempo reale."
+            ctaLabel="Inizia a esplorare"
+            ctaHref="/search"
+            secondaryLabel="€5 di benvenuto"
+            secondaryHref="/profile/loyalty"
+          />
+        )}
       </div>
     );
   }

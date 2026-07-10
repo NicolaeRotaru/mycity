@@ -178,13 +178,13 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
 
   const reject = useMutation({
     mutationFn: async (reason?: string) => {
-      const { data, error } = await supabase.rpc('seller_reject_order', {
-        p_order_id: id,
-        p_reason: reason ?? null,
+      const res = await fetch(`/api/seller/orders/${id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason ?? null }),
       });
-      if (error) throw error;
-      const r = data as { ok: boolean; reason?: string };
-      if (!r.ok) throw new Error(r.reason ?? 'Impossibile rifiutare');
+      const json = await res.json();
+      if (!json.ok) throw new Error(json.error?.message ?? 'Impossibile rifiutare');
     },
     onSuccess: () => {
       setRejectOpen(false);

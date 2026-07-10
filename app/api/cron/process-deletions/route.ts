@@ -76,7 +76,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     const monthsAgo = (m: number) => new Date(Date.now() - m * 30 * 86_400_000).toISOString();
     await admin
       .from('activity_events')
-      .update({ ip: null, user_agent: null })
+      .update({ ip: null, user_agent: null, anon_id: null, path: '/', referrer: null, city: null, country: null })
       .lt('created_at', monthsAgo(14))
       .not('ip', 'is', null);
     await admin
@@ -113,6 +113,16 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         results.errors.push(`${userId}: anonymize failed`);
         continue;
       }
+      // KYC fields could not be nulled: KYC data may remain in DB.
+      // Do NOT proceed with deleteUser — block deletion so the issue
+      // is surfaced and can be manually resolved before hard delete.
+      logger.error('[cron-deletions] KYC anonymization failed — blocking deleteUser', {
+        userId,
+        reason: full.error.message,
+      });
+      results.failed++;
+      results.errors.push(`${userId}: kyc_anonymization_failed`);
+      continue;
     }
 
     // 1b) 🟡-14: anonimizza il free-text PII dell'utente oltre al profilo (Art.17).
