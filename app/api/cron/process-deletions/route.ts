@@ -79,6 +79,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       .update({ ip: null, user_agent: null })
       .lt('created_at', monthsAgo(14))
       .not('ip', 'is', null);
+    // Fix #33: la retention dichiarata (14 mesi) non annullava anon_id/path/city/referrer.
+    // Oltre 14 mesi azzeriamo anche il profilo comportamentale pseudonimo (art. 5.1.e GDPR).
+    await admin
+      .from('activity_events')
+      .update({ anon_id: null, path: null, referrer: null, city: null, country: null })
+      .lt('created_at', monthsAgo(14))
+      .not('anon_id', 'is', null);
     await admin
       .from('audit_logs')
       .update({ ip: null, user_agent: null })

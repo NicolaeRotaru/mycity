@@ -62,11 +62,12 @@ export default function CookiesPage() {
 
         <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.3 Cookie di analisi (richiede consenso)</h3>
         <p>
-          Statistiche aggregate anonime sull&apos;uso del sito. Configurati con IP anonimizzato
-          e senza condivisione con piattaforme pubblicitarie.
+          Statistiche sull&apos;uso del sito a fini di miglioramento del servizio.
+          I dati sono pseudonimizzati (non anonimi) e conservati per un massimo di 14 mesi.
         </p>
         <CookieTable rows={[
           { name: '_ga / _ga_*', purpose: 'Statistiche di utilizzo (se attivato)', duration: '14 mesi', provider: 'Google Analytics 4' },
+          { name: 'mc_vid', purpose: 'Identificatore di visita MyCity: correla le sessioni ricorrenti dello stesso dispositivo e le collega all\'account al login (profilazione pseudonima cross-sessione). Base giuridica: consenso (art. 6.1.a GDPR).', duration: '12 mesi', provider: 'Prima parte' },
         ]} />
 
         <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.4 Cookie di marketing (richiede consenso)</h3>
