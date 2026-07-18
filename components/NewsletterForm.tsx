@@ -88,6 +88,15 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
           {loading ? '…' : t('subscribe')}
         </button>
       </div>
+      {/* Consenso esplicito GDPR — richiesto prima dell'iscrizione (art. 7 GDPR). */}
+      <label className={`flex items-start gap-2 cursor-pointer text-xs ${isLight ? 'text-ink-500' : 'text-ink-400'}`}>
+        <input type="checkbox" required className="mt-0.5 shrink-0 accent-primary-600" />
+        <span>
+          Acconsento a ricevere comunicazioni commerciali da MyCity e confermo di aver letto la{' '}
+          <a href="/privacy" className="underline hover:text-primary-600">Privacy Policy</a>.
+          Potrò disiscrivermi in qualsiasi momento.
+        </span>
+      </label>
     </form>
   );
 };

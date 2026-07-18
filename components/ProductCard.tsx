@@ -108,12 +108,18 @@ const ProductCard = ({
   const initials = (storeName ?? '').trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
 
   return (
-    <Link
-      href={`/product/${id}`}
+    <div
       className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-surface-200 bg-white transition-all duration-200 hover:-translate-y-1 hover:border-primary-200 hover:shadow-warm-lg"
     >
+      {/* Link overlay: copre tutta la card ma sta sotto i pulsanti (z-0). */}
+      <Link
+        href={`/product/${id}`}
+        className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-2 focus-visible:outline-primary-600 focus-visible:outline-offset-2"
+        aria-label={name}
+        tabIndex={0}
+      />
       {/* Badge in alto a sinistra */}
-      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1">
+      <div className="absolute top-2 left-2 z-10 flex flex-col gap-1" aria-hidden>
         {showStrike && <Badge variant="discount">-{badgePct}%</Badge>}
         {isNew && <Badge variant="new">Nuovo</Badge>}
         {isOutOfStock && <Badge variant="soldout">Esaurito</Badge>}
@@ -146,8 +152,8 @@ const ProductCard = ({
         </button>
       </div>
 
-      {/* Corpo compatto */}
-      <div className="flex flex-1 flex-col gap-1 p-2.5">
+      {/* Corpo compatto — z-10 per stare sopra il link overlay */}
+      <div className="relative z-10 flex flex-1 flex-col gap-1 p-2.5">
         {storeName && (
           <div className="flex items-center gap-1.5">
             <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[8px] font-bold text-white">
@@ -196,7 +202,7 @@ const ProductCard = ({
           </div>
         </div>
       </div>
-    </Link>
+    </div>
   );
 };
 
