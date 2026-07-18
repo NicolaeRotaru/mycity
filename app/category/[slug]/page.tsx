@@ -251,7 +251,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   if (isHub) {
     return (
       <div className="container mx-auto px-4 sm:px-6 py-8 space-y-8">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }} />
         {header}
 
         <section>
@@ -292,7 +292,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   // riga conteggio, chip row e zero-results arricchito.
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }} />
 
       <div className="md:col-span-4">{header}</div>
 

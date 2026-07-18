@@ -203,7 +203,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (pendErr || !pending) {
     logger.error('[stripe] pending_checkout non trovato', { pendingCheckoutId, err: pendErr });
-    return;
+    // Throw: Stripe ritenterà il webhook invece di marcare l'evento come processed.
+    throw new Error(`pending_checkout non trovato: ${pendingCheckoutId}`);
   }
 
   // Idempotenza checkout-level: se già processato, no-op.
@@ -220,7 +221,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (!Array.isArray(groups) || groups.length === 0) {
     logger.error('[stripe] pending_checkout senza groups', { pendingCheckoutId });
-    return;
+    throw new Error(`pending_checkout ${pendingCheckoutId} senza groups validi`);
   }
 
   const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { buildDraftProductInsert } from '@/lib/products/draftFromVision';
@@ -50,7 +50,7 @@ const BodySchema = z.object({
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   // Ogni call crea fino a 12 prodotti: rate limit per evitare flood.
-  const rl = rateLimit({ key: `ai-catalog-create-bulk:${user.id}`, max: 10, windowMs: 60 * 60_000 });
+  const rl = await rateLimitAsync({ key: `ai-catalog-create-bulk:${user.id}`, max: 10, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;

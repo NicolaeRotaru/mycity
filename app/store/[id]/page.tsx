@@ -91,7 +91,7 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     >
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }}
       />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <Breadcrumb items={[

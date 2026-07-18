@@ -70,6 +70,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       })
       .eq('id', order.id);
     if (updErr) return ApiErrors.internal('Annullamento fallito');
+    // Ripristina lo stock riservato (COD non ancora consegnato: merce mai uscita).
+    await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
   }
 
   // Notifica in-app al buyer.

@@ -325,10 +325,12 @@ export async function refundOrder(
 
   if (error || !order) throw new Error('refundOrder: ordine non trovato');
 
-  // Clamp di sicurezza: mai rimborsare più del totale dell'ordine (in multi-seller
-  // la charge è condivisa: un clamp per-ordine evita di prosciugare i fondi degli altri seller).
+  // Clamp di sicurezza: mai rimborsare più del residuo rimborsabile (totale − già rimborsato).
+  // Il clamp al solo `orderTotalCents` permetteva un over-accredito wallet su ordini COD con
+  // rimborsi parziali multipli (il secondo rimborso ignorava il già accreditato).
   const orderTotalCents = Math.round(Number(order.total_price) * 100);
-  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents));
+  const alreadyRefunded = order.refunded_amount_cents ?? 0;
+  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents - alreadyRefunded));
   if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
 
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
