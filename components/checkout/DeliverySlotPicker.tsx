@@ -49,6 +49,12 @@ function todayTimesAvailable(): string[] {
   return TODAY_SLOTS.filter((s) => s.endHour > nowHour).map((s) => s.label);
 }
 
+/** Express disponibile solo in finestra di servizio 8:00–21:00 (ora locale) — fix #23. */
+function isExpressAvailable(): boolean {
+  const h = new Date().getHours();
+  return h >= 8 && h < 21;
+}
+
 type Props = {
   /** giorno selezionato */
   day: DayKey;
@@ -71,6 +77,7 @@ export function DeliverySlotPicker({
 }: Props) {
   // Calcolato a render: le fasce di "Oggi" già trascorse sono escluse.
   const todayTimes = todayTimesAvailable();
+  const expressAvailable = isExpressAvailable();
   const times = day === 'today' ? todayTimes : TOMORROW_TIMES;
   const current = day === 'today' ? todayTime : tomorrowTime;
   const onTimeChange = day === 'today' ? onTodayTimeChange : onTomorrowTimeChange;
@@ -90,9 +97,10 @@ export function DeliverySlotPicker({
       <div className="grid grid-cols-3 gap-3">
         <DayTile
           active={day === 'now'}
-          onClick={() => onDayChange('now')}
+          onClick={() => expressAvailable && onDayChange('now')}
+          disabled={!expressAvailable}
           title="Adesso"
-          subtitle="~30–45 min"
+          subtitle={expressAvailable ? '~30–45 min' : 'Non disponibile'}
           badge={{ text: 'Express', cls: 'text-accent-700 bg-accent-50' }}
         />
         <DayTile
@@ -158,12 +166,14 @@ export function DeliverySlotPicker({
 function DayTile({
   active,
   onClick,
+  disabled,
   title,
   subtitle,
   badge,
 }: {
   active: boolean;
   onClick: () => void;
+  disabled?: boolean;
   title: string;
   subtitle: string;
   badge?: { text: string; cls: string };
@@ -172,8 +182,11 @@ function DayTile({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={`relative rounded-xl border-[1.5px] px-3 py-3 text-left transition-colors ${
-        active ? 'border-primary-500 bg-primary-50' : 'border-cream-300 bg-white hover:border-primary-200'
+        disabled
+          ? 'border-cream-200 bg-cream-50 cursor-not-allowed opacity-50'
+          : active ? 'border-primary-500 bg-primary-50' : 'border-cream-300 bg-white hover:border-primary-200'
       }`}
     >
       {badge && (

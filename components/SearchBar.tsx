@@ -156,11 +156,17 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         <input
           ref={inputRef}
           type="text"
+          role="combobox"
+          aria-label="Cerca"
+          aria-expanded={open && (debounced.length >= 2 || debounced.length < 2)}
+          aria-haspopup="listbox"
+          aria-autocomplete="list"
+          aria-controls="search-listbox"
           value={q}
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
+          onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur(); } }}
           placeholder={placeholder}
-          aria-label="Cerca"
           autoFocus={autoFocus}
           className="w-full bg-white border-2 border-transparent focus:border-primary-400 focus:bg-white text-ink-900 placeholder-ink-400 rounded-full pl-11 pr-11 py-2.5 text-sm font-medium focus:outline-none transition-colors shadow-sm"
         />
@@ -177,7 +183,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
       </form>
 
       {open && debounced.length >= 2 && (
-        <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-warm-lg ring-1 ring-ink-100 overflow-hidden z-50 max-h-[60vh] overflow-y-auto">
+        <div id="search-listbox" role="listbox" aria-label="Suggerimenti di ricerca" className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-warm-lg ring-1 ring-ink-100 overflow-hidden z-50 max-h-[60vh] overflow-y-auto">
           {suggestions.length === 0 ? (
             <div className="p-6 text-center text-sm text-ink-500">
               Nessun risultato per &laquo;{debounced}&raquo;.

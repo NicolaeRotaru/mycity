@@ -2,7 +2,7 @@
 
 import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -67,9 +67,14 @@ const fetchOrders = async (): Promise<Order[]> => {
 function StripeReturnHandler() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const qc = useQueryClient();
   useEffect(() => {
     if (searchParams.get('stripe') === 'success') {
       toast.success('Pagamento completato! Il tuo ordine è confermato.');
+      // Il webhook Stripe può arrivare con un ritardo di qualche secondo: ri-fetcha
+      // gli ordini dopo 2s e 5s per non mostrare "nessun ordine" al rientro (fix #22).
+      const t1 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 2000);
+      const t2 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 5000);
       // Funnel: emette `purchase` (GA4) + `order_placed` una sola volta per
       // sessione Stripe. session_id = transaction_id (dedup lato GA4); il valore
       // arriva dallo stash creato prima del redirect (mc_pending_purchase).
@@ -88,8 +93,9 @@ function StripeReturnHandler() {
       } catch { /* noop */ }
       // Pulisce il param dall'URL senza ricaricare
       router.replace('/orders');
+      return () => { clearTimeout(t1); clearTimeout(t2); };
     }
-  }, [searchParams, router]);
+  }, [searchParams, router, qc]);
   return null;
 }
 
