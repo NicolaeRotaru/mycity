@@ -218,6 +218,12 @@ export const POST = withAuthRateLimit(
       couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
       couponFreeShipping = couponRes.freeShipping;
       validatedCouponCode = couponRes.coupon.code;
+      // Claim atomico: check + increment in un'unica operazione — previene la race condition (fix #36).
+      // Se due richieste parallele arrivano con lo stesso coupon, solo una ottiene il claim.
+      const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
+      if (claimErr || !claimed) {
+        return ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.');
+      }
     }
 
     const shippingPerGroupCents = body.groups.map((g, i) => {
@@ -454,11 +460,8 @@ export const POST = withAuthRateLimit(
       createdOrderIds.push(order.id);
     }
 
-    // Traccia uso coupon (server-side authoritative).
-    if (validatedCouponCode && createdOrderIds.length > 0) {
-      const { error: cErr } = await admin.rpc('increment_coupon_usage', { p_code: validatedCouponCode });
-      if (cErr) logger.warn('[cod] increment_coupon_usage fallito', { code: validatedCouponCode, message: cErr.message });
-    }
+    // NB: il coupon è già stato claimato atomicamente sopra (claim_coupon, fix #36).
+    // Non chiamiamo più increment_coupon_usage qui.
 
     return NextResponse.json({ orderIds: createdOrderIds }, { status: 200 });
   },

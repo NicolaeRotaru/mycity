@@ -264,7 +264,12 @@ export async function reverseOrderTransfer(
   const isFull = reverseCents >= maxCents;
   await admin
     .from('orders')
-    .update({ stripe_reversal_id: reversal.id, ...(isFull ? { payout_status: 'REVERSED' } : {}) })
+    .update({
+      stripe_reversal_id: reversal.id,
+      // Riduce il residuo venditore così i rimborsi parziali successivi non over-reversano (fix #35).
+      seller_payout_cents: Math.max(0, maxCents - reverseCents),
+      ...(isFull ? { payout_status: 'REVERSED' } : {}),
+    })
     .eq('id', order.id);
 
   return { reversalId: reversal.id, reversedCents: reverseCents };
