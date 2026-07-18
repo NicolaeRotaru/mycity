@@ -539,9 +539,12 @@ export default function CheckoutPage() {
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};
     if (!form.fullName.trim()) e.fullName = 'Inserisci nome e cognome';
-    if (!form.address.trim()) e.address = 'Inserisci l\'indirizzo di consegna';
-    if (!form.city.trim()) e.city = 'Inserisci la città';
-    if (!/^\d{5}$/.test(form.zip.trim())) e.zip = 'CAP non valido (5 cifre)';
+    // Indirizzo/città/CAP non obbligatori per il ritiro in negozio (fix #24).
+    if (!pickupInStore) {
+      if (!form.address.trim()) e.address = 'Inserisci l\'indirizzo di consegna';
+      if (!form.city.trim()) e.city = 'Inserisci la città';
+      if (!/^\d{5}$/.test(form.zip.trim())) e.zip = 'CAP non valido (5 cifre)';
+    }
     if (form.phone.trim().replace(/\D/g, '').length < 8) e.phone = 'Numero di telefono non valido';
     return e;
   };
