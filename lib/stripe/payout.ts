@@ -148,7 +148,7 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, rider_id, shipping_cost, payment_method, delivery_status, rider_payout_status, stripe_charge_id, stripe_transfer_group')
+    .select('id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, stripe_charge_id, stripe_transfer_group')
     .eq('id', orderId)
     .single();
 
@@ -158,7 +158,11 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   if (!order.rider_id) return { ok: false, code: 'BAD_STATE', reason: 'Nessun rider assegnato' };
   if (order.rider_payout_status === 'TRANSFERRED') return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già versato' };
 
-  const feeCents = Math.round(Number(order.shipping_cost ?? 0) * 100);
+  // rider_fee_cents (migrazione 111) è disaccoppiato dallo shipping_cost (prezzo
+  // buyer). Fallback a shipping_cost*100 per gli ordini antecedenti alla migrazione.
+  const feeCents = order.rider_fee_cents != null
+    ? order.rider_fee_cents
+    : Math.round(Number(order.shipping_cost ?? 0) * 100);
   if (feeCents <= 0) return { ok: false, code: 'INVALID_AMOUNT', reason: 'Compenso di consegna nullo' };
 
   const { data: rider } = await admin
@@ -245,10 +249,9 @@ export async function reverseOrderTransfer(
   if (order.payout_status !== 'TRANSFERRED' || !order.stripe_transfer_id) {
     return { reversalId: null, reversedCents: 0 };
   }
-  if (order.stripe_reversal_id) {
-    return { reversalId: order.stripe_reversal_id, reversedCents: 0 };
-  }
 
+  // Residuo ancora da stornare (seller_payout_cents viene decrementato ad ogni
+  // reversal parziale nella riga 270): se è zero, tutto è già stato recuperato.
   const maxCents = order.seller_payout_cents ?? 0;
   const reverseCents = Math.min(amountCents ?? maxCents, maxCents);
   if (reverseCents <= 0) return { reversalId: null, reversedCents: 0 };
@@ -257,14 +260,21 @@ export async function reverseOrderTransfer(
   const reversal = await stripe.transfers.createReversal(
     order.stripe_transfer_id,
     { amount: reverseCents, metadata: { order_id: order.id } },
-    { idempotencyKey: `reversal_${order.id}` },
+    // idempotencyKey per-importo-cumulativo: permette reversal multipli incrementali
+    // sullo stesso ordine (es. due rimborsi parziali sequenziali).
+    { idempotencyKey: `reversal_${order.id}_${reverseCents}` },
   );
 
   const admin = getAdminSupabase();
   const isFull = reverseCents >= maxCents;
   await admin
     .from('orders')
-    .update({ stripe_reversal_id: reversal.id, ...(isFull ? { payout_status: 'REVERSED' } : {}) })
+    .update({
+      stripe_reversal_id: reversal.id,
+      // Riduce il residuo venditore così i rimborsi parziali successivi non over-reversano (fix #35).
+      seller_payout_cents: Math.max(0, maxCents - reverseCents),
+      ...(isFull ? { payout_status: 'REVERSED' } : {}),
+    })
     .eq('id', order.id);
 
   return { reversalId: reversal.id, reversedCents: reverseCents };
@@ -325,10 +335,12 @@ export async function refundOrder(
 
   if (error || !order) throw new Error('refundOrder: ordine non trovato');
 
-  // Clamp di sicurezza: mai rimborsare più del totale dell'ordine (in multi-seller
-  // la charge è condivisa: un clamp per-ordine evita di prosciugare i fondi degli altri seller).
+  // Clamp di sicurezza: mai rimborsare più del residuo rimborsabile (totale − già rimborsato).
+  // Il clamp al solo `orderTotalCents` permetteva un over-accredito wallet su ordini COD con
+  // rimborsi parziali multipli (il secondo rimborso ignorava il già accreditato).
   const orderTotalCents = Math.round(Number(order.total_price) * 100);
-  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents));
+  const alreadyRefunded = order.refunded_amount_cents ?? 0;
+  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents - alreadyRefunded));
   if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
 
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).

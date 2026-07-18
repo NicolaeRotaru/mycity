@@ -1,0 +1,61 @@
+{
+  "_comment": "Cron jobs gestiti su cron-job.org (free tier). Ogni job fa POST con header Authorization: Bearer <CRON_SECRET>. Aggiorna qui quando aggiungi/rimuovi/modifichi un endpoint.",
+  "provider": "cron-job.org",
+  "auth_header": "Authorization: Bearer <CRON_SECRET>",
+  "jobs": [
+    {
+      "id": "release-payouts",
+      "endpoint": "POST /api/cron/release-payouts",
+      "schedule": "*/15 * * * *",
+      "description": "Paga il seller ~1h dopo la consegna confermata"
+    },
+    {
+      "id": "process-deletions",
+      "endpoint": "POST /api/cron/process-deletions",
+      "schedule": "0 4 * * *",
+      "description": "Anonimizza dati personali (GDPR) dopo 14 mesi: IP, UA, anon_id, path, referrer, city, country"
+    },
+    {
+      "id": "send-emails",
+      "endpoint": "POST /api/cron/send-emails",
+      "schedule": "*/10 * * * *",
+      "description": "Svuota la coda email (Resend)"
+    },
+    {
+      "id": "send-push",
+      "endpoint": "POST /api/cron/send-push",
+      "schedule": "*/5 * * * *",
+      "description": "Svuota la coda notifiche push"
+    },
+    {
+      "id": "expire-checkouts",
+      "endpoint": "POST /api/cron/expire-checkouts",
+      "schedule": "*/30 * * * *",
+      "description": "Scade le sessioni di checkout Stripe abbandonate"
+    },
+    {
+      "id": "expire-stale-orders",
+      "endpoint": "POST /api/cron/expire-stale-orders",
+      "schedule": "*/30 * * * *",
+      "description": "Annulla e rimborsa gli ordini NEW non accettati dal negozio entro 3h"
+    },
+    {
+      "id": "abandoned-carts",
+      "endpoint": "POST /api/cron/abandoned-carts",
+      "schedule": "0 * * * *",
+      "description": "Invia email/push di recupero carrelli abbandonati"
+    },
+    {
+      "id": "operational-alerts",
+      "endpoint": "POST /api/cron/operational-alerts",
+      "schedule": "*/15 * * * *",
+      "description": "Controlla anomalie operative (ordini bloccati, payout fermi, ecc.)"
+    },
+    {
+      "id": "external-price-alerts",
+      "endpoint": "POST /api/cron/external-price-alerts",
+      "schedule": "0 * * * *",
+      "description": "Riprezzo e aggiornamento stock dei prodotti importati da fonti esterne"
+    }
+  ]
+}

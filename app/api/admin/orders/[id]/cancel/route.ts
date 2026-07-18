@@ -32,7 +32,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, user_id, total_price, payment_method, payment_status, delivery_status, stripe_payment_intent')
+    .select('id, user_id, total_price, payment_method, payment_status, delivery_status, stripe_payment_intent, wallet_applied_cents')
     .eq('id', params.id)
     .single();
   if (error || !order) return ApiErrors.notFound('Ordine non trovato');
@@ -70,6 +70,19 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       })
       .eq('id', order.id);
     if (updErr) return ApiErrors.internal('Annullamento fallito');
+    // Ripristina lo stock riservato (COD non ancora consegnato: merce mai uscita).
+    await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+    // Restituisce il credito wallet se il buyer ne aveva usato (fix #34).
+    const walletCents = Number((order as { wallet_applied_cents?: number }).wallet_applied_cents ?? 0);
+    if (walletCents > 0) {
+      const { error: wErr } = await admin.rpc('wallet_credit', {
+        p_user: order.user_id,
+        p_cents: walletCents,
+        p_reason: 'order_admin_canceled',
+        p_ref: order.id,
+      });
+      if (wErr) logger.warn('[admin cancel] storno wallet fallito', { orderId: order.id, err: wErr.message });
+    }
   }
 
   // Notifica in-app al buyer.

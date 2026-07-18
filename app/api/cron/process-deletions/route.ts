@@ -79,6 +79,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       .update({ ip: null, user_agent: null })
       .lt('created_at', monthsAgo(14))
       .not('ip', 'is', null);
+    // Fix #33: la retention dichiarata (14 mesi) non annullava anon_id/path/city/referrer.
+    // Oltre 14 mesi azzeriamo anche il profilo comportamentale pseudonimo (art. 5.1.e GDPR).
+    await admin
+      .from('activity_events')
+      .update({ anon_id: null, path: null, referrer: null, city: null, country: null })
+      .lt('created_at', monthsAgo(14))
+      .not('anon_id', 'is', null);
     await admin
       .from('audit_logs')
       .update({ ip: null, user_agent: null })
@@ -103,7 +110,9 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   const results = { ok: 0, failed: 0, errors: [] as string[] };
 
   for (const userId of userIds) {
-    // 1) Anonimizza (resilient pattern: full → safe fallback)
+    // 1) Anonimizza (resilient pattern: full → safe fallback).
+    // IMPORTANTE: i dati KYC (CF, IBAN, nomi legali) vanno sempre cancellati,
+    // anche nel fallback — mai lasciarli in chiaro dopo una deletion (Art.17 GDPR).
     const full = await admin.from('profiles').update({ ...SAFE_FIELDS, ...KYC_FIELDS }).eq('id', userId);
     if (full.error) {
       logger.warn('[cron-deletions] full anonymize failed, fallback', { userId, err: full.error.message });
@@ -113,6 +122,11 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         results.errors.push(`${userId}: anonymize failed`);
         continue;
       }
+      // Tenta comunque di cancellare i dati KYC separatamente (best-effort ma obbligatorio).
+      await admin.from('profiles').update(KYC_FIELDS).eq('id', userId)
+        .then(({ error: kycErr }) => {
+          if (kycErr) logger.warn('[cron-deletions] KYC fields cleanup parziale', { userId, err: kycErr.message });
+        });
     }
 
     // 1b) 🟡-14: anonimizza il free-text PII dell'utente oltre al profilo (Art.17).

@@ -25,6 +25,7 @@ import {
   StickyNote, Banknote, Check, ChevronLeft, Store, MessageSquare, Clock,
 } from 'lucide-react';
 import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
+import { trackRiderDeliveryCompleted } from '@/lib/analytics/events';
 import { queryKeys } from '@/lib/queries/keys';
 
 type OrderRow = {
@@ -167,6 +168,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       toast.success('Consegna confermata!');
       stopSharing();
       setVerifyOpen(null);
+      // Calcola durata dalla presa in carico (accepted_at) alla consegna.
+      const durationMs = order?.accepted_at ? Date.now() - new Date(order.accepted_at).getTime() : 0;
+      trackRiderDeliveryCompleted(id, Math.round(durationMs / 60_000));
       setTimeout(() => router.push('/rider'), 1000);
     }
     return result;

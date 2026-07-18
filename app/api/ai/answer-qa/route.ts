@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
@@ -44,7 +44,7 @@ type Body = ProductContextInput & { question?: string };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
-  const rl = rateLimit({ key: `ai-answer-qa:${user.id}`, max: 40, windowMs: 60 * 60_000 });
+  const rl = await rateLimitAsync({ key: `ai-answer-qa:${user.id}`, max: 40, windowMs: 60 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let body: Body;

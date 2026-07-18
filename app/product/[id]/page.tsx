@@ -119,7 +119,8 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       const { data, error } = await supabase.from('reviews')
         .select('id, rating, comment, created_at, user_id, photo_urls, verified_purchase').eq('product_id', id)
         .order('verified_purchase', { ascending: false })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(200);
       if (error) throw error;
       return (data ?? []) as ReviewRow[];
     },
@@ -389,7 +390,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     <div className="container mx-auto px-4 sm:px-6 py-6">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }}
       />
       <Breadcrumb className="mb-4" items={[
         { label: 'Home', href: '/' },

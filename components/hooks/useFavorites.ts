@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
+import { trackFavoriteAdded } from '@/lib/analytics/events';
 
 export const useFavorites = () => {
   const qc = useQueryClient();
@@ -30,6 +31,7 @@ export const useFavorites = () => {
         await supabase.from('favorites').delete().eq('user_id', user.id).eq('product_id', productId);
       } else {
         await supabase.from('favorites').insert({ user_id: user.id, product_id: productId });
+        trackFavoriteAdded(productId);
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.favorites.all }),

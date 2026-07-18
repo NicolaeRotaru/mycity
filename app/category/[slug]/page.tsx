@@ -2,7 +2,9 @@
 import { use, useRef, useState } from "react";
 
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { trackCategoryViewed } from '@/lib/analytics/events';
 import { Filter, RotateCcw, Truck, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
@@ -14,6 +16,7 @@ import { queryKeys } from '@/lib/queries/keys';
 export default function CategoryPage(props: { params: Promise<{ slug: string }> }) {
   const params = use(props.params);
   const { slug } = params;
+  useEffect(() => { trackCategoryViewed(slug); }, [slug]);
   const t = useTranslations('search');
   const ta = useTranslations('actions');
   const tn = useTranslations('nav');
@@ -251,7 +254,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   if (isHub) {
     return (
       <div className="container mx-auto px-4 sm:px-6 py-8 space-y-8">
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }} />
         {header}
 
         <section>
@@ -292,7 +295,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   // riga conteggio, chip row e zero-results arricchito.
   return (
     <div className="container mx-auto px-4 sm:px-6 py-8 grid grid-cols-1 md:grid-cols-4 gap-6">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }} />
 
       <div className="md:col-span-4">{header}</div>
 

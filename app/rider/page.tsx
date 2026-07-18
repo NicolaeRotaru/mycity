@@ -18,6 +18,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useProfile } from '@/components/hooks/useProfile';
+import { trackRiderOrderAccepted } from '@/lib/analytics/events';
 
 type AvailableOrder = {
   id: string;
@@ -192,6 +193,7 @@ export default function RiderDashboardPage() {
       return data;
     },
     onSuccess: (data) => {
+      trackRiderOrderAccepted(data.id);
       qc.invalidateQueries({ queryKey: queryKeys.rider.orders });
       toast.success('Ordine assegnato a te!');
       router.push(`/rider/orders/${data.id}`);

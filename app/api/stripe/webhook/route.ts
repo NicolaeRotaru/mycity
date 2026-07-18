@@ -203,7 +203,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (pendErr || !pending) {
     logger.error('[stripe] pending_checkout non trovato', { pendingCheckoutId, err: pendErr });
-    return;
+    // Throw: Stripe ritenterà il webhook invece di marcare l'evento come processed.
+    throw new Error(`pending_checkout non trovato: ${pendingCheckoutId}`);
   }
 
   // Idempotenza checkout-level: se già processato, no-op.
@@ -220,7 +221,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   if (!Array.isArray(groups) || groups.length === 0) {
     logger.error('[stripe] pending_checkout senza groups', { pendingCheckoutId });
-    return;
+    throw new Error(`pending_checkout ${pendingCheckoutId} senza groups validi`);
   }
 
   const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
@@ -353,13 +354,8 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     throw new Error(`partial checkout: ${createdOrderIds.length}/${groups.length} orders created`);
   }
 
-  // Traccia l'uso del coupon (server-side authoritative). handleCheckoutCompleted
-  // esce subito se il pending era già COMPLETED, quindi l'incremento è eseguito
-  // una sola volta per checkout.
-  if (couponCode && createdOrderIds.length > 0) {
-    const { error: cErr } = await admin.rpc('increment_coupon_usage', { p_code: couponCode });
-    if (cErr) logger.warn('[stripe] increment_coupon_usage fallito', { couponCode, message: cErr.message });
-  }
+  // NB: il coupon è già stato claimato atomicamente in /api/stripe/checkout (claim_coupon, fix #36).
+  // Non richiamiamo increment_coupon_usage qui per evitare doppio conteggio.
 
   // Marca pending_checkout come COMPLETED solo a checkout interamente riuscito.
   await admin

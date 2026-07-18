@@ -93,6 +93,35 @@ function withToolCache(
   );
 }
 
+/**
+ * Circuit breaker globale per il costo AI giornaliero (in-memory).
+ * Si azzera a ogni cold start / deploy — accettabile: il suo scopo è fermare
+ * abusi o bug di loop nella stessa istanza. AI_GLOBAL_DAILY_BUDGET_EUR
+ * controlla il tetto (0 = disabilitato).
+ */
+const _aiBudget = { spentEur: 0, resetAt: Date.now() };
+
+function _resetAiBudgetIfNeeded(): void {
+  if (Date.now() - _aiBudget.resetAt > 86_400_000) {
+    _aiBudget.spentEur = 0;
+    _aiBudget.resetAt = Date.now();
+  }
+}
+
+function _checkAiBudget(feature: string): void {
+  _resetAiBudgetIfNeeded();
+  const limitEur = Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
+  if (limitEur > 0 && _aiBudget.spentEur >= limitEur) {
+    logger.warn('ai_budget_exceeded', { feature, spentEur: _aiBudget.spentEur, limitEur });
+    throw new AiCallError(feature, 503);
+  }
+}
+
+function _recordAiCost(costEur: number): void {
+  _resetAiBudgetIfNeeded();
+  _aiBudget.spentEur += costEur;
+}
+
 /** Errore lanciato quando l'SDK fallisce; porta lo status per il mapping. */
 export class AiCallError extends Error {
   constructor(
@@ -117,6 +146,7 @@ export function mapAiError(err: unknown, feature: string): NextResponse {
   logger.error('AI call failed', { feature, status }); // solo status, mai raw
   if (status === 401) return ApiErrors.unavailable('Servizio AI non disponibile.');
   if (status === 429) return ApiErrors.rateLimited(60);
+  if (status === 503) return ApiErrors.unavailable('Budget AI giornaliero esaurito. Riprova domani.');
   return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
 }
 
@@ -129,6 +159,8 @@ export function mapAiError(err: unknown, feature: string): NextResponse {
 export async function runMessage<TInput = unknown>(
   args: RunMessageArgs,
 ): Promise<RunMessageResult<TInput>> {
+  // Circuit breaker: blocca se si è già superato il budget giornaliero.
+  _checkAiBudget(args.feature);
   const client = getAnthropic(); // può lanciare AiConfigError (gestito a monte)
 
   let response: Anthropic.Message;
@@ -166,6 +198,9 @@ export async function runMessage<TInput = unknown>(
     cacheReadTokens: u.cache_read_input_tokens ?? 0,
   };
   const estCostEur = estimateCostEur(args.model, usageTokens);
+
+  // Accumula il costo reale nel circuit breaker dopo la chiamata riuscita.
+  _recordAiCost(estCostEur);
 
   // Telemetria aggregabile (feature, model, token, € stimati).
   logger.info('ai_usage', {

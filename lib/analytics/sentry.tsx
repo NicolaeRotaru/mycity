@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { hasConsent } from '@/lib/consent';
 
 /**
  * Sentry minimal wrapper — installazione lazy.
@@ -26,11 +27,13 @@ async function initSentry() {
   initialized = true;
   const Sentry = await import('@sentry/nextjs').catch(() => null);
   if (!Sentry) return;
+  const analyticsOk = hasConsent('analytics');
   Sentry.init({
     dsn: DSN,
     tracesSampleRate: 0.1,
-    replaysSessionSampleRate: 0.05,
-    replaysOnErrorSampleRate: 1.0,
+    // Session replay = registrazione schermo → solo con consenso analytics (GDPR).
+    replaysSessionSampleRate: analyticsOk ? 0.05 : 0,
+    replaysOnErrorSampleRate: analyticsOk ? 1.0 : 0,
     environment: process.env.NODE_ENV,
     // 🟡-11: non inviare PII di default (IP/cookie/header). Esplicito anche se è
     // il default dell'SDK, così non regredisce se cambia in futuro.

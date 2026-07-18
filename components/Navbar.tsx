@@ -21,6 +21,7 @@ import SearchBar from './SearchBar';
 import CategoryBar from './CategoryBar';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
+import { trackSignedOut } from '@/lib/analytics/events';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
 
@@ -51,6 +52,7 @@ export default function Navbar() {
   // MobileTabBar in fondo.
 
   const handleSignOut = async () => {
+    trackSignedOut();
     await supabase.auth.signOut();
     router.push('/sign-in');
     router.refresh();
@@ -319,14 +321,15 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
               <p className="font-semibold text-ink-900 truncate">{displayName}</p>
             </div>
           </div>
-          <ul className="py-1 text-ink-700">
+          <ul role="menu" className="py-1 text-ink-700">
             {getAccountMenuItems(role).map((it) => (
               <MenuLink key={it.href} href={it.href} icon={it.icon} label={it.label} />
             ))}
-            <li><div className="border-t border-ink-100 my-1" /></li>
-            <li>
+            <li role="separator"><div className="border-t border-ink-100 my-1" /></li>
+            <li role="none">
               <button
                 type="button"
+                role="menuitem"
                 onClick={onSignOut}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-secondary-600 hover:bg-secondary-50 font-medium"
               >
@@ -342,8 +345,8 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
 };
 
 const MenuLink = ({ href, icon: Icon, label }: { href: string; icon: typeof Bell; label: string }) => (
-  <li>
-    <Link href={href} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-cream-100">
+  <li role="none">
+    <Link href={href} role="menuitem" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-cream-100">
       <Icon size={16} strokeWidth={2.2} className="text-ink-500 shrink-0" aria-hidden />
       <span className="font-medium">{label}</span>
     </Link>

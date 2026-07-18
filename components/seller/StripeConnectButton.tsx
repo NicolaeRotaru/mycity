@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { trackSellerOnboardingStarted } from '@/lib/analytics/events';
 
 /**
  * Bottone onboarding Stripe Connect per seller.
@@ -55,6 +56,7 @@ export default function StripeConnectButton() {
       if (!res.ok || !data?.url) {
         throw new Error(data?.error?.message ?? data?.error ?? 'Errore avvio onboarding');
       }
+      trackSellerOnboardingStarted();
       window.location.assign(data.url as string);
     } catch (err) {
       toast.error(friendlyError(err));

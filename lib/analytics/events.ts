@@ -104,20 +104,30 @@ export const trackCheckoutStep = (
 export const trackCouponApplied = (code: string, discountCents: number) =>
   track('coupon_applied', { code, discount_cents: discountCents });
 
+export type GaItem = { id: string; name?: string; priceCents?: number; quantity?: number; storeName?: string };
+
 export const trackOrderPlaced = (
   orderId: string,
   totalCents: number,
   paymentMethod: string,
   sellerId: string,
-  extra?: { coupon?: string },
+  extra?: { coupon?: string; items?: GaItem[] },
 ) => {
   track('order_placed', { order_id: orderId, total_cents: totalCents, payment_method: paymentMethod, seller_id: sellerId });
+  // Fix #16: items inclusi nel purchase per abilitare i report prodotto GA4.
   ga('purchase', {
     transaction_id: orderId,
     currency: 'EUR',
     value: eur(totalCents),
     payment_type: paymentMethod,
     coupon: extra?.coupon,
+    items: extra?.items?.map(it => ({
+      item_id: it.id,
+      item_name: it.name,
+      price: it.priceCents ? eur(it.priceCents) : undefined,
+      quantity: it.quantity,
+      item_brand: it.storeName,
+    })),
   });
 };
 

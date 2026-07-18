@@ -167,7 +167,17 @@ export async function middleware(req: NextRequest) {
   // Eccezione: venditori loggati sul catalogo → gate modalità acquisto.
   if (!needsAuth && !needsSellerGate) return res;
 
-  if (!SUPABASE_URL || !SUPABASE_KEY) return res;
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    // Fail-closed: se mancano le env Supabase, blocca le rotte protette invece di lasciarle passare.
+    if (needsAuth) {
+      const url = req.nextUrl.clone();
+      url.pathname = '/';
+      const r = NextResponse.redirect(url);
+      r.headers.set('Content-Security-Policy', csp);
+      return r;
+    }
+    return res;
+  }
 
   // Client server-side che legge/scrive cookie su richiesta+risposta.
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_KEY, {

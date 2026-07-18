@@ -98,7 +98,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       }
       if (maxPrice !== undefined) q = q.lte('price', maxPrice);
       if (minPrice !== undefined) q = q.gte('price', minPrice);
-      if (limit)      q = q.limit(limit);
+      q = q.limit(limit ?? 96);
       const { data, error } = await q;
       if (error) throw error;
       const rows = data ?? [];

@@ -28,6 +28,7 @@ import { Card } from '@/components/ui/Card';
 import { ContactSheet, type ContactTarget } from '@/components/orders/ContactSheet';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
+import { trackOrderCanceled } from '@/lib/analytics/events';
 import {
   Package, CheckCircle2, Star, Repeat, Undo2, AlertTriangle,
   Clock, XCircle, Check, MapPin, Phone, Store, Bike, Trash2, Banknote,
@@ -176,6 +177,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
       }
     },
     onSuccess: () => {
+      trackOrderCanceled(id);
       qc.invalidateQueries({ queryKey: queryKeys.orders.detail(id) });
       qc.invalidateQueries({ queryKey: queryKeys.orders.all });
       toast.success('Ordine annullato');

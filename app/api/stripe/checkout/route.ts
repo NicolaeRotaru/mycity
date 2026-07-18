@@ -247,6 +247,11 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
     couponFreeShipping = couponRes.freeShipping;
     validatedCouponCode = couponRes.coupon.code;
+    // Claim atomico prima di procedere con Stripe (fix #36 — race condition coupon).
+    const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
+    if (claimErr || !claimed) {
+      return ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.');
+    }
   }
 
   // 4b. Spedizione per gruppo: ricalcolata server-side con la STESSA logica
