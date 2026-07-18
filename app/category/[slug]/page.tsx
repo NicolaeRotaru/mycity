@@ -2,7 +2,9 @@
 import { use, useRef, useState } from "react";
 
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { trackCategoryViewed } from '@/lib/analytics/events';
 import { Filter, RotateCcw, Truck, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
@@ -14,6 +16,7 @@ import { queryKeys } from '@/lib/queries/keys';
 export default function CategoryPage(props: { params: Promise<{ slug: string }> }) {
   const params = use(props.params);
   const { slug } = params;
+  useEffect(() => { trackCategoryViewed(slug); }, [slug]);
   const t = useTranslations('search');
   const ta = useTranslations('actions');
   const tn = useTranslations('nav');

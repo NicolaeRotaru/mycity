@@ -17,6 +17,7 @@ import SimpleQR from '@/components/SimpleQR';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
+import { trackSellerOrderAccepted } from '@/lib/analytics/events';
 import EmptyState from '@/components/EmptyState';
 import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock, Banknote } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
@@ -214,7 +215,8 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         });
       }
     },
-    onSuccess: () => {
+    onSuccess: (_data, params) => {
+      if (params.newStatus === 'ACCEPTED' && order) trackSellerOrderAccepted(order.id);
       qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
       qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
       toast.success('Stato aggiornato');

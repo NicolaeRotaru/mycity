@@ -21,6 +21,7 @@ import SearchBar from './SearchBar';
 import CategoryBar from './CategoryBar';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
+import { trackSignedOut } from '@/lib/analytics/events';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
 
@@ -51,6 +52,7 @@ export default function Navbar() {
   // MobileTabBar in fondo.
 
   const handleSignOut = async () => {
+    trackSignedOut();
     await supabase.auth.signOut();
     router.push('/sign-in');
     router.refresh();

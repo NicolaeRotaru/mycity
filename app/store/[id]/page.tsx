@@ -13,10 +13,14 @@ import { useStorePageData } from '@/components/store-sections/useStorePageData';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import EmptyState from '@/components/EmptyState';
+import { useEffect } from 'react';
+import { trackStoreViewed } from '@/lib/analytics/events';
 
 export default function StorePage(props: { params: Promise<{ id: string }> }) {
   const { id } = use(props.params);
   const data = useStorePageData(id);
+
+  useEffect(() => { trackStoreViewed(id); }, [id]);
 
   // Identità del visitatore: se è il proprietario del negozio mostriamo una
   // scorciatoia per modificare la vetrina (stesso pattern delle pagine custom).
