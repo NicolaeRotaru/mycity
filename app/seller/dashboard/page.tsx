@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
+import { trackSellerOnboardingCompleted } from '@/lib/analytics/events';
 import { useProfile } from '@/components/hooks/useProfile';
 import StoreAvatar from '@/components/StoreAvatar';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
@@ -42,6 +43,7 @@ export default function SellerDashboard() {
         } catch {
           /* il webhook resta come fallback */
         }
+        trackSellerOnboardingCompleted();
         queryClient.invalidateQueries({ queryKey: ['seller'] });
         toast.success('Configurazione pagamenti aggiornata!');
       })();
