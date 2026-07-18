@@ -85,7 +85,26 @@ function StripeReturnHandler() {
           const raw = sessionStorage.getItem('mc_pending_purchase');
           const p = raw ? (JSON.parse(raw) as { valueCents?: number; coupon?: string | null; sellerId?: string }) : null;
           if (p?.valueCents) {
-            trackOrderPlaced(sessionId, p.valueCents, 'card', p.sellerId ?? 'multi', { coupon: p.coupon ?? undefined });
+            // Recupera l'UUID reale dell'ordine creato dal webhook Stripe.
+            // Il webhook può arrivare leggermente dopo il redirect del buyer:
+            // se non trovato ora usiamo sessionId come fallback (dedup GA4 garantito).
+            supabase
+              .from('orders')
+              .select('id')
+              .eq('stripe_session_id', sessionId)
+              .maybeSingle()
+              .then(({ data }) => {
+                trackOrderPlaced(
+                  data?.id ?? sessionId,
+                  p.valueCents!,
+                  'card',
+                  p.sellerId ?? 'multi',
+                  { coupon: p.coupon ?? undefined },
+                );
+              })
+              .catch(() => {
+                trackOrderPlaced(sessionId, p.valueCents!, 'card', p.sellerId ?? 'multi', { coupon: p.coupon ?? undefined });
+              });
           }
           sessionStorage.setItem(dedupKey, '1');
           sessionStorage.removeItem('mc_pending_purchase');
