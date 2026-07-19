@@ -23,7 +23,7 @@ services:
     region: frankfurt # EU per GDPR + latenza Italia
     branch: main
     autoDeploy: true
-    buildCommand: npm ci --legacy-peer-deps && npm run build
+    buildCommand: npm ci --legacy-peer-deps && NODE_OPTIONS=--max-old-space-size=4096 npm run build
     startCommand: npm start
     # Health check sull'endpoint che verifica DAVVERO il DB + env critiche
     # (ritorna 503 se degradato). NON usare "/" : la home può rispondere 200
