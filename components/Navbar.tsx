@@ -169,13 +169,15 @@ export default function Navbar() {
         {/* MOBILE */}
         <div className="md:hidden">
           <div className="container mx-auto px-3 py-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <Link href="/" className="text-xl font-serif font-bold whitespace-nowrap leading-none">
+            <div className="flex items-center gap-2">
+              <Link href="/" className="shrink-0 text-xl font-serif font-bold whitespace-nowrap leading-none">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
-              <LocationPill compact />
+              <div className="min-w-0 flex-1 flex justify-center">
+                <LocationPill compact />
+              </div>
               {isAuthenticated && canPurchase && (
-                <Link href="/cart" aria-label="Carrello" className="relative ml-auto inline-flex p-2 text-white">
+                <Link href="/cart" aria-label="Carrello" className="relative shrink-0 inline-flex p-2 text-white">
                   <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                   {cartCount > 0 && (
                     <span className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
@@ -187,14 +189,14 @@ export default function Navbar() {
               {!isAuthenticated && !isLoading && (
                 <>
                   {cartCount > 0 ? (
-                    <Link href="/cart" aria-label="Carrello" className="relative ml-auto inline-flex p-2 text-white">
+                    <Link href="/cart" aria-label="Carrello" className="relative shrink-0 inline-flex p-2 text-white">
                       <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                       <span className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
                         {cartCount > 99 ? '99+' : cartCount}
                       </span>
                     </Link>
                   ) : (
-                    <Link href="/sign-in" className="ml-auto text-sm font-medium hover:text-accent-300 focus-visible:outline-white">Accedi</Link>
+                    <Link href="/sign-in" className="shrink-0 text-sm font-medium hover:text-accent-300 focus-visible:outline-white">Accedi</Link>
                   )}
                 </>
               )}
