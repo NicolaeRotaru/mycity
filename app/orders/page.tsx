@@ -88,11 +88,13 @@ function StripeReturnHandler() {
             // Recupera l'UUID reale dell'ordine creato dal webhook Stripe.
             // Il webhook può arrivare leggermente dopo il redirect del buyer:
             // se non trovato ora usiamo sessionId come fallback (dedup GA4 garantito).
-            supabase
-              .from('orders')
-              .select('id')
-              .eq('stripe_session_id', sessionId)
-              .maybeSingle()
+            void Promise.resolve(
+              supabase
+                .from('orders')
+                .select('id')
+                .eq('stripe_session_id', sessionId)
+                .maybeSingle(),
+            )
               .then(({ data }) => {
                 trackOrderPlaced(
                   data?.id ?? sessionId,
