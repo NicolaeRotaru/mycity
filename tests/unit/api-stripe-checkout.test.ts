@@ -19,6 +19,7 @@ const S1 = '22222222-2222-2222-2222-222222222222';
 // Stato configurabile per-test (pattern di tests/unit/api-returns.test.ts).
 const state: {
   user: { id: string; email: string | null; email_confirmed_at: string | null };
+  profile: { id: string; role: string; is_approved: boolean };
   stripeConfigured: boolean;
   products: unknown[];
   sellers: unknown[];
@@ -26,6 +27,7 @@ const state: {
   shipping: number;
 } = {
   user: { id: 'buyer-1', email: 'b@x.com', email_confirmed_at: '2020-01-01T00:00:00Z' },
+  profile: { id: 'buyer-1', role: 'buyer', is_approved: true },
   stripeConfigured: true,
   products: [],
   sellers: [],
@@ -36,12 +38,16 @@ const state: {
 // Cattura l'input dell'ultima Checkout Session creata.
 const createSession = vi.fn(async (_input: unknown) => ({ id: 'cs_test', url: 'https://stripe.test/cs_test' }));
 
-vi.mock('@/lib/api/middleware', () => ({
-  withAuthRateLimit:
-    (_opts: unknown, handler: (ctx: { user: typeof state.user; req: Request }) => unknown) =>
-    (req: Request) =>
-      handler({ user: state.user, req }),
-}));
+vi.mock('@/lib/api/middleware', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/middleware')>();
+  return {
+    ...actual,
+    withAuthRateLimit:
+      (_opts: unknown, handler: (ctx: { user: typeof state.user; profile: typeof state.profile; req: Request }) => unknown) =>
+      (req: Request) =>
+        handler({ user: state.user, profile: state.profile, req }),
+  };
+});
 
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
@@ -75,7 +81,10 @@ vi.mock('@/lib/supabase/server', () => {
     }
     return { insert: () => Promise.resolve({ error: null }) };
   });
-  const rpc = vi.fn(() => Promise.resolve({ data: 0, error: null }));
+  const rpc = vi.fn((fn: string) => {
+    if (fn === 'claim_coupon') return Promise.resolve({ data: true, error: null });
+    return Promise.resolve({ data: 0, error: null });
+  });
   return {
     getServerSupabase: vi.fn(() => ({ from: serverFrom, rpc })),
     getAdminSupabase: vi.fn(() => ({ from: adminFrom, rpc })),
@@ -116,6 +125,7 @@ describe('POST /api/stripe/checkout — anti-tampering importi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.user = { id: 'buyer-1', email: 'b@x.com', email_confirmed_at: '2020-01-01T00:00:00Z' };
+    state.profile = { id: 'buyer-1', role: 'buyer', is_approved: true };
     state.stripeConfigured = true;
     state.products = [
       { id: P1, name: 'Prodotto A', price: 10, images: ['a.jpg'], seller_id: S1, stock: 50, status: 'available' },

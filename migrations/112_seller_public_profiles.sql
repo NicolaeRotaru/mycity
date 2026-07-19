@@ -1,4 +1,4 @@
--- 107: Sprint 1 radiografia — vetrina pubblica negozi senza leak PII/KYC/finanza
+-- 112: Sprint 1 radiografia — vetrina pubblica negozi senza leak PII/KYC/finanza
 --
 -- Problema: la policy "Anyone can view approved seller profiles" espone l'intera
 -- riga profiles (IBAN, KYC, Stripe ID, wallet) a chiunque via PostgREST.
