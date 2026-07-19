@@ -175,17 +175,28 @@ export default function Navbar() {
               </Link>
               <LocationPill compact />
               {isAuthenticated && canPurchase && (
-                <Link href="/cart" aria-label="Carrello" className="relative ml-auto p-2">
-                  <ShoppingCart size={22} strokeWidth={2} />
+                <Link href="/cart" aria-label="Carrello" className="relative ml-auto inline-flex p-2 text-white">
+                  <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                   {cartCount > 0 && (
-                    <span className="absolute top-0 right-0 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+                    <span className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
                       {cartCount > 99 ? '99+' : cartCount}
                     </span>
                   )}
                 </Link>
               )}
               {!isAuthenticated && !isLoading && (
-                <Link href="/sign-in" className="ml-auto text-sm font-medium hover:text-accent-300 focus-visible:outline-white">Accedi</Link>
+                <>
+                  {cartCount > 0 ? (
+                    <Link href="/cart" aria-label="Carrello" className="relative ml-auto inline-flex p-2 text-white">
+                      <ShoppingCart size={22} strokeWidth={2} aria-hidden />
+                      <span className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                        {cartCount > 99 ? '99+' : cartCount}
+                      </span>
+                    </Link>
+                  ) : (
+                    <Link href="/sign-in" className="ml-auto text-sm font-medium hover:text-accent-300 focus-visible:outline-white">Accedi</Link>
+                  )}
+                </>
               )}
             </div>
             <div className="mt-2">
