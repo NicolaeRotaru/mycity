@@ -549,7 +549,6 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <SellerCard
               sellerId={(sellerProfile?.id ?? product.seller_id) as string}
               storeName={product.profiles?.store_name ?? 'Negozio'}
-              verified={product.profiles?.is_approved ?? undefined}
             />
           )}
 

@@ -13,6 +13,8 @@ export type SellerPublicProfile = {
   store_media?: unknown;
   store_description?: string | null;
   is_approved?: boolean;
+  stripe_charges_enabled?: boolean | null;
+  stripe_payouts_enabled?: boolean | null;
   role?: string | null;
   offers_express?: boolean | null;
   founded_year?: number | null;
@@ -20,7 +22,7 @@ export type SellerPublicProfile = {
 };
 
 const PUBLIC_SELLER_SELECT =
-  'id, store_name, store_address, store_lat, store_lng, store_phone, store_logo, store_hours, store_media, store_description, is_approved, role, offers_express, founded_year, created_at';
+  'id, store_name, store_address, store_lat, store_lng, store_phone, store_logo, store_hours, store_media, store_description, is_approved, stripe_charges_enabled, stripe_payouts_enabled, role, offers_express, founded_year, created_at';
 
 /** Carica le vetrine pubbliche per un insieme di seller id (batch). */
 export async function fetchSellerPublicMap(

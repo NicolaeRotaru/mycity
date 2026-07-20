@@ -19,7 +19,7 @@ export function useStorePageData(id: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('seller_public_profiles')
-        .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year')
+        .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year')
         .eq('id', id)
         .single();
       if (error) throw error;
