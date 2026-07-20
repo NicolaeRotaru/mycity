@@ -75,7 +75,7 @@ NEXT_PUBLIC_WHATSAPP_NUMBER=+393000000000
 
 # Observability (opzionale ma fortemente consigliato)
 NEXT_PUBLIC_POSTHOG_KEY=phc_xxx
-NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 NEXT_PUBLIC_SENTRY_DSN=https://xxx@oxxx.ingest.sentry.io/xxx
 
 # Google Analytics 4 (opzionale)

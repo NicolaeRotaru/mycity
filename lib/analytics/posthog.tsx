@@ -14,15 +14,15 @@ import { readConsent } from '@/lib/consent';
  *   Cookie consent rispettato via opt_in/opt_out."
  * - SRE: "Lazy import per non gonfiare bundle iniziale (PostHog ~50KB)."
  *
- * Setup:
- *   1. Crea account su https://eu.posthog.com (EU instance, GDPR-friendly)
- *   2. Copia Project API Key
- *   3. Aggiungi su Render env: NEXT_PUBLIC_POSTHOG_KEY=phc_xxx
- *   4. Aggiungi: NEXT_PUBLIC_POSTHOG_HOST=https://eu.i.posthog.com
+ * Setup (account MyCity = US):
+ *   1. Account su https://us.posthog.com
+ *   2. Copia Project API Key (phc_…)
+ *   3. Render env: NEXT_PUBLIC_POSTHOG_KEY=phc_xxx
+ *   4. Render env: NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
  */
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com';
+const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 
 type PostHogLike = {
   capture: (event: string, props?: Record<string, unknown>) => void;

@@ -57,6 +57,8 @@ services:
         sync: false
       - key: NEXT_PUBLIC_POSTHOG_KEY
         sync: false
+      - key: NEXT_PUBLIC_POSTHOG_HOST
+        value: https://us.i.posthog.com
       - key: NEXT_PUBLIC_SENTRY_DSN
         sync: false
       - key: NEXT_PUBLIC_APP_URL
