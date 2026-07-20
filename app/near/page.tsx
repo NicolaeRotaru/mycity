@@ -21,10 +21,8 @@ type ProductLite = ProductPreview & { seller_id: string };
 
 const fetchNearData = async () => {
   const { data: storesRaw } = await supabase
-    .from('profiles')
-    .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media')
-    .eq('is_approved', true)
-    .not('store_name', 'is', null);
+    .from('seller_public_profiles')
+    .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled');
 
   const stores = (storesRaw ?? []) as Store[];
   const storeIds = stores.map((s) => s.id);

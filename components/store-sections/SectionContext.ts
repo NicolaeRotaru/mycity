@@ -20,6 +20,8 @@ export type StoreContextRow = {
   store_media: unknown;
   store_description: string | null;
   is_approved: boolean | null;
+  stripe_charges_enabled?: boolean | null;
+  stripe_payouts_enabled?: boolean | null;
   founded_year: number | null;
 };
 

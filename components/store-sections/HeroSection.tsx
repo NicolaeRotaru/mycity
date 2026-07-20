@@ -7,6 +7,7 @@ import { ArrowLeft, Instagram, Facebook, Globe, MessageCircle, Music2, Star, Map
 import StoreStoryRing from '@/components/StoreStoryRing';
 import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMediaCarousel';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
+import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
 import { coverClassName, socialLinks, badgeLabel } from '@/lib/store-customization';
 import { isOpenNow, streetFromAddress, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
@@ -162,7 +163,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
           <div className="min-w-[200px] flex-1">
             <h1 className="flex flex-wrap items-center gap-2 font-serif text-[28px] font-extrabold leading-tight text-white sm:text-[34px]">
               <span className="truncate drop-shadow-sm">{store.store_name}</span>
-              {store.is_approved && (
+              {isVerifiedStore(store) && (
                 <span className="text-white/90">
                   <VerifiedBadge size="md" />
                 </span>

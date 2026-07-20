@@ -5,6 +5,7 @@ import { MapPin, Star, ChevronRight, Package } from 'lucide-react';
 import StoreAvatar from './StoreAvatar';
 import StoreMediaCarousel, { type StoreMediaItem } from './StoreMediaCarousel';
 import { VerifiedBadge } from './ui/VerifiedBadge';
+import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 
@@ -15,6 +16,9 @@ export type StoreCardData = {
   store_logo: string | null;
   store_hours: StoreHours | null;
   store_media?: StoreMediaItem[] | null;
+  is_approved?: boolean | null;
+  stripe_charges_enabled?: boolean | null;
+  stripe_payouts_enabled?: boolean | null;
 };
 
 export type ProductPreview = {
@@ -73,7 +77,7 @@ const StorePreviewCard = ({ store, products = [], reviews, distanceKm, compact =
         <Link href={storeHref} className="block">
           <h3 className="inline-flex items-center gap-1.5 truncate text-[15px] font-bold text-ink-900 transition-colors group-hover:text-primary-700">
             <span className="truncate">{store.store_name}</span>
-            <VerifiedBadge size="sm" />
+            {isVerifiedStore(store) && <VerifiedBadge size="sm" />}
           </h3>
         </Link>
 

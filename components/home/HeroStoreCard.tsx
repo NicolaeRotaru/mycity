@@ -8,12 +8,16 @@ import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
+import { isVerifiedStore } from '@/lib/store-trust';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 
 type StoreMediaItem = { type: 'image' | 'video'; url: string };
 type Store = {
   id: string; store_name: string | null; store_address: string | null; store_logo: string | null;
   store_hours?: unknown; store_media?: unknown;
+  is_approved?: boolean | null;
+  stripe_charges_enabled?: boolean | null;
+  stripe_payouts_enabled?: boolean | null;
 };
 type Prod = { id: string; name: string; price: number | string; images: string[] | null };
 type Reviews = { avg: number; count: number };
@@ -43,28 +47,32 @@ export default function HeroStoreCard() {
       firstOfMonth.setHours(0, 0, 0, 0);
       const monthIso = firstOfMonth.toISOString().slice(0, 10);
 
-      // 1) Negozio del mese (pick admin), se presente.
+      // 1) Negozio del mese (pick admin), se presente — poi vetrina pubblica per i flag trust.
       const { data: som } = await supabase
         .from('shop_of_month')
-        .select('seller:profiles!shop_of_month_seller_id_fkey ( id, store_name, store_address, store_logo, store_hours, store_media )')
+        .select('seller_id')
         .eq('month', monthIso)
         .maybeSingle();
-      let store = (som as unknown as { seller: Store | null } | null)?.seller ?? null;
+      let storeId = (som as { seller_id?: string } | null)?.seller_id ?? null;
 
-      // 2) Fallback: un negozio reale approvato.
-      if (!store) {
+      // 2) Fallback: ultimo negozio approvato in vetrina pubblica.
+      if (!storeId) {
         const { data: s } = await supabase
-          .from('profiles')
-          .select('id, store_name, store_address, store_logo, store_hours, store_media')
-          .eq('role', 'seller')
-          .eq('is_approved', true)
-          .not('store_name', 'is', null)
+          .from('seller_public_profiles')
+          .select('id')
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        store = (s as Store | null) ?? null;
+        storeId = (s as { id?: string } | null)?.id ?? null;
       }
-      if (!store) return null;
+      if (!storeId) return null;
+
+      const { data: storeRow } = await supabase
+        .from('seller_public_profiles')
+        .select('id, store_name, store_address, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled')
+        .eq('id', storeId)
+        .maybeSingle();
+      const store = (storeRow as Store | null) ?? null;
 
       // Prodotti reali + statistiche recensioni (RPC aggregata): la card mostra
       // rating e numero recensioni solo se esistono recensioni vere.
@@ -134,7 +142,7 @@ export default function HeroStoreCard() {
             {/* Nome negozio in SERIF + badge verificato */}
             <div className="flex items-center gap-1.5 min-w-0">
               <h3 className="font-serif font-bold text-lg text-ink-900 truncate">{store.store_name ?? 'Negozio'}</h3>
-              <VerifiedBadge size="sm" />
+              {isVerifiedStore(store) && <VerifiedBadge size="sm" />}
             </div>
 
             {/* Riga meta: rating · recensioni · zona (tutto data-driven) */}
@@ -232,7 +240,6 @@ function HeroStorePlaceholder() {
           <div className="p-5 space-y-3">
             <div className="flex items-center gap-1.5 min-w-0">
               <h3 className="font-serif font-bold text-lg text-ink-900 truncate">Salumeria del Borgo</h3>
-              <VerifiedBadge size="sm" />
             </div>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
               <span className="inline-flex items-center gap-1 truncate">

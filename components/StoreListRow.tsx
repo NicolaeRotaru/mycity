@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Star, ChevronRight, Package } from 'lucide-react';
 import StoreAvatar from './StoreAvatar';
 import { VerifiedBadge } from './ui/VerifiedBadge';
+import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import type { StoreCardData, ProductPreview } from './StorePreviewCard';
@@ -41,7 +42,7 @@ const StoreListRow = ({ store, products = [], reviews, distanceKm }: Props) => {
       <div className="min-w-0 flex-1">
         <h3 className="inline-flex items-center gap-1.5 truncate text-[15px] font-bold text-ink-900 group-hover:text-primary-700">
           <span className="truncate">{store.store_name}</span>
-          <VerifiedBadge size="sm" />
+          {isVerifiedStore(store) && <VerifiedBadge size="sm" />}
         </h3>
         {street && <p className="truncate text-xs text-ink-400">{street}</p>}
         <div className="mt-1 flex items-center gap-3 text-xs">

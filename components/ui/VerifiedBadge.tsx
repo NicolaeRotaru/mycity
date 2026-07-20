@@ -2,14 +2,8 @@ import { BadgeCheck } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 /**
- * Verified seller badge — appare quando profilo.is_approved = true.
- *
- * Esperti consultati:
- * - Trust & Safety: "Badge verified = trust signal #1 marketplace. Etsy +12%
- *   conversion sui sellers verified vs non. Stripe Connect best-practice."
- * - Content Designer: "Hover/tooltip spiega cosa significa 'verificato'.
- *   No solo icona muta."
- */
+ * Verified seller badge — solo se `isVerifiedStore(profile)` è true
+ * (approvato + Stripe charges + payouts attivi).
 
 type Props = {
   size?: 'sm' | 'md' | 'lg';

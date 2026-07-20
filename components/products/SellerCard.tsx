@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { useFollowStore } from '@/components/hooks/useFollowStore';
+import { isVerifiedStore } from '@/lib/store-trust';
 
 /**
  * Scheda venditore della PDP: avatar, nome, badge verificato, valutazione,
@@ -36,6 +37,7 @@ const ONTIME_WINDOW_MS = 48 * 60 * 60 * 1000;
 type SellerStats = {
   store_logo: string | null;
   created_at: string | null;
+  verified: boolean;
   rating: number | null;
   reviewCount: number;
   onTimePct: number | null;
@@ -44,17 +46,19 @@ type SellerStats = {
 export function SellerCard({
   sellerId,
   storeName,
-  verified,
 }: {
   sellerId: string;
   storeName: string;
-  verified?: boolean;
 }) {
   const { data } = useQuery({
     queryKey: queryKeys.stores.sellerCard(sellerId),
     queryFn: async (): Promise<SellerStats> => {
       const [profileRes, reviewsRes, ordersRes] = await Promise.all([
-        supabase.from('profiles').select('store_logo, created_at').eq('id', sellerId).maybeSingle(),
+        supabase
+          .from('seller_public_profiles')
+          .select('store_logo, created_at, is_approved, stripe_charges_enabled, stripe_payouts_enabled')
+          .eq('id', sellerId)
+          .maybeSingle(),
         supabase.from('store_reviews').select('rating').eq('store_id', sellerId),
         // Ordini consegnati del negozio: bastano created_at + delivered_at per la
         // derivazione "in tempo" (entro 48h). Query leggera, capata a 200 righe.
@@ -86,6 +90,7 @@ export function SellerCard({
       return {
         store_logo: profileRes.data?.store_logo ?? null,
         created_at: profileRes.data?.created_at ?? null,
+        verified: isVerifiedStore(profileRes.data),
         rating,
         reviewCount,
         onTimePct,
@@ -132,7 +137,7 @@ export function SellerCard({
       <div className="min-w-0 flex-1">
         <Link href={`/store/${sellerId}`} className="flex items-center gap-1.5 hover:underline">
           <span className="truncate font-semibold text-ink-900">{storeName}</span>
-          {verified && <BadgeCheck size={16} className="shrink-0 text-primary-600" aria-hidden />}
+          {data?.verified && <BadgeCheck size={16} className="shrink-0 text-primary-600" aria-hidden />}
         </Link>
         <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-ink-500">
           {data?.rating != null && (
