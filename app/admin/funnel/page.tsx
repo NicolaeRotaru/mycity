@@ -38,12 +38,24 @@ export default function AdminFunnelPage() {
     queryFn: async (): Promise<FunnelData> => {
       const since = new Date(Date.now() - periodDays * 86_400_000).toISOString();
 
-      // Buyer signups nel periodo
+      // Iscritti: la finestra deve coprire ANCHE le coorti mostrate sotto.
+      //
+      // Il difetto: questa lista prendeva solo gli iscritti del periodo scelto
+      // (per default 90 giorni), ma il calcolo delle coorti scorre sempre gli
+      // ultimi quattro mesi. Le coorti fuori finestra risultavano vuote o
+      // dimezzate, e le percentuali di ritorno erano numeri inventati — nel
+      // senso letterale: calcolati su gente che la query non aveva caricato.
+      const inizioCoorti = new Date();
+      inizioCoorti.setMonth(inizioCoorti.getMonth() - 3);
+      inizioCoorti.setDate(1);
+      inizioCoorti.setHours(0, 0, 0, 0);
+      const daQuando = new Date(since) < inizioCoorti ? since : inizioCoorti.toISOString();
+
       const { data: signupsList } = await supabase
         .from('profiles')
         .select('id, created_at')
         .eq('role', 'buyer')
-        .gte('created_at', since);
+        .gte('created_at', daQuando);
 
       type Signup = { id: string; created_at: string };
       const userIds = ((signupsList ?? []) as Signup[]).map((u) => u.id);
@@ -68,7 +80,14 @@ export default function AdminFunnelPage() {
       let firstOrderEver = 0;
       let multipleOrders = 0;
 
-      for (const u of (signupsList ?? [])) {
+      // Il funnel guarda il PERIODO scelto; le coorti sotto guardano i quattro
+      // mesi. La lista caricata copre il piu' ampio dei due, quindi qui si
+      // filtra: senza questo, cambiare il periodo non cambiava i numeri.
+      const iscrittiDelPeriodo = ((signupsList ?? []) as Signup[]).filter(
+        (u) => new Date(u.created_at) >= new Date(since),
+      );
+
+      for (const u of iscrittiDelPeriodo) {
         const userOrders = (orderMap.get(u.id) ?? []).sort((a, b) => a.getTime() - b.getTime());
         if (userOrders.length === 0) continue;
         firstOrderEver++;
@@ -114,7 +133,7 @@ export default function AdminFunnelPage() {
       }
 
       return {
-        signups: signupsList?.length ?? 0,
+        signups: iscrittiDelPeriodo.length,
         firstOrderWithin7d,
         firstOrderEver,
         multipleOrders,

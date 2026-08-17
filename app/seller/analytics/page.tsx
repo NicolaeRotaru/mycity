@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { metricheVenditore } from '@/lib/metriche-venditore';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Eye, ShoppingCart, Star, Sparkles, Lightbulb, PackageX, type LucideIcon } from 'lucide-react';
@@ -63,7 +64,7 @@ export default function SellerAnalyticsPage() {
           .gte('viewed_at', since30),
         supabase
           .from('orders')
-          .select('id, total_price, delivery_status, created_at')
+          .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, created_at')
           .eq('seller_id', userId!)
           .gte('created_at', since30),
         supabase
@@ -83,10 +84,12 @@ export default function SellerAnalyticsPage() {
 
       const orders30 = orders.length;
       const orders7 = orders.filter((o) => o.created_at >= since7).length;
-      const revenue30 = orders.filter((o) => o.delivery_status === 'DELIVERED')
-        .reduce((s, o) => s + Number(o.total_price || 0), 0);
-      const revenue7 = orders.filter((o) => o.created_at >= since7 && o.delivery_status === 'DELIVERED')
-        .reduce((s, o) => s + Number(o.total_price || 0), 0);
+      // Una definizione sola, da lib/metriche-venditore: qui il numero mostrato
+      // e' quello che resta AL NEGOZIO, senza spedizione, quota di consegna e
+      // commissione. Prima era il totale degli ordini consegnati — soldi che in
+      // parte non sono suoi — e le altre due pagine ne davano altri due valori.
+      const revenue30 = metricheVenditore(orders as never[]).tuoNettoCents / 100;
+      const revenue7 = metricheVenditore(orders as never[], new Date(since7)).tuoNettoCents / 100;
 
       const conversionRate = views30 > 0 ? (orders30 / views30) * 100 : 0;
 

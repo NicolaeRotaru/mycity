@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { ordineContaNelFatturato } from '@/lib/metriche-venditore';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -66,7 +67,7 @@ export default function SellerDashboard() {
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('seller_id', user.id).eq('status', 'available'),
         supabase.from('order_items')
-          .select('quantity, unit_price, orders(created_at), products!inner(seller_id)')
+          .select('quantity, unit_price, orders(created_at, delivery_status, payment_status), products!inner(seller_id)')
           .eq('products.seller_id', user.id),
         supabase.from('store_reviews').select('rating').eq('store_id', user.id),
       ]);
@@ -74,9 +75,21 @@ export default function SellerDashboard() {
       type OrderItem = {
         unit_price: number | string;
         quantity: number;
-        orders?: { created_at: string | null } | null;
+        orders?: { created_at: string | null; delivery_status?: string | null; payment_status?: string | null } | null;
       };
-      const itemsArr = (items ?? []) as unknown as OrderItem[];
+      // Solo gli articoli di ordini pagati e non annullati.
+      //
+      // Prima si sommava tutto, senza guardare lo stato: dentro c'erano ordini
+      // annullati e ordini mai pagati, quindi questo riquadro mostrava il numero
+      // piu' alto delle tre pagine del venditore — e nessuno dei tre coincideva
+      // con gli altri. La definizione unica sta in lib/metriche-venditore.
+      const itemsArr = ((items ?? []) as unknown as OrderItem[]).filter((it) =>
+        ordineContaNelFatturato({
+          total_price: 0,
+          delivery_status: it.orders?.delivery_status ?? null,
+          payment_status: it.orders?.payment_status ?? null,
+        }),
+      );
       const revenue = itemsArr.reduce((s, it) => s + Number(it.unit_price) * it.quantity, 0);
 
       const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);

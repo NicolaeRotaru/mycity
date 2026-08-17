@@ -19,6 +19,7 @@ import BuyerOnboardingTour from '@/components/BuyerOnboardingTour';
 import PWAInstallBanner from '@/components/PWAInstallBanner';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import PostHogProvider from '@/lib/analytics/posthog';
+import EventiAccessoOAuth from '@/components/analytics/EventiAccessoOAuth';
 import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
@@ -144,6 +145,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </Suspense>
         <Suspense fallback={null}>
           <PostHogProvider />
+        </Suspense>
+        {/* Registrazione e accesso via Google: gli eventi del funnel li emette
+            questo, perché la rotta di ritorno gira sul server. */}
+        <Suspense fallback={null}>
+          <EventiAccessoOAuth />
         </Suspense>
         <SentryProvider />
         <ServiceWorkerRegister />

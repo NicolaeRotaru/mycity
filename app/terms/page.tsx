@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
 
 export const metadata = {
@@ -203,9 +204,10 @@ export default function TermsPage() {
           <li>collaborare nella gestione di dispute, resi e reclami.</li>
         </ul>
         <p>
-          La <strong>commissione di servizio</strong> trattenuta da MyCity è pari all&apos;8% del
-          valore dell&apos;ordine, IVA esclusa. Eventuali variazioni saranno comunicate con
-          preavviso di 30 giorni come da art. 15.
+          La <strong>commissione di servizio</strong> trattenuta da MyCity è pari al{' '}
+          {MARKETPLACE_FEE_BPS / 100}% del subtotale dei prodotti, IVA esclusa; non si applica
+          alle spese di spedizione né alla quota di consegna. Eventuali variazioni saranno
+          comunicate con preavviso di 30 giorni come da art. 15.
         </p>
       </LegalSection>
 

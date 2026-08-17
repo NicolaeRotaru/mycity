@@ -9,13 +9,19 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
+import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/order-status';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { AdminPageTitle, AdminSectionLabel, AdminStatCard } from '@/components/admin/AdminUI';
 
-const TAKE_RATE = 0.14;
+// Qui c'era `const TAKE_RATE = 0.14` scritto a mano, mentre la commissione
+// trattenuta e' il 10% (MARKETPLACE_FEE_BPS in lib/constants) e le Condizioni
+// d'uso dicevano un terzo numero, l'8%. Tre aliquote diverse per lo stesso
+// prodotto: ogni decisione presa guardando questo riquadro era presa su un
+// numero inventato. Ora l'aliquota serve solo per l'etichetta, e l'importo
+// arriva sommato dal database.
 
 const HEALTH_TONE: Record<string, { bg: string; fg: string }> = {
   olive:     { bg: 'bg-olive-100',     fg: 'text-olive-700' },
@@ -47,50 +53,51 @@ export default function AdminDashboard() {
   const { data: stats, isLoading } = useQuery({
     queryKey: queryKeys.admin.stats,
     queryFn: async () => {
-      const [profilesRes, ordersRes, productsRes] = await Promise.all([
-        supabase.from('profiles').select('role'),
-        supabase.from('orders').select('total_price, delivery_status, created_at'),
-        supabase.from('products').select('status'),
-      ]);
+      // I conti si fanno nel database, non nel browser.
+      //
+      // Prima queste tre righe scaricavano le tabelle INTERE e sommavano qui,
+      // senza limite dichiarato. PostgREST però ha un tetto di righe per
+      // risposta: superato quello la risposta arriva troncata e non lo dice.
+      // Appena il marketplace cresce, ogni numero di questa pagina comincia a
+      // mentire per difetto — e nessuno lo nota, perché il numero c'è: sembra
+      // solo più piccolo. Ora una funzione conta dove stanno i dati.
+      const { data, error } = await supabase.rpc('admin_kpi');
+      if (error) throw error;
 
-      const profiles = profilesRes.data ?? [];
-      const orders = ordersRes.data ?? [];
-      const products = productsRes.data ?? [];
-
-      const byRole: Record<string, number> = {};
-      for (const p of profiles) byRole[p.role] = (byRole[p.role] ?? 0) + 1;
-
-      const byStatus: Record<string, number> = {};
-      for (const o of orders) byStatus[o.delivery_status] = (byStatus[o.delivery_status] ?? 0) + 1;
-
-      type Order = { delivery_status: string; total_price: string | number; created_at: string };
-      type Product = { status: string };
-
-      const totalRevenue = (orders as Order[])
-        .filter((o) => o.delivery_status === 'DELIVERED')
-        .reduce((s, o) => s + Number(o.total_price), 0);
-
-      const sevenDaysAgo = new Date(Date.now() - 7 * 86400_000).toISOString();
-      const recent = (orders as Order[]).filter((o) => o.created_at >= sevenDaysAgo).length;
+      const k = (data ?? {}) as {
+        utenti?: Record<string, number>;
+        utenti_totali?: number;
+        ordini_totali?: number;
+        ordini_per_stato?: Record<string, number>;
+        incassato_cents?: number;
+        ordini_7g?: number;
+        prodotti_totali?: number;
+        prodotti_disponibili?: number;
+        commissioni_cents?: number;
+      };
+      const ruoli = k.utenti ?? {};
 
       return {
         users: {
-          total: profiles.length,
-          buyers: byRole.buyer ?? 0,
-          sellers: byRole.seller ?? 0,
-          riders: byRole.rider ?? 0,
-          admins: byRole.admin ?? 0,
+          total: k.utenti_totali ?? 0,
+          buyers: ruoli.buyer ?? 0,
+          sellers: ruoli.seller ?? 0,
+          riders: ruoli.rider ?? 0,
+          admins: ruoli.admin ?? 0,
         },
         orders: {
-          total: orders.length,
-          recent,
-          byStatus,
-          revenue: totalRevenue,
+          total: k.ordini_totali ?? 0,
+          recent: k.ordini_7g ?? 0,
+          byStatus: (k.ordini_per_stato ?? {}) as Record<string, number>,
+          revenue: (k.incassato_cents ?? 0) / 100,
         },
         products: {
-          total: products.length,
-          available: (products as Product[]).filter((p) => p.status === 'available').length,
+          total: k.prodotti_totali ?? 0,
+          available: k.prodotti_disponibili ?? 0,
         },
+        // La commissione REALE registrata sugli ordini, non una stima su
+        // un'aliquota scritta a mano nella pagina.
+        commissioniReali: (k.commissioni_cents ?? 0) / 100,
       };
     },
     refetchInterval: 30_000,
@@ -104,7 +111,12 @@ export default function AdminDashboard() {
   const gmv = stats.orders.revenue;
   const delivered = stats.orders.byStatus.DELIVERED ?? 0;
   const canceled = stats.orders.byStatus.CANCELED ?? 0;
-  const commissions = gmv * TAKE_RATE;
+  // La commissione trattenuta davvero, sommata dagli ordini. Prima era
+  // `gmv * 0.14`: un'aliquota scritta a mano (14%) diversa da quella reale
+  // (10%), applicata anche a spedizione e quota di consegna che non sono
+  // soggette a commissione. Due errori nello stesso numero, entrambi verso
+  // l'alto.
+  const commissions = stats.commissioniReali;
   const aov = delivered > 0 ? gmv / delivered : 0;
   const closedOrders = stats.orders.total - (stats.orders.byStatus.NEW ?? 0) - (stats.orders.byStatus.ACCEPTED ?? 0);
   const fulfillmentRate = closedOrders > 0 ? (delivered / closedOrders) * 100 : 0;
@@ -124,7 +136,7 @@ export default function AdminDashboard() {
         <AdminSectionLabel icon={Activity}>Salute del marketplace</AdminSectionLabel>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
           <HealthTile icon={Euro} tone="olive" label="GMV (ordini consegnati)" value={formatPrice(gmv)} hint={`AOV ${formatPrice(aov)}`} />
-          <HealthTile icon={Percent} tone="primary" label={`Commissioni (take-rate ${Math.round(TAKE_RATE * 100)}%)`} value={formatPrice(commissions)} hint="stima sul GMV consegnato" />
+          <HealthTile icon={Percent} tone="primary" label={`Commissioni (${MARKETPLACE_FEE_BPS / 100}% del subtotale)`} value={formatPrice(commissions)} hint="trattenuta reale sugli ordini consegnati" />
           <HealthTile icon={Timer} tone="accent" label="Tasso di consegna" value={`${fulfillmentRate.toFixed(1)}%`} hint="obiettivo ≥ 95%" />
           <HealthTile icon={Store} tone="secondary" label="Tasso di annullamento" value={`${cancelRate.toFixed(1)}%`} hint={`${canceled} ordini annullati`} />
         </div>

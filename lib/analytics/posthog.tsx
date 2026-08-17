@@ -108,7 +108,21 @@ export default function PostHogProvider() {
   // revoca) senza aspettare la navigazione successiva.
   useEffect(() => {
     if (!POSTHOG_KEY) return;
-    const onConsentChange = () => { void getPosthog(); };
+    const onConsentChange = () => {
+      void getPosthog().then((ph) => {
+        if (!ph) return;
+        // Emette la pagina CORRENTE appena arriva il consenso.
+        //
+        // Il difetto: qui si faceva solo `getPosthog()` — si accendeva la
+        // raccolta e si aspettava. Ma l'effetto che registra la pagina dipende
+        // da percorso e parametri, che dopo un clic sul banner non cambiano:
+        // la prima pagina — quella da cui la persona è arrivata, cioè la piu'
+        // importante per capire da dove viene il traffico — non veniva mai
+        // registrata. Si vedeva la seconda.
+        const url = window.location.pathname + window.location.search;
+        ph.capture('$pageview', { $current_url: url });
+      });
+    };
     window.addEventListener('mc:consent-change', onConsentChange);
     return () => window.removeEventListener('mc:consent-change', onConsentChange);
   }, []);
