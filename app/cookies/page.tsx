@@ -67,6 +67,7 @@ export default function CookiesPage() {
         </p>
         <CookieTable rows={[
           { name: '_ga / _ga_*', purpose: 'Statistiche di utilizzo (se attivato)', duration: '14 mesi', provider: 'Google Analytics 4' },
+          { name: 'ph_* / ph_phc_*', purpose: 'PostHog: statistiche di utilizzo e registrazione della sessione di navigazione (session replay). Attivi solo con il consenso ai cookie analitici; i campi di inserimento vengono mascherati nella registrazione.', duration: '12 mesi', provider: 'PostHog Inc. (Stati Uniti)' },
           { name: 'mc_vid', purpose: 'Identificatore di visita MyCity: correla le sessioni ricorrenti dello stesso dispositivo e le collega all\'account al login (profilazione pseudonima cross-sessione). Base giuridica: consenso (art. 6.1.a GDPR).', duration: '12 mesi', provider: 'Prima parte' },
         ]} />
 

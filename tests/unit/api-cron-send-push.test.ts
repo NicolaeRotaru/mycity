@@ -21,10 +21,13 @@ vi.mock('@/lib/env', () => ({
 }));
 
 const marked: string[] = [];
-const pending: Array<{ id: string; user_id: string; title: string; body: string | null; link: string | null }> = [];
+const pending: Array<{ id: string; user_id: string; title: string; body: string | null; link: string | null; category?: string }> = [];
+/** Risposta della funzione che dice se la persona vuole quella categoria. */
+let vuoleNotifica: boolean = true;
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
+    rpc: (_nome: string) => Promise.resolve({ data: vuoleNotifica, error: null }),
     from: () => {
       const b: Record<string, unknown> = {
         _update: false,
@@ -55,6 +58,7 @@ async function run() {
 beforeEach(() => {
   marked.length = 0;
   pending.length = 0;
+  vuoleNotifica = true;
   sendPushToUserMock.mockClear();
 });
 
@@ -84,5 +88,35 @@ describe('cron send-push (audit 🟠-10)', () => {
     pushResult.total = 0;
     const res = await run();
     expect(marked).toEqual(['n3']);
+  });
+});
+
+describe('le preferenze delle notifiche contano', () => {
+  it('non manda la promozione a chi ha spento le promozioni', async () => {
+    // Prima le quattro preferenze del profilo non venivano lette da nessuno:
+    // nessun cron, nessuna rotta, nessun trigger. Chi spegneva l'interruttore
+    // continuava a ricevere le promozioni.
+    vuoleNotifica = false;
+    pending.push({ id: 'n1', user_id: 'u1', title: 'Sconto!', body: null, link: null, category: 'promo' });
+    pushResult.delivered = 1;
+    pushResult.total = 1;
+
+    await run();
+
+    expect(sendPushToUserMock).not.toHaveBeenCalled();
+    // Segnata come gestita: non deve tornare al giro dopo.
+    expect(marked).toContain('n1');
+  });
+
+  it('manda l\'aggiornamento sull\'ordine a chi lo vuole', async () => {
+    vuoleNotifica = true;
+    pending.push({ id: 'n2', user_id: 'u1', title: 'In consegna', body: null, link: null, category: 'order' });
+    pushResult.delivered = 1;
+    pushResult.total = 1;
+
+    await run();
+
+    expect(sendPushToUserMock).toHaveBeenCalledTimes(1);
+    expect(marked).toContain('n2');
   });
 });

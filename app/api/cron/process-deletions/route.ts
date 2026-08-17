@@ -63,7 +63,64 @@ const KYC_FIELDS = {
   billing_iban: null,
   billing_card_last4: null,
   approval_status: 'rejected',
+  // Gli indirizzi dei documenti: carta d'identità (fronte e retro), selfie,
+  // patente, assicurazione e attestato alimentare. Prima restavano scritti nel
+  // profilo dopo la cancellazione — e i file restavano nello storage.
+  kyc_id_doc_front_url: null,
+  kyc_id_doc_back_url: null,
+  kyc_selfie_url: null,
+  rider_license_url: null,
+  rider_insurance_url: null,
+  rider_haccp_url: null,
 };
+
+/** Secchi che possono contenere file personali di un utente. */
+const SECCHI_CON_FILE_PERSONALI = ['kyc-docs', 'cod-proof'] as const;
+
+/**
+ * Cancella i file dell'utente dallo storage.
+ *
+ * Serve perché azzerare la colonna che punta al file non cancella il file: le
+ * carte d'identità e i selfie restavano nello storage per sempre. Un giro sul
+ * codice non trovava NESSUNA chiamata a `.remove()`: nessuno li aveva mai
+ * cancellati.
+ */
+async function cancellaFilePersonali(
+  admin: ReturnType<typeof getAdminSupabase>,
+  userId: string,
+): Promise<{ rimossi: number; errori: string[] }> {
+  let rimossi = 0;
+  const errori: string[] = [];
+
+  for (const secchio of SECCHI_CON_FILE_PERSONALI) {
+    try {
+      const { data: elenco, error } = await admin.storage.from(secchio).list(userId, { limit: 1000 });
+      if (error) { errori.push(`${secchio}: ${error.message}`); continue; }
+      if (!elenco || elenco.length === 0) continue;
+
+      // Un livello di sottocartelle (per esempio cod-proof/<utente>/<ordine>/).
+      const percorsi: string[] = [];
+      for (const voce of elenco) {
+        if (voce.id === null) {
+          const { data: dentro } = await admin.storage
+            .from(secchio)
+            .list(`${userId}/${voce.name}`, { limit: 1000 });
+          for (const f of dentro ?? []) percorsi.push(`${userId}/${voce.name}/${f.name}`);
+        } else {
+          percorsi.push(`${userId}/${voce.name}`);
+        }
+      }
+      if (percorsi.length === 0) continue;
+
+      const { error: errRimozione } = await admin.storage.from(secchio).remove(percorsi);
+      if (errRimozione) errori.push(`${secchio}: ${errRimozione.message}`);
+      else rimossi += percorsi.length;
+    } catch (e) {
+      errori.push(`${secchio}: ${e instanceof Error ? e.message : 'errore'}`);
+    }
+  }
+  return { rimossi, errori };
+}
 
 export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
   const admin = getAdminSupabase();
@@ -91,6 +148,35 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       .update({ ip: null, user_agent: null })
       .lt('created_at', monthsAgo(12))
       .not('ip', 'is', null);
+
+    // `metadata` e `summary` restavano intatti: sono i campi che contengono i
+    // valori vecchi e nuovi delle colonne cambiate, quindi la parte piu'
+    // personale della riga. Azzerarli oltre la finestra dichiarata.
+    await admin
+      .from('activity_events')
+      .update({ metadata: null, summary: null })
+      .lt('created_at', monthsAgo(14))
+      .not('metadata', 'is', null);
+    await admin
+      .from('audit_logs')
+      .update({ metadata: null })
+      .lt('created_at', monthsAgo(12))
+      .not('metadata', 'is', null);
+
+    // E le righe di semplice navigazione si cancellano, non si sbiancano: senza
+    // questo la tabella cresceva per sempre. Le altre categorie restano perche'
+    // servono da traccia di sicurezza e contabile.
+    await admin
+      .from('activity_events')
+      .delete()
+      .eq('category', 'visitor')
+      .lt('created_at', monthsAgo(14));
+
+    // I messaggi dal modulo contatti oltre due anni non servono piu' a nessuno.
+    await admin
+      .from('contact_messages')
+      .delete()
+      .lt('created_at', monthsAgo(24));
   } catch (e) {
     logger.warn('[cron-deletions] prune retention IP/UA parziale', { e });
   }
@@ -143,6 +229,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         .update({ name: '[eliminato]', email: '[eliminato]', message: '[rimosso]' })
         .eq('user_id', userId),
     ]).catch((e) => logger.warn('[cron-deletions] anonimizzazione free-text parziale', { userId, e }));
+
+    // 1c) I file personali nello storage. Va fatto PRIMA della cancellazione
+    // dell'utente: dopo, l'elenco delle sue cartelle non e' piu' ricostruibile.
+    const file = await cancellaFilePersonali(admin, userId);
+    if (file.errori.length > 0) {
+      logger.warn('[cron-deletions] file personali non tutti rimossi', { userId, errori: file.errori });
+    }
 
     // 2) Hard delete auth.users
     const { error: delErr } = await admin.auth.admin.deleteUser(userId);

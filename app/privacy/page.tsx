@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
+import { titolare } from '@/lib/legal/titolare';
 
 export const metadata = {
   title: 'Informativa sulla privacy · MyCity',
@@ -31,6 +32,7 @@ const TOC = [
 ];
 
 export default function PrivacyPage() {
+  const ownerData = titolare();
   return (
     <LegalLayout
       title="Informativa sulla privacy"
@@ -47,12 +49,20 @@ export default function PrivacyPage() {
     >
       <LegalSection id="titolare" heading="1. Titolare del trattamento">
         <p>
-          Il titolare del trattamento è <strong>MyCity S.r.l.</strong>, con sede in
-          Via Roma 1, 29121 Piacenza (PC), P.IVA IT00000000000.
+          Il titolare del trattamento è <strong>{ownerData.denominazione}</strong>
+          {ownerData.indirizzo ? <>, con sede in {ownerData.indirizzo}</> : null}
+          {ownerData.partitaIva ? <>, P.IVA {ownerData.partitaIva}</> : null}.
         </p>
         <p>
-          <strong>Contatti del Titolare:</strong> <a href="mailto:privacy@mycity.it" className="text-primary-700 underline">privacy@mycity.it</a><br />
-          <strong>Responsabile della protezione dei dati (DPO):</strong> <a href="mailto:dpo@mycity.it" className="text-primary-700 underline">dpo@mycity.it</a>
+          <strong>Contatti del Titolare:</strong>{' '}
+          <a href={`mailto:${ownerData.emailPrivacy}`} className="text-primary-700 underline">{ownerData.emailPrivacy}</a>
+          {ownerData.emailDpo ? (
+            <>
+              <br />
+              <strong>Responsabile della protezione dei dati (DPO):</strong>{' '}
+              <a href={`mailto:${ownerData.emailDpo}`} className="text-primary-700 underline">{ownerData.emailDpo}</a>
+            </>
+          ) : null}
         </p>
       </LegalSection>
 
@@ -106,6 +116,9 @@ export default function PrivacyPage() {
           <li><strong>Anthropic PBC</strong> (Stati Uniti — SCC) — funzionalità AI del marketplace: miglioramento descrizioni prodotto, analisi immagini caricate dai venditori, assistente catalogo, riconoscimento vocale prodotto, riassunto recensioni, ricerca per foto. I testi processati possono includere contenuti di schede prodotto e messaggi inviati tramite le funzioni AI; Anthropic non conserva i dati per finalità proprie (accordo API). Dati personali degli acquirenti non vengono inviati ad Anthropic salvo quelli contenuti esplicitamente nelle richieste dell&apos;utente.</li>
           <li><strong>Provider KYC</strong> (Onfido / Jumio / Veriff) — verifica documenti d&apos;identità per Venditori e Rider.</li>
           <li><strong>OpenStreetMap Foundation</strong> (Regno Unito) — geocoding indirizzi.</li>
+          <li><strong>PostHog Inc.</strong> (Stati Uniti — SCC) — statistiche di utilizzo e registrazione delle sessioni di navigazione (session replay), attiva solo con il consenso ai cookie analitici. Alla registrazione della sessione vengono mascherati i campi di inserimento; l&apos;identificativo dell&apos;utente viene collegato dopo l&apos;accesso.</li>
+          <li><strong>Functional Software Inc. (Sentry)</strong> (Stati Uniti — SCC) — raccolta degli errori dell&apos;applicazione per la diagnosi dei guasti; può includere indirizzo IP e pagina in cui si è verificato l&apos;errore.</li>
+          <li><strong>Google Ireland Ltd.</strong> — misurazione del traffico del sito, attiva solo con il consenso ai cookie analitici.</li>
         </ul>
         <p>
           <strong>Trasferimenti extra-UE:</strong> sono protetti da Standard Contractual Clauses
@@ -129,7 +142,7 @@ export default function PrivacyPage() {
           <Link href="/profile/settings" className="text-primary-700 underline">Impostazioni → Privacy</Link>{' '}
           (dove trovi i pulsanti &quot;Scarica i miei dati&quot; e &quot;Cancella account&quot;) oppure
           scrivendo a{' '}
-          <a href="mailto:dpo@mycity.it" className="text-primary-700 underline">dpo@mycity.it</a>.
+          <a href={`mailto:${ownerData.emailPrivacy}`} className="text-primary-700 underline">{ownerData.emailPrivacy}</a>.
         </p>
         <p>
           Hai diritto di presentare reclamo al{' '}
@@ -168,7 +181,7 @@ export default function PrivacyPage() {
         <p>
           Possiamo aggiornare questa informativa per riflettere modifiche normative o operative.
           Le versioni precedenti restano consultabili su richiesta scrivendo a{' '}
-          <a href="mailto:dpo@mycity.it" className="text-primary-700 underline">dpo@mycity.it</a>.
+          <a href={`mailto:${ownerData.emailPrivacy}`} className="text-primary-700 underline">{ownerData.emailPrivacy}</a>.
         </p>
       </LegalSection>
 

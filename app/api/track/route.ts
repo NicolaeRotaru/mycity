@@ -84,10 +84,8 @@ export async function POST(request: Request) {
   // page_view, session_start) richiedono il consenso 'analytics' anche lato
   // server, non solo nel client. Gli eventi 'auth' (login/logout/signup) sono
   // funzionali/di sicurezza e non sono soggetti a consenso.
-  if (category === 'visitor') {
-    const consent = parseConsentCookie(readCookie(request.headers.get('cookie'), CONSENT_COOKIE) ?? undefined);
-    if (!consent.analytics) return noContent();
-  }
+  const consent = parseConsentCookie(readCookie(request.headers.get('cookie'), CONSENT_COOKIE) ?? undefined);
+  if (category === 'visitor' && !consent.analytics) return noContent();
 
   const path = typeof body.path === 'string' ? body.path.slice(0, 500) : null;
   const referrer = typeof body.referrer === 'string' ? body.referrer.slice(0, 500) : null;
@@ -101,9 +99,16 @@ export async function POST(request: Request) {
 
   // id visitatore stabile (cookie di prima parte). Generato server-side e
   // mantenuto anche dopo il login → correla anonimo ↔ account.
-  let vid = readCookie(request.headers.get('cookie'), VID_COOKIE);
+  // Senza consenso all'analitica non si crea nessun identificatore persistente.
+  // Prima il controllo copriva solo gli eventi di navigazione: quelli di accesso
+  // (login, registrazione) proseguivano e piazzavano comunque il cookie mc_vid
+  // per un anno, che e' esattamente cio' a cui la persona aveva detto no.
+  // L'evento di sicurezza resta registrato, ma senza etichetta che segua.
+  let vid = consent.analytics
+    ? readCookie(request.headers.get('cookie'), VID_COOKIE)
+    : null;
   let setCookie = false;
-  if (!vid) {
+  if (!vid && consent.analytics) {
     vid = crypto.randomUUID();
     setCookie = true;
   }
