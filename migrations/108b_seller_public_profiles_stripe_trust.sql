@@ -1,4 +1,4 @@
--- 108: Espone i flag Stripe pubblici sulla vetrina (per gate badge «Verificato»)
+-- 108b: Espone i flag Stripe pubblici sulla vetrina (per gate badge «Verificato»)
 -- Solo booleani di stato pagamento — niente stripe_account_id né IBAN.
 -- Idempotente.
 
