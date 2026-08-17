@@ -29,7 +29,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .update({ status: 'EXPIRED' })
     .eq('status', 'PENDING')
     .lt('expires_at', new Date().toISOString())
-    .select('id, groups');
+    .select('id, groups, coupon_code');
 
   if (error) {
     logger.error('[cron] expire-checkouts failed', error);
@@ -52,6 +52,14 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     if (items.length > 0) {
       const { error: rErr } = await admin.rpc('restore_stock', { p_items: items });
       if (rErr) logger.warn('[cron] restore_stock on expire fallita', { id: pc.id, message: rErr.message });
+    }
+
+    // Come per lo stock, anche il codice sconto torna disponibile: era stato
+    // contato come usato prima del pagamento, e il pagamento non è avvenuto.
+    const codice = (pc as { coupon_code?: string | null }).coupon_code ?? null;
+    if (codice) {
+      const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice });
+      if (cErr) logger.warn('[cron] codice sconto non restituito', { id: pc.id, message: cErr.message });
     }
   }
 

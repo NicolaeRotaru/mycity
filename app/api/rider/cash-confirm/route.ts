@@ -109,6 +109,12 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
       delivery_photo_url: body.deliveryPhotoUrl ?? null,
       cash_confirmed_at: now.toISOString(),
       cash_collected_by: user.id,
+      // L'ordine in contanti diventa PAGATO qui, che è il momento in cui i soldi
+      // sono davvero passati di mano. Prima restava 'PENDING' per sempre: in
+      // tutto il codice l'unico punto che scriveva 'PAID' era il webhook della
+      // carta. Conseguenza: l'annullamento da pannello trattava un contante già
+      // incassato come un ordine mai pagato, e non restituiva niente al cliente.
+      payment_status: 'PAID',
     })
     .eq('id', body.orderId)
     .eq('rider_id', user.id)

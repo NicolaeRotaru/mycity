@@ -6,7 +6,7 @@ import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
-import { shippingCentsFor } from '@/lib/shipping';
+import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -333,6 +333,18 @@ export const POST = withAuthRateLimit(
           total_price: totalCents / 100,
           shipping_cost: shipping / 100,
           delivery_fee_cents: deliveryFeeCents,
+          // Il compenso del fattorino, scritto alla creazione dell'ordine e
+          // scollegato da quanto ha pagato il cliente. Prima questa colonna non
+          // veniva popolata da nessuna parte, quindi al momento del pagamento si
+          // ricadeva sul prezzo di spedizione — che sopra i 30 euro e' zero:
+          // il fattorino consegnava gratis.
+          rider_fee_cents: compensoRiderCents({
+            storeLat: (sellerCoordMap.get(g.sellerId) ?? { lat: null }).lat ?? null,
+            storeLng: (sellerCoordMap.get(g.sellerId) ?? { lng: null }).lng ?? null,
+            deliveryLat: body.delivery.lat ?? null,
+            deliveryLng: body.delivery.lng ?? null,
+            pickupInStore: body.pickupInStore,
+          }),
           application_fee_cents: codFeeCents,
           seller_payout_cents: codSellerPayoutCents,
           // In attesa della rimessa contanti del rider (un admin la conferma →

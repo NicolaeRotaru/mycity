@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { createMultiSellerCheckoutSession, isStripeConfigured } from '@/lib/stripe/client';
+import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
-import { shippingCentsFor } from '@/lib/shipping';
+import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 
 export const runtime = 'nodejs';
@@ -290,18 +291,27 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     Math.max(0, grandSubtotalCents + grandShippingCents - 1),
   );
 
+  // Le quote per negozio si calcolano dallo sconto GIÀ limitato, non da quello
+  // richiesto: è lo sconto limitato che finisce sulla carta del cliente. E si
+  // ripartiscono col metodo del resto più grande, così la somma delle quote
+  // torna al centesimo con l'importo addebitato. Prima si usavano i valori non
+  // limitati, arrotondati uno per uno: i totali per negozio e l'addebito
+  // divergevano.
+  const scontiLimitati = riduciAlTetto(couponDiscountCents, pickupDiscountCents, totalDiscountCents);
+  const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotalPerGroupCents);
+  const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotalPerGroupCents);
+
   const groupPersisted = stripeGroups.map((g, i) => {
     const subtotal = subtotalPerGroupCents[i];
     const shipping = shippingPerGroupCents[i];
     const deliveryFeeCents = deliveryFeePerGroupCents[i];
-    // Quota proporzionale del coupon globale rispetto al subtotale del gruppo
-    const portion = grandSubtotalCents > 0 ? subtotal / grandSubtotalCents : 0;
-    const couponPortionCents = Math.round(couponDiscountCents * portion);
-    const pickupPortionCents = Math.round(pickupDiscountCents * portion);
+    const couponPortionCents = quoteCoupon[i];
+    const pickupPortionCents = quoteRitiro[i];
     const totalCents = Math.max(
       0,
       subtotal + shipping + deliveryFeeCents - couponPortionCents - pickupPortionCents,
     );
+    const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
     return {
       sellerId: g.sellerId,
       storeName: g.storeName,
@@ -312,6 +322,16 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       couponPortionCents,
       pickupPortionCents,
       totalCents,
+      // Il compenso del fattorino si calcola qui, dove le coordinate del negozio
+      // e della consegna sono note, e viaggia col gruppo fino alla creazione
+      // dell'ordine. Dipende dalla distanza, non da quanto paga il cliente.
+      riderFeeCents: compensoRiderCents({
+        storeLat: coord.lat,
+        storeLng: coord.lng,
+        deliveryLat: body.delivery.lat ?? null,
+        deliveryLng: body.delivery.lng ?? null,
+        pickupInStore: body.pickupInStore,
+      }),
     };
   });
 
@@ -397,6 +417,13 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     logger.error('[stripe] checkout creation failed', e);
     // Rilascia la riserva di stock e marca il pending come CANCELED (no orphan).
     await admin.rpc('restore_stock', { p_items: stockItems });
+    // Il codice sconto era già stato «consumato» prima di creare la sessione:
+    // se il pagamento non nasce va restituito, altrimenti quell'uso è perso per
+    // sempre. Nel codice non esisteva nessun punto che lo restituisse.
+    if (validatedCouponCode) {
+      const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
+      if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+    }
     await admin
       .from('pending_checkouts')
       .update({ status: 'CANCELED' })

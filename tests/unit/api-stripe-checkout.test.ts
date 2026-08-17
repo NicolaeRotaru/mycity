@@ -62,6 +62,8 @@ vi.mock('@/lib/coupons', () => ({
 
 vi.mock('@/lib/shipping', () => ({
   shippingCentsFor: vi.fn(() => state.shipping),
+  // Il compenso del fattorino ora si calcola al checkout e viaggia col gruppo.
+  compensoRiderCents: vi.fn(() => 250),
 }));
 
 vi.mock('@/lib/supabase/server', () => {

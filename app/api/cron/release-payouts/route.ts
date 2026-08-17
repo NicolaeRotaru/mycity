@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { releaseOrderPayout, releaseRiderPayout } from '@/lib/stripe/payout';
+import { releaseOrderPayout, releaseRiderPayout, FILTRO_RIDER_RITENTABILI } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -117,7 +117,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .eq('payment_method', 'card')
     .eq('delivery_status', 'DELIVERED')
     .not('rider_id', 'is', null)
-    .or('rider_payout_status.is.null,rider_payout_status.eq.PENDING_RIDER_ONBOARDING,rider_payout_status.eq.FAILED')
+    .or(FILTRO_RIDER_RITENTABILI)
     .or(PAYOUT_DISPUTE_FILTER)
     .lte('delivered_at', cutoffIso)
     .limit(BATCH_LIMIT);

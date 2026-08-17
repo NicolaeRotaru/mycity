@@ -32,7 +32,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, user_id, total_price, payment_method, payment_status, delivery_status, stripe_payment_intent, wallet_applied_cents')
+    .select('id, user_id, total_price, payment_method, payment_status, delivery_status, stripe_payment_intent, wallet_applied_cents, cash_confirmed_at, cash_collected_cents')
     .eq('id', params.id)
     .single();
   if (error || !order) return ApiErrors.notFound('Ordine non trovato');
@@ -43,6 +43,23 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   const isPaidCard =
     order.payment_method === 'card' && !!order.stripe_payment_intent && order.payment_status === 'PAID';
+
+  // Contanti già incassati dal fattorino: qui non c'è nulla da rimborsare via
+  // Stripe, e annullare in silenzio lascerebbe il cliente senza merce e senza
+  // soldi. Prima l'ordine in contanti restava 'PENDING' per sempre, quindi
+  // questo caso non era nemmeno distinguibile: veniva trattato come «mai
+  // pagato» e portato a 'FAILED'. La restituzione dei contanti è un fatto
+  // fisico: la decide una persona, non questo endpoint.
+  const contantiIncassati =
+    order.payment_method === 'cod' &&
+    !!(order as { cash_confirmed_at?: string | null }).cash_confirmed_at;
+
+  if (contantiIncassati) {
+    return ApiErrors.conflict(
+      'Ordine già incassato in contanti dal fattorino: la restituzione va gestita a mano ' +
+      '(rimborso al cliente o nota di credito). Registra la scelta prima di annullare.',
+    );
+  }
 
   if (isPaidCard) {
     if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');

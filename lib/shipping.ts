@@ -37,3 +37,30 @@ export function shippingForEuro(opts: {
 export function shippingCentsFor(opts: Parameters<typeof shippingForEuro>[0]): number {
   return Math.round(shippingForEuro(opts) * 100);
 }
+
+/**
+ * Quanto va pagato al fattorino per questa consegna, in centesimi.
+ *
+ * È una cosa diversa da `shippingForEuro`, che dice quanto paga il CLIENTE.
+ * Le due venivano confuse: il compenso del fattorino si leggeva dal prezzo di
+ * spedizione pagato dal cliente, e sopra la soglia della spedizione gratuita
+ * quel prezzo è zero. Risultato: su ogni ordine sopra i 30 euro il fattorino
+ * consegnava e non veniva pagato. La spedizione gratis è una scelta commerciale
+ * della piattaforma, non un lavoro gratis di chi porta il pacco.
+ *
+ * Con il ritiro in negozio non c'è consegna, quindi non c'è compenso.
+ */
+export function compensoRiderCents(opts: {
+  storeLat: number | null;
+  storeLng: number | null;
+  deliveryLat: number | null;
+  deliveryLng: number | null;
+  pickupInStore: boolean;
+}): number {
+  const { storeLat, storeLng, deliveryLat, deliveryLng, pickupInStore } = opts;
+  if (pickupInStore) return 0;
+  if (storeLat && storeLng && deliveryLat && deliveryLng) {
+    return Math.round(riderFee(haversineKm(storeLat, storeLng, deliveryLat, deliveryLng)) * 100);
+  }
+  return Math.round(SHIPPING_PER_ORDER * 100);
+}

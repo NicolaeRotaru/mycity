@@ -26,6 +26,11 @@ vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));
 vi.mock('@/lib/stripe/payout', () => ({
   releaseOrderPayout: (id: string) => releaseOrderPayoutMock(id),
   releaseRiderPayout: (id: string) => releaseRiderPayoutMock(id),
+  // Gli stati dai quali un compenso rider si puo' ritentare vivono in payout.ts
+  // e li usa anche il cron: prima il cron aveva una sua copia dell'elenco, e
+  // 'HELD' mancava, quindi un compenso fallito non veniva piu' ripescato.
+  FILTRO_RIDER_RITENTABILI:
+    'rider_payout_status.is.null,rider_payout_status.in.(HELD,PENDING_RIDER_ONBOARDING,FAILED)',
 }));
 
 // Builder che rispetta i filtri eq/in rilevanti (payment_method, payout_status,

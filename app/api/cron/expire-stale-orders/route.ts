@@ -51,8 +51,17 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   let failed = 0;
 
   for (const o of candidates ?? []) {
-    // Claim atomico: solo il primo passaggio porta NEW → CANCELED. Se un'altra
-    // esecuzione ha già preso l'ordine, 0 righe → skip (no doppio rimborso).
+    const isCardPaid =
+      o.payment_method === 'card' && o.payment_status === 'PAID' && !!o.stripe_payment_intent;
+
+    // Il blocco atomico resta (solo una esecuzione prende l'ordine), ma se il
+    // rimborso non riesce l'ordine TORNA in coda.
+    //
+    // Prima non tornava: si annullava, si chiedeva il rimborso, e se Stripe non
+    // rispondeva — un timeout, un 5xx, un limite di richieste — l'errore veniva
+    // contato e si passava al prossimo. Al giro dopo l'ordine non era piu' in
+    // NEW, quindi la ricerca dei candidati non lo ripescava mai: annullato e mai
+    // rimborsato, coi soldi del cliente fermi e nessuno che se ne accorgesse.
     const { data: claimed, error: claimErr } = await admin
       .from('orders')
       .update({ delivery_status: 'CANCELED', canceled_at: new Date().toISOString() })
@@ -67,21 +76,35 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     if (!claimed || claimed.length === 0) continue;
 
     try {
-      const isCardPaid =
-        o.payment_method === 'card' && o.payment_status === 'PAID' && !!o.stripe_payment_intent;
-
       if (isCardPaid) {
-        // refundOrder fa: refund Stripe (idempotente) + reversal (no-op, HELD) +
-        // ripristino stock + email buyer + stato REFUNDED/CANCELED.
-        await refundOrder({
-          orderId: o.id,
-          amountCents: Math.round(Number(o.total_price) * 100),
-          reason: 'Ordine annullato: il venditore non lo ha accettato in tempo',
-          notifyBuyer: true,
-        });
-        refunded++;
+        try {
+          await refundOrder({
+            orderId: o.id,
+            amountCents: Math.round(Number(o.total_price) * 100),
+            reason: 'Ordine annullato: il venditore non lo ha accettato in tempo',
+            notifyBuyer: true,
+          });
+          refunded++;
+        } catch (errRimborso) {
+          // Rimetti l'ordine in coda: il prossimo giro riprovera'. Senza questo
+          // resterebbe annullato e non rimborsato per sempre.
+          const { error: errRipristino } = await admin
+            .from('orders')
+            .update({ delivery_status: 'NEW', canceled_at: null })
+            .eq('id', o.id)
+            .eq('delivery_status', 'CANCELED');
+          if (errRipristino) {
+            logger.error('[cron] expire-stale-orders: ordine annullato e NON rimborsato, fuori dalla coda', {
+              id: o.id, message: errRipristino.message,
+            });
+          } else {
+            logger.warn('[cron] expire-stale-orders: rimborso fallito, ordine rimesso in coda', { id: o.id });
+          }
+          failed++;
+          continue;
+        }
       } else {
-        // COD / non pagato: nessun addebito da rimborsare, solo ripristino stock.
+        // COD o non pagato: niente da rimborsare, solo il ripristino della merce.
         const { error: rErr } = await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
         if (rErr) logger.warn('[cron] expire-stale-orders: restore_stock fallito', { id: o.id, message: rErr.message });
       }
