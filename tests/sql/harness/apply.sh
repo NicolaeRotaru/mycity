@@ -34,6 +34,15 @@ for f in $(ls "$MIG"/*.sql | sort -V); do
   name="$(basename "$f")"
   if out="$(psql -q -d "$DB" -v ON_ERROR_STOP=1 -f "$f" 2>&1)"; then
     applied=$((applied + 1))
+    # Registra la migrazione come applicata, come fa Supabase: cosi' il
+    # controllo di deriva (`npm run db:check-drift`) ha qualcosa da confrontare.
+    # Il nome e' la parte DOPO il numero, senza estensione: e' la forma che lo
+    # script si aspetta.
+    versione="${name%%_*}"
+    nome="${name#*_}"; nome="${nome%.sql}"
+    psql -q -d "$DB" -c "INSERT INTO supabase_migrations.schema_migrations (version, name)
+                         VALUES ('$versione', '$nome')
+                         ON CONFLICT (version) DO NOTHING" >/dev/null 2>&1 || true
   else
     failed=$((failed + 1))
     echo "  ✗ $name"

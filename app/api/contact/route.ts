@@ -65,9 +65,15 @@ export async function POST(req: Request) {
     return ApiErrors.internal('Errore interno');
   }
 
-  // Best-effort email al support (skip se RESEND_API_KEY non configurato)
-  sendEmail({
-    to: process.env.SUPPORT_EMAIL ?? 'support@mycity.it',
+  // Avviso al supporto, se sappiamo dove mandarlo. Nessun indirizzo di ripiego
+  // inventato (vedi operational-alerts): il messaggio resta comunque in
+  // contact_messages, quindi non si perde — si perde solo l'avviso immediato.
+  const supporto = process.env.SUPPORT_EMAIL?.trim();
+  if (!supporto) {
+    logger.warn('[contact] SUPPORT_EMAIL non configurata: nessun avviso inviato');
+  }
+  if (supporto) sendEmail({
+    to: supporto,
     subject: `[Contact] ${payload.subject} — ${payload.name}`,
     html: `<p><strong>Da:</strong> ${escapeHtml(payload.name)} &lt;${escapeHtml(payload.email)}&gt;</p>
            <p><strong>Soggetto:</strong> ${escapeHtml(payload.subject)}</p>

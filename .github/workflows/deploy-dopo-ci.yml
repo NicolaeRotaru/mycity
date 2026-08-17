@@ -1,0 +1,57 @@
+name: Rilascio dopo CI verde
+
+# A cosa serve: oggi il rilascio parte da solo a ogni push su main
+# (`autoDeploy: true` in render.yaml) e non aspetta la CI. I due corrono in
+# parallelo, quindi un test rosso finisce in produzione comunque: la CI diventa
+# un referto che arriva dopo il funerale.
+#
+# Questo file è la metà che si può mettere nel repository: rilascia SOLO quando
+# la CI di main è passata.
+#
+# ⚠️ Per farlo diventare l'unica strada servono due cose, entrambe di Nicola:
+#   1. in render.yaml mettere `autoDeploy: false` (una riga)
+#   2. aggiungere il segreto RENDER_DEPLOY_HOOK
+#      (Render → servizio → Settings → Deploy Hook → copia l'indirizzo)
+#
+# Finché il segreto manca, questo lavoro si limita a dirlo e non fa nulla: non
+# blocca niente e non rilascia niente.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  rilascia:
+    name: Chiama Render
+    runs-on: ubuntu-latest
+    # Solo su CI passata. `workflow_dispatch` non porta conclusion: si accetta.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 10
+    steps:
+      - name: Verifica di avere il gancio di rilascio
+        id: gancio
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK non configurato: nessun rilascio da qui. Oggi rilascia Render da solo a ogni push, SENZA aspettare la CI."
+            echo "pronto=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pronto=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rilascia
+        if: steps.gancio.outputs.pronto == 'true'
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          codice="$(curl -sS -o /tmp/risposta.txt -w '%{http_code}' -X POST "$HOOK")"
+          echo "Risposta di Render: $codice"
+          cat /tmp/risposta.txt || true
+          # Un rilascio che non parte non deve passare per riuscito.
+          [ "$codice" -ge 200 ] && [ "$codice" -lt 300 ]

@@ -132,6 +132,18 @@ GRANT ALL ON ALL TABLES    IN SCHEMA storage TO anon, authenticated, service_rol
 GRANT ALL ON ALL TABLES    IN SCHEMA auth    TO service_role;
 GRANT SELECT ON auth.users TO authenticated, anon;
 
+-- ------------------------------------- registro delle migrazioni applicate
+-- Supabase tiene qui l'elenco delle migrazioni gia' passate. Serve al controllo
+-- di deriva (`npm run db:check-drift`), che confronta i file sul disco con
+-- questo elenco: senza la tabella, il controllo si limitava a saltare.
+CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+  version    text PRIMARY KEY,
+  name       text,
+  statements text[],
+  inserted_at timestamptz DEFAULT now()
+);
+
 -- ------------------------------------------------------------ realtime
 -- Supabase la crea di serie; diverse migrazioni ci aggiungono tabelle.
 DO $$

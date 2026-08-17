@@ -19,8 +19,16 @@ describe('GET /api/health', () => {
     vi.clearAllMocks();
     limitMock.mockResolvedValue({ error: null });
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://x.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon';
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc';
     process.env.NEXT_PUBLIC_APP_URL = 'http://localhost:3000';
+    // L'elenco delle variabili indispensabili ora comprende anche quelle senza
+    // cui il marketplace non incassa e non scrive: prima il controllo diceva
+    // «a posto» con i pagamenti e la posta spenti.
+    process.env.STRIPE_SECRET_KEY = 'sk_test';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.CRON_SECRET = 'cron_test';
   });
 
   afterEach(() => {

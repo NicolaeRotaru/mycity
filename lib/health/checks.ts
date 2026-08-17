@@ -150,10 +150,27 @@ function checkPush(): ServiceHealth {
   );
 }
 
+/**
+ * Servizi senza i quali il marketplace non funziona: se sono «non configurati»
+ * la pagina pubblica NON puo' dire «tutto operativo».
+ *
+ * Prima diceva proprio questo: `unknown` (non configurato) non faceva scattare
+ * nulla, quindi a pagamenti spenti e posta spenta la pagina dichiarava «tutto
+ * operativo» — mentre nessun cliente poteva pagare e nessuna conferma d'ordine
+ * partiva. Un cartello «funziona tutto» su un negozio con la serranda giu'.
+ */
+const SERVIZI_INDISPENSABILI = ['db', 'auth', 'payments', 'email'] as const;
+
 function computeOverall(services: ServiceHealth[]): ServiceStatus {
   if (services.some((s) => s.status === 'outage')) return 'outage';
   if (services.some((s) => s.status === 'degraded')) return 'degraded';
-  return 'operational'; // i servizi "unknown" (non configurati) non fanno scattare l'allarme
+  // Un servizio indispensabile non configurato conta come degradato.
+  if (services.some((s) =>
+    s.status === 'unknown' && (SERVIZI_INDISPENSABILI as readonly string[]).includes(s.id)
+  )) {
+    return 'degraded';
+  }
+  return 'operational';
 }
 
 async function runServiceChecks(): Promise<SystemHealth> {

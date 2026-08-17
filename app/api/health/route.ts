@@ -24,21 +24,40 @@ export async function GET() {
   const startedAt = Date.now();
   const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {};
 
-  // Check 1: Supabase DB raggiungibile
+  // Check 1: Supabase DB raggiungibile, con un tetto di tempo.
+  // Senza tetto, un database lento teneva la richiesta appesa: e questo
+  // endpoint e' quello che Render interroga per decidere se l'istanza e' viva,
+  // quindi un database lento diventava un'istanza dichiarata morta e riavviata.
+  const TETTO_MS = 3000;
   try {
     const admin = getAdminSupabase();
     const t0 = Date.now();
-    const { error } = await admin.from('categories').select('id').limit(1);
-    checks.db = { ok: !error, latencyMs: Date.now() - t0, error: error?.message };
+    const query = admin.from('categories').select('id').limit(1);
+    const esito = await Promise.race([
+      query.then(({ error }) => ({ scaduto: false, error })),
+      new Promise<{ scaduto: true; error: null }>((r) =>
+        setTimeout(() => r({ scaduto: true, error: null }), TETTO_MS)),
+    ]);
+    checks.db = esito.scaduto
+      ? { ok: false, latencyMs: TETTO_MS, error: `nessuna risposta entro ${TETTO_MS}ms` }
+      : { ok: !esito.error, latencyMs: Date.now() - t0, error: esito.error?.message };
   } catch (e) {
     checks.db = { ok: false, error: e instanceof Error ? e.message : 'unknown' };
   }
 
-  // Check 2: env vars critiche presenti
+  // Check 2: le variabili senza cui il marketplace non incassa e non scrive.
+  // Prima l'elenco ne conteneva tre e lasciava fuori pagamenti, webhook, posta
+  // e segreto dei lavori periodici: il sito risultava «a posto» mentre nessun
+  // ordine poteva essere pagato.
   const requiredEnv = [
     'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
     'SUPABASE_SERVICE_ROLE_KEY',
     'NEXT_PUBLIC_APP_URL',
+    'STRIPE_SECRET_KEY',
+    'STRIPE_WEBHOOK_SECRET',
+    'RESEND_API_KEY',
+    'CRON_SECRET',
   ];
   const missingEnv = requiredEnv.filter((k) => !process.env[k]);
   checks.env = { ok: missingEnv.length === 0, error: missingEnv.join(',') || undefined };

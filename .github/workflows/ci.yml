@@ -86,13 +86,17 @@ jobs:
       # silenzioso, ma non blocchiamo i merge di chi non ha ancora un DB di test.
       - name: Check RLS secrets
         id: rls
+        # Segreti con nomi DEDICATI alla prova (suffisso _TEST). Prima si usavano
+        # gli stessi nomi della produzione, chiave di servizio compresa: un
+        # errore di configurazione e i test scrivevano sul database dei clienti.
+        # Il commento diceva «progetto di TEST», ma niente lo verificava.
         env:
-          URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          ANON: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SR: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          URL: ${{ secrets.SUPABASE_TEST_URL }}
+          ANON: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+          SR: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
         run: |
           if [ -z "$URL" ] || [ -z "$ANON" ] || [ -z "$SR" ]; then
-            echo "::warning::Test RLS/grant SALTATI: mancano i secret di un progetto Supabase di TEST (NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY). Aggiungili in Settings -> Secrets and variables -> Actions per attivare l'enforcement (audit 🔴-4)."
+            echo "::warning::Test d'integrazione su Supabase SALTATI: mancano SUPABASE_TEST_URL, SUPABASE_TEST_ANON_KEY, SUPABASE_TEST_SERVICE_ROLE_KEY. I controlli di permessi girano comunque nel job 'Controlli database (Postgres locale)', che non usa chiavi."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=true" >> "$GITHUB_OUTPUT"
@@ -103,10 +107,72 @@ jobs:
       - name: Integration tests
         if: steps.rls.outputs.enabled == 'true'
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
         run: npm run test:integration
+
+  rls-locale:
+    name: Controlli database (Postgres locale, senza chiavi)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Perche' questo job esiste: i test di sicurezza sul database si
+    # auto-skippavano quando mancavano i segreti di un progetto di prova. Un
+    # verde che non provava niente — e proprio sui controlli che tengono chiusi
+    # i dati dei clienti. Qui si ricostruisce lo schema VERO dalle migrazioni su
+    # un Postgres del runner: nessuna chiave, nessuna rete, e non si salta mai.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installa il client psql
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      # Ricostruisce il database da zero: impalcatura Supabase + tutte le
+      # migrazioni nell'ordine vero. Fallisce se una migrazione non si applica —
+      # e cinque non si applicavano, fermandosi a meta' file.
+      - name: Ricostruisci lo schema dalle migrazioni
+        run: bash tests/sql/harness/apply.sh mycity_ci
+
+      # I controlli di comportamento: si apre una sessione col ruolo di un
+      # estraneo e si prova a fare il danno.
+      - name: Controlli di permessi e privacy
+        run: bash tests/sql/harness/run.sh mycity_ci
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      # Deriva fra le migrazioni sul disco e quelle registrate: lo script
+      # esisteva e nessuno lo eseguiva, quindi una migrazione dimenticata
+      # passava liscia. Qui gira contro il database appena ricostruito.
+      - name: Controllo deriva migrazioni
+        env:
+          SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/mycity_ci
+        run: npm run db:check-drift
 
   e2e-tests:
     name: E2E smoke (Playwright)
