@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn';
 /**
  * Verified seller badge — solo se `isVerifiedStore(profile)` è true
  * (approvato + Stripe charges + payouts attivi).
+ */
 
 type Props = {
   size?: 'sm' | 'md' | 'lg';

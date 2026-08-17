@@ -73,6 +73,7 @@ export default function HeroStoreCard() {
         .eq('id', storeId)
         .maybeSingle();
       const store = (storeRow as Store | null) ?? null;
+      if (!store) return null;
 
       // Prodotti reali + statistiche recensioni (RPC aggregata): la card mostra
       // rating e numero recensioni solo se esistono recensioni vere.
