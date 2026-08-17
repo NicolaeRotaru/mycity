@@ -77,9 +77,22 @@ vi.mock('@/lib/supabase/server', () => {
   const adminFrom = vi.fn((table: string) => {
     if (table === 'pending_checkouts') {
       return {
-        insert: () => ({ select: () => ({ single: () => Promise.resolve({ data: { id: 'pc_1' }, error: null }) }) }),
+        insert: () => ({
+          select: () => ({
+            single: () => Promise.resolve({
+              data: { id: 'pc_1', expires_at: new Date(Date.now() + 2 * 3600_000).toISOString() },
+              error: null,
+            }),
+          }),
+        }),
         update: () => ({ eq: () => Promise.resolve({ error: null }) }),
       };
+    }
+    if (table === 'user_addresses') {
+      // Le coordinate della consegna ora si cercano fra gli indirizzi SALVATI
+      // della persona, non si prendono dal corpo della richiesta: chi le
+      // mandava dal browser decideva il prezzo della consegna.
+      return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
     }
     return { insert: () => Promise.resolve({ error: null }) };
   });

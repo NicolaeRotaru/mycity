@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/supabase/client';
+import { authServer } from '@/lib/supabase/auth-server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { ApiErrors } from '@/lib/api/responses';
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { data, error } = await auth.signIn(email, password, { captchaToken });
+    const { data, error, client } = await authServer.signIn(email, password, { captchaToken });
     if (error) {
       return ApiErrors.unauthorized('Email o password non corretti');
     }
@@ -57,7 +57,7 @@ export async function POST(request: Request) {
     // Gate verifica email: blocca login se non confermata
     if (data?.user && !data.user.email_confirmed_at) {
       // Logout pulito per non lasciare cookie semi-validi
-      try { await auth.signOut(); } catch { /* noop */ }
+      try { await client.auth.signOut(); } catch { /* noop */ }
       return NextResponse.json(
         { ok: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Devi confermare la tua email prima di accedere. Controlla la posta.' } },
         { status: 403 },

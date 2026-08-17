@@ -68,6 +68,11 @@ export type CreateCheckoutInput = {
   buyerUserId: string;
   successUrl: string;
   cancelUrl: string;
+  /**
+   * Quando scade la riserva della merce (millisecondi). La sessione di pagamento
+   * scade insieme a lei: vedi il commento in `sessions.create`.
+   */
+  pendingExpiresAt?: number;
 };
 
 /**
@@ -165,6 +170,21 @@ export async function createMultiSellerCheckoutSession(
     discounts = [{ coupon: coupon.id }];
   }
 
+  // La sessione di pagamento scade quando scade la riserva della merce.
+  //
+  // Il difetto: la riserva dura due ore (`pending_checkouts.expires_at`), e dopo
+  // quelle due ore un lavoro periodico rimette la merce in vendita. La sessione
+  // Stripe, invece, non aveva scadenza: durava le 24 ore di default. Chi pagava
+  // dopo tre ore riusciva a pagare, e il webhook creava l'ordine di merce che
+  // nel frattempo era stata rimessa a magazzino — e magari venduta a un altro.
+  // Stripe accetta un minimo di 30 minuti e un massimo di 24 ore.
+  const scadenzaRiservaSec = Math.floor((input.pendingExpiresAt ?? 0) / 1000);
+  const minimoSec = Math.floor(Date.now() / 1000) + 31 * 60;
+  const massimoSec = Math.floor(Date.now() / 1000) + 23 * 60 * 60;
+  const expiresAt = scadenzaRiservaSec > 0
+    ? Math.min(Math.max(scadenzaRiservaSec, minimoSec), massimoSec)
+    : undefined;
+
   return await stripe.checkout.sessions.create({
     mode: 'payment',
     payment_method_types: ['card'],
@@ -173,6 +193,7 @@ export async function createMultiSellerCheckoutSession(
     customer_email: input.buyerEmail,
     success_url: input.successUrl,
     cancel_url: input.cancelUrl,
+    ...(expiresAt ? { expires_at: expiresAt } : {}),
     client_reference_id: input.pendingCheckoutId,
     metadata: {
       buyer_user_id: input.buyerUserId,

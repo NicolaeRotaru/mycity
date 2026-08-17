@@ -10,6 +10,8 @@ import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
+import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
+import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 
 export const runtime = 'nodejs';
@@ -134,7 +136,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
   const { data: sellers } = await supa
     .from('profiles')
-    .select('id, store_name, full_name, store_lat, store_lng')
+    .select('id, store_name, full_name, store_lat, store_lng, store_hours')
     .in('id', sellerIds);
 
   const sellerNameMap = new Map<string, string>();
@@ -142,6 +144,24 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   for (const s of sellers ?? []) {
     sellerNameMap.set(s.id, s.store_name ?? s.full_name ?? 'Negozio');
     sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
+  }
+
+  // Negozio chiuso: niente consegna a domicilio adesso, il fattorino andrebbe a
+  // vuoto. Il percorso in contanti questo controllo lo faceva già; quello con la
+  // carta no, quindi alle tre di notte si poteva pagare un ordine che nessuno
+  // avrebbe preparato. Il ritiro in negozio è esente: il cliente passa quando è
+  // aperto.
+  if (!body.pickupInStore) {
+    for (const s of sellers ?? []) {
+      if (isStoreClosedForOrder((s as { store_hours?: unknown }).store_hours)) {
+        return NextResponse.json(
+          {
+            error: `${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
   }
 
   // --- 3. Validazioni per ogni gruppo + costruzione line items per Stripe.
@@ -259,14 +279,24 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // distanza-based della UI (lib/shipping.ts), usando le coordinate negozio dal
   // DB e quelle di consegna inviate dal client. Coupon FREE_SHIPPING o soglia
   // raggiunta ⇒ 0. Si ignora qualunque importo di spedizione dal client.
+  // Coordinate della consegna prese dal database, non dal browser: il prezzo
+  // della consegna dipende dalla distanza, e finora quel numero lo scriveva il
+  // client. Se l'indirizzo non è fra quelli salvati dalla persona, si resta
+  // senza coordinate e vale la tariffa fissa.
+  const coordConsegna = await coordinateDaIndirizziSalvati(admin, user.id, {
+    address: body.delivery.address,
+    city: body.delivery.city,
+    zip: body.delivery.zip,
+  });
+
   const shippingPerGroupCents = stripeGroups.map((g, i) => {
     const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
     return shippingCentsFor({
       subtotal: subtotalPerGroupCents[i] / 100,
       storeLat: coord.lat,
       storeLng: coord.lng,
-      deliveryLat: body.delivery.lat ?? null,
-      deliveryLng: body.delivery.lng ?? null,
+      deliveryLat: coordConsegna?.lat ?? null,
+      deliveryLng: coordConsegna?.lng ?? null,
       pickupInStore: body.pickupInStore,
       freeShipping: couponFreeShipping,
     });
@@ -328,8 +358,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       riderFeeCents: compensoRiderCents({
         storeLat: coord.lat,
         storeLng: coord.lng,
-        deliveryLat: body.delivery.lat ?? null,
-        deliveryLng: body.delivery.lng ?? null,
+        deliveryLat: coordConsegna?.lat ?? null,
+        deliveryLng: coordConsegna?.lng ?? null,
         pickupInStore: body.pickupInStore,
       }),
     };
@@ -371,8 +401,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         zip: body.delivery.zip,
         phone: body.delivery.phone,
         notes: body.delivery.notes ?? null,
-        lat: body.delivery.lat ?? null,
-        lng: body.delivery.lng ?? null,
+        lat: coordConsegna?.lat ?? body.delivery.lat ?? null,
+        lng: coordConsegna?.lng ?? body.delivery.lng ?? null,
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
         // scrive su orders.delivery_slot. null per ritiro / non scelta.
         slot: body.pickupInStore ? null : (body.deliverySlot ?? null),
@@ -380,7 +410,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       pickup_in_store: body.pickupInStore,
       status: 'PENDING',
     })
-    .select('id')
+    .select('id, expires_at')
     .single();
 
   if (pendErr || !pending) {
@@ -404,6 +434,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       buyerUserId: user.id,
       successUrl,
       cancelUrl,
+      // La sessione scade con la riserva della merce, non 24 ore dopo.
+      pendingExpiresAt: pending.expires_at ? new Date(pending.expires_at).getTime() : undefined,
     });
 
     // Salva l'id session su pending_checkout per lookup nel webhook

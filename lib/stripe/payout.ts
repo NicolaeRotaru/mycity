@@ -304,9 +304,12 @@ export async function reverseOrderTransfer(
   const reversal = await stripe.transfers.createReversal(
     order.stripe_transfer_id,
     { amount: reverseCents, metadata: { order_id: order.id } },
-    // idempotencyKey per-importo-cumulativo: permette reversal multipli incrementali
-    // sullo stesso ordine (es. due rimborsi parziali sequenziali).
-    { idempotencyKey: `reversal_${order.id}_${reverseCents}` },
+    // La chiave contiene il TOTALE stornato dopo questa operazione, non
+    // l'importo della singola chiamata. Con l'importo singolo due rimborsi
+    // parziali dello stesso valore — 20 euro e poi altri 20 — producevano la
+    // stessa chiave: Stripe restituiva il primo storno e il secondo non
+    // avveniva, lasciando al venditore soldi che andavano recuperati.
+    { idempotencyKey: `reversal_${order.id}_tot_${(order.seller_payout_reversed_cents ?? 0) + reverseCents}` },
   );
 
   const admin = getAdminSupabase();

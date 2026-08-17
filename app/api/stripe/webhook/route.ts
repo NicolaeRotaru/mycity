@@ -199,7 +199,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Carica il record-of-intent
   const { data: pending, error: pendErr } = await admin
     .from('pending_checkouts')
-    .select('id, buyer_id, status, groups, coupon_code, delivery, pickup_in_store, total_cents, stripe_session_id')
+    .select('id, buyer_id, status, groups, coupon_code, delivery, pickup_in_store, total_cents, stripe_session_id, expires_at')
     .eq('id', pendingCheckoutId)
     .single();
 
@@ -212,6 +212,36 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Idempotenza checkout-level: se già processato, no-op.
   if (pending.status === 'COMPLETED') {
     logger.info('[stripe] pending_checkout già COMPLETED, skip', { pendingCheckoutId });
+    return;
+  }
+
+  // Riserva della merce già scaduta: la merce è stata rimessa in vendita e
+  // potrebbe essere stata comprata da un altro. Creare l'ordine qui vorrebbe
+  // dire vendere due volte la stessa cosa. Il pagamento c'è: si rimborsa.
+  //
+  // Da qui in avanti la sessione Stripe scade insieme alla riserva (vedi
+  // lib/stripe/client.ts), quindi questo caso è la rete di sicurezza per le
+  // sessioni create prima di quella modifica e per i casi di confine.
+  if (pending.status === 'EXPIRED') {
+    logger.error('[stripe] pagamento su una riserva scaduta: rimborso', { pendingCheckoutId });
+    const importoCents = session.amount_total ?? 0;
+    const pi = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+    if (pi && importoCents > 0) {
+      try {
+        await stripe.refunds.create(
+          { payment_intent: pi, metadata: { motivo: 'riserva_scaduta', pending_checkout_id: pendingCheckoutId } },
+          { idempotencyKey: `refund_scaduto_${pendingCheckoutId}` },
+        );
+      } catch (err) {
+        logger.error('[stripe] rimborso su riserva scaduta fallito', { pendingCheckoutId, err });
+        throw err;   // Stripe riprova: meglio ritentare che tenere soldi non dovuti
+      }
+    }
+    await notifyAdmins(
+      '⚠️ Pagamento su carrello scaduto',
+      `Un pagamento è arrivato dopo la scadenza della riserva merce (${pendingCheckoutId}). Rimborsato automaticamente.`,
+      '/admin/orders',
+    );
     return;
   }
 

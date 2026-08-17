@@ -28,6 +28,22 @@ const ALLOWED_KINDS = new Set([
  */
 // Rate limit: 20 upload / 10 min per utente (anti-abuse + protezione storage)
 export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 10 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
+  // Tetto PRIMA di leggere il corpo. `req.formData()` legge e analizza l'intero
+
+  // corpo in memoria: il controllo su file.size arrivava quando il file era già
+
+  // tutto in RAM, e le route di Next non impongono un limite loro. Un solo
+
+  // caricamento da qualche centinaio di megabyte bastava a far cadere il server.
+
+  const dichiarati = Number(req.headers.get('content-length') ?? '0');
+
+  if (Number.isFinite(dichiarati) && dichiarati > MAX_BYTES + 64 * 1024) {
+
+    return ApiErrors.payloadTooLarge('File troppo grande.');
+
+  }
+
   const form = await req.formData();
   const file = form.get('file');
   const kindRaw = form.get('kind');

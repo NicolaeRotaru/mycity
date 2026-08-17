@@ -5,11 +5,16 @@ const signUpMock = vi.fn();
 const signInMock = vi.fn();
 const signOutMock = vi.fn();
 
-vi.mock('@/lib/supabase/client', () => ({
-  auth: {
+// Le due rotte usano ora un client creato PER RICHIESTA (lib/supabase/auth-server):
+// prima importavano il client del browser, che tiene una sola istanza in una
+// variabile di modulo — condivisa fra tutte le richieste dello stesso processo.
+vi.mock('@/lib/supabase/auth-server', () => ({
+  authServer: {
     signUp: (...args: unknown[]) => signUpMock(...args),
-    signIn: (...args: unknown[]) => signInMock(...args),
-    signOut: () => signOutMock(),
+    signIn: async (...args: unknown[]) => {
+      const res = await signInMock(...args);
+      return { ...(res as object), client: { auth: { signOut: () => signOutMock() } } };
+    },
   },
 }));
 
