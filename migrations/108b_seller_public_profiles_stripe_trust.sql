@@ -1,10 +1,22 @@
 -- 108b: Espone i flag Stripe pubblici sulla vetrina (per gate badge «Verificato»)
 -- Solo booleani di stato pagamento — niente stripe_account_id né IBAN.
--- Idempotente.
+--
+-- ⚠️ DROP + CREATE, non CREATE OR REPLACE. Le due colonne nuove vanno inserite
+-- PRIMA di role/created_at per tenere l'ordine logico, ma CREATE OR REPLACE VIEW
+-- consente solo di AGGIUNGERE colonne in coda. Con la vista gia' esistente
+-- fallisce con:
+--   ERROR 42P16: cannot change name of view column "role" to "stripe_charges_enabled"
+-- Era questo il motivo per cui la migration non risultava applicata in produzione
+-- (verificato il 17/08/2026: supabase_migrations.schema_migrations non la
+-- conteneva, e la vista non aveva le due colonne).
+--
+-- Sicuro: nessun altro oggetto dipende dalla vista (pg_depend vuoto).
+-- Il DROP azzera i permessi, quindi vanno riassegnati: SOLO SELECT — vedi
+-- 113_revoke_public_writes_on_views.sql per il perche' la scrittura non va data.
 
-BEGIN;
+DROP VIEW IF EXISTS public.seller_public_profiles;
 
-CREATE OR REPLACE VIEW public.seller_public_profiles AS
+CREATE VIEW public.seller_public_profiles AS
 SELECT
   id,
   store_name,
@@ -34,7 +46,6 @@ COMMENT ON VIEW public.seller_public_profiles IS
   'Vetrina pubblica negozi approvati (colonne non sensibili + flag Stripe per badge Verificato). @foreignKey (id) references public.profiles (id)';
 
 GRANT SELECT ON public.seller_public_profiles TO anon, authenticated;
-
-COMMIT;
+REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.seller_public_profiles FROM anon, authenticated;
 
 NOTIFY pgrst, 'reload schema';
