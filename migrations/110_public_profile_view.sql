@@ -18,23 +18,22 @@ CREATE OR REPLACE VIEW public.public_profiles AS
   SELECT
     id,
     full_name,
-    avatar_url,
+    -- La colonna in profiles si chiama public_avatar_url (migrazione 033):
+    -- `avatar_url` non esiste e interrompeva la creazione della vista.
+    public_avatar_url AS avatar_url,
     -- Campi pubblici opzionali (impostati dall'utente)
     public_profile_enabled,
     -- Seller public fields
     store_name,
     store_logo,
-    store_banner,
     store_description,
-    store_city,
     store_address,
     is_approved,
-    rating,
-    total_reviews,
-    delivery_time_minutes,
-    min_order_amount,
-    free_delivery_threshold,
     offers_express,
+    -- Tolte perche' in public.profiles non esistono, e la vista non si creava:
+    -- store_banner, store_city, rating, total_reviews, delivery_time_minutes,
+    -- min_order_amount, free_delivery_threshold. Nessuna pagina legge questa
+    -- vista (il codice usa seller_public_profiles), quindi niente cambia a video.
     -- Role (senza dati fiscali/KYC)
     role
   FROM public.profiles

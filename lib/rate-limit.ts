@@ -149,10 +149,35 @@ export async function rateLimitAsync(opts: RateLimitOptions): Promise<RateLimitR
   return rateLimit(opts);
 }
 
-/** Estrae IP "ragionevole" da NextRequest. Non perfetto contro spoofing. */
+/**
+ * Quanti proxy fidati stanno davanti all'applicazione. In produzione ce n'è uno
+ * (l'ingresso della piattaforma). Se un giorno se ne aggiunge un altro — per
+ * esempio un CDN davanti — si alza questo numero via variabile d'ambiente,
+ * senza toccare il codice.
+ */
+const PROXY_FIDATI = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? '1') || 1);
+
+/**
+ * L'indirizzo di chi sta chiamando davvero.
+ *
+ * Perché non si legge il primo pezzo dell'intestazione: `x-forwarded-for` è una
+ * catena, e ogni proxy AGGIUNGE IN CODA l'indirizzo da cui ha ricevuto. Il primo
+ * pezzo è quindi quello che ha scritto il chiamante, che può inventarselo: con
+ * `X-Forwarded-For: <numero casuale>` a ogni richiesta si otteneva un contatore
+ * nuovo ogni volta, e il limite sui tentativi di accesso non contava più nulla.
+ *
+ * Si legge invece da destra, scartando i proxy fidati: quello è l'indirizzo
+ * scritto dalla nostra infrastruttura, che il chiamante non può falsificare.
+ */
 export function getClientIp(req: Request): string {
   const xff = req.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0].trim();
+  if (xff) {
+    const catena = xff.split(',').map((p) => p.trim()).filter(Boolean);
+    if (catena.length > 0) {
+      const i = Math.max(0, catena.length - PROXY_FIDATI);
+      return catena[i] ?? catena[catena.length - 1];
+    }
+  }
   const real = req.headers.get('x-real-ip');
   if (real) return real.trim();
   return 'unknown';

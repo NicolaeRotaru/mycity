@@ -48,7 +48,7 @@ CREATE POLICY "Rider reviews readable by involved parties" ON public.rider_revie
   FOR SELECT
   USING (
     rider_id = auth.uid()                       -- il rider vede le sue
-    OR reviewer_id = auth.uid()                 -- il buyer vede la sua
+    OR user_id = auth.uid()                     -- il buyer vede la sua
     OR public.is_admin()                        -- admin vede tutto
   );
 
@@ -79,7 +79,7 @@ CREATE POLICY "Group participants readable by self or seller" ON public.group_pa
     user_id = auth.uid()
     OR EXISTS (
       SELECT 1 FROM public.group_orders
-      WHERE group_orders.id = group_participants.group_id
+      WHERE group_orders.id = group_participants.group_order_id
         AND group_orders.seller_id = auth.uid()
     )
     OR public.is_admin()

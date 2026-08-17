@@ -12,16 +12,17 @@ type Activity = {
   created_at: string;
   delivery_status: string;
   delivery_city: string | null;
-  delivery_full_name: string | null;
-  seller: { store_name: string | null; id: string } | null;
+  seller_id: string | null;
+  store_name: string | null;
 };
 
-// Anonimizza il nome: "Mario Rossi" → "Mario R."
-function anonName(name: string | null | undefined): string {
-  if (!name) return 'Qualcuno';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0];
-  return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+// Chi ha ordinato non si dice. Prima questa riga leggeva delivery_full_name
+// dalla tabella orders e lo accorciava qui nel browser ("Mario R."): il nome
+// intero, col resto dell'ordine, arrivava comunque a ogni visitatore. Ora la
+// vista live_activity_public non lo contiene affatto, e al suo posto c'e' la
+// citta', che e' prova sociale senza essere un dato personale.
+function chiHaOrdinato(citta: string | null | undefined): string {
+  return citta ? `Qualcuno a ${citta}` : 'Qualcuno';
 }
 
 function timeAgo(date: string, now: number): string {
@@ -51,12 +52,8 @@ const LiveActivityFeed = () => {
     queryKey: queryKeys.home.liveFeed,
     queryFn: async () => {
       const { data } = await supabase
-        .from('orders')
-        .select(`
-          id, created_at, delivery_status, delivery_city, delivery_full_name,
-          seller:profiles!orders_seller_id_fkey ( id, store_name )
-        `)
-        .in('delivery_status', ['NEW', 'ACCEPTED', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED'])
+        .from('live_activity_public')
+        .select('id, created_at, delivery_status, delivery_city, seller_id, store_name')
         .order('created_at', { ascending: false })
         .limit(8);
       return (data ?? []) as unknown as Activity[];
@@ -110,14 +107,14 @@ const LiveActivityFeed = () => {
               </span>
               <div className="flex-1 min-w-0">
                 <p className="truncate">
-                  <strong className="text-ink-900">{anonName(a.delivery_full_name)}</strong>
+                  <strong className="text-ink-900">{chiHaOrdinato(a.delivery_city)}</strong>
                   <span className="text-ink-500"> {verb} </span>
-                  {a.seller?.id ? (
-                    <Link href={`/store/${a.seller.id}`} className="font-semibold text-primary-700 hover:underline">
-                      {a.seller.store_name ?? 'un negozio'}
+                  {a.seller_id ? (
+                    <Link href={`/store/${a.seller_id}`} className="font-semibold text-primary-700 hover:underline">
+                      {a.store_name ?? 'un negozio'}
                     </Link>
                   ) : (
-                    <span className="font-semibold text-ink-700">{a.seller?.store_name ?? 'un negozio'}</span>
+                    <span className="font-semibold text-ink-700">{a.store_name ?? 'un negozio'}</span>
                   )}
                 </p>
               </div>

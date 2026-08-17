@@ -26,10 +26,25 @@
 -- ⚠️ Da ripetere dopo ogni DROP+CREATE di una vista pubblica: i default
 -- privileges riassegnano ALL alla ricreazione.
 
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.seller_public_profiles   FROM anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.public_profiles          FROM anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.seller_storefronts       FROM anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.referral_leaderboard     FROM anon, authenticated;
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.shop_of_month_leaderboard FROM anon, authenticated;
+-- Solo sulle viste che esistono: `seller_storefronts` vive in produzione ma in
+-- nessuna migrazione (deriva), quindi su un database ricostruito da zero non
+-- c'e' — e un REVOKE su un oggetto assente interrompeva il file.
+DO $$
+DECLARE
+  v text;
+BEGIN
+  FOREACH v IN ARRAY ARRAY[
+    'public.seller_public_profiles',
+    'public.public_profiles',
+    'public.seller_storefronts',
+    'public.referral_leaderboard',
+    'public.shop_of_month_leaderboard'
+  ] LOOP
+    IF to_regclass(v) IS NOT NULL THEN
+      EXECUTE format(
+        'REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON %s FROM anon, authenticated', v);
+    END IF;
+  END LOOP;
+END $$;
 
 NOTIFY pgrst, 'reload schema';

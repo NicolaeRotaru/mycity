@@ -48,7 +48,12 @@ export default function NewReturnPage() {
   async function uploadPhoto(file: File) {
     setUploading(true);
     try {
-      const path = `returns/${params.id}/${Date.now()}-${file.name}`;
+      // Cartella = utente: la regola del secchio pubblico ora pretende che il
+      // primo livello sia l'identita' di chi carica, cosi' nessuno scrive
+      // dentro la cartella di un altro.
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessione scaduta');
+      const path = `${user.id}/returns/${params.id}/${Date.now()}-${file.name}`;
       const { error: upErr } = await supabase.storage
         .from('products')
         .upload(path, file, { upsert: false });

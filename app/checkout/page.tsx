@@ -14,7 +14,7 @@ import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import { haversineKm, riderFee } from '@/lib/geo';
 import { isExpressEligible } from '@/lib/products/express';
-import { validateCoupon, type Coupon } from '@/lib/coupons';
+import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -344,7 +344,7 @@ export default function CheckoutPage() {
 
   const applyCoupon = async () => {
     setCouponError(null);
-    const result = await validateCoupon(couponCode, grandSubtotal, authUser?.id ?? null);
+    const result = await validateCouponFromBrowser(couponCode, grandSubtotal);
     if (!result.ok) {
       setCouponError(result.reason);
       setAppliedCoupon(null);

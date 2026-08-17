@@ -9,7 +9,13 @@ BEGIN;
 
 DROP POLICY IF EXISTS "Anyone can view approved seller profiles" ON public.profiles;
 
-CREATE OR REPLACE VIEW public.seller_public_profiles AS
+-- DROP prima del CREATE: la 108b definisce la stessa vista con due colonne in
+-- piu' (i flag Stripe) e `CREATE OR REPLACE VIEW` non sa togliere colonne —
+-- l'intero file si interrompeva qui. La forma definitiva della vista sta nella
+-- migrazione 114.
+DROP VIEW IF EXISTS public.seller_public_profiles;
+
+CREATE VIEW public.seller_public_profiles AS
 SELECT
   id,
   store_name,

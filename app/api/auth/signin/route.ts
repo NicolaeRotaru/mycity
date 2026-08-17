@@ -34,6 +34,15 @@ export async function POST(request: Request) {
     return ApiErrors.invalidRequest('Password non valida');
   }
 
+  // Secondo limite, sull'indirizzo email invece che sull'indirizzo di rete: chi
+  // prova mille password su un account solo cambiando rete a ogni tentativo
+  // aggirava il limite per IP. Le due misure insieme chiudono i due casi —
+  // molti account da una rete, e un account da molte reti.
+  const rlEmail = await rateLimitAsync({ key: `signin-email:${email}`, max: 10, windowMs: 5 * 60_000 });
+  if (!rlEmail.allowed) {
+    return ApiErrors.rateLimited(rlEmail.retryAfterSec, 'Troppi tentativi su questo account. Riprova tra qualche minuto.');
+  }
+
   const cap = await verifyTurnstileToken(captchaToken, ip);
   if (!cap.ok) {
     return ApiErrors.invalidRequest(cap.reason);

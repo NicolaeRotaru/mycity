@@ -32,14 +32,21 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
   const [uploading, setUploading] = useState<'cash' | 'delivery' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Le prove d'incasso vanno nel secchio privato `cod-proof`, nella cartella del
+  // fattorino che le carica. Prima finivano nel secchio pubblico `products` sotto
+  // `cod-proof/<ordine>/`: chi indovinava l'indirizzo vedeva la foto dei
+  // contanti e quella della porta di casa del cliente. Qui si salva il PERCORSO,
+  // non un indirizzo pubblico: chi ha diritto di vederla ottiene un link a
+  // scadenza.
   async function upload(file: File, kind: 'cash' | 'delivery'): Promise<string | null> {
     setUploading(kind);
     try {
-      const path = `cod-proof/${orderId}/${kind}-${Date.now()}.jpg`;
-      const { error } = await supabase.storage.from('products').upload(path, file, { upsert: false });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Sessione scaduta');
+      const path = `${user.id}/${orderId}/${kind}-${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from('cod-proof').upload(path, file, { upsert: false });
       if (error) throw error;
-      const { data } = supabase.storage.from('products').getPublicUrl(path);
-      return data.publicUrl;
+      return path;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Upload fallito');
       return null;
