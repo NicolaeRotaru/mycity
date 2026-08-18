@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { env } from '@/lib/env';
 
 export const runtime = 'nodejs';
 
@@ -12,7 +13,9 @@ export const runtime = 'nodejs';
  */
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get('token') ?? '';
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? '';
+  // NEXT_PUBLIC_SITE_URL non esiste in questo progetto: valeva stringa vuota, e un
+  // indirizzo relativo fa lanciare NextResponse.redirect. Il punto unico e env.appUrl().
+  const base = env.appUrl();
 
   if (!token || token.length > 200) {
     return NextResponse.redirect(`${base}/?newsletter=link-non-valido`);
