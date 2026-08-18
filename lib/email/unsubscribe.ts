@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { env } from '@/lib/env';
 
 /**
  * Link di disiscrizione dalle email, senza dover accedere.
@@ -55,6 +56,8 @@ export function verificaDisiscrizione(
 }
 
 export function linkDisiscrizione(email: string, ambito: AmbitoDisiscrizione): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mycity.it';
+  // Il dominio scritto a mano qui non era quello vero (render.yaml dice
+  // mycity-marketplace.com): un link di disiscrizione che porta altrove non vale.
+  const base = env.appUrl();
   return `${base}/api/unsubscribe?token=${encodeURIComponent(firmaDisiscrizione(email, ambito))}`;
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { env } from '@/lib/env';
 import { z } from 'zod';
 import crypto from 'node:crypto';
 import { getAdminSupabase } from '@/lib/supabase/server';
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
     return ApiErrors.internal('Iscrizione non riuscita');
   }
 
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://mycity.it';
+  const base = env.appUrl();
   const link = `${base}/api/newsletter/confirm?token=${encodeURIComponent(token)}`;
 
   await sendEmail({
