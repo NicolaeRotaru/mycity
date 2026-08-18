@@ -62,21 +62,32 @@ function line(level: string, msg: string, ctx?: LogContext): string {
   return JSON.stringify({ level, msg, ts: new Date().toISOString(), ...(toCtx(ctx) ?? {}) });
 }
 
+/**
+ * Sul SERVER si scrive sempre, anche in produzione.
+ *
+ * Prima le tre funzioni erano avvolte da `NODE_ENV !== 'production'`: in
+ * produzione, sul server, non usciva NIENTE nei log. L'unico canale rimasto era
+ * la cattura degli errori verso il servizio esterno, che serve a un altro scopo
+ * e non aiuta chi apre i log per capire cos'e' successo un minuto prima. Cioe':
+ * un guasto in produzione si guardava alla cieca. Il rumore si controlla col
+ * livello (`info` resta fuori dalla produzione), non spegnendo tutto.
+ */
+const eServer = typeof window === 'undefined';
+
 export const logger = {
   info: (msg: string, ctx?: LogContext) => {
-    if (process.env.NODE_ENV !== 'production') {
+    if (process.env.NODE_ENV !== 'production' || process.env.LOG_LEVEL === 'info') {
       console.log(line('info', msg, ctx));
     }
   },
 
   warn: (msg: string, ctx?: LogContext) => {
-    if (typeof window !== 'undefined' || process.env.NODE_ENV !== 'production') {
-      console.warn(line('warn', msg, ctx));
-    }
+    // Sempre: un avviso in produzione e' esattamente quello che si va a cercare.
+    console.warn(line('warn', msg, ctx));
   },
 
   error: (err: unknown, ctx?: LogContext) => {
-    if (process.env.NODE_ENV !== 'production') {
+    if (eServer || process.env.NODE_ENV !== 'production') {
       console.error(line('error', err instanceof Error ? err.message : String(err), ctx));
     }
     const c = toCtx(ctx);

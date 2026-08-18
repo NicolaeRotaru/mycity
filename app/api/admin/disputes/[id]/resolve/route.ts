@@ -96,6 +96,32 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (updErr) return ApiErrors.internal('Update fallito');
   if (!updated || updated.length === 0) return ApiErrors.conflict("Reclamo già risolto da un'altra sessione");
 
+  // Sbloccare il payout del venditore.
+  //
+  // All'apertura del reclamo un trigger scrive `orders.dispute_status='OPEN'`, e
+  // il cron dei payout paga solo gli ordini con quel campo vuoto o 'WON'.
+  // Chiudere il reclamo aggiornava soltanto la tabella dei reclami: il campo
+  // sull'ordine restava 'OPEN' per sempre, e il venditore non veniva pagato mai
+  // piu'. Non c'era nessun punto nel codice che lo riportasse indietro.
+  if (dispute.order_id) {
+    const esitoAlCliente = body.status === 'resolved_buyer';
+    const { error: errOrdine } = await admin
+      .from('orders')
+      .update(
+        esitoAlCliente
+          ? { dispute_status: 'LOST' }
+          : { dispute_status: null, disputed_at: null },
+      )
+      .eq('id', dispute.order_id);
+    if (errOrdine) {
+      // Non blocca la risoluzione, ma deve essere visibile: il venditore resta
+      // in attesa di essere pagato.
+      logger.error('[dispute] stato dell ordine non sbloccato', {
+        orderId: dispute.order_id, message: errOrdine.message,
+      });
+    }
+  }
+
   // Notifica chi ha aperto il reclamo.
   await admin.from('notifications').insert({
     user_id: dispute.opener_id,

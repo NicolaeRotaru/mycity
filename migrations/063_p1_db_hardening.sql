@@ -12,9 +12,23 @@
 -- =========================================================
 -- 1) search_path immutabile (advisor function_search_path_mutable)
 -- =========================================================
-ALTER FUNCTION public.touch_updated_at() SET search_path = public;
-ALTER FUNCTION public.product_active_discount(uuid) SET search_path = public;
-ALTER FUNCTION public.search_products_smart(text, integer) SET search_path = public;
+-- Solo per le funzioni che esistono davvero: `touch_updated_at` non e' mai stata
+-- creata da nessuna migrazione, e un ALTER su una funzione assente interrompeva
+-- il file — lasciando fuori tutto il resto (trigger dispute, lockout OTP).
+DO $$
+DECLARE
+  f text;
+BEGIN
+  FOREACH f IN ARRAY ARRAY[
+    'public.touch_updated_at()',
+    'public.product_active_discount(uuid)',
+    'public.search_products_smart(text, integer)'
+  ] LOOP
+    IF to_regprocedure(f) IS NOT NULL THEN
+      EXECUTE format('ALTER FUNCTION %s SET search_path = public', f);
+    END IF;
+  END LOOP;
+END $$;
 
 -- =========================================================
 -- 2) Lockdown SECURITY DEFINER: revoca EXECUTE ad anon/authenticated

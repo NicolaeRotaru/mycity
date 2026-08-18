@@ -6,12 +6,24 @@ import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
+/**
+ * Percorso dentro il secchio privato `cod-proof`, non un indirizzo pubblico.
+ * Le prove d'incasso non stanno piu' nel secchio pubblico, quindi qui arriva
+ * `<utente>/<ordine>/cash-....jpg`. Vietati i due punti (nessun http://) e i
+ * passi indietro (`..`), per non poter uscire dalla propria cartella.
+ */
+const PercorsoProva = z
+  .string()
+  .max(300)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9/_.-]*$/, 'Percorso non valido')
+  .refine((v) => !v.includes('..'), 'Percorso non valido');
+
 const Body = z.object({
   orderId: z.string().uuid(),
   cashCollectedCents: z.number().int().nonnegative(),
-  photoUrl: z.string().url().optional(),
-  signatureUrl: z.string().url().optional(),
-  deliveryPhotoUrl: z.string().url().optional(),
+  photoUrl: PercorsoProva.optional(),
+  signatureUrl: PercorsoProva.optional(),
+  deliveryPhotoUrl: PercorsoProva.optional(),
 });
 
 /** Sopra questa soglia la prova (foto contanti o firma) è obbligatoria. */
@@ -97,6 +109,12 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
       delivery_photo_url: body.deliveryPhotoUrl ?? null,
       cash_confirmed_at: now.toISOString(),
       cash_collected_by: user.id,
+      // L'ordine in contanti diventa PAGATO qui, che è il momento in cui i soldi
+      // sono davvero passati di mano. Prima restava 'PENDING' per sempre: in
+      // tutto il codice l'unico punto che scriveva 'PAID' era il webhook della
+      // carta. Conseguenza: l'annullamento da pannello trattava un contante già
+      // incassato come un ordine mai pagato, e non restituiva niente al cliente.
+      payment_status: 'PAID',
     })
     .eq('id', body.orderId)
     .eq('rider_id', user.id)

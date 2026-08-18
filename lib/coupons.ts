@@ -86,3 +86,53 @@ export async function validateCoupon(
 
   return { ok: true, coupon, discount, freeShipping };
 }
+
+/**
+ * Valida un codice DAL BROWSER, passando dalla funzione `check_coupon` del
+ * database invece di leggere la tabella coupons.
+ *
+ * Perché non si legge più la tabella: la policy di lettura era `active = true`
+ * per tutti, e il ruolo anonimo aveva il permesso di SELECT. Una sola chiamata
+ * con la chiave pubblica del browser — che sta nel bundle, quindi la ha
+ * chiunque — scaricava l'elenco completo dei codici attivi con valore, soglia
+ * minima e scadenza. La funzione risponde solo «vale / non vale» e, se vale,
+ * quanto sconto: nessun elenco da sfogliare.
+ *
+ * I percorsi server (/api/stripe/checkout e /api/orders/cod) continuano a usare
+ * validateCoupon con il client di servizio: lì la lettura diretta serve e non è
+ * esposta a nessuno.
+ */
+export async function validateCouponFromBrowser(
+  code: string,
+  subtotal: number,
+): Promise<CouponValidation> {
+  const trimmed = code.trim().toUpperCase();
+  if (!trimmed) return { ok: false, reason: 'Inserisci un codice' };
+
+  const { data, error } = await supabase.rpc('check_coupon', {
+    p_code: trimmed,
+    p_subtotal: subtotal,
+  });
+
+  if (error || !data) return { ok: false, reason: 'Codice non valido' };
+
+  const res = data as {
+    ok: boolean;
+    reason?: string;
+    discount?: number;
+    freeShipping?: boolean;
+    coupon?: Partial<Coupon>;
+  };
+
+  if (!res.ok || !res.coupon) return { ok: false, reason: res.reason ?? 'Codice non valido' };
+
+  return {
+    ok: true,
+    // La funzione restituisce i soli campi che servono a mostrare il codice
+    // applicato; il calcolo dello sconto resta comunque rifatto lato server
+    // prima di addebitare.
+    coupon: res.coupon as Coupon,
+    discount: Number(res.discount ?? 0),
+    freeShipping: Boolean(res.freeShipping),
+  };
+}

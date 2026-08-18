@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/supabase/client';
+import { authServer } from '@/lib/supabase/auth-server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { env } from '@/lib/env';
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
   try {
     const emailRedirectTo = `${env.appUrl()}/auth/callback`;
-    const { data, error } = await auth.signUp(email, password, {
+    const { data, error } = await authServer.signUp(email, password, {
       captchaToken,
       emailRedirectTo,
     });

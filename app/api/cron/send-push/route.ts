@@ -32,7 +32,7 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
   const sinceIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
   const { data: pending } = await supa
     .from('notifications')
-    .select('id, user_id, title, body, link')
+    .select('id, user_id, title, body, link, category')
     .is('pushed_at', null)
     .gte('created_at', sinceIso)
     .order('created_at', { ascending: true })
@@ -43,7 +43,22 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
   let sent = 0;
   let retried = 0;
   const nowIso = new Date().toISOString();
-  for (const n of pending as { id: string; user_id: string; title: string; body: string | null; link: string | null }[]) {
+  let saltate = 0;
+  for (const n of pending as { id: string; user_id: string; title: string; body: string | null; link: string | null; category: string | null }[]) {
+    // Gli interruttori nelle impostazioni ora contano. Prima le quattro
+    // preferenze del profilo non venivano lette da nessuno: chi spegneva
+    // «promozioni» continuava a riceverle.
+    const { data: vuole } = await supa.rpc('vuole_notifica', {
+      p_user_id: n.user_id,
+      p_category: n.category ?? 'order',
+    });
+    if (vuole === false) {
+      // Segnata come gestita: non e' un errore, e' una scelta di chi la riceve.
+      await supa.from('notifications').update({ pushed_at: nowIso }).eq('id', n.id);
+      saltate++;
+      continue;
+    }
+
     const r = await sendPushToUser(supa, n.user_id, {
       title: n.title,
       body: n.body ?? undefined,
@@ -62,7 +77,7 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, processed: pending.length, retried });
+  return NextResponse.json({ ok: true, sent, processed: pending.length, retried, saltate });
 });
 
 export const GET = handler;

@@ -67,12 +67,19 @@ export function ConfirmDialogHost() {
     () => null,
   );
 
-  // ESC chiude, Enter conferma, blocca lo scroll del body mentre aperto
+  // ESC annulla; Invio NON conferma da solo. Blocca lo scroll mentre è aperto.
+  //
+  // Il difetto: l'ascoltatore stava su `document` e faceva
+  // `if (e.key === 'Enter') closeWith(true)`. Qualunque Invio premuto col
+  // dialogo aperto eseguiva l'azione — anche col fuoco sul bottone «Annulla»,
+  // anche premuto per abitudine dopo aver letto la domanda. Su un dialogo che
+  // chiede «cancello l'account?» quello è il tasto sbagliato da rendere
+  // scorciatoia. Ora Invio funziona come su qualsiasi bottone: attiva quello
+  // che ha il fuoco, e il browser ci pensa da sé.
   useEffect(() => {
     if (!state) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); closeWith(false); }
-      if (e.key === 'Enter')  { e.preventDefault(); closeWith(true); }
     };
     document.addEventListener('keydown', onKey);
     const prevOverflow = document.body.style.overflow;
@@ -145,6 +152,7 @@ export function ConfirmDialogHost() {
           <button
             type="button"
             onClick={() => closeWith(false)}
+            autoFocus={isDanger}
             className="px-4 py-3 rounded-xl font-semibold text-ink-700 bg-white border-2 border-cream-300 hover:border-cream-300 hover:bg-cream-50 active:scale-[0.98] transition-all"
           >
             {state.cancelLabel ?? tActions('cancel')}
@@ -152,7 +160,9 @@ export function ConfirmDialogHost() {
           <button
             type="button"
             onClick={() => closeWith(true)}
-            autoFocus
+            // Sul dialogo distruttivo il fuoco parte da «Annulla» (vedi sopra):
+            // chi tira via le mani dalla tastiera non deve cancellare niente.
+            autoFocus={!isDanger}
             className={`px-4 py-3 rounded-xl font-bold text-white shadow-md active:scale-[0.98] transition-all ${
               isDanger
                 ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'

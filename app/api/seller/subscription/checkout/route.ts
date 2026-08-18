@@ -44,6 +44,38 @@ export const POST = withAuthRateLimit(
     }
 
     const stripe = getStripe();
+
+    // Il controllo sopra guarda un campo che viene scritto dal webhook DOPO il
+    // pagamento: fra il primo clic e l'arrivo del webhook — o con due schede
+    // aperte — restava aperta una finestra in cui nascevano due abbonamenti
+    // distinti, e il secondo copriva il primo nel profilo. Il negoziante pagava
+    // due volte e nel pannello se ne vedeva uno.
+    //
+    // Qui si chiede a Stripe, che è la fonte vera, invece di fidarsi del nostro
+    // campo. Se la chiamata non riesce non si blocca il negoziante: si prosegue,
+    // perché il caso peggiore resta quello di prima.
+    if (profile.stripe_customer_id) {
+      try {
+        const esistenti = await stripe.subscriptions.list({
+          customer: profile.stripe_customer_id,
+          status: 'all',
+          limit: 10,
+        });
+        const attiva = esistenti.data.find((sub) =>
+          ['active', 'trialing', 'past_due', 'unpaid'].includes(sub.status),
+        );
+        if (attiva) {
+          logger.warn('[subscription] abbonamento già presente su Stripe', {
+            sellerId: user.id, subscriptionId: attiva.id, stato: attiva.status,
+          });
+          return ApiErrors.conflict(
+            'Risulta già un abbonamento su questo account. Ricarica la pagina: se non lo vedi, scrivici.',
+          );
+        }
+      } catch (err) {
+        logger.warn('[subscription] verifica su Stripe non riuscita, si prosegue', { err });
+      }
+    }
     try {
       const session = await stripe.checkout.sessions.create({
         mode: 'subscription',

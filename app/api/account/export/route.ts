@@ -51,6 +51,14 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
     conversations,
     chatMessages,
     contactMessages,
+    activityEvents,
+    recentlyViewed,
+    productViews,
+    pushSubscriptions,
+    newsletter,
+    returns,
+    disputes,
+    consents,
   ] = await Promise.all([
     admin.from('profiles').select('*').eq('id', userId).single(),
     admin.from('user_addresses').select('*').eq('user_id', userId),
@@ -70,6 +78,18 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
     admin.from('conversations').select('*').or(`buyer_id.eq.${userId},seller_id.eq.${userId}`),
     admin.from('messages').select('*').eq('sender_id', userId),
     admin.from('contact_messages').select('*').eq('user_id', userId),
+    // Mancavano all'appello, e sono i dati con cui una persona viene profilata:
+    // il registro delle azioni (con indirizzo di rete e browser), le cose
+    // guardate, i dispositivi registrati per le notifiche, l'iscrizione alle
+    // novità, i resi, le contestazioni e lo storico dei consensi.
+    admin.from('activity_events').select('*').or(`user_id.eq.${userId},actor_id.eq.${userId}`).limit(5000),
+    admin.from('recently_viewed').select('*').eq('user_id', userId),
+    admin.from('product_views').select('*').eq('user_id', userId).limit(5000),
+    admin.from('push_subscriptions').select('*').eq('user_id', userId),
+    admin.from('newsletter_subscribers').select('*').eq('email', userEmail ?? ''),
+    admin.from('returns').select('*').eq('buyer_id', userId),
+    admin.from('disputes').select('*').or(`opener_id.eq.${userId},against_id.eq.${userId}`),
+    admin.from('consent_log').select('*').eq('user_id', userId),
   ]);
 
   // Anonimizza/maschera campi sensibili anche nell'export
@@ -107,6 +127,14 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
       messages_sent: chatMessages.data ?? [],
     },
     contact_messages: contactMessages.data ?? [],
+    registro_attivita: activityEvents.data ?? [],
+    guardati_di_recente: recentlyViewed.data ?? [],
+    prodotti_visti: productViews.data ?? [],
+    dispositivi_notifiche: pushSubscriptions.data ?? [],
+    newsletter: newsletter.data ?? [],
+    resi: returns.data ?? [],
+    contestazioni: disputes.data ?? [],
+    consensi: consents.data ?? [],
   };
 
   const today = new Date().toISOString().slice(0, 10);

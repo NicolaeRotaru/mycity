@@ -223,8 +223,18 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
       ? authHeader.slice(7).trim()
       : null;
     if (!secretsMatch(bearer, expected)) return ApiErrors.unauthorized();
-    void recordCronHeartbeat(req); // dead-man's switch (🟠-25), best-effort
-    return handler(req);
+
+    // Il battito si registra DOPO, e solo se il lavoro e' andato a buon fine.
+    //
+    // Prima veniva scritto subito dopo il controllo del segreto: l'allarme
+    // «questo lavoro non gira piu'» restava zitto anche quando il lavoro girava
+    // e falliva ogni volta. Cioe' il sensore che doveva accorgersi dei guasti
+    // era l'unico che non li vedeva.
+    const risposta = await handler(req);
+    if (risposta.status < 400) {
+      void recordCronHeartbeat(req); // dead-man's switch (🟠-25), best-effort
+    }
+    return risposta;
   };
 }
 

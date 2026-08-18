@@ -13,7 +13,7 @@ type Review = {
   rating: number;
   comment: string | null;
   created_at: string;
-  reviewer: { full_name: string | null } | null;
+  autore_nome: string | null;
 };
 
 const Stars = ({ rating, size = 14 }: { rating: number; size?: number }) => {
@@ -41,16 +41,17 @@ export default function RiderReviewsPage() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      // Dalla vista rider_reviews_ricevute: porta il solo nome di battesimo di
+      // chi ha scritto. Prima questa query chiedeva la riga profiles del
+      // cliente (che include codice fiscale, IBAN e documenti) attraverso un
+      // collegamento che nemmeno esiste — `rider_reviews_reviewer_id_fkey`, la
+      // colonna vera e' user_id — quindi la pagina andava comunque in errore.
       const { data, error } = await supabase
-        .from('rider_reviews')
-        .select(`
-          id, rating, comment, created_at,
-          reviewer:profiles!rider_reviews_reviewer_id_fkey ( full_name )
-        `)
-        .eq('rider_id', user.id)
+        .from('rider_reviews_ricevute')
+        .select('id, rating, comment, created_at, autore_nome')
         .order('created_at', { ascending: false });
       if (error) throw error;
-      type RiderReviewRow = { id: string; rating: number; comment: string | null; created_at: string; reviewer: { full_name: string | null } | null };
+      type RiderReviewRow = { id: string; rating: number; comment: string | null; created_at: string; autore_nome: string | null };
       return (data ?? []) as unknown as RiderReviewRow[];
     },
   });
@@ -143,7 +144,7 @@ export default function RiderReviewsPage() {
               {filtered.map((r) => (
                 <article key={r.id} className="rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3">
                   <div className="mb-1 flex items-center justify-between gap-2">
-                    <strong className="text-[13px] text-ink-900">{r.reviewer?.full_name ?? 'Cliente'}</strong>
+                    <strong className="text-[13px] text-ink-900">{r.autore_nome ?? 'Cliente'}</strong>
                     <Stars rating={r.rating} size={12} />
                   </div>
                   {r.comment && <p className="text-[13px] leading-relaxed text-ink-600">{r.comment}</p>}

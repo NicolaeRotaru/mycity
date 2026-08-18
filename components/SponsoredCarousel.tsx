@@ -39,17 +39,20 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
     queryKey: queryKeys.sponsored.placement(placement, categorySlug),
     queryFn: async (): Promise<SponsoredItem[]> => {
       const today = new Date().toISOString().slice(0, 10);
+      // Legge la vista sponsored_active_public: l'annuncio senza i conti.
+      // La tabella sponsored_listings porta anche daily_budget_cents,
+      // spent_cents, impressions, clicks e stripe_session_id, ed era leggibile
+      // da chiunque: i concorrenti vedevano quanto spendeva ogni negozio.
       let q = supabase
-        .from('sponsored_listings')
+        .from('sponsored_active_public')
         .select(`
           id, product_id,
-          product:products!sponsored_listings_product_id_fkey (
+          product:products (
             id, name, price, images,
             profiles!products_seller_id_fkey ( store_name, is_approved )
           )
         `)
         .eq('placement', placement)
-        .eq('status', 'active')
         .lte('start_date', today)
         .gte('end_date', today)
         .limit(8);

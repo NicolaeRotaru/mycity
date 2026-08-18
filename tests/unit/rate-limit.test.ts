@@ -103,9 +103,14 @@ describe('getClientIp', () => {
   const mkReq = (headers: Record<string, string>) =>
     new Request('http://localhost', { headers });
 
-  it('extracts from x-forwarded-for (first IP)', () => {
+  // Questo test chiedeva il PRIMO pezzo della catena, cioè il valore scritto dal
+  // chiamante — che può inventarselo. Così com'era, fissava la falla come
+  // regola: bastava mandare un x-forwarded-for diverso a ogni richiesta per
+  // avere un contatore nuovo ogni volta e non incontrare mai il limite.
+  // Ora si legge l'ultimo pezzo, quello scritto dal nostro proxy.
+  it('prende l\'indirizzo scritto dal proxy, non quello dichiarato dal chiamante', () => {
     const req = mkReq({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' });
-    expect(getClientIp(req)).toBe('1.2.3.4');
+    expect(getClientIp(req)).toBe('5.6.7.8');
   });
 
   it('extracts single x-forwarded-for', () => {
@@ -124,7 +129,7 @@ describe('getClientIp', () => {
   });
 
   it('trims whitespace', () => {
-    const req = mkReq({ 'x-forwarded-for': '   1.2.3.4  , 5.6.7.8' });
-    expect(getClientIp(req)).toBe('1.2.3.4');
+    const req = mkReq({ 'x-forwarded-for': '   1.2.3.4  , 5.6.7.8   ' });
+    expect(getClientIp(req)).toBe('5.6.7.8');
   });
 });

@@ -1,0 +1,56 @@
+name: Backup database
+
+# Perché questo file esiste: lo script scripts/backup-db.sh era scritto bene e
+# non lo eseguiva nessuno. Nessun blocco periodico in render.yaml, nessun lavoro
+# in CI, nessuna voce nell'elenco dei cron: zero backup. E l'unica copia
+# possibile finiva sul disco del contenitore, che si azzera a ogni rilascio.
+#
+# Qui il backup gira ogni notte e il file viene conservato fuori dal contenitore,
+# fra gli artefatti dell'esecuzione, per 30 giorni.
+#
+# Serve il segreto SUPABASE_DB_URL (la stringa di connessione al database).
+# Senza, il lavoro NON finge di essere andato bene: si fermerà con un messaggio
+# esplicito, perché un backup che non c'è va visto subito, non alla prima
+# emergenza.
+
+on:
+  schedule:
+    - cron: "17 2 * * *" # ogni notte alle 02:17 UTC
+  workflow_dispatch: {} # avviabile anche a mano
+
+jobs:
+  backup:
+    name: Copia notturna
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installa il client Postgres
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Verifica di sapere dove copiare
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Manca il segreto SUPABASE_DB_URL: nessun backup eseguito. Aggiungilo in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      - name: Esegui il backup
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_DIR: ${{ github.workspace }}/backup
+        run: |
+          mkdir -p "$BACKUP_DIR"
+          bash scripts/backup-db.sh
+
+      - name: Conserva la copia fuori dal contenitore
+        uses: actions/upload-artifact@v4
+        with:
+          name: backup-database-${{ github.run_id }}
+          path: backup/
+          retention-days: 30
+          if-no-files-found: error

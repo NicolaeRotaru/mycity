@@ -2,13 +2,16 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { createMultiSellerCheckoutSession, isStripeConfigured } from '@/lib/stripe/client';
+import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
-import { shippingCentsFor } from '@/lib/shipping';
+import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
+import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
+import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 
 export const runtime = 'nodejs';
@@ -133,7 +136,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
   const { data: sellers } = await supa
     .from('profiles')
-    .select('id, store_name, full_name, store_lat, store_lng')
+    .select('id, store_name, full_name, store_lat, store_lng, store_hours')
     .in('id', sellerIds);
 
   const sellerNameMap = new Map<string, string>();
@@ -141,6 +144,24 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   for (const s of sellers ?? []) {
     sellerNameMap.set(s.id, s.store_name ?? s.full_name ?? 'Negozio');
     sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
+  }
+
+  // Negozio chiuso: niente consegna a domicilio adesso, il fattorino andrebbe a
+  // vuoto. Il percorso in contanti questo controllo lo faceva già; quello con la
+  // carta no, quindi alle tre di notte si poteva pagare un ordine che nessuno
+  // avrebbe preparato. Il ritiro in negozio è esente: il cliente passa quando è
+  // aperto.
+  if (!body.pickupInStore) {
+    for (const s of sellers ?? []) {
+      if (isStoreClosedForOrder((s as { store_hours?: unknown }).store_hours)) {
+        return NextResponse.json(
+          {
+            error: `${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`,
+          },
+          { status: 409 },
+        );
+      }
+    }
   }
 
   // --- 3. Validazioni per ogni gruppo + costruzione line items per Stripe.
@@ -258,14 +279,24 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // distanza-based della UI (lib/shipping.ts), usando le coordinate negozio dal
   // DB e quelle di consegna inviate dal client. Coupon FREE_SHIPPING o soglia
   // raggiunta ⇒ 0. Si ignora qualunque importo di spedizione dal client.
+  // Coordinate della consegna prese dal database, non dal browser: il prezzo
+  // della consegna dipende dalla distanza, e finora quel numero lo scriveva il
+  // client. Se l'indirizzo non è fra quelli salvati dalla persona, si resta
+  // senza coordinate e vale la tariffa fissa.
+  const coordConsegna = await coordinateDaIndirizziSalvati(admin, user.id, {
+    address: body.delivery.address,
+    city: body.delivery.city,
+    zip: body.delivery.zip,
+  });
+
   const shippingPerGroupCents = stripeGroups.map((g, i) => {
     const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
     return shippingCentsFor({
       subtotal: subtotalPerGroupCents[i] / 100,
       storeLat: coord.lat,
       storeLng: coord.lng,
-      deliveryLat: body.delivery.lat ?? null,
-      deliveryLng: body.delivery.lng ?? null,
+      deliveryLat: coordConsegna?.lat ?? null,
+      deliveryLng: coordConsegna?.lng ?? null,
       pickupInStore: body.pickupInStore,
       freeShipping: couponFreeShipping,
     });
@@ -290,18 +321,27 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     Math.max(0, grandSubtotalCents + grandShippingCents - 1),
   );
 
+  // Le quote per negozio si calcolano dallo sconto GIÀ limitato, non da quello
+  // richiesto: è lo sconto limitato che finisce sulla carta del cliente. E si
+  // ripartiscono col metodo del resto più grande, così la somma delle quote
+  // torna al centesimo con l'importo addebitato. Prima si usavano i valori non
+  // limitati, arrotondati uno per uno: i totali per negozio e l'addebito
+  // divergevano.
+  const scontiLimitati = riduciAlTetto(couponDiscountCents, pickupDiscountCents, totalDiscountCents);
+  const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotalPerGroupCents);
+  const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotalPerGroupCents);
+
   const groupPersisted = stripeGroups.map((g, i) => {
     const subtotal = subtotalPerGroupCents[i];
     const shipping = shippingPerGroupCents[i];
     const deliveryFeeCents = deliveryFeePerGroupCents[i];
-    // Quota proporzionale del coupon globale rispetto al subtotale del gruppo
-    const portion = grandSubtotalCents > 0 ? subtotal / grandSubtotalCents : 0;
-    const couponPortionCents = Math.round(couponDiscountCents * portion);
-    const pickupPortionCents = Math.round(pickupDiscountCents * portion);
+    const couponPortionCents = quoteCoupon[i];
+    const pickupPortionCents = quoteRitiro[i];
     const totalCents = Math.max(
       0,
       subtotal + shipping + deliveryFeeCents - couponPortionCents - pickupPortionCents,
     );
+    const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
     return {
       sellerId: g.sellerId,
       storeName: g.storeName,
@@ -312,6 +352,16 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       couponPortionCents,
       pickupPortionCents,
       totalCents,
+      // Il compenso del fattorino si calcola qui, dove le coordinate del negozio
+      // e della consegna sono note, e viaggia col gruppo fino alla creazione
+      // dell'ordine. Dipende dalla distanza, non da quanto paga il cliente.
+      riderFeeCents: compensoRiderCents({
+        storeLat: coord.lat,
+        storeLng: coord.lng,
+        deliveryLat: coordConsegna?.lat ?? null,
+        deliveryLng: coordConsegna?.lng ?? null,
+        pickupInStore: body.pickupInStore,
+      }),
     };
   });
 
@@ -351,8 +401,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         zip: body.delivery.zip,
         phone: body.delivery.phone,
         notes: body.delivery.notes ?? null,
-        lat: body.delivery.lat ?? null,
-        lng: body.delivery.lng ?? null,
+        lat: coordConsegna?.lat ?? body.delivery.lat ?? null,
+        lng: coordConsegna?.lng ?? body.delivery.lng ?? null,
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
         // scrive su orders.delivery_slot. null per ritiro / non scelta.
         slot: body.pickupInStore ? null : (body.deliverySlot ?? null),
@@ -360,7 +410,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       pickup_in_store: body.pickupInStore,
       status: 'PENDING',
     })
-    .select('id')
+    .select('id, expires_at')
     .single();
 
   if (pendErr || !pending) {
@@ -384,6 +434,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       buyerUserId: user.id,
       successUrl,
       cancelUrl,
+      // La sessione scade con la riserva della merce, non 24 ore dopo.
+      pendingExpiresAt: pending.expires_at ? new Date(pending.expires_at).getTime() : undefined,
     });
 
     // Salva l'id session su pending_checkout per lookup nel webhook
@@ -397,6 +449,13 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     logger.error('[stripe] checkout creation failed', e);
     // Rilascia la riserva di stock e marca il pending come CANCELED (no orphan).
     await admin.rpc('restore_stock', { p_items: stockItems });
+    // Il codice sconto era già stato «consumato» prima di creare la sessione:
+    // se il pagamento non nasce va restituito, altrimenti quell'uso è perso per
+    // sempre. Nel codice non esisteva nessun punto che lo restituisse.
+    if (validatedCouponCode) {
+      const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
+      if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+    }
     await admin
       .from('pending_checkouts')
       .update({ status: 'CANCELED' })

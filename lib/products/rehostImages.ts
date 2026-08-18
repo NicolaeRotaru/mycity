@@ -50,6 +50,42 @@ function isHttpUrl(raw: string): boolean {
 }
 
 /**
+ * Legge il corpo della risposta a pezzi e si ferma appena supera `maxBytes`.
+ * Restituisce `null` se il tetto viene superato: così il file grande non arriva
+ * mai a occupare la memoria per intero.
+ *
+ * Se la risposta non offre uno stream (per esempio in un test con una risposta
+ * finta), ricade su arrayBuffer e controlla la dimensione subito dopo.
+ */
+export async function leggiConTetto(res: Response, maxBytes: number): Promise<Buffer | null> {
+  const body = res.body as ReadableStream<Uint8Array> | null | undefined;
+  if (!body || typeof body.getReader !== 'function') {
+    const buf = Buffer.from(await res.arrayBuffer());
+    return buf.byteLength > maxBytes ? null : buf;
+  }
+
+  const reader = body.getReader();
+  const pezzi: Uint8Array[] = [];
+  let letti = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      letti += value.byteLength;
+      if (letti > maxBytes) {
+        await reader.cancel().catch(() => {});
+        return null;
+      }
+      pezzi.push(value);
+    }
+  } finally {
+    reader.releaseLock?.();
+  }
+  return Buffer.concat(pezzi.map((p) => Buffer.from(p)));
+}
+
+/**
  * Scarica `imageUrls` e le ricarica nel bucket `products` sotto `ownerId/`.
  * `storage` può essere il client admin (service role) o quello utente.
  */
@@ -89,13 +125,25 @@ export async function rehostImageUrls(
         continue;
       }
 
-      const buffer = Buffer.from(await res.arrayBuffer());
-      if (buffer.byteLength === 0) {
-        failed.push({ url, reason: 'File vuoto' });
+      // Il tetto si controlla PRIMA di tenere il file in memoria. Con
+      // `await res.arrayBuffer()` il controllo arrivava quando il file era già
+      // interamente in RAM: un URL che punta a un file enorme — e l'URL lo
+      // scrive il venditore — bastava a saturare la memoria del server.
+      const dichiarati = Number(res.headers.get('content-length') ?? '');
+      if (Number.isFinite(dichiarati) && dichiarati > maxBytes) {
+        failed.push({ url, reason: 'Immagine troppo grande' });
         continue;
       }
-      if (buffer.byteLength > maxBytes) {
+
+      // Chi mente sul Content-Length (o lo omette) viene fermato comunque:
+      // si legge a pezzi e si interrompe appena si supera il tetto.
+      const buffer = await leggiConTetto(res, maxBytes);
+      if (buffer === null) {
         failed.push({ url, reason: 'Immagine troppo grande' });
+        continue;
+      }
+      if (buffer.byteLength === 0) {
+        failed.push({ url, reason: 'File vuoto' });
         continue;
       }
 

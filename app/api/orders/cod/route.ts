@@ -6,7 +6,8 @@ import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
-import { shippingCentsFor } from '@/lib/shipping';
+import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
+import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -226,14 +227,24 @@ export const POST = withAuthRateLimit(
       }
     }
 
+    // Coordinate della consegna prese dal database, non dal browser: il prezzo
+    // della consegna dipende dalla distanza, e finora quel numero lo scriveva il
+    // client. Se l'indirizzo non è fra quelli salvati dalla persona, si resta
+    // senza coordinate e vale la tariffa fissa.
+    const coordConsegna = await coordinateDaIndirizziSalvati(admin, user.id, {
+      address: body.delivery.address,
+      city: body.delivery.city,
+      zip: body.delivery.zip,
+    });
+
     const shippingPerGroupCents = body.groups.map((g, i) => {
       const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
       return shippingCentsFor({
         subtotal: subtotalPerGroupCents[i] / 100,
         storeLat: coord.lat,
         storeLng: coord.lng,
-        deliveryLat: body.delivery.lat ?? null,
-        deliveryLng: body.delivery.lng ?? null,
+        deliveryLat: coordConsegna?.lat ?? null,
+        deliveryLng: coordConsegna?.lng ?? null,
         pickupInStore: body.pickupInStore,
         freeShipping: couponFreeShipping,
       });
@@ -290,6 +301,15 @@ export const POST = withAuthRateLimit(
       const { error: resErr } = await admin.rpc('reserve_stock', { p_items: groupStockItems });
       if (resErr) {
         logger.warn('[cod] reserve_stock fallita', { sellerId: g.sellerId, message: resErr.message });
+        // Annulla anche gli ordini dei negozi PRECEDENTI di questo carrello.
+        //
+        // Il difetto: qui si usciva con un 409 senza toccarli. Con la spesa da
+        // due negozi e l'ultimo articolo finito nel secondo, il cliente vedeva
+        // «non piu' disponibile» e credeva di non aver ordinato niente — mentre
+        // al primo negozio l'ordine era stato creato davvero, con la merce
+        // scalata. Le altre due uscite di errore, poche righe sotto, lo
+        // facevano: mancava solo questa.
+        await rollbackCreatedCodOrders();
         return NextResponse.json(
           { error: 'Alcuni articoli non sono più disponibili nelle quantità richieste.' },
           { status: 409 },
@@ -333,6 +353,18 @@ export const POST = withAuthRateLimit(
           total_price: totalCents / 100,
           shipping_cost: shipping / 100,
           delivery_fee_cents: deliveryFeeCents,
+          // Il compenso del fattorino, scritto alla creazione dell'ordine e
+          // scollegato da quanto ha pagato il cliente. Prima questa colonna non
+          // veniva popolata da nessuna parte, quindi al momento del pagamento si
+          // ricadeva sul prezzo di spedizione — che sopra i 30 euro e' zero:
+          // il fattorino consegnava gratis.
+          rider_fee_cents: compensoRiderCents({
+            storeLat: (sellerCoordMap.get(g.sellerId) ?? { lat: null }).lat ?? null,
+            storeLng: (sellerCoordMap.get(g.sellerId) ?? { lng: null }).lng ?? null,
+            deliveryLat: coordConsegna?.lat ?? null,
+            deliveryLng: coordConsegna?.lng ?? null,
+            pickupInStore: body.pickupInStore,
+          }),
           application_fee_cents: codFeeCents,
           seller_payout_cents: codSellerPayoutCents,
           // In attesa della rimessa contanti del rider (un admin la conferma →
@@ -353,8 +385,8 @@ export const POST = withAuthRateLimit(
           delivery_city: body.delivery.city,
           delivery_zip: body.delivery.zip,
           delivery_notes: body.delivery.notes ?? null,
-          delivery_lat: body.delivery.lat ?? null,
-          delivery_lng: body.delivery.lng ?? null,
+          delivery_lat: coordConsegna?.lat ?? body.delivery.lat ?? null,
+          delivery_lng: coordConsegna?.lng ?? body.delivery.lng ?? null,
         })
         .select('id')
         .single();

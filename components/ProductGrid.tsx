@@ -249,8 +249,16 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     if (!term || isLoading) return;
     if (lastTrackedSearch.current === term) return;
     lastTrackedSearch.current = term;
-    trackSearchPerformed(term, prods.length);
-  }, [search, isLoading, prods.length]);
+    // Il numero riportato è quello che la persona VEDE davvero.
+    //
+    // Prima si mandava `prods.length`: le righe grezze della query, prima dei
+    // filtri applicati subito dopo (negozi aperti, valutazione minima, solo in
+    // promozione, solo disponibili) e tagliate a 96. Quindi «ricerca con 96
+    // risultati» mentre a schermo ne comparivano tre, e la misura di quante
+    // ricerche finiscono a vuoto — quella che dice cosa manca in catalogo —
+    // era falsa proprio nei casi che contano.
+    trackSearchPerformed(term, filtered.length);
+  }, [search, isLoading, filtered.length]);
 
   // Sezione = rail con intestazione: si comporta come un blocco autonomo
   // (titolo + "Vedi tutto") e scompare del tutto quando è vuota.

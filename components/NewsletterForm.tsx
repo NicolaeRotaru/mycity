@@ -28,10 +28,15 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
     if (Date.now() - startedAtRef.current < 1500) { setSubscribed(true); return; }
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('newsletter_subscribers')
-        .insert({ email: email.trim().toLowerCase() });
-      if (error && error.code !== '23505') throw error;
+      // Passa dal server, che manda l'email di conferma. Prima scriveva dritto
+      // nella tabella con la chiave pubblica del browser: chiunque poteva
+      // iscrivere l'indirizzo di un altro, e del consenso non restava prova.
+      const res = await fetch('/api/newsletter', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      if (!res.ok) throw new Error('Iscrizione non riuscita');
       setSubscribed(true);
       toast.success(t('subscribed'));
     } catch (err) {

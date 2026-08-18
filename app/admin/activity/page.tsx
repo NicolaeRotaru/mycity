@@ -119,6 +119,9 @@ export default function AdminActivityPage() {
         .gte('created_at', since)
         .order('created_at', { ascending: false })
         .limit(3000);
+      // Il taglio a 3000 righe resta (è una pagina, non un rendiconto), ma va
+      // detto: prima le 24 ore sembravano complete anche quando erano un
+      // troncone. Chi legge deve sapere che sta guardando un campione.
       return (data ?? []) as unknown as EventRow[];
     },
   });
@@ -136,7 +139,16 @@ export default function AdminActivityPage() {
     let anonViews = 0;
 
     for (const r of realtime) {
-      const visitorKey = r.anon_id || r.session_id || r.ip || r.id;
+      // Solo le righe scritte da un BROWSER contano come visitatore.
+      //
+      // Il difetto: la chiave del visitatore ricadeva su `r.id`, che è l'id
+      // della riga — quindi ogni riga senza identificatore di browser diventava
+      // «un visitatore in più». E le righe scritte dai trigger del database (un
+      // ordine che cambia stato, un profilo aggiornato) non hanno anon_id né
+      // sessione né indirizzo: erano tutte contate. «Visitatori 24h» e «Online
+      // ora» crescevano col traffico interno della macchina, non con le persone.
+      const visitorKey = r.anon_id || r.session_id || r.ip;
+      if (!visitorKey) continue;
       if (new Date(r.created_at).getTime() >= fiveMin) onlineSet.add(visitorKey);
       uniqueVisitors.add(visitorKey);
       byCategory[r.category] = (byCategory[r.category] ?? 0) + 1;
@@ -232,7 +244,7 @@ export default function AdminActivityPage() {
       {/* KPI in tempo reale */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Kpi icon={Radio} label="Online ora" value={summary.online} color="olive" hint="ultimi 5 min" />
-        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="primary" hint="unici" />
+        <Kpi icon={Users} label="Visitatori 24h" value={summary.uniqueVisitors} color="primary" hint={recent.length >= 3000 ? 'unici — campione: ultime 3000 righe' : 'unici'} />
         <Kpi icon={LogIn} label="Accessi 24h" value={summary.logins} color="accent" />
         <Kpi icon={Globe} label="Viste anonime" value={summary.anonViews} color="primary" />
         <Kpi icon={Activity} label="Viste loggati" value={summary.loggedInViews} color="secondary" />

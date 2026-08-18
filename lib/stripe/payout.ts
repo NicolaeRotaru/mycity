@@ -123,10 +123,18 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
       { idempotencyKey: `payout_seller_${order.id}` },
     );
 
-    await admin
+    const { error: errFine } = await admin
       .from('orders')
       .update({ stripe_transfer_id: transfer.id, payout_status: 'TRANSFERRED', payout_at: new Date().toISOString() })
       .eq('id', order.id);
+    if (errFine) {
+      // Il bonifico e' partito ma l'ordine resta in PROCESSING: senza questo
+      // avviso nessuno lo scopre, e il recupero automatico non saprebbe che
+      // il transfer esiste gia'. L'id serve per riconciliare a mano.
+      logger.error('[stripe] payout eseguito ma stato non aggiornato', {
+        orderId: order.id, transferId: transfer.id, message: errFine.message,
+      });
+    }
 
     return { ok: true, transferId: transfer.id };
   } catch (err) {
@@ -144,6 +152,20 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
  * pronto → 'PENDING_RIDER_ONBOARDING' (ritentato al prossimo cron).
  * Per gli ordini COD il rider incassa i contanti: nessun transfer qui.
  */
+/**
+ * Stati dai quali un compenso rider si puo' ancora ritentare.
+ *
+ * Perche' sta qui e non nel cron: il claim accettava anche 'HELD' (dove finisce
+ * un transfer fallito), ma la query del cron che cerca i candidati NON lo
+ * includeva. Risultato: un compenso fallito una volta non veniva mai piu'
+ * ritentato, perche' nessuno lo ripescava. Ora l'elenco e' uno solo.
+ */
+export const STATI_RIDER_RITENTABILI = ['HELD', 'PENDING_RIDER_ONBOARDING', 'FAILED'] as const;
+
+/** Filtro PostgREST per i candidati rider (null incluso). */
+export const FILTRO_RIDER_RITENTABILI =
+  `rider_payout_status.is.null,rider_payout_status.in.(${STATI_RIDER_RITENTABILI.join(',')})`;
+
 export async function releaseRiderPayout(orderId: string): Promise<PayoutResult> {
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
@@ -181,7 +203,7 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
     .from('orders')
     .update({ rider_payout_status: 'PROCESSING' })
     .eq('id', order.id)
-    .or('rider_payout_status.is.null,rider_payout_status.in.(HELD,PENDING_RIDER_ONBOARDING,FAILED)')
+    .or(FILTRO_RIDER_RITENTABILI)
     .select('id');
   if (claimErr) {
     // Vedi releaseOrderPayout: un errore DB non va mascherato da no-op silenzioso.
@@ -206,10 +228,15 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
       { idempotencyKey: `payout_rider_${order.id}` },
     );
 
-    await admin
+    const { error: errFineRider } = await admin
       .from('orders')
       .update({ rider_transfer_id: transfer.id, rider_payout_status: 'TRANSFERRED', rider_payout_at: new Date().toISOString() })
       .eq('id', order.id);
+    if (errFineRider) {
+      logger.error('[stripe] compenso rider eseguito ma stato non aggiornato', {
+        orderId: order.id, transferId: transfer.id, message: errFineRider.message,
+      });
+    }
 
     return { ok: true, transferId: transfer.id };
   } catch (err) {
@@ -225,7 +252,25 @@ export interface ReversibleOrder {
   payout_status: string | null;
   stripe_transfer_id: string | null;
   seller_payout_cents: number | null;
+  /** Totale gia' recuperato con storni precedenti. */
+  seller_payout_reversed_cents?: number | null;
   stripe_reversal_id?: string | null;
+}
+
+/**
+ * Quanto si puo' ancora recuperare dal venditore su questo ordine.
+ *
+ * Prima il residuo si teneva DENTRO `seller_payout_cents`, decrementandolo a
+ * ogni storno. Ma quel campo e' il netto dell'ordine, e lo leggono i guadagni
+ * del negoziante, i rendiconti dell'amministrazione e — peggio — il calcolo
+ * della quota da recuperare al rimborso successivo: dopo il primo storno
+ * parziale tutti quei numeri erano sbagliati. Ora il netto resta fermo e il
+ * recuperato si accumula in un campo suo.
+ */
+export function residuoRecuperabile(order: ReversibleOrder): number {
+  const netto = order.seller_payout_cents ?? 0;
+  const giaStornato = order.seller_payout_reversed_cents ?? 0;
+  return Math.max(0, netto - giaStornato);
 }
 
 /**
@@ -250,9 +295,8 @@ export async function reverseOrderTransfer(
     return { reversalId: null, reversedCents: 0 };
   }
 
-  // Residuo ancora da stornare (seller_payout_cents viene decrementato ad ogni
-  // reversal parziale nella riga 270): se è zero, tutto è già stato recuperato.
-  const maxCents = order.seller_payout_cents ?? 0;
+  // Residuo ancora da stornare: netto dell'ordine meno quanto gia' recuperato.
+  const maxCents = residuoRecuperabile(order);
   const reverseCents = Math.min(amountCents ?? maxCents, maxCents);
   if (reverseCents <= 0) return { reversalId: null, reversedCents: 0 };
 
@@ -260,22 +304,89 @@ export async function reverseOrderTransfer(
   const reversal = await stripe.transfers.createReversal(
     order.stripe_transfer_id,
     { amount: reverseCents, metadata: { order_id: order.id } },
-    // idempotencyKey per-importo-cumulativo: permette reversal multipli incrementali
-    // sullo stesso ordine (es. due rimborsi parziali sequenziali).
-    { idempotencyKey: `reversal_${order.id}_${reverseCents}` },
+    // La chiave contiene il TOTALE stornato dopo questa operazione, non
+    // l'importo della singola chiamata. Con l'importo singolo due rimborsi
+    // parziali dello stesso valore — 20 euro e poi altri 20 — producevano la
+    // stessa chiave: Stripe restituiva il primo storno e il secondo non
+    // avveniva, lasciando al venditore soldi che andavano recuperati.
+    { idempotencyKey: `reversal_${order.id}_tot_${(order.seller_payout_reversed_cents ?? 0) + reverseCents}` },
   );
 
   const admin = getAdminSupabase();
   const isFull = reverseCents >= maxCents;
-  await admin
+  const { error: errAggiorna } = await admin
     .from('orders')
     .update({
       stripe_reversal_id: reversal.id,
-      // Riduce il residuo venditore così i rimborsi parziali successivi non over-reversano (fix #35).
-      seller_payout_cents: Math.max(0, maxCents - reverseCents),
+      // Si accumula il recuperato; il netto dell'ordine non si tocca.
+      seller_payout_reversed_cents: (order.seller_payout_reversed_cents ?? 0) + reverseCents,
       ...(isFull ? { payout_status: 'REVERSED' } : {}),
     })
     .eq('id', order.id);
+  if (errAggiorna) {
+    // Lo storno su Stripe e' avvenuto: se il database non lo registra, il
+    // prossimo giro rischia di stornare due volte. Va visto, non ingoiato.
+    logger.error('[stripe] storno registrato su Stripe ma non nel database', {
+      orderId: order.id, reversalId: reversal.id, message: errAggiorna.message,
+    });
+  }
+
+  return { reversalId: reversal.id, reversedCents: reverseCents };
+}
+
+/** Campi necessari per recuperare il compenso versato al fattorino. */
+export interface RiderReversibleOrder {
+  id: string;
+  rider_id?: string | null;
+  rider_transfer_id: string | null;
+  rider_payout_status: string | null;
+  rider_fee_cents?: number | null;
+  shipping_cost?: number | string | null;
+}
+
+/**
+ * Recupera il compenso già versato al fattorino.
+ *
+ * Perché serviva: su un rimborso totale o su una contestazione persa il codice
+ * stornava soltanto il transfer del VENDITORE. Il compenso del fattorino
+ * restava versato: la piattaforma restituiva l'intero incasso al cliente e
+ * teneva la perdita su di sé, ordine dopo ordine. In tutto il codice
+ * `rider_transfer_id` compariva in due punti soli — quando si scrive e quando
+ * Stripe conferma uno storno — segno che nessuno lo aveva mai recuperato.
+ */
+export async function reverseRiderTransfer(
+  order: RiderReversibleOrder,
+  amountCents?: number,
+): Promise<{ reversalId: string | null; reversedCents: number }> {
+  if (order.rider_payout_status !== 'TRANSFERRED' || !order.rider_transfer_id) {
+    return { reversalId: null, reversedCents: 0 };
+  }
+
+  const versato = order.rider_fee_cents != null
+    ? order.rider_fee_cents
+    : Math.round(Number(order.shipping_cost ?? 0) * 100);
+  const reverseCents = Math.min(amountCents ?? versato, versato);
+  if (reverseCents <= 0) return { reversalId: null, reversedCents: 0 };
+
+  const stripe = getStripe();
+  const reversal = await stripe.transfers.createReversal(
+    order.rider_transfer_id,
+    { amount: reverseCents, metadata: { order_id: order.id, kind: 'rider_fee' } },
+    { idempotencyKey: `reversal_rider_${order.id}_${reverseCents}` },
+  );
+
+  const admin = getAdminSupabase();
+  const { error } = await admin
+    .from('orders')
+    .update({
+      rider_payout_status: reverseCents >= versato ? 'REVERSED' : 'TRANSFERRED',
+    })
+    .eq('id', order.id);
+  if (error) {
+    logger.error('[stripe] storno compenso rider non registrato nel database', {
+      orderId: order.id, reversalId: reversal.id, message: error.message,
+    });
+  }
 
   return { reversalId: reversal.id, reversedCents: reverseCents };
 }
@@ -329,7 +440,7 @@ export async function refundOrder(
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_payout_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method')
+    .select('id, user_id, total_price, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_fee_cents, shipping_cost')
     .eq('id', opts.orderId)
     .single();
 
@@ -368,6 +479,16 @@ export async function refundOrder(
     const sellerShare =
       orderTotalCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / orderTotalCents), sellerNet) : 0;
     const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
+
+  // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
+  // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
+  if (isFull) {
+    try {
+      await reverseRiderTransfer(order as unknown as RiderReversibleOrder);
+    } catch (err) {
+      logger.error('[stripe] recupero compenso rider fallito', { orderId: order.id, err });
+    }
+  }
     const wasTransferred = order.payout_status === 'TRANSFERRED';
 
     // Accredito wallet del buyer (idempotente via unique index su ref).
@@ -424,6 +545,16 @@ export async function refundOrder(
     orderTotalCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / orderTotalCents), sellerNet) : 0;
 
   const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
+
+  // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
+  // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
+  if (isFull) {
+    try {
+      await reverseRiderTransfer(order as unknown as RiderReversibleOrder);
+    } catch (err) {
+      logger.error('[stripe] recupero compenso rider fallito', { orderId: order.id, err });
+    }
+  }
 
   const wasTransferred = order.payout_status === 'TRANSFERRED';
   await admin

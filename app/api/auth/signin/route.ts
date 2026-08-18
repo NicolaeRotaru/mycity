@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/supabase/client';
+import { authServer } from '@/lib/supabase/auth-server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { ApiErrors } from '@/lib/api/responses';
@@ -34,13 +34,22 @@ export async function POST(request: Request) {
     return ApiErrors.invalidRequest('Password non valida');
   }
 
+  // Secondo limite, sull'indirizzo email invece che sull'indirizzo di rete: chi
+  // prova mille password su un account solo cambiando rete a ogni tentativo
+  // aggirava il limite per IP. Le due misure insieme chiudono i due casi —
+  // molti account da una rete, e un account da molte reti.
+  const rlEmail = await rateLimitAsync({ key: `signin-email:${email}`, max: 10, windowMs: 5 * 60_000 });
+  if (!rlEmail.allowed) {
+    return ApiErrors.rateLimited(rlEmail.retryAfterSec, 'Troppi tentativi su questo account. Riprova tra qualche minuto.');
+  }
+
   const cap = await verifyTurnstileToken(captchaToken, ip);
   if (!cap.ok) {
     return ApiErrors.invalidRequest(cap.reason);
   }
 
   try {
-    const { data, error } = await auth.signIn(email, password, { captchaToken });
+    const { data, error, client } = await authServer.signIn(email, password, { captchaToken });
     if (error) {
       return ApiErrors.unauthorized('Email o password non corretti');
     }
@@ -48,7 +57,7 @@ export async function POST(request: Request) {
     // Gate verifica email: blocca login se non confermata
     if (data?.user && !data.user.email_confirmed_at) {
       // Logout pulito per non lasciare cookie semi-validi
-      try { await auth.signOut(); } catch { /* noop */ }
+      try { await client.auth.signOut(); } catch { /* noop */ }
       return NextResponse.json(
         { ok: false, error: { code: 'EMAIL_NOT_VERIFIED', message: 'Devi confermare la tua email prima di accedere. Controlla la posta.' } },
         { status: 403 },

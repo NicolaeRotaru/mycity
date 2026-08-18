@@ -11,9 +11,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *  - storno del credito wallet speso.
  */
 
-const state: { candidates: Record<string, unknown>[]; claimed: Array<{ id: string }> } = {
+const state: {
+  candidates: Record<string, unknown>[];
+  claimed: Array<{ id: string }>;
+  /** Ogni update sugli ordini, per poter osservare il rimettere in coda. */
+  updates: Record<string, unknown>[];
+} = {
   candidates: [],
   claimed: [{ id: 'o1' }],
+  updates: [],
 };
 const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 const notifInsert = vi.fn(async () => ({ error: null }));
@@ -43,7 +49,10 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'orders') {
         return {
           select: () => qb({ data: state.candidates, error: null }),
-          update: () => qb({ data: state.claimed, error: null }),
+          update: (valori: Record<string, unknown>) => {
+            state.updates.push(valori);
+            return qb({ data: state.claimed, error: null });
+          },
         };
       }
       if (table === 'notifications') return { insert: notifInsert };
@@ -65,6 +74,7 @@ async function run() {
 
 beforeEach(() => {
   rpcCalls.length = 0;
+  state.updates.length = 0;
   refundOrderMock.mockClear();
   notifInsert.mockClear();
   state.candidates = [];
@@ -104,6 +114,26 @@ describe('POST /api/cron/expire-stale-orders', () => {
     const res = await run();
     expect(await res.json()).toMatchObject({ ok: true, canceled: 0, refunded: 0 });
     expect(refundOrderMock).not.toHaveBeenCalled();
+  });
+
+  it('se il rimborso non riesce, l\'ordine torna in coda invece di restare annullato', async () => {
+    // Il difetto: l'ordine passava ad annullato e solo dopo si chiedeva il
+    // rimborso. Se Stripe non rispondeva, al giro successivo l'ordine non era
+    // più fra i candidati (la ricerca guarda solo quelli in NEW): annullato e
+    // mai rimborsato, coi soldi del cliente fermi.
+    state.candidates = [
+      { id: 'o1', user_id: 'u1', payment_method: 'card', payment_status: 'PAID', stripe_payment_intent: 'pi_1', total_price: 50, wallet_applied_cents: 0 },
+    ];
+    refundOrderMock.mockRejectedValueOnce(new Error('Stripe non risponde'));
+
+    const res = await run();
+    expect(await res.json()).toMatchObject({ ok: true, refunded: 0, failed: 1 });
+
+    // Rimesso in NEW: il prossimo giro lo ripesca.
+    const rimesso = state.updates.find(
+      (u) => u.delivery_status === 'NEW' && u.canceled_at === null,
+    );
+    expect(rimesso).toBeTruthy();
   });
 
   it('storna il credito wallet speso', async () => {

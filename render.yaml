@@ -10,8 +10,19 @@
 # service (previewsEnabled / previewsExpireAfterDays) è DEPRECATA da Render e fa
 # fallire il parsing del Blueprint ("field not found in type file.Service").
 # Va usata questa sezione `previews` a livello root.
+# ⚠️ Anteprime DISATTIVATE. Erano `generation: automatic`, e ogni anteprima
+# eredita le variabili del servizio: le chiavi dichiarate `sync: false` qui sotto
+# — chiave di servizio del database, chiave segreta dei pagamenti, segreto dei
+# webhook, chiave della posta, segreto dei lavori periodici — finivano
+# nell'ambiente di OGNI richiesta di unione. Chiunque potesse aprirne una, o
+# eseguire codice dentro l'anteprima, arrivava al database e ai pagamenti VERI.
+#
+# Per riaccenderle servono prima gli ambienti separati: un progetto database di
+# prova e le chiavi in modalita' test dei pagamenti, dichiarati con
+# `previewValue` accanto a ogni `sync: false`. Finche' quelli non ci sono,
+# un'anteprima e' una porta aperta sulla produzione.
 previews:
-  generation: automatic
+  generation: off
 
 services:
   - type: web
@@ -22,8 +33,19 @@ services:
     # il rate-limit in-memory non è condiviso tra istanze ed è aggirabile (🟠-12).
     region: frankfurt # EU per GDPR + latenza Italia
     branch: main
+    # ⚠️ DECISIONE APERTA (serve Nicola). Con `true` il rilascio parte da solo a
+    # ogni push su main e NON aspetta la CI: i due corrono in parallelo, quindi
+    # un test rosso finisce in produzione comunque. Il rilascio controllato è
+    # già pronto in .github/workflows/deploy-dopo-ci.yml e parte solo a CI
+    # verde; per usarlo servono due cose: mettere `false` qui e aggiungere il
+    # segreto RENDER_DEPLOY_HOOK. Lasciato `true` per non fermare i rilasci
+    # senza il tuo ok.
     autoDeploy: true
-    buildCommand: npm ci --legacy-peer-deps && NODE_OPTIONS=--max-old-space-size=4096 npm run build
+    # --include=dev: con NODE_ENV=production (impostato sotto) npm salta le
+    # devDependencies, ma servono per COMPILARE — tailwind, postcss, i tipi, il
+    # compilatore TypeScript. Senza questo la build passa solo per caso, quando
+    # la cache di Render conserva ancora i moduli del rilascio precedente.
+    buildCommand: npm ci --legacy-peer-deps --include=dev && NODE_OPTIONS=--max-old-space-size=4096 npm run build
     startCommand: npm start
     # Health check sull'endpoint che verifica DAVVERO il DB + env critiche
     # (ritorna 503 se degradato). NON usare "/" : la home può rispondere 200
@@ -46,6 +68,26 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
       - key: RESEND_API_KEY
+        sync: false
+      # Senza questa il mittente delle email e' 'no-reply@example.com': i
+      # messaggi partono da un dominio che non e' nostro e finiscono nello spam.
+      - key: RESEND_FROM
+        sync: false
+      - key: RESEND_REPLY_TO
+        sync: false
+      # Dove arrivano gli avvisi di servizio e i messaggi dal modulo contatti.
+      # Senza, il codice ricadeva su 'admin@mycity.it' — una casella che nessuno
+      # legge, quindi allarmi spediti nel vuoto.
+      - key: SUPPORT_EMAIL
+        sync: false
+      # Notifiche push: senza queste due il lavoro periodico rispondeva «ok»
+      # senza mandare niente, e nessuno se ne accorgeva.
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      # Firma dei link di disiscrizione dalle email.
+      - key: UNSUBSCRIBE_SECRET
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false

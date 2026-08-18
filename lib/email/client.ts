@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { env } from '@/lib/env';
+import { linkDisiscrizione } from '@/lib/email/unsubscribe';
 import { logger } from '@/lib/logger';
 
 let _resend: Resend | null = null;
@@ -47,14 +48,29 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   // silenziati (vanno a Sentry via logger) e operational-alerts vigila il
   // backlog della coda lifecycle. (Outbox durevole per le email transazionali =
   // enhancement futuro: la coda attuale è template-based per user_id.)
+  // Link di disiscrizione su OGNI email, aggiunto qui e non nei singoli
+  // template: il footer di templates.ts non conosce il destinatario, e i
+  // messaggi costruiti altrove (carrelli abbandonati, ciclo di vita) non
+  // passavano dal footer comune. Prima l'unico link era «Gestisci preferenze»,
+  // che porta a una pagina con il login: inutile per chi vuole solo smettere.
+  const destinatario = Array.isArray(input.to) ? input.to[0] : input.to;
+  const linkStop = destinatario ? linkDisiscrizione(destinatario, 'marketing') : null;
+
   const payload = {
     from: env.resendFrom(),
     to: input.to,
     subject: input.subject,
-    html: input.html,
+    html: linkStop ? conPiedeDisiscrizione(input.html, linkStop) : input.html,
     text: input.text,
     reply_to: input.replyTo ?? env.resendReplyTo(),
     tags: input.tags,
+    // Il pulsante «Annulla iscrizione» dei client di posta usa queste due.
+    headers: linkStop
+      ? {
+          'List-Unsubscribe': `<${linkStop}>`,
+          'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+        }
+      : undefined,
   };
   let lastErr = 'unknown';
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -69,4 +85,21 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   }
   logger.error('[email] invio fallito dopo retry', { message: lastErr });
   return { ok: false, error: lastErr };
+}
+
+/**
+ * Aggiunge la riga di disiscrizione in fondo al corpo HTML, una volta sola.
+ * Se il messaggio ha un </body> la mette prima, altrimenti in coda.
+ */
+function conPiedeDisiscrizione(html: string, link: string): string {
+  if (html.includes(link)) return html;
+  const riga =
+    `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;` +
+    `font-family:-apple-system,Segoe UI,Roboto,sans-serif;font-size:12px;color:#64748b">` +
+    `Non vuoi più ricevere queste email? ` +
+    `<a href="${link}" style="color:#64748b">Annulla l'iscrizione con un clic</a>.` +
+    `</div>`;
+  return html.includes('</body>')
+    ? html.replace('</body>', `${riga}</body>`)
+    : `${html}${riga}`;
 }

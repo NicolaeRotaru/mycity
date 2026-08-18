@@ -71,6 +71,10 @@ function StripeReturnHandler() {
   useEffect(() => {
     if (searchParams.get('stripe') === 'success') {
       toast.success('Pagamento completato! Il tuo ordine è confermato.');
+      // Il carrello si svuota anche sul percorso con la carta. Prima lo faceva
+      // solo il contrassegno: chi pagava con la carta tornava e ritrovava tutto
+      // dentro, con lo stesso ordine pronto a essere rifatto per sbaglio.
+      clearCart();
       // Il webhook Stripe può arrivare con un ritardo di qualche secondo: ri-fetcha
       // gli ordini dopo 2s e 5s per non mostrare "nessun ordine" al rientro (fix #22).
       const t1 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 2000);

@@ -69,7 +69,24 @@ export function writeConsent(partial: Partial<ConsentState>) {
   const value = encodeURIComponent(
     `${next.functional ? 1 : 0}${next.analytics ? 1 : 0}${next.marketing ? 1 : 0}`,
   );
-  document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=${maxAge}; SameSite=Lax`;
+  // Secure: il cookie non deve viaggiare su una connessione non cifrata.
+  // In sviluppo (http://localhost) il flag va omesso o il browser lo scarta.
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${CONSENT_COOKIE}=${value}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`;
+
+  // Traccia lato server: prima il consenso viveva solo qui nel browser, quindi
+  // svuotando la cronologia spariva e non era dimostrabile a nessuno.
+  void fetch('/api/consent', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      analytics: next.analytics,
+      marketing: next.marketing,
+      versione: CONSENT_VERSION,
+    }),
+    keepalive: true,
+  }).catch(() => { /* la registrazione non deve bloccare la scelta dell'utente */ });
+
   window.dispatchEvent(new CustomEvent('mc:consent-change', { detail: next }));
 }
 

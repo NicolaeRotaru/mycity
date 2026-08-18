@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createHmac } from 'node:crypto';
 import type Stripe from 'stripe';
 import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
-import { reverseOrderTransfer, applyConnectAccountStatus } from '@/lib/stripe/payout';
+import { reverseOrderTransfer, reverseRiderTransfer, applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
@@ -165,6 +165,8 @@ type PendingGroup = {
   subtotalCents: number;
   shippingCents: number;
   deliveryFeeCents?: number;
+  /** Compenso del fattorino, calcolato al checkout sulla distanza. */
+  riderFeeCents?: number;
   couponPortionCents: number;
   pickupPortionCents: number;
   totalCents: number;
@@ -197,7 +199,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Carica il record-of-intent
   const { data: pending, error: pendErr } = await admin
     .from('pending_checkouts')
-    .select('id, buyer_id, status, groups, coupon_code, delivery, pickup_in_store, total_cents, stripe_session_id')
+    .select('id, buyer_id, status, groups, coupon_code, delivery, pickup_in_store, total_cents, stripe_session_id, expires_at')
     .eq('id', pendingCheckoutId)
     .single();
 
@@ -210,6 +212,36 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // Idempotenza checkout-level: se già processato, no-op.
   if (pending.status === 'COMPLETED') {
     logger.info('[stripe] pending_checkout già COMPLETED, skip', { pendingCheckoutId });
+    return;
+  }
+
+  // Riserva della merce già scaduta: la merce è stata rimessa in vendita e
+  // potrebbe essere stata comprata da un altro. Creare l'ordine qui vorrebbe
+  // dire vendere due volte la stessa cosa. Il pagamento c'è: si rimborsa.
+  //
+  // Da qui in avanti la sessione Stripe scade insieme alla riserva (vedi
+  // lib/stripe/client.ts), quindi questo caso è la rete di sicurezza per le
+  // sessioni create prima di quella modifica e per i casi di confine.
+  if (pending.status === 'EXPIRED') {
+    logger.error('[stripe] pagamento su una riserva scaduta: rimborso', { pendingCheckoutId });
+    const importoCents = session.amount_total ?? 0;
+    const pi = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+    if (pi && importoCents > 0) {
+      try {
+        await stripe.refunds.create(
+          { payment_intent: pi, metadata: { motivo: 'riserva_scaduta', pending_checkout_id: pendingCheckoutId } },
+          { idempotencyKey: `refund_scaduto_${pendingCheckoutId}` },
+        );
+      } catch (err) {
+        logger.error('[stripe] rimborso su riserva scaduta fallito', { pendingCheckoutId, err });
+        throw err;   // Stripe riprova: meglio ritentare che tenere soldi non dovuti
+      }
+    }
+    await notifyAdmins(
+      '⚠️ Pagamento su carrello scaduto',
+      `Un pagamento è arrivato dopo la scadenza della riserva merce (${pendingCheckoutId}). Rimborsato automaticamente.`,
+      '/admin/orders',
+    );
     return;
   }
 
@@ -265,6 +297,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         total_price: g.totalCents / 100,
         shipping_cost: g.shippingCents / 100,
         delivery_fee_cents: deliveryFeeCents,
+        // Compenso del fattorino: dipende dalla distanza, non da quanto ha
+        // pagato il cliente (vedi commento in lib/shipping.ts).
+        rider_fee_cents: g.riderFeeCents ?? null,
         discount_amount: (g.couponPortionCents + g.pickupPortionCents) / 100,
         coupon_code: couponCode,
         pickup_in_store: pickupInStore,
@@ -435,8 +470,11 @@ async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
   const message = m.message || null;
 
   if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    // `throw`, non `return`: chi chiama interpreta il ritorno come «fatto» e
+    // segna l'evento come lavorato, quindi Stripe non riprova mai piu'. Con un
+    // errore l'evento resta da rifare e il problema si vede.
     logger.error('[stripe] gift_card senza amount valido', { sessionId: session.id });
-    return;
+    throw new Error(`gift_card senza importo valido (sessione ${session.id})`);
   }
 
   const code = giftCardCodeForSession(session.id);
@@ -457,7 +495,9 @@ async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
       return;
     }
     logger.error(error, { context: 'stripe-gift-card-insert', sessionId: session.id });
-    return;
+    // Pagamento incassato e carta regalo non creata: senza errore nessuno lo
+    // scopre e il cliente resta senza quello che ha pagato.
+    throw new Error(`gift_card non creata (sessione ${session.id}): ${error.message}`);
   }
 
   const amountEuro = amountCents / 100;
@@ -496,7 +536,7 @@ async function handleSponsoredPurchase(session: Stripe.Checkout.Session) {
 
   if (!sellerId || !productId || !Number.isFinite(days) || days <= 0) {
     logger.error('[stripe] sponsored metadata incompleti', { sessionId: session.id });
-    return;
+    throw new Error(`sponsorizzazione con dati incompleti (sessione ${session.id})`);
   }
 
   const today = new Date();
@@ -524,7 +564,7 @@ async function handleSponsoredPurchase(session: Stripe.Checkout.Session) {
       return;
     }
     logger.error(error, { context: 'stripe-sponsored-insert', sessionId: session.id });
-    return;
+    throw new Error(`sponsorizzazione non creata (sessione ${session.id}): ${error.message}`);
   }
 
   await admin.from('notifications').insert({
@@ -565,7 +605,7 @@ async function handleSellerSubscription(session: Stripe.Checkout.Session) {
 
   if (!sellerId || !subscriptionId) {
     logger.error('[stripe] seller_subscription metadata incompleti', { sessionId: session.id });
-    return;
+    throw new Error(`abbonamento con dati incompleti (sessione ${session.id})`);
   }
 
   // Recupera periodo di rinnovo (best-effort).
@@ -640,7 +680,7 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   // Multi-seller: una charge può avere N ordini (uno per seller).
   const { data: orders } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_id, payout_status, payment_status, stripe_transfer_id, seller_payout_cents, stripe_reversal_id')
+    .select('id, user_id, total_price, seller_id, payout_status, payment_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_fee_cents, shipping_cost')
     .eq('stripe_payment_intent', pi);
 
   if (!orders || orders.length === 0) return;
@@ -749,7 +789,14 @@ type DisputeOrderRow = {
   payout_status: string | null;
   stripe_transfer_id: string | null;
   seller_payout_cents: number | null;
+  seller_payout_reversed_cents?: number | null;
   stripe_reversal_id: string | null;
+  // Servono per recuperare anche il compenso versato al fattorino.
+  rider_id?: string | null;
+  rider_transfer_id: string | null;
+  rider_payout_status: string | null;
+  rider_fee_cents?: number | null;
+  shipping_cost?: number | string | null;
 };
 
 /** Trova gli ordini legati alla charge/PI di una dispute (multi-seller). */
@@ -785,7 +832,7 @@ async function notifyAdmins(title: string, body: string, link: string) {
 async function handleDisputeCreated(dispute: Stripe.Dispute) {
   const orders = await findOrdersForDispute(
     dispute,
-    'id, payout_status, stripe_transfer_id, seller_payout_cents, stripe_reversal_id',
+    'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_fee_cents, shipping_cost',
   );
   if (orders.length === 0) {
     logger.warn('[stripe] dispute.created: nessun ordine trovato', { disputeId: dispute.id });
@@ -799,6 +846,13 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
       } catch (e) {
         logger.error('[stripe] reversal on dispute.created failed', { orderId: o.id, e });
       }
+    }
+    // Anche il compenso del fattorino torna indietro: senza questo la
+    // piattaforma restituisce l'incasso al cliente e paga la consegna da se'.
+    try {
+      await reverseRiderTransfer(o);
+    } catch (e) {
+      logger.error('[stripe] recupero compenso rider su contestazione fallito', { orderId: o.id, e });
     }
   }
 
@@ -821,14 +875,37 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
  * fatto all'apertura) → annulla l'ordine (semantica rimborso).
  */
 async function handleDisputeClosed(dispute: Stripe.Dispute) {
-  const orders = await findOrdersForDispute(dispute, 'id, payout_status');
+  const orders = await findOrdersForDispute(dispute, 'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_fee_cents, shipping_cost');
   if (orders.length === 0) return;
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
 
   if (dispute.status === 'won') {
+    // Il payout va davvero sbloccato, non solo annunciato. All'apertura della
+    // contestazione i soldi del venditore erano stati richiamati indietro
+    // (payout_status='REVERSED'): se qui ci si limitasse a scrivere 'WON', il
+    // venditore avrebbe consegnato la merce, vinto la causa e non essere mai
+    // stato pagato — il cron dei payout non guarda gli ordini 'REVERSED'.
     await admin.from('orders').update({ dispute_status: 'WON' }).in('id', ids);
-    await notifyAdmins('✓ Chargeback vinto', `Contestazione vinta su ordine ${ids[0]}. Payout sbloccato.`, '/admin/disputes');
+
+    const daRipagare = orders.filter((o) => o.payout_status === 'REVERSED');
+    if (daRipagare.length > 0) {
+      await admin
+        .from('orders')
+        .update({
+          payout_status: 'HELD',       // torna fra i candidati del prossimo giro
+          stripe_transfer_id: null,    // il transfer precedente e' stato stornato
+          stripe_reversal_id: null,
+          seller_payout_reversed_cents: 0,
+          payout_at: null,
+        })
+        .in('id', daRipagare.map((o) => o.id));
+      logger.info('[stripe] contestazione vinta: payout rimessi in coda', {
+        ordini: daRipagare.length,
+      });
+    }
+
+    await notifyAdmins('✓ Chargeback vinto', `Contestazione vinta su ordine ${ids[0]}. Payout rimesso in coda.`, '/admin/disputes');
   } else if (dispute.status === 'lost') {
     await admin
       .from('orders')
@@ -855,6 +932,22 @@ async function handleDisputeClosed(dispute: Stripe.Dispute) {
  */
 async function handleTransferReversed(transfer: Stripe.Transfer) {
   const admin = getAdminSupabase();
+
+  // Stripe manda questo evento a OGNI storno, anche parziale. Marcare
+  // 'REVERSED' senza guardare gli importi chiudeva la porta agli storni
+  // successivi: reverseOrderTransfer parte solo da 'TRANSFERRED', quindi dopo un
+  // rimborso parziale il resto non si poteva piu' recuperare.
+  const stornato = transfer.amount_reversed ?? 0;
+  const totale = transfer.amount ?? 0;
+  const eTotale = totale > 0 ? stornato >= totale : true;
+
+  if (!eTotale) {
+    logger.info('[stripe] transfer.reversed parziale: stato invariato', {
+      transferId: transfer.id, stornato, totale,
+    });
+    return;
+  }
+
   await admin.from('orders').update({ payout_status: 'REVERSED' }).eq('stripe_transfer_id', transfer.id);
   await admin.from('orders').update({ rider_payout_status: 'REVERSED' }).eq('rider_transfer_id', transfer.id);
   logger.info('[stripe] transfer.reversed sincronizzato', { transferId: transfer.id });
@@ -870,7 +963,7 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   if (!pid) return;
   const { data: pending } = await admin
     .from('pending_checkouts')
-    .select('id, status, groups')
+    .select('id, status, groups, coupon_code')
     .eq('id', pid)
     .single();
   if (!pending || pending.status !== 'PENDING') return;
@@ -879,6 +972,14 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
     (g.items ?? []).map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
   );
   if (items.length > 0) await admin.rpc('restore_stock', { p_items: items });
+
+  // Il codice sconto torna disponibile: il cliente ha abbandonato il pagamento.
+  const codiceAbbandonato = (pending as { coupon_code?: string | null }).coupon_code ?? null;
+  if (codiceAbbandonato) {
+    const { error: cErr } = await admin.rpc('release_coupon', { p_code: codiceAbbandonato });
+    if (cErr) logger.warn('[stripe] codice sconto non restituito', { pid, message: cErr.message });
+  }
+
   await admin.from('pending_checkouts').update({ status: 'EXPIRED' }).eq('id', pid);
 }
 

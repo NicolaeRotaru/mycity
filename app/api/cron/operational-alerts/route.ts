@@ -237,7 +237,16 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   }
 
   // Notifica admin via email + notification in-app (solo per gli alert "freschi")
-  const adminEmail = process.env.SUPPORT_EMAIL ?? 'admin@mycity.it';
+  // Nessun indirizzo di ripiego inventato: 'admin@mycity.it' non e' una casella
+  // che qualcuno legge, quindi gli allarmi partivano nel vuoto e sembrava che
+  // tutto andasse bene. Se la variabile manca lo si dice nei log e si salta
+  // l'invio: un allarme non recapitato deve essere visibile come tale.
+  const adminEmail = process.env.SUPPORT_EMAIL?.trim() || null;
+  if (!adminEmail) {
+    logger.error('[operational-alerts] SUPPORT_EMAIL non configurata: allarmi non recapitati', {
+      anomalie: fresh.length,
+    });
+  }
   const body = `
     <h2>⚠️ Alert operational MyCity</h2>
     <p>Rilevate <strong>${fresh.length}</strong> nuove anomalie:</p>
@@ -247,14 +256,16 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     <p style="color:#666;font-size:12px">Generato automaticamente dal cron operational-alerts.</p>
   `;
 
-  try {
-    await sendEmail({
-      to: adminEmail,
-      subject: `[MyCity Alert] ${fresh.length} anomalie operative`,
-      html: body,
-    });
-  } catch (err) {
-    logger.error('[cron-alerts] email send failed', err);
+  if (adminEmail) {
+    try {
+      await sendEmail({
+        to: adminEmail,
+        subject: `[MyCity Alert] ${fresh.length} anomalie operative`,
+        html: body,
+      });
+    } catch (err) {
+      logger.error('[cron-alerts] email send failed', err);
+    }
   }
 
   // Push notification in-app a tutti gli admin
