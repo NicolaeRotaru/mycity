@@ -81,7 +81,13 @@ export default function CheckoutPage() {
         for (const p of products ?? []) {
           validIds.add(p.id);
           if (p.seller_id) lookupMap.set(p.id, p.seller_id);
-          stockMap.set(p.id, p.stock ?? 0);
+          // 103 / 153 — `stock = null` in questo progetto vuol dire
+          // «disponibilità illimitata»: lo dicono la scheda prodotto, la
+          // griglia, il server e la funzione atomica di riserva. Solo QUI
+          // diventava zero. Effetto: un prodotto senza limite di scorte non si
+          // poteva comprare — il checkout lo dichiarava esaurito e spegneva il
+          // pulsante, senza che il negoziante potesse capire perché.
+          stockMap.set(p.id, p.stock == null ? Number.POSITIVE_INFINITY : p.stock);
           hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
         }
       }
@@ -155,7 +161,9 @@ export default function CheckoutPage() {
       // Disponibilità per riga: stock della variante se presente, altrimenti del
       // prodotto. Blocca e segnala invece di fallire dopo.
       const availableFor = (it: CartItem) =>
-        it.variantId ? (variantStock.get(it.variantId) ?? 0) : (stockMap.get(it.id) ?? 0);
+        it.variantId
+          ? (variantStock.get(it.variantId) ?? 0)
+          : (stockMap.get(it.id) ?? Number.POSITIVE_INFINITY);
       const stockIssues = cart
         .filter((it) => validIds.has(it.id) && it.quantity > availableFor(it))
         .map((it) => ({ id: it.id, name: it.name, requested: it.quantity, available: availableFor(it) }));

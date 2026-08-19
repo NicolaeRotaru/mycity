@@ -59,8 +59,14 @@ export function ShippingAddressForm({
   onSubmit,
   onApplySavedAddress,
 }: Props) {
-  // UI-only: il form manuale è aperto di default solo senza indirizzi salvati.
-  const [editing, setEditing] = useState(savedAddresses.length === 0);
+  // 121 — `useState(savedAddresses.length === 0)` cristallizzava la decisione al
+  // primo render, quando gli indirizzi salvati sono ancora in caricamento e
+  // quindi zero: il form restava aperto anche per chi ne aveva tre. Chi ha già
+  // un indirizzo si trovava una lista da compilare invece delle sue mattonelle.
+  // La verità va derivata dai dati, non fotografata una volta sola.
+  const [manualOpen, setManualOpen] = useState(false);
+  const editing = manualOpen || savedAddresses.length === 0;
+  const setEditing = setManualOpen;
 
   // Tile attiva = indirizzo salvato i cui campi combaciano col form corrente.
   // Pura derivazione visiva, nessuna logica di stato dell'indirizzo qui.
@@ -129,7 +135,14 @@ export function ShippingAddressForm({
 
       {/* Il form resta SEMPRE montato (è il target di submit della OrderSummary);
           su mobile/desktop lo nascondiamo visivamente quando si usa una tile. */}
-      <form onSubmit={onSubmit} className={`space-y-4 ${editing ? '' : 'hidden'}`} id="checkout-form">
+      {/* 105 — `noValidate`: i campi indirizzo/città/CAP sono `required`, e il
+          browser li pretendeva anche con «Ritiro in negozio» attivo — dove
+          l'indirizzo non serve. Peggio: il form è nascosto quando si usa una
+          mattonella salvata, e il browser non può portare il fuoco su un campo
+          invisibile, quindi il pulsante «Conferma ordine» non faceva NIENTE e
+          non diceva perché. La validazione vera è `validateAddress()`, che il
+          ritiro lo conosce. */}
+      <form onSubmit={onSubmit} noValidate className={`space-y-4 ${editing ? '' : 'hidden'}`} id="checkout-form">
         <Input
           label="Nome e cognome"
           name="fullName"

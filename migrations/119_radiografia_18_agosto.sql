@@ -36,6 +36,9 @@
 --   062 due consegne dello stesso evento Stripe vengono processate entrambe
 --   059 una rotazione di chiave emette una seconda gift card sullo stesso pagamento
 --   050/173 il reclamo interno tocca il flag del chargeback bancario
+--   094 mancano gli indici sulle tre interrogazioni piu' frequenti
+--   097 due indici identici sulla tabella che riceve piu' scritture
+--   098 le visite ai prodotti crescono senza fine
 --
 -- Idempotente: si può rilanciare senza rompere niente.
 -- 🔴 Applicarla al database di produzione resta una firma di Nicola.
@@ -790,6 +793,96 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS internal_dispute_status text;
 
 COMMENT ON COLUMN public.orders.internal_dispute_status IS
   'Reclamo interno fra cliente e negozio. NON e il chargeback bancario: quello vive in dispute_status e lo scrive solo il webhook Stripe.';
+
+-- =========================================================
+-- 094 — I TRE INDICI CHE MANCAVANO SULLE DOMANDE PIÙ FREQUENTI
+-- =========================================================
+-- La griglia del catalogo, l'elenco delle vetrine e «i miei ordini» sono le tre
+-- interrogazioni che il sito esegue di continuo, e nessuna delle tre aveva un
+-- indice adatto: con poche righe non si vede, con qualche migliaio diventa il
+-- primo rallentamento visibile.
+CREATE INDEX IF NOT EXISTS products_status_created_idx
+  ON public.products (status, created_at DESC)
+  WHERE status = 'available';
+
+CREATE INDEX IF NOT EXISTS profiles_vetrina_idx
+  ON public.profiles (role, is_approved)
+  WHERE role = 'seller' AND is_approved = true;
+
+CREATE INDEX IF NOT EXISTS orders_user_created_idx
+  ON public.orders (user_id, created_at DESC);
+
+-- =========================================================
+-- 097 — DUE INDICI IDENTICI SULLA TABELLA CHE SCRIVE DI PIÙ
+-- =========================================================
+-- `product_views` riceve una riga per ogni visita a una scheda prodotto, e
+-- portava due indici sulle stesse colonne (la 027 e la 117). Ogni scrittura li
+-- aggiornava tutti e due: costo doppio, beneficio zero. Si toglie il più
+-- recente, così resta quello che ha già le statistiche del pianificatore.
+DROP INDEX IF EXISTS public.product_views_prodotto_tempo_idx;
+
+-- =========================================================
+-- 098 — LE VISITE AI PRODOTTI NON CRESCONO PER SEMPRE
+-- =========================================================
+-- La tabella accanto (`activity_events`) ha la sua potatura da mesi; questa no,
+-- e cresce di una riga per visita senza nessun limite. Ma il negoziante non
+-- deve perdere lo storico: prima si salva il conto giornaliero, poi si buttano
+-- le righe singole. La riga grezza dura 90 giorni, il numero resta per sempre.
+CREATE TABLE IF NOT EXISTS public.product_views_daily (
+  product_id uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+  giorno     date NOT NULL,
+  visite     integer NOT NULL DEFAULT 0,
+  PRIMARY KEY (product_id, giorno)
+);
+
+ALTER TABLE public.product_views_daily ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS pvd_select_owner ON public.product_views_daily;
+CREATE POLICY pvd_select_owner ON public.product_views_daily
+  FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.products p
+       WHERE p.id = product_views_daily.product_id
+         AND p.seller_id = (SELECT auth.uid())
+    )
+    OR public.is_admin()
+  );
+
+REVOKE INSERT, UPDATE, DELETE ON public.product_views_daily FROM anon, authenticated;
+
+CREATE OR REPLACE FUNCTION public.consolida_visite_prodotto(p_giorni int DEFAULT 90)
+RETURNS TABLE (aggregate_scritte int, righe_cancellate int)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  limite timestamptz := now() - make_interval(days => greatest(p_giorni, 1));
+  scritte int := 0;
+  cancellate int := 0;
+BEGIN
+  -- Prima il conto: se questa fallisce, non si cancella niente.
+  WITH agg AS (
+    SELECT product_id, viewed_at::date AS giorno, count(*)::int AS visite
+      FROM public.product_views
+     WHERE viewed_at < limite
+     GROUP BY product_id, viewed_at::date
+  )
+  INSERT INTO public.product_views_daily (product_id, giorno, visite)
+  SELECT product_id, giorno, visite FROM agg
+  ON CONFLICT (product_id, giorno) DO UPDATE SET visite = EXCLUDED.visite;
+  GET DIAGNOSTICS scritte = ROW_COUNT;
+
+  DELETE FROM public.product_views WHERE viewed_at < limite;
+  GET DIAGNOSTICS cancellate = ROW_COUNT;
+
+  RETURN QUERY SELECT scritte, cancellate;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.consolida_visite_prodotto(int) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.consolida_visite_prodotto(int) TO service_role;
 
 COMMIT;
 

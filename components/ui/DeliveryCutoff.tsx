@@ -13,11 +13,38 @@ import { deliveryWindow, splitDuration, DEFAULT_CUTOFF_HOUR, EXPRESS_ETA_LABEL, 
  */
 export function useDeliveryCutoff(cutoffHour = DEFAULT_CUTOFF_HOUR) {
   const [now, setNow] = useState<number | null>(null);
+  // 102 — Prima: un `setInterval` da un secondo, per sempre, anche con la scheda
+  // in secondo piano — su ogni home e su ogni scheda prodotto. Su un telefono
+  // quel timer tiene sveglio il processore e mangia batteria per aggiornare un
+  // conto alla rovescia che nessuno sta guardando.
+  // Due accorgimenti: si ferma quando la scheda non e' visibile, e batte al
+  // minuto finche' manca piu' di un quarto d'ora — al secondo solo alla fine,
+  // che e' l'unico momento in cui la fretta si sente.
   useEffect(() => {
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
+    let id: ReturnType<typeof setInterval> | null = null;
+
+    const ferma = () => { if (id) { clearInterval(id); id = null; } };
+
+    const avvia = () => {
+      ferma();
+      setNow(Date.now());
+      const win = deliveryWindow(Date.now(), cutoffHour);
+      const mancaPoco = new Date(win.targetIso).getTime() - Date.now() <= 15 * 60_000;
+      id = setInterval(() => setNow(Date.now()), mancaPoco ? 1000 : 60_000);
+    };
+
+    const suVisibilita = () => {
+      if (document.visibilityState === 'visible') avvia();
+      else ferma();
+    };
+
+    avvia();
+    document.addEventListener('visibilitychange', suVisibilita);
+    return () => {
+      ferma();
+      document.removeEventListener('visibilitychange', suVisibilita);
+    };
+  }, [cutoffHour]);
 
   if (now === null) {
     return { hydrated: false as const, day: 'oggi' as const, h: 0, m: 0, s: 0 };

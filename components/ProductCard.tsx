@@ -2,6 +2,7 @@
 
 import { memo, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { Flame, Heart, Plus, Truck } from 'lucide-react';
 import { addToCart } from '@/lib/cart';
@@ -58,6 +59,7 @@ const ProductCard = ({
     : (compareValid ? Math.round((1 - price / (compareAtPrice as number)) * 100) : 0);
   const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
   const img = sizedImage(rawImg, 'card');
+  const router = useRouter();
   const { favorites, toggle } = useFavorites();
   const { isSeller, isAdmin } = useProfile();
   const shoppingMode = useShoppingMode(isSeller);
@@ -66,16 +68,26 @@ const ProductCard = ({
   const [heartBeat, setHeartBeat] = useState(false);
 
   const handleAdd = (e: React.MouseEvent) => {
-    if (hasVariants) return;
     e.preventDefault();
     e.stopPropagation();
+    // 108 — Prima, sui prodotti con varianti, la funzione usciva in silenzio: il
+    // clic sul «+» non faceva assolutamente niente, e il cliente lo ripeteva
+    // due o tre volte prima di rinunciare. La taglia va scelta: si va lì.
+    if (hasVariants) {
+      router.push(`/product/${id}`);
+      return;
+    }
     if (!canPurchase) {
       toast.error(isAdmin
         ? 'Gli account assistenza non possono acquistare sul marketplace.'
         : 'Apri il marketplace dal pulsante «Vai al marketplace» nella dashboard negozio.');
       return;
     }
-    addToCart({ id, name, price, image: img, sellerId, storeName });
+    // 109 — Entrava `price`, cioè il prezzo PIENO, anche quando la card
+    // mostrava «−30%» e il prezzo scontato. Il cliente vedeva 7 €, nel carrello
+    // ne trovava 10, e la fiducia se ne andava lì. Il server sconta davvero:
+    // era la vetrina a mentire.
+    addToCart({ id, name, price: bigPrice, image: img, sellerId, storeName });
     toast.success(`${name} aggiunto al carrello`, { duration: 2000 });
   };
 

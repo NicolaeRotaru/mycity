@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { CartItem, getCart, updateQuantity, removeFromCart, cartTotal, cartCount } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
+import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
@@ -42,7 +42,6 @@ export default function CartPage() {
   const count = cartCount(items);
   const freeShipping = total >= FREE_SHIPPING_THRESHOLD;
   const shippingCost = freeShipping ? 0 : 4.9;
-  const finalTotal = total + shippingCost;
 
   if (items.length === 0) {
     return (
@@ -74,6 +73,13 @@ export default function CartPage() {
   }
   const groups = groupOrder.map((k) => ({ key: k, ...groupsByStore.get(k)! }));
   const multiStore = groups.length > 1;
+  // 107 — Il carrello sommava merce e spedizione e si fermava lì. Al checkout
+  // si aggiungono 3 € di «Consegna MyCity» per ogni negozio: il totale mostrato
+  // qui era piu' basso di quello che si paga davvero, e la differenza compariva
+  // all'ultimo passo — dove l'abbandono costa di piu'. Stessa matematica del
+  // checkout: una fee per gruppo-negozio.
+  const platformDeliveryFee = groups.length * (PLATFORM_DELIVERY_FEE_CENTS / 100);
+  const finalTotal = total + shippingCost + platformDeliveryFee;
   const groupSubtotal = (g: { items: CartItem[] }) =>
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
 
@@ -207,14 +213,27 @@ export default function CartPage() {
                       garantito. Onestà: etichetta come stima finché i due modelli
                       non sono allineati. */}
                   {freeShipping && multiStore ? 'Spedizione stimata' : 'Spedizione'}
-                  {(!freeShipping || multiStore) && (
-                    <span className="block text-2xs text-ink-400 font-normal">stima · potrebbe variare al checkout</span>
-                  )}
+                  {/* 107 — La nota compariva solo in certi casi. La spedizione
+                      al checkout si calcola per negozio e sulla distanza: è una
+                      stima SEMPRE, e dirlo sempre costa zero. */}
+                  <span className="block text-2xs text-ink-500 font-normal">stima · potrebbe variare al checkout</span>
                 </span>
                 <span className={`font-semibold ${freeShipping ? 'text-olive-700' : 'text-ink-900'}`}>
                   {freeShipping ? (multiStore ? 'Gratis*' : 'Gratis') : formatPrice(shippingCost)}
                 </span>
               </div>
+            </div>
+
+            <div className="flex justify-between items-baseline text-sm">
+              <span className="text-ink-600">
+                Consegna MyCity
+                {groups.length > 1 && (
+                  <span className="block text-2xs text-ink-500 font-normal">
+                    {groups.length} negozi × {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
+                  </span>
+                )}
+              </span>
+              <span className="font-semibold text-ink-900">{formatPrice(platformDeliveryFee)}</span>
             </div>
 
             <div className="border-t border-cream-300 pt-3 flex justify-between items-baseline">

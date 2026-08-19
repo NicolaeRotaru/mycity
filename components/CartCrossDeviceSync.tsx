@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import { getCart, saveCart, CART_UPDATED_AT_KEY, type CartItem } from '@/lib/cart';
+import { getCart, saveCart, clearCart, CART_UPDATED_AT_KEY, type CartItem } from '@/lib/cart';
 
 /**
  * Sincronizza il carrello locale (localStorage) con il cloud (Supabase) quando
@@ -97,8 +97,22 @@ export default function CartCrossDeviceSync() {
 
     // Re-sync su login/logout
     const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
+      const precedente = userId;
       userId = session?.user?.id ?? null;
-      if (userId) syncDown(userId);
+      if (userId) {
+        syncDown(userId);
+        return;
+      }
+      // 106 — Mancava questo ramo. All'uscita il carrello restava nel browser:
+      // sul computer di casa condiviso, o su quello di un negozio, la persona
+      // successiva entrava e trovava dentro la spesa di chi c'era prima — e al
+      // primo cambio la mandava perfino nel proprio carrello sul server.
+      // Il punto giusto è uno solo: qui. I sei pulsanti di uscita sparsi per il
+      // sito non devono ricordarsene, e nemmeno il settimo che nascerà.
+      if (precedente) {
+        clearCart();
+        try { localStorage.removeItem(LAST_UPDATED_KEY); } catch { /* noop */ }
+      }
     });
 
     // Sync UP quando il carrello cambia (debounce 1s)

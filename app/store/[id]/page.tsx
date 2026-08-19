@@ -13,6 +13,7 @@ import { useStorePageData } from '@/components/store-sections/useStorePageData';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import EmptyState from '@/components/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { useEffect } from 'react';
 import { trackStoreViewed } from '@/lib/analytics/events';
 
@@ -34,6 +35,18 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     return (
       <div className="container mx-auto px-4 py-16">
         <LoadingState />
+      </div>
+    );
+  }
+  // 110 — Prima di dire «non trovato» si guarda se la domanda è arrivata.
+  if (data.isError) {
+    return (
+      <div className="container mx-auto px-4 py-16 max-w-xl">
+        <ErrorState
+          title="Non riesco a caricare il negozio"
+          description="Sembra un problema di collegamento. Riprova."
+          retry={() => { void data.refetch(); }}
+        />
       </div>
     );
   }

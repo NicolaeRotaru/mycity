@@ -90,15 +90,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     );
   }
 
-  const buttonProps = rest as ButtonHTMLAttributes<HTMLButtonElement>;
+  // 104 — `{...buttonProps}` veniva DOPO `disabled`, quindi lo sovrascriveva
+  // con il valore originale: un pulsante con `loading` e `disabled={false}`
+  // restava cliccabile. Sull'importazione del catalogo questo voleva dire
+  // duplicare tutti i prodotti con un doppio clic, e sul pagamento della
+  // promozione voleva dire pagarla due volte.
+  const { disabled: disabledProp, type: typeProp, ...restButtonProps } =
+    rest as ButtonHTMLAttributes<HTMLButtonElement>;
   return (
     <button
       ref={ref}
-      type={buttonProps.type ?? 'button'}
+      type={typeProp ?? 'button'}
       aria-busy={loading || undefined}
-      disabled={buttonProps.disabled || loading}
+      disabled={disabledProp || loading}
       className={classes}
-      {...buttonProps}
+      {...restButtonProps}
     >
       {content}
     </button>

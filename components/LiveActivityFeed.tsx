@@ -58,26 +58,25 @@ const LiveActivityFeed = () => {
         .limit(8);
       return (data ?? []) as unknown as Activity[];
     },
-    // Niente refetchInterval: il refresh avviene via Realtime sotto.
+    // 093 — Prima non c'era ricarica periodica perche' c'era un collegamento
+    // permanente in ascolto sulla tabella ordini: UNO PER VISITATORE della home,
+    // aperto anche da chi guarda e se ne va. Con mille visitatori sono mille
+    // canali che il database deve tenere in piedi per aggiornare un riquadro di
+    // prova sociale. Questo riquadro deve mostrare che il marketplace e' vivo,
+    // non l'istante esatto in cui arriva un ordine: una richiesta al minuto da'
+    // la stessa sensazione e non costa niente.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     staleTime: 60_000,
   });
 
-  // Subscribe a nuovi ordini in tempo reale
+  // Il battito visivo segue la ricarica, non piu' un evento del database.
   useEffect(() => {
-    const channel = supabase
-      .channel('live-feed-orders')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'orders' },
-        () => {
-          setPulse(true);
-          refetch();
-          setTimeout(() => setPulse(false), 1500);
-        },
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [refetch]);
+    if (activities.length === 0) return;
+    setPulse(true);
+    const id = setTimeout(() => setPulse(false), 1500);
+    return () => clearTimeout(id);
+  }, [activities]);
 
   if (activities.length === 0) return null;
 

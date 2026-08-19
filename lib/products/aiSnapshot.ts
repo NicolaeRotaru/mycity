@@ -71,3 +71,4 @@ export function productSnapshot(row: ProductRow, categories: CategoryRow[]): Pro
     hasVariants: Boolean(row.has_variants),
   };
 }
+

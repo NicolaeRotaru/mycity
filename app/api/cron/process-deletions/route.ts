@@ -136,6 +136,17 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       .update({ ip: null, user_agent: null })
       .lt('created_at', monthsAgo(14))
       .not('ip', 'is', null);
+    // 077 — `consent_log` era l'unica tabella con dati personali che nessuna
+    // pulizia toccava: l'indirizzo di rete restava li' per sempre. La PROVA del
+    // consenso va conservata (e' l'accountability dell'art. 7.1), l'indirizzo di
+    // rete no: dopo 24 mesi — il ciclo di rinnovo semestrale piu' un margine di
+    // contenzioso — non serve piu' a niente.
+    await admin
+      .from('consent_log')
+      .update({ ip: null, user_agent: null })
+      .lt('created_at', monthsAgo(24))
+      .not('ip', 'is', null);
+
     // Fix #33: la retention dichiarata (14 mesi) non annullava anon_id/path/city/referrer.
     // Oltre 14 mesi azzeriamo anche il profilo comportamentale pseudonimo (art. 5.1.e GDPR).
     await admin
@@ -162,6 +173,19 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       .update({ metadata: null })
       .lt('created_at', monthsAgo(12))
       .not('metadata', 'is', null);
+
+    // 098 — `product_views` cresceva senza fine: una riga per ogni visita a una
+    // scheda, per sempre, mentre la tabella accanto veniva potata da mesi. Ma il
+    // negoziante non deve perdere lo storico. La funzione prima SALVA il conto
+    // giornaliero, poi cancella le righe singole: la riga grezza dura 90 giorni,
+    // il numero resta per sempre.
+    const { data: consolidate, error: errVisite } = await admin
+      .rpc('consolida_visite_prodotto', { p_giorni: 90 });
+    if (errVisite) {
+      logger.warn('[cron-deletions] consolidamento visite prodotto fallito', { err: errVisite.message });
+    } else {
+      logger.info('[cron-deletions] visite prodotto consolidate', { consolidate });
+    }
 
     // E le righe di semplice navigazione si cancellano, non si sbiancano: senza
     // questo la tabella cresceva per sempre. Le altre categorie restano perche'
@@ -229,6 +253,26 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         .update({ name: '[eliminato]', email: '[eliminato]', message: '[rimosso]' })
         .eq('user_id', userId),
     ]).catch((e) => logger.warn('[cron-deletions] anonimizzazione free-text parziale', { userId, e }));
+
+    // 1b-bis) 071 — L'iscrizione alla newsletter viveva in una tabella a parte,
+    // legata all'indirizzo email e non al profilo: la cancellazione dell'account
+    // non la toccava. Risultato: chi chiedeva di sparire continuava a ricevere
+    // la newsletter da un indirizzo che nel sito non esisteva piu', e non poteva
+    // nemmeno piu' accedere per disiscriversi. L'email va letta ADESSO: dopo la
+    // cancellazione dell'utente non e' piu' recuperabile.
+    try {
+      const { data: utenteAuth } = await admin.auth.admin.getUserById(userId);
+      const emailUtente = utenteAuth?.user?.email ?? null;
+      if (emailUtente) {
+        const { error: errNews } = await admin
+          .from('newsletter_subscribers')
+          .delete()
+          .ilike('email', emailUtente);
+        if (errNews) logger.warn('[cron-deletions] newsletter non ripulita', { userId, err: errNews.message });
+      }
+    } catch (e) {
+      logger.warn('[cron-deletions] lettura email per la newsletter fallita', { userId, e });
+    }
 
     // 1c) I file personali nello storage. Va fatto PRIMA della cancellazione
     // dell'utente: dopo, l'elenco delle sue cartelle non e' piu' ricostruibile.

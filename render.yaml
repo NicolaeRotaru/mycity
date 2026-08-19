@@ -87,8 +87,16 @@ services:
       - key: VAPID_PRIVATE_KEY
         sync: false
       # Firma dei link di disiscrizione dalle email.
+      # 081 — Senza questa variabile la firma ripiegava sulla chiave di servizio
+      # di Supabase, o su una stringa scritta nel codice: chiunque la conoscesse
+      # poteva disiscrivere chiunque. Ora in produzione e' obbligatoria.
       - key: UNSUBSCRIBE_SECRET
-        sync: false
+        generateValue: true
+      # 020 — Password delle rotte interne (trigger del database, cron interni).
+      # Prima, se mancava, si ripiegava su SUPABASE_SERVICE_ROLE_KEY: la chiave
+      # che scavalca ogni regola diventava la password di una rotta HTTP.
+      - key: INTERNAL_API_SECRET
+        generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY

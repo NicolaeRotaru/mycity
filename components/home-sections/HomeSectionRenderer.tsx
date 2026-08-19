@@ -448,7 +448,7 @@ function HomeBlock({
       const isFile = c.provider === 'file';
       if (isFile ? !c.videoUrl : !c.videoId) return null;
       const embedSrc = c.provider === 'vimeo'
-        ? `https://player.vimeo.com/video/${c.videoId}`
+        ? `https://player.vimeo.com/video/${c.videoId}?dnt=1`
         : `https://www.youtube-nocookie.com/embed/${c.videoId}`;
       return (
         <section className="container mx-auto px-4 sm:px-6 py-5">

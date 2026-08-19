@@ -193,9 +193,15 @@ h3 { font-size: var(--text-xl);  font-weight: var(--weight-bold); line-height: v
 /* Bottom-tab safe area iOS */
 .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0); }
 
-/* Sticky bottom nav: spazio per non coprire contenuti */
+/* Sticky bottom nav: spazio per non coprire contenuti.
+   124 — Prima era `72px` scritto a mano, senza condizione: lo spazio veniva
+   riservato anche nelle pagine dove la barra a schede non c'è (area venditore,
+   pannello, fattorino), e il 72 viveva in due posti diversi che potevano
+   divergere. Ora si usa la variabile — unica casa dell'altezza — e le pagine
+   senza barra la mettono a zero. */
 @media (max-width: 767px) {
-  body { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0)); }
+  body { padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0)); }
+  body.senza-tabbar { --tabbar-height: 0px; }
 }
 
 /* A11y: reduced motion override per utenti con vestibolare disorders */

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -45,7 +45,7 @@ export default function MobileTabBar() {
   // critico). Su /seller e /rider la navigazione mobile è gestita dallo shell
   // dedicato (drawer off-canvas SellerShell; bottom tab bar di RiderShell),
   // quindi nascondiamo la tab bar globale per non avere doppia chrome.
-  if (
+  const nascosta =
     pathname.startsWith('/sign-in') ||
     pathname.startsWith('/sign-up') ||
     pathname.startsWith('/reset-password') ||
@@ -53,8 +53,18 @@ export default function MobileTabBar() {
     pathname.startsWith('/checkout') ||
     pathname.startsWith('/seller') ||
     pathname.startsWith('/rider') ||
-    /^\/messages\/[^/]+/.test(pathname)
-  ) return null;
+    /^\/messages\/[^/]+/.test(pathname);
+
+  // 124 — La pagina riservava sempre 72px in fondo, anche dove questa barra non
+  // c'è: una striscia di vuoto sotto il contenuto, su tutta l'area venditore,
+  // fattorino, checkout e accesso. La classe dice al foglio di stile quando
+  // l'altezza vale zero, e l'altezza resta scritta in un posto solo.
+  useEffect(() => {
+    document.body.classList.toggle('senza-tabbar', nascosta);
+    return () => document.body.classList.remove('senza-tabbar');
+  }, [nascosta]);
+
+  if (nascosta) return null;
 
   let tabs: Tab[];
 

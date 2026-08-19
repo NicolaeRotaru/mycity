@@ -122,5 +122,13 @@ export function useStorePageData(id: string) {
         }
       : null;
 
-  return { isLoading: storeQ.isLoading, store, approved, custom, accent, socials, reviews, promos, site, ctx };
+  // 110 — `isError` e `refetch` non erano esposti: la pagina non aveva modo di
+  // distinguere «questo negozio non esiste» da «non sono riuscita a chiederlo»,
+  // e diceva sempre la prima.
+  return {
+    isLoading: storeQ.isLoading,
+    isError: storeQ.isError,
+    refetch: storeQ.refetch,
+    store, approved, custom, accent, socials, reviews, promos, site, ctx,
+  };
 }
