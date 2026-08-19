@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
-import { requireSupabaseService } from '@/lib/env';
+import { requireSupabaseService, env } from '@/lib/env';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { escapeHtml } from '@/lib/html-escape';
+import { logger } from '@/lib/logger';
 
 /**
  * Cron endpoint per inviare email "Hai dimenticato qualcosa" agli utenti
@@ -41,7 +42,19 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     const { data: prof } = await supa.from('profiles').select('email_marketing').eq('id', c.user_id).single();
     if (!prof?.email_marketing) {
       skipped++;
-      await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+      const { error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+      if (errMarca) logger.error('[abandoned-carts] marcatura fallita (senza consenso)', errMarca);
+      continue;
+    }
+
+    // 183 — Prima si spediva e POI si marcava, senza guardare l'esito della
+    // marcatura. Se la marcatura falliva, al giro dopo la stessa persona
+    // riceveva la stessa email; e chi la riceve due volte la segna come spam.
+    // Ora si rivendica prima: si scrive solo a chi si è riusciti a marcare.
+    const { error: errClaim } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
+    if (errClaim) {
+      logger.error('[abandoned-carts] rivendicazione fallita, non spedisco', errClaim);
+      errors++;
       continue;
     }
     const itemsList = Array.isArray(c.cart_data)
@@ -54,14 +67,13 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
       html: `<p>Ciao ${escapeHtml(first)},</p>
              <p>Il tuo carrello (€${Number(c.cart_total).toFixed(2)}) ti aspetta.</p>
              ${itemsList ? `<ul>${itemsList}</ul>` : ''}
-             <p><a href="https://mycity-marketplace.com/cart" style="background:#C0492C;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Completa l&apos;acquisto →</a></p>
+             <p><a href="${env.appUrl()}/cart" style="background:#C0492C;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Completa l&apos;acquisto →</a></p>
              <p style="font-size:12px;color:#888">Se hai cambiato idea, ignora questa email. Non ti scriveremo più per questo carrello.</p>`,
-      text: `Il tuo carrello ti aspetta. Totale €${Number(c.cart_total).toFixed(2)}. Vai su mycity-marketplace.com/cart.`,
+      text: `Il tuo carrello ti aspetta. Totale €${Number(c.cart_total).toFixed(2)}. Vai su ${env.appUrl()}/cart.`,
       tags: [{ name: 'template', value: 'abandoned_cart_4h' }],
     });
     if ('ok' in res && res.ok) {
       sent++;
-      await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
     } else {
       errors++;
     }

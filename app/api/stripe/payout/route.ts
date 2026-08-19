@@ -30,6 +30,11 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
 
   const result = await releaseOrderPayout(body.orderId);
   if (result.ok) {
+    // 046 — Un ordine rimborsato per intero prima del pagamento non ha niente da
+    // versare: è un esito buono, non un trasferimento.
+    if ('code' in result) {
+      return NextResponse.json({ ok: true, transferId: null, nota: result.reason }, { status: 200 });
+    }
     return NextResponse.json({ ok: true, transferId: result.transferId }, { status: 200 });
   }
 

@@ -242,13 +242,21 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
  * Wrapper: richiede x-internal-secret per endpoint server-to-server (trigger DB,
  * cron interni, edge functions). Non esporre mai a client browser.
  *
- * 🟡-1: usa un secret DEDICATO `INTERNAL_API_SECRET` (rotabile indipendentemente,
- * blast-radius ridotto). Fallback a `SUPABASE_SERVICE_ROLE_KEY` per retro-
- * compatibilità con i caller esistenti finché non viene configurato il dedicato.
+ * Usa un segreto DEDICATO `INTERNAL_API_SECRET`, rotabile per conto suo.
+ *
+ * 020 — Prima, se quel segreto mancava, si ripiegava su `SUPABASE_SERVICE_ROLE_KEY`:
+ * la chiave che scavalca ogni regola del database diventava anche la password di
+ * una rotta HTTP. Chi la indovinava o la vedeva passare non entrava in una rotta:
+ * entrava dappertutto. E un ripiego silenzioso non si accorge nessuno che c'è.
+ * Ora, senza segreto dedicato, la rotta risponde 503: non funziona finché non è
+ * configurata, che è esattamente il comportamento che si vuole.
  */
 export function withInternalAuth(handler: (req: NextRequest) => Promise<NextResponse>) {
   return async (req: NextRequest): Promise<NextResponse> => {
-    const expected = process.env.INTERNAL_API_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const expected = process.env.INTERNAL_API_SECRET;
+    if (!expected) {
+      return ApiErrors.unavailable('INTERNAL_API_SECRET non configurato');
+    }
     const provided = req.headers.get('x-internal-secret');
     if (!secretsMatch(provided, expected)) {
       return ApiErrors.forbidden();

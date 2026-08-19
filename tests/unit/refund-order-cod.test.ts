@@ -79,6 +79,17 @@ vi.mock('@/lib/supabase/server', () => ({
     },
     rpc: (name: string, args: Record<string, unknown>) => {
       state.rpcCalls.push({ name, args });
+      // 051 — L'accumulo del rimborso ora lo fa il database, in una riga sola e
+      // col tetto dentro. Qui lo si imita: se la somma sfonda il totale
+      // dell'ordine la funzione non restituisce righe, e chi chiama NON deve
+      // arrivare a Stripe. È il caso del doppio rimborso concorrente.
+      if (name === 'accumula_rimborso') {
+        const totale = Math.round(state.order.total_price * 100);
+        const nuovo = (state.order.refunded_amount_cents ?? 0) + Number(args.p_delta ?? 0);
+        if (nuovo > totale) return Promise.resolve({ data: [], error: null });
+        state.order.refunded_amount_cents = nuovo;
+        return Promise.resolve({ data: [{ totale_rimborsato: nuovo, totale_ordine: totale }], error: null });
+      }
       return Promise.resolve({ data: null, error: name === 'wallet_credit' ? state.walletErr : null });
     },
     auth: { admin: { getUserById: async () => ({ data: { user: { email: 'b@x.com' } } }) } },
@@ -137,5 +148,21 @@ describe('refundOrder COD → wallet', () => {
     expect(upd?.delivery_status).toBeUndefined();
     expect(upd?.payout_status).toBeUndefined();
     expect(state.rpcCalls.some((c) => c.name === 'restore_stock_for_order')).toBe(false);
+  });
+
+  // 051 — Prima il totale rimborsato si leggeva, si sommava in memoria e si
+  // riscriveva: due percorsi partiti insieme sullo stesso ordine leggevano
+  // entrambi «zero» e rimborsavano entrambi l'intero. Ora chi non rivendica la
+  // riga non arriva mai a toccare i soldi.
+  it('un secondo rimborso pieno sullo stesso ordine non passa: la riga non si rivendica due volte', async () => {
+    await refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r1' });
+    const accreditiPrima = state.rpcCalls.filter((c) => c.name === 'wallet_credit').length;
+
+    await expect(
+      refundOrder({ orderId: 'o1', amountCents: 2000, idempotencyKey: 'return_r2' }),
+    ).rejects.toThrow();
+
+    const accreditiDopo = state.rpcCalls.filter((c) => c.name === 'wallet_credit').length;
+    expect(accreditiDopo).toBe(accreditiPrima);
   });
 });

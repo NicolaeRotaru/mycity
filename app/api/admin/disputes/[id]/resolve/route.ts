@@ -105,13 +105,18 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // piu'. Non c'era nessun punto nel codice che lo riportasse indietro.
   if (dispute.order_id) {
     const esitoAlCliente = body.status === 'resolved_buyer';
+    // 050 / 173 — Questa rotta scriveva `orders.dispute_status`, che è la
+    // colonna del CHARGEBACK BANCARIO e appartiene solo al webhook di Stripe.
+    // Due conseguenze, tutte e due vere:
+    //  · chiudere un reclamo interno a favore del negozio azzerava il flag di
+    //    una contestazione ancora aperta in banca, e il cron pagava il negozio
+    //    con i soldi che la banca aveva già ripreso;
+    //  · chiuderlo a favore del cliente scriveva 'LOST' anche senza nessun
+    //    chargeback, e quel pagamento restava bloccato per sempre.
+    // Il reclamo interno ora ha la sua colonna. La banca la sua.
     const { error: errOrdine } = await admin
       .from('orders')
-      .update(
-        esitoAlCliente
-          ? { dispute_status: 'LOST' }
-          : { dispute_status: null, disputed_at: null },
-      )
+      .update({ internal_dispute_status: esitoAlCliente ? 'LOST' : 'RESOLVED' })
       .eq('id', dispute.order_id);
     if (errOrdine) {
       // Non blocca la risoluzione, ma deve essere visibile: il venditore resta

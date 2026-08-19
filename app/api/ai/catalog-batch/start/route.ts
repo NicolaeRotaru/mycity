@@ -70,30 +70,49 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   const requests = buildCatalogBatchRequests({ operation, products, categories, targetLang });
 
+  // 191 — Prima si mandava il lavoro al modello e POI si scriveva la riga che lo
+  // traccia. Se quella scrittura falliva, il lavoro era partito, era pagato, e
+  // nessuno sapeva più che esistesse: né il negoziante, che vede «riprova», né
+  // noi. Ora la riga nasce prima, in stato «in invio»; l'identificativo del
+  // lotto ci si aggiunge dopo. Se qualcosa va storto resta una traccia con
+  // scritto cosa è successo, e il lotto si recupera a mano.
+  const { data: job, error: errJob } = await admin
+    .from('catalog_ai_jobs')
+    .insert({
+      seller_id: user.id,
+      operation,
+      status: 'submitting',
+      target_lang: targetLang ?? null,
+      total: products.length,
+    })
+    .select('id')
+    .single();
+
+  if (errJob || !job) {
+    logger.error('catalog-batch start: insert job failed', { sellerId: user.id, status: errJob?.code });
+    return ApiErrors.badGateway('Non sono riuscito ad aprire il lavoro. Riprova.');
+  }
+
   try {
     const handle = await submitBatch(requests);
-    const { data: job, error } = await admin
+    const { error: errUpd } = await admin
       .from('catalog_ai_jobs')
-      .insert({
-        seller_id: user.id,
-        operation,
-        status: 'processing',
-        batch_id: handle.id,
-        target_lang: targetLang ?? null,
-        total: products.length,
-      })
-      .select('id')
-      .single();
+      .update({ status: 'processing', batch_id: handle.id })
+      .eq('id', job.id);
 
-    if (error || !job) {
-      logger.error('catalog-batch start: insert job failed', { sellerId: user.id, status: error?.code });
-      return ApiErrors.badGateway('Job avviato ma non tracciato. Riprova.');
+    if (errUpd) {
+      // Il lavoro è partito davvero: l'identificativo va nel log, così il lotto
+      // resta recuperabile dalla console anche se il database non l'ha preso.
+      logger.error('catalog-batch start: batch avviato ma non agganciato', {
+        sellerId: user.id, jobId: job.id, batchId: handle.id,
+      });
     }
 
     return NextResponse.json({ jobId: job.id, total: products.length, status: 'processing' });
   } catch (err) {
+    await admin.from('catalog_ai_jobs').update({ status: 'failed' }).eq('id', job.id);
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
-    logger.error('catalog-batch start: submit failed', { sellerId: user.id });
-    return ApiErrors.badGateway('Non sono riuscito ad avviare il job. Riprova.');
+    logger.error('catalog-batch start: submit failed', { sellerId: user.id, jobId: job.id });
+    return ApiErrors.badGateway('Non sono riuscito ad avviare il lavoro. Riprova.');
   }
 });

@@ -95,7 +95,7 @@ export const POST = handler;
 // validate al runtime.
 // Acceptable any: tipo Supabase troppo restrittivo senza Database type.
 // eslint-disable-next-line
-async function processBatch(supa: any, batch: { id: string; user_id: string; template: string }[]): Promise<NextResponse> {
+async function processBatch(supa: any, batch: { id: string; user_id: string; template: string; attempts?: number }[]): Promise<NextResponse> {
   let sent = 0, skipped = 0, errors = 0;
   for (const row of batch) {
     const tpl = TEMPLATES[row.template];
@@ -134,8 +134,32 @@ async function processBatch(supa: any, batch: { id: string; user_id: string; tem
       await supa.from('email_queue').update({ sent_at: new Date().toISOString() }).eq('id', row.id);
     } else {
       errors++;
-      // Invio fallito: rilascia il claim così il prossimo run può ritentare.
-      await supa.from('email_queue').update({ claimed_at: null }).eq('id', row.id);
+      // 182 — Prima si rilasciava il claim e basta: nessun contatore, nessuna
+      // resa. Un indirizzo che rimbalza veniva ritentato per sempre, e ogni
+      // rimbalzo abbassa la reputazione del mittente — cioè fa finire nello
+      // spam anche le conferme d'ordine di tutti gli altri.
+      // Ora: si conta il tentativo, si scrive il motivo, si rimanda in avanti
+      // con attesa crescente, e al quinto si smette e si dichiara annullata.
+      const tentativi = (typeof row.attempts === 'number' ? row.attempts : 0) + 1;
+      const motivo = 'error' in res && res.error ? String(res.error).slice(0, 500) : 'invio fallito';
+      const MASSIMO = 5;
+      if (tentativi >= MASSIMO) {
+        await supa.from('email_queue').update({
+          claimed_at: null,
+          attempts: tentativi,
+          last_error: motivo,
+          cancelled_at: new Date().toISOString(),
+        }).eq('id', row.id);
+      } else {
+        // Attesa crescente: 5, 25, 125, 625 minuti.
+        const rinvioMin = 5 ** tentativi;
+        await supa.from('email_queue').update({
+          claimed_at: null,
+          attempts: tentativi,
+          last_error: motivo,
+          send_at: new Date(Date.now() + rinvioMin * 60_000).toISOString(),
+        }).eq('id', row.id);
+      }
     }
   }
   return NextResponse.json({ ok: true, sent, skipped, errors, total: batch.length });

@@ -40,9 +40,12 @@ export async function applyConnectAccountStatus(acct: Stripe.Account): Promise<v
 
 export type PayoutResult =
   | { ok: true; transferId: string }
+  // 046 — Rimborsato per intero prima che il pagamento partisse: non c'è niente
+  // da versare, e non è un errore.
+  | { ok: true; code: 'NOTHING_TO_PAY'; reason: string }
   | {
       ok: false;
-      code: 'NOT_FOUND' | 'NOT_DELIVERED' | 'BAD_STATE' | 'INVALID_AMOUNT' | 'SELLER_NOT_READY' | 'RIDER_NOT_READY' | 'TRANSFER_FAILED';
+      code: 'NOT_FOUND' | 'NOT_DELIVERED' | 'BAD_STATE' | 'INVALID_AMOUNT' | 'SELLER_NOT_READY' | 'RIDER_NOT_READY' | 'TRANSFER_FAILED' | 'NOTHING_TO_PAY';
       reason: string;
     };
 
@@ -61,7 +64,9 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, seller_id, payout_status, seller_payout_cents, stripe_charge_id, stripe_transfer_group, delivery_status')
+    // 046 — serve anche quanto è già stato addebitato al venditore: il payout
+    // deve versare il residuo, non il netto pieno.
+    .select('id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, stripe_charge_id, stripe_transfer_group, delivery_status')
     .eq('id', orderId)
     .single();
 
@@ -109,9 +114,26 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
 
   try {
     const stripe = getStripe();
+    // 046 — Prima qui si trasferiva `seller_payout_cents`, cioè il netto pieno
+    // dell'ordine, anche quando una parte era già stata rimborsata al cliente
+    // PRIMA che il payout partisse. In quel caso lo storno non aveva niente da
+    // stornare (nessun transfer ancora inviato) e il venditore incassava
+    // comunque il cento per cento: la differenza la metteva la piattaforma.
+    // `residuoRecuperabile` toglie dal netto quanto è già stato messo a carico
+    // del venditore, ed è la stessa funzione che governa gli storni.
+    const daVersare = residuoRecuperabile(order as unknown as ReversibleOrder);
+    if (daVersare <= 0) {
+      const { error: errNulla } = await admin
+        .from('orders')
+        .update({ payout_status: 'REVERSED', payout_at: new Date().toISOString() })
+        .eq('id', order.id);
+      if (errNulla) logger.error('[stripe] payout a zero non registrato', errNulla);
+      return { ok: true, code: 'NOTHING_TO_PAY', reason: 'Rimborsato per intero prima del pagamento: niente da versare' };
+    }
+
     const transfer = await stripe.transfers.create(
       {
-        amount: order.seller_payout_cents,
+        amount: daVersare,
         currency: 'eur',
         destination: seller.stripe_account_id,
         ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
@@ -340,6 +362,8 @@ export interface RiderReversibleOrder {
   rider_id?: string | null;
   rider_transfer_id: string | null;
   rider_payout_status: string | null;
+  /** 061 — quanto del compenso è già rientrato: serve al residuo e alla chiave. */
+  rider_payout_reversed_cents?: number | null;
   rider_fee_cents?: number | null;
   shipping_cost?: number | string | null;
 }
@@ -365,27 +389,41 @@ export async function reverseRiderTransfer(
   const versato = order.rider_fee_cents != null
     ? order.rider_fee_cents
     : Math.round(Number(order.shipping_cost ?? 0) * 100);
-  const reverseCents = Math.min(amountCents ?? versato, versato);
+  // 061 — Il residuo si calcola come per il venditore: quanto è stato versato
+  // meno quanto è già rientrato. Senza contatore, due storni parziali sullo
+  // stesso ordine si sommavano oltre il versato.
+  const giaStornato = order.rider_payout_reversed_cents ?? 0;
+  const residuo = Math.max(0, versato - giaStornato);
+  const reverseCents = Math.min(amountCents ?? residuo, residuo);
   if (reverseCents <= 0) return { reversalId: null, reversedCents: 0 };
 
   const stripe = getStripe();
   const reversal = await stripe.transfers.createReversal(
     order.rider_transfer_id,
     { amount: reverseCents, metadata: { order_id: order.id, kind: 'rider_fee' } },
-    { idempotencyKey: `reversal_rider_${order.id}_${reverseCents}` },
+    // 061 — La chiave portava l'importo del singolo storno: due storni dello
+    // stesso importo sullo stesso ordine avevano la stessa chiave e il secondo
+    // non avveniva. Ora porta il totale cumulato, come per il venditore.
+    { idempotencyKey: `reversal_rider_${order.id}_tot_${giaStornato + reverseCents}` },
   );
 
   const admin = getAdminSupabase();
+  const totaleStornato = giaStornato + reverseCents;
   const { error } = await admin
     .from('orders')
     .update({
-      rider_payout_status: reverseCents >= versato ? 'REVERSED' : 'TRANSFERRED',
+      rider_payout_reversed_cents: totaleStornato,
+      // 049 — 'REVERSED' era rifiutato dal vincolo del database (migrazione 081)
+      // e l'errore veniva solo scritto nel log: uno storno che nei conti non
+      // esisteva. La migrazione 119 aggiunge lo stato; qui l'errore si vede.
+      rider_payout_status: totaleStornato >= versato ? 'REVERSED' : 'TRANSFERRED',
     })
     .eq('id', order.id);
   if (error) {
     logger.error('[stripe] storno compenso rider non registrato nel database', {
       orderId: order.id, reversalId: reversal.id, message: error.message,
     });
+    throw new Error(`storno rider non registrato: ${error.message}`);
   }
 
   return { reversalId: reversal.id, reversedCents: reverseCents };
@@ -440,7 +478,7 @@ export async function refundOrder(
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_fee_cents, shipping_cost')
+    .select('id, user_id, total_price, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status')
     .eq('id', opts.orderId)
     .single();
 
@@ -454,8 +492,27 @@ export async function refundOrder(
   const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents - alreadyRefunded));
   if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
 
+  // 051 — LA RIVENDICAZIONE VIENE PRIMA DEI SOLDI.
+  // Prima il totale rimborsato veniva letto qui, sommato in memoria e riscritto
+  // più sotto. Due percorsi partiti insieme sullo stesso ordine — la decisione
+  // su un reso e la risoluzione di una contestazione — leggevano entrambi
+  // «zero rimborsato» e chiamavano Stripe entrambi: il denaro usciva due volte,
+  // e uscire è irreversibile.
+  // Ora la somma la fa il database in una riga sola, con il tetto dentro la
+  // stessa istruzione. Se non rivendica, non si chiama Stripe: si esce.
+  const { data: claimRimborso, error: errClaim } = await admin
+    .rpc('accumula_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
+  if (errClaim) {
+    logger.error('[refundOrder] accumulo rimborso fallito', { orderId: order.id, message: errClaim.message });
+    throw new Error('refundOrder: impossibile registrare il rimborso');
+  }
+  const rivendicato = Array.isArray(claimRimborso) ? claimRimborso[0] : claimRimborso;
+  if (!rivendicato) {
+    throw new Error('refundOrder: rimborso già registrato o oltre il totale dell ordine');
+  }
+
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
-  const newRefundedTotal = (order.refunded_amount_cents ?? 0) + safeAmountCents;
+  const newRefundedTotal = Number(rivendicato.totale_rimborsato ?? 0);
   const isFull = newRefundedTotal >= orderTotalCents;
 
   // --- COD (🟠-18): nessuna charge Stripe → accredito sul wallet del buyer.
@@ -478,7 +535,31 @@ export async function refundOrder(
     const sellerNet = order.seller_payout_cents ?? 0;
     const sellerShare =
       orderTotalCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / orderTotalCents), sellerNet) : 0;
-    const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
+    let { reversedCents } = await reverseOrderTransfer(order, sellerShare);
+
+  // 046 — Se il payout NON è ancora partito, `reverseOrderTransfer` è un no-op:
+  // giusto, non c'è niente da stornare. Ma prima finiva lì, e la quota del
+  // venditore non veniva registrata da nessuna parte: al momento del pagamento
+  // il cron gli versava il netto pieno, rimborso compreso. La perdita restava
+  // alla piattaforma, in silenzio, su ogni rimborso parziale anticipato.
+  // Ora la quota si accumula lo stesso: il pagamento successivo verserà il
+  // residuo, che è quello che gli spetta davvero.
+  if (reversedCents === 0 && sellerShare > 0 && order.payout_status !== 'TRANSFERRED') {
+    const giaAddebitato = order.seller_payout_reversed_cents ?? 0;
+    const nettoVenditore = order.seller_payout_cents ?? 0;
+    const nuovoAddebito = Math.min(giaAddebitato + sellerShare, nettoVenditore);
+    const { error: errQuota } = await admin
+      .from('orders')
+      .update({ seller_payout_reversed_cents: nuovoAddebito })
+      .eq('id', order.id);
+    if (errQuota) {
+      logger.error('[refundOrder] quota venditore non addebitata', {
+        orderId: order.id, message: errQuota.message,
+      });
+    } else {
+      reversedCents = nuovoAddebito - giaAddebitato;
+    }
+  }
 
   // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
   // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
@@ -538,7 +619,11 @@ export async function refundOrder(
       },
     },
     // Idempotency-Key: doppio-click su risoluzione dispute/reso NON genera doppio rimborso.
-    { idempotencyKey: opts.idempotencyKey ?? `refund_${order.id}_${safeAmountCents}` },
+    // 051 — La chiave portava solo l'importo di QUESTO rimborso: due rimborsi
+    // parziali uguali sullo stesso ordine (due volte 10 €) avevano la stessa
+    // chiave, e il secondo non avveniva. Ora porta il totale cumulato, che è
+    // diverso a ogni passo e uguale a se stesso su un ritentativo.
+    { idempotencyKey: opts.idempotencyKey ?? `refund_${order.id}_tot_${newRefundedTotal}` },
   );
   const sellerNet = order.seller_payout_cents ?? 0;
   const sellerShare =
@@ -561,13 +646,20 @@ export async function refundOrder(
     .from('orders')
     .update({
       stripe_refund_id: refund.id,
-      refunded_amount_cents: newRefundedTotal,
+      // `refunded_amount_cents` l'ha già scritto `accumula_rimborso`: riscriverlo
+      // qui riaprirebbe la corsa che quella funzione serve a chiudere.
       payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
       ...(isFull
         ? {
             payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED',
-            delivery_status: 'CANCELED',
-            canceled_at: new Date().toISOString(),
+            // 054 — Un ordine già CONSEGNATO non torna «annullato» perché è
+            // stato rimborsato: la consegna è avvenuta, il fattorino l'ha
+            // fatta, e riscrivere quello stato cancellava dai numeri consegne
+            // vere e faceva sparire l'ordine dalle liste operative.
+            // Si tocca il pagamento, non la storia della consegna.
+            ...(order.delivery_status === 'DELIVERED'
+              ? {}
+              : { delivery_status: 'CANCELED', canceled_at: new Date().toISOString() }),
           }
         : {}),
     })

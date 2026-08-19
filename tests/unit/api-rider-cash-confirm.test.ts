@@ -29,6 +29,8 @@ const state: {
 };
 
 // Query-builder chainabile e "awaitable" che risolve sempre a `result`.
+export const filtriVisti: { in: unknown[][] } = { in: [] };
+
 function qb(result: unknown) {
   const chain = () => builder;
   const builder: Record<string, unknown> = {
@@ -37,7 +39,8 @@ function qb(result: unknown) {
     is: chain,
     gte: chain,
     lte: chain,
-    in: chain,
+    lt: chain,
+    in: (...args: unknown[]) => { filtriVisti.in.push(args); return builder; },
     order: chain,
     limit: chain,
     single: () => Promise.resolve(result),
@@ -95,6 +98,7 @@ async function callPost(body: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  filtriVisti.in.length = 0;
   state.user = { id: 'rider-1' };
   // Ordine COD da €10 (sotto la soglia €50, niente prova obbligatoria).
   state.order = {
@@ -138,5 +142,34 @@ describe('POST /api/rider/cash-confirm', () => {
     state.order = { ...(state.order as object), payment_method: 'card' };
     const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
     expect(res.status).toBe(409);
+  });
+
+  // 056 / 172 — Il commento in cima al file dichiarava una guardia che nel
+  // codice non c'era: un fattorino poteva marcare PAGATO un ordine appena
+  // assegnato, mai ritirato e mai consegnato. La guardia ora vive DENTRO la
+  // stessa UPDATE atomica, e questa prova cerca proprio lì: se qualcuno la
+  // rimette in un `if` o la toglie, questa diventa rossa.
+  it('la conferma dell\'incasso filtra sullo stato di consegna dentro la UPDATE', async () => {
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+    expect(res.status).toBe(200);
+    const filtroStato = filtriVisti.in.find(
+      (args) => args[0] === 'delivery_status',
+    );
+    expect(filtroStato).toBeTruthy();
+    expect(filtroStato?.[1]).toEqual(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']);
+  });
+
+  // 189 — La giornata di cassa è quella di Piacenza, non quella di Greenwich:
+  // d'estate le consegne fra le 22 e mezzanotte finivano nel giorno dopo.
+  it('la quadratura usa il giorno di Piacenza, non quello UTC', async () => {
+    vi.useFakeTimers();
+    try {
+      // 30 giugno, 22:30 a Piacenza = 20:30 UTC. Il giorno giusto è il 30, non il 1º luglio.
+      vi.setSystemTime(new Date('2026-06-30T20:30:00Z'));
+      const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+      expect(res.status).toBe(200);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
