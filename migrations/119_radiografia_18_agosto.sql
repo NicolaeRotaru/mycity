@@ -41,7 +41,12 @@
 --   097 due indici identici sulla tabella che riceve piu' scritture
 --   098 le visite ai prodotti crescono senza fine
 --
--- Idempotente: si può rilanciare senza rompere niente.
+-- Idempotente: si può rilanciare senza rompere niente. E non è una promessa
+-- scritta a fiducia — l'ho verificata rilanciandola due volte su un Postgres
+-- vero. Al primo giro NON lo era: tre policy nascevano senza il loro
+-- «cancella se c'è», e la seconda esecuzione moriva lì. Una migrazione che si
+-- rompe al secondo colpo è proprio quella che serve quando la prima si è
+-- fermata a metà.
 -- 🔴 Applicarla al database di produzione resta una firma di Nicola.
 -- =============================================================================
 
@@ -448,6 +453,12 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
+DECLARE
+  -- Il tetto vale solo per le visite anonime SENZA impronta: e' la strada che
+  -- resta gonfiabile, quindi resta anche protetta. Con l'impronta il conto e'
+  -- personale, e nessuno puo' consumare il budget di un altro.
+  TETTO_SENZA_IMPRONTA_AL_MINUTO constant int := 20;
+  recenti int;
 BEGIN
   -- Persona con un account: una visita per prodotto ogni ora (come prima).
   IF NEW.user_id IS NOT NULL THEN
@@ -462,21 +473,37 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Visita anonima senza impronta: si accetta, ma non si può deduplicare.
-  IF coalesce(NEW.view_fingerprint, '') = '' THEN
+  -- Visita anonima CON impronta: una per impronta all'ora. Il conto guarda solo
+  -- le righe di quella impronta, quindi il traffico di un terzo non puo' far
+  -- scartare le visite di nessun altro. E' la riparazione del difetto 041.
+  IF coalesce(NEW.view_fingerprint, '') <> '' THEN
+    IF EXISTS (
+      SELECT 1 FROM public.product_views
+       WHERE product_id = NEW.product_id
+         AND user_id IS NULL
+         AND view_fingerprint = NEW.view_fingerprint
+         AND viewed_at > now() - interval '1 hour'
+    ) THEN
+      RETURN NULL;
+    END IF;
     RETURN NEW;
   END IF;
 
-  -- Con l'impronta: una per impronta all'ora. Il conto guarda SOLO le righe di
-  -- quella impronta, quindi il traffico di un terzo non può più far scartare
-  -- le visite di nessun altro.
-  IF EXISTS (
-    SELECT 1 FROM public.product_views
-     WHERE product_id = NEW.product_id
-       AND user_id IS NULL
-       AND view_fingerprint = NEW.view_fingerprint
-       AND viewed_at > now() - interval '1 hour'
-  ) THEN
+  -- Visita anonima SENZA impronta: qui il tetto della 117 resta, perche' senza
+  -- impronta non c'e' altro modo di distinguere mille visite vere da un ciclo.
+  -- Toglierlo — come avevo fatto in una prima versione di questa migrazione —
+  -- riapriva il gonfiaggio senza limite, e la prova di comportamento
+  -- `tests/sql/rls/03-visite-prodotto.test.sql` l'ha visto: 200 su 200 scritte.
+  -- Chi manda l'impronta (il browser lo fa) da questo tetto e' comunque immune,
+  -- quindi la soppressione che il difetto 041 denunciava non lo tocca piu'.
+  SELECT count(*) INTO recenti
+    FROM public.product_views
+   WHERE product_id = NEW.product_id
+     AND user_id IS NULL
+     AND coalesce(view_fingerprint, '') = ''
+     AND viewed_at > now() - interval '1 minute';
+
+  IF recenti >= TETTO_SENZA_IMPRONTA_AL_MINUTO THEN
     RETURN NULL;
   END IF;
 
@@ -493,10 +520,12 @@ $$;
 -- pagina: si stringe adesso, prima che qualcuno ci attacchi il codice.
 DROP POLICY IF EXISTS subscription_orders_owner_rw ON public.subscription_orders;
 
+DROP POLICY IF EXISTS subscription_orders_read ON public.subscription_orders;
 CREATE POLICY subscription_orders_read ON public.subscription_orders
   FOR SELECT TO authenticated
   USING (user_id = (SELECT auth.uid()) OR seller_id = (SELECT auth.uid()) OR public.is_admin());
 
+DROP POLICY IF EXISTS subscription_orders_insert_own ON public.subscription_orders;
 CREATE POLICY subscription_orders_insert_own ON public.subscription_orders
   FOR INSERT TO authenticated
   WITH CHECK (user_id = (SELECT auth.uid()));
@@ -529,6 +558,7 @@ CREATE TRIGGER trg_subscription_orders_campi_bloccati
   BEFORE UPDATE ON public.subscription_orders
   FOR EACH ROW EXECUTE FUNCTION public.subscription_orders_campi_bloccati();
 
+DROP POLICY IF EXISTS subscription_orders_update_own ON public.subscription_orders;
 CREATE POLICY subscription_orders_update_own ON public.subscription_orders
   FOR UPDATE TO authenticated
   USING (user_id = (SELECT auth.uid()))

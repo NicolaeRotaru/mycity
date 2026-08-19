@@ -128,6 +128,62 @@ RESET ROLE;
 RESET request.jwt.claims;
 
 -- =============================================================================
+-- 5. Il tetto non si puo' usare AL CONTRARIO, per azzerare le visite di un altro
+-- =============================================================================
+-- Il difetto 041 del referto del 18/8: il tetto della 117 valeva per PRODOTTO.
+-- Chi voleva far sparire le statistiche di un rivale gli sparava venti visite
+-- al minuto, e da li' in poi quelle vere venivano buttate. Un freno che si puo'
+-- usare per fare il danno che doveva impedire non e' un freno.
+-- Ora chi manda la propria impronta di sessione ha un conto suo: il traffico
+-- di un terzo non lo tocca.
+SET LOCAL ROLE anon;
+DO $$
+DECLARE i int;
+BEGIN
+  -- L'attaccante inonda, senza impronta: il tetto lo ferma (ed e' giusto).
+  FOR i IN 1..200 LOOP
+    BEGIN
+      INSERT INTO public.product_views (product_id, user_id)
+      VALUES ('99999999-9999-9999-9999-999999999999', NULL);
+    EXCEPTION WHEN others THEN NULL;
+    END;
+  END LOOP;
+
+  -- Subito dopo arriva una visita VERA, con la sua impronta.
+  BEGIN
+    INSERT INTO public.product_views (product_id, user_id, view_fingerprint)
+    VALUES ('99999999-9999-9999-9999-999999999999', NULL, 'visitatore-vero-1');
+  EXCEPTION WHEN others THEN NULL;
+  END;
+END $$;
+RESET ROLE;
+
+-- Il conto si fa FUORI dal ruolo anonimo: `product_views` ora si legge solo se
+-- sei il negoziante che possiede il prodotto (riparazione 037). Contare da anon
+-- avrebbe detto «zero» sempre, e sarebbe stata una prova che non misura niente.
+DO $$
+DECLARE scritte int; visibile boolean;
+BEGIN
+  SELECT count(*) > 0 INTO visibile
+    FROM public.product_views
+   WHERE product_id = '99999999-9999-9999-9999-999999999999'
+     AND view_fingerprint = 'visitatore-vero-1';
+
+  SELECT count(*) INTO scritte
+    FROM public.product_views
+   WHERE product_id = '99999999-9999-9999-9999-999999999999'
+     AND user_id IS NULL
+     AND coalesce(view_fingerprint, '') = '';
+
+  INSERT INTO esiti VALUES (
+    'l''inondazione di un terzo non cancella la visita vera', visibile,
+    CASE WHEN visibile THEN 'la visita con impronta e'' passata' ELSE 'soppressa dal traffico altrui' END);
+  INSERT INTO esiti VALUES (
+    'l''inondazione senza impronta resta sotto il tetto', scritte <= 20,
+    'su 200 tentativi ne sono state scritte ' || scritte);
+END $$;
+
+-- =============================================================================
 -- Verdetto
 -- =============================================================================
 DO $$
