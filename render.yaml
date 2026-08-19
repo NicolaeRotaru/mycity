@@ -99,6 +99,14 @@ services:
         generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false
+      # 193 — Il freno di spesa AI esisteva nel codice (lib/ai/run.ts) e non era
+      # mai acceso: la variabile che lo attiva non compariva in nessun file di
+      # configurazione, quindi valeva zero — e zero vuol dire «nessun tetto». Un
+      # ciclo impazzito o un abuso poteva spendere senza limite, e il primo
+      # segnale sarebbe stata la fattura. Venti euro al giorno sono larghi per
+      # l'uso vero e stretti per un guasto: si alzano quando servira'.
+      - key: AI_GLOBAL_DAILY_BUDGET_EUR
+        value: "20"
       - key: NEXT_PUBLIC_TURNSTILE_SITE_KEY
         sync: false
       - key: TURNSTILE_SECRET_KEY

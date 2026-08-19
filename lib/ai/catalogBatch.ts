@@ -15,6 +15,28 @@ import type { AiProductPatch, CategoryRow } from '@/lib/products/aiPatch';
  * il batch lavora sul testo della scheda.
  */
 
+/**
+ * 192 — «APPLICA A TUTTI» NON PUO' TOCCARE I SOLDI.
+ *
+ * Il lavoro massivo dell'AI Studio proponeva un patch con lo schema COMPLETO,
+ * prezzo, disponibilita' e stato compresi: un modello poteva quindi proporre —
+ * e il pulsante «Applica a tutti» scrivere — un prezzo nuovo su duecento
+ * prodotti in un colpo, senza che il negoziante vedesse cosa stava cambiando.
+ * Un errore di quel tipo non si accorge nessuno finche' non arrivano gli ordini
+ * al prezzo sbagliato, e a quel punto e' gia' successo.
+ *
+ * Il lotto lavora sul TESTO della scheda. Il prezzo si cambia uno per uno,
+ * guardandolo. Questo elenco e' il perimetro, e vive qui perche' e' una
+ * decisione, non una dimenticanza.
+ */
+const CAMPI_ECONOMICI = ['price', 'compare_at_price', 'stock', 'unlimited_stock', 'status'] as const;
+
+const PROPRIETA_SOLO_TESTO: Record<string, unknown> = Object.fromEntries(
+  Object.entries(PRODUCT_PATCH_PROPERTIES).filter(
+    ([k]) => !(CAMPI_ECONOMICI as readonly string[]).includes(k),
+  ),
+);
+
 export const CATALOG_OPERATIONS = ['improve', 'redescribe', 'moderate', 'translate'] as const;
 export type CatalogOperation = (typeof CATALOG_OPERATIONS)[number];
 
@@ -61,7 +83,7 @@ function opSpec(operation: CatalogOperation, langName?: string): {
         system: `Sei un esperto di e-commerce per "MyCity Piacenza". Migliora la scheda di UN prodotto (nome, descrizione, tag, attributi mancanti, categoria se sbagliata) in modo onesto, senza inventare. In "patch" metti SOLO i campi da cambiare; ometti gli invariati. "tags" è la lista completa. Niente emoji. Rispondi solo con lo strumento "improve_one".`,
         tool: PATCH_TOOL('improve_one', 'Migliora la scheda prodotto.', {
           summary: { type: 'string', description: 'Cosa hai migliorato, 1 frase.' },
-          patch: { type: 'object', properties: PRODUCT_PATCH_PROPERTIES },
+          patch: { type: 'object', properties: PROPRIETA_SOLO_TESTO },
         }),
       };
     case 'redescribe':
