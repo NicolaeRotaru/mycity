@@ -718,10 +718,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS returns_un_solo_reso_aperto
 -- =========================================================
 -- La riga si scrive ORA prima di mandare il lavoro al modello, così un lavoro
 -- pagato non può più sparire senza traccia. Servono i due stati nuovi.
-ALTER TABLE public.catalog_ai_jobs DROP CONSTRAINT IF EXISTS catalog_ai_jobs_status_check;
-ALTER TABLE public.catalog_ai_jobs
-  ADD CONSTRAINT catalog_ai_jobs_status_check
-  CHECK (status IN ('submitting','processing','ready','applied','error','failed','canceled'));
+--
+-- La guardia `to_regclass` non è pedanteria: sul database vero la tabella NON
+-- c'è. La migrazione 099, che la crea, sta nel repo ma non è mai stata
+-- applicata in produzione — qui invece la prova gira su un database ricostruito
+-- da TUTTE le migrazioni, dove la tabella c'è sempre. Senza guardia, il 19
+-- agosto questa riga ha fatto annullare in blocco le altre sei riparazioni
+-- della stessa transazione. Stessa forma già usata sopra per `referrals`.
+DO $$
+BEGIN
+  IF to_regclass('public.catalog_ai_jobs') IS NOT NULL THEN
+    EXECUTE 'ALTER TABLE public.catalog_ai_jobs DROP CONSTRAINT IF EXISTS catalog_ai_jobs_status_check';
+    EXECUTE 'ALTER TABLE public.catalog_ai_jobs
+             ADD CONSTRAINT catalog_ai_jobs_status_check
+             CHECK (status IN (''submitting'',''processing'',''ready'',''applied'',''error'',''failed'',''canceled''))';
+  END IF;
+END $$;
 
 -- =========================================================
 -- 051 — IL RIMBORSO SI ACCUMULA IN MODO ATOMICO, O NON SI FA
