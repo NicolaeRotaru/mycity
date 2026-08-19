@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Activity = {
-  id: string;
   created_at: string;
   delivery_status: string;
   delivery_city: string | null;
@@ -53,7 +52,11 @@ const LiveActivityFeed = () => {
     queryFn: async () => {
       const { data } = await supabase
         .from('live_activity_public')
-        .select('id, created_at, delivery_status, delivery_city, seller_id, store_name')
+        // 040 — `id` non si chiede più: era l'identità dell'ordine, cioè quello
+        // che permetteva a un concorrente di riconoscere gli ordini uno per uno
+        // e contarli per negozio. La vista smetterà di darlo (migrazione 120), e
+        // questa riga deve smettere di chiederlo PRIMA che quella parta.
+        .select('created_at, delivery_status, delivery_city, seller_id, store_name')
         .order('created_at', { ascending: false })
         .limit(8);
       return (data ?? []) as unknown as Activity[];
@@ -93,12 +96,12 @@ const LiveActivityFeed = () => {
         <span className="text-xs text-ink-400 uppercase tracking-wider font-semibold">Live</span>
       </div>
       <ul className="space-y-1">
-        {activities.map((a) => {
+        {activities.map((a, i) => {
           const verb = a.delivery_status === 'DELIVERED'
             ? 'ha ricevuto un ordine da'
             : 'ha appena ordinato da';
           return (
-            <li key={a.id} className="flex items-center gap-3 text-sm py-2 border-b border-cream-200 last:border-0 hover:bg-cream-50 -mx-2 px-2 rounded transition-colors">
+            <li key={`${a.seller_id ?? 'x'}-${a.created_at}-${i}`} className="flex items-center gap-3 text-sm py-2 border-b border-cream-200 last:border-0 hover:bg-cream-50 -mx-2 px-2 rounded transition-colors">
               <span className="shrink-0 text-ink-500">
                 {a.delivery_status === 'DELIVERED' ? <CheckCircle2 size={18} strokeWidth={2.2} className="text-olive-600" aria-hidden /> :
                  a.delivery_status === 'OUT_FOR_DELIVERY' ? <Truck size={18} strokeWidth={2.2} className="text-primary-600" aria-hidden /> :

@@ -20,7 +20,8 @@
 --   036 la vista public_profiles espone i venditori non approvati
 --   037 product_views non ha policy di lettura: le statistiche restano a zero
 --   038 subscription_orders: il venditore sottoscrive per il cliente
---   040 «attività dal vivo» lascia contare gli ordini di ogni negozio
+--   (040 spostato nella 120: cambia la FORMA di una vista che la home legge,
+--    quindi va applicato solo dopo che il codice nuovo e' in produzione)
 --   041 il tetto anti-gonfiaggio si può usare per azzerare le visite di un rivale
 --   042 il mittente riscrive un messaggio già letto senza lasciare traccia
 --   044 group_participants porta due policy di lettura identiche
@@ -131,9 +132,26 @@ CREATE TRIGGER trg_enforce_profile_update_rules
 -- risulta approvato di qua e in attesa di là. Il vincolo lo impedisce nel posto
 -- in cui non si può aggirare. Prima si allineano le righe già incoerenti
 -- prendendo per buona la colonna testuale, che è quella che scrive il pannello.
+-- Misurato sul database vero prima di scrivere: le righe incoerenti sono due, e
+-- sono un amministratore e un compratore — nessun negozio, nessun fattorino.
+-- Per loro `approval_status` non vuol dire niente: l'approvazione riguarda chi
+-- vende e chi consegna. Portarli a `is_approved = false` sarebbe stato il gesto
+-- che ha fatto il danno del 14 agosto; qui invece si toglie il valore che non
+-- ha senso per quel ruolo, e non si tocca nient'altro.
+UPDATE public.profiles
+   SET approval_status = NULL
+ WHERE approval_status IS NOT NULL
+   AND role IS DISTINCT FROM 'seller'
+   AND role IS DISTINCT FROM 'rider'
+   AND is_approved IS DISTINCT FROM (approval_status = 'approved');
+
+-- Per chi vende o consegna la colonna conta davvero: li' si allinea il booleano
+-- allo stato testuale, che e' quello che scrive il pannello. Oggi non ce n'e'
+-- nessuno in questa condizione (misurato: zero).
 UPDATE public.profiles
    SET is_approved = (approval_status = 'approved')
  WHERE approval_status IS NOT NULL
+   AND role IN ('seller', 'rider')
    AND is_approved IS DISTINCT FROM (approval_status = 'approved');
 
 ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS chk_approvazione_coerente;
@@ -268,7 +286,12 @@ AS $$
   SELECT event_id, count(*)::int FROM public.event_rsvps GROUP BY event_id;
 $$;
 
-CREATE OR REPLACE FUNCTION public.shop_of_month_vote_counts(p_month text DEFAULT NULL)
+-- `shop_of_month_votes.month` e' di tipo DATE (migrazione 034), non testo.
+-- Dichiararlo `text` faceva fallire il confronto — «operator does not exist:
+-- date = text» — e con la migrazione dentro una transazione sola avrebbe fatto
+-- annullare TUTTE le trentotto riparazioni. Trovato dalla prova su Postgres
+-- prima di toccare la produzione, non dopo.
+CREATE OR REPLACE FUNCTION public.shop_of_month_vote_counts(p_month date DEFAULT NULL)
 RETURNS TABLE (seller_id uuid, voti int)
 LANGUAGE sql
 STABLE
@@ -283,7 +306,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.event_rsvp_count(uuid) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.event_rsvp_counts() TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.shop_of_month_vote_counts(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.shop_of_month_vote_counts(date) TO anon, authenticated;
 
 -- =========================================================
 -- 029 — IL PANNELLO DEI CODICI SCONTO TORNA A LEGGERE
@@ -510,30 +533,6 @@ CREATE POLICY subscription_orders_update_own ON public.subscription_orders
   FOR UPDATE TO authenticated
   USING (user_id = (SELECT auth.uid()))
   WITH CHECK (user_id = (SELECT auth.uid()));
-
--- =========================================================
--- 040 — LA PROVA SOCIALE IN HOME NON È UN CONTATORE DI ORDINI
--- =========================================================
--- `live_activity_public` dava id e orario al secondo di ogni ordine: un
--- concorrente contava quanti ordini fa ciascun negozio, e a che ora.
--- Serve a dire «qui si compra», non «Pane Quotidiano oggi ha fatto 14 ordini».
-DROP VIEW IF EXISTS public.live_activity_public;
-CREATE VIEW public.live_activity_public AS
-  SELECT date_trunc('hour', o.created_at) AS ora,
-         o.delivery_city,
-         p.store_name
-    FROM public.orders o
-    JOIN public.profiles p ON p.id = o.seller_id
-   WHERE o.delivery_status IN ('NEW', 'ACCEPTED', 'READY', 'OUT_FOR_DELIVERY', 'DELIVERED')
-     AND p.is_approved
-   ORDER BY date_trunc('hour', o.created_at) DESC
-   LIMIT 20;
-
-COMMENT ON VIEW public.live_activity_public IS
-  'Attivita recente per la home: ora arrotondata, citta, negozio. Nessun id ordine, nessun dato personale.';
-
-REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES ON public.live_activity_public FROM anon, authenticated;
-GRANT SELECT ON public.live_activity_public TO anon, authenticated;
 
 -- =========================================================
 -- 044 — UNA SOLA POLICY DI LETTURA SU group_participants
