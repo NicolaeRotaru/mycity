@@ -213,7 +213,7 @@ export default function ProductChatAssistant({
           }}
           rows={1}
           placeholder="Es. metti il prezzo a 4,90 e aggiungi il tag spezie"
-          className="flex-1 resize-none rounded-lg border border-cream-300 px-3 py-2 text-sm focus:border-primary-300 focus:outline-none focus:ring-1 focus:ring-primary-200"
+          className="flex-1 resize-none rounded-lg border border-cream-300 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none focus:ring-1 focus:ring-primary-200"
         />
         <button
           type="button"

@@ -28,7 +28,10 @@ import { cn } from '@/lib/cn';
 
 const CONTROL_BASE =
   'w-full rounded-lg border bg-white text-base text-ink-900 placeholder:text-ink-400 transition-colors focus:outline-none focus-visible:ring-2 disabled:opacity-60 disabled:cursor-not-allowed';
-const CONTROL_OK = 'border-cream-300 focus-visible:ring-primary-400 focus-visible:border-primary-400';
+// 132 — primary-400 sul bianco misura 2,90:1: sotto la soglia di 3:1 che un
+// indicatore di fuoco deve rispettare. Chi naviga da tastiera non vedeva dove
+// si trovava. primary-700 (#A03B25) misura 6,67:1 e cambia solo il colore.
+const CONTROL_OK = 'border-cream-300 focus-visible:ring-primary-700 focus-visible:border-primary-700';
 const CONTROL_ERR = 'border-secondary-400 focus-visible:ring-secondary-400 focus-visible:border-secondary-400';
 const PAD = 'px-3 py-2.5';
 
@@ -66,7 +69,13 @@ export function Field({ id, label, required, hint, error, className, labelAction
         <p id={`${id}-hint`} className="text-xs text-ink-500">{hint}</p>
       )}
       {error && (
-        <p id={`${id}-error`} className="text-xs font-medium text-secondary-600">{error}</p>
+        // 131 — Senza `role="alert"` l'errore compariva a video e basta: chi usa
+        // un lettore di schermo premeva «Invia», non succedeva niente di
+        // udibile, e non aveva modo di sapere perché. È la correzione col
+        // rapporto impatto/righe più alto dell'audit, perché questa primitiva
+        // serve OGNI form del sito: accesso, registrazione, indirizzi,
+        // checkout, area venditore.
+        <p id={`${id}-error`} role="alert" className="text-xs font-medium text-secondary-600">{error}</p>
       )}
     </div>
   );
@@ -141,7 +150,9 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(fu
           onClick={() => setShow((v) => !v)}
           aria-label={show ? 'Nascondi password' : 'Mostra password'}
           aria-pressed={show}
-          tabIndex={-1}
+          // 139 — `tabIndex={-1}` toglieva il pulsante dalla tastiera: chi non
+          // usa il mouse non poteva rileggere la password che stava digitando.
+          // L'ordine nel documento è già giusto, quindi non serviva escluderlo.
           className="text-ink-500 hover:text-ink-700 hover:bg-cream-100 rounded-md p-2 transition-colors"
         >
           {show ? <EyeOff size={18} aria-hidden /> : <Eye size={18} aria-hidden />}
@@ -229,7 +240,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${fieldId}-error` : undefined}
           className={cn(
-            'mt-0.5 h-4 w-4 rounded border-cream-300 text-primary-700 accent-primary-600 focus-visible:ring-2 focus-visible:ring-primary-400',
+            'mt-0.5 h-4 w-4 rounded border-cream-300 text-primary-700 accent-primary-600 focus-visible:ring-2 focus-visible:ring-primary-700',
             className,
           )}
           {...props}

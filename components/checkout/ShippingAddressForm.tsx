@@ -88,7 +88,7 @@ export function ShippingAddressForm({
                 type="button"
                 onClick={() => selectTile(a.id)}
                 aria-pressed={active}
-                className={`text-left rounded-xl border-2 p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1 ${
+                className={`text-left rounded-xl border-2 p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1 ${
                   active
                     ? 'border-primary-500 bg-primary-50'
                     : 'border-cream-300 bg-white hover:border-primary-200'
@@ -109,7 +109,7 @@ export function ShippingAddressForm({
             type="button"
             onClick={() => setEditing((v) => !v)}
             aria-expanded={editing}
-            className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1 ${
+            className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1 ${
               editing
                 ? 'border-primary-400 bg-primary-50 text-primary-700'
                 : 'border-cream-400 text-primary-700 hover:border-primary-300 hover:bg-primary-50/50'

@@ -352,7 +352,7 @@ export default function SellerShell({ children }: { children: React.ReactNode })
               name="q"
               aria-label="Cerca ordini, prodotti, clienti"
               placeholder="Cerca ordini, prodotti, clienti…"
-              className="w-full rounded-full border border-cream-300 bg-cream-50 py-2.5 pl-10 pr-4 text-sm text-ink-900 outline-none placeholder:text-ink-400 focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-400"
+              className="w-full rounded-full border border-cream-300 bg-cream-50 py-2.5 pl-10 pr-4 text-sm text-ink-900 outline-none placeholder:text-ink-400 focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
             />
           </form>
 

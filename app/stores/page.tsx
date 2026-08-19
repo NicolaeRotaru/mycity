@@ -163,7 +163,7 @@ export default function StoresPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca per nome negozio…"
-            className="flex-1 min-w-[160px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="flex-1 min-w-[160px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
           <button
             onClick={() => setOnlyOpen((v) => !v)}

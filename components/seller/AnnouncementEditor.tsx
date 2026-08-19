@@ -23,7 +23,7 @@ export default function AnnouncementEditor({ value, onChange }: Props) {
           type="checkbox"
           checked={enabled}
           onChange={(e) => patch({ enabled: e.target.checked })}
-          className="rounded border-cream-300 text-primary-600 focus:ring-primary-400"
+          className="rounded border-cream-300 text-primary-600 focus:ring-primary-700"
         />
         <span className="text-sm font-medium text-ink-700">Mostra un banner annuncio in vetrina</span>
       </label>
@@ -36,7 +36,7 @@ export default function AnnouncementEditor({ value, onChange }: Props) {
             onChange={(e) => patch({ text: e.target.value })}
             rows={2}
             placeholder="Es. Chiusi per ferie dal 10 al 20 agosto · Nuovi arrivi in negozio!"
-            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none text-sm"
+            className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700 resize-none text-sm"
           />
           <div className="flex items-center gap-2 text-sm flex-wrap">
             <label className="text-ink-600" htmlFor="announcement-until">Fino al</label>
@@ -45,7 +45,7 @@ export default function AnnouncementEditor({ value, onChange }: Props) {
               type="date"
               value={until}
               onChange={(e) => patch({ until: e.target.value })}
-              className="border p-1.5 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
+              className="border p-1.5 rounded focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
             <span className="text-xs text-ink-400">(opzionale — dopo questa data sparisce)</span>
           </div>

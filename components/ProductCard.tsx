@@ -115,7 +115,17 @@ const ProductCard = ({
       <Link
         href={`/product/${id}`}
         className="absolute inset-0 z-0 rounded-2xl focus-visible:outline-2 focus-visible:outline-primary-600 focus-visible:outline-offset-2"
-        aria-label={name}
+        // 138 — «Esaurito», «-30%» e «Nuovo» erano nascosti allo screen reader
+        // (aria-hidden sui badge, per non farli ripetere accanto al link). Il
+        // risultato è che chi non vede la scheda non sapeva che il prodotto era
+        // esaurito: ci cliccava, e lo scopriva dopo. La strada giusta non è
+        // zittire l'informazione, è metterla nel nome del link.
+        aria-label={[
+          name,
+          isOutOfStock ? 'esaurito' : null,
+          showStrike ? `scontato del ${badgePct} per cento` : null,
+          isNew ? 'novità' : null,
+        ].filter(Boolean).join(', ')}
         tabIndex={0}
       />
       {/* Badge in alto a sinistra */}
@@ -185,7 +195,9 @@ const ProductCard = ({
             {showStrike ? (
               <>
                 <span className="text-base font-extrabold text-secondary-600">{formatPrice(bigPrice)}</span>
-                <span className="text-[11px] text-ink-400 line-through">{formatPrice(strikePrice)}</span>
+                <s className="text-[11px] text-ink-500">
+                  <span className="sr-only">Prezzo pieno </span>{formatPrice(strikePrice)}
+                </s>
               </>
             ) : (
               <span className="text-base font-extrabold text-ink-900">{formatPrice(price)}</span>

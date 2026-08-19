@@ -70,7 +70,7 @@ function MobileAccountNav() {
               <Link
                 href={n.href}
                 aria-current={on ? 'page' : undefined}
-                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 ${
+                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-2 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 ${
                   on
                     ? 'border-primary-200 bg-primary-50 font-bold text-primary-800'
                     : 'border-cream-300 bg-white font-medium text-ink-700 hover:bg-cream-50'

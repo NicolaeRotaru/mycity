@@ -61,21 +61,33 @@ const VerifyCodeDialog = ({
   };
 
   return (
+    // 140 / 151 — Era un `div` con un velo nero: a video sembra un dialogo, per
+    // chi usa un lettore di schermo è una parte qualsiasi della pagina. Senza
+    // ruolo non viene annunciato, senza Esc non si chiude da tastiera, e il
+    // fuoco resta libero di uscire dietro il velo.
     <div
       className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="verifica-titolo"
+        aria-describedby="verifica-descrizione"
         className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}
       >
         <div>
-          <h2 className="text-xl font-extrabold text-ink-900">{title}</h2>
-          <p className="text-sm text-ink-500 mt-1">{description}</p>
+          <h2 id="verifica-titolo" className="text-xl font-extrabold text-ink-900">{title}</h2>
+          <p id="verifica-descrizione" className="text-sm text-ink-500 mt-1">{description}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
+          {/* 140 — Il campo aveva solo il segnaposto «000000»: nessun nome. */}
+          <label htmlFor="verify-code" className="sr-only">Codice a 6 cifre</label>
           <input
+            id="verify-code"
             ref={inputRef}
             type="text"
             inputMode="numeric"
@@ -87,11 +99,12 @@ const VerifyCodeDialog = ({
               setError(null);
             }}
             placeholder="000000"
-            className="w-full text-center font-mono text-4xl tracking-[0.5em] font-bold border-2 border-cream-300 rounded-xl py-4 focus:outline-none focus:border-primary-500"
+            aria-invalid={error ? true : undefined}
+            className="w-full text-center font-mono text-4xl tracking-[0.5em] font-bold border-2 border-cream-300 rounded-xl py-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus:border-primary-700"
             autoComplete="one-time-code"
           />
           {error && (
-            <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded p-2 text-center">
+            <p role="alert" className="text-sm text-rose-600 bg-rose-50 border border-rose-200 rounded p-2 text-center">
               {error}
             </p>
           )}

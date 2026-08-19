@@ -135,7 +135,7 @@ export default function PublicProfileToggle() {
                 onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                 placeholder="marco_pc"
                 maxLength={30}
-                className="flex-1 bg-cream-50 border border-cream-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                className="flex-1 bg-cream-50 border border-cream-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
               />
             </div>
             {publicUrl && (
@@ -156,7 +156,7 @@ export default function PublicProfileToggle() {
               maxLength={200}
               rows={2}
               placeholder="Ciao, sono Marco. Adoro la pasta fresca!"
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700 resize-none"
             />
           </div>
         </div>

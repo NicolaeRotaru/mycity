@@ -178,7 +178,7 @@ export default function AdminSupportPage() {
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
               placeholder="Note interne (opzionale)…"
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
 
             <div className="grid grid-cols-2 gap-2">

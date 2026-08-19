@@ -36,7 +36,7 @@ export default function SocialLinksFields({ value, onChange }: Props) {
             value={value?.[f.key] ?? ''}
             onChange={(e) => set(f.key, e.target.value)}
             placeholder={`${f.label} · ${f.placeholder}`}
-            className="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 text-sm"
+            className="flex-1 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700 text-sm"
           />
         </div>
       ))}

@@ -150,7 +150,7 @@ function ManualEntry({
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onSubmit(); } }}
         inputMode="numeric"
         placeholder="Inserisci EAN a mano"
-        className="flex-1 rounded-lg border border-cream-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+        className="flex-1 rounded-lg border border-cream-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
       />
       <button
         type="button"

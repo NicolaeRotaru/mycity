@@ -293,7 +293,7 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
                 maxLength={80}
                 onChange={(e) => setCustom({ ...custom, tagline: e.target.value })}
                 placeholder="Es. Pane fresco tutti i giorni dal 1962"
-                className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400 text-sm"
+                className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700 text-sm"
               />
             </div>
           </CustomizationSection>

@@ -59,7 +59,7 @@ export function AuthShell({
           {back && (
             <Link
               href={back.href}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-600 hover:text-ink-900 transition-colors mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 rounded"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-600 hover:text-ink-900 transition-colors mb-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
             >
               <ArrowLeft size={17} strokeWidth={2.2} aria-hidden />
               {back.label}

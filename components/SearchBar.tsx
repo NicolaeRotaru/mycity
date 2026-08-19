@@ -151,24 +151,27 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
-      <form onSubmit={submit} className="relative">
+      {/* 128 — Qui c'era un «combobox» dichiarato e mai costruito:
+          `aria-expanded` sempre vero (la condizione `debounced.length >= 2 ||
+          debounced.length < 2` è vera per definizione), `aria-controls` che
+          puntava a un elenco che esiste solo qualche volta, e nessuna
+          navigazione con le frecce. Un lettore di schermo annunciava un elenco
+          di suggeriment i che da tastiera non esisteva: chi ci si fidava
+          restava fermo. Un'ARIA sbagliata è peggio di nessuna ARIA — quindi
+          via, e al suo posto un annuncio onesto di quanti suggerimenti ci sono. */}
+      <form onSubmit={submit} role="search" className="relative">
         <Search size={18} strokeWidth={2.2} aria-hidden className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-400 pointer-events-none" />
         <input
           ref={inputRef}
-          type="text"
-          role="combobox"
+          type="search"
           aria-label="Cerca"
-          aria-expanded={open && (debounced.length >= 2 || debounced.length < 2)}
-          aria-haspopup="listbox"
-          aria-autocomplete="list"
-          aria-controls="search-listbox"
           value={q}
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onKeyDown={(e) => { if (e.key === 'Escape') { setOpen(false); inputRef.current?.blur(); } }}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="w-full bg-white border-2 border-transparent focus:border-primary-400 focus:bg-white text-ink-900 placeholder-ink-400 rounded-full pl-11 pr-11 py-2.5 text-sm font-medium focus:outline-none transition-colors shadow-sm"
+          className="w-full bg-white border-2 border-transparent focus-visible:ring-2 focus-visible:ring-primary-700 focus:border-primary-700 focus:bg-white text-ink-900 placeholder-ink-400 rounded-full pl-11 pr-11 py-2.5 text-sm font-medium focus:outline-none transition-colors shadow-sm"
         />
         {q && (
           <button
@@ -182,8 +185,17 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         )}
       </form>
 
+      {/* L'annuncio onesto: quanti suggerimenti ci sono davvero, adesso. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {open && debounced.length >= 2
+          ? (suggestions.length === 0
+              ? `Nessun suggerimento per ${debounced}`
+              : `${suggestions.length} suggeriment${suggestions.length === 1 ? 'o' : 'i'} disponibil${suggestions.length === 1 ? 'e' : 'i'}`)
+          : ''}
+      </p>
+
       {open && debounced.length >= 2 && (
-        <div id="search-listbox" role="listbox" aria-label="Suggerimenti di ricerca" className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-warm-lg ring-1 ring-ink-100 overflow-hidden z-50 max-h-[60vh] overflow-y-auto">
+        <div aria-label="Suggerimenti di ricerca" className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-warm-lg ring-1 ring-ink-100 overflow-hidden z-50 max-h-[60vh] overflow-y-auto">
           {suggestions.length === 0 ? (
             <div className="p-6 text-center text-sm text-ink-500">
               Nessun risultato per &laquo;{debounced}&raquo;.

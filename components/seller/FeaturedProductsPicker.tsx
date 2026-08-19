@@ -60,7 +60,7 @@ export default function FeaturedProductsPicker({ value = [], onChange }: Props) 
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Cerca un prodotto…"
-          className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+          className="w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
         />
       </div>
       <ul className="max-h-72 overflow-y-auto divide-y divide-cream-100 border border-cream-200 rounded-lg">

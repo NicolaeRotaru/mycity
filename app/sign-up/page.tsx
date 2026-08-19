@@ -124,7 +124,7 @@ function SignUpInner() {
               type="button"
               onClick={() => setRole(r.value)}
               aria-pressed={role === r.value}
-              className={`rounded-xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 ${
+              className={`rounded-xl border p-3 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 ${
                 role === r.value
                   ? 'border-primary-500 bg-primary-50'
                   : 'border-cream-300 hover:border-primary-300'

@@ -123,7 +123,7 @@ function PreviewBlock({
   highlighted: boolean;
 }) {
   return (
-    <div className={`relative ${highlighted ? 'ring-2 ring-inset ring-primary-400' : ''}`}>
+    <div className={`relative ${highlighted ? 'ring-2 ring-inset ring-primary-700' : ''}`}>
       <BlockBody section={section} accent={accent} storeName={storeName} />
     </div>
   );

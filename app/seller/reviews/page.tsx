@@ -219,7 +219,7 @@ function ReviewCard({ review }: { review: Review }) {
             rows={3}
             maxLength={500}
             placeholder="Ringrazia il cliente o spiega cosa farete di diverso…"
-            className="w-full border border-cream-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full border border-cream-300 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
           <div className="flex justify-end gap-2 mt-2">
             <button

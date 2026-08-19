@@ -36,7 +36,7 @@ const SIZES: Record<Size, string> = {
   lg: 'px-5 py-3 text-base gap-2 min-h-[48px]',
 };
 
-const BASE = 'inline-flex items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+const BASE = 'inline-flex items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
 const SHAPES: Record<Shape, string> = {
   rounded: 'rounded',

@@ -135,7 +135,7 @@ export default function VoiceProductButton({
             rows={2}
             disabled={disabled || state === 'processing'}
             placeholder="Es. tre magliette rosse di cotone taglia M a 15 euro l'una"
-            className="flex-1 resize-none rounded-lg border border-cream-300 px-3 py-2 text-sm focus:border-primary-300 focus:outline-none"
+            className="flex-1 resize-none rounded-lg border border-cream-300 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none"
           />
           <button
             type="button"

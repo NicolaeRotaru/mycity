@@ -44,17 +44,26 @@ export function CouponInput({
         </div>
       ) : (
         <div className="space-y-1">
+          {/* 140 — Il campo aveva solo un segnaposto. Un segnaposto sparisce
+              appena si scrive, e un lettore di schermo non è tenuto a leggerlo:
+              chi arrivava qui da tastiera trovava una casella senza nome. */}
           <div className="flex gap-2">
+            <label htmlFor="codice-sconto" className="sr-only">Codice sconto</label>
             <input
+              id="codice-sconto"
               type="text"
               value={couponCode}
               onChange={(e) => onCodeChange(e.target.value)}
-              placeholder="Codice sconto (es. BENVENUTO10)"
-              className="flex-1 border p-2 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              placeholder="es. BENVENUTO10"
+              aria-invalid={couponError ? true : undefined}
+              aria-describedby={couponError ? 'codice-sconto-errore' : undefined}
+              className="flex-1 border p-2 rounded text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700"
             />
             <Button type="button" onClick={onApply} size="sm">Applica</Button>
           </div>
-          {couponError && <p className="text-xs text-rose-600">{couponError}</p>}
+          {couponError && (
+            <p id="codice-sconto-errore" role="alert" className="text-xs text-rose-600">{couponError}</p>
+          )}
         </div>
       )}
     </div>

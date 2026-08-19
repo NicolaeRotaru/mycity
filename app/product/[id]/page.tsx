@@ -901,7 +901,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 onChange={(e) => setReviewComment(e.target.value)}
                 rows={3}
                 placeholder="Scrivi un commento (opzionale)…"
-                className="w-full border border-cream-300 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+                className="w-full border border-cream-300 p-2.5 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-700 resize-none"
               />
               {/* Foto recensione: +20 punti, +35% credibilità (CRO Specialist) */}
               {profile?.id && (
@@ -924,7 +924,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               <select
                 value={reviewSort}
                 onChange={(e) => setReviewSort(e.target.value as 'recent' | 'top' | 'low')}
-                className="bg-white border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-400"
+                className="bg-white border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-700"
               >
                 <option value="recent">Più recenti</option>
                 <option value="top">Voto più alto</option>

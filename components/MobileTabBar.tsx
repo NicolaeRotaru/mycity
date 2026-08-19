@@ -189,7 +189,10 @@ export default function MobileTabBar() {
                     {renderInner(tab, active)}
                   </button>
                 ) : (
-                  <Link href={tab.href} className={tabClass(active)}>
+                  // 142 — Senza `aria-current` la scheda attiva era segnalata
+                  // solo dal colore: chi non lo distingue, o non vede affatto,
+                  // non sapeva dove si trovava.
+                  <Link href={tab.href} aria-current={active ? 'page' : undefined} className={tabClass(active)}>
                     {renderInner(tab, active)}
                   </Link>
                 )}
@@ -226,6 +229,9 @@ export default function MobileTabBar() {
 
       {/* Assistenza per il buyer: aperta dalla tab "Assistenza" nella barra. */}
       {isBuyer && (
+        // `role` qui è una proprietà del componente (compratore/venditore), non
+        // un ruolo ARIA: la regola di lint non può distinguerlo.
+        // eslint-disable-next-line jsx-a11y/aria-role
         <SupportChatModal open={supportOpen} onClose={() => setSupportOpen(false)} role="buyer" />
       )}
     </>

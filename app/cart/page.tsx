@@ -147,21 +147,22 @@ export default function CartPage() {
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity - 1, item.variantId)}
                               disabled={item.quantity <= 1}
-                              aria-label="Diminuisci quantità"
+                              aria-label={`Diminuisci quantità di ${item.name}`}
                               className="w-10 h-10 hover:bg-cream-100 rounded-l-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             >−</button>
                             <span className="w-8 text-center font-semibold">{item.quantity}</span>
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
-                              aria-label="Aumenta quantità"
+                              aria-label={`Aumenta quantità di ${item.name}`}
                               className="w-10 h-10 hover:bg-cream-100 rounded-r-full"
                             >+</button>
                           </div>
                           <button
                             type="button"
                             onClick={() => removeFromCart(item.id, item.variantId)}
-                            className="text-ink-400 hover:text-secondary-600 text-sm ml-2 flex items-center gap-1"
+                            aria-label={`Rimuovi ${item.name} dal carrello`}
+                            className="text-ink-500 hover:text-secondary-600 text-sm ml-2 flex items-center gap-1"
                           >
                             <Trash2 size={15} aria-hidden /> Rimuovi
                           </button>
@@ -226,7 +227,7 @@ export default function CartPage() {
 
             <Link
               href="/checkout"
-              className="flex items-center justify-center gap-2 w-full text-center bg-primary-700 hover:bg-primary-800 text-white py-3.5 rounded-lg font-bold shadow-warm-sm hover:shadow-warm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+              className="flex items-center justify-center gap-2 w-full text-center bg-primary-700 hover:bg-primary-800 text-white py-3.5 rounded-lg font-bold shadow-warm-sm hover:shadow-warm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
             >
               <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
             </Link>

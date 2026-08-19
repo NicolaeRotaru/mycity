@@ -244,7 +244,7 @@ export default function AddressesPage() {
           <button
             type="button"
             onClick={() => { setEditing(null); setForm(empty); setShowForm(true); }}
-            className="flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cream-400 bg-transparent font-semibold text-primary-700 transition-colors hover:border-primary-300 hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400"
+            className="flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cream-400 bg-transparent font-semibold text-primary-700 transition-colors hover:border-primary-300 hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700"
           >
             <Plus size={24} strokeWidth={2.4} aria-hidden />
             Aggiungi indirizzo

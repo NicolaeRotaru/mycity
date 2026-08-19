@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Cookie } from 'lucide-react';
 import {
@@ -22,6 +22,8 @@ import {
  */
 export default function CookieBanner() {
   const [show, setShow] = useState(false);
+  const titoloRef = useRef<HTMLHeadingElement>(null);
+  const contenitoreRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'compact' | 'custom'>('compact');
   const [draft, setDraft] = useState<Partial<ConsentState>>({
     functional: false,
@@ -51,19 +53,33 @@ export default function CookieBanner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [show]);
 
+  // 146 — Il banner compare in fondo al documento: chi naviga da tastiera lo
+  // raggiungeva per ultimo, dopo tutta la pagina, e nel frattempo copriva gli
+  // elementi che stava mettendo a fuoco. Ora il fuoco ci arriva subito e la
+  // pagina lascia spazio in fondo mentre il banner è visibile.
+  useEffect(() => {
+    if (!show) return;
+    titoloRef.current?.focus();
+    const altezza = contenitoreRef.current?.offsetHeight ?? 0;
+    const precedente = document.documentElement.style.scrollPaddingBottom;
+    document.documentElement.style.scrollPaddingBottom = `${altezza + 16}px`;
+    return () => { document.documentElement.style.scrollPaddingBottom = precedente; };
+  }, [show]);
+
   if (!show) return null;
 
   const close = () => setShow(false);
 
   return (
     <div
+      ref={contenitoreRef}
       role="dialog"
       aria-labelledby="cookie-banner-title"
       aria-describedby="cookie-banner-desc"
       className="fixed inset-x-0 bottom-[var(--tabbar-height)] md:bottom-0 z-[100] p-3 sm:p-4"
     >
       <div className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-cream-300">
-        <h2 id="cookie-banner-title" className="flex items-center gap-2 text-base font-semibold text-ink-900">
+        <h2 id="cookie-banner-title" ref={titoloRef} tabIndex={-1} className="flex items-center gap-2 text-base font-semibold text-ink-900 focus:outline-none">
           <Cookie size={18} strokeWidth={2.2} aria-hidden /> Cookie e tecnologie simili
         </h2>
         <p id="cookie-banner-desc" className="mt-1 text-sm text-ink-600">

@@ -72,7 +72,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca nei prodotti del negozio…"
-            className="w-full bg-white border border-cream-300 rounded-full pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full bg-white border border-cream-300 rounded-full pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
           {search && (
             <button
@@ -109,7 +109,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as SortOption)}
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             >
               <option value="relevance">Rilevanza</option>
               <option value="newest">Più recenti</option>
@@ -126,7 +126,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
               >
                 <option value="">Tutte le categorie</option>
                 {categories.map((c) => (

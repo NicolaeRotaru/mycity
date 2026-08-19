@@ -341,7 +341,7 @@ export default function AdminActivityPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca IP, utente, pagina…"
-            className="bg-cream-50 border border-cream-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 w-48"
+            className="bg-cream-50 border border-cream-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700 w-48"
           />
           <label className="inline-flex items-center gap-1.5 text-xs text-ink-600 cursor-pointer">
             <input type="checkbox" checked={hideBots} onChange={(e) => setHideBots(e.target.checked)} />

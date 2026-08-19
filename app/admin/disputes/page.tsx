@@ -293,7 +293,7 @@ export default function AdminDisputesPage() {
               onChange={(e) => setResolution(e.target.value)}
               rows={4}
               placeholder="Spiega la decisione presa (verrà mostrato alle parti)…"
-              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
 
             <div>
@@ -304,7 +304,7 @@ export default function AdminDisputesPage() {
                 value={refundEur}
                 onChange={(e) => setRefundEur(e.target.value)}
                 placeholder="0.00"
-                className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+                className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
               />
             </div>
 
