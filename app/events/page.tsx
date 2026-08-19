@@ -116,9 +116,16 @@ export default function EventsPage() {
   const { data: rsvpCounts = {} } = useQuery({
     queryKey: queryKeys.events.rsvpCounts,
     queryFn: async (): Promise<Record<string, number>> => {
-      const { data } = await supabase.from('event_rsvps').select('event_id');
+      // Il conteggio arriva dal database gia' fatto. Prima questa riga scaricava
+      // una riga per ogni iscrizione e le contava qui nel browser: per farlo
+      // serviva poter leggere CHI si e' iscritto, evento per evento, nome per
+      // nome — ed e' quello che la migrazione 119 ha chiuso. Chiedere il numero
+      // invece dell'elenco e' la stessa informazione senza le persone dentro.
+      const { data } = await supabase.rpc('event_rsvp_counts');
       const counts: Record<string, number> = {};
-      for (const r of (data ?? [])) counts[r.event_id] = (counts[r.event_id] ?? 0) + 1;
+      for (const r of ((data ?? []) as { event_id: string; partecipanti: number }[])) {
+        counts[r.event_id] = r.partecipanti;
+      }
       return counts;
     },
     refetchInterval: 60_000,
