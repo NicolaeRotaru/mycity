@@ -150,7 +150,7 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
                 rows={2}
                 maxLength={4000}
                 placeholder="Scrivi qui la tua richiesta…"
-                className="flex-1 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+                className="flex-1 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700 resize-none"
               />
               <button
                 type="submit"

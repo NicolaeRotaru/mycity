@@ -155,7 +155,7 @@ function SearchInner() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortOption)}
-            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           >
             <option value="relevance">{t('sort.relevance')}</option>
             <option value="newest">{t('sort.newest')}</option>
@@ -170,7 +170,7 @@ function SearchInner() {
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
-            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           >
             <option value="">{t('allCategories')}</option>
             {categories.map((c) => (
@@ -405,7 +405,10 @@ function SearchInner() {
         </div>
       )}
 
-      <main className="md:col-span-3 space-y-6">
+      {/* 148 — Il layout dell'applicazione ha già un <main>: questo secondo,
+          annidato dentro il primo, rompe la navigazione per landmark — chi usa
+          un lettore di schermo salta al «contenuto principale» e ne trova due. */}
+      <div className="md:col-span-3 space-y-6">
         <SponsoredCarousel placement="search_top" />
         <div className="space-y-3">
           {/* Breadcrumb accessibile: Home › Ricerca */}
@@ -427,16 +430,19 @@ function SearchInner() {
 
           {/* Riga risultati: conteggio a sinistra + select "Ordina per" attivo a destra (desktop) */}
           <div className="flex flex-wrap items-center justify-between gap-2.5">
-            {resultCount !== null ? (
-              <p className="text-sm text-ink-500">{t('countLine', { count: resultCount })}</p>
-            ) : <span />}
+            {/* 144 — Cambiando un filtro il numero di risultati cambiava in
+                silenzio: chi non vede la pagina non sapeva se il filtro avesse
+                fatto qualcosa. Ora la riga si annuncia da sola. */}
+            <p role="status" aria-live="polite" className="text-sm text-ink-500">
+              {resultCount !== null ? t('countLine', { count: resultCount }) : ''}
+            </p>
             <label className="hidden md:inline-flex items-center gap-2 text-[13px] text-ink-500">
               {t('sortBy')}
               <select
                 value={sort}
                 onChange={(e) => setSort(e.target.value as SortOption)}
                 aria-label={t('sortBy')}
-                className="bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-400 cursor-pointer"
+                className="bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-[13px] font-semibold text-ink-900 focus:outline-none focus:ring-2 focus:ring-primary-700 cursor-pointer"
               >
                 {SORT_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>{t(`sort.${opt}`)}</option>
@@ -509,7 +515,7 @@ function SearchInner() {
             </div>
           }
         />
-      </main>
+      </div>
     </div>
   );
 }

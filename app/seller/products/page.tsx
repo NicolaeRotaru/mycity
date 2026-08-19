@@ -286,7 +286,7 @@ export default function SellerProductsPage() {
                           onChange={(e) => setField(p.id, 'price', e.target.value)}
                           inputMode="decimal"
                           aria-label={`Prezzo di ${p.name}`}
-                          className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-400"
+                          className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                         />
                       ) : (
                         <span className="font-bold text-ink-900">{formatPrice(Number(p.price))}</span>
@@ -301,7 +301,7 @@ export default function SellerProductsPage() {
                           onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''))}
                           inputMode="numeric"
                           aria-label={`Stock di ${p.name}`}
-                          className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-400"
+                          className="w-20 rounded-md border border-cream-300 px-2 py-1.5 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                         />
                       ) : (
                         p.stock ?? 0
@@ -385,7 +385,7 @@ export default function SellerProductsPage() {
                             onChange={(e) => setField(p.id, 'price', e.target.value)}
                             inputMode="decimal"
                             aria-label={`Prezzo di ${p.name}`}
-                            className="w-20 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-400"
+                            className="w-20 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                           />
                         </label>
                         <label className="flex items-center gap-1.5 text-xs text-ink-500">
@@ -395,7 +395,7 @@ export default function SellerProductsPage() {
                             onChange={(e) => setField(p.id, 'stock', e.target.value.replace(/[^0-9]/g, ''))}
                             inputMode="numeric"
                             aria-label={`Stock di ${p.name}`}
-                            className="w-16 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-400"
+                            className="w-16 rounded-md border border-cream-300 px-2 py-1 text-right text-[13px] font-semibold text-ink-900 outline-none focus-visible:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                           />
                         </label>
                       </div>

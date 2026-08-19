@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import { type ProductVariant, normalizeVariants } from '@/lib/products/variants';
+import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 
 /**
  * Persistenza varianti lato venditore (RLS: il seller gestisce le varianti dei
@@ -17,48 +18,19 @@ export async function loadProductVariants(productId: string): Promise<ProductVar
   return normalizeVariants(data ?? []);
 }
 
+/**
+ * 008 — Questa funzione era la copia riga per riga di `saveProductVariantsServer`:
+ * stesso diff insert/update/delete, stessi id da tenere stabili, quaranta righe
+ * duplicate. Due copie della stessa logica non restano uguali: la prima
+ * correzione che entra in una sola delle due crea una differenza di
+ * comportamento fra il pannello del venditore e quello dell'amministratore,
+ * e nessuno la vede finche' non fa danni sui riferimenti degli ordini.
+ * La firma che accetta il client come parametro esisteva gia': qui resta il
+ * punto d'ingresso comodo per il browser, la logica vive in un posto solo.
+ */
 export async function saveProductVariants(
   productId: string,
   variants: ProductVariant[],
 ): Promise<void> {
-  const { data: existing, error: loadErr } = await supabase
-    .from('product_variants')
-    .select('id')
-    .eq('product_id', productId);
-  if (loadErr) throw loadErr;
-  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
-
-  const keepIds = new Set<string>();
-  const toInsert: Array<Record<string, unknown>> = [];
-  const toUpdate: Array<{ id: string; row: Record<string, unknown> }> = [];
-
-  variants.forEach((v, i) => {
-    const row = {
-      product_id: productId,
-      options: v.options,
-      label: v.label,
-      stock: Math.max(0, Math.trunc(v.stock || 0)),
-      position: i,
-    };
-    if (v.id && existingIds.has(v.id)) {
-      keepIds.add(v.id);
-      toUpdate.push({ id: v.id, row });
-    } else {
-      toInsert.push(row);
-    }
-  });
-
-  const toDelete = [...existingIds].filter((id) => !keepIds.has(id));
-  if (toDelete.length > 0) {
-    const { error } = await supabase.from('product_variants').delete().in('id', toDelete);
-    if (error) throw error;
-  }
-  for (const u of toUpdate) {
-    const { error } = await supabase.from('product_variants').update(u.row).eq('id', u.id);
-    if (error) throw error;
-  }
-  if (toInsert.length > 0) {
-    const { error } = await supabase.from('product_variants').insert(toInsert);
-    if (error) throw error;
-  }
+  return saveProductVariantsServer(supabase, productId, variants);
 }

@@ -3,8 +3,14 @@
 import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Headset } from 'lucide-react';
+import dynamic from 'next/dynamic';
 import { useProfile } from './hooks/useProfile';
-import SupportChatModal from './SupportChatModal';
+
+// 100 — L'import statico portava nel pacchetto iniziale il modale e con lui
+// l'assistente prodotto (oltre seicento righe), per OGNI visitatore — compresi
+// i compratori e gli anonimi, che questo pulsante non lo vedono mai. Caricarlo
+// quando serve non cambia niente per chi lo usa e alleggerisce tutti gli altri.
+const SupportChatModal = dynamic(() => import('./SupportChatModal'), { ssr: false });
 
 /**
  * Pulsante "Assistenza" flottante. Disponibile a seller e rider loggati.

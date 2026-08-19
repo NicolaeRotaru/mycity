@@ -776,7 +776,7 @@ export default function ProductForm({
                       value={v.stock}
                       onChange={(e) => setVariantStock(idx, Number(e.target.value))}
                       aria-label={`Disponibilità ${v.label}`}
-                      className="w-24 rounded-lg border border-cream-300 px-2 py-1 text-sm text-right focus:border-primary-300 focus:outline-none focus:ring-1 focus:ring-primary-200"
+                      className="w-24 rounded-lg border border-cream-300 px-2 py-1 text-sm text-right focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none focus:ring-1 focus:ring-primary-200"
                     />
                   </div>
                 ))}
@@ -808,7 +808,7 @@ export default function ProductForm({
               }}
               onBlur={() => addTag(tagInput)}
               placeholder={tags.length === 0 ? 'Es. regalo, artigianale, bio…' : 'Aggiungi tag'}
-              className="flex-1 min-w-[8rem] border-0 p-1 text-sm focus:outline-none focus:ring-0"
+              className="flex-1 min-w-[8rem] border-0 p-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-inset"
             />
           </div>
           <p className="text-xs text-ink-400 mt-1">Invio o virgola per aggiungere. Aiutano i clienti a trovarti.</p>

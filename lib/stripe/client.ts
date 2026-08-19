@@ -230,6 +230,11 @@ export async function createConnectOnboardingLink(args: {
 
   let accountId = args.existingAccount;
   if (!accountId) {
+    // 181 — Senza chiave di idempotenza, ogni errore di rete fra la creazione
+    // del conto e il salvataggio dell'id lasciava un conto Connect orfano su
+    // Stripe: nessuno lo cancella, e alla verifica antiriciclaggio quei conti
+    // fantasma sono un problema di chi li ha creati. Con la chiave, riprovare
+    // restituisce SEMPRE lo stesso conto.
     const account = await stripe.accounts.create({
       type: 'express',
       country: 'IT',
@@ -240,7 +245,7 @@ export async function createConnectOnboardingLink(args: {
       },
       business_type: 'individual',
       metadata: { seller_id: args.sellerId },
-    });
+    }, { idempotencyKey: `connect_${args.sellerId}` });
     accountId = account.id;
   }
 

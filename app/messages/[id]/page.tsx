@@ -262,7 +262,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
             aria-label="Scrivi un messaggio"
             maxLength={4000}
             disabled={sendMutation.isPending}
-            className="flex-1 border border-cream-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-60"
+            className="flex-1 border border-cream-300 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-700 disabled:opacity-60"
           />
           <button
             type="submit"

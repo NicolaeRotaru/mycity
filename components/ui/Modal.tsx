@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -48,6 +48,7 @@ export function Modal({
   closeOnEsc = true,
 }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const autoId = useId();
   const previousActiveElement = useRef<HTMLElement | null>(null);
 
   // Body scroll lock + return focus
@@ -69,14 +70,15 @@ export function Modal({
     };
   }, [open]);
 
-  // Esc to close + focus trap minimal
+  // 145 — Prima Esc e trappola del fuoco stavano nello STESSO effetto, con una
+  // sola guardia: `if (!open || !closeOnEsc) return;`. Passando
+  // `closeOnEsc={false}` — cosa che si fa per i dialoghi che chiedono una
+  // scelta obbligata — si spegneva anche la trappola, e il fuoco usciva dietro
+  // il velo. Cioè: proprio il dialogo da cui NON si deve uscire era l'unico da
+  // cui si usciva. Due effetti separati, due guardie diverse.
   useEffect(() => {
-    if (!open || !closeOnEsc) return;
+    if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        onClose();
-      }
       if (e.key === 'Tab' && dialogRef.current) {
         const focusables = dialogRef.current.querySelectorAll<HTMLElement>(
           'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -95,12 +97,28 @@ export function Modal({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  }, [open]);
+
+  // La chiusura con Esc, invece, si può disattivare: è una scelta di prodotto.
+  useEffect(() => {
+    if (!open || !closeOnEsc) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
   }, [open, closeOnEsc, onClose]);
 
   if (!open) return null;
   if (typeof document === 'undefined') return null;
 
-  const titleId = `modal-title-${title.toLowerCase().replace(/\s+/g, '-').slice(0, 20)}`;
+  // 145 — L'identificativo derivava dal TESTO del titolo: due dialoghi con lo
+  // stesso titolo aperti nella stessa pagina producevano due `id` uguali, e il
+  // collegamento fra dialogo e titolo puntava a caso.
+  const titleId = `modal-title-${autoId}`;
   const descId  = description ? `${titleId}-desc` : undefined;
 
   return createPortal(

@@ -72,7 +72,7 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
                 maxLength={120}
                 onChange={(e) => setItem(i, { alt: e.target.value })}
                 placeholder="Descrizione"
-                className="w-full border border-cream-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-400"
+                className="w-full border border-cream-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-700"
               />
             </div>
           ))}

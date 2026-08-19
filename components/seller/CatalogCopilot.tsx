@@ -198,7 +198,7 @@ export default function CatalogCopilot() {
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void ask(); } }}
           rows={1}
           placeholder="Chiedi al copilota…"
-          className="max-h-28 flex-1 resize-none rounded-full border border-cream-300 px-4 py-2.5 text-sm focus:border-primary-300 focus:outline-none"
+          className="max-h-28 flex-1 resize-none rounded-full border border-cream-300 px-4 py-2.5 text-sm focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none"
         />
         <button
           type="button"

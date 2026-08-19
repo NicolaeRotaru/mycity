@@ -72,7 +72,7 @@ function Block({ section }: { section: CmsSection }) {
       if (!c.videoId) return null;
       const src = c.provider === 'youtube'
         ? `https://www.youtube-nocookie.com/embed/${c.videoId}`
-        : `https://player.vimeo.com/video/${c.videoId}`;
+        : `https://player.vimeo.com/video/${c.videoId}?dnt=1`;
       return (
         <section>
           {c.heading && <h2 className="text-2xl font-serif font-bold text-ink-900 mb-4">{c.heading}</h2>}

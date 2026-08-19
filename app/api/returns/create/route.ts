@@ -53,6 +53,19 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     if (days > 14) return ApiErrors.invalidRequest('Termine per il recesso scaduto (14 giorni dalla consegna).');
   }
 
+  // 186 — L'articolo indicato non veniva verificato: si poteva chiedere il reso
+  // di un prodotto di un ALTRO ordine, e il negoziante si trovava una richiesta
+  // che non torna con niente. Se c'è un articolo, deve essere di quest'ordine.
+  if (body.orderItemId) {
+    const { data: riga } = await supa
+      .from('order_items')
+      .select('id')
+      .eq('id', body.orderItemId)
+      .eq('order_id', body.orderId)
+      .maybeSingle();
+    if (!riga) return ApiErrors.invalidRequest("L'articolo indicato non appartiene a questo ordine");
+  }
+
   // Anti-doppione: max 1 reso open per ordine
   const { data: existing } = await supa
     .from('returns')
@@ -80,6 +93,13 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
     .single();
 
   if (insErr || !ret) {
+    // 186 — Il controllo qui sopra non è atomico: due invii ravvicinati lo
+    // superano entrambi. L'indice unico parziale della migrazione 119 è la
+    // guardia vera; qui si traduce il suo rifiuto in una risposta che si capisce
+    // invece che in un errore interno.
+    if (insErr?.code === '23505') {
+      return ApiErrors.conflict('Esiste già una richiesta di reso aperta per questo ordine');
+    }
     logger.error(insErr, { context: 'returns-insert' });
     return ApiErrors.internal('Creazione reso fallita');
   }

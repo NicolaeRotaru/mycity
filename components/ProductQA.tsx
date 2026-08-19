@@ -159,7 +159,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
               onChange={(e) => setText(e.target.value)}
               placeholder="Es: questo prodotto è disponibile in altre dimensioni?"
               maxLength={500}
-              className="flex-1 bg-white border border-cream-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+              className="flex-1 bg-white border border-cream-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
             <Button
               type="submit"
@@ -240,7 +240,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
                     value={answerText[q.id] ?? ''}
                     onChange={(e) => setAnswerText((s) => ({ ...s, [q.id]: e.target.value }))}
                     placeholder="Scrivi la tua risposta…"
-                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400 resize-none"
+                    className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700 resize-none"
                   />
                   <button
                     onClick={() => {

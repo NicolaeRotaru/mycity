@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -21,8 +21,9 @@ const StartSchema = z.object({
  * Risponde con { conversationId } pronto per navigare a /messages/[id].
  */
 export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
-  const ip = getClientIp(req);
-  const rl = await rateLimitAsync({ key: `chat:start:${ip}`, max: 20, windowMs: 60_000 });
+  // 188 — la chiave è la persona, non l'indirizzo di rete: chi sta su rete
+  // mobile non deve essere fermato per colpa di uno sconosciuto.
+  const rl = await rateLimitAsync({ key: `chat:start:${user.id}`, max: 20, windowMs: 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;
@@ -61,8 +62,26 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
       .insert({ buyer_id: user.id, seller_id: sellerId })
       .select('id')
       .single();
-    if (error || !created) return ApiErrors.internal('Impossibile aprire la conversazione');
-    conversationId = created.id;
+    if (error) {
+      // 185 — Due clic ravvicinati sul pulsante «Scrivi al negozio» arrivavano
+      // qui insieme: tutti e due leggevano «non esiste», tutti e due
+      // inserivano, e il secondo sbatteva sull'indice unico. L'utente vedeva
+      // un errore generico su una cosa che in realtà era andata a buon fine.
+      // Un doppione su una chiave unica non è un guasto: è la risposta.
+      if (error.code === '23505') {
+        const { data: gia } = await supa
+          .from('conversations')
+          .select('id')
+          .eq('buyer_id', user.id)
+          .eq('seller_id', sellerId)
+          .maybeSingle();
+        conversationId = gia?.id ?? null;
+      }
+      if (!conversationId) return ApiErrors.internal('Impossibile aprire la conversazione');
+    } else if (created) {
+      conversationId = created.id;
+    }
+    if (!conversationId) return ApiErrors.internal('Impossibile aprire la conversazione');
   }
 
   if (firstMessage) {

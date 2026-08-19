@@ -179,10 +179,14 @@ function DayTile({
   badge?: { text: string; cls: string };
 }) {
   return (
+    // 150 — La tile scelta era segnalata solo dal bordo colorato: un lettore di
+    // schermo leggeva tre pulsanti identici, senza dire quale fosse attivo.
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={active}
+      aria-label={`${title}, ${subtitle}`}
       className={`relative rounded-xl border-[1.5px] px-3 py-3 text-left transition-colors ${
         disabled
           ? 'border-cream-200 bg-cream-50 cursor-not-allowed opacity-50'

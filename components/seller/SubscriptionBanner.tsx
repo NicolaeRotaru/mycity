@@ -5,6 +5,13 @@ import { CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
+import { apiErrorMessage } from '@/lib/errors';
+// 184 — `json.error` funziona solo se il server risponde `{error:'testo'}`.
+// Le rotte rispondono `{ok:false, error:{code,message}}`: `json.error` era
+// un oggetto, quindi falso-y mai e stringa mai, e finiva sempre nel
+// messaggio di riserva. Su tre schermate che portano soldi la persona
+// leggeva «Errore nel pagamento» invece del motivo vero — che il server
+// aveva scritto e mandato. `apiErrorMessage` legge tutte e due le forme.
 
 /**
  * Avviso (non bloccante) per i venditori senza abbonamento attivo. Mostra una
@@ -22,7 +29,7 @@ export function SubscriptionBanner({ status }: { status: string | null | undefin
     try {
       const res = await fetch('/api/seller/subscription/checkout', { method: 'POST' });
       const json = await res.json();
-      if (!res.ok || !json.url) throw new Error(json.error || 'Errore nell’attivazione');
+      if (!res.ok || !json.url) throw new Error(apiErrorMessage(json, 'Errore nell’attivazione'));
       window.location.href = json.url as string;
     } catch (e) {
       toast.error(friendlyError(e));

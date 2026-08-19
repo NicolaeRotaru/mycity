@@ -36,7 +36,7 @@ const SIZES: Record<Size, string> = {
   lg: 'px-5 py-3 text-base gap-2 min-h-[48px]',
 };
 
-const BASE = 'inline-flex items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+const BASE = 'inline-flex items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
 const SHAPES: Record<Shape, string> = {
   rounded: 'rounded',
@@ -90,15 +90,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
     );
   }
 
-  const buttonProps = rest as ButtonHTMLAttributes<HTMLButtonElement>;
+  // 104 — `{...buttonProps}` veniva DOPO `disabled`, quindi lo sovrascriveva
+  // con il valore originale: un pulsante con `loading` e `disabled={false}`
+  // restava cliccabile. Sull'importazione del catalogo questo voleva dire
+  // duplicare tutti i prodotti con un doppio clic, e sul pagamento della
+  // promozione voleva dire pagarla due volte.
+  const { disabled: disabledProp, type: typeProp, ...restButtonProps } =
+    rest as ButtonHTMLAttributes<HTMLButtonElement>;
   return (
     <button
       ref={ref}
-      type={buttonProps.type ?? 'button'}
+      type={typeProp ?? 'button'}
       aria-busy={loading || undefined}
-      disabled={buttonProps.disabled || loading}
+      disabled={disabledProp || loading}
       className={classes}
-      {...buttonProps}
+      {...restButtonProps}
     >
       {content}
     </button>

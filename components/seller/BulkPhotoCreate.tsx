@@ -272,7 +272,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
                     onChange={(e) => updateProduct(idx, { name: e.target.value })}
                     disabled={creating}
                     placeholder="Nome prodotto"
-                    className="w-full rounded border border-cream-300 bg-white px-2 py-1 text-sm font-semibold focus:border-primary-300 focus:outline-none"
+                    className="w-full rounded border border-cream-300 bg-white px-2 py-1 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none"
                   />
                 )}
                 <div className="mt-1 flex items-center gap-2 text-xs text-ink-500">
@@ -298,7 +298,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
                         })
                       }
                       disabled={creating}
-                      className="w-20 rounded border border-cream-300 bg-white px-2 py-1 text-right text-sm focus:border-primary-300 focus:outline-none"
+                      className="w-20 rounded border border-cream-300 bg-white px-2 py-1 text-right text-sm focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none"
                     />
                     <span className="text-xs text-ink-400">€</span>
                   </div>

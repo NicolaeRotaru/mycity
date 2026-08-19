@@ -370,6 +370,11 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       storeName={p.profiles?.store_name ?? undefined}
       sellerId={p.seller_id ?? undefined}
       discountPercent={discountFor(p)}
+      // 122 — Questa proprietà non veniva passata: la griglia ordinava per
+      // «Sconto maggiore» usando compare_at_price, ma poi nessuna card
+      // mostrava il prezzo barrato. Il cliente vedeva un ordinamento che non
+      // corrispondeva a niente di visibile.
+      compareAtPrice={p.compare_at_price != null ? Number(p.compare_at_price) : null}
       hasVariants={p.has_variants ?? false}
       priority={i < 4}
     />

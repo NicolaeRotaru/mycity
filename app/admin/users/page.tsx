@@ -648,7 +648,7 @@ function EditUserModal({
   const [storeName, setStoreName] = useState(profile.store_name ?? '');
   const [role, setRole] = useState(profile.role);
 
-  const inputCls = 'w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400';
+  const inputCls = 'w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700';
 
   return (
     <Modal

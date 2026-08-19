@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
@@ -17,11 +17,15 @@ const SendSchema = z.object({
  * Invia un nuovo messaggio nella conversazione indicata. RLS verifica che il
  * sender sia un partecipante. Il trigger DB aggiorna preview e counter unread.
  *
- * Rate limit dedicato anti-flood: max 30 msg/min per utente (per IP qui).
+ * Freno anti-alluvione: 30 messaggi al minuto per PERSONA.
+ *
+ * 188 — Prima la chiave era l'indirizzo di rete. Ma qui si è già autenticati:
+ * chi naviga da rete mobile condivide l'indirizzo con centinaia di sconosciuti e
+ * si trovava zittito per colpa loro, mentre chi voleva davvero inondare la chat
+ * cambiava rete. La chiave giusta è chi scrive, e la sappiamo.
  */
 export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
-  const ip = getClientIp(req);
-  const rl = await rateLimitAsync({ key: `chat:msg:${ip}`, max: 30, windowMs: 60_000 });
+  const rl = await rateLimitAsync({ key: `chat:msg:${user.id}`, max: 30, windowMs: 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;

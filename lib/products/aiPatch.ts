@@ -49,6 +49,10 @@ export type CurrentProduct = {
   attributes: Record<string, unknown> | null;
   category_id: string | null;
   has_variants?: boolean | null;
+  /** 192 — serve alla banda di sicurezza sul prezzo: senza il valore attuale
+   *  non si puo' dire se una proposta e' ragionevole o un errore di battitura
+   *  del modello. Assente = nessuna banda, come prima. */
+  price?: number | string | null;
 };
 
 export type ResolvedPatch = {
@@ -94,8 +98,22 @@ export function resolveAiPatch(opts: {
     changed.push('descrizione');
   }
   if (typeof patch.price === 'number' && patch.price > 0) {
-    update.price = patch.price;
-    changed.push('prezzo');
+    // 192 — Banda di sicurezza: un prezzo proposto dall'AI che si scosta di
+    // piu' del 30% da quello attuale non si applica, e non si tronca nemmeno —
+    // si rifiuta e si dice. Troncare avrebbe scritto comunque un prezzo che
+    // nessuno ha deciso. La banda vale anche quando la proposta e' onesta: sopra
+    // quella soglia la decisione e' del negoziante, non del modello.
+    const attuale = Number(current.price ?? 0);
+    const scostamentoTroppoGrande =
+      attuale > 0 && Math.abs(patch.price - attuale) / attuale > 0.30;
+    if (scostamentoTroppoGrande) {
+      changed.push(
+        `prezzo NON applicato (${attuale.toFixed(2)} → ${patch.price.toFixed(2)} €: oltre il 30%, va deciso a mano)`,
+      );
+    } else {
+      update.price = patch.price;
+      changed.push('prezzo');
+    }
   }
   if ('compare_at_price' in patch) {
     if (patch.compare_at_price == null) {

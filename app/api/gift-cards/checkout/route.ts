@@ -78,7 +78,12 @@ export const POST = withAuthRateLimit(
           success_url: `${env.appUrl()}/profile/gift-cards?giftcard=success`,
           cancel_url: `${env.appUrl()}/profile/gift-cards?giftcard=canceled`,
         },
-        { idempotencyKey: `giftcard_${user.id}_${amountCents}_${body.recipientEmail}_${Date.now()}` },
+        // 187 — Con `Date.now()` dentro, la chiave era diversa a ogni chiamata:
+        // cioè non proteggeva da niente, che è il contrario di una chiave di
+        // idempotenza. Due clic sul pulsante «Regala» aprivano due sessioni di
+        // pagamento per la stessa carta. Ora la finestra è di dieci minuti: due
+        // tentativi ravvicinati sono lo stesso tentativo, uno domani è un altro.
+        { idempotencyKey: `giftcard_${user.id}_${amountCents}_${body.recipientEmail}_${Math.floor(Date.now() / 600_000)}` },
       );
 
       return NextResponse.json({ url: session.url }, { status: 200 });

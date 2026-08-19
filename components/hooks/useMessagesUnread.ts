@@ -15,6 +15,20 @@ import { logger } from '@/lib/logger';
  * "cannot add postgres_changes callbacks after subscribe()" perché il channel
  * con lo stesso nome viene ri-usato già subscribed. Lo passiamo via ref.
  */
+/**
+ * 101 — Un canale per persona, condiviso da tutti i punti che mostrano il
+ * numero dei messaggi non letti. Vive fuori dal componente proprio perché deve
+ * sopravvivere ai montaggi: è lì che sta la condivisione.
+ */
+const registro = new Map<
+  string,
+  {
+    usi: number;
+    canale: ReturnType<typeof supabase.channel> | null;
+    ascoltatori: Set<{ current: () => void }>;
+  }
+>();
+
 export const useMessagesUnread = () => {
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -55,24 +69,49 @@ export const useMessagesUnread = () => {
 
   useEffect(() => {
     if (!userId) return;
-    // Channel name unico per effect run: previene il caso in cui Supabase JS
-    // riusa un'istanza già subscribed (race condition tra cleanup async e
-    // re-mount sincrono). Date.now() garantisce unicità.
-    // Try/catch difensivo: se Supabase rifiuta il subscribe per qualsiasi
-    // motivo (es. Realtime non abilitato sul DB, migration non applicata),
-    // logghiamo ma non crashiamo l'app — il polling ogni 60s resta attivo.
-    let ch: ReturnType<typeof supabase.channel> | null = null;
-    try {
-      ch = supabase
-        .channel(`msg-unread-${userId}-${Date.now()}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
-          refetchRef.current();
-        })
-        .subscribe();
-    } catch (err) {
-      logger.warn('[useMessagesUnread] realtime subscribe failed', err);
+
+    // 101 — Questo aggancio nasceva UNA VOLTA PER MONTAGGIO, e il gancio è
+    // montato due volte insieme: la barra in alto e la barra in basso vivono
+    // tutte e due nel guscio dell'applicazione. Ogni persona che entra teneva
+    // quindi due collegamenti in tempo reale identici, che ascoltano la stessa
+    // tabella e chiamano la stessa ricarica: il doppio del costo per lo stesso
+    // numero. Nell'area account diventavano perfino tre.
+    //
+    // Il canale ora è UNO per persona, con un contatore di chi lo usa: il primo
+    // montaggio lo apre, gli altri si agganciano, e si chiude quando l'ultimo
+    // se ne va. Il nome del canale non porta più l'orologio — era proprio
+    // quello a renderlo irripetibile e quindi impossibile da condividere.
+    const chiamanti = registro.get(userId);
+    if (chiamanti) {
+      chiamanti.usi += 1;
+      chiamanti.ascoltatori.add(refetchRef);
+    } else {
+      const ascoltatori = new Set<typeof refetchRef>([refetchRef]);
+      let canale: ReturnType<typeof supabase.channel> | null = null;
+      try {
+        canale = supabase
+          .channel(`msg-unread-${userId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+            for (const a of ascoltatori) a.current();
+          })
+          .subscribe();
+      } catch (err) {
+        logger.warn('[useMessagesUnread] realtime subscribe failed', err);
+      }
+      registro.set(userId, { usi: 1, canale, ascoltatori });
     }
-    return () => { if (ch) { try { supabase.removeChannel(ch); } catch { /* noop */ } } };
+
+    return () => {
+      const voce = registro.get(userId);
+      if (!voce) return;
+      voce.ascoltatori.delete(refetchRef);
+      voce.usi -= 1;
+      if (voce.usi > 0) return;
+      registro.delete(userId);
+      if (voce.canale) {
+        try { supabase.removeChannel(voce.canale); } catch { /* noop */ }
+      }
+    };
   }, [userId]); // solo userId — refetch via ref
 
   return unread;

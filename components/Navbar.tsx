@@ -177,10 +177,11 @@ export default function Navbar() {
                 <LocationPill compact />
               </div>
               {isAuthenticated && canPurchase && (
-                <Link href="/cart" aria-label="Carrello" className="relative shrink-0 inline-flex p-2 text-white">
+                <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white">
                   <ShoppingCart size={22} strokeWidth={2} aria-hidden />
+                  <span className="sr-only">Carrello{cartCount > 0 ? `, ${cartCount} ${cartCount === 1 ? 'articolo' : 'articoli'}` : ''}</span>
                   {cartCount > 0 && (
-                    <span className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                    <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
                       {cartCount > 99 ? '99+' : cartCount}
                     </span>
                   )}
@@ -189,9 +190,10 @@ export default function Navbar() {
               {!isAuthenticated && !isLoading && (
                 <>
                   {cartCount > 0 ? (
-                    <Link href="/cart" aria-label="Carrello" className="relative shrink-0 inline-flex p-2 text-white">
+                    <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white">
                       <ShoppingCart size={22} strokeWidth={2} aria-hidden />
-                      <span className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                      <span className="sr-only">Carrello, {cartCount} {cartCount === 1 ? 'articolo' : 'articoli'}</span>
+                      <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
                         {cartCount > 99 ? '99+' : cartCount}
                       </span>
                     </Link>
@@ -236,19 +238,25 @@ const IconButton = ({ href, label, badge, children }: { href: string; label: str
   </Link>
 );
 
+// 137 — L'`aria-label="Carrello"` copriva tutto il contenuto del link, badge
+// compreso: chi usa un lettore di schermo sentiva «Carrello» e basta, senza mai
+// sapere quanti articoli ci fossero dentro. Il nome si compone dal contenuto.
 const CartButton = ({ count }: { count: number }) => (
   <Link
     href="/cart"
     title="Carrello"
-    aria-label="Carrello"
     className="ml-1 inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-ink-900 px-3 py-2 rounded-full text-sm font-bold transition-colors relative"
   >
-    <ShoppingCart size={16} strokeWidth={2.4} />
+    <ShoppingCart size={16} strokeWidth={2.4} aria-hidden />
     <span className="hidden lg:inline">Carrello</span>
+    <span className="sr-only lg:hidden">Carrello</span>
     {count > 0 && (
-      <span className="bg-ink-900 text-accent-400 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
-        {count > 99 ? '99+' : count}
-      </span>
+      <>
+        <span aria-hidden className="bg-ink-900 text-accent-400 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+          {count > 99 ? '99+' : count}
+        </span>
+        <span className="sr-only">, {count} {count === 1 ? 'articolo' : 'articoli'}</span>
+      </>
     )}
   </Link>
 );

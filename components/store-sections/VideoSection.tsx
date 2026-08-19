@@ -19,7 +19,7 @@ export default function VideoSection({
   const src =
     config.provider === 'youtube'
       ? `https://www.youtube-nocookie.com/embed/${config.videoId}`
-      : `https://player.vimeo.com/video/${config.videoId}`;
+      : `https://player.vimeo.com/video/${config.videoId}?dnt=1`;
 
   return (
     <section>

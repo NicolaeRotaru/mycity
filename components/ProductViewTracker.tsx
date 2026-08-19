@@ -20,6 +20,24 @@ type Props = {
  * Componente invisibile, side effect only. Usa sessionStorage per dedupare:
  * lo stesso prodotto viene contato 1x per sessione (no inflation da F5 ripetuti).
  */
+/**
+ * Un identificativo casuale che vive quanto la scheda del browser. Non dice chi
+ * sei e non ti segue: serve solo a distinguere «duecento visite da uno» da
+ * «duecento visite da duecento persone».
+ */
+function improntaSessione(): string {
+  const CHIAVE = 'mc_impronta_visite';
+  try {
+    const gia = sessionStorage.getItem(CHIAVE);
+    if (gia) return gia;
+    const nuova = crypto.randomUUID();
+    sessionStorage.setItem(CHIAVE, nuova);
+    return nuova;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
 export default function ProductViewTracker({ productId, price, category, sellerId }: Props) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -32,9 +50,16 @@ export default function ProductViewTracker({ productId, price, category, sellerI
       const { data: { user } } = await supabase.auth.getUser();
 
       // 1) product_views (sempre, anche guest)
+      // 041 — L'impronta di sessione serve a contare le visite anonime PER
+      // VISITATORE invece che per prodotto. Prima il tetto era globale sul
+      // prodotto, e chi voleva azzerare le statistiche di un rivale gli sparava
+      // venti visite al minuto: da lì in poi quelle vere venivano buttate. Un
+      // freno che si può usare per fare il danno che doveva impedire non è un
+      // freno. Chi manda l'impronta ha un conto suo, e nessuno può consumarlo.
       await supabase.from('product_views').insert({
         product_id: productId,
         user_id: user?.id ?? null,
+        view_fingerprint: user ? null : improntaSessione(),
       });
 
       // 2) recently_viewed (solo loggati) — upsert con touch viewed_at

@@ -28,13 +28,17 @@ export function RatingStars({
       className={`inline-flex items-center ${className}`}
     >
       {Array.from({ length: 5 }).map((_, i) => {
+        // 149 — accent-500 sulle stelle misurava 2,16:1 contro il fondo: sotto
+        // qualunque soglia. Chi ha una vista debole vedeva cinque macchie
+        // uguali. accent-700 (#9D621C) misura 5,00:1 e resta lo stesso giallo
+        // caldo. Le stelle vuote passano da ink-300 a ink-400 per distinguersi.
         if (i < full) {
-          return <Star key={i} size={size} className="fill-accent-500 text-accent-500" aria-hidden />;
+          return <Star key={i} size={size} className="fill-accent-700 text-accent-700" aria-hidden />;
         }
         if (i === full && hasHalf) {
-          return <StarHalf key={i} size={size} className="fill-accent-500 text-accent-500" aria-hidden />;
+          return <StarHalf key={i} size={size} className="fill-accent-700 text-accent-700" aria-hidden />;
         }
-        return <Star key={i} size={size} className="fill-none text-ink-300" aria-hidden />;
+        return <Star key={i} size={size} strokeWidth={2.2} className="fill-none text-ink-400" aria-hidden />;
       })}
     </span>
   );

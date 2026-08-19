@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { withAuth } from '@/lib/api/middleware';
+import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -23,7 +23,13 @@ export const runtime = 'nodejs';
  *
  * Sicurezza: richiede Bearer token; userId derivato dal token.
  */
-export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
+// 026 — Nessun freno su una rotta che legge diecimila righe e le impacchetta in
+// memoria: bastava un ciclo per tenere occupata l'istanza. Esportare i propri
+// dati è un diritto, e come tutti i diritti si esercita qualche volta, non
+// trecento al minuto. Tre al giorno.
+export const GET = withAuthRateLimit(
+  { name: 'account-export', max: 3, windowMs: 24 * 60 * 60_000 },
+  async ({ user }): Promise<NextResponse> => {
   const userId = user.id;
   const userEmail = user.email ?? null;
 
@@ -148,4 +154,5 @@ export const GET = withAuth(async ({ user }): Promise<NextResponse> => {
       'cache-control': 'no-store',
     },
   });
-});
+  },
+);

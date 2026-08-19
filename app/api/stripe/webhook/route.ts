@@ -61,15 +61,23 @@ export async function POST(req: NextRequest) {
   const seen = await admin.from('stripe_event_log').insert({ event_id: event.id, type: event.type });
   if (seen.error) {
     if (seen.error.code === '23505') {
-      const { data: existing } = await admin
+      // 062 — Prima bastava leggere `processed`: due consegne concorrenti dello
+      // stesso evento (Stripe ritenta, e il primo tentativo è ancora in corso)
+      // leggevano tutte e due «non processato» e creavano tutte e due gli
+      // ordini. Ora si rivendica: passa una sola, l'altra risponde 200 e se ne
+      // va. Un claim più vecchio di cinque minuti si può riprendere, altrimenti
+      // un processo morto a metà bloccherebbe l'evento per sempre.
+      const cinqueMinutiFa = new Date(Date.now() - 5 * 60_000).toISOString();
+      const { data: rivendicato } = await admin
         .from('stripe_event_log')
-        .select('processed')
+        .update({ claimed_at: new Date().toISOString() })
         .eq('event_id', event.id)
-        .single();
-      if (existing?.processed) {
+        .eq('processed', false)
+        .or(`claimed_at.is.null,claimed_at.lt.${cinqueMinutiFa}`)
+        .select('event_id');
+      if (!rivendicato || rivendicato.length === 0) {
         return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
       }
-      // tentativo precedente non completato → procedi a riprocessare
     } else {
       logger.error(seen.error, { context: 'stripe-event-log-insert' });
     }
@@ -188,6 +196,18 @@ type PendingDelivery = {
 };
 
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
+  // 057 — `checkout.session.completed` vuol dire «il cliente ha finito la
+  // procedura», non «i soldi sono arrivati». Con carta di credito le due cose
+  // coincidono; col primo metodo asincrono che si aggiunge (bonifico, SEPA,
+  // Klarna) non più: si creerebbero ordini pagati per denaro mai incassato.
+  // Vale per gli ordini e per i tre fratelli (gift card, sponsorizzati,
+  // abbonamento), tutti richiamati dallo stesso evento.
+  if (!sessionePagata(session)) {
+    logger.info('[stripe] sessione completata ma non pagata: nessun ordine creato', {
+      sessionId: session.id, stato: session.payment_status,
+    });
+    return;
+  }
   const admin = getAdminSupabase();
   const stripe = getStripe();
   const pendingCheckoutId = session.client_reference_id ?? session.metadata?.pending_checkout_id;
@@ -268,7 +288,17 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       const lc = pi.latest_charge;
       stripeChargeId = typeof lc === 'string' ? lc : (lc?.id ?? null);
     } catch (e) {
-      logger.warn('[stripe] retrieve PI per charge_id fallita', e);
+      // 052 — Questo NON è un dettaglio best-effort. Senza `stripe_charge_id` il
+      // pagamento al negozio parte senza `source_transaction`: Stripe lo prende
+      // dal saldo della piattaforma, che sui conti nuovi è vuoto, e il
+      // trasferimento resta bloccato per sempre. Il negozio non viene pagato e
+      // nessuno sa perché.
+      // Meglio far fallire l'evento: Stripe lo riconsegna, e la creazione degli
+      // ordini è già protetta dall'indice unico su (sessione, negozio).
+      logger.error('[stripe] retrieve PI per charge_id fallita: evento respinto per riconsegna', {
+        sessionId: session.id, paymentIntent, e,
+      });
+      throw e;
     }
   }
 
@@ -680,7 +710,9 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   // Multi-seller: una charge può avere N ordini (uno per seller).
   const { data: orders } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_id, payout_status, payment_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_fee_cents, shipping_cost')
+    // 054 — serve `delivery_status`: un ordine già consegnato non torna «annullato».
+    // 061 — serve `rider_payout_reversed_cents` per il residuo dello storno rider.
+    .select('id, user_id, total_price, seller_id, payout_status, payment_status, delivery_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
     .eq('stripe_payment_intent', pi);
 
   if (!orders || orders.length === 0) return;
@@ -724,13 +756,33 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   // Claw-back dei transfer già inviati (idempotente: no-op se non TRANSFERRED
   // o già revertito). reverseOrderTransfer porta quelli pagati a 'REVERSED'.
   const reversedIds: string[] = [];
+  // 048 — Se il recupero dal venditore falliva, l'errore finiva nel log e
+  // l'ordine veniva marcato RIMBORSATO lo stesso: la perdita spariva dai conti e
+  // nessuno la ripescava più. Ora quegli ordini prendono uno stato loro,
+  // restano fuori dai «rimborsati puliti» e gli amministratori lo vengono a
+  // sapere.
+  const stornoFallito: Array<{ id: string; motivo: string }> = [];
   for (const o of orders) {
     if (o.payout_status === 'TRANSFERRED') {
       try {
         const { reversalId } = await reverseOrderTransfer(o);
         if (reversalId) reversedIds.push(o.id);
       } catch (e) {
+        const motivo = e instanceof Error ? e.message : 'errore sconosciuto';
         logger.error('[stripe] reversal on charge.refunded failed', { orderId: o.id, e });
+        stornoFallito.push({ id: o.id, motivo });
+      }
+    }
+
+    // 054 — Il compenso del fattorino non veniva mai recuperato per questa
+    // strada, mentre lo era per le altre due: su ogni rimborso arrivato da
+    // Stripe la piattaforma restituiva tutto al cliente e pagava la consegna di
+    // tasca propria.
+    if (o.rider_payout_status === 'TRANSFERRED') {
+      try {
+        await reverseRiderTransfer(o);
+      } catch (e) {
+        logger.error('[stripe] recupero compenso rider fallito su charge.refunded', { orderId: o.id, e });
       }
     }
   }
@@ -740,11 +792,20 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
     .from('orders')
     .update({
       payment_status: 'REFUNDED',
-      delivery_status: 'CANCELED',
       stripe_refund_id: refundId,
-      canceled_at: new Date().toISOString(),
     })
     .in('id', allIds);
+
+  // 054 — Un ordine già CONSEGNATO non diventa «annullato» perché è stato
+  // rimborsato: la consegna c'è stata. Prima si riscriveva lo stato di tutti, e
+  // sparivano dalle liste operative consegne realmente effettuate.
+  const daAnnullare = orders.filter((o) => o.delivery_status !== 'DELIVERED').map((o) => o.id);
+  if (daAnnullare.length > 0) {
+    await admin
+      .from('orders')
+      .update({ delivery_status: 'CANCELED', canceled_at: new Date().toISOString() })
+      .in('id', daAnnullare);
+  }
   // refunded_amount_cents per ordine (refund pieno = totale ordine).
   for (const o of orders) {
     await admin
@@ -754,9 +815,23 @@ async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 
   // payout_status: i pagati sono già 'REVERSED' dal reversal; gli altri 'REFUNDED'.
-  const refundedIds = allIds.filter((id) => !reversedIds.includes(id));
+  const idFalliti = stornoFallito.map((f) => f.id);
+  const refundedIds = allIds.filter((id) => !reversedIds.includes(id) && !idFalliti.includes(id));
   if (refundedIds.length > 0) {
     await admin.from('orders').update({ payout_status: 'REFUNDED' }).in('id', refundedIds);
+  }
+  for (const f of stornoFallito) {
+    await admin
+      .from('orders')
+      .update({ payout_status: 'REVERSAL_FAILED', reversal_error: f.motivo.slice(0, 500) })
+      .eq('id', f.id);
+  }
+  if (stornoFallito.length > 0) {
+    await notifyAdmins(
+      '⚠️ Storno al venditore non riuscito',
+      `Rimborso eseguito ma i soldi non sono rientrati dal venditore su ${stornoFallito.length} ordine/i: ${idFalliti.map((i) => i.slice(0, 8)).join(', ')}. Vanno recuperati a mano.`,
+      '/admin/orders',
+    );
   }
 
   // Ripristina lo stock solo se refundOrder non l'ha già fatto (evita doppio restore).
@@ -790,6 +865,8 @@ type DisputeOrderRow = {
   stripe_transfer_id: string | null;
   seller_payout_cents: number | null;
   seller_payout_reversed_cents?: number | null;
+  rider_payout_reversed_cents?: number | null;
+  delivery_status?: string | null;
   stripe_reversal_id: string | null;
   // Servono per recuperare anche il compenso versato al fattorino.
   rider_id?: string | null;
@@ -815,6 +892,16 @@ async function findOrdersForDispute(dispute: Stripe.Dispute, columns: string): P
   return [];
 }
 
+/**
+ * 057 — Una sessione «completata» non è per forza una sessione PAGATA. Stripe
+ * usa `payment_status`: 'paid' o 'no_payment_required' vogliono dire soldi
+ * arrivati (o non dovuti); 'unpaid' vuol dire che il pagamento è ancora per
+ * strada, come succede con bonifici e pagamenti differiti.
+ */
+function sessionePagata(session: Stripe.Checkout.Session): boolean {
+  return session.payment_status === 'paid' || session.payment_status === 'no_payment_required';
+}
+
 /** Inserisce una notifica per tutti gli admin. */
 async function notifyAdmins(title: string, body: string, link: string) {
   const admin = getAdminSupabase();
@@ -832,7 +919,7 @@ async function notifyAdmins(title: string, body: string, link: string) {
 async function handleDisputeCreated(dispute: Stripe.Dispute) {
   const orders = await findOrdersForDispute(
     dispute,
-    'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_fee_cents, shipping_cost',
+    'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost',
   );
   if (orders.length === 0) {
     logger.warn('[stripe] dispute.created: nessun ordine trovato', { disputeId: dispute.id });
@@ -961,12 +1048,19 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   const admin = getAdminSupabase();
   const pid = session.client_reference_id ?? session.metadata?.pending_checkout_id;
   if (!pid) return;
-  const { data: pending } = await admin
+  // 064 — Prima si leggeva, si rilasciava la merce e POI si scriveva EXPIRED:
+  // il cron `expire-checkouts` e questo evento potevano passare insieme e
+  // rimettere in magazzino la stessa merce due volte, e restituire due volte il
+  // codice sconto. La rivendicazione condizionata è la stessa forma già usata
+  // nel cron: o la riga passa da PENDING a EXPIRED qui, o non si fa niente.
+  const { data: rivendicati } = await admin
     .from('pending_checkouts')
-    .select('id, status, groups, coupon_code')
+    .update({ status: 'EXPIRED' })
     .eq('id', pid)
-    .single();
-  if (!pending || pending.status !== 'PENDING') return;
+    .eq('status', 'PENDING')
+    .select('id, groups, coupon_code');
+  const pending = rivendicati?.[0];
+  if (!pending) return;
   const groups = (pending.groups as PendingGroup[]) ?? [];
   const items = groups.flatMap((g) =>
     (g.items ?? []).map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
@@ -980,7 +1074,6 @@ async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
     if (cErr) logger.warn('[stripe] codice sconto non restituito', { pid, message: cErr.message });
   }
 
-  await admin.from('pending_checkouts').update({ status: 'EXPIRED' }).eq('id', pid);
 }
 
 /** payout.failed → il bonifico bancario di un connected account è fallito: alert admin. */

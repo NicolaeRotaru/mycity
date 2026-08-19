@@ -81,7 +81,13 @@ export default function CheckoutPage() {
         for (const p of products ?? []) {
           validIds.add(p.id);
           if (p.seller_id) lookupMap.set(p.id, p.seller_id);
-          stockMap.set(p.id, p.stock ?? 0);
+          // 103 / 153 — `stock = null` in questo progetto vuol dire
+          // «disponibilità illimitata»: lo dicono la scheda prodotto, la
+          // griglia, il server e la funzione atomica di riserva. Solo QUI
+          // diventava zero. Effetto: un prodotto senza limite di scorte non si
+          // poteva comprare — il checkout lo dichiarava esaurito e spegneva il
+          // pulsante, senza che il negoziante potesse capire perché.
+          stockMap.set(p.id, p.stock == null ? Number.POSITIVE_INFINITY : p.stock);
           hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
         }
       }
@@ -155,7 +161,9 @@ export default function CheckoutPage() {
       // Disponibilità per riga: stock della variante se presente, altrimenti del
       // prodotto. Blocca e segnala invece di fallire dopo.
       const availableFor = (it: CartItem) =>
-        it.variantId ? (variantStock.get(it.variantId) ?? 0) : (stockMap.get(it.id) ?? 0);
+        it.variantId
+          ? (variantStock.get(it.variantId) ?? 0)
+          : (stockMap.get(it.id) ?? Number.POSITIVE_INFINITY);
       const stockIssues = cart
         .filter((it) => validIds.has(it.id) && it.quantity > availableFor(it))
         .map((it) => ({ id: it.id, name: it.name, requested: it.quantity, available: availableFor(it) }));
@@ -555,9 +563,20 @@ export default function CheckoutPage() {
     setErrors(fieldErrors);
     const firstInvalid = (['fullName', 'address', 'city', 'zip', 'phone'] as const).find((k) => fieldErrors[k]);
     if (firstInvalid) {
-      const el = document.querySelector<HTMLElement>(`[name="${firstInvalid}"]`);
-      el?.focus();
-      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      // 127 — Il fuoco si cercava nello stesso giro in cui si scrivevano gli
+      // errori: il form era ancora nascosto e `focus()` non attaccava su niente.
+      // Un fotogramma di attesa e il campo esiste, e' visibile, e ci si puo'
+      // andare. E se per qualunque motivo non ci fosse, si dice comunque cosa
+      // manca, invece di lasciare la persona davanti a un pulsante muto.
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[name="${firstInvalid}"]`);
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } else {
+          toast.error(fieldErrors[firstInvalid] ?? 'Controlla i dati di consegna');
+        }
+      });
       return;
     }
     if (stockIssues.length > 0) {
@@ -834,7 +853,7 @@ export default function CheckoutPage() {
           form="checkout-form"
           disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}
           aria-label={paymentMethod === 'card' ? 'Paga con carta e conferma ordine' : 'Conferma ordine'}
-          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
         >
           {isCheckingOut
             ? (paymentMethod === 'card' ? 'Apertura…' : 'Elaborazione…')

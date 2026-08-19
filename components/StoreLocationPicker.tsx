@@ -197,7 +197,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
               }
             }}
             placeholder="Es. Via Roma 1, Milano"
-            className="w-full sm:flex-1 min-w-0 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full sm:flex-1 min-w-0 border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
           <Button
             type="button"

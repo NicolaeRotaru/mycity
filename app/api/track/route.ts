@@ -48,16 +48,47 @@ function readCookie(header: string | null, name: string): string | null {
   return null;
 }
 
+/**
+ * 025 — Solo le intestazioni che scrive DAVVERO l'infrastruttura davanti al sito
+ * (Cloudflare, Vercel). `x-geo-country` e `x-geo-city` non le scrive nessuno qui:
+ * le scriveva il chiamante, cioè chiunque, e finivano nella tabella come se
+ * fossero un dato misurato. Un dato che si può dettare non è una misura.
+ */
 function geoFromHeaders(req: Request): { country: string | null; city: string | null } {
   const h = req.headers;
-  const country =
-    h.get('cf-ipcountry') || h.get('x-vercel-ip-country') || h.get('x-geo-country') || null;
-  const city =
-    h.get('x-vercel-ip-city') || h.get('x-geo-city') || null;
+  const country = h.get('cf-ipcountry') || h.get('x-vercel-ip-country') || null;
+  const city = h.get('cf-ipcity') || h.get('x-vercel-ip-city') || null;
   return {
-    country: country && country !== 'XX' ? country : null,
-    city: city ? decodeURIComponent(city) : null,
+    country: country && country !== 'XX' ? country.slice(0, 8) : null,
+    city: city ? decodeURIComponent(city).slice(0, 80) : null,
   };
+}
+
+/**
+ * 025 — `metadata` arrivava come oggetto libero e veniva salvato così com'è:
+ * chiavi a piacere, valori a piacere, dimensione a piacere. Bastava un ciclo per
+ * riempire la tabella di testo, e ogni lettore a valle si trovava una forma
+ * diversa. Qui si accettano solo chiavi corte, valori semplici, e un tetto.
+ */
+const METADATA_MAX_CHIAVI = 20;
+const METADATA_MAX_BYTE = 1024;
+
+function metadataSicuro(input: unknown): Record<string, string | number | boolean> | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const pulito: Record<string, string | number | boolean> = {};
+  let chiavi = 0;
+  for (const [k, v] of Object.entries(input as Record<string, unknown>)) {
+    if (chiavi >= METADATA_MAX_CHIAVI) break;
+    if (!/^[a-zA-Z0-9_.-]{1,40}$/.test(k)) continue;
+    if (typeof v === 'string') pulito[k] = v.slice(0, 200);
+    else if (typeof v === 'number' && Number.isFinite(v)) pulito[k] = v;
+    else if (typeof v === 'boolean') pulito[k] = v;
+    else continue;
+    chiavi++;
+  }
+  if (chiavi === 0) return null;
+  if (JSON.stringify(pulito).length > METADATA_MAX_BYTE) return null;
+  return pulito;
 }
 
 const noContent = () => new NextResponse(null, { status: 204 });
@@ -90,8 +121,7 @@ export async function POST(request: Request) {
   const path = typeof body.path === 'string' ? body.path.slice(0, 500) : null;
   const referrer = typeof body.referrer === 'string' ? body.referrer.slice(0, 500) : null;
   const sessionId = typeof body.session_id === 'string' ? body.session_id.slice(0, 100) : null;
-  const metadata =
-    body.metadata && typeof body.metadata === 'object' ? (body.metadata as Record<string, unknown>) : null;
+  const metadata = metadataSicuro(body.metadata);
 
   const ua = request.headers.get('user-agent');
   const parsed = parseUserAgent(ua);

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { env, requireSupabasePublic } from '@/lib/env';
+import { safeInternalPath } from '@/lib/safe-redirect';
 
 export const runtime = 'nodejs';
 
@@ -18,8 +19,11 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const code = url.searchParams.get('code');
   const nextParam = url.searchParams.get('next') ?? '/';
-  // Sanitize: solo path interni
-  const next = nextParam.startsWith('/') && !nextParam.startsWith('//') ? nextParam : '/';
+  // 019: il controllo scritto a mano qui lasciava passare `/\evil.com`, che i
+  // browser normalizzano in `//evil.com` — cioè un sito esterno. La funzione
+  // giusta esiste già ed è una sola per tutti i ritorni: quando si corregge, si
+  // corregge ovunque.
+  const next = safeInternalPath(nextParam, '/');
 
   if (!code) {
     return NextResponse.redirect(new URL('/sign-in?error=missing_code', env.appUrl()));

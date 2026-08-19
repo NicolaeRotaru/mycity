@@ -91,7 +91,11 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 
   const admin = getAdminSupabase();
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
+  // 189 — La giornata di cassa del fattorino è quella di Piacenza. Con
+  // `toISOString()` era quella di Greenwich: d'estate le consegne fra le 22 e
+  // mezzanotte finivano nel giorno dopo, e la quadratura risultava sbagliata
+  // proprio nelle sere più cariche.
+  const today = giornoLocale(now);
 
   // Guard atomico contro la "doppia cassa": solo il PRIMO writer (con
   // cash_confirmed_at ancora NULL) vince. Il check a riga ~63 è solo un fast-path
@@ -119,6 +123,14 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     .eq('id', body.orderId)
     .eq('rider_id', user.id)
     .is('cash_confirmed_at', null)
+    // 056/172 — il commento in cima al file dichiarava questa guardia
+    // («il rider puo' aggiornare solo i propri ordini con delivery_status
+    // PICKED_UP/OUT_FOR_DELIVERY/DELIVERED, controllo server-side») e nel codice
+    // non c'era: un fattorino poteva marcare PAGATO un ordine appena assegnato,
+    // mai ritirato e mai consegnato — e da lì l'ordine risultava incassato.
+    // Ora la condizione sta dentro la stessa UPDATE, quindi la decide il
+    // database e non un `if` che qualcuno può spostare.
+    .in('delivery_status', ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'])
     .select('id');
 
   if (updErr) return ApiErrors.internal('Update fallito');
@@ -149,9 +161,39 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 type AdminSupabase = ReturnType<typeof import('@/lib/supabase/server').getAdminSupabase>;
 type ReconciliationRow = { total_price: number | string | null; cash_collected_cents: number | null };
 
+/** La data (AAAA-MM-GG) nel fuso di Piacenza, non in quello di Greenwich. */
+function giornoLocale(d: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d);
+}
+
+/** Mezzanotte locale di quel giorno, espressa in UTC. */
+function inizioGiornoLocale(isoDate: string): Date {
+  // Si parte dalla mezzanotte UTC e si corregge con lo scarto vero del fuso in
+  // quella data: così l'ora legale è gestita dal calendario, non da una costante.
+  const mezzanotteUtc = new Date(`${isoDate}T00:00:00Z`);
+  const scartoMin = scartoFusoMinuti(mezzanotteUtc);
+  return new Date(mezzanotteUtc.getTime() - scartoMin * 60_000);
+}
+
+function scartoFusoMinuti(d: Date): number {
+  const f = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Rome', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  }).formatToParts(d);
+  const g = (t: string) => Number(f.find((p) => p.type === t)?.value ?? '0');
+  const locale = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour') % 24, g('minute'));
+  return Math.round((locale - d.getTime()) / 60_000);
+}
+
 async function upsertReconciliation(admin: AdminSupabase, riderId: string, isoDate: string) {
-  const start = `${isoDate}T00:00:00Z`;
-  const end = `${isoDate}T23:59:59Z`;
+  // 189 — Prima la finestra era `T00:00:00Z … T23:59:59Z`: sbagliato due volte.
+  // Il fuso (le consegne serali finivano nel giorno dopo) e l'ultimo secondo,
+  // che restava fuori — una consegna alle 23:59:59.400 non veniva contata.
+  // Ora: da mezzanotte locale INCLUSA a mezzanotte locale del giorno dopo ESCLUSA.
+  const start = inizioGiornoLocale(isoDate).toISOString();
+  const end = new Date(inizioGiornoLocale(isoDate).getTime() + 24 * 60 * 60_000).toISOString();
 
   // 🟡-7: atteso E incassato sono ancorati allo STESSO insieme di ordini —
   // quelli consegnati quel giorno (per delivered_at). Prima l'incassato usava
@@ -166,7 +208,7 @@ async function upsertReconciliation(admin: AdminSupabase, riderId: string, isoDa
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
     .gte('delivered_at', start)
-    .lte('delivered_at', end);
+    .lt('delivered_at', end);
   const rows = (deliveredRows ?? []) as ReconciliationRow[];
   const expected = rows.reduce((s, r) => s + Math.round(Number(r.total_price) * 100), 0);
   const collected = rows.reduce((s, r) => s + Number(r.cash_collected_cents ?? 0), 0);

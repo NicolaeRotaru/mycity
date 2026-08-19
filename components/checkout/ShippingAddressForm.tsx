@@ -59,8 +59,22 @@ export function ShippingAddressForm({
   onSubmit,
   onApplySavedAddress,
 }: Props) {
-  // UI-only: il form manuale è aperto di default solo senza indirizzi salvati.
-  const [editing, setEditing] = useState(savedAddresses.length === 0);
+  // 121 — `useState(savedAddresses.length === 0)` cristallizzava la decisione al
+  // primo render, quando gli indirizzi salvati sono ancora in caricamento e
+  // quindi zero: il form restava aperto anche per chi ne aveva tre. Chi ha già
+  // un indirizzo si trovava una lista da compilare invece delle sue mattonelle.
+  // La verità va derivata dai dati, non fotografata una volta sola.
+  const [manualOpen, setManualOpen] = useState(false);
+  // 127 — E se il form e' nascosto ma HA errori? Prima restava nascosto, e il
+  // checkout provava a portare il fuoco su un campo invisibile: il fuoco non ci
+  // va, la pagina non scorre, e il pulsante «Conferma ordine» non faceva
+  // NIENTE — senza un messaggio, senza un motivo, senza una via d'uscita. Chi
+  // aveva un indirizzo salvato col telefono mancante restava fermo li'.
+  // Un modulo con errori si mostra sempre: e' la sola cosa che permette di
+  // correggerli.
+  const conErrori = Object.values(errors).some(Boolean);
+  const editing = manualOpen || conErrori || savedAddresses.length === 0;
+  const setEditing = setManualOpen;
 
   // Tile attiva = indirizzo salvato i cui campi combaciano col form corrente.
   // Pura derivazione visiva, nessuna logica di stato dell'indirizzo qui.
@@ -88,7 +102,7 @@ export function ShippingAddressForm({
                 type="button"
                 onClick={() => selectTile(a.id)}
                 aria-pressed={active}
-                className={`text-left rounded-xl border-2 p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1 ${
+                className={`text-left rounded-xl border-2 p-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1 ${
                   active
                     ? 'border-primary-500 bg-primary-50'
                     : 'border-cream-300 bg-white hover:border-primary-200'
@@ -109,7 +123,7 @@ export function ShippingAddressForm({
             type="button"
             onClick={() => setEditing((v) => !v)}
             aria-expanded={editing}
-            className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1 ${
+            className={`flex flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed p-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1 ${
               editing
                 ? 'border-primary-400 bg-primary-50 text-primary-700'
                 : 'border-cream-400 text-primary-700 hover:border-primary-300 hover:bg-primary-50/50'
@@ -129,7 +143,14 @@ export function ShippingAddressForm({
 
       {/* Il form resta SEMPRE montato (è il target di submit della OrderSummary);
           su mobile/desktop lo nascondiamo visivamente quando si usa una tile. */}
-      <form onSubmit={onSubmit} className={`space-y-4 ${editing ? '' : 'hidden'}`} id="checkout-form">
+      {/* 105 — `noValidate`: i campi indirizzo/città/CAP sono `required`, e il
+          browser li pretendeva anche con «Ritiro in negozio» attivo — dove
+          l'indirizzo non serve. Peggio: il form è nascosto quando si usa una
+          mattonella salvata, e il browser non può portare il fuoco su un campo
+          invisibile, quindi il pulsante «Conferma ordine» non faceva NIENTE e
+          non diceva perché. La validazione vera è `validateAddress()`, che il
+          ritiro lo conosce. */}
+      <form onSubmit={onSubmit} noValidate className={`space-y-4 ${editing ? '' : 'hidden'}`} id="checkout-form">
         <Input
           label="Nome e cognome"
           name="fullName"

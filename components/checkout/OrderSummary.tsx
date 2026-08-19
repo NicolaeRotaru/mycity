@@ -91,8 +91,11 @@ export function OrderSummary({
         type="submit"
         form="checkout-form"
         disabled={isCheckingOut || disabled}
-        aria-label={paymentMethod === 'card' ? 'Paga con carta e conferma ordine' : 'Conferma ordine'}
-        className="w-full bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-4 font-extrabold text-base transition-colors shadow-warm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-inset"
+        // 147 — L'`aria-label` sovrascriveva il testo visibile, che contiene
+        // l'importo: chi usa un lettore di schermo sentiva «Conferma ordine» e
+        // premeva senza sapere quanto stava pagando. Il testo visibile è già il
+        // nome migliore.
+        className="w-full bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-4 font-extrabold text-base transition-colors shadow-warm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-inset"
       >
         {isCheckingOut ? (
           paymentMethod === 'card' ? 'Apertura pagamento sicuro…' : 'Elaborazione…'

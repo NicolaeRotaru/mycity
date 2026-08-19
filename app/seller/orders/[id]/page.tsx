@@ -103,7 +103,7 @@ function RejectDialog({
             rows={3}
             autoFocus
             placeholder="Es. prodotto esaurito, fuori zona di consegna…"
-            className="mt-1.5 w-full resize-none rounded-xl border border-cream-300 px-3 py-2.5 text-sm text-ink-900 focus:border-primary-300 focus:outline-none"
+            className="mt-1.5 w-full resize-none rounded-xl border border-cream-300 px-3 py-2.5 text-sm text-ink-900 focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none"
           />
         </div>
         <div className="grid grid-cols-2 gap-3 px-6 pb-6 pt-4">

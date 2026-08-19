@@ -93,7 +93,11 @@ export function getAnthropic(): Anthropic {
   if (_client) return _client;
   const apiKey = env.anthropicKey();
   if (!apiKey) throw new AiConfigError();
-  _client = new Anthropic({ apiKey });
+  // 180 — Senza tetto di tempo, l'SDK aspetta fino a dieci minuti e ritenta due
+  // volte: mezz'ora appesa su una singola richiesta, con la connessione del
+  // negoziante bloccata e la rotta serverless che paga il tempo. Un minuto è più
+  // di quanto serva a qualunque risposta utile.
+  _client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   return _client;
 }
 

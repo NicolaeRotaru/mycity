@@ -84,7 +84,7 @@ export default function AuditLogPage() {
         <select
           value={filterAction}
           onChange={(e) => setFilterAction(e.target.value)}
-          className="bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+          className="bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
         >
           <option value="">Tutte le azioni</option>
           {Object.entries(ACTION_LABEL).map(([k, v]) => (

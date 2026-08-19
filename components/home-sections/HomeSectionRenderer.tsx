@@ -117,7 +117,7 @@ function HomeBlock({
                     ctaId="hero_secondary"
                     location="hero"
                     variant={heroVariant}
-                    className="inline-flex items-center justify-center gap-2 bg-white border border-cream-300 hover:bg-cream-50 text-ink-900 px-5 py-3 text-base min-h-[48px] rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
+                    className="inline-flex items-center justify-center gap-2 bg-white border border-cream-300 hover:bg-cream-50 text-ink-900 px-5 py-3 text-base min-h-[48px] rounded-full font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
                   >
                     <Store size={18} strokeWidth={2.4} />
                     Esplora i negozi
@@ -448,7 +448,7 @@ function HomeBlock({
       const isFile = c.provider === 'file';
       if (isFile ? !c.videoUrl : !c.videoId) return null;
       const embedSrc = c.provider === 'vimeo'
-        ? `https://player.vimeo.com/video/${c.videoId}`
+        ? `https://player.vimeo.com/video/${c.videoId}?dnt=1`
         : `https://www.youtube-nocookie.com/embed/${c.videoId}`;
       return (
         <section className="container mx-auto px-4 sm:px-6 py-5">

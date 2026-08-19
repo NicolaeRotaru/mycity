@@ -121,7 +121,7 @@ export function CartUpsell({ items }: Props) {
                     type="button"
                     onClick={() => handleAdd(p)}
                     aria-label={`Aggiungi ${p.name} al carrello`}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-1"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1"
                   >
                     <Plus size={16} strokeWidth={2.6} aria-hidden />
                   </button>

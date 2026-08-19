@@ -100,7 +100,11 @@ const AttributesFields = ({
             }}
             onBlur={() => addAxisValue(f.key, drafts[f.key] ?? '')}
             placeholder={vals.length === 0 ? `Aggiungi ${f.label.toLowerCase()} (es. S, M, L)…` : 'Aggiungi…'}
-            className="min-w-[8rem] flex-1 border-0 p-1 text-sm focus:outline-none focus:ring-0"
+            aria-label={`Aggiungi ${f.label}`}
+            // 152 — `focus:ring-0` toglieva l'anello di fuoco senza metterne un
+            // altro: chi naviga da tastiera non vedeva più dove si trovava.
+            // Togliere l'indicatore è consentito solo se se ne mette uno visibile.
+            className="min-w-[8rem] flex-1 border-0 p-1 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-inset"
           />
         </div>
         {remainingOptions.length > 0 && (
@@ -133,7 +137,7 @@ const AttributesFields = ({
           value={(value as string) ?? ''}
           onChange={(e) => onChange(f.key, e.target.value)}
           placeholder={f.placeholder}
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
+          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700"
         />
       );
     }
@@ -145,7 +149,7 @@ const AttributesFields = ({
           value={(value as number | string) ?? ''}
           onChange={(e) => onChange(f.key, e.target.value === '' ? undefined : Number(e.target.value))}
           placeholder={f.placeholder}
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
+          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700"
         />
       );
     }
@@ -155,7 +159,7 @@ const AttributesFields = ({
           id={id}
           value={(value as string) ?? ''}
           onChange={(e) => onChange(f.key, e.target.value || undefined)}
-          className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary-400"
+          className="w-full border p-2 rounded bg-white focus:outline-none focus:ring-2 focus:ring-primary-700"
         >
           <option value="">—</option>
           {f.options?.map((opt) => (
@@ -171,7 +175,7 @@ const AttributesFields = ({
           type="date"
           value={(value as string) ?? ''}
           onChange={(e) => onChange(f.key, e.target.value || undefined)}
-          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
+          className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700"
         />
       );
     }
@@ -183,7 +187,7 @@ const AttributesFields = ({
         value={(value as string) ?? ''}
         onChange={(e) => onChange(f.key, e.target.value)}
         placeholder={f.placeholder}
-        className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-400"
+        className="w-full border p-2 rounded focus:outline-none focus:ring-2 focus:ring-primary-700"
       />
     );
   };
@@ -212,7 +216,7 @@ const AttributesFields = ({
                   type="checkbox"
                   checked={Boolean(values[f.key])}
                   onChange={(e) => onChange(f.key, e.target.checked)}
-                  className="w-4 h-4 text-primary-700 rounded focus:ring-primary-400"
+                  className="w-4 h-4 text-primary-700 rounded focus:ring-primary-700"
                 />
                 <label htmlFor={id} className="text-sm text-ink-700">{f.label}</label>
               </div>

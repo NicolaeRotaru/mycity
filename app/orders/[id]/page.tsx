@@ -28,6 +28,7 @@ import { Card } from '@/components/ui/Card';
 import { ContactSheet, type ContactTarget } from '@/components/orders/ContactSheet';
 import { friendlyError } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { trackOrderCanceled } from '@/lib/analytics/events';
 import {
   Package, CheckCircle2, Star, Repeat, Undo2, AlertTriangle,
@@ -97,7 +98,11 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
     `)
     .eq('id', id)
     .single();
-  if (error) return null;
+  // 110 — Prima qui c'era `if (error) return null`: un errore di rete o un
+  // database lento diventavano «Ordine non trovato», cioè un messaggio che dice
+  // alla persona una cosa falsa e senza rimedio. Non trovato e non raggiungibile
+  // sono due cose diverse: la prima non ha ritentativo, la seconda sì.
+  if (error) throw error;
   return data as unknown as OrderRow;
 };
 
@@ -115,7 +120,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const router = useRouter();
   const qc = useQueryClient();
 
-  const { data: order, isLoading, refetch } = useQuery({
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.orders.detail(id),
     queryFn: () => fetchOrder(id),
   });
@@ -186,6 +191,18 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   });
 
   if (isLoading) return <LoadingState />;
+  // 110 — Errore di rete: si dice cos'è successo e si offre di riprovare.
+  if (isError) {
+    return (
+      <div className="container mx-auto py-12 max-w-2xl">
+        <ErrorState
+          title="Non riesco a caricare l'ordine"
+          description="Sembra un problema di collegamento. L'ordine c'è: riprova."
+          retry={() => { void refetch(); }}
+        />
+      </div>
+    );
+  }
   if (!order || !status) return <div className="container mx-auto py-12 max-w-2xl"><EmptyState icon={Package} title="Ordine non trovato" description="L'ordine non esiste o non hai i permessi per vederlo." ctaLabel="Tutti gli ordini" ctaHref="/orders" /></div>;
 
   const points: MapPoint[] = [];

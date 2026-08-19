@@ -17,9 +17,23 @@ import { env } from '@/lib/env';
 export type AmbitoDisiscrizione = 'newsletter' | 'marketing';
 
 function segreto(): string {
-  // In produzione la variabile c'è; in sviluppo si usa un valore fisso così i
-  // link restano stabili tra riavvii.
-  return process.env.UNSUBSCRIBE_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? 'mycity-dev';
+  const dedicato = process.env.UNSUBSCRIBE_SECRET;
+  if (dedicato) return dedicato;
+
+  // 081 — Prima qui si ripiegava sulla chiave di servizio di Supabase, e in
+  // ultima istanza sulla stringa 'mycity-dev' scritta nel codice. Due guai in
+  // uno: chi conosceva quella stringa poteva firmarsi da solo un link valido e
+  // disiscrivere chiunque, e la chiave che scavalca ogni regola del database
+  // diventava materiale crittografico presente in ogni email spedita.
+  // In produzione, senza segreto dedicato, i link non si firmano: si dice e si
+  // ripara. Fuori dalla produzione resta il valore fisso, cosi' i link restano
+  // stabili fra un riavvio e l'altro.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'UNSUBSCRIBE_SECRET non configurata: senza segreto dedicato i link di disiscrizione non si firmano.',
+    );
+  }
+  return 'mycity-dev';
 }
 
 export function firmaDisiscrizione(email: string, ambito: AmbitoDisiscrizione): string {

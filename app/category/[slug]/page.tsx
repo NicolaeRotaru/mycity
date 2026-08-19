@@ -145,7 +145,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortOption)}
-            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="w-full bg-cream-50 border border-cream-300 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           >
             <option value="relevance">{t('sort.relevance')}</option>
             <option value="newest">{t('sort.newest')}</option>
@@ -400,12 +400,13 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
         </div>
       )}
 
-      {/* Risultati */}
-      <main className="md:col-span-3 space-y-4">
+      {/* Risultati — 148: era un secondo <main> annidato nel <main> del layout. */}
+      <section aria-label="Risultati" className="md:col-span-3 space-y-4">
         {/* Riga conteggio */}
-        {resultCount !== null && (
-          <p className="text-sm text-ink-500">{t('countLine', { count: resultCount })}</p>
-        )}
+        {/* 144 — vedi la pagina di ricerca: il conteggio si annuncia da solo. */}
+        <p role="status" aria-live="polite" className="text-sm text-ink-500">
+          {resultCount !== null ? t('countLine', { count: resultCount }) : ''}
+        </p>
 
         {/* Chip dei filtri attivi (rimovibili) */}
         {chips.length > 0 && (
@@ -463,7 +464,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
             </div>
           }
         />
-      </main>
+      </section>
     </div>
   );
 }

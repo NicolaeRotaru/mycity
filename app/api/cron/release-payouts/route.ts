@@ -61,6 +61,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .eq('payment_method', 'card')
     .eq('delivery_status', 'DELIVERED')
     .or(PAYOUT_DISPUTE_FILTER)
+    // 050 / 173 — Il reclamo interno ha ora una colonna sua, separata dal
+    // chargeback bancario. Un reclamo interno perso trattiene il pagamento
+    // senza toccare il flag della banca.
+    .or('internal_dispute_status.is.null,internal_dispute_status.eq.RESOLVED')
     .lte('delivered_at', cutoffIso)
     .limit(BATCH_LIMIT);
 
@@ -95,8 +99,13 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     }
     try {
       const res = await releaseOrderPayout(id);
-      if (res.ok) released++;
-      else if (res.code === 'SELLER_NOT_READY' || res.code === 'BAD_STATE') skipped++;
+      // 046 — Un ordine rimborsato per intero prima del pagamento non produce
+      // nessun trasferimento: è saltato, non rilasciato. Contarlo come
+      // «pagato» avrebbe mentito nel rendiconto del cron.
+      if (res.ok) {
+        if ('code' in res) skipped++;
+        else released++;
+      } else if (res.code === 'SELLER_NOT_READY' || res.code === 'BAD_STATE') skipped++;
       else failed++;
     } catch (e) {
       logger.error('[cron] release-payouts order failed', { id, e });

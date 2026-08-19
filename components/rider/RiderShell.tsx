@@ -79,7 +79,7 @@ export default function RiderShell({
                   <Link
                     href={tab.href}
                     aria-current={on ? 'page' : undefined}
-                    className={`relative flex flex-col items-center justify-center gap-0.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 ${
+                    className={`relative flex flex-col items-center justify-center gap-0.5 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 ${
                       on ? 'text-primary-700' : 'text-ink-400 hover:text-ink-700'
                     }`}
                   >

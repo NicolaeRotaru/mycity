@@ -13,6 +13,14 @@ import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
+import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
+
+// 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
+// tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
+// — la forma che il codice del browser si aspetta e che il file delle
+// risposte dichiara «mai inconsistente». Sulle due rotte dei soldi il
+// cliente vedeva «Qualcosa non ha funzionato» al posto di «il negozio e'
+// chiuso»: il messaggio giusto c'era, e si perdeva nella forma sbagliata.
 
 export const runtime = 'nodejs';
 
@@ -144,12 +152,7 @@ export const POST = withAuthRateLimit(
     if (!body.pickupInStore) {
       for (const s of sellers ?? []) {
         if (isStoreClosedForOrder(s.store_hours)) {
-          return NextResponse.json(
-            {
-              error: `${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`,
-            },
-            { status: 409 },
-          );
+          return ApiErrors.conflict(`${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`);
         }
       }
     }
@@ -185,18 +188,12 @@ export const POST = withAuthRateLimit(
             return ApiErrors.invalidRequest(`Variante non valida per ${p.name}.`);
           }
           if (v.stock < it.quantity) {
-            return NextResponse.json(
-              { error: `Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.` },
-              { status: 409 },
-            );
+            return ApiErrors.conflict(`Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.`);
           }
           variantId = v.id;
           variantLabel = v.label;
         } else if (typeof p.stock === 'number' && p.stock < it.quantity) {
-          return NextResponse.json(
-            { error: `Stock insufficiente per ${p.name} (${p.stock} disponibili).` },
-            { status: 409 },
-          );
+          return ApiErrors.conflict(`Stock insufficiente per ${p.name} (${p.stock} disponibili).`);
         }
         const unitCents = discountedUnitCents(p.price, discountMap.get(p.id) ?? 0);
         items.push({ productId: p.id, quantity: it.quantity, unitCents, variantId, variantLabel });
@@ -253,6 +250,23 @@ export const POST = withAuthRateLimit(
       ? Math.round(grandSubtotalCents * (PICKUP_DISCOUNT_PERCENT / 100))
       : 0;
 
+    // 058 / 165 — LA STESSA MATEMATICA DELLA CARTA, NON UNA SUA IMITAZIONE.
+    //
+    // Qui lo sconto veniva spalmato sui negozi con `Math.round(sconto * quota)`
+    // fatto una volta per gruppo, e senza nessun tetto complessivo. Due guai:
+    //  · gli arrotondamenti indipendenti non tornano — un buono da 10,01 € su
+    //    tre negozi diventava 10,00 o 10,02, e i totali per negozio non
+    //    quadravano con quello che il cliente paga in contanti al fattorino;
+    //  · senza tetto, uno sconto piu' grande del carrello produceva un ordine
+    //    con totale negativo, cioe' un negozio che paga il cliente.
+    // La rotta della carta ha gia' risolto tutte e due le cose con due funzioni
+    // scritte e provate. Non serviva una seconda versione: serviva usarle.
+    const grandShippingCents = shippingPerGroupCents.reduce((s, x) => s + x, 0);
+    const tettoScontoCents = Math.max(0, grandSubtotalCents + grandShippingCents - 1);
+    const scontiLimitati = riduciAlTetto(couponDiscountCents, pickupDiscountCents, tettoScontoCents);
+    const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotalPerGroupCents);
+    const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotalPerGroupCents);
+
     // --- 5. Inserisci N ordini (uno per gruppo) con il client admin.
     const createdOrderIds: string[] = [];
     const reservedStockPerGroup: Array<Array<{ product_id: string; variant_id: string | null; qty: number }>> = [];
@@ -282,9 +296,8 @@ export const POST = withAuthRateLimit(
       const g = body.groups[i];
       const subtotal = subtotalPerGroupCents[i];
       const shipping = shippingPerGroupCents[i];
-      const portion = grandSubtotalCents > 0 ? subtotal / grandSubtotalCents : 0;
-      const couponPortionCents = Math.round(couponDiscountCents * portion);
-      const pickupPortionCents = Math.round(pickupDiscountCents * portion);
+      const couponPortionCents = quoteCoupon[i];
+      const pickupPortionCents = quoteRitiro[i];
       const discountCents = couponPortionCents + pickupPortionCents;
       // Fee di consegna piattaforma (€3): solo per consegna a domicilio, mai per
       // ritiro in negozio. Il cliente la paga in contanti insieme all'ordine.
@@ -310,10 +323,7 @@ export const POST = withAuthRateLimit(
         // scalata. Le altre due uscite di errore, poche righe sotto, lo
         // facevano: mancava solo questa.
         await rollbackCreatedCodOrders();
-        return NextResponse.json(
-          { error: 'Alcuni articoli non sono più disponibili nelle quantità richieste.' },
-          { status: 409 },
-        );
+        return ApiErrors.conflict('Alcuni articoli non sono più disponibili nelle quantità richieste.');
       }
 
       // Credito MyCity (opt-in): addebito atomico fino a coprire il totale del

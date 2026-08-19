@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Cookie } from 'lucide-react';
+import { Cookie, X } from 'lucide-react';
 import {
   readConsent,
   writeConsent,
@@ -16,12 +16,19 @@ import {
  *  - "Accetta tutto" e "Rifiuta tutto" di PARI peso visivo (no dark pattern);
  *    "Personalizza" come azione secondaria
  *  - X / chiusura senza scelta = rifiuto totale (no scrolling = consenso)
+ *
+ * 082 — Questa riga descriveva una X che nel codice non c'era: si usciva dal
+ * banner solo con Esc, che nessuno sa. Senza via d'uscita visibile la pressione
+ * a premere «Accetta» solo per togliersi il banner e' esattamente il
+ * condizionamento che le linee guida vietano. Ora la X c'e', e rifiuta.
  *  - Le categorie sono opt-in disattive di default (tranne necessary)
  *  - Re-prompt automatico ogni 6 mesi (CONSENT_MAX_AGE_DAYS)
  *  - Link a /cookies (informativa estesa)
  */
 export default function CookieBanner() {
   const [show, setShow] = useState(false);
+  const titoloRef = useRef<HTMLHeadingElement>(null);
+  const contenitoreRef = useRef<HTMLDivElement>(null);
   const [mode, setMode] = useState<'compact' | 'custom'>('compact');
   const [draft, setDraft] = useState<Partial<ConsentState>>({
     functional: false,
@@ -51,19 +58,33 @@ export default function CookieBanner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [show]);
 
+  // 146 — Il banner compare in fondo al documento: chi naviga da tastiera lo
+  // raggiungeva per ultimo, dopo tutta la pagina, e nel frattempo copriva gli
+  // elementi che stava mettendo a fuoco. Ora il fuoco ci arriva subito e la
+  // pagina lascia spazio in fondo mentre il banner è visibile.
+  useEffect(() => {
+    if (!show) return;
+    titoloRef.current?.focus();
+    const altezza = contenitoreRef.current?.offsetHeight ?? 0;
+    const precedente = document.documentElement.style.scrollPaddingBottom;
+    document.documentElement.style.scrollPaddingBottom = `${altezza + 16}px`;
+    return () => { document.documentElement.style.scrollPaddingBottom = precedente; };
+  }, [show]);
+
   if (!show) return null;
 
   const close = () => setShow(false);
 
   return (
     <div
+      ref={contenitoreRef}
       role="dialog"
       aria-labelledby="cookie-banner-title"
       aria-describedby="cookie-banner-desc"
       className="fixed inset-x-0 bottom-[var(--tabbar-height)] md:bottom-0 z-[100] p-3 sm:p-4"
     >
-      <div className="mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-cream-300">
-        <h2 id="cookie-banner-title" className="flex items-center gap-2 text-base font-semibold text-ink-900">
+      <div className="relative mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-cream-300">
+        <h2 id="cookie-banner-title" ref={titoloRef} tabIndex={-1} className="flex items-center gap-2 text-base font-semibold text-ink-900 focus:outline-none">
           <Cookie size={18} strokeWidth={2.2} aria-hidden /> Cookie e tecnologie simili
         </h2>
         <p id="cookie-banner-desc" className="mt-1 text-sm text-ink-600">
@@ -98,6 +119,15 @@ export default function CookieBanner() {
             />
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={() => { rejectAll(); close(); }}
+          aria-label="Chiudi e rifiuta i cookie non necessari"
+          className="absolute right-3 top-3 rounded-md p-1.5 text-ink-500 hover:bg-cream-100 hover:text-ink-900 focus-visible:ring-2 focus-visible:ring-primary-700"
+        >
+          <X size={18} strokeWidth={2.2} aria-hidden />
+        </button>
 
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <button

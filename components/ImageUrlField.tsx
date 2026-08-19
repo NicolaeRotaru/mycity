@@ -101,7 +101,7 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="oppure incolla un URL https://…"
-          className="w-full bg-cream-50 border border-cream-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-400"
+          className="w-full bg-cream-50 border border-cream-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
         />
       </div>
 
