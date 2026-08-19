@@ -563,9 +563,20 @@ export default function CheckoutPage() {
     setErrors(fieldErrors);
     const firstInvalid = (['fullName', 'address', 'city', 'zip', 'phone'] as const).find((k) => fieldErrors[k]);
     if (firstInvalid) {
-      const el = document.querySelector<HTMLElement>(`[name="${firstInvalid}"]`);
-      el?.focus();
-      el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      // 127 — Il fuoco si cercava nello stesso giro in cui si scrivevano gli
+      // errori: il form era ancora nascosto e `focus()` non attaccava su niente.
+      // Un fotogramma di attesa e il campo esiste, e' visibile, e ci si puo'
+      // andare. E se per qualunque motivo non ci fosse, si dice comunque cosa
+      // manca, invece di lasciare la persona davanti a un pulsante muto.
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[name="${firstInvalid}"]`);
+        if (el) {
+          el.focus();
+          el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } else {
+          toast.error(fieldErrors[firstInvalid] ?? 'Controlla i dati di consegna');
+        }
+      });
       return;
     }
     if (stockIssues.length > 0) {

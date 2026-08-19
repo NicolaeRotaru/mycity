@@ -13,6 +13,13 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
+import { apiErrorMessage } from '@/lib/errors';
+// 184 — `json.error` funziona solo se il server risponde `{error:'testo'}`.
+// Le rotte rispondono `{ok:false, error:{code,message}}`: `json.error` era
+// un oggetto, quindi falso-y mai e stringa mai, e finiva sempre nel
+// messaggio di riserva. Su tre schermate che portano soldi la persona
+// leggeva «Errore nel pagamento» invece del motivo vero — che il server
+// aveva scritto e mandato. `apiErrorMessage` legge tutte e due le forme.
 
 const PER_WEEK_EUR = 4.99;
 const DURATIONS = [1, 2, 4]; // settimane
@@ -84,7 +91,7 @@ export default function SellerPromotePage() {
         body: JSON.stringify({ productId: selected, weeks }),
       });
       const json = await res.json();
-      if (!res.ok || !json.url) throw new Error(json.error || 'Errore nel pagamento');
+      if (!res.ok || !json.url) throw new Error(apiErrorMessage(json, 'Errore nel pagamento'));
       window.location.href = json.url as string;
     } catch (e) {
       toast.error(friendlyError(e));

@@ -65,7 +65,15 @@ export function ShippingAddressForm({
   // un indirizzo si trovava una lista da compilare invece delle sue mattonelle.
   // La verità va derivata dai dati, non fotografata una volta sola.
   const [manualOpen, setManualOpen] = useState(false);
-  const editing = manualOpen || savedAddresses.length === 0;
+  // 127 — E se il form e' nascosto ma HA errori? Prima restava nascosto, e il
+  // checkout provava a portare il fuoco su un campo invisibile: il fuoco non ci
+  // va, la pagina non scorre, e il pulsante «Conferma ordine» non faceva
+  // NIENTE — senza un messaggio, senza un motivo, senza una via d'uscita. Chi
+  // aveva un indirizzo salvato col telefono mancante restava fermo li'.
+  // Un modulo con errori si mostra sempre: e' la sola cosa che permette di
+  // correggerli.
+  const conErrori = Object.values(errors).some(Boolean);
+  const editing = manualOpen || conErrori || savedAddresses.length === 0;
   const setEditing = setManualOpen;
 
   // Tile attiva = indirizzo salvato i cui campi combaciano col form corrente.

@@ -14,6 +14,13 @@ import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 
+// 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
+// tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
+// — la forma che il codice del browser si aspetta e che il file delle
+// risposte dichiara «mai inconsistente». Sulle due rotte dei soldi il
+// cliente vedeva «Qualcosa non ha funzionato» al posto di «il negozio e'
+// chiuso»: il messaggio giusto c'era, e si perdeva nella forma sbagliata.
+
 export const runtime = 'nodejs';
 
 const ItemSchema = z.object({
@@ -154,12 +161,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   if (!body.pickupInStore) {
     for (const s of sellers ?? []) {
       if (isStoreClosedForOrder((s as { store_hours?: unknown }).store_hours)) {
-        return NextResponse.json(
-          {
-            error: `${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`,
-          },
-          { status: 409 },
-        );
+        return ApiErrors.conflict(`${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`);
       }
     }
   }
@@ -209,18 +211,12 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
           return ApiErrors.invalidRequest(`Variante non valida per ${p.name}.`);
         }
         if (v.stock < it.quantity) {
-          return NextResponse.json(
-            { error: `Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.` },
-            { status: 409 },
-          );
+          return ApiErrors.conflict(`Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.`);
         }
         variantId = v.id;
         variantLabel = v.label;
       } else if (typeof p.stock === 'number' && p.stock < it.quantity) {
-        return NextResponse.json(
-          { error: `Stock insufficiente per ${p.name} (${p.stock} disponibili).` },
-          { status: 409 },
-        );
+        return ApiErrors.conflict(`Stock insufficiente per ${p.name} (${p.stock} disponibili).`);
       }
 
       const unitCents = discountedUnitCents(p.price, discountMap.get(p.id) ?? 0);
@@ -379,10 +375,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
   if (reserveErr) {
     logger.warn('[stripe] reserve_stock fallita', { message: reserveErr.message });
-    return NextResponse.json(
-      { error: 'Alcuni articoli non sono più disponibili nelle quantità richieste.' },
-      { status: 409 },
-    );
+    return ApiErrors.conflict('Alcuni articoli non sono più disponibili nelle quantità richieste.');
   }
 
   // --- 5. Inserisci pending_checkout (record-of-intent) PRIMA della session Stripe.
