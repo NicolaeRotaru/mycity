@@ -53,6 +53,29 @@ import { trackReviewSubmitted } from '@/lib/analytics/events';
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
 const ALLERGEN_ACCORDION_KEYS = ['allergeni', 'ingredienti', 'conservazione', 'valori_nutrizionali'];
 
+/** La scheda prodotto come la usa questa pagina (#97: colonne per nome). */
+type SchedaProdotto = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | string;
+  images: string[] | null;
+  seller_id: string;
+  status: string | null;
+  created_at: string | null;
+  category_id: string | null;
+  stock: number | null;
+  attributes: Record<string, unknown> | null;
+  unit: string | null;
+  compare_at_price: number | string | null;
+  condition: string | null;
+  express_enabled: boolean | null;
+  has_variants: boolean | null;
+  external_source_url: string | null;
+  categories: { slug: string | null; name: string | null } | null;
+  profiles: { id: string; store_name: string | null; is_approved: boolean | null; offers_express: boolean | null } | null;
+};
+
 export default function ProductPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
   const { id } = params;
@@ -99,14 +122,28 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
   const [reviewsOnlyPhoto, setReviewsOnlyPhoto] = useState(false);
 
-  const { data: product, isLoading, isError, refetch } = useQuery({
+  const { data: product, isLoading, isError, refetch } = useQuery<SchedaProdotto>({
     queryKey: queryKeys.products.detail(id),
     queryFn: async () => {
+      // #97 — Le colonne per nome, non `*`.
+      //
+      // Con `*` arrivava al browser anche `search_tsv`: l'indice di ricerca del
+      // prodotto, cioe' tutte le parole della scheda ripetute in forma
+      // compressa, che nessuno mostra e nessuno usa. Su una scheda con una
+      // descrizione lunga sono decine di chilobyte per ogni apertura, pagati da
+      // chi guarda il prodotto dal telefono. Arrivavano anche i campi di
+      // sincronizzazione con i marketplace esterni, che qui non servono.
       const { data, error } = await supabase.from('products').select(`
-        *, categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express )
+        id, name, description, price, images, seller_id, status, created_at, category_id,
+        stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
+        external_source_url,
+        categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express )
       `).eq('id', id).single();
       if (error) throw error;
-      return data;
+      // Il collegamento a categoria e negozio e' uno a uno: PostgREST lo
+      // restituisce come oggetto, ma con le colonne elencate per nome i tipi
+      // generati lo descrivono come elenco. Si dichiara la forma vera.
+      return data as unknown as SchedaProdotto;
     },
   });
 
@@ -433,7 +470,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       />
       <Breadcrumb className="mb-4" items={[
         { label: 'Home', href: '/' },
-        ...(product.categories ? [{ label: product.categories.name, href: `/category/${product.categories.slug}` }] : []),
+        ...(product.categories?.name && product.categories?.slug
+          ? [{ label: product.categories.name, href: `/category/${product.categories.slug}` }]
+          : []),
         { label: product.name },
       ]} />
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import { useUtente } from '@/components/hooks/useUtente';
 
 type Item = {
   viewed_at: string;
@@ -33,11 +34,8 @@ type Props = {
  * prodotti visti.
  */
 export default function RecentlyViewed({ excludeId, className = '' }: Props) {
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-  }, []);
+  // #88 — Dalla cache condivisa, non da una chiamata di rete propria.
+  const { userId } = useUtente();
 
   const { data: items = [] } = useQuery({
     queryKey: queryKeys.home.recentlyViewed(userId ?? ''),

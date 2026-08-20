@@ -25,7 +25,20 @@ export default function SellerProfilePage() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { data, error } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      // #97 — Le colonne per nome. Con `*` il browser del negoziante riceveva
+      // anche i campi che non mostra: identificativi Stripe, dati di
+      // verifica dell'identita', tracce amministrative. Meno dati escono, meno
+      // dati si possono perdere.
+      const { data, error } = await supabase
+        .from('profiles')
+        .select(`
+          id, role, full_name, email_marketing, store_name, store_logo, store_address,
+          store_lat, store_lng, store_phone, store_hours, store_description, store_media,
+          store_customization, store_site, offers_express, founded_year, is_approved,
+          approval_status, subscription_status, created_at
+        `)
+        .eq('id', user.id)
+        .single();
       if (error) throw error;
       return data;
     },

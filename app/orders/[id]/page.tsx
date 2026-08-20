@@ -3,6 +3,7 @@
 import { useEffect, useState, use } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
@@ -36,6 +37,8 @@ import {
   LifeBuoy, MessageCircle, ArrowLeft, ShoppingBag,
 } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+// #92 — le miniature si chiedono gia' piccole al server
+import { sizedImage } from '@/lib/image-url';
 
 type OrderRow = {
   id: string;
@@ -566,8 +569,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                   <div key={it.id} className="flex items-center gap-2.5 py-2">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-cream-100">
                       {img ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        (<img src={img} alt="" loading="lazy" className="h-full w-full object-cover" />)
+                        (<Image src={sizedImage(img, 'thumb')} alt="" width={44} height={44} unoptimized className="h-full w-full object-cover" />)
                       ) : <Package size={18} className="text-ink-400" aria-hidden />}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -596,8 +598,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-cream-100">
                 {order.seller?.store_logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  (<img src={order.seller.store_logo} alt="" loading="lazy" className="h-full w-full object-cover" />)
+                  (<Image src={sizedImage(order.seller.store_logo, 'thumb')} alt="" width={40} height={40} unoptimized className="h-full w-full object-cover" />)
                 ) : <Store size={18} className="text-ink-400" aria-hidden />}
               </div>
               <div className="min-w-0 flex-1">

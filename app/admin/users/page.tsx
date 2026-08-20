@@ -107,10 +107,15 @@ function AdminUsersPageInner() {
       };
 
       let base: Profile[];
+      // #90 — Un tetto esplicito: il pannello leggeva TUTTI i profili a ogni
+      // apertura. Cinquecento e' molto piu' di quanti utenti ci siano oggi, e
+      // molto meno del punto in cui la pagina smette di aprirsi.
+      const TETTO_UTENTI = 500;
       const tryFull = await supabase
         .from('profiles')
         .select(fullSelect)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(TETTO_UTENTI);
       if (!tryFull.error) {
         base = (tryFull.data ?? []).map((p: Record<string, unknown>) => ({ ...p, ...emptyAuth })) as Profile[];
       } else {
@@ -118,7 +123,8 @@ function AdminUsersPageInner() {
         const min = await supabase
           .from('profiles')
           .select(minimalSelect)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(TETTO_UTENTI);
         if (min.error) throw min.error;
         base = (min.data ?? []).map((p: Record<string, unknown>) => ({
           ...p,

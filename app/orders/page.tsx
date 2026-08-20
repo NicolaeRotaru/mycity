@@ -8,6 +8,7 @@ import { riordina } from '@/lib/riordino';
 import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
+import Image from 'next/image';
 import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +21,8 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackOrderPlaced } from '@/lib/analytics/events';
+// #92 — le miniature si chiedono gia' piccole al server
+import { sizedImage } from '@/lib/image-url';
 
 type OrderItem = {
   id: string;
@@ -55,7 +58,14 @@ const fetchOrders = async (): Promise<Order[]> => {
       )
     `)
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
+    // finche' gli ordini sono cento non si nota, il giorno che sono
+    // diecimila la pagina non si apre piu' — cioe' proprio quando serve.
+    // Il tetto e' dichiarato qui e mostrato a chi guarda, invece di essere
+    // il limite implicito di mille righe di PostgREST, che taglia in
+    // silenzio e fa sembrare veri dei numeri che non lo sono.
+    .order('created_at', { ascending: false })
+      .limit(100);
 
   if (error) throw error;
   return (data ?? []) as unknown as Order[];
@@ -288,8 +298,7 @@ export default function OrdersPage() {
               <div className="flex items-center gap-4 min-w-0 flex-1">
                 <div className="w-12 h-12 rounded-full bg-cream-100 shrink-0 overflow-hidden flex items-center justify-center text-xl">
                   {order.seller?.store_logo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={order.seller.store_logo} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    <Image src={sizedImage(order.seller.store_logo, 'thumb')} alt="" width={40} height={40} unoptimized className="w-full h-full object-cover" />
                   ) : <Store size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="min-w-0">
@@ -318,8 +327,7 @@ export default function OrdersPage() {
                       >
                         <div className="h-12 w-12 overflow-hidden rounded-lg bg-cream-100 flex items-center justify-center">
                           {img ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={img} alt="" loading="lazy" className="h-full w-full object-cover" />
+                            <Image src={sizedImage(img, 'thumb')} alt="" width={48} height={48} unoptimized className="h-full w-full object-cover" />
                           ) : <Package size={18} className="text-ink-400" aria-hidden />}
                         </div>
                         <span className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-ink-900 px-1 text-[10px] font-bold text-white">

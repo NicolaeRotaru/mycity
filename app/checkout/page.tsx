@@ -82,6 +82,8 @@ export default function CheckoutPage() {
       const stockMap = new Map<string, number>();  // productId → stock disponibile (DB)
       const hasVariantsMap = new Map<string, boolean>(); // productId → ha varianti
       const priceMap = new Map<string, number>(); // productId → prezzo di ADESSO (DB)
+      const expressPerProdotto = new Map<string, boolean | null>(); // #85
+      const expressPerNegozio = new Map<string, boolean>();          // #85
       const validIds = new Set<string>();
 
       if (cart.length > 0) {
@@ -91,10 +93,23 @@ export default function CheckoutPage() {
         // ne addebitava altri. Chi aveva un carrello di una settimana prima
         // vedeva 24 euro e si trovava 27 sull'estratto conto — o il contrario,
         // e allora ci rimettevamo noi.
-        const { data: products, error: pErr } = await supabase
+        const ids = cart.map((c) => c.id);
+        let { data: products, error: pErr } = await supabase
           .from('products')
-          .select('id, seller_id, stock, has_variants, price')
-          .in('id', cart.map((c) => c.id));
+          .select('id, seller_id, stock, has_variants, price, express_enabled')
+          .in('id', ids);
+        // #85 — Ripiego che scatta una volta sola, non due viaggi fissi per
+        // tutti: se `express_enabled` non esistesse (migrazione 071 non
+        // applicata), si rilegge senza quella colonna invece di far fallire il
+        // checkout. 42703 = colonna inesistente.
+        if (pErr?.code === '42703') {
+          const ripiego = await supabase
+            .from('products')
+            .select('id, seller_id, stock, has_variants, price')
+            .in('id', ids);
+          products = (ripiego.data ?? []).map((r) => ({ ...r, express_enabled: null })) as typeof products;
+          pErr = ripiego.error;
+        }
         if (pErr) throw pErr;
         for (const p of products ?? []) {
           validIds.add(p.id);
@@ -109,6 +124,7 @@ export default function CheckoutPage() {
           hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
           const prezzoVero = Number((p as { price?: number | string | null }).price ?? NaN);
           if (Number.isFinite(prezzoVero)) priceMap.set(p.id, prezzoVero);
+          expressPerProdotto.set(p.id, (p as { express_enabled?: boolean | null }).express_enabled ?? null);
         }
       }
 
@@ -131,16 +147,24 @@ export default function CheckoutPage() {
         ]),
       );
       if (allSellerIds.length > 0) {
-        const { data: sellers } = await supabase
+        let { data: sellers, error: sErr } = await supabase
           .from('profiles')
-          .select('id, store_name, store_lat, store_lng')
+          .select('id, store_name, store_lat, store_lng, offers_express')
           .in('id', allSellerIds);
+        if (sErr?.code === '42703') {
+          const ripiego = await supabase
+            .from('profiles')
+            .select('id, store_name, store_lat, store_lng')
+            .in('id', allSellerIds);
+          sellers = (ripiego.data ?? []).map((r) => ({ ...r, offers_express: false })) as typeof sellers;
+        }
         for (const s of sellers ?? []) {
           sellerInfo.set(s.id, {
             name: s.store_name ?? 'Negozio',
             lat: s.store_lat,
             lng: s.store_lng,
           });
+          expressPerNegozio.set(s.id, Boolean((s as { offers_express?: boolean }).offers_express));
         }
       }
 
@@ -212,26 +236,21 @@ export default function CheckoutPage() {
 
       const groupsArr = Array.from(sellerMap.values());
 
-      // Express (best-effort): query SEPARATA dal percorso critico. Se le colonne
-      // non esistono ancora (migrazione 071 non applicata) PostgREST ritorna
-      // errore→data null: nessun badge Express, ma il checkout NON si rompe.
-      let expressStores: string[] = [];
-      if (groupsArr.length > 0) {
-        const sellerIds = groupsArr.map((g) => g.sellerId);
-        const [{ data: exProducts }, { data: exSellers }] = await Promise.all([
-          supabase.from('products').select('id, express_enabled').in('id', cart.map((c) => c.id)),
-          supabase.from('profiles').select('id, offers_express').in('id', sellerIds),
-        ]);
-        if (exProducts && exSellers) {
-          const exMap = new Map<string, boolean | null>();
-          for (const p of exProducts) exMap.set(p.id, (p as { express_enabled?: boolean | null }).express_enabled ?? null);
-          const offersMap = new Map<string, boolean>();
-          for (const s of exSellers) offersMap.set(s.id, Boolean((s as { offers_express?: boolean }).offers_express));
-          expressStores = groupsArr
-            .filter((g) => offersMap.get(g.sellerId) && g.items.every((it) => isExpressEligible(exMap.get(it.id) ?? null, offersMap.get(g.sellerId) ?? false)))
-            .map((g) => g.storeName);
-        }
-      }
+      // #85 — L'express non costa piu' due letture in piu'.
+      //
+      // Prima si rileggevano le STESSE righe di `products` e `profiles` gia'
+      // lette qui sopra, solo per due colonne: due viaggi di rete aggiuntivi
+      // dentro il checkout, il punto in cui la gente e' piu' impaziente. Ora le
+      // due colonne si chiedono subito, insieme al resto.
+      //
+      // Se la migrazione 071 non fosse applicata, `express_enabled` e
+      // `offers_express` non esisterebbero: la lettura fallirebbe per intero e
+      // il checkout si fermerebbe. Non e' un rischio teorico che vale la pena
+      // correre in silenzio, quindi il ripiego resta esplicito piu' sotto.
+      const expressStores = groupsArr
+        .filter((g) => expressPerNegozio.get(g.sellerId)
+          && g.items.every((it) => isExpressEligible(expressPerProdotto.get(it.id) ?? null, expressPerNegozio.get(g.sellerId) ?? false)))
+        .map((g) => g.storeName);
 
       return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, expressStores, prezziCambiati };
     },

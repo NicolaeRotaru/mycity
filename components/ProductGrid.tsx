@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowRight, RotateCcw, SearchX } from 'lucide-react';
@@ -71,13 +71,26 @@ interface Props {
 }
 
 const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+  /**
+   * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
+   *
+   * Chi cercava una parola comune («pane», «vino») vedeva novantasei schede e
+   * poi il vuoto: non «fine dei risultati», ma la fine di quello che era stato
+   * scaricato. I prodotti dal novantasettesimo in poi non esistevano per
+   * nessuno — nemmeno per il negoziante che li aveva pubblicati.
+   *
+   * Ora c'e' «Carica altri»: ogni pressione allarga la finestra.
+   */
+  const [pagine, setPagine] = useState(1);
+  useEffect(() => { setPagine(1); }, [categoryId, sellerId, search, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort]);
+
   const { data: products = [], isLoading, isError, refetch } = useQuery({
-    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
+    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: (limit ?? 96) * pagine, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
     queryFn: async () => {
       let q = supabase
         .from('products')
         .select(`
-          id, name, description, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id
+          id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id
         `)
         .eq('status', 'available');
 
@@ -98,7 +111,21 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       }
       if (maxPrice !== undefined) q = q.lte('price', maxPrice);
       if (minPrice !== undefined) q = q.gte('price', minPrice);
-      q = q.limit(limit ?? 96);
+      // #91 — «Solo disponibili» lo decide il database. Prima si scaricavano
+      // anche gli esauriti e si buttavano via nel browser: righe pagate due
+      // volte (rete e memoria) e, soprattutto, righe che rubavano posto dentro
+      // il tetto — cosi' l'elenco filtrato usciva corto.
+      // Attenzione: `stock` a NULL vuol dire disponibilita' illimitata.
+      if (onlyInStock) q = q.or('stock.is.null,stock.gt.0');
+      // #91 e #127 — I filtri che restano nel browser (negozio aperto adesso,
+      // valutazione minima, in promozione) tagliano DOPO. Se si chiedessero al
+      // database solo 96 righe, quei filtri lavorerebbero su un campione e
+      // l'elenco uscirebbe corto e sbagliato — non «pochi risultati», ma
+      // risultati mancanti senza che nessuno lo dica. Finche' quei tre filtri
+      // non vivono in una funzione SQL, si chiede un margine.
+      const filtriNelBrowser = onlyOpenStores || onlyPromo || (minRating !== undefined && minRating > 0);
+      const tetto = (limit ?? 96) * pagine;
+      q = q.limit(filtriNelBrowser ? Math.min(tetto * 4, 400) : tetto);
       const { data, error } = await q;
       if (error) throw error;
       const rows = data ?? [];
@@ -113,7 +140,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   // Carica rating aggregato per i prodotti visibili (per filtro/ordinamento per rating)
   type Prod = {
-    id: string; name: string; description: string | null; price: string | number;
+    id: string; name: string; price: string | number;
     compare_at_price: string | number | null;
     images: string[] | null; stock: number | null; has_variants?: boolean | null; created_at: string;
     seller_id: string | null; category_id: string | null;
@@ -217,6 +244,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       });
     }
     if (onlyInStock) {
+      // Ridondante ma innocuo: il filtro vero ora e' nella query (#91).
       arr = arr.filter((p) => p.stock == null || p.stock > 0);
     }
     if (sort === 'rating') {
@@ -362,7 +390,6 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     <ProductCard
       id={p.id}
       name={p.name}
-      description={p.description ?? ''}
       price={Number(p.price)}
       images={Array.isArray(p.images) ? p.images : []}
       stock={p.stock ?? undefined}
@@ -407,12 +434,30 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
       : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
 
+  // Se sono tornate esattamente tante righe quante ne abbiamo chieste, quasi
+  // certamente ce ne sono altre: si offre di caricarle invece di far finire il
+  // catalogo li' in silenzio (#127).
+  const forseCeNeSonoAltri = prods.length >= (limit ?? 96) * pagine;
+
   return (
-    <div className={`grid ${gridCols} gap-4`}>
-      {filtered.map((p, i) => (
-        <div key={p.id}>{renderCard(p, i)}</div>
-      ))}
-    </div>
+    <>
+      <div className={`grid ${gridCols} gap-4`}>
+        {filtered.map((p, i) => (
+          <div key={p.id}>{renderCard(p, i)}</div>
+        ))}
+      </div>
+      {forseCeNeSonoAltri && (
+        <div className="mt-6 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setPagine((n) => n + 1)}
+            className="rounded-full border border-cream-300 bg-white px-6 py-2.5 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700"
+          >
+            Carica altri prodotti
+          </button>
+        </div>
+      )}
+    </>
   );
 };
 
