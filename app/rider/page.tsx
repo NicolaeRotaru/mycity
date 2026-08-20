@@ -215,19 +215,32 @@ export default function RiderDashboardPage() {
 
   const claim = useMutation({
     mutationFn: async (orderId: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
-      // Atomic claim: solo se rider_id e' ancora NULL
-      const { data, error } = await supabase
-        .from('orders')
-        .update({ rider_id: user.id, delivery_status: 'ASSIGNED' })
-        .eq('id', orderId)
-        .is('rider_id', null)
-        .eq('delivery_status', 'READY')
-        .select()
-        .single();
+      /*
+       * La presa passa da `prendi_ordine` (migrazione 123), non piu' da un
+       * UPDATE diretto.
+       *
+       * Perche': la 122 ha stretto la lettura di `orders` a «solo gli ordini
+       * che sono miei», per togliere dalla bacheca nome, telefono e indirizzo
+       * dei clienti. In PostgreSQL pero' anche il WHERE di un UPDATE passa
+       * dalle policy di lettura: su un ordine libero `rider_id` e' vuoto, la
+       * riga non si vede, e l'UPDATE aggiornava zero righe. Il fattorino
+       * vedeva l'ordine sulla bacheca e si sentiva rispondere «gia' preso».
+       *
+       * La funzione gira coi permessi del proprietario, controlla da sola che
+       * sia un fattorino approvato, e resta atomica: chi arriva secondo trova
+       * l'ordine gia' assegnato.
+       */
+      const { data, error } = await supabase.rpc('prendi_ordine', { p_order_id: orderId });
       if (error) throw error;
-      if (!data) throw new Error('Ordine già preso da un altro rider');
+      const esito = data as { ok: boolean; id?: string; motivo?: string } | null;
+      if (!esito?.ok || !esito.id) {
+        throw new Error(
+          esito?.motivo === 'NON_FATTORINO'
+            ? 'Il tuo profilo fattorino non è ancora approvato'
+            : 'Ordine già preso da un altro rider',
+        );
+      }
+      const data2 = { id: esito.id };
 
       // #44 — Qui c'era una chiamata a `notify()` dal browser. Non ha mai
       // funzionato: la tabella delle notifiche non ha nessuna regola che
@@ -235,7 +248,7 @@ export default function RiderDashboardPage() {
       // rifiutava e la funzione si mangiava l'errore. Sembrava fatto e non era
       // fatto. La notifica vera la scrive il trigger sul cambio di stato
       // dell'ordine (migrazione 086), lato server, dove i permessi ci sono.
-      return data;
+      return data2;
     },
     onSuccess: (data) => {
       trackRiderOrderAccepted(data.id);
