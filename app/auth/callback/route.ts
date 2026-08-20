@@ -65,7 +65,11 @@ export async function GET(req: NextRequest) {
     const creato = utente.created_at ? new Date(utente.created_at).getTime() : 0;
     const appenaNato = creato > 0 && Date.now() - creato < 60_000;
     destinazione.searchParams.set('auth', appenaNato ? 'signup' : 'signin');
-    destinazione.searchParams.set('via', 'oauth');
+    // #214 — Il canale vero. Prima qui c'era scritto 'oauth' per tutti, anche
+    // per chi arrivava dal link di conferma di una registrazione con email:
+    // il dato diceva il contrario di quello che era successo.
+    const canale = (utente.app_metadata?.provider as string | undefined) ?? 'email';
+    destinazione.searchParams.set('via', canale);
   }
 
   // Il redirect va ricostruito con la destinazione aggiornata, tenendo i cookie

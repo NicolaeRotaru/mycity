@@ -9,6 +9,7 @@ import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
 import ErrorState from '@/components/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -38,13 +39,17 @@ const fetchStoresData = async () => {
   // 3 query parallele (era 4 — la query di conteggio era ridondante con
   // products). Da products deriviamo display + count + categorie per store.
   const [productsRes, reviewsRes, categoriesRes] = await Promise.all([
-    supabase
-      .from('products')
-      .select('id, name, price, images, seller_id, category_id')
-      .in('seller_id', storeIds)
-      .eq('status', 'available')
-      .order('created_at', { ascending: false })
-      .limit(600),
+    // #93 — blocchi da cento, altrimenti oltre i due-trecento negozi la
+    // richiesta sfonda l'indirizzo e la pagina si svuota in silenzio.
+    leggiInBlocchi<ProductLite>(storeIds, (blocco) =>
+      supabase
+        .from('products')
+        .select('id, name, price, images, seller_id, category_id')
+        .in('seller_id', blocco)
+        .eq('status', 'available')
+        .order('created_at', { ascending: false })
+        .limit(600) as unknown as PromiseLike<{ data: ProductLite[] | null; error: { message?: string } | null }>,
+    ),
     supabase.rpc('store_review_stats', { p_store_ids: storeIds }),
     supabase
       .from('categories')

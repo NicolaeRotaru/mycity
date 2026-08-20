@@ -269,6 +269,12 @@ export const POST = withAuthRateLimit(
 
     // --- 5. Inserisci N ordini (uno per gruppo) con il client admin.
     const createdOrderIds: string[] = [];
+    // #210 e #213 — Il browser non deve piu' indovinare quanto e' stato
+    // ordinato. Qui c'e' l'importo che il cliente pagherà davvero, per ogni
+    // ordine, col negozio vero: sono i numeri che tornano indietro e finiscono
+    // nella misura. Prima ne partiva uno solo, con la stima del browser e la
+    // parola «multi» al posto del negozio.
+    const ordiniCreati: Array<{ id: string; sellerId: string; totalCents: number }> = [];
     const reservedStockPerGroup: Array<Array<{ product_id: string; variant_id: string | null; qty: number }>> = [];
     const walletAppliedPerGroup: number[] = [];
 
@@ -288,6 +294,7 @@ export const POST = withAuthRateLimit(
         }
       }
       createdOrderIds.length = 0;
+      ordiniCreati.length = 0;
       reservedStockPerGroup.length = 0;
       walletAppliedPerGroup.length = 0;
     };
@@ -500,11 +507,12 @@ export const POST = withAuthRateLimit(
       }
 
       createdOrderIds.push(order.id);
+      ordiniCreati.push({ id: order.id, sellerId: g.sellerId, totalCents });
     }
 
     // NB: il coupon è già stato claimato atomicamente sopra (claim_coupon, fix #36).
     // Non chiamiamo più increment_coupon_usage qui.
 
-    return NextResponse.json({ orderIds: createdOrderIds }, { status: 200 });
+    return NextResponse.json({ orderIds: createdOrderIds, ordini: ordiniCreati }, { status: 200 });
   },
 );

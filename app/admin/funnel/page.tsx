@@ -6,6 +6,7 @@ import { TrendingUp, Users, ShoppingCart, Package, UserX, type LucideIcon } from
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 /**
@@ -51,23 +52,32 @@ export default function AdminFunnelPage() {
       inizioCoorti.setHours(0, 0, 0, 0);
       const daQuando = new Date(since) < inizioCoorti ? since : inizioCoorti.toISOString();
 
-      const { data: signupsList } = await supabase
+      // #217 — L'errore non si butta piu': un cruscotto che dice zero perche'
+      // la lettura e' fallita e' peggio di un cruscotto in errore, perche' chi
+      // guarda ci crede e decide su quello.
+      const { data: signupsList, error: erroreIscritti } = await supabase
         .from('profiles')
         .select('id, created_at')
         .eq('role', 'buyer')
         .gte('created_at', daQuando);
+      if (erroreIscritti) throw erroreIscritti;
 
       type Signup = { id: string; created_at: string };
       const userIds = ((signupsList ?? []) as Signup[]).map((u) => u.id);
 
       // Orders di questi utenti
-      const { data: orders } = userIds.length > 0
-        ? await supabase
-            .from('orders')
-            .select('user_id, created_at, delivery_status')
-            .in('user_id', userIds)
-            .neq('delivery_status', 'CANCELED')
-        : { data: [] as Array<{ user_id: string; created_at: string; delivery_status: string }> };
+      // #93 — gli identificativi degli iscritti passavano tutti nell'indirizzo
+      // della richiesta: sopra i due-trecento la richiesta viene rifiutata e il
+      // cruscotto mostrerebbe zero ordini. Blocchi da cento.
+      type RigaOrdine = { user_id: string; created_at: string; delivery_status: string };
+      const { data: orders, error: erroreOrdini } = await leggiInBlocchi<RigaOrdine>(userIds, (blocco) =>
+        supabase
+          .from('orders')
+          .select('user_id, created_at, delivery_status')
+          .in('user_id', blocco)
+          .neq('delivery_status', 'CANCELED') as unknown as PromiseLike<{ data: RigaOrdine[] | null; error: { message?: string } | null }>,
+      );
+      if (erroreOrdini) throw erroreOrdini;
 
       const orderMap = new Map<string, Date[]>();
       for (const o of (orders ?? [])) {

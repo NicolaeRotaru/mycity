@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { trackReferralSent } from '@/lib/analytics/events';
 
 export default function ReferralPage() {
   const [copied, setCopied] = useState(false);
@@ -56,6 +57,10 @@ export default function ReferralPage() {
 
   const copy = async () => {
     await navigator.clipboard.writeText(inviteLink);
+    // #224 — L'invito partito non si contava da nessuna parte: si vedevano gli
+    // iscritti col codice, mai quanti inviti erano stati mandati. Senza il
+    // numero di partenza il tasso di conversione dell'invito non esiste.
+    void trackReferralSent('copy_link');
     setCopied(true);
     toast.success('Link copiato!');
     setTimeout(() => setCopied(false), 2000);
@@ -106,6 +111,7 @@ export default function ReferralPage() {
             href={`https://wa.me/?text=${encodeURIComponent(shareText)}`}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => void trackReferralSent('whatsapp')}
             className="inline-flex items-center justify-center gap-2 bg-olive-500 hover:bg-olive-600 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
           >
             <MessageCircle size={16} className="text-white" aria-hidden />
@@ -113,6 +119,7 @@ export default function ReferralPage() {
           </a>
           <a
             href={`mailto:?subject=${encodeURIComponent('Iscriviti a MyCity Piacenza')}&body=${encodeURIComponent(shareText)}`}
+            onClick={() => void trackReferralSent('email')}
             className="inline-flex items-center justify-center gap-2 bg-ink-700 hover:bg-ink-800 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
           >
             <Mail size={16} className="text-white" aria-hidden />

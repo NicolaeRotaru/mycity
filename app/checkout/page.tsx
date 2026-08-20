@@ -50,10 +50,21 @@ export default function CheckoutPage() {
   useEffect(() => {
     const c = getCart();
     setCart(c);
-    if (c.length > 0) {
-      const totalCents = Math.round(c.reduce((s, i) => s + i.price * i.quantity, 0) * 100);
-      trackCheckoutStarted(totalCents, c.reduce((s, i) => s + i.quantity, 0));
-    }
+    if (c.length === 0) return;
+    const totalCents = Math.round(c.reduce((s, i) => s + i.price * i.quantity, 0) * 100);
+    // #225 — L'avvio del checkout si contava a ogni ingresso nella pagina,
+    // mentre l'acquisto aveva l'anti-doppione. Chi torna indietro a correggere
+    // l'indirizzo e rientra contava due volte: il tasso di conversione da
+    // «checkout iniziato» ad «acquisto» usciva piu' basso del vero, e nessuno
+    // sapeva di quanto. La chiave e' legata al contenuto del carrello: un
+    // carrello diverso e' un checkout diverso e va contato.
+    const impronta = `${c.map((i) => `${i.id}:${i.variantId ?? ''}:${i.quantity}`).join('|')}#${totalCents}`;
+    const chiave = `mc_checkout_started_${impronta}`;
+    try {
+      if (sessionStorage.getItem(chiave)) return;
+      sessionStorage.setItem(chiave, '1');
+    } catch { /* sessionStorage non disponibile: si conta comunque */ }
+    trackCheckoutStarted(totalCents, c.reduce((s, i) => s + i.quantity, 0));
   }, []);
 
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
@@ -434,18 +445,25 @@ export default function CheckoutPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
       const createdOrders: string[] = (body as { orderIds?: string[] }).orderIds ?? [];
-      // Misura: una conversione = un purchase col totale reale del checkout.
-      // Multi-seller crea N ordini ma con un solo flusso di pagamento: per non
-      // gonfiare il fatturato in GA4 emettiamo un order_placed aggregato sul
-      // primo orderId (transaction_id), seller 'multi' se più negozi.
-      if (createdOrders.length > 0) {
-        trackOrderPlaced(
-          createdOrders[0],
-          Math.round(grandTotal * 100),
-          'cod',
-          groups.length === 1 ? groups[0].sellerId : 'multi',
-          { coupon: appliedCoupon?.coupon.code },
-        );
+      const ordiniVeri = (body as { ordini?: Array<{ id: string; sellerId: string; totalCents: number }> }).ordini ?? [];
+      // #210 e #213 — Prima partiva UN evento solo, con due difetti dentro.
+      //
+      // Il primo: l'importo era `grandTotal`, cioe' la stima del browser prima
+      // del credito MyCity. Il cliente pagava 22 euro e nella misura ne
+      // risultavano 40. Ora l'importo e' quello che risponde il server, ordine
+      // per ordine: e' l'unico che sa quanto e' stato davvero addebitato.
+      //
+      // Il secondo: un carrello con due negozi crea due ordini, ma l'evento era
+      // uno e il venditore diventava la parola «multi». Il fatturato per negozio
+      // non esisteva, e il conto degli acquisti non tornava mai con la tabella
+      // degli ordini. Ora un evento per ordine, col negozio vero, e il
+      // `checkout_id` comune per riconoscere che vengono dallo stesso carrello.
+      const carrelloId = createdOrders[0] ?? null;
+      for (const o of ordiniVeri) {
+        trackOrderPlaced(o.id, o.totalCents, 'cod', o.sellerId, {
+          coupon: appliedCoupon?.coupon.code,
+          checkoutId: carrelloId,
+        });
       }
       return createdOrders;
     },
@@ -526,10 +544,12 @@ export default function CheckoutPage() {
       // al rientro su /orders?stripe=success: lì gli ordini sono già creati dal
       // webhook ma il client non ne conosce i totali, quindi li portiamo da qui.
       try {
+        // #210 — Qui resta solo il codice sconto, che il rientro non puo'
+        // ricavare dalla riga ordine. L'importo e il negozio NON si portano
+        // piu' dal browser: al rientro si leggono da `orders`, dove il webhook
+        // Stripe ha scritto quello che e' stato davvero incassato.
         sessionStorage.setItem('mc_pending_purchase', JSON.stringify({
-          valueCents: Math.round(grandTotal * 100),
           coupon: appliedCoupon?.coupon.code ?? null,
-          sellerId: groups.length === 1 ? groups[0].sellerId : 'multi',
         }));
       } catch { /* noop */ }
       // Redirect alla pagina Stripe Hosted Checkout. Il rientro avviene

@@ -7,7 +7,6 @@ import { ShoppingCart, Store, Bike, Gift, Mail, User, ArrowRight, type LucideIco
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Turnstile from '@/components/Turnstile';
-import { trackSignupCompleted } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, PasswordInput, Checkbox } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
@@ -87,7 +86,11 @@ function SignUpInner() {
         });
       }
 
-      if (data.user?.id) trackSignupCompleted(data.user.id, role);
+      // #214 — Qui l'evento NON si emette piu'. Chi compila il modulo non e'
+      // ancora iscritto: deve confermare l'email. Contandolo qui, la stessa
+      // persona finiva contata due volte (qui e al rientro dal link) e chi non
+      // confermava mai risultava iscritto lo stesso. La sorgente unica e' il
+      // rientro da /auth/callback, dove l'iscrizione e' un fatto.
       toast.success('Registrazione completata! Controlla la tua email per confermare.');
       router.push('/auth/verify-email');
     } catch (error) {

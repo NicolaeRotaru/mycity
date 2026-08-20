@@ -46,6 +46,7 @@ import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { SocialProof } from '@/components/ui/SocialProof';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { trackReviewSubmitted } from '@/lib/analytics/events';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -161,6 +162,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       // è eseguibile solo da service_role.
     },
     onSuccess: () => {
+      // #224 — La recensione era nel catalogo eventi e non la emetteva
+      // nessuno. Si contava quante ne arrivavano guardando la tabella, mai
+      // dentro il funnel: non si poteva legare «ha recensito» a «ha ricomprato».
+      void trackReviewSubmitted(id, reviewRating, reviewPhotos.length > 0);
       qc.invalidateQueries({ queryKey: queryKeys.reviews.detail(id) });
       setReviewComment('');
       setReviewRating(5);

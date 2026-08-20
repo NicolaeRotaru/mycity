@@ -79,41 +79,47 @@ function StripeReturnHandler() {
       // gli ordini dopo 2s e 5s per non mostrare "nessun ordine" al rientro (fix #22).
       const t1 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 2000);
       const t2 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 5000);
-      // Funnel: emette `purchase` (GA4) + `order_placed` una sola volta per
-      // sessione Stripe. session_id = transaction_id (dedup lato GA4); il valore
-      // arriva dallo stash creato prima del redirect (mc_pending_purchase).
+      // Funnel: `purchase` (GA4) + `order_placed`, uno per ordine creato.
+      //
+      // #210 — L'importo non arriva piu' dallo stash del browser (era la stima
+      // fatta PRIMA di pagare) ma da `orders.total_price`, cioe' la riga che il
+      // webhook Stripe ha scritto dopo l'incasso: l'unico numero autorevole.
+      //
+      // #213 — Un carrello con due negozi crea due ordini: ora sono due eventi
+      // col negozio vero, non uno solo col venditore chiamato «multi».
+      //
+      // #209 (in parte) — Il segno «gia' contato» si scriveva PRIMA che la
+      // lettura degli ordini finisse: se la pagina si ricaricava in quel mezzo
+      // secondo l'acquisto risultava tracciato senza esserlo mai stato. Ora si
+      // scrive dopo, e solo se qualcosa e' stato davvero emesso.
       const sessionId = searchParams.get('session_id') ?? '';
       const dedupKey = `mc_purchase_tracked_${sessionId}`;
       try {
         if (sessionId && !sessionStorage.getItem(dedupKey)) {
           const raw = sessionStorage.getItem('mc_pending_purchase');
-          const p = raw ? (JSON.parse(raw) as { valueCents?: number; coupon?: string | null; sellerId?: string }) : null;
-          if (p?.valueCents) {
-            // Recupera l'UUID reale dell'ordine creato dal webhook Stripe.
-            // Il webhook può arrivare leggermente dopo il redirect del buyer:
-            // se non trovato ora usiamo sessionId come fallback (dedup GA4 garantito).
-            void Promise.resolve(
-              supabase
-                .from('orders')
-                .select('id')
-                .eq('stripe_session_id', sessionId)
-                .maybeSingle(),
-            )
-              .then(({ data }) => {
-                trackOrderPlaced(
-                  data?.id ?? sessionId,
-                  p.valueCents!,
-                  'card',
-                  p.sellerId ?? 'multi',
-                  { coupon: p.coupon ?? undefined },
-                );
-              })
-              .catch(() => {
-                trackOrderPlaced(sessionId, p.valueCents!, 'card', p.sellerId ?? 'multi', { coupon: p.coupon ?? undefined });
-              });
-          }
-          sessionStorage.setItem(dedupKey, '1');
-          sessionStorage.removeItem('mc_pending_purchase');
+          const stash = raw ? (JSON.parse(raw) as { coupon?: string | null }) : null;
+          void Promise.resolve(
+            supabase
+              .from('orders')
+              .select('id, total_price, seller_id')
+              .eq('stripe_session_id', sessionId),
+          )
+            .then(({ data }) => {
+              const righe = (data ?? []) as Array<{ id: string; total_price: number | string; seller_id: string }>;
+              if (righe.length === 0) return;
+              const carrelloId = righe[0].id;
+              for (const o of righe) {
+                trackOrderPlaced(o.id, Math.round(Number(o.total_price ?? 0) * 100), 'card', o.seller_id, {
+                  coupon: stash?.coupon ?? undefined,
+                  checkoutId: carrelloId,
+                });
+              }
+              try {
+                sessionStorage.setItem(dedupKey, '1');
+                sessionStorage.removeItem('mc_pending_purchase');
+              } catch { /* noop */ }
+            })
+            .catch(() => { /* niente evento: meglio mancante che sbagliato */ });
         }
       } catch { /* noop */ }
       // Pulisce il param dall'URL senza ricaricare

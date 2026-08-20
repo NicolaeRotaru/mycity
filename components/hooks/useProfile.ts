@@ -32,7 +32,11 @@ export const useProfile = () => {
       setUserId(uid);
       setUserEmail(em);
       setAuthChecked(true);
-      if (uid) { identify(uid, { email: em }); setSentryUser(uid, em ?? undefined); }
+      // #220 — a PostHog va solo l'identificativo. L'email e' un dato personale
+      // e PostHog di norma sta negli Stati Uniti: l'indirizzo non esce di qui.
+      // Sentry resta con l'email perche' li' e' dichiarato e con conservazione
+      // limitata, ed e' il posto dove serve per ricontattare chi ha visto l'errore.
+      if (uid) { identify(uid); setSentryUser(uid, em ?? undefined); }
     });
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       const uid = session?.user?.id ?? null;
@@ -40,7 +44,7 @@ export const useProfile = () => {
       setUserId(uid);
       setUserEmail(em);
       setAuthChecked(true);
-      if (event === 'SIGNED_IN' && uid) { identify(uid, { email: em }); setSentryUser(uid, em ?? undefined); }
+      if (event === 'SIGNED_IN' && uid) { identify(uid); setSentryUser(uid, em ?? undefined); }
       if (event === 'SIGNED_OUT') { resetUser(); }
     });
     return () => sub.subscription.unsubscribe();

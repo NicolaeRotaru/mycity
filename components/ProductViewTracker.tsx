@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { trackProductViewed } from '@/lib/analytics/events';
+import { hasConsent } from '@/lib/consent';
 
 type Props = {
   productId: string;
@@ -41,6 +42,12 @@ function improntaSessione(): string {
 export default function ProductViewTracker({ productId, price, category, sellerId }: Props) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // #228 — Le visite si contavano anche senza consenso, mentre PostHog e il
+    // tracciatore di attivita' lo chiedevano. Tre sistemi, due regole diverse:
+    // la piu' permissiva vinceva senza che nessuno l'avesse deciso. Ora la
+    // regola e' una sola. hasConsent() legge lo stato vivo, quindi il conteggio
+    // riparte da solo appena la persona accetta.
+    if (!hasConsent('analytics')) return;
     const key = `mc_viewed_${productId}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');

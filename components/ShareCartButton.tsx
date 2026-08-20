@@ -5,6 +5,7 @@ import { Share2, Copy, MessageCircle, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import type { CartItem } from '@/lib/cart';
+import { trackShareCart } from '@/lib/analytics/events';
 
 type Props = {
   items: CartItem[];
@@ -40,6 +41,9 @@ export default function ShareCartButton({ items }: Props) {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
+      // #224 — La condivisione della lista era nel catalogo eventi ma non la
+      // emetteva nessuno: tre pulsanti muti.
+      void trackShareCart('copy_link');
       toast.success('Link copiato!');
       setOpen(false);
     } catch {
@@ -67,6 +71,7 @@ export default function ShareCartButton({ items }: Props) {
             href={whatsappUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={() => void trackShareCart('whatsapp')}
             className="w-full inline-flex items-center gap-3 bg-[#25D366] hover:bg-[#1FAD53] text-white px-4 py-3 rounded-lg font-semibold transition-colors"
           >
             <MessageCircle size={18} />
@@ -74,6 +79,7 @@ export default function ShareCartButton({ items }: Props) {
           </a>
           <a
             href={emailUrl}
+            onClick={() => void trackShareCart('email')}
             className="w-full inline-flex items-center gap-3 bg-primary-700 hover:bg-primary-800 text-white px-4 py-3 rounded-lg font-semibold transition-colors"
           >
             <Mail size={18} />

@@ -10,6 +10,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { Button } from '@/components/ui/Button';
 import { ImageUrlField } from '@/components/ImageUrlField';
 import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
+import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
 
 /**
  * Admin: Negozio del mese.
@@ -30,7 +31,8 @@ type LB = { seller_id: string; store_name: string | null; store_logo: string | n
 
 export default function AdminShopOfMonthPage() {
   const qc = useQueryClient();
-  const firstOfMonth = (() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d.toISOString().slice(0,10); })();
+  // #211 — Stessa chiave-mese di chi vota: quella di Piacenza.
+  const firstOfMonth = primoDelMesePiacenza();
 
   const [sellerId, setSellerId] = useState('');
   const [headline, setHeadline] = useState('');

@@ -117,6 +117,14 @@ services:
         sync: false
       - key: NEXT_PUBLIC_POSTHOG_HOST
         value: https://us.i.posthog.com
+      # #212 — Meta' del catalogo eventi faceva anche il giro di Google
+      # Analytics, ma la variabile che accende GA4 non era dichiarata qui:
+      # in produzione valeva vuoto, quindi il componente non caricava nulla e
+      # quegli eventi non arrivavano da nessuna parte. Dichiarata con
+      # sync:false: finche' non le si da' un valore nel pannello di Render,
+      # GA4 resta spento — ma ora e' una scelta scritta, non una dimenticanza.
+      - key: NEXT_PUBLIC_GA_MEASUREMENT_ID
+        sync: false
       - key: NEXT_PUBLIC_SENTRY_DSN
         sync: false
       - key: NEXT_PUBLIC_APP_URL
