@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { openConsentBanner } from '@/components/CookieBanner';
 import { Cookie } from 'lucide-react';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
+import { titolare } from '@/lib/legal/titolare';
 
 const VERSION = '2.0';
 const EFFECTIVE_DATE = '24 maggio 2026';
@@ -17,6 +18,8 @@ const TOC = [
 ];
 
 export default function CookiesPage() {
+  const chiSiamo = titolare();
+
   return (
     <LegalLayout
       title="Cookie policy"
@@ -129,7 +132,8 @@ export default function CookiesPage() {
         <p>
           Aggiorniamo questa policy ogni volta che vengono aggiunti, rimossi o modificati cookie
           o tecnologie di tracciamento. Conserviamo le versioni precedenti su richiesta a{' '}
-          <a href="mailto:dpo@mycity.it" className="text-primary-700 underline">dpo@mycity.it</a>.
+          <a href={`mailto:${chiSiamo.emailPrivacy}`} className="text-primary-700 underline">{chiSiamo.emailPrivacy}</a>
+          {chiSiamo.referentePrivacy ? <> (referente: {chiSiamo.referentePrivacy})</> : null}.
         </p>
         <p className="text-sm">
           Per maggiori informazioni sul trattamento dei tuoi dati consulta l&apos;

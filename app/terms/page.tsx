@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 import { LegalLayout, LegalSection } from '@/components/ui/LegalLayout';
+import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 
 export const metadata = {
   title: 'Termini di servizio · MyCity',
@@ -41,6 +42,9 @@ const TOC = [
 ];
 
 export default function TermsPage() {
+  const chiSiamo = titolare();
+  const identita = rigaIdentita(chiSiamo);
+
   return (
     <LegalLayout
       title="Termini di servizio"
@@ -53,8 +57,8 @@ export default function TermsPage() {
         <p>
           I presenti Termini di Servizio (&quot;<strong>Termini</strong>&quot;) regolano l&apos;utilizzo
           della piattaforma MyCity (il &quot;<strong>Servizio</strong>&quot;), gestita da
-          <strong> MyCity S.r.l.</strong>, con sede in Via Roma 1, 29121 Piacenza (PC), Italia,
-          P.IVA IT00000000000, REA PC-000000, PEC mycity@pec.it (di seguito &quot;MyCity&quot;, &quot;noi&quot;).
+          <strong> {chiSiamo.denominazione}</strong>
+          {identita ? <> — {identita}</> : null} (di seguito &quot;MyCity&quot;, &quot;noi&quot;).
         </p>
         <p>
           <strong>Definizioni:</strong> &quot;<strong>Acquirente</strong>&quot; o &quot;<strong>Utente</strong>&quot;

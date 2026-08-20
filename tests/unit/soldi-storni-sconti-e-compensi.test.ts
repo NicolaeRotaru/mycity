@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { residuoRecuperabile } from '@/lib/stripe/payout';
-import { compensoRiderCents } from '@/lib/shipping';
-import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
+import { compensoRiderCents, shippingCentsFor } from '@/lib/shipping';
+import { COMPENSO_RIDER_CENTS, FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 
 /**
  * Quattro punti in cui i conti non tornavano.
@@ -91,39 +91,78 @@ describe('lo sconto ridotto al massimo consentito', () => {
 });
 
 describe('il compenso del fattorino', () => {
-  // Il compenso si leggeva dal prezzo di spedizione pagato dal cliente, che
-  // sopra la soglia della spedizione gratuita e' zero: su ogni ordine grosso il
-  // fattorino consegnava e non veniva pagato.
-  it('non e zero su un ordine con spedizione gratuita', () => {
-    const compenso = compensoRiderCents({
-      storeLat: 45.05, storeLng: 9.69,      // Piacenza centro
-      deliveryLat: 45.06, deliveryLng: 9.70,
-      pickupInStore: false,
-    });
-    expect(compenso).toBeGreaterThan(0);
-    // A conferma che il caso è proprio quello dell'ordine sopra soglia.
-    expect(FREE_SHIPPING_THRESHOLD).toBeGreaterThan(0);
-  });
+  // STORIA IN DUE ATTI.
+  //
+  // ① Il compenso si leggeva dal prezzo di spedizione pagato dal cliente, che
+  //    sopra la soglia della spedizione gratuita e' zero: su ogni ordine grosso
+  //    il fattorino consegnava e non veniva pagato.
+  // ② Poi e' stato staccato dal prezzo del cliente ma e' rimasto legato alla
+  //    distanza (2,50 + 1,20 al km). Il conto continuava a non tornare: con la
+  //    spedizione gratis l'unica cosa disponibile per pagarlo erano i 3 euro di
+  //    fee di consegna, che bastano solo fino a 420 metri. Oltre, il versamento
+  //    al fattorino chiedeva piu' soldi di quanti ne fossero rimasti
+  //    sull'incasso, quindi falliva e il cron lo ritentava all'infinito.
+  //
+  // Adesso il compenso e' FISSO (Nicola, 20/8/2026). Questi controlli tengono
+  // ferme le due cose che contano: che non sia mai zero, e che i soldi per
+  // pagarlo ci siano SEMPRE.
 
-  it('cresce con la distanza', () => {
-    const vicino = compensoRiderCents({
-      storeLat: 45.05, storeLng: 9.69, deliveryLat: 45.06, deliveryLng: 9.70, pickupInStore: false,
-    });
-    const lontano = compensoRiderCents({
-      storeLat: 45.05, storeLng: 9.69, deliveryLat: 45.20, deliveryLng: 9.90, pickupInStore: false,
-    });
-    expect(lontano).toBeGreaterThan(vicino);
-  });
-
-  it('senza coordinate usa la tariffa fissa, non zero', () => {
-    expect(compensoRiderCents({
-      storeLat: null, storeLng: null, deliveryLat: null, deliveryLng: null, pickupInStore: false,
-    })).toBeGreaterThan(0);
+  it('e sempre la stessa cifra, comunque sia lontana la consegna', () => {
+    expect(compensoRiderCents({ pickupInStore: false })).toBe(COMPENSO_RIDER_CENTS);
+    expect(COMPENSO_RIDER_CENTS).toBeGreaterThan(0);
   });
 
   it('col ritiro in negozio non c e consegna, quindi non c e compenso', () => {
-    expect(compensoRiderCents({
-      storeLat: 45.05, storeLng: 9.69, deliveryLat: 45.06, deliveryLng: 9.70, pickupInStore: true,
-    })).toBe(0);
+    expect(compensoRiderCents({ pickupInStore: true })).toBe(0);
+  });
+
+  // LA PROVA CHE CONTA, ed e' quella che il compenso a distanza faceva fallire.
+  //
+  // Su ogni ordine la piattaforma trattiene la fee di consegna, e il cliente
+  // paga la spedizione (zero sopra la soglia). Da li' esce il compenso del
+  // fattorino. Se quella somma e' minore del compenso, il versamento non ha
+  // abbastanza soldi: e' esattamente il caso «spesa da 30 euro a 5 km», dove
+  // servivano 8,50 euro e ce n'erano 3.
+  it('i soldi per pagarlo ci sono sempre, a qualunque distanza e a qualunque importo', () => {
+    const distanze = [
+      { deliveryLat: 45.05,  deliveryLng: 9.690 },  // stesso isolato
+      { deliveryLat: 45.06,  deliveryLng: 9.700 },  // ~1,3 km
+      { deliveryLat: 45.20,  deliveryLng: 9.900 },  // ~24 km
+    ];
+    const subtotali = [5, 15, 29.99, FREE_SHIPPING_THRESHOLD, 60, 250];
+    const casiScoperti: string[] = [];
+
+    for (const subtotal of subtotali) {
+      for (const dove of distanze) {
+        const spedizione = shippingCentsFor({
+          subtotal,
+          storeLat: 45.05, storeLng: 9.69,
+          ...dove,
+          pickupInStore: false,
+        });
+        const disponibile = spedizione + PLATFORM_DELIVERY_FEE_CENTS;
+        const dovuto = compensoRiderCents({ pickupInStore: false });
+        if (disponibile < dovuto) {
+          casiScoperti.push(
+            `subtotale ${subtotal} euro a ${dove.deliveryLat}: disponibili ${disponibile}, dovuti ${dovuto}`,
+          );
+        }
+      }
+    }
+
+    expect(casiScoperti).toEqual([]);
+  });
+
+  it('sopra la soglia la spedizione e zero, e la fee di consegna copre da sola il compenso', () => {
+    const spedizione = shippingCentsFor({
+      subtotal: FREE_SHIPPING_THRESHOLD + 10,
+      storeLat: 45.05, storeLng: 9.69,
+      deliveryLat: 45.20, deliveryLng: 9.90,   // lontano: col vecchio calcolo erano 8,50 euro
+      pickupInStore: false,
+    });
+    expect(spedizione).toBe(0);
+    expect(PLATFORM_DELIVERY_FEE_CENTS).toBeGreaterThanOrEqual(
+      compensoRiderCents({ pickupInStore: false }),
+    );
   });
 });

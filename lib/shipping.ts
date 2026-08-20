@@ -1,4 +1,4 @@
-import { FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER } from './constants';
+import { COMPENSO_RIDER_CENTS, FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER } from './constants';
 import { haversineKm, riderFee } from './geo';
 
 /**
@@ -45,22 +45,21 @@ export function shippingCentsFor(opts: Parameters<typeof shippingForEuro>[0]): n
  * Le due venivano confuse: il compenso del fattorino si leggeva dal prezzo di
  * spedizione pagato dal cliente, e sopra la soglia della spedizione gratuita
  * quel prezzo è zero. Risultato: su ogni ordine sopra i 30 euro il fattorino
- * consegnava e non veniva pagato. La spedizione gratis è una scelta commerciale
- * della piattaforma, non un lavoro gratis di chi porta il pacco.
+ * consegnava e non veniva pagato.
+ *
+ * Poi il compenso è stato staccato dal prezzo pagato dal cliente, ma è rimasto
+ * legato alla distanza — e il conto continuava a non tornare, perché con la
+ * spedizione gratis l'unica cosa disponibile per pagarlo erano i 3 euro di fee
+ * di consegna: oltre i 420 metri non bastavano più.
+ *
+ * Adesso il compenso è FISSO (Nicola, 20/8/2026). La distanza non c'entra più:
+ * la fee di consegna che la piattaforma trattiene copre il compenso da sola,
+ * su ogni ordine, anche quando il cliente non paga spedizione.
  *
  * Con il ritiro in negozio non c'è consegna, quindi non c'è compenso.
  */
 export function compensoRiderCents(opts: {
-  storeLat: number | null;
-  storeLng: number | null;
-  deliveryLat: number | null;
-  deliveryLng: number | null;
   pickupInStore: boolean;
 }): number {
-  const { storeLat, storeLng, deliveryLat, deliveryLng, pickupInStore } = opts;
-  if (pickupInStore) return 0;
-  if (storeLat && storeLng && deliveryLat && deliveryLng) {
-    return Math.round(riderFee(haversineKm(storeLat, storeLng, deliveryLat, deliveryLng)) * 100);
-  }
-  return Math.round(SHIPPING_PER_ORDER * 100);
+  return opts.pickupInStore ? 0 : COMPENSO_RIDER_CENTS;
 }

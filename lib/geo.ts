@@ -14,7 +14,18 @@ export function haversineKm(
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Stima compenso rider: base + €/km, arrotondato a 0.10
+/**
+ * Prezzo della spedizione a distanza: base + €/km, arrotondato a 0,10.
+ *
+ * ATTENZIONE AL NOME, che e' rimasto quello di prima ed e' fuorviante: questo
+ * NON e' piu' il compenso del fattorino. Il compenso e' fisso
+ * (COMPENSO_RIDER_CENTS in lib/constants) e non dipende dalla distanza.
+ * Qui si calcola solo quanto paga il CLIENTE per la spedizione, sotto la
+ * soglia della spedizione gratuita.
+ *
+ * Le due cose erano la stessa, ed e' li' che stava il guasto: sopra i 30 euro
+ * la spedizione e' zero, quindi il fattorino consegnava e non veniva pagato.
+ */
 export function riderFee(distanceKm: number): number {
   const BASE = 2.5;
   const PER_KM = 1.2;

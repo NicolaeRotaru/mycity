@@ -14,6 +14,7 @@
  */
 
 import { Badge } from '@/components/ui/Badge';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { formatPrice } from '@/lib/format';
 import { Banknote, CreditCard, Info, Store } from 'lucide-react';
 
@@ -106,9 +107,20 @@ export function PaymentMethodSelector({
         </div>
       </label>
 
-      {/* RITIRO IN NEGOZIO — consolidato come terza tile-metodo (stesso stile
-          row delle altre). Lo stato e la matematica dello sconto restano nel
-          parent: qui è solo il controllo + la presentazione. */}
+      {/*
+        RITIRO IN NEGOZIO — MESSO DA PARTE.
+        Nicola, 20/8/2026: «togli il 10% di sconto per ritira in negozio, o
+        mettilo da parte per il momento, perche non ne ho ancora parlato con i
+        negozi di questo». Uno sconto sul prezzo di un negozio non si offre
+        prima di averglielo chiesto.
+        C'era anche un secondo motivo per spegnerlo tutto e non solo lo sconto:
+        un ordine ritirato in negozio non arrivava MAI a «consegnato», perché
+        l'unico modo di chiudere un ordine è il bottone del fattorino — e su un
+        ritiro il fattorino non c'è. Il negoziante consegnava a mano e restava
+        senza incasso, per sempre.
+        Si riaccende con RITIRO_IN_NEGOZIO_ATTIVO in lib/constants.
+      */}
+      {RITIRO_IN_NEGOZIO_ATTIVO && (
       <label
         className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
           pickupInStore ? 'border-olive-400 bg-olive-50' : 'border-cream-300 bg-white hover:border-olive-200'
@@ -139,6 +151,7 @@ export function PaymentMethodSelector({
           </p>
         </div>
       </label>
+      )}
     </div>
   );
 }
