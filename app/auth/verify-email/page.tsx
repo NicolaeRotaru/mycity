@@ -2,12 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { safeInternalPath } from '@/lib/safe-redirect';
 import { Mail } from 'lucide-react';
 import { supabase, auth } from '@/lib/supabase/client';
 import { useTranslations } from 'next-intl';
 
 export default function VerifyEmailPage() {
   const tStates = useTranslations('states');
+  // #112 — Chi si stava registrando dal checkout deve poter tornare al suo
+  // ordine, non alla home. Il percorso arriva dalla registrazione e passa dal
+  // filtro dei percorsi interni: nessun indirizzo esterno.
+  const searchParams = useSearchParams();
+  const returnTo = safeInternalPath(searchParams.get('returnTo') ?? '/', '/');
   const [email, setEmail] = useState<string | null>(null);
   const [verified, setVerified] = useState<boolean>(false);
   const [resending, setResending] = useState(false);
@@ -85,10 +92,10 @@ export default function VerifyEmailPage() {
         {verified && (
           <div className="mt-6">
             <Link
-              href="/"
+              href={returnTo}
               className="block w-full rounded-lg bg-primary-700 px-4 py-2 text-center text-sm font-medium text-white hover:bg-primary-800"
             >
-              Vai alla home
+              {returnTo.startsWith('/checkout') ? 'Torna al tuo ordine' : 'Vai alla home'}
             </Link>
           </div>
         )}

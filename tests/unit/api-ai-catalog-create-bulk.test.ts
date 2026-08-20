@@ -30,6 +30,13 @@ vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: () => ({ from: fromMock }),
 }));
 
+// #197 — Ogni prodotto passa dal filtro dei prodotti vietati prima di entrare
+// nel catalogo. Qui il verdetto e' finto: quello vero costa una chiamata AI.
+const policyMock = vi.fn(async () => ({ allowed: true }) as { allowed: boolean; reason?: string });
+vi.mock('@/lib/ai/moderation', () => ({
+  classifyProductPolicy: (...a: unknown[]) => policyMock(...(a as [])),
+}));
+
 import { POST } from '@/app/api/ai/catalog-create-bulk/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 
@@ -42,7 +49,7 @@ function makeReq(body: unknown): never {
 }
 
 const ITEM = {
-  imageUrls: ['https://x/a.jpg'],
+  imageUrls: ['https://abcdefgh.supabase.co/storage/v1/object/public/products/a.jpg'],
   draft: { name: 'Lampada', category_slug: 'casa', suggested_price: 9.9 },
 };
 
@@ -53,7 +60,7 @@ describe('POST /api/ai/catalog-create-bulk', () => {
     insertMock.mockReturnValue({ select: insertSelectMock });
     insertSelectMock.mockResolvedValue({
       data: [
-        { id: 'p1', name: 'Lampada', price: 9.9, category_id: 'casa-top', images: ['https://x/a.jpg'], tags: [], attributes: {} },
+        { id: 'p1', name: 'Lampada', price: 9.9, category_id: 'casa-top', images: ['https://abcdefgh.supabase.co/storage/v1/object/public/products/a.jpg'], tags: [], attributes: {} },
       ],
       error: null,
     });
@@ -102,5 +109,22 @@ describe('POST /api/ai/catalog-create-bulk', () => {
     }
     const res = await POST(makeReq({ items: [ITEM] }));
     expect(res.status).toBe(429);
+  });
+
+  it('scarta il prodotto vietato e dice perché (#197)', async () => {
+    policyMock.mockResolvedValueOnce({ allowed: false, reason: 'arma da fuoco' });
+    const res = await POST(makeReq({ items: [ITEM] }));
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(JSON.stringify(json)).toContain('arma da fuoco');
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it('scarta le foto ospitate fuori da MyCity (#205)', async () => {
+    const estraneo = { ...ITEM, imageUrls: ['https://sito-di-un-altro.example/foto.jpg'] };
+    const res = await POST(makeReq({ items: [estraneo] }));
+    expect(res.status).toBe(400);
+    expect(policyMock).not.toHaveBeenCalled();
+    expect(insertMock).not.toHaveBeenCalled();
   });
 });

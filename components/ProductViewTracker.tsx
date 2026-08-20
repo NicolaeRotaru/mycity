@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { trackProductViewed } from '@/lib/analytics/events';
+import { hasConsent } from '@/lib/consent';
+import { idUtenteInMemoria } from '@/components/hooks/useUtente';
 
 type Props = {
   productId: string;
@@ -41,13 +43,21 @@ function improntaSessione(): string {
 export default function ProductViewTracker({ productId, price, category, sellerId }: Props) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // #228 — Le visite si contavano anche senza consenso, mentre PostHog e il
+    // tracciatore di attivita' lo chiedevano. Tre sistemi, due regole diverse:
+    // la piu' permissiva vinceva senza che nessuno l'avesse deciso. Ora la
+    // regola e' una sola. hasConsent() legge lo stato vivo, quindi il conteggio
+    // riparte da solo appena la persona accetta.
+    if (!hasConsent('analytics')) return;
     const key = `mc_viewed_${productId}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
     trackProductViewed(productId, { price, category, seller_id: sellerId });
 
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      // #88 — Il token gia' in memoria basta: qui serve solo distinguere una
+      // visita anonima da una con account.
+      const userId = await idUtenteInMemoria();
 
       // 1) product_views (sempre, anche guest)
       // 041 — L'impronta di sessione serve a contare le visite anonime PER
@@ -58,16 +68,16 @@ export default function ProductViewTracker({ productId, price, category, sellerI
       // freno. Chi manda l'impronta ha un conto suo, e nessuno può consumarlo.
       await supabase.from('product_views').insert({
         product_id: productId,
-        user_id: user?.id ?? null,
-        view_fingerprint: user ? null : improntaSessione(),
+        user_id: userId,
+        view_fingerprint: userId ? null : improntaSessione(),
       });
 
       // 2) recently_viewed (solo loggati) — upsert con touch viewed_at
-      if (user) {
+      if (userId) {
         await supabase
           .from('recently_viewed')
           .upsert(
-            { user_id: user.id, product_id: productId, viewed_at: new Date().toISOString() },
+            { user_id: userId, product_id: productId, viewed_at: new Date().toISOString() },
             { onConflict: 'user_id,product_id' },
           );
       }

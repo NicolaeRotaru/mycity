@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { env, requireSupabasePublic } from '@/lib/env';
 import { safeInternalPath } from '@/lib/safe-redirect';
+import { getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
@@ -60,12 +62,53 @@ export async function GET(req: NextRequest) {
   // iscriversi. Il segnale si passa al browser con un parametro, e la pagina di
   // arrivo emette l'evento: qui siamo sul server, dove PostHog non gira.
   const utente = data?.user;
+
+  /**
+   * #79 — Il verbale dell'accettazione, scritto dal server.
+   *
+   * Chi si registra spunta «accetto Termini e Informativa», e finora quella
+   * spunta viveva solo nel browser: nessuna riga da nessuna parte, nessuna
+   * versione del testo. Qui c'e' la sessione vera, quindi l'utente e' quello
+   * che dice di essere: si registra una volta sola, al primo accesso.
+   */
+  if (utente) {
+    const versione = (utente.user_metadata?.versione_testi_accettati as string | undefined) ?? null;
+    if (versione) {
+      try {
+        const admin = getAdminSupabase();
+        const { data: profilo } = await admin
+          .from('profiles')
+          .select('tos_accepted_at')
+          .eq('id', utente.id)
+          .maybeSingle();
+        if (profilo && !profilo.tos_accepted_at) {
+          const adesso = new Date().toISOString();
+          await admin.from('consent_log').insert({
+            user_id: utente.id,
+            categoria: 'privacy_terms',
+            valore: true,
+            versione_testo: versione.slice(0, 60),
+            ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+            user_agent: req.headers.get('user-agent')?.slice(0, 300) ?? null,
+          });
+          await admin.from('profiles').update({ tos_accepted_at: adesso }).eq('id', utente.id);
+        }
+      } catch (e) {
+        logger.warn('[callback] accettazione dei testi non registrata', { e });
+      }
+    }
+  }
+
   const destinazione = new URL(next, env.appUrl());
   if (utente) {
     const creato = utente.created_at ? new Date(utente.created_at).getTime() : 0;
     const appenaNato = creato > 0 && Date.now() - creato < 60_000;
     destinazione.searchParams.set('auth', appenaNato ? 'signup' : 'signin');
-    destinazione.searchParams.set('via', 'oauth');
+    // #214 — Il canale vero. Prima qui c'era scritto 'oauth' per tutti, anche
+    // per chi arrivava dal link di conferma di una registrazione con email:
+    // il dato diceva il contrario di quello che era successo.
+    const canale = (utente.app_metadata?.provider as string | undefined) ?? 'email';
+    destinazione.searchParams.set('via', canale);
   }
 
   // Il redirect va ricostruito con la destinazione aggiornata, tenendo i cookie

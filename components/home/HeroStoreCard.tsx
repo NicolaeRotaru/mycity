@@ -10,6 +10,7 @@ import { formatPrice } from '@/lib/format';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
+import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
 
 type StoreMediaItem = { type: 'image' | 'video'; url: string };
 type Store = {
@@ -42,10 +43,8 @@ export default function HeroStoreCard() {
     queryKey: ['home', 'hero-store'],
     staleTime: 10 * 60 * 1000,
     queryFn: async (): Promise<{ store: Store; products: Prod[]; reviews: Reviews | null } | null> => {
-      const firstOfMonth = new Date();
-      firstOfMonth.setDate(1);
-      firstOfMonth.setHours(0, 0, 0, 0);
-      const monthIso = firstOfMonth.toISOString().slice(0, 10);
+      // #211 — Il mese e' quello di Piacenza, non di Greenwich.
+      const monthIso = primoDelMesePiacenza();
 
       // 1) Negozio del mese (pick admin), se presente — poi vetrina pubblica per i flag trust.
       const { data: som } = await supabase

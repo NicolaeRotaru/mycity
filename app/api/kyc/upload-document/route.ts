@@ -3,6 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { richiestaConTetto } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -36,15 +37,13 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
 
   // caricamento da qualche centinaio di megabyte bastava a far cadere il server.
 
-  const dichiarati = Number(req.headers.get('content-length') ?? '0');
+  // #180 — Il tetto vero, non quello dichiarato da chi chiama. Prima si
+  // guardava l'intestazione `content-length`: bastava ometterla per saltare il
+  // controllo, e il file finiva comunque tutto in memoria.
+  const richiesta = await richiestaConTetto(req, MAX_BYTES + 64 * 1024);
+  if (!richiesta) return ApiErrors.payloadTooLarge('File troppo grande.');
 
-  if (Number.isFinite(dichiarati) && dichiarati > MAX_BYTES + 64 * 1024) {
-
-    return ApiErrors.payloadTooLarge('File troppo grande.');
-
-  }
-
-  const form = await req.formData();
+  const form = await richiesta.formData();
   const file = form.get('file');
   const kindRaw = form.get('kind');
   const kind = typeof kindRaw === 'string' ? kindRaw : '';

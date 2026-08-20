@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { metricheVenditore } from '@/lib/metriche-venditore';
+import { metricheVenditore, ordineContaNelFatturato } from '@/lib/metriche-venditore';
+import { giornoPiacenza, oraPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, TrendingDown, Eye, ShoppingCart, Star, Sparkles, Lightbulb, PackageX, type LucideIcon } from 'lucide-react';
@@ -73,14 +74,23 @@ export default function SellerAnalyticsPage() {
           .in('product_id', productIds),
       ]);
 
+      // #217 — Prima l'errore veniva buttato: se una delle tre letture falliva,
+      // la pagina mostrava zero e sembrava una giornata storta. Uno zero che
+      // vuol dire «non lo so» e' peggio di un errore, perche' il negoziante ci
+      // crede. Ora l'errore risale e react-query mostra lo stato di errore.
+      const erroreLettura = viewsRes.error ?? ordersRes.error ?? reviewsRes.error;
+      if (erroreLettura) throw erroreLettura;
+
       const views = (viewsRes.data ?? []) as Array<{ product_id: string; viewed_at: string }>;
       const orders = (ordersRes.data ?? []) as Array<{ id: string; total_price: number; delivery_status: string; created_at: string }>;
       const reviews = (reviewsRes.data ?? []) as Array<{ product_id: string; rating: number }>;
 
       const views30 = views.length;
       const views7 = views.filter((v) => v.viewed_at >= since7).length;
-      const todayStr = new Date().toISOString().slice(0, 10);
-      const viewsToday = views.filter((v) => v.viewed_at.startsWith(todayStr)).length;
+      // #221 — «Oggi» e' oggi a Piacenza, non a Greenwich: fra mezzanotte e le
+      // due le visite finivano nel giorno prima.
+      const oggi = giornoPiacenza();
+      const viewsToday = views.filter((v) => giornoPiacenza(v.viewed_at) === oggi).length;
 
       const orders30 = orders.length;
       const orders7 = orders.filter((o) => o.created_at >= since7).length;
@@ -114,26 +124,35 @@ export default function SellerAnalyticsPage() {
         .sort((a, b) => a.views - b.views)
         .slice(0, 3) as Array<{ id: string; name?: string; views: number }>;
 
-      // Serie ricavi ultimi 7 giorni (ordini consegnati, dato reale).
-      const dayBuckets: { key: string; label: string; value: number }[] = [];
-      const now = new Date();
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(now);
-        d.setDate(now.getDate() - i);
-        dayBuckets.push({ key: d.toISOString().slice(0, 10), label: DAY_LABELS[d.getDay()], value: 0 });
-      }
+      // Serie ricavi ultimi 7 giorni.
+      //
+      // #218 — Il grafico usava una terza definizione di fatturato, dentro la
+      // stessa pagina che ne mostrava gia' un'altra nelle schede: prendeva il
+      // totale pieno dei soli ordini CONSEGNATI, spedizione e quota di consegna
+      // comprese, cioe' soldi che al negozio non arrivano. La somma delle barre
+      // non tornava mai col numero sopra. Ora barre e schede usano la stessa
+      // definizione: il netto del negozio sugli ordini pagati e non annullati.
+      //
+      // #221 — E le giornate sono quelle di Piacenza.
+      const giorni = ultimiGiorniPiacenza(7);
+      const dayBuckets = giorni.map((key) => ({
+        key,
+        label: DAY_LABELS[new Date(`${key}T12:00:00Z`).getUTCDay()],
+        value: 0,
+      }));
       const dayIndex = new Map(dayBuckets.map((b, i) => [b.key, i]));
       for (const o of orders) {
-        if (o.delivery_status !== 'DELIVERED') continue;
-        const k = o.created_at.slice(0, 10);
-        const i = dayIndex.get(k);
-        if (i != null) dayBuckets[i].value += Number(o.total_price || 0);
+        if (!ordineContaNelFatturato(o as never)) continue;
+        const i = dayIndex.get(giornoPiacenza(o.created_at));
+        if (i != null) dayBuckets[i].value += metricheVenditore([o as never]).tuoNettoCents / 100;
       }
       const revenueSeries = dayBuckets.map((b) => ({ label: b.label, value: b.value }));
 
       // Ore di punta: distribuzione oraria reale degli ordini (30gg).
       const hourCounts = new Array(24).fill(0) as number[];
-      for (const o of orders) hourCounts[new Date(o.created_at).getHours()] += 1;
+      // #221 — L'ora di punta e' l'ora del negozio, non quella del browser di
+      // chi guarda: chi apre la pagina da un fuso diverso vedeva altre fasce.
+      for (const o of orders) hourCounts[oraPiacenza(o.created_at)] += 1;
       const maxHour = Math.max(...hourCounts, 0);
       let peakHours: Array<{ label: string; value: number; pct: number }> = [];
       let peakLabel: string | null = null;

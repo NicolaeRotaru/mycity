@@ -46,11 +46,22 @@ export const CACHE_MULTIPLIER = { write5m: 1.25, read: 0.1 } as const;
  */
 export const USD_EUR = 0.92;
 
+/**
+ * #195 — La ricerca sul web si paga a richiesta, non a token: dieci dollari
+ * ogni mille ricerche (tariffa Anthropic, versionata qui accanto ai prezzi per
+ * milione di token). Non essendo contata, la spesa vera degli endpoint che
+ * cercano — diagnosi, codice a barre, le due chat — risultava piu' bassa del
+ * vero, e il freno di spesa si accendeva troppo tardi.
+ */
+export const USD_PER_WEB_SEARCH = 0.01;
+
 export type AiUsageTokens = {
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number; // cache_creation_input_tokens
   cacheReadTokens: number; // cache_read_input_tokens
+  /** Ricerche web fatte dal modello in questa chiamata (si pagano a richiesta). */
+  webSearchRequests?: number;
 };
 
 /**
@@ -66,7 +77,8 @@ export function estimateCostEur(model: ModelId, usage: AiUsageTokens): number {
     usage.inputTokens * perToken(price.input) +
     usage.outputTokens * perToken(price.output) +
     usage.cacheWriteTokens * perToken(price.input * CACHE_MULTIPLIER.write5m) +
-    usage.cacheReadTokens * perToken(price.input * CACHE_MULTIPLIER.read);
+    usage.cacheReadTokens * perToken(price.input * CACHE_MULTIPLIER.read) +
+    (usage.webSearchRequests ?? 0) * USD_PER_WEB_SEARCH;
   return usd * USD_EUR;
 }
 

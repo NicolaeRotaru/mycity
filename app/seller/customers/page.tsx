@@ -43,7 +43,14 @@ export default function SellerCustomersPage() {
           buyer:profiles!orders_user_id_fkey ( full_name )
         `)
         .eq('seller_id', user.id)
-        .order('created_at', { ascending: false });
+        // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
+        // finche' gli ordini sono cento non si nota, il giorno che sono
+        // diecimila la pagina non si apre piu' — cioe' proprio quando serve.
+        // Il tetto e' dichiarato qui e mostrato a chi guarda, invece di essere
+        // il limite implicito di mille righe di PostgREST, che taglia in
+        // silenzio e fa sembrare veri dei numeri che non lo sono.
+        .order('created_at', { ascending: false })
+          .limit(500);
 
       const byUser = new Map<string, CustomerRow>();
       type OrderRow = { id: string; user_id: string | null; total_price: number; created_at: string; buyer: { full_name: string | null } | null };

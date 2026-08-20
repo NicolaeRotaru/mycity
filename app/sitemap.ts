@@ -1,5 +1,6 @@
 import type { MetadataRoute } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 
 export const revalidate = 3600; // sitemap rigenerato ogni ora
 
@@ -64,21 +65,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ]);
 
   const approvedSellerIds = ((storesRes.data ?? []) as StoreSlug[]).map((s) => s.id);
-  const products =
-    approvedSellerIds.length > 0
-      ? await supabase
-          .from('products')
-          .select('id, created_at, seller_id')
-          .eq('status', 'available')
-          .in('seller_id', approvedSellerIds)
-          .order('created_at', { ascending: false })
-          .limit(5000)
-      : { data: [] as ProductSlug[] };
+  // #93 — Duemila negozi passati tutti nell'indirizzo della richiesta fanno
+  // settantaquattromila caratteri: il server risponde 414 e qui si legge
+  // «nessun prodotto». La sitemap continuerebbe a rispondere, vuota, e Google
+  // smetterebbe di indicizzare il catalogo senza che nessuno se ne accorga.
+  const products = await leggiInBlocchi<ProductSlug>(approvedSellerIds, (blocco) =>
+    supabase
+      .from('products')
+      .select('id, created_at, seller_id')
+      .eq('status', 'available')
+      .in('seller_id', blocco)
+      .order('created_at', { ascending: false })
+      .limit(5000) as unknown as PromiseLike<{ data: ProductSlug[] | null; error: { message?: string } | null }>,
+  );
 
   const stores = storesRes;
   const categories = categoriesRes;
 
   const productEntries: MetadataRoute.Sitemap = ((products.data ?? []) as unknown as ProductSlug[])
+    .sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')))
+    .slice(0, 5000)
     .map((p) => ({
       url: `${APP_URL}/product/${p.id}`,
       lastModified: p.created_at ? new Date(p.created_at) : now,

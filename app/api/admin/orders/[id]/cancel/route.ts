@@ -117,6 +117,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   // Notifica in-app al buyer.
   await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
     user_id: order.user_id,
     title: '✕ Ordine annullato',
     body: refundId ? `${reason} · rimborso emesso` : reason,

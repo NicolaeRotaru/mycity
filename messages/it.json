@@ -82,7 +82,7 @@
     "maxPrice": "Prezzo massimo",
     "minRating": "Rating minimo",
     "ratingAll": "Tutti",
-    "freeShipping": "Spedizione gratuita (≥ €30)",
+    "freeShipping": "Prodotti da 30 € in su",
     "openNow": "Solo negozi aperti ora",
     "promotion": "Solo in promozione",
     "inStock": "Solo disponibili",
@@ -107,7 +107,7 @@
     "filterPriceMin": "Da €{min}",
     "filterCategory": "Categoria: {name}",
     "chip": {
-      "freeShipping": "Spedizione gratuita",
+      "freeShipping": "Da 30 € in su",
       "promotion": "In promozione",
       "inStock": "Disponibili",
       "openNow": "Aperti ora",

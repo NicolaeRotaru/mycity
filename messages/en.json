@@ -82,7 +82,7 @@
     "maxPrice": "Maximum price",
     "minRating": "Minimum rating",
     "ratingAll": "All",
-    "freeShipping": "Free shipping (≥ €30)",
+    "freeShipping": "Products from €30 up",
     "openNow": "Open shops only",
     "promotion": "On promotion only",
     "inStock": "In stock only",
@@ -107,7 +107,7 @@
     "filterPriceMin": "From €{min}",
     "filterCategory": "Category: {name}",
     "chip": {
-      "freeShipping": "Free shipping",
+      "freeShipping": "From €30 up",
       "promotion": "On promotion",
       "inStock": "In stock",
       "openNow": "Open now",

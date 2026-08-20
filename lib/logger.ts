@@ -21,6 +21,15 @@ const PII_KEYS = /^(email|password|pass|token|authorization|auth|cookie|phone|te
 function redact(value: unknown, depth = 0): unknown {
   if (depth > 4 || value == null) return value;
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
+  // #232 — Un Error va trattato per quello che è, PRIMA del ramo «oggetto».
+  // Un Error non ha proprietà enumerabili: Object.entries() su di lui torna
+  // una lista vuota, quindi finiva nel log come `{}`. In settantuno chiamate
+  // su ottantaquattro l'errore era il secondo argomento, quindi nei log
+  // restava la frase («rimborso fallito») e spariva il motivo. Chi apriva il
+  // log dopo un rimborso fallito leggeva: rimborso fallito, {}.
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack };
+  }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
@@ -81,22 +90,46 @@ export const logger = {
     }
   },
 
+  /**
+   * #195 — La spesa. Non e' un messaggio di servizio: e' un numero che deve
+   * restare. Prima usciva con `logger.info`, che in produzione e' spento se
+   * LOG_LEVEL non vale 'info' — e infatti non e' impostato in render.yaml.
+   * Risultato: quanto costa l'AI in produzione non si vedeva da nessuna parte.
+   * Questa esce sempre, come gli avvisi, e resta riconoscibile per grep.
+   */
+  spesa: (msg: string, ctx?: LogContext) => {
+    console.log(line('spesa', msg, ctx));
+  },
+
   warn: (msg: string, ctx?: LogContext) => {
     // Sempre: un avviso in produzione e' esattamente quello che si va a cercare.
     console.warn(line('warn', msg, ctx));
   },
 
   error: (err: unknown, ctx?: LogContext) => {
-    if (eServer || process.env.NODE_ENV !== 'production') {
-      console.error(line('error', err instanceof Error ? err.message : String(err), ctx));
+    // #232 — Gli argomenti invertiti. La firma è `error(errore, contesto)`, ma
+    // in settantuno chiamate su ottantaquattro è scritta al contrario:
+    // `logger.error('rimborso fallito', err)`. Chi la scrive così non sbaglia
+    // per distrazione: è come si scrive in mezzo mondo. Invece di correggere
+    // ottantaquattro punti e sperare che nessuno ne aggiunga un altro, li
+    // rimette in ordine il logger: l'Error va a Sentry, la frase resta come
+    // contesto. Così l'errore vero smette di sparire.
+    let errore = err;
+    let contesto = ctx;
+    if (typeof err === 'string' && ctx instanceof Error) {
+      errore = ctx;
+      contesto = { messaggio: err };
     }
-    const c = toCtx(ctx);
+    if (eServer || process.env.NODE_ENV !== 'production') {
+      console.error(line('error', errore instanceof Error ? errore.message : String(errore), contesto));
+    }
+    const c = toCtx(contesto);
     if (typeof window === 'undefined') {
       // Server (API/cron/webhook): cattura diretta sul SDK server già init'd.
-      void captureServerError(err, c);
+      void captureServerError(errore, c);
     } else {
       // Client: wrapper lazy esistente (init Sentry browser al primo errore).
-      void captureError(err, c);
+      void captureError(errore, c);
     }
   },
 };

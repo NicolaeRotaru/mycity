@@ -6,6 +6,8 @@ import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
+import { recinta, REGOLA_TESTO_DI_TERZI } from '@/lib/ai/recinto';
+import { getAdminSupabase } from '@/lib/supabase/server';
 
 /**
  * Riepilogo recensioni: sintetizza i feedback degli acquirenti (di un prodotto
@@ -24,7 +26,8 @@ const SYSTEM = `Sei un analista per il marketplace "MyCity Piacenza". Ricevi le 
 - "pros": punti di forza ricorrenti (3-6, brevi).
 - "cons": criticità ricorrenti (0-6, brevi); ometti se non ce ne sono.
 - "suggestions": 2-5 azioni concrete per migliorare prodotto/servizio in base ai feedback.
-Non inventare: basati solo sulle recensioni fornite. Se sono poche, dillo. Rispondi sempre e solo chiamando lo strumento "summarize_reviews".`;
+Non inventare: basati solo sulle recensioni fornite. Se sono poche, dillo. Rispondi sempre e solo chiamando lo strumento "summarize_reviews".
+${REGOLA_TESTO_DI_TERZI}`;
 
 const TOOL: Anthropic.Tool = {
   name: 'summarize_reviews',
@@ -41,8 +44,7 @@ const TOOL: Anthropic.Tool = {
   },
 };
 
-type ReviewIn = { rating?: number; text?: string };
-type Body = { reviews?: ReviewIn[]; productName?: string };
+type Body = { productId?: string };
 type SummaryInput = { summary?: string; pros?: string[]; cons?: string[]; suggestions?: string[] };
 
 function cleanList(v: unknown, max = 6): string[] {
@@ -64,19 +66,45 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.invalidRequest('JSON non valido');
   }
 
-  const reviews = (Array.isArray(body.reviews) ? body.reviews : [])
-    .filter((r): r is ReviewIn => !!r && typeof r.text === 'string' && !!r.text.trim())
-    .slice(0, MAX_REVIEWS)
+  // #202 — Le recensioni non arrivano piu' dal client. Prima l'endpoint
+  // sintetizzava qualunque testo gli venisse passato: un venditore poteva
+  // farsi analizzare le recensioni di un concorrente, o del testo inventato, e
+  // ogni chiamata la pagavamo noi. Ora si dichiara QUALE prodotto, si verifica
+  // che sia suo, e le recensioni si leggono dal database.
+  const productId = typeof body.productId === 'string' ? body.productId : '';
+  if (!/^[0-9a-f-]{36}$/i.test(productId)) {
+    return ApiErrors.invalidRequest('Manca il prodotto di cui riassumere le recensioni.');
+  }
+
+  const admin = getAdminSupabase();
+  const { data: prodotto } = await admin
+    .from('products')
+    .select('id, name, seller_id')
+    .eq('id', productId)
+    .single();
+  if (!prodotto) return ApiErrors.notFound('Prodotto non trovato.');
+  if (prodotto.seller_id !== user.id) return ApiErrors.forbidden('Questo prodotto non e\' tuo.');
+
+  const { data: righe } = await admin
+    .from('reviews')
+    .select('rating, comment')
+    .eq('product_id', productId)
+    .order('created_at', { ascending: false })
+    .limit(MAX_REVIEWS);
+
+  // #200 — Ogni recensione dentro il suo recinto: e' testo scritto da terzi.
+  const reviews = ((righe ?? []) as Array<{ rating: number | null; comment: string | null }>)
+    .filter((r) => typeof r.comment === 'string' && r.comment.trim().length > 0)
     .map((r) => {
-      const stars = typeof r.rating === 'number' ? ` (${Math.max(1, Math.min(5, Math.round(r.rating)))}/5)` : '';
-      return `- ${r.text!.trim().slice(0, MAX_LEN)}${stars}`;
+      const stelle = typeof r.rating === 'number' ? ` (${Math.max(1, Math.min(5, Math.round(r.rating)))}/5)` : '';
+      return `${recinta('recensione', r.comment ?? '', MAX_LEN)}${stelle}`;
     });
 
   if (reviews.length === 0) {
     return ApiErrors.invalidRequest('Nessuna recensione da analizzare.');
   }
 
-  const productLine = body.productName ? `Prodotto: ${String(body.productName).slice(0, 120)}\n\n` : '';
+  const productLine = `Prodotto: ${String(prodotto.name ?? '').slice(0, 120)}\n\n`;
   const dataText = `${productLine}Recensioni dei clienti (${reviews.length}):\n${reviews.join('\n')}`;
 
   try {

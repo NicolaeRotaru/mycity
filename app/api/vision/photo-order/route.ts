@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
@@ -58,7 +58,11 @@ type Body = { imageUrls?: string[] };
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
-  const rl = rateLimit({ key: `vision-order:${user.id}`, max: 15, windowMs: 10 * 60_000 });
+  // #203 — Il limitatore condiviso (Upstash quando c'e', memoria locale
+  // altrimenti). Quello vecchio viveva dentro una singola macchina: con due
+  // istanze in produzione il tetto valeva il doppio, e a ogni rilascio si
+  // azzerava.
+  const rl = await rateLimitAsync({ key: `vision-order:${user.id}`, max: 15, windowMs: 10 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let body: Body;

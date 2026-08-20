@@ -182,10 +182,18 @@ export function parseCatalogBatchEntry(
   }
   const input = (entry.toolInput ?? {}) as Record<string, unknown>;
   if (operation === 'moderate') {
+    // #204 — Verdetto mancante = segnalato, non «a posto». Prima
+    // `input.flagged === true` trattava la risposta assente, tagliata o
+    // malformata come «prodotto conforme»: il filtro dava il via libera
+    // proprio nei casi in cui non aveva capito niente. Il resto del progetto
+    // (classifyProductPolicy) nega in caso di dubbio: ora sono coerenti.
+    const verdettoPresente = typeof input.flagged === 'boolean';
     return {
       product_id: productId,
-      flagged: input.flagged === true,
-      reason: typeof input.reason === 'string' ? input.reason : undefined,
+      flagged: verdettoPresente ? input.flagged === true : true,
+      reason: typeof input.reason === 'string'
+        ? input.reason
+        : (verdettoPresente ? undefined : 'Verdetto non disponibile: da controllare a mano.'),
     };
   }
   const patch = input.patch && typeof input.patch === 'object' ? (input.patch as AiProductPatch) : {};

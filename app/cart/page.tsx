@@ -21,6 +21,17 @@ const storeInitials = (name: string) =>
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
+  /**
+   * #119 — Quanto ce n'e' davvero, per ogni articolo del carrello.
+   *
+   * Il pulsante «+» non aveva nessun tetto: si poteva salire a novantanove
+   * pezzi di un prodotto che ne ha due. Il blocco arrivava alla fine, al
+   * momento di pagare, con un messaggio che non diceva nemmeno quanti se ne
+   * potevano prendere: il cliente doveva tornare indietro e indovinare. Il
+   * «−» il tetto ce l'aveva (non scende sotto uno): mancava solo dall'altra
+   * parte. `null` = disponibilita' illimitata, `undefined` = non ancora letta.
+   */
+  const [disponibilita, setDisponibilita] = useState<Record<string, number | null>>({});
 
   useEffect(() => {
     const refresh = () => setItems(getCart());
@@ -28,6 +39,29 @@ export default function CartPage() {
     window.addEventListener('cart:updated', refresh);
     return () => window.removeEventListener('cart:updated', refresh);
   }, []);
+
+  // #119 — La stessa lettura che fa il checkout, fatta qui: cosi' il limite si
+  // vede dove si sceglie la quantita', non tre schermate dopo.
+  useEffect(() => {
+    const ids = Array.from(new Set(getCart().map((i) => i.id)));
+    if (ids.length === 0) return;
+    let vivo = true;
+    void (async () => {
+      const { supabase } = await import('@/lib/supabase/client');
+      const { data } = await supabase.from('products').select('id, stock').in('id', ids);
+      if (!vivo || !data) return;
+      const mappa: Record<string, number | null> = {};
+      for (const p of data as Array<{ id: string; stock: number | null }>) mappa[p.id] = p.stock;
+      setDisponibilita(mappa);
+    })();
+    return () => { vivo = false; };
+  }, [items.length]);
+
+  /** Il massimo prendibile per quella riga: null/assente = nessun limite noto. */
+  const massimo = (id: string): number | null => {
+    const s = disponibilita[id];
+    return typeof s === 'number' ? s : null;
+  };
 
   // Feedback al rientro da Stripe Checkout annullato (?stripe=canceled)
   useEffect(() => {
@@ -148,6 +182,7 @@ export default function CartPage() {
                       </p>
                       <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                         <div className="flex items-center gap-2">
+                          <div className="flex flex-col">
                           <div className="flex items-center border border-cream-300 rounded-full">
                             <button
                               type="button"
@@ -160,9 +195,18 @@ export default function CartPage() {
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
+                              disabled={massimo(item.id) != null && item.quantity >= (massimo(item.id) as number)}
                               aria-label={`Aumenta quantità di ${item.name}`}
-                              className="w-10 h-10 hover:bg-cream-100 rounded-r-full"
+                              className="w-10 h-10 hover:bg-cream-100 rounded-r-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             >+</button>
+                          </div>
+                          {massimo(item.id) != null && item.quantity >= (massimo(item.id) as number) && (
+                            <p className="mt-1 text-[11px] text-ink-500">
+                              {(massimo(item.id) as number) === 1
+                                ? 'Ne resta solo uno'
+                                : `Disponibili ${massimo(item.id)}`}
+                            </p>
+                          )}
                           </div>
                           <button
                             type="button"

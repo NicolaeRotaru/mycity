@@ -66,14 +66,54 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
     },
   });
 
-  // Tracciamento impression: una volta per campagna mostrata (best-effort).
+  /**
+   * #219 — Una visualizzazione si conta quando qualcuno l'ha vista davvero.
+   *
+   * Prima bastava che la campagna fosse nell'elenco: il carosello scorre in
+   * orizzontale e mostra tre schede su otto, ma tutte e otto risultavano viste.
+   * Il negozio pagava per sette visualizzazioni che non erano mai comparse sullo
+   * schermo di nessuno.
+   *
+   * La regola dello standard pubblicitario e' semplice ed e' questa: almeno
+   * meta' dell'elemento dentro lo schermo, per almeno un secondo. Il tetto per
+   * campagna al minuto (migrazione 122) copre l'altro lato, quello di chi prova
+   * a gonfiare i numeri a mano.
+   */
   const impressedRef = useRef<Set<string>>(new Set());
+  const schedeRef = useRef<Map<string, HTMLElement>>(new Map());
+
   useEffect(() => {
-    for (const it of items) {
-      if (impressedRef.current.has(it.id)) continue;
-      impressedRef.current.add(it.id);
-      void supabase.rpc('track_sponsored_impression', { p_id: it.id });
-    }
+    if (items.length === 0) return;
+    if (typeof IntersectionObserver === 'undefined') return; // browser vecchio: nessun conteggio, meglio che uno falso
+
+    const attese = new Map<string, number>();
+    const osservatore = new IntersectionObserver(
+      (voci) => {
+        for (const voce of voci) {
+          const id = (voce.target as HTMLElement).dataset.campagna;
+          if (!id) continue;
+          if (voce.isIntersecting && voce.intersectionRatio >= 0.5) {
+            if (impressedRef.current.has(id) || attese.has(id)) continue;
+            attese.set(id, window.setTimeout(() => {
+              attese.delete(id);
+              if (impressedRef.current.has(id)) return;
+              impressedRef.current.add(id);
+              void supabase.rpc('track_sponsored_impression', { p_id: id });
+            }, 1000));
+          } else {
+            const t = attese.get(id);
+            if (t) { window.clearTimeout(t); attese.delete(id); }
+          }
+        }
+      },
+      { threshold: [0, 0.5, 1] },
+    );
+
+    for (const el of schedeRef.current.values()) osservatore.observe(el);
+    return () => {
+      for (const t of attese.values()) window.clearTimeout(t);
+      osservatore.disconnect();
+    };
   }, [items]);
 
   if (items.length === 0) return null;
@@ -95,6 +135,11 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
             <Link
               key={it.id}
               href={`/product/${p.id}`}
+              data-campagna={it.id}
+              ref={(el) => {
+                if (el) schedeRef.current.set(it.id, el);
+                else schedeRef.current.delete(it.id);
+              }}
               onClick={() => { void supabase.rpc('track_sponsored_click', { p_id: it.id }); }}
               className="shrink-0 w-32 sm:w-36 snap-start bg-white border border-cream-200 rounded-xl overflow-hidden card-hover"
             >

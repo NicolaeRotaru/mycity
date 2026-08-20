@@ -38,12 +38,18 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
 
   // Verifica che sellerId sia effettivamente un seller approvato (non scrivere
   // a buyer / rider / negozi sospesi). Evita anche enumeration di utenti.
+  // #16 — Dalla vetrina pubblica: la tabella dei profili, con la sessione di un
+  // cliente, non e' piu' leggibile da quando la 110 ha tolto la regola «chiunque
+  // puo' vedere i negozi approvati». Questa lettura tornava vuota e la chat con
+  // il negozio non si apriva piu' — con il messaggio «venditore non
+  // disponibile», che suona come «quel negozio non c'e' piu'».
+  // La vista contiene SOLO negozi approvati, quindi il controllo e' implicito.
   const { data: sellerProfile } = await supa
-    .from('profiles')
-    .select('id, role, is_approved')
+    .from('seller_public_profiles')
+    .select('id')
     .eq('id', sellerId)
-    .single();
-  if (!sellerProfile || sellerProfile.role !== 'seller' || !sellerProfile.is_approved) {
+    .maybeSingle();
+  if (!sellerProfile) {
     return ApiErrors.notFound('Venditore non disponibile');
   }
 

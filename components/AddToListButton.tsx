@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, Plus, X, Check, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 
 /**
  * Pulsante "Aggiungi a lista" sulle product page.
@@ -22,6 +23,9 @@ type List = { id: string; title: string; cover_emoji: string | null };
 export default function AddToListButton({ productId }: { productId: string }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
+  const pannelloRef = useRef<HTMLDivElement>(null);
+  const avvioRef = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(open, pannelloRef, avvioRef, () => setOpen(false));
   const [newListTitle, setNewListTitle] = useState('');
 
   const { data: lists = [] } = useQuery({
@@ -112,6 +116,7 @@ export default function AddToListButton({ productId }: { productId: string }) {
     <>
       <button
         type="button"
+        ref={avvioRef}
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 text-xs font-semibold bg-cream-100 hover:bg-cream-200 text-ink-700 border border-cream-300 px-3 py-1.5 rounded-full"
       >
@@ -120,10 +125,18 @@ export default function AddToListButton({ productId }: { productId: string }) {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-warm-lg">
+        <div
+          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="titolo-aggiungi-a-lista"
+        >
+          {/* #152 — Era un velo scritto a mano: nessuna semantica di dialogo,
+              nessuna uscita con Esc, il fuoco che restava sulla pagina dietro.
+              Ora passa dallo stesso hook dei pannelli filtri. */}
+          <div ref={pannelloRef} className="bg-white rounded-2xl w-full max-w-md shadow-warm-lg">
             <div className="px-5 py-4 border-b border-cream-200 flex items-center justify-between">
-              <h2 className="font-bold">Aggiungi alle tue liste</h2>
+              <h2 id="titolo-aggiungi-a-lista" className="font-bold">Aggiungi alle tue liste</h2>
               <button onClick={() => setOpen(false)} aria-label="Chiudi"><X size={20} /></button>
             </div>
             <div className="p-5 space-y-3 max-h-[60vh] overflow-y-auto">

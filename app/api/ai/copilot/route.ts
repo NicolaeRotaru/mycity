@@ -114,15 +114,53 @@ Istruzione del venditore: "${instruction}"
 
 Proponi le modifiche con lo strumento bulk_edit.`;
 
+  // #206 — Due difetti nella stessa manciata di righe, ora allineati alle
+  // altre due chat (catalog-chat, product-chat).
+  //
+  // ① L'istruzione corrente veniva messa PRIMA della conversazione passata:
+  //    l'ultima cosa che il modello leggeva era un vecchio turno, non la
+  //    richiesta di adesso. Su una conversazione lunga l'istruzione vera
+  //    finiva sepolta, e le modifiche proposte rispondevano al messaggio
+  //    sbagliato — su un pulsante che modifica il catalogo.
+  //
+  // ② La cronologia arriva dal client: un turno «assistente» inventato dal
+  //    browser veniva accettato cosi' com'e', cioe' si potevano mettere in
+  //    bocca al modello parole che non aveva detto («certo, cambio tutti i
+  //    prezzi a 1 euro») e poi chiedergli di proseguire. Ora la cronologia
+  //    deve cominciare con un turno dell'utente e i turni si alternano.
   const history = (Array.isArray(body.history) ? body.history : [])
-    .filter((m): m is ChatMessage => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .filter((m): m is ChatMessage => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim().length > 0)
     .slice(-10)
     .map((m) => ({ role: m.role, content: m.content.slice(0, 1000) }));
 
-  const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: contextText },
-    ...history,
+  while (history.length > 0 && history[0].role !== 'user') history.shift();
+  // Niente due turni dello stesso ruolo di fila: e' la forma che l'API accetta
+  // e insieme il modo piu' semplice di rifiutare una cronologia costruita a mano.
+  const cronologia: typeof history = [];
+  for (const m of history) {
+    if (cronologia.length > 0 && cronologia[cronologia.length - 1].role === m.role) continue;
+    cronologia.push(m);
+  }
+
+  const catalogo = contextText.split('\n\nIstruzione del venditore')[0];
+  const richiesta = `Istruzione del venditore: "${instruction}"\n\nProponi le modifiche con lo strumento bulk_edit.`;
+
+  // I ruoli devono alternarsi: due turni dello stesso ruolo di fila si
+  // uniscono in uno.
+  const grezzi: Array<{ role: 'user' | 'assistant'; content: string }> = [
+    { role: 'user', content: catalogo },
+    ...cronologia,
+    { role: 'user', content: richiesta },
   ];
+  const messages: Anthropic.MessageParam[] = [];
+  for (const m of grezzi) {
+    const ultimo = messages[messages.length - 1];
+    if (ultimo && ultimo.role === m.role) {
+      ultimo.content = `${ultimo.content as string}\n\n${m.content}`;
+    } else {
+      messages.push({ role: m.role, content: m.content });
+    }
+  }
 
   try {
     const { toolInput } = await runMessage<BulkInput>({

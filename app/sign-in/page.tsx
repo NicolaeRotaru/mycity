@@ -36,6 +36,11 @@ const SignInForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
+  // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
+  // estensione che lo taglia, guasto loro), il modulo non resta bloccato per
+  // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'
+  // comunque sul server, quindi non si apre nessun buco.
+  const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = safeInternalPath(searchParams.get('returnTo'), '/');
@@ -58,7 +63,7 @@ const SignInForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (TURNSTILE_SITE_KEY && !captchaToken) {
+    if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) {
       toast.error('Completa il controllo anti-bot');
       return;
     }
@@ -169,10 +174,17 @@ const SignInForm = () => {
           <div className="flex justify-center">
             <Turnstile
               siteKey={TURNSTILE_SITE_KEY}
-              onVerify={setCaptchaToken}
+              onVerify={(t) => { setCaptchaToken(t); setCaptchaRotto(null); }}
               onExpire={() => setCaptchaToken('')}
+              onError={(motivo) => setCaptchaRotto(motivo)}
             />
           </div>
+        )}
+        {captchaRotto && (
+          <p className="text-center text-sm text-ink-600">
+            {captchaRotto} Puoi provare lo stesso ad accedere: se non funziona,
+            ricarica la pagina o scrivici da <a className="underline" href="/contact">Contatti</a>.
+          </p>
         )}
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>
           {isLoading ? 'Accesso in corso...' : 'Accedi'}

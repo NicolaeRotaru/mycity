@@ -13,7 +13,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
-import ErrorState from '@/components/ErrorState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';
@@ -46,10 +46,35 @@ import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { SocialProof } from '@/components/ui/SocialProof';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
+import { trackReviewSubmitted } from '@/lib/analytics/events';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
 const ALLERGEN_ACCORDION_KEYS = ['allergeni', 'ingredienti', 'conservazione', 'valori_nutrizionali'];
+
+/** La scheda prodotto come la usa questa pagina (#97: colonne per nome). */
+type SchedaProdotto = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | string;
+  images: string[] | null;
+  seller_id: string;
+  status: string | null;
+  created_at: string | null;
+  category_id: string | null;
+  stock: number | null;
+  attributes: Record<string, unknown> | null;
+  unit: string | null;
+  compare_at_price: number | string | null;
+  condition: string | null;
+  express_enabled: boolean | null;
+  has_variants: boolean | null;
+  external_source_url: string | null;
+  categories: { slug: string | null; name: string | null } | null;
+  profiles: { id: string; store_name: string | null; is_approved: boolean | null; offers_express: boolean | null } | null;
+};
 
 export default function ProductPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -60,6 +85,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  /**
+   * #135 e #120 — Il visore a schermo intero era un `fixed inset-0` scritto a
+   * mano: nessun Esc, nessuna trappola del fuoco, nessun blocco dello
+   * scorrimento. Da tastiera si finiva a navigare la pagina sotto il velo nero,
+   * senza vedere dove si era e senza modo di chiudere; sul telefono la pagina
+   * scorreva dietro la foto. E si dichiarava `aria-modal`, cioe' prometteva
+   * esattamente quello che non faceva.
+   *
+   * Lo stesso hook dei pannelli filtri: Esc, fuoco che entra e torna al
+   * pulsante, scorrimento bloccato.
+   */
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const zoomTriggerRef = useRef<HTMLButtonElement>(null);
+  /** Quante foto ha il prodotto: l'elenco nasce piu' sotto, dopo i controlli
+   *  di caricamento, e gli hook devono stare tutti prima. */
+  const numeroFoto = useRef(1);
   // "Nuovo" calcolato post-hydration (come ProductCard): Date.now() differisce
   // server/client e su prodotti vicini al limite NEW_PRODUCT_DAYS causa mismatch.
   const [isNew, setIsNew] = useState(false);
@@ -81,14 +122,28 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
   const [reviewsOnlyPhoto, setReviewsOnlyPhoto] = useState(false);
 
-  const { data: product, isLoading, isError, refetch } = useQuery({
+  const { data: product, isLoading, isError, refetch } = useQuery<SchedaProdotto>({
     queryKey: queryKeys.products.detail(id),
     queryFn: async () => {
+      // #97 — Le colonne per nome, non `*`.
+      //
+      // Con `*` arrivava al browser anche `search_tsv`: l'indice di ricerca del
+      // prodotto, cioe' tutte le parole della scheda ripetute in forma
+      // compressa, che nessuno mostra e nessuno usa. Su una scheda con una
+      // descrizione lunga sono decine di chilobyte per ogni apertura, pagati da
+      // chi guarda il prodotto dal telefono. Arrivavano anche i campi di
+      // sincronizzazione con i marketplace esterni, che qui non servono.
       const { data, error } = await supabase.from('products').select(`
-        *, categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express )
+        id, name, description, price, images, seller_id, status, created_at, category_id,
+        stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
+        external_source_url,
+        categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express )
       `).eq('id', id).single();
       if (error) throw error;
-      return data;
+      // Il collegamento a categoria e negozio e' uno a uno: PostgREST lo
+      // restituisce come oggetto, ma con le colonne elencate per nome i tipi
+      // generati lo descrivono come elenco. Si dichiara la forma vera.
+      return data as unknown as SchedaProdotto;
     },
   });
 
@@ -161,6 +216,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       // è eseguibile solo da service_role.
     },
     onSuccess: () => {
+      // #224 — La recensione era nel catalogo eventi e non la emetteva
+      // nessuno. Si contava quante ne arrivavano guardando la tabella, mai
+      // dentro il funnel: non si poteva legare «ha recensito» a «ha ricomprato».
+      void trackReviewSubmitted(id, reviewRating, reviewPhotos.length > 0);
       qc.invalidateQueries({ queryKey: queryKeys.reviews.detail(id) });
       setReviewComment('');
       setReviewRating(5);
@@ -175,6 +234,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       if (err instanceof Error && err.message !== 'REDIRECT') toast.error(friendlyError(err));
     },
   });
+
+  useBottomSheetA11y(lightbox, lightboxRef, zoomTriggerRef, () => setLightbox(false));
+
+  // #135 — Le frecce sinistra/destra sfogliano le foto, come ci si aspetta da
+  // un visore a schermo intero. Prima si poteva solo con lo swipe o col mouse.
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      const n = numeroFoto.current;
+      if (n < 2) return;
+      if (e.key === 'ArrowLeft') setActiveImg((p) => (p - 1 + n) % n);
+      if (e.key === 'ArrowRight') setActiveImg((p) => (p + 1) % n);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightbox]);
 
   // Quando si chiude il lightbox (dove si naviga con frecce/swipe), riallinea
   // il carosello principale alla foto corrente.
@@ -251,6 +326,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const images: string[] = Array.isArray(product.images) && product.images.length > 0
     ? (product.images as string[])
     : ['https://placehold.co/600x600/F5EDD9/78716C?text=Foto+prodotto'];
+  numeroFoto.current = images.length;
 
   const avgRating = reviews.length
     ? reviews.reduce((s: number, r) => s + Number(r.rating), 0) / reviews.length
@@ -394,7 +470,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       />
       <Breadcrumb className="mb-4" items={[
         { label: 'Home', href: '/' },
-        ...(product.categories ? [{ label: product.categories.name, href: `/category/${product.categories.slug}` }] : []),
+        ...(product.categories?.name && product.categories?.slug
+          ? [{ label: product.categories.name, href: `/category/${product.categories.slug}` }]
+          : []),
         { label: product.name },
       ]} />
 
@@ -425,8 +503,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   />
                   <button
                     type="button"
+                    ref={i === activeImg ? zoomTriggerRef : undefined}
                     onClick={() => setLightbox(true)}
                     aria-label="Ingrandisci foto"
+                    // #135 — Da tastiera si raggiunge solo la foto in vista: le
+                    // altre sono nel carosello ma non sono ancora «qui», e
+                    // otto tabulazioni sulla stessa immagine non aiutano nessuno.
+                    tabIndex={i === activeImg ? 0 : -1}
                     className="absolute inset-0 z-[1] cursor-zoom-in"
                   />
                 </div>
@@ -483,6 +566,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         {/* LIGHTBOX a schermo intero — vede la foto intera, con navigazione */}
         {lightbox && (
           <div
+            ref={lightboxRef}
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
             onClick={() => setLightbox(false)}
             onTouchStart={(e) => { touchStartX.current = e.touches[0]?.clientX ?? null; }}
@@ -647,13 +731,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <div className="space-y-3">
               {optionGroups.map((g) => (
                 <div key={g.name}>
-                  <p className="text-sm font-semibold text-ink-700 mb-1.5">
+                  {/* #142 — Il titolo del gruppo (Taglia, Colore…) non era
+                      collegato ai pulsanti sotto: da screen reader si sentiva
+                      «M, premuto» senza sapere M di che cosa. */}
+                  <p id={`opt-${g.name}`} className="text-sm font-semibold text-ink-700 mb-1.5">
                     {findLabelForKey(g.name)}
                     {selectedOptions[g.name] && (
                       <span className="ml-1.5 font-normal text-ink-500">· {selectedOptions[g.name]}</span>
                     )}
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2" role="group" aria-labelledby={`opt-${g.name}`}>
                     {g.values.map((val) => {
                       const active = selectedOptions[g.name] === val;
                       return (
@@ -755,8 +842,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               )}
             </p>
 
-            <div className="flex items-center gap-3 pt-2 flex-wrap">
-              <label className="text-sm font-medium">Q.tà:</label>
+            {/* #142 — L'etichetta «Q.tà» era una label senza niente a cui
+                agganciarsi (`for` mancante, e nessun campo: i tre pezzi sono due
+                pulsanti e un numero). Per uno screen reader restava una parola
+                sospesa, e il numero cambiava in silenzio: si premeva «+» e non
+                veniva annunciato niente. Ora e' un gruppo con un nome, e il
+                valore si annuncia da solo quando cambia. */}
+            <div className="flex items-center gap-3 pt-2 flex-wrap" role="group" aria-label="Quantità">
+              <span className="text-sm font-medium" aria-hidden>Q.tà:</span>
               <div className="flex items-center border border-surface-300 rounded-lg">
                 <button
                   type="button"
@@ -765,7 +858,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   aria-label="Diminuisci quantità"
                   className="w-9 h-9 hover:bg-surface-50 rounded-l-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >−</button>
-                <span className="w-10 text-center font-semibold">{qty}</span>
+                <output aria-live="polite" aria-atomic="true" className="w-10 text-center font-semibold">{qty}</output>
                 <button
                   type="button"
                   onClick={() => setQuantity(Math.min(maxQty, qty + 1))}
@@ -883,14 +976,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               onSubmit={(e) => { e.preventDefault(); submitReview.mutate(); }}
               className="space-y-3"
             >
-              <div className="flex gap-1">
+              {/* #142 — Le stelle erano cinque pulsanti senza stato: si sentiva
+                  «3 stelle, pulsante» sia prima sia dopo averlo premuto, e
+                  nessuno diceva che quel voto era quello scelto. */}
+              <div className="flex gap-1" role="group" aria-label="Il tuo voto">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setReviewRating(n)}
+                    aria-pressed={n <= reviewRating}
                     className="text-3xl hover:scale-110 transition-transform"
-                    aria-label={`${n} stelle`}
+                    aria-label={`${n} ${n === 1 ? 'stella' : 'stelle'}`}
                   >
                     <span className={n <= reviewRating ? 'text-accent-700' : 'text-ink-300'}>★</span>
                   </button>

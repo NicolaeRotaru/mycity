@@ -96,8 +96,8 @@ function AdminUsersPageInner() {
       const fullSelect = `
         id, role, is_approved, approval_status, approval_requested_at, approved_at, rejection_reason,
         store_name, full_name, phone, store_address,
-        legal_first_name, legal_last_name, legal_fiscal_code,
-        business_legal_name, business_vat_number, business_form,
+        legal_first_name, legal_last_name,
+        business_legal_name, business_form,
         business_address, business_city, business_pec, created_at
       `;
       const minimalSelect = `id, role, is_approved, store_name, full_name, phone, store_address, created_at`;
@@ -107,10 +107,15 @@ function AdminUsersPageInner() {
       };
 
       let base: Profile[];
+      // #90 — Un tetto esplicito: il pannello leggeva TUTTI i profili a ogni
+      // apertura. Cinquecento e' molto piu' di quanti utenti ci siano oggi, e
+      // molto meno del punto in cui la pagina smette di aprirsi.
+      const TETTO_UTENTI = 500;
       const tryFull = await supabase
         .from('profiles')
         .select(fullSelect)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(TETTO_UTENTI);
       if (!tryFull.error) {
         base = (tryFull.data ?? []).map((p: Record<string, unknown>) => ({ ...p, ...emptyAuth })) as Profile[];
       } else {
@@ -118,7 +123,8 @@ function AdminUsersPageInner() {
         const min = await supabase
           .from('profiles')
           .select(minimalSelect)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(TETTO_UTENTI);
         if (min.error) throw min.error;
         base = (min.data ?? []).map((p: Record<string, unknown>) => ({
           ...p,
@@ -261,7 +267,6 @@ function AdminUsersPageInner() {
         p.store_name?.toLowerCase().includes(s) ||
         p.email?.toLowerCase().includes(s) ||
         p.business_legal_name?.toLowerCase().includes(s) ||
-        p.business_vat_number?.toLowerCase().includes(s) ||
         p.phone?.includes(s) ||
         p.auth_phone?.includes(s)
       );
@@ -270,6 +275,24 @@ function AdminUsersPageInner() {
   });
 
   const detail = detailId ? profiles.find((p) => p.id === detailId) : null;
+
+  /**
+   * #81 — Codice fiscale e partita IVA si chiedono per UN utente, quando si apre
+   * la sua scheda, e la lettura finisce nel registro (chi, quando, di chi).
+   * Prima arrivavano in blocco per tutti a ogni apertura del pannello, e nessuna
+   * lettura lasciava traccia.
+   */
+  const { data: datiIdentita } = useQuery({
+    queryKey: [...queryKeys.admin.users(), 'kyc', detailId],
+    enabled: !!detailId,
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async (): Promise<{ legal_fiscal_code: string | null; business_vat_number: string | null }> => {
+      const res = await fetch(`/api/admin/users/${detailId}/kyc`);
+      if (!res.ok) return { legal_fiscal_code: null, business_vat_number: null };
+      return res.json();
+    },
+  });
 
   if (isLoading) return <LoadingState />;
 
@@ -620,6 +643,7 @@ function AdminUsersPageInner() {
       {detail && (
         <DetailPanel
           profile={detail}
+          datiIdentita={datiIdentita ?? null}
           onClose={() => setDetailId(null)}
           onApprove={() => { approve.mutate(detail.id); setDetailId(null); }}
           onReject={async () => {
@@ -743,9 +767,12 @@ function EditUserModal({
 }
 
 function DetailPanel({
-  profile, onClose, onApprove, onReject,
+  profile, datiIdentita, onClose, onApprove, onReject,
 }: {
   profile: Profile;
+  // #81 — Codice fiscale e partita IVA arrivano solo qui, per questo utente,
+  // e la lettura e' registrata: non viaggiano piu' con l'elenco di tutti.
+  datiIdentita: { legal_fiscal_code: string | null; business_vat_number: string | null } | null;
   onClose: () => void;
   onApprove: () => void;
   onReject: () => void;
@@ -778,7 +805,7 @@ function DetailPanel({
             </DetailRow>
             <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
             <DetailRow label="Codice fiscale">
-              <code>{profile.legal_fiscal_code ?? '—'}</code>
+              <code>{datiIdentita?.legal_fiscal_code ?? '—'}</code>
             </DetailRow>
             <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
             <DetailRow label="Ultimo accesso">
@@ -788,7 +815,7 @@ function DetailPanel({
 
           <DetailGroup title="Azienda" icon={ReceiptText}>
             <DetailRow label="Ragione sociale">{profile.business_legal_name ?? '—'}</DetailRow>
-            <DetailRow label="P.IVA"><code>{profile.business_vat_number ?? '—'}</code></DetailRow>
+            <DetailRow label="P.IVA"><code>{datiIdentita?.business_vat_number ?? '—'}</code></DetailRow>
             <DetailRow label="Forma giuridica">{profile.business_form ?? '—'}</DetailRow>
             <DetailRow label="Sede legale">
               {profile.business_address} — {profile.business_city}

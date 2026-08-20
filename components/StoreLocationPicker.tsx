@@ -64,9 +64,15 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
       // Fix per le icone Leaflet con Next/Webpack
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        iconUrl:       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        shadowUrl:     'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+                // #76 — Le icone del segnaposto arrivavano da unpkg.com, un CDN di
+        // terzi: ogni persona che apriva una mappa faceva una richiesta a un
+        // sito che non e' nostro, e quel sito vedeva il suo indirizzo di rete.
+        // Un destinatario dei dati in piu' — mai dichiarato nell'informativa —
+        // per tre file da pochi chilobyte. Ora stanno da noi: sparisce il
+        // destinatario, sparisce la richiesta esterna, e la mappa carica prima.
+        iconRetinaUrl: '/mappa/marker-icon-2x.png',
+        iconUrl:       '/mappa/marker-icon.png',
+        shadowUrl:     '/mappa/marker-shadow.png',
       });
 
       const map = L.map(mapDivRef.current).setView([coords.lat, coords.lng], 14);

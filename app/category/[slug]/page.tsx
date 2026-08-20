@@ -8,6 +8,7 @@ import { trackCategoryViewed } from '@/lib/analytics/events';
 import { Filter, RotateCcw, Truck, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import ProductGrid, { type SortOption } from '@/components/ProductGrid';
 import CollectionHeader from '@/components/CollectionHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -21,34 +22,45 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const ta = useTranslations('actions');
   const tn = useTranslations('nav');
 
-  const { data: category, isLoading } = useQuery({
+  type SubcatRow = { id: string; slug: string; name: string; icon: string | null };
+
+  /**
+   * #96 — Due attese in fila prima che partisse qualunque richiesta di prodotti.
+   *
+   * Si caricava la categoria, si aspettava; solo dopo partivano le
+   * sottocategorie (`enabled: !!category`), si aspettava di nuovo; e solo a
+   * quel punto le griglie chiedevano i prodotti. Due giri di rete a vuoto —
+   * su una connessione mobile mezzo secondo buono — prima che comparisse
+   * qualcosa, sulla pagina da cui la gente entra nel catalogo.
+   *
+   * Categoria e sottocategorie stanno nella stessa tabella e si possono
+   * chiedere insieme: una lettura sola, `slug = questa OPPURE genitore =
+   * questa`, e poi si separano qui.
+   */
+  const { data: alberoCategoria, isLoading } = useQuery({
     queryKey: queryKeys.categories.bySlug(slug),
     queryFn: async () => {
+      // Le categorie sono poche decine: si leggono tutte in un colpo e si
+      // separano qui. Costa meno di due viaggi in fila, e la risposta serve
+      // anche alle altre pagine di categoria (stessa chiave di cache).
       const { data, error } = await supabase
         .from('categories')
         .select('id, slug, name, icon, parent_id')
-        .eq('slug', slug)
-        .single();
+        .order('name')
+        .limit(500);
       if (error) throw error;
-      return data;
+      const righe = (data ?? []) as Array<SubcatRow & { parent_id: string | null }>;
+      const padre = righe.find((r) => r.slug === slug) ?? null;
+      return {
+        category: padre,
+        subcategories: padre ? righe.filter((r) => r.parent_id === padre.id) : [],
+      };
     },
+    staleTime: 10 * 60_000,
   });
-
-  type SubcatRow = { id: string; slug: string; name: string; icon: string | null };
-  const { data: subcategories = [], isLoading: subsLoading } = useQuery({
-    queryKey: [...queryKeys.categories.all, 'sub', category?.id],
-    queryFn: async (): Promise<SubcatRow[]> => {
-      if (!category) return [];
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, slug, name, icon')
-        .eq('parent_id', category.id)
-        .order('name');
-      if (error) throw error;
-      return (data ?? []) as SubcatRow[];
-    },
-    enabled: !!category,
-  });
+  const category = alberoCategoria?.category ?? null;
+  const subcategories: SubcatRow[] = alberoCategoria?.subcategories ?? [];
+  const subsLoading = isLoading;
 
   // Stato filtri — ESCLUSIVAMENTE le dimensioni già supportate da ProductGrid.
   const [maxPrice, setMaxPrice] = useState<number>(500);
@@ -61,7 +73,13 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const [minRating, setMinRating] = useState<number>(0);
   const [resultCount, setResultCount] = useState<number | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // #134 — Il pannello si dichiarava `aria-modal` e non si comportava da
+  // modale: da tastiera il fuoco restava dietro il velo, senza Esc e senza
+  // uscita. Lo stesso pannello nella pagina di ricerca era gia' a posto: era
+  // scritto li' dentro e nessuno l'aveva estratto.
+  const sheetRef = useRef<HTMLDivElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false));
 
   const reset = () => {
     setMaxPrice(500);
@@ -364,7 +382,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       {filtersOpen && (
         <div className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={t('filters')}>
           <div className="absolute inset-0 bg-black/40" onClick={() => setFiltersOpen(false)} />
-          <div className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] flex flex-col pb-safe">
+          <div ref={sheetRef} className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] flex flex-col pb-safe">
             <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-cream-200 rounded-t-2xl">
               <h2 className="font-serif font-bold text-ink-900 flex items-center gap-2">
                 <Filter size={16} strokeWidth={2.2} className="text-primary-600" />

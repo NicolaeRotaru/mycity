@@ -10,6 +10,7 @@ import { type ProductPreview, type StoreCardData } from '@/components/StorePrevi
 import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -28,22 +29,38 @@ const fetchNearData = async () => {
   const storeIds = stores.map((s) => s.id);
   if (storeIds.length === 0) return { stores: [], productsByStore: {}, reviewsByStore: {} };
 
+  // #93 — L'elenco dei negozi viaggia nell'indirizzo della richiesta, 37
+  // caratteri l'uno: oltre i due-trecento negozi la richiesta viene rifiutata e
+  // qui si legge «nessun prodotto». Si spezza in blocchi da cento.
   const [productsRes, reviewsRes] = await Promise.all([
-    supabase
-      .from('products')
-      .select('id, name, price, images, seller_id')
-      .in('seller_id', storeIds)
-      .eq('status', 'available')
-      .order('created_at', { ascending: false })
-      .limit(400),
-    supabase
-      .from('store_reviews')
-      .select('store_id, rating')
-      .in('store_id', storeIds),
+    leggiInBlocchi<ProductLite>(storeIds, (blocco) =>
+      supabase
+        .from('products')
+        .select('id, name, price, images, seller_id')
+        .in('seller_id', blocco)
+        .eq('status', 'available')
+        .order('created_at', { ascending: false })
+        .limit(400) as unknown as PromiseLike<{ data: ProductLite[] | null; error: { message?: string } | null }>,
+    ),
+    leggiInBlocchi<{ store_id: string; rating: number }>(storeIds, (blocco) =>
+      supabase
+        .from('store_reviews')
+        .select('store_id, rating')
+        .in('store_id', blocco) as unknown as PromiseLike<{ data: { store_id: string; rating: number }[] | null; error: { message?: string } | null }>,
+    ),
   ]);
 
+  // #89 — Stessa cosa di /stores: il taglio globale (400 prodotti in tutto)
+  // lasciava senza vetrina i negozi che non pubblicano da un po'. La funzione
+  // della migrazione 122 prende i primi quattro DI OGNI negozio; se non e'
+  // ancora applicata si resta al giro di prima.
+  const { data: schede } = await supabase.rpc('store_cards', { p_per_store: 4, p_limit: 500 });
   const productsByStore: Record<string, ProductLite[]> = {};
+  for (const riga of (schede ?? []) as Array<{ seller_id: string; prodotti: ProductLite[] }>) {
+    if (riga.prodotti && riga.prodotti.length > 0) productsByStore[riga.seller_id] = riga.prodotti;
+  }
   for (const p of (productsRes.data ?? []) as ProductLite[]) {
+    if (productsByStore[p.seller_id]?.length) continue;
     (productsByStore[p.seller_id] ??= []).push(p);
   }
 

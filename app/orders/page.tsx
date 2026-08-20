@@ -1,16 +1,18 @@
 'use client';
 
-import { useEffect, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { riordina } from '@/lib/riordino';
 import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
+import Image from 'next/image';
 import EmptyState from '@/components/EmptyState';
-import ErrorState from '@/components/ErrorState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
-import { addToCart, clearCart } from '@/lib/cart';
+import { clearCart } from '@/lib/cart';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   type OrderStatus,
@@ -19,6 +21,8 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackOrderPlaced } from '@/lib/analytics/events';
+// #92 — le miniature si chiedono gia' piccole al server
+import { sizedImage } from '@/lib/image-url';
 
 type OrderItem = {
   id: string;
@@ -54,7 +58,14 @@ const fetchOrders = async (): Promise<Order[]> => {
       )
     `)
     .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+    // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
+    // finche' gli ordini sono cento non si nota, il giorno che sono
+    // diecimila la pagina non si apre piu' — cioe' proprio quando serve.
+    // Il tetto e' dichiarato qui e mostrato a chi guarda, invece di essere
+    // il limite implicito di mille righe di PostgREST, che taglia in
+    // silenzio e fa sembrare veri dei numeri che non lo sono.
+    .order('created_at', { ascending: false })
+      .limit(100);
 
   if (error) throw error;
   return (data ?? []) as unknown as Order[];
@@ -75,50 +86,66 @@ function StripeReturnHandler() {
       // solo il contrassegno: chi pagava con la carta tornava e ritrovava tutto
       // dentro, con lo stesso ordine pronto a essere rifatto per sbaglio.
       clearCart();
-      // Il webhook Stripe può arrivare con un ritardo di qualche secondo: ri-fetcha
-      // gli ordini dopo 2s e 5s per non mostrare "nessun ordine" al rientro (fix #22).
-      const t1 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 2000);
-      const t2 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 5000);
-      // Funnel: emette `purchase` (GA4) + `order_placed` una sola volta per
-      // sessione Stripe. session_id = transaction_id (dedup lato GA4); il valore
-      // arriva dallo stash creato prima del redirect (mc_pending_purchase).
+      // #116 — Il webhook Stripe crea l'ordine, e puo' metterci qualche
+      // secondo. Prima si riprovava due volte (2 s e 5 s) e poi ci si arrendeva:
+      // chi rientrava su una rete lenta, o quando Stripe rallentava, leggeva
+      // «Non hai ancora ordini» subito dopo aver pagato. Da li' la reazione e'
+      // sempre la stessa: si ripaga, o si chiama la banca.
+      //
+      // Ora si riprova a distanze crescenti fino a circa mezzo minuto, e finche'
+      // dura NON si mostra mai lo stato vuoto (vedi `stripeInCorso` sotto).
+      const attese = [1000, 2000, 4000, 8000, 15000];
+      const timers = attese.map((ms) =>
+        setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), ms),
+      );
+      // Funnel: `purchase` (GA4) + `order_placed`, uno per ordine creato.
+      //
+      // #210 — L'importo non arriva piu' dallo stash del browser (era la stima
+      // fatta PRIMA di pagare) ma da `orders.total_price`, cioe' la riga che il
+      // webhook Stripe ha scritto dopo l'incasso: l'unico numero autorevole.
+      //
+      // #213 — Un carrello con due negozi crea due ordini: ora sono due eventi
+      // col negozio vero, non uno solo col venditore chiamato «multi».
+      //
+      // #209 (in parte) — Il segno «gia' contato» si scriveva PRIMA che la
+      // lettura degli ordini finisse: se la pagina si ricaricava in quel mezzo
+      // secondo l'acquisto risultava tracciato senza esserlo mai stato. Ora si
+      // scrive dopo, e solo se qualcosa e' stato davvero emesso.
       const sessionId = searchParams.get('session_id') ?? '';
       const dedupKey = `mc_purchase_tracked_${sessionId}`;
       try {
         if (sessionId && !sessionStorage.getItem(dedupKey)) {
           const raw = sessionStorage.getItem('mc_pending_purchase');
-          const p = raw ? (JSON.parse(raw) as { valueCents?: number; coupon?: string | null; sellerId?: string }) : null;
-          if (p?.valueCents) {
-            // Recupera l'UUID reale dell'ordine creato dal webhook Stripe.
-            // Il webhook può arrivare leggermente dopo il redirect del buyer:
-            // se non trovato ora usiamo sessionId come fallback (dedup GA4 garantito).
-            void Promise.resolve(
-              supabase
-                .from('orders')
-                .select('id')
-                .eq('stripe_session_id', sessionId)
-                .maybeSingle(),
-            )
-              .then(({ data }) => {
-                trackOrderPlaced(
-                  data?.id ?? sessionId,
-                  p.valueCents!,
-                  'card',
-                  p.sellerId ?? 'multi',
-                  { coupon: p.coupon ?? undefined },
-                );
-              })
-              .catch(() => {
-                trackOrderPlaced(sessionId, p.valueCents!, 'card', p.sellerId ?? 'multi', { coupon: p.coupon ?? undefined });
-              });
-          }
-          sessionStorage.setItem(dedupKey, '1');
-          sessionStorage.removeItem('mc_pending_purchase');
+          const stash = raw ? (JSON.parse(raw) as { coupon?: string | null }) : null;
+          void Promise.resolve(
+            supabase
+              .from('orders')
+              .select('id, total_price, seller_id')
+              .eq('stripe_session_id', sessionId),
+          )
+            .then(({ data }) => {
+              const righe = (data ?? []) as Array<{ id: string; total_price: number | string; seller_id: string }>;
+              if (righe.length === 0) return;
+              const carrelloId = righe[0].id;
+              for (const o of righe) {
+                trackOrderPlaced(o.id, Math.round(Number(o.total_price ?? 0) * 100), 'card', o.seller_id, {
+                  coupon: stash?.coupon ?? undefined,
+                  checkoutId: carrelloId,
+                });
+              }
+              try {
+                sessionStorage.setItem(dedupKey, '1');
+                sessionStorage.removeItem('mc_pending_purchase');
+              } catch { /* noop */ }
+            })
+            .catch(() => { /* niente evento: meglio mancante che sbagliato */ });
         }
       } catch { /* noop */ }
-      // Pulisce il param dall'URL senza ricaricare
-      router.replace('/orders');
-      return () => { clearTimeout(t1); clearTimeout(t2); };
+      // #116 — L'indirizzo si ripulisce DOPO l'ultima riprova: prima veniva
+      // tolto subito, quindi la pagina non sapeva piu' di essere appena tornata
+      // da un pagamento e mostrava lo stato vuoto.
+      const pulizia = setTimeout(() => router.replace('/orders'), 30_000);
+      return () => { timers.forEach(clearTimeout); clearTimeout(pulizia); };
     }
   }, [searchParams, router, qc]);
   return null;
@@ -132,6 +159,22 @@ const TRACKABLE: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
 
 export default function OrdersPage() {
   const router = useRouter();
+  /**
+   * #116 — Siamo appena tornati dal pagamento con carta?
+   *
+   * Si legge dall'indirizzo senza `useSearchParams`, che obbligherebbe a
+   * mettere in Suspense tutta la pagina. Vale per una finestra di trenta
+   * secondi: dentro quella finestra lo stato «non hai ancora ordini» non si
+   * mostra, perche' sarebbe falso e spingerebbe a pagare due volte.
+   */
+  const [stripeInCorso, setStripeInCorso] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('stripe') !== 'success') return;
+    setStripeInCorso(true);
+    const t = setTimeout(() => setStripeInCorso(false), 30_000);
+    return () => clearTimeout(t);
+  }, []);
   const { data: orders = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.orders.all,
     queryFn: fetchOrders,
@@ -140,28 +183,21 @@ export default function OrdersPage() {
   // Riordino: riusa lo stesso modulo carrello (`@/lib/cart`) del dettaglio
   // ordine — stesso shape di addToCart, nessuna logica duplicata. Svuota il
   // carrello e reinserisce le righe dell'ordine, poi porta a /cart.
-  const handleReorder = (order: Order) => {
-    clearCart();
-    let added = 0;
-    for (const it of order.order_items) {
-      if (!it.product_id || !it.products?.name) continue;
-      addToCart({
-        id: it.product_id,
-        name: it.products.name,
-        price: Number(it.unit_price),
-        image: it.products.images?.[0],
+  // #113 — Stessa funzione del dettaglio ordine e della striscia in home:
+  // chiede prima di svuotare, e rilegge i prezzi di adesso.
+  const handleReorder = async (order: Order) => {
+    const aggiunti = await riordina(
+      order.order_items.map((it) => ({
+        productId: it.product_id ?? '',
+        name: it.products?.name ?? '',
+        prezzoStorico: Number(it.unit_price),
+        image: it.products?.images?.[0],
         quantity: it.quantity,
         sellerId: order.seller_id ?? undefined,
         storeName: order.seller?.store_name ?? undefined,
-      });
-      added++;
-    }
-    if (added === 0) {
-      toast.error('Nessun prodotto di questo ordine è più disponibile.');
-      return;
-    }
-    toast.success(`${added} ${added === 1 ? 'articolo aggiunto' : 'articoli aggiunti'} al carrello!`);
-    router.push('/cart');
+      })),
+    );
+    if (aggiunti > 0) router.push('/cart');
   };
 
   if (isLoading) {
@@ -188,6 +224,25 @@ export default function OrdersPage() {
             onRetry={() => refetch()}
           />
         )}
+      </div>
+    );
+  }
+
+  if (orders.length === 0 && stripeInCorso) {
+    // #116 — La regola, una sola: dentro la finestra del pagamento non si
+    // mostra MAI lo stato vuoto. Chi ha appena pagato non deve leggere «non hai
+    // ordini»: deve leggere che stiamo confermando.
+    return (
+      <div className="py-8">
+        <Suspense fallback={null}><StripeReturnHandler /></Suspense>
+        <div className="mx-auto max-w-md rounded-2xl border border-cream-300 bg-white p-8 text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-cream-300 border-t-primary-700" aria-hidden />
+          <h1 className="font-serif text-xl font-bold text-ink-900">Stiamo confermando il pagamento</h1>
+          <p className="mt-2 text-sm text-ink-600">
+            Ci vogliono pochi secondi. Non ricaricare la pagina e non pagare di nuovo:
+            il tuo ordine comparirà qui appena la banca conferma.
+          </p>
+        </div>
       </div>
     );
   }
@@ -243,8 +298,7 @@ export default function OrdersPage() {
               <div className="flex items-center gap-4 min-w-0 flex-1">
                 <div className="w-12 h-12 rounded-full bg-cream-100 shrink-0 overflow-hidden flex items-center justify-center text-xl">
                   {order.seller?.store_logo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={order.seller.store_logo} alt="" loading="lazy" className="w-full h-full object-cover" />
+                    <Image src={sizedImage(order.seller.store_logo, 'thumb')} alt="" width={40} height={40} unoptimized className="w-full h-full object-cover" />
                   ) : <Store size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="min-w-0">
@@ -273,8 +327,7 @@ export default function OrdersPage() {
                       >
                         <div className="h-12 w-12 overflow-hidden rounded-lg bg-cream-100 flex items-center justify-center">
                           {img ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={img} alt="" loading="lazy" className="h-full w-full object-cover" />
+                            <Image src={sizedImage(img, 'thumb')} alt="" width={48} height={48} unoptimized className="h-full w-full object-cover" />
                           ) : <Package size={18} className="text-ink-400" aria-hidden />}
                         </div>
                         <span className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-ink-900 px-1 text-[10px] font-bold text-white">

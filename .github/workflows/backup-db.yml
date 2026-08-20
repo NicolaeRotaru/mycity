@@ -18,6 +18,14 @@ on:
     - cron: "17 2 * * *" # ogni notte alle 02:17 UTC
   workflow_dispatch: {} # avviabile anche a mano
 
+
+# #244 — Il minimo indispensabile. Senza questo blocco ogni lavoro parte col
+# permesso predefinito del repository, che di norma è di SCRITTURA: uno script
+# di una dipendenza compromessa potrebbe scrivere sul codice o creare rilasci.
+# Qui serve solo leggere.
+permissions:
+  contents: read
+
 jobs:
   backup:
     name: Copia notturna
@@ -33,15 +41,26 @@ jobs:
       - name: Verifica di sapere dove copiare
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
           if [ -z "$SUPABASE_DB_URL" ]; then
             echo "::error::Manca il segreto SUPABASE_DB_URL: nessun backup eseguito. Aggiungilo in Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          # #234 — Il file contiene nomi, indirizzi, telefoni e ordini di tutti.
+          # Senza passphrase resterebbe in chiaro per trenta giorni fra gli
+          # artefatti, scaricabile da chiunque abbia accesso al repository.
+          # Meglio un backup che manca e si vede, che un backup che espone
+          # tutti e non lo dice.
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "::error::Manca il segreto BACKUP_PASSPHRASE: il backup NON viene eseguito perché uscirebbe in chiaro. Scegli una passphrase lunga, salvala dove tieni le password e aggiungila in Settings → Secrets and variables → Actions."
             exit 1
           fi
 
       - name: Esegui il backup
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
           BACKUP_DIR: ${{ github.workspace }}/backup
         run: |
           mkdir -p "$BACKUP_DIR"

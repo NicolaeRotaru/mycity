@@ -4,6 +4,8 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { verificaImmagineBase64 } from '@/lib/immagini-base64';
+import { jsonConTetto } from '@/lib/api/corpo';
 import { getBgRemovalProvider } from '@/lib/bg-removal';
 import {
   BgRemovalConfigError,
@@ -23,9 +25,6 @@ import {
 
 // Eseguito sempre lato server (provider key server-only).
 export const runtime = 'nodejs';
-
-// Validazione base64 (solo charset), come app/api/vision/extract-product/route.ts.
-const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
@@ -52,24 +51,27 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   // 3) Body + validazione
-  let json: unknown;
-  try {
-    json = await req.json();
-  } catch {
-    return ApiErrors.invalidRequest('Body JSON non valido.');
-  }
+  // #180 — Tetto vero sul corpo: l'immagine arriva come base64 dentro il JSON,
+  // quindi un corpo enorme finirebbe tutto in memoria prima di qualunque
+  // controllo. Otto megabyte coprono i cinque veri dell'immagine piu' il
+  // sovrapprezzo del base64.
+  const json = await jsonConTetto(req, 8 * 1024 * 1024);
+  if (json === undefined) return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+  if (json === null) return ApiErrors.invalidRequest('Body JSON non valido.');
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) {
     return ApiErrors.invalidRequest('media_type deve essere image/jpeg, image/png o image/webp.');
   }
   const { image_base64, media_type } = parsed.data;
 
-  if (!BASE64_RE.test(image_base64.slice(0, 4096))) {
-    return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
-  }
-  // base64 ~= 4/3 byte raw: accettiamo fino a ~5 MB raw = ~7 MB base64.
-  if (image_base64.length > 7_500_000) {
-    return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+  // #207 — Si controlla tutta la stringa, non i primi quattromila caratteri, e
+  // si guarda che i primi byte siano davvero quelli di una immagine del tipo
+  // dichiarato. Il controllo unico sta in lib/immagini-base64.ts.
+  const esitoImmagine = verificaImmagineBase64(image_base64, media_type);
+  if (!esitoImmagine.ok) {
+    return esitoImmagine.troppoGrande
+      ? ApiErrors.payloadTooLarge(esitoImmagine.motivo)
+      : ApiErrors.invalidRequest(esitoImmagine.motivo);
   }
 
   // 4) Rimozione sfondo → immagine su bianco

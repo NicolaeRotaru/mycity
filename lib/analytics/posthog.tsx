@@ -24,12 +24,24 @@ import { readConsent } from '@/lib/consent';
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 
+// #227 — L'indirizzo che riceve gli eventi finisce sempre per `.i.posthog.com`.
+// Con l'indirizzo del pannello al posto suo, gli eventi partono e non arrivano
+// da nessuna parte: nessun errore, solo silenzio. Meglio una riga in console
+// subito che un mese di numeri a zero.
+if (typeof window !== 'undefined' && POSTHOG_KEY && !/\.i\.posthog\.com\/?$/.test(POSTHOG_HOST)) {
+  console.warn(
+    `[analytics] NEXT_PUBLIC_POSTHOG_HOST vale "${POSTHOG_HOST}": non e' un indirizzo di raccolta eventi (deve finire per .i.posthog.com). Gli eventi non arriveranno.`,
+  );
+}
+
 type PostHogLike = {
   capture: (event: string, props?: Record<string, unknown>) => void;
   identify: (userId: string, traits?: Record<string, unknown>) => void;
   reset: () => void;
   opt_in_capturing: () => void;
   opt_out_capturing: () => void;
+  /** Proprieta' appiccicate a TUTTI gli eventi successivi (super-property). */
+  register: (props: Record<string, unknown>) => void;
 };
 
 let posthogInstance: PostHogLike | null = null;
@@ -90,6 +102,18 @@ export async function identify(userId: string, traits?: Record<string, unknown>)
   ph.identify(userId, traits);
 }
 
+/**
+ * #215 — Attacca una proprieta' a tutti gli eventi successivi di questa
+ * sessione. Serve al test A/B: senza questo la variante viveva su un evento
+ * solo (l'esposizione) e non su quelli che contano — carrello, acquisto — e
+ * quindi l'esperimento non era misurabile.
+ */
+export async function registraProprietaPersistenti(props: Record<string, unknown>) {
+  const ph = await getPosthog();
+  if (!ph) return;
+  try { ph.register(props); } catch { /* telemetria best-effort */ }
+}
+
 export async function resetUser() {
   const ph = await getPosthog();
   if (!ph) return;
@@ -119,6 +143,18 @@ export default function PostHogProvider() {
         // la prima pagina — quella da cui la persona è arrivata, cioè la piu'
         // importante per capire da dove viene il traffico — non veniva mai
         // registrata. Si vedeva la seconda.
+        // #222 — Chi accetta i cookie mentre e' gia' entrato restava anonimo
+        // fino al ricaricamento della pagina: l'identificazione avviene al
+        // montaggio del profilo, che dopo un clic sul banner non si rimonta.
+        // Risultato: gli eventi piu' interessanti — quelli subito dopo il
+        // consenso — restavano staccati dalla persona.
+        void (async () => {
+          try {
+            const { supabase } = await import('@/lib/supabase/client');
+            const { data } = await supabase.auth.getUser();
+            if (data.user?.id) ph.identify(data.user.id);
+          } catch { /* niente identita': gli eventi restano anonimi */ }
+        })();
         const url = window.location.pathname + window.location.search;
         ph.capture('$pageview', { $current_url: url });
       });

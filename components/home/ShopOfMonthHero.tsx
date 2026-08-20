@@ -7,6 +7,7 @@ import { Crown, ArrowRight, Vote } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
 
 /**
  * Hero "Negozio del mese" in home.
@@ -36,10 +37,8 @@ export default function ShopOfMonthHero() {
   const { data: pick, isLoading } = useQuery<Pick | null>({
     queryKey: queryKeys.shopOfMonth.current,
     queryFn: async (): Promise<Pick | null> => {
-      const firstOfMonth = new Date();
-      firstOfMonth.setDate(1);
-      firstOfMonth.setHours(0, 0, 0, 0);
-      const monthIso = firstOfMonth.toISOString().slice(0, 10);
+      // #211 — Il mese e' quello di Piacenza, non di Greenwich.
+      const monthIso = primoDelMesePiacenza();
 
       const { data } = await supabase
         .from('shop_of_month')

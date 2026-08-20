@@ -80,6 +80,9 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
       if (delta && r.seller_id) {
         const { title, body } = changeMessage(r.name ?? 'prodotto', delta);
         await supa.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'promo',
           user_id: r.seller_id,
           title,
           body,

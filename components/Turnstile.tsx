@@ -17,6 +17,16 @@ type Props = {
   siteKey: string;
   onVerify: (token: string) => void;
   onExpire?: () => void;
+  /**
+   * #115 — Chiamata quando il controllo anti-bot NON si carica: rete che
+   * blocca challenges.cloudflare.com (uffici, scuole, alcuni operatori),
+   * estensione che lo taglia via, Cloudflare che ha un guasto. Prima non
+   * esisteva: il gettone non arrivava mai, il modulo restava bloccato per
+   * sempre e l'unico messaggio era «Completa il controllo anti-bot» — su un
+   * riquadro vuoto. Nessuno poteva piu' registrarsi ne' accedere, e a noi non
+   * arrivava nessun segnale.
+   */
+  onError?: (motivo: string) => void;
   theme?: 'light' | 'dark' | 'auto';
 };
 
@@ -25,22 +35,37 @@ type Props = {
  * e renderizza un challenge invisibile/managed. Se la sitekey non è
  * configurata (lato server) il componente non viene montato dal parent.
  */
-export default function Turnstile({ siteKey, onVerify, onExpire, theme = 'auto' }: Props) {
+export default function Turnstile({ siteKey, onVerify, onExpire, onError, theme = 'auto' }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
+  // #115 — Le funzioni di richiamo cambiano identita' a ogni disegno: se
+  // restano fra le dipendenze, l'effetto si rifa' in continuazione e il
+  // riquadro viene smontato e rimontato. Si tengono da parte e aggiornate.
+  const richiami = useRef({ onVerify, onExpire, onError });
+  richiami.current = { onVerify, onExpire, onError };
 
   useEffect(() => {
     if (!siteKey || !ref.current) return;
+    let vivo = true;
+
+    const fallito = (motivo: string) => {
+      if (vivo) richiami.current.onError?.(motivo);
+    };
 
     const render = () => {
       if (!window.turnstile || !ref.current) return;
       if (widgetId.current) return;
-      widgetId.current = window.turnstile.render(ref.current, {
-        sitekey: siteKey,
-        theme,
-        callback: (token: string) => onVerify(token),
-        'expired-callback': () => onExpire?.(),
-      });
+      try {
+        widgetId.current = window.turnstile.render(ref.current, {
+          sitekey: siteKey,
+          theme,
+          callback: (token: string) => richiami.current.onVerify(token),
+          'expired-callback': () => richiami.current.onExpire?.(),
+          'error-callback': () => fallito('Il controllo anti-bot non ha risposto.'),
+        });
+      } catch {
+        fallito('Il controllo anti-bot non si e\' aperto.');
+      }
     };
 
     if (window.__turnstileLoaded) {
@@ -57,22 +82,32 @@ export default function Turnstile({ siteKey, onVerify, onExpire, theme = 'auto' 
           window.__turnstileLoaded = true;
           render();
         };
+        // #115 — Se lo script non arriva, si dice. Prima non succedeva niente:
+        // silenzio, e il modulo bloccato per sempre.
+        s.onerror = () => fallito('Il controllo anti-bot non si e\' caricato.');
         document.head.appendChild(s);
       } else {
         existing.addEventListener('load', () => {
           window.__turnstileLoaded = true;
           render();
         });
+        existing.addEventListener('error', () => fallito('Il controllo anti-bot non si e\' caricato.'));
       }
+      // Rete di sicurezza: se dopo dieci secondi non e' successo niente — script
+      // fermo, richiesta appesa — vale come «non disponibile».
+      window.setTimeout(() => {
+        if (!widgetId.current) fallito('Il controllo anti-bot non ha risposto in tempo.');
+      }, 10_000);
     }
 
     return () => {
+      vivo = false;
       if (widgetId.current && window.turnstile) {
         try { window.turnstile.remove(widgetId.current); } catch { /* noop */ }
         widgetId.current = null;
       }
     };
-  }, [siteKey, theme, onVerify, onExpire]);
+  }, [siteKey, theme]);
 
   return <div ref={ref} className="cf-turnstile" />;
 }

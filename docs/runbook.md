@@ -98,9 +98,22 @@ WHERE seller_id = '<seller-uuid>';
 
 ### Backup
 
-Supabase fa **PITR (Point In Time Recovery)** automatico:
-- Free tier: 7 giorni
-- Pro tier: 14 giorni
+> ⚠️ #238 — **Da verificare prima di fidarsi.** Qui c'era scritto che Supabase
+> fa il ripristino al minuto (PITR) su tutti i piani. Non è così: sul piano
+> gratuito il ripristino al minuto **non c'è**, e il ripristino di una copia
+> giornaliera **sovrascrive la produzione**, non crea una copia a parte. Lo
+> script `scripts/backup-db.sh` nasce proprio da questo: era la nostra unica
+> rete di sicurezza vera, e non lo eseguiva nessuno.
+>
+> **Cosa c'è davvero, oggi:** la copia notturna di GitHub Actions
+> (`.github/workflows/backup-db.yml`), cifrata, conservata 30 giorni, che dal
+> 20 agosto comprende anche gli utenti. Il resto va confermato aprendo
+> Supabase → Settings → Billing e Database → Backups, e scritto qui con la
+> data del controllo.
+>
+> - Piano Supabase attivo: _da verificare_
+> - Ripristino al minuto (PITR): _da verificare_
+> - Data del controllo: _mai fatto_
 
 ### Restore drill (da eseguire ogni 3 mesi)
 
@@ -112,6 +125,39 @@ Supabase fa **PITR (Point In Time Recovery)** automatico:
 6. Distruggi il test project
 
 **Time SLA per disaster reale**: ~30 min dal trigger al ripristino prod.
+
+---
+
+## 4-bis. Tornare indietro dopo un rilascio andato male
+
+> #231 — Prima non era scritto da nessuna parte. Chi si trovava il sito rotto
+> alle nove di sera trovava scritto come rilasciare, non come tornare indietro:
+> l'unica strada che veniva in mente era un altro rilascio, cioè la cosa più
+> lenta e più rischiosa da fare mentre il sito è giù.
+
+**L'obiettivo, dichiarato:** si decide entro **10 minuti** dal primo segnale, si
+torna indietro in **meno di 5**.
+
+**Come si fa (è un clic):**
+
+1. Render → il servizio → scheda **Events**.
+2. Trova l'ultimo rilascio con la spunta verde, quello **prima** di quello rotto.
+3. Bottone **Rollback**. I rilasci di Render sono immutabili: sta ripubblicando
+   esattamente quei file, non ricostruendo niente.
+4. Aspetta il verde e ricontrolla la pagina che era rotta.
+
+**Se il guasto nasce da una migrazione del database, il ritorno del codice NON
+basta.** Il codice vecchio parlerà con un database nuovo, e la rottura resta —
+a volte peggiora, perché il codice vecchio non sa niente delle colonne appena
+cambiate. In quel caso: prima si rimette a posto il dato (vedi §4), poi si
+torna indietro col codice. Se la migrazione ha cancellato o riscritto righe,
+fermarsi e chiamare Nicola: un ripristino sbagliato è peggio del guasto.
+
+**Da provare a freddo, una volta**, fuori dall'orario di punta: fai un rollback
+su un rilascio innocuo, cronometra, e scrivi qui quanto ci è voluto davvero.
+Una procedura mai provata non è una procedura.
+
+- Ultima prova a freddo: _mai fatta_ (da compilare).
 
 ---
 

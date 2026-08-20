@@ -51,12 +51,45 @@ pg_dump \
   --file="$OUT" \
   "$DB_URL"
 
-SIZE=$(du -h "$OUT" | cut -f1)
+# #234 — Gli utenti. Lo schema `auth` era escluso per intero, e li' dentro c'e'
+# `auth.users`: la tabella a cui punta `profiles.id` e quindici altri file di
+# migrazione. Ripristinando solo questo dump si ottiene un database senza
+# nessun utente, quindi senza nessun profilo, negozio o ordine collegabile a
+# una persona: nessuno riuscirebbe piu' ad accedere. Non era un backup, era un
+# file. Qui si aggiunge un secondo dump della sola tabella degli utenti (il
+# resto dello schema `auth` e' roba interna di Supabase, che si ricrea da se').
+UTENTI="$BACKUP_DIR/mycity_${TS}_utenti.dump"
+echo "[backup] Dump degli utenti (auth.users) → $UTENTI"
+pg_dump \
+  --format=custom \
+  --no-owner \
+  --no-acl \
+  --table=auth.users \
+  --file="$UTENTI" \
+  "$DB_URL"
+
+# #234 — La cifratura. Dentro c'e' tutto: nomi, indirizzi, telefoni, email,
+# ordini. Fino a ieri il file usciva in chiaro e restava per trenta giorni fra
+# gli artefatti di GitHub, che chiunque abbia accesso al repository puo'
+# scaricare. Con la passphrase, esce cifrato e basta la passphrase per
+# rileggerlo.
+if [ -n "${BACKUP_PASSPHRASE:-}" ]; then
+  for f in "$OUT" "$UTENTI"; do
+    gpg --batch --yes --symmetric --cipher-algo AES256 \
+      --passphrase "$BACKUP_PASSPHRASE" --output "$f.gpg" "$f"
+    rm -f "$f"
+    echo "[backup] Cifrato: $f.gpg"
+  done
+else
+  echo "[backup] ATTENZIONE: BACKUP_PASSPHRASE non impostata, il file resta in chiaro." >&2
+fi
+
+SIZE=$(du -sh "$BACKUP_DIR" | cut -f1)
 DURATION=$(($(date +%s) - START))
 echo "[backup] Done in ${DURATION}s — size: $SIZE"
 
 # Rotation: rimuovi backup piu' vecchi di RETENTION_DAYS
-find "$BACKUP_DIR" -name "mycity_*.dump" -mtime +"$RETENTION_DAYS" -delete
+find "$BACKUP_DIR" \( -name "mycity_*.dump" -o -name "mycity_*.dump.gpg" \) -mtime +"$RETENTION_DAYS" -delete
 echo "[backup] Rotation done (retention: ${RETENTION_DAYS} days)"
 
 # Opzionale: upload su S3 / Google Drive / Backblaze B2

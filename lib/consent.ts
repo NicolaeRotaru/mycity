@@ -24,7 +24,11 @@ export type ConsentState = {
   version: number;
 };
 
-export const CONSENT_VERSION = 1;
+// #69 — Alzata da 1 a 2 insieme alla riparazione della registrazione: i
+// consensi «gia' dati» non esistono da nessuna parte (il registro era vuoto per
+// via del difetto), quindi vanno richiesti di nuovo. Il banner ricompare una
+// volta, e da li' in avanti quello che la gente sceglie resta scritto.
+export const CONSENT_VERSION = 2;
 export const CONSENT_COOKIE = 'mc_consent';
 export const CONSENT_STORAGE = 'mc_consent_v1';
 export const CONSENT_MAX_AGE_DAYS = 180;
@@ -82,7 +86,13 @@ export function writeConsent(partial: Partial<ConsentState>) {
     body: JSON.stringify({
       analytics: next.analytics,
       marketing: next.marketing,
-      versione: CONSENT_VERSION,
+      // #69 — La versione va come TESTO. `CONSENT_VERSION` e' un numero, e la
+      // rotta si aspetta una stringa: ogni registrazione veniva respinta con
+      // 400, in silenzio, e il registro dei consensi era vuoto da sempre. Il
+      // giorno in cui il Garante — o un cliente — chiede «dimostrate che vi
+      // aveva detto di si'», non c'e' niente da mostrare. Testo anche perche'
+      // regge versioni come '2.1'.
+      versione: String(CONSENT_VERSION),
     }),
     keepalive: true,
   }).catch(() => { /* la registrazione non deve bloccare la scelta dell'utente */ });

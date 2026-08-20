@@ -95,6 +95,38 @@ export const POST = withAuthRateLimit(
     const supa = await getServerSupabase();
     const admin = getAdminSupabase();
 
+    /**
+     * #172 — Doppio clic, un ordine solo.
+     *
+     * Il percorso in contanti non aveva nessuna protezione contro il doppio
+     * invio. Un secondo tocco sul pulsante — la cosa piu' naturale del mondo
+     * quando per due secondi non succede niente — creava DUE ordini, riservava
+     * la merce due volte e addebitava il credito MyCity due volte. Il negozio
+     * preparava due spese e il fattorino ne consegnava una: la differenza la
+     * rimettevamo noi.
+     *
+     * Il browser manda una chiave per tentativo (intestazione
+     * `Idempotency-Key`). Se quella chiave e' gia' passata di qui, si
+     * restituiscono gli ordini di allora invece di crearne altri.
+     */
+    const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    if (chiaveTentativo) {
+      const { data: gia } = await admin
+        .from('cod_checkout_attempts')
+        .select('order_ids')
+        .eq('chiave', chiaveTentativo)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const ordiniGia = (gia?.order_ids as Array<{ id: string; sellerId: string; totalCents: number }> | null) ?? null;
+      if (ordiniGia && ordiniGia.length > 0) {
+        logger.info('[cod] tentativo ripetuto: restituisco gli ordini gia creati', { chiave: chiaveTentativo });
+        return NextResponse.json(
+          { orderIds: ordiniGia.map((o) => o.id), ordini: ordiniGia, ripetuto: true },
+          { status: 200 },
+        );
+      }
+    }
+
     // --- 1. Carica i prodotti dal DB (mai trust client su prezzo/seller/stock).
     const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
     const uniqueProductIds = [...new Set(allProductIds)];
@@ -136,8 +168,18 @@ export const POST = withAuthRateLimit(
 
     // --- 2. Coordinate negozio (per spedizione distanza-based).
     const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
+    // #16 — Si legge dalla VETRINA PUBBLICA, non dalla tabella dei profili.
+    //
+    // Da quando la 110 ha tolto la regola «chiunque puo' vedere i negozi
+    // approvati», questa lettura fatta con la sessione del cliente tornava
+    // VUOTA — senza errore, semplicemente zero righe. Due conseguenze silenziose:
+    // il controllo «il negozio e' chiuso adesso» non scattava mai (si poteva
+    // ordinare alle tre di notte, e il fattorino andava a vuoto), e le coordinate
+    // del negozio mancavano, quindi la consegna veniva prezzata sempre a tariffa
+    // fissa invece che sulla distanza. `seller_public_profiles` espone
+    // esattamente queste colonne, ed e' leggibile da chi ha un account.
     const { data: sellers } = await supa
-      .from('profiles')
+      .from('seller_public_profiles')
       .select('id, store_name, store_lat, store_lng, store_hours')
       .in('id', sellerIds);
     const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
@@ -269,6 +311,12 @@ export const POST = withAuthRateLimit(
 
     // --- 5. Inserisci N ordini (uno per gruppo) con il client admin.
     const createdOrderIds: string[] = [];
+    // #210 e #213 — Il browser non deve piu' indovinare quanto e' stato
+    // ordinato. Qui c'e' l'importo che il cliente pagherà davvero, per ogni
+    // ordine, col negozio vero: sono i numeri che tornano indietro e finiscono
+    // nella misura. Prima ne partiva uno solo, con la stima del browser e la
+    // parola «multi» al posto del negozio.
+    const ordiniCreati: Array<{ id: string; sellerId: string; totalCents: number }> = [];
     const reservedStockPerGroup: Array<Array<{ product_id: string; variant_id: string | null; qty: number }>> = [];
     const walletAppliedPerGroup: number[] = [];
 
@@ -287,7 +335,16 @@ export const POST = withAuthRateLimit(
           });
         }
       }
+      // #171 — Anche il codice sconto torna disponibile. Era «consumato» col
+      // claim atomico prima di creare gli ordini: se gli ordini vengono
+      // annullati e il codice resta usato, il cliente lo ha in mano e il
+      // sistema lo considera bruciato, senza che nessuno abbia comprato niente.
+      if (validatedCouponCode) {
+        const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
+        if (relErr) logger.warn('[cod] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+      }
       createdOrderIds.length = 0;
+      ordiniCreati.length = 0;
       reservedStockPerGroup.length = 0;
       walletAppliedPerGroup.length = 0;
     };
@@ -395,8 +452,14 @@ export const POST = withAuthRateLimit(
           delivery_city: body.delivery.city,
           delivery_zip: body.delivery.zip,
           delivery_notes: body.delivery.notes ?? null,
-          delivery_lat: coordConsegna?.lat ?? body.delivery.lat ?? null,
-          delivery_lng: coordConsegna?.lng ?? body.delivery.lng ?? null,
+          // #162 — Mai le coordinate mandate dal browser come ripiego. Erano
+          // quelle di un indirizzo salvato, che pero' la persona puo' aver
+          // corretto a mano un attimo prima: il testo dice una via e il punto
+          // sulla mappa ne indica un'altra, e il fattorino va dove dice il
+          // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
+          // coordinata che contraddice l'indirizzo scritto.
+          delivery_lat: coordConsegna?.lat ?? null,
+          delivery_lng: coordConsegna?.lng ?? null,
         })
         .select('id')
         .single();
@@ -448,6 +511,9 @@ export const POST = withAuthRateLimit(
 
       // Notifica in-app al venditore — nuovo ordine COD ricevuto
       await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
         user_id: g.sellerId,
         title: '🎉 Nuovo ordine!',
         body: `Ordine #${order.id.slice(0, 6).toUpperCase()} · €${(totalCents / 100).toFixed(2)} · pagamento alla consegna`,
@@ -477,6 +543,9 @@ export const POST = withAuthRateLimit(
       // non deve far fallire la creazione dell'ordine). Per gli ordini con carta
       // la conferma parte dal webhook Stripe; per il COD va inviata qui.
       await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
         user_id: user.id,
         title: '✅ Ordine ricevuto',
         body: `Il tuo ordine #${order.id.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,
@@ -500,11 +569,21 @@ export const POST = withAuthRateLimit(
       }
 
       createdOrderIds.push(order.id);
+      ordiniCreati.push({ id: order.id, sellerId: g.sellerId, totalCents });
     }
 
     // NB: il coupon è già stato claimato atomicamente sopra (claim_coupon, fix #36).
     // Non chiamiamo più increment_coupon_usage qui.
 
-    return NextResponse.json({ orderIds: createdOrderIds }, { status: 200 });
+    // #172 — Si registra il tentativo: se la stessa chiave torna (doppio clic,
+    // rete che ritenta), la prossima volta si esce subito con questi ordini.
+    if (chiaveTentativo && createdOrderIds.length > 0) {
+      const { error: errChiave } = await admin
+        .from('cod_checkout_attempts')
+        .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: ordiniCreati });
+      if (errChiave) logger.warn('[cod] tentativo non registrato', { message: errChiave.message });
+    }
+
+    return NextResponse.json({ orderIds: createdOrderIds, ordini: ordiniCreati }, { status: 200 });
   },
 );

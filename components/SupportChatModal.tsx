@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Headset, X, Send, Sparkles, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { useCloseOnBack } from './hooks/useCloseOnBack';
+import { useBottomSheetA11y } from './hooks/useBottomSheetA11y';
 import SupportProductAssistant from './SupportProductAssistant';
 
 type SupportRole = 'buyer' | 'seller' | 'rider' | 'default';
@@ -30,6 +31,10 @@ type Props = {
  * punti (es. la tab "Assistenza" della MobileTabBar per il buyer).
  */
 export default function SupportChatModal({ open, onClose, role = 'default' }: Props) {
+  // #152 — Esc, trappola del fuoco, scorrimento bloccato e ritorno del fuoco.
+  const pannelloRef = useRef<HTMLDivElement>(null);
+  const nessunAvvio = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(open, pannelloRef, nessunAvvio, onClose);
   const router = useRouter();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -85,7 +90,11 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
       aria-modal="true"
       aria-label="Assistenza MyCity"
     >
+      {/* #152 — Si dichiarava dialogo modale e non si comportava da tale:
+          niente Esc, niente trappola del fuoco, niente ritorno al pulsante che
+          l'aveva aperto. Ora usa lo stesso hook degli altri pannelli. */}
       <div
+        ref={pannelloRef}
         className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-warm-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >

@@ -14,7 +14,6 @@ import {
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
-import { notify } from '@/lib/notifications';
 import CashConfirmDialog from '@/components/rider/CashConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -101,14 +100,24 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
 
   // Transizione semplice (es. PICKED_UP → OUT_FOR_DELIVERY senza codice)
   const transition = useMutation({
-    mutationFn: async (params: { newStatus: OrderStatus; timestampField?: string }) => {
+    // #12 — Via il parametro `timestampField`: lasciava scrivere al BROWSER il
+    // nome di una colonna e il suo valore. Quei due orari (ritiro e consegna) li
+    // scrive gia' il database dentro `verify_pickup_code` e `verify_delivery_code`,
+    // ed e' giusto cosi': sono la prova di quando e' successo, e la prova non la
+    // scrive chi ha interesse a spostarla. Le regole del database rifiutavano
+    // comunque quella scrittura, quindi era anche codice che non funzionava.
+    mutationFn: async (params: { newStatus: OrderStatus }) => {
       if (!order) throw new Error('Ordine non caricato');
       const update: Record<string, any> = { delivery_status: params.newStatus };
-      if (params.timestampField) update[params.timestampField] = new Date().toISOString();
       const { error } = await supabase.from('orders').update(update).eq('id', order.id);
       if (error) throw error;
 
-      notify({ userId: order.user_id, title: ORDER_STATUS_LABEL[params.newStatus], body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`, link: `/orders/${order.id}` });
+      // #44 — Qui c'era una chiamata a `notify()` dal browser. Non ha mai
+      // funzionato: la tabella delle notifiche non ha nessuna regola che
+      // permetta a una persona di scriverne una a un'altra, quindi il database
+      // rifiutava e la funzione si mangiava l'errore. Sembrava fatto e non era
+      // fatto. La notifica vera la scrive il trigger sul cambio di stato
+      // dell'ordine (migrazione 086), lato server, dove i permessi ci sono.
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) });
@@ -384,6 +393,19 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 </button>
               )}
             </div>
+
+            {/* #75 — Cosa viene raccolto, perche' e per quanto: scritto qui,
+                dove si accende, non solo in una pagina legale che nessuno apre.
+                La posizione e' il dato piu' invasivo che chiediamo, e chi la
+                condivide ha diritto di sapere cosa succede. */}
+            <p className="mt-3 border-t border-cream-200 pt-3 text-[12px] leading-relaxed text-ink-500">
+              Mentre è attiva, la tua posizione viene salvata al massimo una volta ogni
+              30 secondi e la vede il cliente di <em>questo</em> ordine, per sapere quando
+              arrivi. Si ferma da sola quando l&apos;ordine si chiude e non viene usata per
+              valutare il tuo lavoro. Puoi disattivarla in qualunque momento con il
+              pulsante qui sopra: l&apos;ordine resta tuo.{' '}
+              <Link href="/privacy" className="underline">Come trattiamo i tuoi dati</Link>
+            </p>
           </div>
         )}
 

@@ -1,24 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
+import { useUtente, CHIAVE_UTENTE } from '@/components/hooks/useUtente';
 
 /**
  * Conta le notifiche non lette dell'utente corrente.
  * Si re-fetcha ogni 60s e quando lo stato auth cambia.
  */
 export const useNotificationsCount = () => {
-  const [userId, setUserId] = useState<string | null>(null);
-
+  // #88 — L'identita' arriva dalla cache condivisa (una lettura per tutta la
+  // pagina). Il cambio di stato lo si ascolta comunque, per svuotare i conti
+  // quando qualcuno esce.
+  const { userId } = useUtente();
+  const qc = useQueryClient();
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
-      setUserId(session?.user?.id ?? null);
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      void qc.invalidateQueries({ queryKey: CHIAVE_UTENTE });
     });
     return () => sub.subscription.unsubscribe();
-  }, []);
+  }, [qc]);
 
   const { data: count = 0 } = useQuery({
     queryKey: [...queryKeys.notifications.count, userId],

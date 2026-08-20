@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getServerSupabase } from '@/lib/supabase/server';
-import { buildShippingLabel } from '@/lib/shipping/label';
+// #12 — La cartella si chiamava `lib/shipping/`, come il file `lib/shipping.ts`
+// che sta accanto: due cose diverse con lo stesso nome. Un `import from
+// '@/lib/shipping'` prende il file, `'@/lib/shipping/label'` prende la
+// cartella, e chi legge non ha modo di accorgersi della differenza. Rinominata.
+import { buildShippingLabel } from '@/lib/shipping-etichetta/label';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 

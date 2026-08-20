@@ -432,7 +432,21 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     })
     .eq('id', pendingCheckoutId);
 
-  // Email buyer + seller (best-effort, per ogni ordine creato)
+  /**
+   * #176 — Le email non tengono piu' in ostaggio la risposta a Stripe.
+   *
+   * Stripe considera fallita una consegna che non riceve risposta entro pochi
+   * secondi, la ritenta, e dopo troppi fallimenti disattiva l'endpoint. Qui,
+   * per ogni ordine, si aspettavano DUE invii di posta (con un secondo
+   * tentativo interno ciascuno) piu' una lettura dell'utente venditore: con un
+   * carrello da tre negozi e Resend lento si arrivava tranquillamente oltre il
+   * limite. E il lavoro che conta — l'ordine — era gia' fatto.
+   *
+   * Gli ordini sono creati e registrati sopra: da qui in giu' e' tutto
+   * best-effort, e parte senza far aspettare nessuno. Se un'email fallisce si
+   * vede nel log, non nel fatto che Stripe smette di parlarci.
+   */
+  const avvisi = (async () => {
   for (const created of createdOrderIds) {
     const groupForOrder = groups.find((x) => x.sellerId === created.sellerId);
     const storeName = groupForOrder?.storeName ?? 'venditore';
@@ -461,12 +475,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
     // Notifica in-app al venditore (campanella) — nuovo ordine ricevuto
     await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
       user_id: created.sellerId,
       title: '📦 Nuovo ordine ricevuto',
       body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
       link: `/seller/orders/${created.orderId}`,
     });
   }
+  })();
+  // Non si aspetta: si registra soltanto se qualcosa va storto.
+  void avvisi.catch((e) => logger.warn('[webhook] avvisi post-ordine falliti', { message: e instanceof Error ? e.message : 'errore' }));
 }
 
 /**
@@ -598,6 +618,9 @@ async function handleSponsoredPurchase(session: Stripe.Checkout.Session) {
   }
 
   await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
     user_id: sellerId,
     title: '✨ Sponsorizzazione attiva',
     body: `Il tuo prodotto è "In primo piano" nella ricerca fino al ${endStr}.`,
@@ -658,6 +681,9 @@ async function handleSellerSubscription(session: Stripe.Checkout.Session) {
     .eq('id', sellerId);
 
   await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
     user_id: sellerId,
     title: '✅ Abbonamento attivo',
     body: 'Il tuo abbonamento venditore (€50/mese) è attivo. Grazie!',
@@ -694,6 +720,9 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     .select('id');
   for (const r of rows ?? []) {
     await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
       user_id: r.id,
       title: '⚠️ Pagamento abbonamento non riuscito',
       body: 'Non siamo riusciti ad addebitare l’abbonamento mensile. Aggiorna il metodo di pagamento.',

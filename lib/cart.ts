@@ -68,18 +68,42 @@ export const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number
  * tutte le righe del prodotto (utile per gli articoli non più disponibili).
  */
 export const removeFromCart = (id: string, variantId?: string) => {
+  const prima = getCart();
+  const tolte = prima.filter((c) =>
+    variantId === undefined ? c.id === id : sameLine(c, { id, variantId }),
+  );
   saveCart(
-    getCart().filter((c) =>
+    prima.filter((c) =>
       variantId === undefined ? c.id !== id : !sameLine(c, { id, variantId }),
     ),
   );
-  // Tracking (PostHog + GA4), fire-and-forget.
-  import('@/lib/analytics/events').then((m) => m.trackRemoveFromCart(id)).catch(() => {});
+  // #226 — La rimozione porta quantita' e prezzo, come l'aggiunta. Prima
+  // viaggiava nuda: su GA4 il valore tolto dal carrello era sempre zero.
+  const qta = tolte.reduce((s, r) => s + r.quantity, 0);
+  const riga = tolte[0];
+  if (!riga) return;
+  import('@/lib/analytics/events')
+    .then((m) => m.trackRemoveFromCart(id, qta, Math.round(riga.price * 100), { name: riga.name, storeName: riga.storeName }))
+    .catch(() => {});
 };
 
 export const updateQuantity = (id: string, quantity: number, variantId?: string) => {
   if (quantity < 1) return removeFromCart(id, variantId);
-  saveCart(getCart().map((c) => (sameLine(c, { id, variantId }) ? { ...c, quantity } : c)));
+  const prima = getCart();
+  const riga = prima.find((c) => sameLine(c, { id, variantId }));
+  const delta = quantity - (riga?.quantity ?? 0);
+  saveCart(prima.map((c) => (sameLine(c, { id, variantId }) ? { ...c, quantity } : c)));
+  // #226 — Il cambio di quantita' non si vedeva affatto: nei numeri un
+  // carrello portato da 1 a 6 pezzi era identico a uno lasciato a 1. Si emette
+  // la differenza, che e' la convenzione GA4.
+  if (!riga || delta === 0) return;
+  const cents = Math.round(riga.price * 100);
+  const meta = { name: riga.name, storeName: riga.storeName };
+  import('@/lib/analytics/events')
+    .then((m) => (delta > 0
+      ? m.trackAddToCart(id, delta, cents, meta)
+      : m.trackRemoveFromCart(id, -delta, cents, meta)))
+    .catch(() => {});
 };
 
 export const clearCart = () => {

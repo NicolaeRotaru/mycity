@@ -17,6 +17,13 @@ export function getStripe(): Stripe {
     apiVersion: '2024-06-20',
     typescript: true,
     appInfo: { name: 'MyCity', version: '1.0.0' },
+    // #241 — Senza questi due parametri la libreria aspetta ottanta secondi e
+    // riprova due volte da sola: quasi tre minuti col cliente fermo sulla
+    // rotella, e la nostra istanza occupata. Dieci secondi sono gia' generosi
+    // per Stripe, e trasformano un'attesa infinita in un errore rapido che si
+    // puo' mostrare («riprova») invece di lasciare la gente appesa.
+    timeout: 10_000,
+    maxNetworkRetries: 2,
   });
   return _stripe;
 }

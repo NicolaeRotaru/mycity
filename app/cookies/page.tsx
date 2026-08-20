@@ -46,9 +46,19 @@ export default function CookiesPage() {
         <p>
           Necessari al funzionamento del sito. Non richiedono consenso preventivo.
         </p>
+        {/* #74 — Questa tabella era scritta a memoria e non corrispondeva ai
+            cookie veri: ne dichiarava uno che non esiste (mc_pref_*) e ne
+            taceva quattro che esistono (NEXT_LOCALE, mycity_shopping_mode,
+            mc_sid, mc_exp_*). Una cookie policy che elenca cose diverse da
+            quelle che il sito installa e' esattamente cio' che il Garante
+            guarda per primo. Rifatta leggendo il codice. */}
         <CookieTable rows={[
           { name: 'sb-*-auth-token', purpose: 'Sessione utente (Supabase Auth)', duration: '1 settimana', provider: 'Prima parte' },
-          { name: 'mc_consent', purpose: 'Memorizza le tue scelte sui cookie', duration: '6 mesi', provider: 'Prima parte' },
+          { name: 'mc_consent', purpose: 'Memorizza le tue scelte sui cookie (versione breve, leggibile dal server)', duration: '6 mesi', provider: 'Prima parte' },
+          { name: 'mc_consent_v1', purpose: 'Le stesse scelte, salvate nel browser per mostrarti lo stato nel banner', duration: 'Finché non le cambi', provider: 'Prima parte (archivio locale)' },
+          { name: 'NEXT_LOCALE', purpose: 'La lingua che hai scelto per il sito', duration: '1 anno', provider: 'Prima parte' },
+          { name: 'mycity_shopping_mode', purpose: 'Per i venditori: ricorda se stai navigando come negozio o come cliente', duration: 'Sessione', provider: 'Prima parte' },
+          { name: 'mc_cid', purpose: 'Identificativo del registro dei consensi: serve solo a legare la scelta che hai fatto sui cookie a chi l\'ha fatta, quando non hai un account. Non è leggibile dal browser e non serve a profilare.', duration: '6 mesi', provider: 'Prima parte' },
           { name: '__cf_bm', purpose: 'Anti-bot Cloudflare (sicurezza)', duration: '30 minuti', provider: 'Cloudflare' },
           { name: 'cf-turnstile-*', purpose: 'CAPTCHA Turnstile', duration: 'Sessione', provider: 'Cloudflare' },
           { name: '__stripe_mid / __stripe_sid', purpose: 'Anti-frode pagamenti', duration: '1 anno / 30 min', provider: 'Stripe' },
@@ -56,9 +66,12 @@ export default function CookiesPage() {
 
         <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.2 Cookie funzionali (richiede consenso)</h3>
         <p>Memorizzano preferenze come lingua, ultima ricerca, mappa salvata.</p>
-        <CookieTable rows={[
-          { name: 'mc_pref_*', purpose: 'Preferenze UI (lingua, dark mode)', duration: '1 anno', provider: 'Prima parte' },
-        ]} />
+        {/* #74 — `mc_pref_*` non esiste in questo sito: era rimasto scritto qui
+            da una versione mai fatta. Le preferenze vere (lingua, modalita'
+            negozio) sono cookie tecnici e stanno nella tabella sopra. */}
+        <p className="text-sm text-ink-500">
+          Oggi non installiamo cookie funzionali oltre a quelli tecnici elencati sopra.
+        </p>
 
         <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.3 Cookie di analisi (richiede consenso)</h3>
         <p>
@@ -69,6 +82,8 @@ export default function CookiesPage() {
           { name: '_ga / _ga_*', purpose: 'Statistiche di utilizzo (se attivato)', duration: '14 mesi', provider: 'Google Analytics 4' },
           { name: 'ph_* / ph_phc_*', purpose: 'PostHog: statistiche di utilizzo e registrazione della sessione di navigazione (session replay). Attivi solo con il consenso ai cookie analitici; i campi di inserimento vengono mascherati nella registrazione.', duration: '12 mesi', provider: 'PostHog Inc. (Stati Uniti)' },
           { name: 'mc_vid', purpose: 'Identificatore di visita MyCity: correla le sessioni ricorrenti dello stesso dispositivo e le collega all\'account al login (profilazione pseudonima cross-sessione). Base giuridica: consenso (art. 6.1.a GDPR).', duration: '12 mesi', provider: 'Prima parte' },
+          { name: 'mc_sid', purpose: 'Identificativo della singola sessione di navigazione: tiene insieme le pagine viste in una stessa visita. Si cancella chiudendo la scheda.', duration: 'Sessione', provider: 'Prima parte' },
+          { name: 'mc_exp_*', purpose: 'A quale variante di una prova A/B sei stato assegnato, così la pagina non cambia sotto i tuoi occhi da una visita all\'altra.', duration: '90 giorni', provider: 'Prima parte' },
         ]} />
 
         <h3 className="font-semibold text-ink-900 mt-4 mb-2">2.4 Cookie di marketing (richiede consenso)</h3>

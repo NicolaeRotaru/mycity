@@ -141,15 +141,25 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   // --- 2. Carica i seller (per storeName nei line_items Stripe).
   const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
+  // #16 — Si legge dalla VETRINA PUBBLICA, non dalla tabella dei profili.
+  //
+  // Da quando la 110 ha tolto la regola «chiunque puo' vedere i negozi
+  // approvati», questa lettura fatta con la sessione del cliente tornava
+  // VUOTA — senza errore, semplicemente zero righe. Due conseguenze silenziose:
+  // il controllo «il negozio e' chiuso adesso» non scattava mai (si poteva
+  // ordinare alle tre di notte, e il fattorino andava a vuoto), e le coordinate
+  // del negozio mancavano, quindi la consegna veniva prezzata sempre a tariffa
+  // fissa invece che sulla distanza. `seller_public_profiles` espone
+  // esattamente queste colonne, ed e' leggibile da chi ha un account.
   const { data: sellers } = await supa
-    .from('profiles')
-    .select('id, store_name, full_name, store_lat, store_lng, store_hours')
+    .from('seller_public_profiles')
+    .select('id, store_name, store_lat, store_lng, store_hours')
     .in('id', sellerIds);
 
   const sellerNameMap = new Map<string, string>();
   const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
   for (const s of sellers ?? []) {
-    sellerNameMap.set(s.id, s.store_name ?? s.full_name ?? 'Negozio');
+    sellerNameMap.set(s.id, s.store_name ?? 'Negozio');
     sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
   }
 
@@ -372,9 +382,25 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const stockItems = stripeGroups.flatMap((g) =>
     g.items.map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
   );
+  /**
+   * #171 — Il codice sconto si restituisce a OGNI uscita, non solo all'ultima.
+   *
+   * Il claim avviene prima di parlare con Stripe. Da li' in poi ci sono cinque
+   * modi di uscire senza ordine: merce finita, riga di intento non scritta,
+   * Stripe che rifiuta... e su quattro di questi il codice restava «usato».
+   * Per un codice a uso unico vuol dire perso per sempre: il cliente lo ha in
+   * mano, il sistema lo dichiara consumato, e nessuno ha comprato niente.
+   */
+  const rilasciaCoupon = async () => {
+    if (!validatedCouponCode) return;
+    const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
+    if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+  };
+
   const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
   if (reserveErr) {
     logger.warn('[stripe] reserve_stock fallita', { message: reserveErr.message });
+    await rilasciaCoupon();
     return ApiErrors.conflict('Alcuni articoli non sono più disponibili nelle quantità richieste.');
   }
 
@@ -394,8 +420,14 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         zip: body.delivery.zip,
         phone: body.delivery.phone,
         notes: body.delivery.notes ?? null,
-        lat: coordConsegna?.lat ?? body.delivery.lat ?? null,
-        lng: coordConsegna?.lng ?? body.delivery.lng ?? null,
+        // #162 — Mai le coordinate mandate dal browser come ripiego. Erano
+        // quelle di un indirizzo salvato, che pero' la persona puo' aver
+        // corretto a mano un attimo prima: il testo dice una via e il punto
+        // sulla mappa ne indica un'altra, e il fattorino va dove dice il
+        // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
+        // coordinata che contraddice l'indirizzo scritto.
+        lat: coordConsegna?.lat ?? null,
+        lng: coordConsegna?.lng ?? null,
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
         // scrive su orders.delivery_slot. null per ritiro / non scelta.
         slot: body.pickupInStore ? null : (body.deliverySlot ?? null),
@@ -409,6 +441,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   if (pendErr || !pending) {
     logger.error('[stripe] pending_checkout insert failed', pendErr);
     await admin.rpc('restore_stock', { p_items: stockItems }); // rilascia la riserva
+    await rilasciaCoupon(); // #171 — e anche il codice sconto
     return ApiErrors.internal('Errore nella preparazione del pagamento.');
   }
 
@@ -444,11 +477,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     await admin.rpc('restore_stock', { p_items: stockItems });
     // Il codice sconto era già stato «consumato» prima di creare la sessione:
     // se il pagamento non nasce va restituito, altrimenti quell'uso è perso per
-    // sempre. Nel codice non esisteva nessun punto che lo restituisse.
-    if (validatedCouponCode) {
-      const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
-      if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
-    }
+    // sempre.
+    await rilasciaCoupon();
     await admin
       .from('pending_checkouts')
       .update({ status: 'CANCELED' })

@@ -10,6 +10,7 @@ import { sizedImage } from '@/lib/image-url';
 import { useEffect, useState } from 'react';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
 
 /**
  * Pagina "Negozio del mese" — hero del pick attuale + voto democratico.
@@ -54,11 +55,12 @@ export default function ShopOfMonthPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [myVoteSeller, setMyVoteSeller] = useState<string | null>(null);
 
-  const firstOfMonth = (() => {
-    const d = new Date();
-    d.setDate(1); d.setHours(0,0,0,0);
-    return d.toISOString().slice(0, 10);
-  })();
+  // #211 — La chiave del mese si costruiva con toISOString() partendo da una
+  // mezzanotte locale: e' sempre la data di Greenwich. Il primo del mese, fra
+  // mezzanotte e le due, il browser scriveva il mese PRECEDENTE mentre il
+  // database — che usa il suo fuso — cercava quello corrente. Il voto veniva
+  // salvato e non veniva mai contato.
+  const firstOfMonth = primoDelMesePiacenza();
 
   useEffect(() => {
     (async () => {

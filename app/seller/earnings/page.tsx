@@ -72,7 +72,14 @@ export default function SellerEarningsPage() {
           'id, total_price, created_at, delivery_status, payment_method, payout_status, payout_at, seller_payout_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id',
         )
         .eq('seller_id', user.id)
-        .order('created_at', { ascending: false });
+        // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
+        // finche' gli ordini sono cento non si nota, il giorno che sono
+        // diecimila la pagina non si apre piu' — cioe' proprio quando serve.
+        // Il tetto e' dichiarato qui e mostrato a chi guarda, invece di essere
+        // il limite implicito di mille righe di PostgREST, che taglia in
+        // silenzio e fa sembrare veri dei numeri che non lo sono.
+        .order('created_at', { ascending: false })
+          .limit(500);
       if (error) throw error;
       return (data ?? []) as unknown as OrderRow[];
     },

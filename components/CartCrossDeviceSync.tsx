@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { getCart, saveCart, clearCart, CART_UPDATED_AT_KEY, type CartItem } from '@/lib/cart';
+import { idUtenteInMemoria } from '@/components/hooks/useUtente';
 
 /**
  * Sincronizza il carrello locale (localStorage) con il cloud (Supabase) quando
@@ -87,8 +88,9 @@ export default function CartCrossDeviceSync() {
     };
 
     const handleAuth = async () => {
-      const { data } = await supabase.auth.getUser();
-      userId = data.user?.id ?? null;
+      // #88 — Il token in memoria basta: la sincronizzazione del carrello non
+      // e' un'operazione di sicurezza.
+      userId = await idUtenteInMemoria();
       if (userId) await syncDown(userId);
     };
 

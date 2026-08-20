@@ -4,6 +4,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { writeAudit } from '@/lib/audit';
 import { resolveAiPatch, type AiProductPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import {
   productSnapshot,
@@ -82,6 +83,22 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     logger.error('catalog-apply update failed', { productId, status: error?.code });
     return ApiErrors.badGateway('Non sono riuscito a salvare. Riprova.');
   }
+
+  // #196 — Chi ha scritto cosa. Le modifiche fatte dall'AI non lasciavano
+  // nessuna traccia: non si sapeva quale prodotto fosse stato toccato da un
+  // suggerimento accettato, ne' cosa c'era scritto prima. Se un prezzo o una
+  // descrizione uscivano sbagliati, non c'era modo di risalire — ne' di
+  // annullare. Qui si registra chi, cosa, e il valore precedente dei soli
+  // campi cambiati. Best-effort: non blocca la risposta.
+  const prima: Record<string, unknown> = {};
+  for (const campo of Object.keys(update)) prima[campo] = (current as Record<string, unknown>)[campo];
+  void writeAudit({
+    actorId: user.id,
+    action: 'product.update',
+    targetTable: 'products',
+    targetId: productId,
+    metadata: { origine: 'ai-copilot', campi: Object.keys(update), prima, dopo: update },
+  });
 
   return NextResponse.json({
     ok: true,

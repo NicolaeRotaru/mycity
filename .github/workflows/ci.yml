@@ -6,6 +6,14 @@ on:
   pull_request:
     branches: [main]
 
+
+# #244 — Il minimo indispensabile. Senza questo blocco ogni lavoro parte col
+# permesso predefinito del repository, che di norma è di SCRITTURA: uno script
+# di una dipendenza compromessa potrebbe scrivere sul codice o creare rilasci.
+# Qui serve solo leggere.
+permissions:
+  contents: read
+
 jobs:
   lint-and-typecheck:
     name: Lint + Typecheck + Build
@@ -166,10 +174,14 @@ jobs:
       - name: Install deps
         run: npm ci --legacy-peer-deps
 
-      # Deriva fra le migrazioni sul disco e quelle registrate: lo script
-      # esisteva e nessuno lo eseguiva, quindi una migrazione dimenticata
-      # passava liscia. Qui gira contro il database appena ricostruito.
-      - name: Controllo deriva migrazioni
+      # #233 — Attenzione a cosa prova questo passo: gira contro il database
+      # che la CI ha appena ricostruito applicando TUTTE le migrazioni del
+      # repo. Quindi non puo' diventare rosso per definizione: confronta il
+      # repo con una copia del repo. E' un controllo di coerenza interna, non
+      # la sentinella delle migrazioni dimenticate in produzione — quella e' un
+      # lavoro a parte (.github/workflows/deriva-migrazioni-produzione.yml),
+      # perche' richiede il segreto del database vero.
+      - name: Coerenza interna delle migrazioni (NON e' il controllo su produzione)
         env:
           SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/mycity_ci
         run: npm run db:check-drift
@@ -195,18 +207,29 @@ jobs:
       # renderizzano dati dal DB). Se ci sono i secret di un Supabase di TEST →
       # build + avvio app + Playwright. Se mancano → warning VISIBILE + skip,
       # così il job non blocca i merge ma resta pronto ad attivarsi.
+      # #240 — I segreti si chiamavano come quelli di produzione
+      # (NEXT_PUBLIC_SUPABASE_URL/ANON_KEY): chi li configurava incollava le
+      # chiavi vere, e gli smoke andavano a scrivere sul database dei clienti.
+      # Ora i nomi dicono cosa sono, e c'e' un controllo che rifiuta di partire
+      # se l'indirizzo coincide con quello di produzione.
       - name: Check E2E secrets
         id: e2e
         env:
-          URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          ANON: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          URL: ${{ secrets.SUPABASE_TEST_URL }}
+          ANON: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
+          URL_PRODUZIONE: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           if [ -z "$URL" ] || [ -z "$ANON" ]; then
-            echo "::warning::E2E smoke SALTATI: gli smoke richiedono un backend reale (Supabase di TEST). Configura NEXT_PUBLIC_SUPABASE_URL/ANON_KEY (e idealmente un DB seedato) in Actions per attivarli (audit 🔴-4)."
+            echo "::warning::E2E smoke SALTATI: servono SUPABASE_TEST_URL e SUPABASE_TEST_ANON_KEY (un progetto Supabase di PROVA, mai quello vero)."
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          host_prova="$(printf '%s' "$URL" | sed -E 's#^https?://##' | cut -d/ -f1)"
+          if [ -n "$URL_PRODUZIONE" ] && printf '%s' "$URL_PRODUZIONE" | grep -qF "$host_prova"; then
+            echo "::error::Il Supabase di prova punta allo stesso host della produzione ($host_prova). Gli smoke NON partono: scriverebbero sui dati veri."
+            exit 1
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT" 
 
       - name: Install Playwright (chromium)
         if: steps.e2e.outputs.enabled == 'true'
@@ -215,20 +238,24 @@ jobs:
       - name: Build
         if: steps.e2e.outputs.enabled == 'true'
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
           NEXT_PUBLIC_APP_URL: "http://localhost:3000"
         run: npm run build
 
       - name: Start app + run e2e
         if: steps.e2e.outputs.enabled == 'true'
         env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_TEST_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_TEST_ANON_KEY }}
           NEXT_PUBLIC_APP_URL: "http://localhost:3000"
           E2E_BASE_URL: "http://localhost:3000"
           CRON_SECRET: "ci-e2e-cron-secret"
         run: |
+          # #244 — `npm start` lancia un figlio (il server Next): chiudendo solo
+          # npm, il server restava vivo e il lavoro finiva in timeout. Si chiude
+          # il gruppo intero.
+          set -m
           npm start &
           APP_PID=$!
           for i in $(seq 1 60); do
@@ -238,5 +265,5 @@ jobs:
           set +e
           npm run test:e2e -- --project=chromium
           STATUS=$?
-          kill $APP_PID 2>/dev/null || true
+          kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
           exit $STATUS

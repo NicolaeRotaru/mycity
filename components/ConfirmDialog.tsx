@@ -113,6 +113,10 @@ export function ConfirmDialogHost() {
       onClick={(e) => { if (e.target === e.currentTarget) closeWith(false); }}
       role="dialog"
       aria-modal="true"
+      // #152 — Il messaggio («l'azione è irreversibile») non veniva annunciato
+      // con il titolo: chi usa uno screen reader sentiva solo la domanda, senza
+      // la frase che spiega cosa si sta per perdere.
+      aria-describedby={state.message ? 'confirm-message' : undefined}
       aria-labelledby="confirm-title"
     >
       <div
@@ -141,7 +145,7 @@ export function ConfirmDialogHost() {
             {state.title}
           </h2>
           {state.message && (
-            <p className="mt-2 text-sm text-ink-500 leading-relaxed max-w-[36ch] mx-auto">
+            <p id="confirm-message" className="mt-2 text-sm text-ink-500 leading-relaxed max-w-[36ch] mx-auto">
               {state.message}
             </p>
           )}

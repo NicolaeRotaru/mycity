@@ -11,8 +11,8 @@ import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
-import { haversineKm, riderFee } from '@/lib/geo';
+import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { shippingForEuro } from '@/lib/shipping';
 import { isExpressEligible } from '@/lib/products/express';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
@@ -40,20 +40,27 @@ type AddressForm = {
   notes: string;
 };
 
-const SHIPPING_PER_ORDER = 4.9;
-
-const SHIPPING_COST_FOR = (subtotal: number) => (subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_PER_ORDER);
-
 export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
   useEffect(() => {
     const c = getCart();
     setCart(c);
-    if (c.length > 0) {
-      const totalCents = Math.round(c.reduce((s, i) => s + i.price * i.quantity, 0) * 100);
-      trackCheckoutStarted(totalCents, c.reduce((s, i) => s + i.quantity, 0));
-    }
+    if (c.length === 0) return;
+    const totalCents = Math.round(c.reduce((s, i) => s + i.price * i.quantity, 0) * 100);
+    // #225 — L'avvio del checkout si contava a ogni ingresso nella pagina,
+    // mentre l'acquisto aveva l'anti-doppione. Chi torna indietro a correggere
+    // l'indirizzo e rientra contava due volte: il tasso di conversione da
+    // «checkout iniziato» ad «acquisto» usciva piu' basso del vero, e nessuno
+    // sapeva di quanto. La chiave e' legata al contenuto del carrello: un
+    // carrello diverso e' un checkout diverso e va contato.
+    const impronta = `${c.map((i) => `${i.id}:${i.variantId ?? ''}:${i.quantity}`).join('|')}#${totalCents}`;
+    const chiave = `mc_checkout_started_${impronta}`;
+    try {
+      if (sessionStorage.getItem(chiave)) return;
+      sessionStorage.setItem(chiave, '1');
+    } catch { /* sessionStorage non disponibile: si conta comunque */ }
+    trackCheckoutStarted(totalCents, c.reduce((s, i) => s + i.quantity, 0));
   }, []);
 
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
@@ -70,13 +77,35 @@ export default function CheckoutPage() {
       const lookupMap = new Map<string, string>(); // productId → seller_id (fonte: DB)
       const stockMap = new Map<string, number>();  // productId → stock disponibile (DB)
       const hasVariantsMap = new Map<string, boolean>(); // productId → ha varianti
+      const priceMap = new Map<string, number>(); // productId → prezzo di ADESSO (DB)
+      const expressPerProdotto = new Map<string, boolean | null>(); // #85
+      const expressPerNegozio = new Map<string, boolean>();          // #85
       const validIds = new Set<string>();
 
       if (cart.length > 0) {
-        const { data: products, error: pErr } = await supabase
+        // #114 — Anche il prezzo. Il totale mostrato qui veniva calcolato sui
+        // prezzi salvati nel carrello, che sono quelli del giorno in cui il
+        // prodotto e' stato aggiunto: il server, che rilegge dal database,
+        // ne addebitava altri. Chi aveva un carrello di una settimana prima
+        // vedeva 24 euro e si trovava 27 sull'estratto conto — o il contrario,
+        // e allora ci rimettevamo noi.
+        const ids = cart.map((c) => c.id);
+        let { data: products, error: pErr } = await supabase
           .from('products')
-          .select('id, seller_id, stock, has_variants')
-          .in('id', cart.map((c) => c.id));
+          .select('id, seller_id, stock, has_variants, price, express_enabled')
+          .in('id', ids);
+        // #85 — Ripiego che scatta una volta sola, non due viaggi fissi per
+        // tutti: se `express_enabled` non esistesse (migrazione 071 non
+        // applicata), si rilegge senza quella colonna invece di far fallire il
+        // checkout. 42703 = colonna inesistente.
+        if (pErr?.code === '42703') {
+          const ripiego = await supabase
+            .from('products')
+            .select('id, seller_id, stock, has_variants, price')
+            .in('id', ids);
+          products = (ripiego.data ?? []).map((r) => ({ ...r, express_enabled: null })) as typeof products;
+          pErr = ripiego.error;
+        }
         if (pErr) throw pErr;
         for (const p of products ?? []) {
           validIds.add(p.id);
@@ -89,6 +118,9 @@ export default function CheckoutPage() {
           // pulsante, senza che il negoziante potesse capire perché.
           stockMap.set(p.id, p.stock == null ? Number.POSITIVE_INFINITY : p.stock);
           hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
+          const prezzoVero = Number((p as { price?: number | string | null }).price ?? NaN);
+          if (Number.isFinite(prezzoVero)) priceMap.set(p.id, prezzoVero);
+          expressPerProdotto.set(p.id, (p as { express_enabled?: boolean | null }).express_enabled ?? null);
         }
       }
 
@@ -111,16 +143,24 @@ export default function CheckoutPage() {
         ]),
       );
       if (allSellerIds.length > 0) {
-        const { data: sellers } = await supabase
+        let { data: sellers, error: sErr } = await supabase
           .from('profiles')
-          .select('id, store_name, store_lat, store_lng')
+          .select('id, store_name, store_lat, store_lng, offers_express')
           .in('id', allSellerIds);
+        if (sErr?.code === '42703') {
+          const ripiego = await supabase
+            .from('profiles')
+            .select('id, store_name, store_lat, store_lng')
+            .in('id', allSellerIds);
+          sellers = (ripiego.data ?? []).map((r) => ({ ...r, offers_express: false })) as typeof sellers;
+        }
         for (const s of sellers ?? []) {
           sellerInfo.set(s.id, {
             name: s.store_name ?? 'Negozio',
             lat: s.store_lat,
             lng: s.store_lng,
           });
+          expressPerNegozio.set(s.id, Boolean((s as { offers_express?: boolean }).offers_express));
         }
       }
 
@@ -155,8 +195,24 @@ export default function CheckoutPage() {
             items: [],
           });
         }
-        sellerMap.get(sellerId)!.items.push(item);
+        // #114 — La riga entra nel gruppo col prezzo di adesso, non con quello
+        // che aveva quando e' stata messa nel carrello.
+        const prezzoAggiornato = priceMap.get(item.id);
+        sellerMap.get(sellerId)!.items.push(
+          prezzoAggiornato != null && prezzoAggiornato !== item.price
+            ? { ...item, price: prezzoAggiornato }
+            : item,
+        );
       }
+
+      // #114 — Quali prezzi sono cambiati sotto il naso del cliente: si dice,
+      // non si cambia il totale in silenzio.
+      const prezziCambiati = cart
+        .filter((it) => {
+          const adesso = priceMap.get(it.id);
+          return adesso != null && Math.abs(adesso - it.price) >= 0.01;
+        })
+        .map((it) => ({ id: it.id, name: it.name, prima: it.price, adesso: priceMap.get(it.id) as number }));
 
       // Disponibilità per riga: stock della variante se presente, altrimenti del
       // prodotto. Blocca e segnala invece di fallire dopo.
@@ -176,34 +232,30 @@ export default function CheckoutPage() {
 
       const groupsArr = Array.from(sellerMap.values());
 
-      // Express (best-effort): query SEPARATA dal percorso critico. Se le colonne
-      // non esistono ancora (migrazione 071 non applicata) PostgREST ritorna
-      // errore→data null: nessun badge Express, ma il checkout NON si rompe.
-      let expressStores: string[] = [];
-      if (groupsArr.length > 0) {
-        const sellerIds = groupsArr.map((g) => g.sellerId);
-        const [{ data: exProducts }, { data: exSellers }] = await Promise.all([
-          supabase.from('products').select('id, express_enabled').in('id', cart.map((c) => c.id)),
-          supabase.from('profiles').select('id, offers_express').in('id', sellerIds),
-        ]);
-        if (exProducts && exSellers) {
-          const exMap = new Map<string, boolean | null>();
-          for (const p of exProducts) exMap.set(p.id, (p as { express_enabled?: boolean | null }).express_enabled ?? null);
-          const offersMap = new Map<string, boolean>();
-          for (const s of exSellers) offersMap.set(s.id, Boolean((s as { offers_express?: boolean }).offers_express));
-          expressStores = groupsArr
-            .filter((g) => offersMap.get(g.sellerId) && g.items.every((it) => isExpressEligible(exMap.get(it.id) ?? null, offersMap.get(g.sellerId) ?? false)))
-            .map((g) => g.storeName);
-        }
-      }
+      // #85 — L'express non costa piu' due letture in piu'.
+      //
+      // Prima si rileggevano le STESSE righe di `products` e `profiles` gia'
+      // lette qui sopra, solo per due colonne: due viaggi di rete aggiuntivi
+      // dentro il checkout, il punto in cui la gente e' piu' impaziente. Ora le
+      // due colonne si chiedono subito, insieme al resto.
+      //
+      // Se la migrazione 071 non fosse applicata, `express_enabled` e
+      // `offers_express` non esisterebbero: la lettura fallirebbe per intero e
+      // il checkout si fermerebbe. Non e' un rischio teorico che vale la pena
+      // correre in silenzio, quindi il ripiego resta esplicito piu' sotto.
+      const expressStores = groupsArr
+        .filter((g) => expressPerNegozio.get(g.sellerId)
+          && g.items.every((it) => isExpressEligible(expressPerProdotto.get(it.id) ?? null, expressPerNegozio.get(g.sellerId) ?? false)))
+        .map((g) => g.storeName);
 
-      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, expressStores };
+      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, expressStores, prezziCambiati };
     },
   });
 
   const groups = cartData?.groups ?? [];
   const orphans = useMemo(() => cartData?.orphans ?? [], [cartData]);
   const stockIssues = useMemo(() => cartData?.stockIssues ?? [], [cartData]);
+  const prezziCambiati = useMemo(() => cartData?.prezziCambiati ?? [], [cartData]);
   const variantIssues = useMemo(() => cartData?.variantIssues ?? [], [cartData]);
   const expressStores = useMemo(() => cartData?.expressStores ?? [], [cartData]);
 
@@ -269,7 +321,17 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof AddressForm, string>>>({});
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+      // #3 e #162 — Se cambia l'indirizzo, le coordinate di prima non valgono
+      // piu'. Prima restavano attaccate: si sceglieva un indirizzo salvato, si
+      // correggeva la via a mano, e il fattorino veniva mandato al punto
+      // vecchio — con la strada nuova scritta sulla scheda. Il costo della
+      // consegna, che dipende dalla distanza, veniva calcolato sullo stesso
+      // punto sbagliato.
+      ...(name === 'address' || name === 'city' || name === 'zip' ? { lat: null, lng: null } : {}),
+    }));
     setErrors((prev) => (prev[name as keyof AddressForm] ? { ...prev, [name]: undefined } : prev));
   };
 
@@ -290,10 +352,17 @@ export default function CheckoutPage() {
   // (salvato in handleSubmit), così non va perso dopo l'accesso.
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem('mc_checkout_draft');
+      // #112 — La bozza dell'ordine stava nella memoria della SCHEDA
+      // (sessionStorage): il link di conferma dell'email apre una scheda nuova,
+      // quindi chi si registrava dal checkout ritrovava il modulo vuoto e
+      // doveva riscrivere indirizzo, telefono e note. Ora sta nella memoria del
+      // browser (localStorage) e sopravvive alla scheda nuova. Si cancella
+      // comunque appena viene ripresa, come prima.
+      const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
       const draft = JSON.parse(raw) as Partial<typeof form>;
       setForm((prev) => ({ ...prev, ...draft }));
+      localStorage.removeItem('mc_checkout_draft');
       sessionStorage.removeItem('mc_checkout_draft');
     } catch { /* noop */ }
   }, []);
@@ -336,19 +405,28 @@ export default function CheckoutPage() {
   const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
   const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>(stripeAvailable ? 'card' : 'cod');
-  const PICKUP_DISCOUNT_PERCENT = 10;
-
-  // Distanza-based shipping per ogni gruppo, se entrambe le coords sono note
-  const shippingFor = (g: { storeLat: number | null; storeLng: number | null; items: CartItem[] }): number => {
-    if (pickupInStore) return 0;
-    const subtotal = groupSubtotal(g);
-    if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
-    if (g.storeLat && g.storeLng && form.lat && form.lng) {
-      const km = haversineKm(g.storeLat, g.storeLng, form.lat, form.lng);
-      return riderFee(km);
-    }
-    return SHIPPING_COST_FOR(subtotal);
-  };
+  /**
+   * #3 — La spedizione la calcola la fonte unica, non questa pagina.
+   *
+   * La formula era riscritta qui dentro, con due costanti copiate a mano
+   * (4,90 e 10%). Due copie della stessa regola sono due regole: quella del
+   * server e quella del browser possono divergere in qualunque momento, e
+   * quando divergono il cliente vede un prezzo e ne paga un altro. E' gia'
+   * successo, ed e' il difetto piu' costoso da spiegare a chi compra.
+   *
+   * `shippingForEuro` e' la stessa funzione che usa il server quando crea
+   * l'ordine: gli stessi dati danno per forza lo stesso centesimo.
+   */
+  const shippingFor = (g: { storeLat: number | null; storeLng: number | null; items: CartItem[] }): number =>
+    shippingForEuro({
+      subtotal: groupSubtotal(g),
+      storeLat: g.storeLat,
+      storeLng: g.storeLng,
+      deliveryLat: form.lat,
+      deliveryLng: form.lng,
+      pickupInStore,
+      freeShipping: appliedCoupon?.freeShipping,
+    });
 
   const applyCoupon = async () => {
     setCouponError(null);
@@ -374,6 +452,21 @@ export default function CheckoutPage() {
   // Stripe, dove il credito arriverà più avanti). Mai più del totale dell'ordine.
   const creditApplied = paymentMethod === 'cod' && useCredit ? Math.min(walletEuro, grandTotal) : 0;
   const finalTotal = Math.max(0, grandTotal - creditApplied);
+
+  /**
+   * #172 — L'impronta di QUESTO carrello, usata come chiave del tentativo di
+   * ordine. Cambia se cambia il contenuto o il totale, cosi' due ordini
+   * davvero diversi non si confondono, e due invii dello stesso ordine si'.
+   */
+  const carrelloImpronta = useMemo(() => {
+    const pezzi = cart.map((i) => `${i.id}:${i.variantId ?? ''}:${i.quantity}`).join('|');
+    const totale = Math.round(finalTotal * 100);
+    let h = 0;
+    for (const ch of `${pezzi}#${totale}#${pickupInStore ? 'ritiro' : 'consegna'}`) {
+      h = (h * 31 + ch.charCodeAt(0)) | 0;
+    }
+    return Math.abs(h).toString(36);
+  }, [cart, finalTotal, pickupInStore]);
 
   const placeOrders = useMutation({
     mutationFn: async () => {
@@ -407,9 +500,14 @@ export default function CheckoutPage() {
       // SICUREZZA: gli ordini COD vengono creati SERVER-SIDE (/api/orders/cod),
       // che ricalcola prezzi, spedizione e sconti dal DB. Il client invia solo
       // prodotti+quantità, l'indirizzo e l'eventuale coupon; nessun importo.
+      // #172 — Una chiave per tentativo di checkout: se il pulsante viene
+      // premuto due volte, o se la rete ritenta da sola, il server riconosce il
+      // doppione e restituisce gli ordini gia' creati invece di farne altri.
+      // Vive quanto il carrello: cambia solo quando cambia cosa si sta comprando.
+      const chiaveTentativo = `cod-${carrelloImpronta}`;
       const res = await fetch('/api/orders/cod', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'idempotency-key': chiaveTentativo },
         body: JSON.stringify({
           groups: groups.map((g) => ({
             sellerId: g.sellerId,
@@ -434,18 +532,25 @@ export default function CheckoutPage() {
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
       const createdOrders: string[] = (body as { orderIds?: string[] }).orderIds ?? [];
-      // Misura: una conversione = un purchase col totale reale del checkout.
-      // Multi-seller crea N ordini ma con un solo flusso di pagamento: per non
-      // gonfiare il fatturato in GA4 emettiamo un order_placed aggregato sul
-      // primo orderId (transaction_id), seller 'multi' se più negozi.
-      if (createdOrders.length > 0) {
-        trackOrderPlaced(
-          createdOrders[0],
-          Math.round(grandTotal * 100),
-          'cod',
-          groups.length === 1 ? groups[0].sellerId : 'multi',
-          { coupon: appliedCoupon?.coupon.code },
-        );
+      const ordiniVeri = (body as { ordini?: Array<{ id: string; sellerId: string; totalCents: number }> }).ordini ?? [];
+      // #210 e #213 — Prima partiva UN evento solo, con due difetti dentro.
+      //
+      // Il primo: l'importo era `grandTotal`, cioe' la stima del browser prima
+      // del credito MyCity. Il cliente pagava 22 euro e nella misura ne
+      // risultavano 40. Ora l'importo e' quello che risponde il server, ordine
+      // per ordine: e' l'unico che sa quanto e' stato davvero addebitato.
+      //
+      // Il secondo: un carrello con due negozi crea due ordini, ma l'evento era
+      // uno e il venditore diventava la parola «multi». Il fatturato per negozio
+      // non esisteva, e il conto degli acquisti non tornava mai con la tabella
+      // degli ordini. Ora un evento per ordine, col negozio vero, e il
+      // `checkout_id` comune per riconoscere che vengono dallo stesso carrello.
+      const carrelloId = createdOrders[0] ?? null;
+      for (const o of ordiniVeri) {
+        trackOrderPlaced(o.id, o.totalCents, 'cod', o.sellerId, {
+          coupon: appliedCoupon?.coupon.code,
+          checkoutId: carrelloId,
+        });
       }
       return createdOrders;
     },
@@ -526,10 +631,12 @@ export default function CheckoutPage() {
       // al rientro su /orders?stripe=success: lì gli ordini sono già creati dal
       // webhook ma il client non ne conosce i totali, quindi li portiamo da qui.
       try {
+        // #210 — Qui resta solo il codice sconto, che il rientro non puo'
+        // ricavare dalla riga ordine. L'importo e il negozio NON si portano
+        // piu' dal browser: al rientro si leggono da `orders`, dove il webhook
+        // Stripe ha scritto quello che e' stato davvero incassato.
         sessionStorage.setItem('mc_pending_purchase', JSON.stringify({
-          valueCents: Math.round(grandTotal * 100),
           coupon: appliedCoupon?.coupon.code ?? null,
-          sellerId: groups.length === 1 ? groups[0].sellerId : 'multi',
         }));
       } catch { /* noop */ }
       // Redirect alla pagina Stripe Hosted Checkout. Il rientro avviene
@@ -591,7 +698,7 @@ export default function CheckoutPage() {
     // Defer-the-wall: l'indirizzo si compila da ospiti; l'accesso è richiesto
     // solo qui, al commit, salvando la bozza per ripristinarla al ritorno.
     if (!authUser) {
-      try { sessionStorage.setItem('mc_checkout_draft', JSON.stringify(form)); } catch { /* noop */ }
+      try { localStorage.setItem('mc_checkout_draft', JSON.stringify(form)); } catch { /* noop */ }
       router.push('/sign-in?returnTo=/checkout');
       return;
     }
@@ -777,6 +884,21 @@ export default function CheckoutPage() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.</span>
+            </div>
+          )}
+
+          {/* #114 — Il prezzo e' cambiato da quando l'articolo e' entrato nel
+              carrello: si dice, con la cifra di prima e quella di adesso. Il
+              totale qui sotto e' gia' quello nuovo, cioe' quello che verra'
+              addebitato davvero. */}
+          {prezziCambiati.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+              <span>
+                <strong>Il prezzo è cambiato</strong> da quando avevi messo nel carrello:{' '}
+                {prezziCambiati.map((p) => `${p.name} (${formatPrice(p.prima)} → ${formatPrice(p.adesso)})`).join('; ')}.
+                Il totale qui sotto è già aggiornato.
+              </span>
             </div>
           )}
 

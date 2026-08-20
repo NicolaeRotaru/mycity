@@ -31,11 +31,22 @@ const FILTERS = ['all', 'NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OU
 
 export default function AdminOrdersPage() {
   const [filter, setFilter] = useState<typeof FILTERS[number]>('all');
+  // #90 — Cinquanta ordini per volta, con «carica altri»: un pannello che
+  // scarica tutto smette di aprirsi il giorno in cui gli ordini sono tanti,
+  // cioe' il giorno in cui serve di piu'.
+  const PER_PAGINA = 50;
+  const [pagina, setPagina] = useState(1);
 
   const { data: orders = [], isLoading } = useQuery({
-    queryKey: queryKeys.admin.orders,
+    queryKey: [...queryKeys.admin.orders, filter, pagina],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // #90 — Prima si scaricava la tabella ordini INTERA, ogni trenta secondi,
+      // e il filtro di stato si applicava nel browser. A mille ordini sono
+      // qualche megabyte ogni mezzo minuto per ogni scheda aperta, e il filtro
+      // «annullati» lavorava comunque su tutto. Ora: filtro nella query,
+      // cinquanta righe per volta, e il ricaricamento automatico ogni due
+      // minuti invece di ogni trenta secondi.
+      let q = supabase
         .from('orders')
         .select(`
           id, total_price, delivery_status, created_at,
@@ -44,10 +55,12 @@ export default function AdminOrdersPage() {
           rider:profiles!orders_rider_id_fkey   ( full_name )
         `)
         .order('created_at', { ascending: false });
+      if (filter !== 'all') q = q.eq('delivery_status', filter);
+      const { data, error } = await q.range(0, PER_PAGINA * pagina - 1);
       if (error) throw error;
       return (data ?? []) as unknown as Row[];
     },
-    refetchInterval: 30_000,
+    refetchInterval: 120_000,
   });
 
   const qc = useQueryClient();
@@ -71,7 +84,9 @@ export default function AdminOrdersPage() {
     onError: (e: unknown) => toast.error(friendlyError(e)),
   });
 
-  const filtered = filter === 'all' ? orders : orders.filter((o) => o.delivery_status === filter);
+  // Il filtro ora e' nella query: qui resta solo la lista com'e' arrivata.
+  const filtered = orders;
+  const forseAltri = orders.length >= PER_PAGINA * pagina;
 
   if (isLoading) return <LoadingState />;
 
@@ -121,7 +136,7 @@ export default function AdminOrdersPage() {
         {FILTERS.map((f) => (
           <button
             key={f}
-            onClick={() => setFilter(f)}
+            onClick={() => { setFilter(f); setPagina(1); }}
             className={`px-3 py-1.5 rounded-full font-semibold transition-colors ${
               filter === f ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-600 hover:bg-cream-200'
             }`}
@@ -191,6 +206,19 @@ export default function AdminOrdersPage() {
           </tbody>
         </table>
       </div>
+
+      {/* #90 — «Carica altri» invece di scaricare tutto. */}
+      {forseAltri && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => setPagina((n) => n + 1)}
+            className="rounded-full border border-cream-300 bg-white px-5 py-2 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700"
+          >
+            Carica altri 50 ordini
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
 import { logger } from '@/lib/logger';
+import { useUtente } from '@/components/hooks/useUtente';
 
 /**
  * Somma dei messaggi non letti su tutte le conversazioni dell'utente.
@@ -30,15 +31,11 @@ const registro = new Map<
 >();
 
 export const useMessagesUnread = () => {
-  const [userId, setUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_, session) => {
-      setUserId(session?.user?.id ?? null);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  // #88 — Questo hook e' montato due volte in ogni pagina (barra in alto e
+  // barra in basso sul telefono): erano due chiamate di rete identiche al
+  // server di autenticazione, su ogni pagina. Ora l'identita' arriva dalla
+  // cache condivisa, che la chiede una volta sola.
+  const { userId } = useUtente();
 
   const { data: unread = 0, refetch } = useQuery({
     queryKey: queryKeys.messages.unreadByUser(userId ?? ''),

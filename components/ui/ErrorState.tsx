@@ -14,12 +14,26 @@ import { Button } from './Button';
  * - UX Researcher: "1 CTA (retry) > 2 CTA. Backup CTA solo se serve."
  */
 
+/**
+ * #7 — C'erano DUE «ErrorState» diversi e incompatibili, usati insieme nello
+ * stesso sito: `components/ErrorState.tsx` (sei pagine, prop `onRetry`) e
+ * questo (dieci pagine, prop `retry`). Stesso nome, stesso scopo, aspetto
+ * diverso e nomi delle proprieta' diversi: importarne uno per l'altro compilava
+ * e non mostrava il pulsante «Riprova», in silenzio.
+ *
+ * Ne resta uno solo, questo, che accetta anche i nomi dell'altro.
+ */
 type Props = {
   title?: string;
   description?: string;
   retry?: () => void;
+  /** Sinonimo di `retry`: era il nome usato dall'altro componente. */
+  onRetry?: () => void;
   backHref?: string;
   backLabel?: string;
+  /** Versione ridotta, per le liste dentro una pagina. */
+  variant?: 'default' | 'compact';
+  className?: string;
   /** CTA secondaria "Contatta il supporto". Default: /faq. Passa `null` per nasconderla. */
   supportHref?: string | null;
 };
@@ -28,25 +42,30 @@ export function ErrorState({
   title,
   description,
   retry,
+  onRetry,
   backHref,
   backLabel,
+  variant = 'default',
+  className = '',
   supportHref = '/faq',
 }: Props) {
+  const riprova = retry ?? onRetry;
+  const compatto = variant === 'compact';
   const tErrors = useTranslations('errors');
   const tActions = useTranslations('actions');
   const _title = title ?? 'Qualcosa è andato storto';
   const _desc = description ?? tErrors('generic');
   const _back = backLabel ?? tActions('back');
   return (
-    <div className="py-12 px-4 text-center" role="alert">
-      <div className="mx-auto rounded-full bg-secondary-50 text-secondary-600 flex items-center justify-center w-24 h-24 mb-6">
-        <AlertTriangle size={42} strokeWidth={1.8} aria-hidden />
+    <div className={`${compatto ? 'py-6' : 'py-12'} px-4 text-center ${className}`} role="alert">
+      <div className={`mx-auto rounded-full bg-secondary-50 text-secondary-600 flex items-center justify-center mb-6 ${compatto ? 'w-12 h-12' : 'w-24 h-24'}`}>
+        <AlertTriangle size={compatto ? 22 : 42} strokeWidth={1.8} aria-hidden />
       </div>
-      <h2 className="font-serif text-2xl font-bold text-ink-900">{_title}</h2>
-      <p className="text-base text-ink-600 mt-2.5 max-w-md mx-auto leading-relaxed">{_desc}</p>
+      <h2 className={`font-serif font-bold text-ink-900 ${compatto ? 'text-base' : 'text-2xl'}`}>{_title}</h2>
+      <p className={`text-ink-600 mt-2.5 max-w-md mx-auto leading-relaxed ${compatto ? 'text-xs' : 'text-base'}`}>{_desc}</p>
       <div className="mt-4 flex items-center justify-center gap-2 flex-wrap">
-        {retry && (
-          <Button onClick={retry} icon={RotateCcw} variant="primary">{tActions('retry')}</Button>
+        {riprova && (
+          <Button onClick={riprova} icon={RotateCcw} variant="primary">{tActions('retry')}</Button>
         )}
         {backHref && (
           <Link

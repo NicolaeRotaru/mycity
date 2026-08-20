@@ -16,6 +16,11 @@ export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
   const [sending, setSending] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(''); // 🟡-2
+  // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
+  // estensione che lo taglia, guasto loro), il modulo non resta bloccato per
+  // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'
+  // comunque sul server, quindi non si apre nessun buco.
+  const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
   const honeypotRef = useRef('');
   const startedAtRef = useRef(Date.now());
 
@@ -29,7 +34,7 @@ export default function ContactPage() {
     if (honeypotRef.current) { toast.success('Messaggio inviato! Ti risponderemo entro 24h.'); return; }
     if (Date.now() - startedAtRef.current < 2000) { toast.success('Messaggio inviato!'); return; }
     // 🟡-2: CAPTCHA come su signup (se configurato).
-    if (TURNSTILE_SITE_KEY && !captchaToken) { toast.error('Completa la verifica anti-bot'); return; }
+    if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) { toast.error('Completa la verifica anti-bot'); return; }
 
     setSending(true);
     try {
@@ -130,10 +135,17 @@ export default function ContactPage() {
               <div className="flex justify-center">
                 <Turnstile
                   siteKey={TURNSTILE_SITE_KEY}
-                  onVerify={setCaptchaToken}
+                  onVerify={(t) => { setCaptchaToken(t); setCaptchaRotto(null); }}
                   onExpire={() => setCaptchaToken('')}
+                  onError={(motivo) => setCaptchaRotto(motivo)}
                 />
               </div>
+            )}
+            {captchaRotto && (
+              <p className="text-center text-sm text-ink-600">
+                {captchaRotto} Puoi provare lo stesso a inviare: se non funziona,
+                ricarica la pagina o scrivici a info@mycity-marketplace.com.
+              </p>
             )}
             <Button type="submit" loading={sending} fullWidth size="lg">
               {sending ? 'Invio in corso...' : <span className="inline-flex items-center gap-2"><Mail size={18} aria-hidden /> Invia messaggio</span>}

@@ -9,8 +9,8 @@ import { RotateCcw, ShoppingBasket } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
-import { addToCart, clearCart } from '@/lib/cart';
 import { Button } from '@/components/ui/Button';
+import { riordina } from '@/lib/riordino';
 
 /**
  * "Ordina di nuovo" — rail di riordino rapido nella home, derivata dagli ordini
@@ -113,28 +113,33 @@ export default function ReorderRail() {
   const greeting = data.firstName ? `Bentornato/a, ${data.firstName}` : 'Bentornato/a';
   const staplesTotal = staples.reduce((t, p) => t + p.price, 0);
 
-  const reorderItems = (order: RecentOrder) => {
-    clearCart();
-    for (const it of order.order_items ?? []) {
-      if (!it.product_id || !it.products?.name) continue;
-      addToCart({
-        id: it.product_id,
-        name: it.products.name,
-        price: Number(it.unit_price),
-        image: it.products.images?.[0],
+  // #113 — Stessa funzione degli altri due punti: chiede prima di svuotare il
+  // carrello e rilegge i prezzi di adesso.
+  const reorderItems = async (order: RecentOrder) => {
+    const aggiunti = await riordina(
+      (order.order_items ?? []).map((it) => ({
+        productId: it.product_id ?? '',
+        name: it.products?.name ?? '',
+        prezzoStorico: Number(it.unit_price),
+        image: it.products?.images?.[0],
         quantity: it.quantity,
         storeName: order.seller?.store_name ?? undefined,
-      });
-    }
-    router.push('/cart');
+      })),
+    );
+    if (aggiunti > 0) router.push('/cart');
   };
 
-  const reorderStaples = () => {
-    clearCart();
-    for (const p of staples) {
-      addToCart({ id: p.id, name: p.name, price: p.price, image: p.image ?? undefined, quantity: 1 });
-    }
-    router.push('/cart');
+  const reorderStaples = async () => {
+    const aggiunti = await riordina(
+      staples.map((p) => ({
+        productId: p.id,
+        name: p.name,
+        prezzoStorico: p.price,
+        image: p.image ?? undefined,
+        quantity: 1,
+      })),
+    );
+    if (aggiunti > 0) router.push('/cart');
   };
 
   return (

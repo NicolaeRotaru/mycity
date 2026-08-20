@@ -32,11 +32,14 @@ export default function EventiAccessoOAuth() {
       const { data } = await supabase.auth.getUser();
       const utente = data.user;
       if (utente) {
+        // #214 — Il canale d'ingresso viaggia con l'evento: senza, non si
+        // poteva sapere quale porta porta piu' gente.
+        const canale = searchParams.get('via') ?? 'sconosciuto';
         if (tipo === 'signup') {
           const ruolo = (utente.user_metadata?.role as 'buyer' | 'seller' | 'rider' | 'admin') ?? 'buyer';
-          trackSignupCompleted(utente.id, ruolo);
+          trackSignupCompleted(utente.id, ruolo, canale);
         } else {
-          trackSignedIn(utente.id);
+          trackSignedIn(utente.id, canale);
         }
       }
 

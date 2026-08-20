@@ -6,6 +6,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { verificaImmagineBase64 } from '@/lib/immagini-base64';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError } from '@/lib/ai/run';
@@ -184,8 +185,6 @@ Linee guida:
 Attributi per categoria (usa SOLO le chiavi della categoria scelta; per i campi "uno tra" scegli esattamente uno dei valori elencati):
 ${ATTR_REFERENCE}`;
 
-// Validazione base64 (solo charset, no padding strict)
-const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 type MediaType = (typeof MEDIA_TYPES)[number];
@@ -247,12 +246,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     }
 
     for (const img of images) {
-      if (!BASE64_RE.test(img.image_base64.slice(0, 4096))) {
-        return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
-      }
-      // base64 ~= 4/3 byte raw, accettiamo fino a ~5 MB raw = ~7 MB base64.
-      if (img.image_base64.length > 7_500_000) {
-        return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+  // #207 — Si controlla tutta la stringa, non i primi quattromila caratteri, e
+  // si guarda che i primi byte siano davvero quelli di una immagine del tipo
+  // dichiarato. Il controllo unico sta in lib/immagini-base64.ts.
+      const esitoImmagine = verificaImmagineBase64(img.image_base64, img.media_type);
+      if (!esitoImmagine.ok) {
+        return esitoImmagine.troppoGrande
+          ? ApiErrors.payloadTooLarge(esitoImmagine.motivo)
+          : ApiErrors.invalidRequest(esitoImmagine.motivo);
       }
     }
 

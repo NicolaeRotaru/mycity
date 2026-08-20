@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from './StorePreviewCard';
-import ErrorState from './ErrorState';
+import { ErrorState } from './ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Store = StoreCardData;

@@ -12,7 +12,6 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import OrderTimeline from '@/components/OrderTimeline';
-import { notify } from '@/lib/notifications';
 import SimpleQR from '@/components/SimpleQR';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -207,12 +206,12 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
 
       // Notifica il buyer del cambio stato
       if (order.user_id) {
-        notify({
-          userId: order.user_id,
-          title: ORDER_STATUS_LABEL[params.newStatus],
-          body: `Ordine #${order.id.slice(0, 6).toUpperCase()}`,
-          link: `/orders/${order.id}`,
-        });
+      // #44 — Qui c'era una chiamata a `notify()` dal browser. Non ha mai
+      // funzionato: la tabella delle notifiche non ha nessuna regola che
+      // permetta a una persona di scriverne una a un'altra, quindi il database
+      // rifiutava e la funzione si mangiava l'errore. Sembrava fatto e non era
+      // fatto. La notifica vera la scrive il trigger sul cambio di stato
+      // dell'ordine (migrazione 086), lato server, dove i permessi ci sono.
       }
     },
     onSuccess: (_data, params) => {

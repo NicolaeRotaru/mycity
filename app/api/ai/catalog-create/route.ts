@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { classifyProductPolicy } from '@/lib/ai/moderation';
+import { fotoDaHostAmmesso } from '@/lib/ai/productContext';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { writeAudit } from '@/lib/audit';
 import { buildDraftProductInsert } from '@/lib/products/draftFromVision';
 import type { CategoryRow } from '@/lib/products/aiPatch';
 import {
@@ -57,9 +60,25 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) return ApiErrors.invalidRequest('Dati prodotto non validi.');
 
-  const imageUrls = parsed.data.imageUrls.filter((u) => /^https?:\/\//i.test(u)).slice(0, 4);
-  if (imageUrls.length === 0) return ApiErrors.invalidRequest('Servono le foto del prodotto.');
+  // #205 — Solo foto ospitate da noi: un indirizzo qualunque puo' cambiare
+  // contenuto dopo la pubblicazione, e intanto vede il traffico dei clienti.
+  const imageUrls = parsed.data.imageUrls.filter((u) => fotoDaHostAmmesso(u)).slice(0, 4);
+  if (imageUrls.length === 0) return ApiErrors.invalidRequest('Le foto devono essere caricate su MyCity.');
   const draft = parsed.data.draft;
+
+  // #197 — Il controllo sui prodotti vietati stava sull'endpoint che NON
+  // scrive (vision/extract-product) e mancava proprio qui, dove il prodotto
+  // entra nel catalogo. Chi chiamava questa rotta direttamente saltava il
+  // filtro: un controllo che si puo' aggirare non e' un controllo. Rifarlo qui
+  // costa una chiamata da 128 token, e nega in caso di dubbio.
+  const verdetto = await classifyProductPolicy({
+    name: String(draft.name ?? ''),
+    description: String(draft.description ?? ''),
+    categorySlug: draft.category_slug ?? undefined,
+  }, 'catalog-create-policy');
+  if (!verdetto.allowed) {
+    return ApiErrors.invalidRequest(`Questo prodotto non si puo' pubblicare: ${verdetto.reason}`);
+  }
 
   const admin = getAdminSupabase();
   const { data: categoriesData } = await admin
@@ -83,6 +102,20 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     logger.error('catalog-create insert failed', { sellerId: user.id, status: error?.code });
     return ApiErrors.badGateway('Non sono riuscito a creare il prodotto. Riprova.');
   }
+
+  // #196 — Chi ha scritto cosa. Le modifiche fatte dall'AI non lasciavano
+  // nessuna traccia: non si sapeva quale prodotto fosse stato toccato da un
+  // suggerimento accettato, ne' cosa c'era scritto prima. Se un prezzo o una
+  // descrizione uscivano sbagliati, non c'era modo di risalire — ne' di
+  // annullare. Qui si registra chi, cosa, e il valore precedente dei soli
+  // campi cambiati. Best-effort: non blocca la risposta.
+  void writeAudit({
+    actorId: user.id,
+    action: 'product.create',
+    targetTable: 'products',
+    targetId: (created as { id?: string }).id,
+    metadata: { origine: 'vision-create', dopo: { name: payload.name, price: payload.price } },
+  });
 
   return NextResponse.json({
     ok: true,

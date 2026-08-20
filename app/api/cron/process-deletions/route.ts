@@ -3,6 +3,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
+import { cancellaAccount } from '@/lib/account/cancellazione';
 
 export const runtime = 'nodejs';
 
@@ -26,101 +27,8 @@ export const runtime = 'nodejs';
  * Schedule consigliato: ogni giorno alle 04:00 Europe/Rome.
  */
 
-const SAFE_FIELDS = {
-  full_name: '[utente eliminato]',
-  phone: null,
-  address: null,
-  city: null,
-  zip: null,
-  store_name: null,
-  store_phone: null,
-  store_address: null,
-  store_lat: null,
-  store_lng: null,
-  store_logo: null,
-  store_media: null,
-  store_description: null,
-  is_approved: false,
-  role: 'buyer',
-  deletion_requested_at: null,
-};
 
-const KYC_FIELDS = {
-  legal_first_name: null,
-  legal_last_name: null,
-  legal_fiscal_code: null,
-  legal_birth_date: null,
-  legal_residence_addr: null,
-  legal_residence_city: null,
-  legal_residence_zip: null,
-  business_legal_name: null,
-  business_vat_number: null,
-  business_address: null,
-  business_city: null,
-  business_zip: null,
-  business_pec: null,
-  business_sdi: null,
-  billing_iban: null,
-  billing_card_last4: null,
-  approval_status: 'rejected',
-  // Gli indirizzi dei documenti: carta d'identità (fronte e retro), selfie,
-  // patente, assicurazione e attestato alimentare. Prima restavano scritti nel
-  // profilo dopo la cancellazione — e i file restavano nello storage.
-  kyc_id_doc_front_url: null,
-  kyc_id_doc_back_url: null,
-  kyc_selfie_url: null,
-  rider_license_url: null,
-  rider_insurance_url: null,
-  rider_haccp_url: null,
-};
 
-/** Secchi che possono contenere file personali di un utente. */
-const SECCHI_CON_FILE_PERSONALI = ['kyc-docs', 'cod-proof'] as const;
-
-/**
- * Cancella i file dell'utente dallo storage.
- *
- * Serve perché azzerare la colonna che punta al file non cancella il file: le
- * carte d'identità e i selfie restavano nello storage per sempre. Un giro sul
- * codice non trovava NESSUNA chiamata a `.remove()`: nessuno li aveva mai
- * cancellati.
- */
-async function cancellaFilePersonali(
-  admin: ReturnType<typeof getAdminSupabase>,
-  userId: string,
-): Promise<{ rimossi: number; errori: string[] }> {
-  let rimossi = 0;
-  const errori: string[] = [];
-
-  for (const secchio of SECCHI_CON_FILE_PERSONALI) {
-    try {
-      const { data: elenco, error } = await admin.storage.from(secchio).list(userId, { limit: 1000 });
-      if (error) { errori.push(`${secchio}: ${error.message}`); continue; }
-      if (!elenco || elenco.length === 0) continue;
-
-      // Un livello di sottocartelle (per esempio cod-proof/<utente>/<ordine>/).
-      const percorsi: string[] = [];
-      for (const voce of elenco) {
-        if (voce.id === null) {
-          const { data: dentro } = await admin.storage
-            .from(secchio)
-            .list(`${userId}/${voce.name}`, { limit: 1000 });
-          for (const f of dentro ?? []) percorsi.push(`${userId}/${voce.name}/${f.name}`);
-        } else {
-          percorsi.push(`${userId}/${voce.name}`);
-        }
-      }
-      if (percorsi.length === 0) continue;
-
-      const { error: errRimozione } = await admin.storage.from(secchio).remove(percorsi);
-      if (errRimozione) errori.push(`${secchio}: ${errRimozione.message}`);
-      else rimossi += percorsi.length;
-    } catch (e) {
-      errori.push(`${secchio}: ${e instanceof Error ? e.message : 'errore'}`);
-    }
-  }
-  return { rimossi, errori };
-}
 
 export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
   const admin = getAdminSupabase();
@@ -220,78 +128,21 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   const results = { ok: 0, failed: 0, errors: [] as string[] };
 
   for (const userId of userIds) {
-    // 1) Anonimizza (resilient pattern: full → safe fallback).
-    // IMPORTANTE: i dati KYC (CF, IBAN, nomi legali) vanno sempre cancellati,
-    // anche nel fallback — mai lasciarli in chiaro dopo una deletion (Art.17 GDPR).
-    const full = await admin.from('profiles').update({ ...SAFE_FIELDS, ...KYC_FIELDS }).eq('id', userId);
-    if (full.error) {
-      logger.warn('[cron-deletions] full anonymize failed, fallback', { userId, err: full.error.message });
-      const safe = await admin.from('profiles').update(SAFE_FIELDS).eq('id', userId);
-      if (safe.error) {
-        results.failed++;
-        results.errors.push(`${userId}: anonymize failed`);
-        continue;
-      }
-      // Tenta comunque di cancellare i dati KYC separatamente (best-effort ma obbligatorio).
-      await admin.from('profiles').update(KYC_FIELDS).eq('id', userId)
-        .then(({ error: kycErr }) => {
-          if (kycErr) logger.warn('[cron-deletions] KYC fields cleanup parziale', { userId, err: kycErr.message });
-        });
-    }
-
-    // 1b) 🟡-14: anonimizza il free-text PII dell'utente oltre al profilo (Art.17).
-    // Recensioni/resi/chat/contact possono contenere dati personali in chiaro.
-    // Best-effort: non blocca la cancellazione se una singola tabella fallisce.
-    await Promise.all([
-      admin.from('reviews').update({ comment: null }).eq('user_id', userId),
-      admin.from('store_reviews').update({ comment: null }).eq('user_id', userId),
-      admin.from('rider_reviews').update({ comment: null }).eq('user_id', userId),
-      admin.from('returns').update({ notes: null }).eq('buyer_id', userId),
-      admin.from('messages').update({ body: '[messaggio rimosso]' }).eq('sender_id', userId),
-      admin
-        .from('contact_messages')
-        .update({ name: '[eliminato]', email: '[eliminato]', message: '[rimosso]' })
-        .eq('user_id', userId),
-    ]).catch((e) => logger.warn('[cron-deletions] anonimizzazione free-text parziale', { userId, e }));
-
-    // 1b-bis) 071 — L'iscrizione alla newsletter viveva in una tabella a parte,
-    // legata all'indirizzo email e non al profilo: la cancellazione dell'account
-    // non la toccava. Risultato: chi chiedeva di sparire continuava a ricevere
-    // la newsletter da un indirizzo che nel sito non esisteva piu', e non poteva
-    // nemmeno piu' accedere per disiscriversi. L'email va letta ADESSO: dopo la
-    // cancellazione dell'utente non e' piu' recuperabile.
-    try {
-      const { data: utenteAuth } = await admin.auth.admin.getUserById(userId);
-      const emailUtente = utenteAuth?.user?.email ?? null;
-      if (emailUtente) {
-        const { error: errNews } = await admin
-          .from('newsletter_subscribers')
-          .delete()
-          .ilike('email', emailUtente);
-        if (errNews) logger.warn('[cron-deletions] newsletter non ripulita', { userId, err: errNews.message });
-      }
-    } catch (e) {
-      logger.warn('[cron-deletions] lettura email per la newsletter fallita', { userId, e });
-    }
-
-    // 1c) I file personali nello storage. Va fatto PRIMA della cancellazione
-    // dell'utente: dopo, l'elenco delle sue cartelle non e' piu' ricostruibile.
-    const file = await cancellaFilePersonali(admin, userId);
-    if (file.errori.length > 0) {
-      logger.warn('[cron-deletions] file personali non tutti rimossi', { userId, errori: file.errori });
-    }
-
-    // 2) Hard delete auth.users
-    const { error: delErr } = await admin.auth.admin.deleteUser(userId);
-    if (delErr) {
-      logger.error('[cron-deletions] auth delete failed', { userId, err: delErr.message });
+    // #178 — La stessa pipeline che usa la cancellazione fatta
+    // dall'amministratore: anonimizza il profilo e i dati di verifica
+    // identita', anonimizza il testo libero, toglie dalla newsletter, cancella
+    // i file dallo storage e infine l'account. Prima erano due elenchi di passi
+    // scritti in due file, e uno dei due era piu' corto.
+    const esito = await cancellaAccount(admin, userId);
+    if (!esito.ok) {
+      logger.error('[cron-deletions] cancellazione fallita', { userId, errore: esito.errore });
       results.failed++;
-      results.errors.push(`${userId}: auth delete failed`);
+      results.errors.push(`${userId}: ${esito.errore ?? 'errore'}`);
       continue;
     }
 
     results.ok++;
-    logger.info('[cron-deletions] processed', { userId });
+    logger.info('[cron-deletions] processed', { userId, fileRimossi: esito.fileRimossi });
   }
 
   return NextResponse.json({

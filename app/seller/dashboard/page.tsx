@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect } from 'react';
-import { ordineContaNelFatturato } from '@/lib/metriche-venditore';
+import { ordineContaNelFatturato, metricheVenditore } from '@/lib/metriche-venditore';
+import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -62,7 +63,7 @@ export default function SellerDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      const [{ count: productCount }, { count: availableCount }, { data: items }, { data: storeReviews }] = await Promise.all([
+      const [{ count: productCount }, { count: availableCount }, { data: items }, { data: storeReviews }, ordiniRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }).eq('seller_id', user.id),
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('seller_id', user.id).eq('status', 'available'),
@@ -70,7 +71,22 @@ export default function SellerDashboard() {
           .select('quantity, unit_price, orders(created_at, delivery_status, payment_status), products!inner(seller_id)')
           .eq('products.seller_id', user.id),
         supabase.from('store_reviews').select('rating').eq('store_id', user.id),
+        // #218 — Gli stessi ordini che leggono le altre due pagine del
+        // venditore, con le stesse colonne: cosi' i tre «fatturato» diventano
+        // uno solo. Qui sotto si mostrano due grandezze dette per nome —
+        // «incassato» (lordo) e «il tuo netto» — non una sola ambigua.
+        supabase.from('orders')
+          .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, created_at')
+          .eq('seller_id', user.id),
       ]);
+      if (ordiniRes.error) throw ordiniRes.error;
+      const ordini = ordiniRes.data ?? [];
+      const daInizioOggi = inizioGiornoPiacenza(giornoPiacenza());
+      const metriche = (da?: Date) => metricheVenditore(ordini as never[], da);
+      const totali = metriche();
+      const oggi = metriche(daInizioOggi);
+      const sette = metriche(new Date(Date.now() - 7 * 86400000));
+      const trenta = metriche(new Date(Date.now() - 30 * 86400000));
 
       type OrderItem = {
         unit_price: number | string;
@@ -113,10 +129,17 @@ export default function SellerDashboard() {
         productCount: productCount ?? 0,
         availableCount: availableCount ?? 0,
         orderCount: itemsArr.length,
-        revenue,
-        revenueToday: sum(today),
-        revenue7: sum(last7),
-        revenue30: sum(last30),
+        // #218 — Il venduto per articolo resta (serve per «quanti pezzi»), ma
+        // il denaro mostrato e' quello della definizione unica.
+        vendutoArticoli: revenue,
+        incassato: totali.incassatoCents / 100,
+        netto: totali.tuoNettoCents / 100,
+        revenueToday: oggi.tuoNettoCents / 100,
+        revenue7: sette.tuoNettoCents / 100,
+        revenue30: trenta.tuoNettoCents / 100,
+        ordiniOggi: oggi.ordini,
+        ordini7: sette.ordini,
+        ordini30: trenta.ordini,
         ordersToday: today.length,
         orders7: last7.length,
         last30Count: last30.length,
@@ -195,11 +218,11 @@ export default function SellerDashboard() {
             </div>
           </div>
 
-          {/* Incassi per periodo */}
+          {/* Il tuo netto per periodo — stessa definizione delle altre pagine. */}
           <div className="grid grid-cols-3 gap-2.5 sm:gap-3 mt-6">
-            <HeroStat label="Oggi" value={formatPrice(stats.revenueToday)} sub={`${stats.ordersToday} articoli`} />
-            <HeroStat label="7 giorni" value={formatPrice(stats.revenue7)} sub={`${stats.orders7} articoli`} />
-            <HeroStat label="30 giorni" value={formatPrice(stats.revenue30)} sub={`${stats.last30Count} articoli`} />
+            <HeroStat label="Oggi" value={formatPrice(stats.revenueToday)} sub={`${stats.ordiniOggi} ordini · al netto`} />
+            <HeroStat label="7 giorni" value={formatPrice(stats.revenue7)} sub={`${stats.ordini7} ordini · al netto`} />
+            <HeroStat label="30 giorni" value={formatPrice(stats.revenue30)} sub={`${stats.ordini30} ordini · al netto`} />
           </div>
         </div>
       </section>
@@ -209,7 +232,7 @@ export default function SellerDashboard() {
 
       {/* ===== KPI complessivi ===== */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard icon={TrendingUp} tint={TINT.olive} label="Fatturato totale" value={formatPrice(stats.revenue)} hint={`${stats.orderCount} articoli venduti`} />
+        <KpiCard icon={TrendingUp} tint={TINT.olive} label="Il tuo netto" value={formatPrice(stats.netto)} hint={`su ${formatPrice(stats.incassato)} incassati`} />
         <KpiCard icon={Package} tint={TINT.primary} label="Prodotti in vendita" value={stats.availableCount} hint={`su ${stats.productCount} totali`} />
         <KpiCard icon={Star} tint={TINT.accent} label="Valutazione media" value={stats.avgRating > 0 ? `${stats.avgRating.toFixed(1)} ★` : '—'} hint={stats.reviewCount > 0 ? `${stats.reviewCount} recensioni` : 'Nessuna recensione'} />
         <KpiCard icon={Receipt} tint={TINT.secondary} label="Articoli venduti" value={stats.orderCount} hint="Dall'inizio" />

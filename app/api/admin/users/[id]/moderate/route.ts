@@ -78,7 +78,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   const { error: updErr } = await admin.from('profiles').update(patch).eq('id', params.id);
   if (updErr) return ApiErrors.internal('Aggiornamento fallito.');
 
-  await admin.from('notifications').insert({ user_id: params.id, ...note });
+  await admin.from('notifications').insert({ category: 'system', user_id: params.id, ...note });
 
   await writeAudit({
     actorId: user.id,
