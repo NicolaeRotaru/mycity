@@ -252,11 +252,28 @@ function AdminUsersPageInner() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  const pendingCount = profiles.filter((p) => p.approval_status === 'pending' && p.role === 'seller').length;
+  /**
+   * Chi si puo' approvare da questo pannello: negozi E fattorini.
+   *
+   * Prima erano solo i negozi. Un fattorino iscritto restava «in attesa» per
+   * sempre, perche' i pulsanti non gli comparivano mai accanto: su questo
+   * database ce n'era uno fermo dal 25 maggio. Ed e' il motivo per cui la
+   * bacheca delle consegne era vuota — senza un fattorino approvato non c'e'
+   * nessuno che possa prendere un ordine.
+   */
+  const siPuoModerare = (ruolo: string) => ruolo === 'seller' || ruolo === 'rider';
+
+  /** Come si chiama, nei messaggi di conferma: un fattorino non e' un negozio. */
+  const comeSiChiama = (p: { role: string; store_name?: string | null; full_name?: string | null }) =>
+    p.role === 'rider'
+      ? { cosa: 'il fattorino', chi: p.full_name ?? 'Il fattorino' }
+      : { cosa: 'il negozio',   chi: p.store_name ?? 'Il venditore' };
+
+  const pendingCount = profiles.filter((p) => p.approval_status === 'pending' && siPuoModerare(p.role)).length;
 
   const filtered = profiles.filter((p) => {
     if (filter === 'pending') {
-      if (!(p.role === 'seller' && p.approval_status === 'pending')) return false;
+      if (!(siPuoModerare(p.role) && p.approval_status === 'pending')) return false;
     } else if (filter !== 'all' && p.role !== filter) {
       return false;
     }
@@ -418,10 +435,10 @@ function AdminUsersPageInner() {
             ) : filtered.map((p) => {
               const r = ROLE_LABELS[p.role] ?? ROLE_LABELS.buyer;
               const a = p.approval_status ? APPROVAL_LABELS[p.approval_status] : null;
-              const isSeller    = p.role === 'seller';
-              const isPending   = isSeller && p.approval_status === 'pending';
-              const isApproved  = isSeller && p.approval_status === 'approved' && p.is_approved;
-              const isSuspended = isSeller && p.approval_status === 'suspended';
+              const moderabile  = siPuoModerare(p.role);
+              const isPending   = moderabile && p.approval_status === 'pending';
+              const isApproved  = moderabile && p.approval_status === 'approved' && p.is_approved;
+              const isSuspended = moderabile && p.approval_status === 'suspended';
               return (
                 <tr key={p.id} className="border-t hover:bg-cream-50">
                   <td className="p-3">
@@ -440,7 +457,7 @@ function AdminUsersPageInner() {
                     </span>
                   </td>
                   <td className="p-3">
-                    {p.role === 'seller' && a && (
+                    {moderabile && a && (
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${a.color}`}>
                         {a.label}
                       </span>
@@ -462,8 +479,8 @@ function AdminUsersPageInner() {
                         <button
                           onClick={async () => {
                             const ok = await confirmDialog({
-                              title: 'Sospendere il negozio?',
-                              message: `${p.store_name ?? 'Il venditore'} non potrà più operare finché non lo riattiverai. È diverso dal rifiuto: la richiesta resta valida e basta cliccare "Riattiva" per farlo tornare online.`,
+                              title: `Sospendere ${comeSiChiama(p).cosa}?`,
+                              message: `${comeSiChiama(p).chi} non potrà più operare finché non lo riattiverai. È diverso dal rifiuto: la richiesta resta valida e basta cliccare "Riattiva" per farlo tornare online.`,
                               confirmLabel: tConfirm('yesSuspend'),
                               cancelLabel: tActions('cancel'),
                               danger: true,
@@ -480,8 +497,8 @@ function AdminUsersPageInner() {
                         <button
                           onClick={async () => {
                             const ok = await confirmDialog({
-                              title: 'Riattivare il negozio?',
-                              message: `${p.store_name ?? 'Il venditore'} tornerà operativo immediatamente e riceverà una notifica.`,
+                              title: `Riattivare ${comeSiChiama(p).cosa}?`,
+                              message: `${comeSiChiama(p).chi} tornerà operativo immediatamente e riceverà una notifica.`,
                               confirmLabel: tConfirm('yesReactivate'),
                               cancelLabel: tActions('cancel'),
                               icon: PlayCircle,
@@ -567,8 +584,8 @@ function AdminUsersPageInner() {
                   <button
                     onClick={async () => {
                       const ok = await confirmDialog({
-                        title: 'Sospendere il negozio?',
-                        message: `${p.store_name ?? 'Il venditore'} non potrà più operare finché non lo riattiverai.`,
+                        title: `Sospendere ${comeSiChiama(p).cosa}?`,
+                        message: `${comeSiChiama(p).chi} non potrà più operare finché non lo riattiverai.`,
                         confirmLabel: tConfirm('yesSuspend'), cancelLabel: tActions('cancel'), danger: true, icon: PauseCircle,
                       });
                       if (ok) suspend.mutate(p.id);
@@ -582,8 +599,8 @@ function AdminUsersPageInner() {
                   <button
                     onClick={async () => {
                       const ok = await confirmDialog({
-                        title: 'Riattivare il negozio?',
-                        message: `${p.store_name ?? 'Il venditore'} tornerà operativo immediatamente.`,
+                        title: `Riattivare ${comeSiChiama(p).cosa}?`,
+                        message: `${comeSiChiama(p).chi} tornerà operativo immediatamente.`,
                         confirmLabel: tConfirm('yesReactivate'), cancelLabel: tActions('cancel'), icon: PlayCircle,
                       });
                       if (ok) reactivate.mutate(p.id);

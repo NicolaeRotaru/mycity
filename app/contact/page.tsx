@@ -9,10 +9,14 @@ import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
+import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 export default function ContactPage() {
+  const chiSiamo = titolare();
+  const identita = rigaIdentita(chiSiamo);
+
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
   const [sending, setSending] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(''); // 🟡-2
@@ -157,17 +161,16 @@ export default function ContactPage() {
           <div className="bg-gradient-to-br from-primary-50 to-secondary-50 border border-primary-100 rounded-2xl p-6">
             <h3 className="font-bold text-ink-900 mb-2 flex items-center gap-2"><MapPin size={18} className="text-primary-600 shrink-0" aria-hidden /> Sede</h3>
             <p className="text-sm text-ink-700 leading-relaxed">
-              MyCity S.r.l.<br />
-              Via Roma 1<br />
-              29121 Piacenza (PC)<br />
-              Italia
+              {chiSiamo.denominazione}
+              {chiSiamo.indirizzo ? <><br />{chiSiamo.indirizzo}</> : null}
             </p>
-            <hr className="my-4 border-primary-100" />
-            <p className="text-xs text-ink-600">
-              P.IVA / C.F. IT00000000000<br />
-              REA PC-000000<br />
-              PEC: mycity@pec.it
-            </p>
+            {/* Solo i dati veri: finché non c'è una partita IVA, qui non c'è niente. */}
+            {identita && (
+              <>
+                <hr className="my-4 border-primary-100" />
+                <p className="text-xs text-ink-600">{identita}</p>
+              </>
+            )}
           </div>
 
           <div className="bg-white border border-cream-300 rounded-2xl p-6">

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { shippingForEuro, shippingCentsFor } from '@/lib/shipping';
 import { FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { haversineKm, riderFee } from '@/lib/geo';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 
 /**
  * #3 — La formula della spedizione era scritta due volte: una in
@@ -71,6 +73,16 @@ describe('la spedizione la calcola un posto solo', () => {
   });
 
   it('lo sconto del ritiro è una costante condivisa, non un numero scritto nella pagina', () => {
-    expect(PICKUP_DISCOUNT_PERCENT).toBe(10);
+    // Il controllo è sulla FORMA, non sul valore: lo sconto deve venire da un
+    // posto solo, così cambiarlo è una riga sola. Prima qui c'era scritto 10,
+    // e quando Nicola il 20/8 ha messo da parte il ritiro (sconto a 0) questa
+    // prova è diventata rossa pur essendo tutto giusto: fissava un numero che
+    // non era il punto. Il valore vero lo controlla
+    // `ritiro-in-negozio-messo-da-parte.test.ts`, che sa perché è quello.
+    expect(typeof PICKUP_DISCOUNT_PERCENT).toBe('number');
+    expect(PICKUP_DISCOUNT_PERCENT).toBeGreaterThanOrEqual(0);
+    expect(PICKUP_DISCOUNT_PERCENT).toBeLessThanOrEqual(100);
+    const pagina = readFileSync(path.join(process.cwd(), 'app/checkout/page.tsx'), 'utf8');
+    expect(pagina).toContain('PICKUP_DISCOUNT_PERCENT');
   });
 });

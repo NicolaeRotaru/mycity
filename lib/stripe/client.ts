@@ -311,9 +311,14 @@ export function computeApplicationFeeCents(amountCents: number): number {
  * Il totale pagato dal buyer si scompone in quote che non si sovrappongono:
  *   subtotale prodotti = netto venditore (90%) + commissione piattaforma (10%);
  *   + fee di consegna trattenuta dalla piattaforma;
- *   + spedizione = compenso del rider (versata SEPARATAMENTE via releaseRiderPayout).
- * La spedizione NON fa parte del netto venditore: spetta al rider; senza la
- * separazione verrebbe pagata due volte (al seller nel netto e al rider).
+ *   + spedizione, che resta alla piattaforma.
+ * La spedizione NON fa parte del netto venditore.
+ *
+ * Il compenso del fattorino NON e' una di queste quote: e' una cifra fissa
+ * (COMPENSO_RIDER_CENTS) che la piattaforma paga a parte, via
+ * releaseRiderPayout. Prima era la spedizione stessa, e li' stava il guasto:
+ * sopra i 30 euro la spedizione e' zero, quindi il fattorino non veniva pagato.
+ * Adesso il compenso e' coperto dalla fee di consegna, che vale quanto lui.
  *
  * Invariante: sellerPayout + applicationFee + deliveryFee + shipping === total
  */

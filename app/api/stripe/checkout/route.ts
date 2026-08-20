@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
-import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
@@ -96,6 +96,13 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   } catch (e) {
     return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
   }
+
+  // Il ritiro in negozio e' messo da parte (RITIRO_IN_NEGOZIO_ATTIVO). Il
+  // browser potrebbe chiederlo lo stesso — una richiesta costruita a mano,
+  // o una scheda aperta da prima del rilascio. Qui si spegne, una volta
+  // sola, subito dopo la convalida: cosi' ogni uso piu' sotto lo vede gia'
+  // falso e non c'e' un punto che possa sfuggire.
+  body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
 
   const supa = await getServerSupabase();
   const admin = getAdminSupabase();
@@ -358,16 +365,10 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       couponPortionCents,
       pickupPortionCents,
       totalCents,
-      // Il compenso del fattorino si calcola qui, dove le coordinate del negozio
-      // e della consegna sono note, e viaggia col gruppo fino alla creazione
-      // dell'ordine. Dipende dalla distanza, non da quanto paga il cliente.
-      riderFeeCents: compensoRiderCents({
-        storeLat: coord.lat,
-        storeLng: coord.lng,
-        deliveryLat: coordConsegna?.lat ?? null,
-        deliveryLng: coordConsegna?.lng ?? null,
-        pickupInStore: body.pickupInStore,
-      }),
+      // Il compenso del fattorino viaggia col gruppo fino alla creazione
+      // dell'ordine. E' una cifra fissa: non dipende ne' dalla distanza ne' da
+      // quanto paga il cliente.
+      riderFeeCents: compensoRiderCents({ pickupInStore: body.pickupInStore }),
     };
   });
 

@@ -6,6 +6,7 @@ import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Shirt, Apple, Ho
 import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
+import { rigaIdentita, titolare } from '@/lib/legal/titolare';
 
 const SOCIALS = [
   {
@@ -81,6 +82,9 @@ const SOCIALS = [
 ];
 
 const Footer = () => {
+  const chiSiamo = titolare();
+  const identita = rigaIdentita(chiSiamo);
+
   const pathname = usePathname();
   const { isSeller, isRider, isAuthenticated } = useProfile();
   const isSellerArea = isSeller || isRider;
@@ -235,13 +239,16 @@ const Footer = () => {
       {/* Dati legali azienda */}
       <div className="border-t border-cream-300 py-5 text-center text-xs text-ink-500 space-y-1 px-4">
         <div>
-          © {new Date().getFullYear()} <span className="font-semibold text-ink-700">MyCity S.r.l.</span> · Il mercato locale della tua città
+          © {new Date().getFullYear()} <span className="font-semibold text-ink-700">{chiSiamo.denominazione}</span> · Il mercato locale della tua città
         </div>
+        {/*
+          I dati legali si stampano solo se esistono davvero (lib/legal/titolare).
+          Qui c'erano una sede, una P.IVA di soli zeri, un REA e una PEC inventati,
+          su OGNI pagina del sito. Finché non c'è una partita IVA attiva questa
+          riga resta vuota, e non si stampa affatto.
+        */}
+        {identita && <div>{identita}</div>}
         <div>
-          Sede legale: Via Roma 1, 29121 Piacenza (PC), Italia · P.IVA / C.F. IT00000000000 · REA PC-000000
-        </div>
-        <div>
-          Capitale sociale € 10.000 i.v. · PEC: mycity@pec.it ·{' '}
           <Link href="/terms" className="underline hover:text-primary-700">Termini</Link> ·{' '}
           <Link href="/privacy" className="underline hover:text-primary-700">Privacy</Link> ·{' '}
           <Link href="/cookies" className="underline hover:text-primary-700">Cookie</Link>

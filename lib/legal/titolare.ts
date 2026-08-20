@@ -21,8 +21,24 @@ export type Titolare = {
   denominazione: string;
   indirizzo: string | null;
   partitaIva: string | null;
+  /** Numero REA camerale. Esiste solo con una societa' iscritta. */
+  rea: string | null;
+  /** Posta elettronica certificata. */
+  pec: string | null;
+  /** Capitale sociale, gia' scritto per intero (es. «10.000 € i.v.»). */
+  capitale: string | null;
   emailPrivacy: string;
-  /** Nominato davvero? Se no, la pagina non deve citarne uno. */
+  /**
+   * Chi risponde delle domande sulla privacy, col suo nome.
+   *
+   * NON e' un DPO: quello e' una nomina formale che un'attivita' di questa
+   * dimensione non e' tenuta a fare, e dichiararlo senza averlo fatto e' una
+   * falsa attestazione (art. 37 GDPR). Qui c'e' semplicemente la persona a cui
+   * si scrive. Nicola, 20/8/2026: «per il responsabile di privacy sono io:
+   * Nicolae Rotaru».
+   */
+  referentePrivacy: string | null;
+  /** Nominato davvero un DPO formale? Se no, la pagina non deve citarne uno. */
   emailDpo: string | null;
 };
 
@@ -54,9 +70,35 @@ export function titolare(): Titolare {
     denominazione: process.env.NEXT_PUBLIC_TITOLARE_NOME?.trim() || 'MyCity',
     indirizzo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_INDIRIZZO),
     partitaIva: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_PIVA),
+    rea: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_REA),
+    pec: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_PEC),
+    capitale: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_CAPITALE),
     emailPrivacy: process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY?.trim() || 'privacy@mycity.it',
+    referentePrivacy: process.env.NEXT_PUBLIC_TITOLARE_REFERENTE_PRIVACY?.trim() || 'Nicolae Rotaru',
     emailDpo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_DPO),
   };
+}
+
+/**
+ * La riga di identificazione in fondo alle pagine, coi soli dati veri.
+ *
+ * Cosa c'era prima, su OGNI pagina del sito: «Sede legale: Via Roma 1, 29121
+ * Piacenza (PC), Italia · P.IVA / C.F. IT00000000000 · REA PC-000000» e
+ * «Capitale sociale 10.000 € i.v. · PEC: mycity@pec.it». Nessuno di quei dati
+ * esisteva. Una partita IVA di soli zeri in fondo al contratto che il cliente
+ * accetta non e' un segnaposto da riempire dopo: e' gia' pubblicata.
+ *
+ * Nicola, 20/8/2026: «non c'e' ancora una partita IVA attiva, la attivo quando
+ * raggiungeremo i 5000€». Finche' non c'e', qui non si stampa niente.
+ */
+export function rigaIdentita(t: Titolare = titolare()): string {
+  const pezzi: string[] = [];
+  if (t.indirizzo) pezzi.push(`Sede: ${t.indirizzo}`);
+  if (t.partitaIva) pezzi.push(`P.IVA / C.F. ${t.partitaIva}`);
+  if (t.rea) pezzi.push(`REA ${t.rea}`);
+  if (t.capitale) pezzi.push(`Capitale sociale ${t.capitale}`);
+  if (t.pec) pezzi.push(`PEC: ${t.pec}`);
+  return pezzi.join(' · ');
 }
 
 /**

@@ -1,10 +1,12 @@
 'use client';
 
-import { Truck, MapPin, Info, Store, Banknote, Gift } from 'lucide-react';
+import { Truck, MapPin, Info, Store, Banknote, Gift, Bike } from 'lucide-react';
 import {
   FREE_SHIPPING_THRESHOLD,
   SHIPPING_PER_ORDER,
+  COMPENSO_RIDER_CENTS,
   PICKUP_DISCOUNT_PERCENT,
+  RITIRO_IN_NEGOZIO_ATTIVO,
   PLATFORM_DELIVERY_FEE_CENTS,
 } from '@/lib/constants';
 import { riderFee } from '@/lib/geo';
@@ -86,20 +88,30 @@ export default function AdminDeliveryPage() {
               value={formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
             />
             <Row
+              icon={Bike}
+              title="Compenso del fattorino"
+              desc="Fisso per consegna, non a distanza"
+              value={formatPrice(COMPENSO_RIDER_CENTS / 100)}
+            />
+            <Row
               icon={Store}
-              title="Sconto ritiro in negozio"
-              desc="Il ritiro azzera la spedizione"
-              value={`− ${PICKUP_DISCOUNT_PERCENT}%`}
+              title="Ritiro in negozio"
+              desc={RITIRO_IN_NEGOZIO_ATTIVO
+                ? 'Il ritiro azzera la spedizione'
+                : 'Messo da parte: non se n\u2019è ancora parlato coi negozi'}
+              value={RITIRO_IN_NEGOZIO_ATTIVO ? `− ${PICKUP_DISCOUNT_PERCENT}%` : 'non attivo'}
             />
           </div>
         </div>
 
-        {/* ── Tariffa per distanza (riderFee reale) ── */}
+        {/* ── Quanto paga il CLIENTE per la spedizione (non il compenso del fattorino) ── */}
         <div className="rounded-2xl border-2 border-cream-300 bg-white p-5 shadow-warm">
-          <h2 className="mb-1 font-serif text-[17px] font-bold text-ink-900">Tariffa per distanza</h2>
+          <h2 className="mb-1 font-serif text-[17px] font-bold text-ink-900">Spedizione pagata dal cliente</h2>
           <p className="mb-4 text-xs text-ink-500">
-            Quando negozio e indirizzo hanno coordinate note, la consegna è calcolata sulla distanza (haversine):
-            base + €/km, arrotondata a 0,10.
+            Quando negozio e indirizzo hanno coordinate note, la spedizione è calcolata sulla distanza (haversine):
+            base + €/km, arrotondata a 0,10. <strong>Non è il compenso del fattorino</strong>, che è fisso a{' '}
+            {formatPrice(COMPENSO_RIDER_CENTS / 100)}: le due cose erano confuse, e sopra la soglia della
+            spedizione gratuita il fattorino restava senza paga.
           </p>
           <div className="flex flex-col gap-1.5">
             {DISTANCE_SAMPLES.map((s) => (

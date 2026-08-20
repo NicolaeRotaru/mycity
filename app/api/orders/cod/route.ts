@@ -5,7 +5,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
-import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
@@ -91,6 +91,13 @@ export const POST = withAuthRateLimit(
     } catch (e) {
       return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
     }
+
+    // Il ritiro in negozio e' messo da parte (RITIRO_IN_NEGOZIO_ATTIVO). Il
+    // browser potrebbe chiederlo lo stesso — una richiesta costruita a mano,
+    // o una scheda aperta da prima del rilascio. Qui si spegne, una volta
+    // sola, subito dopo la convalida: cosi' ogni uso piu' sotto lo vede gia'
+    // falso e non c'e' un punto che possa sfuggire.
+    body.pickupInStore = RITIRO_IN_NEGOZIO_ATTIVO && body.pickupInStore;
 
     const supa = await getServerSupabase();
     const admin = getAdminSupabase();
@@ -424,14 +431,9 @@ export const POST = withAuthRateLimit(
           // scollegato da quanto ha pagato il cliente. Prima questa colonna non
           // veniva popolata da nessuna parte, quindi al momento del pagamento si
           // ricadeva sul prezzo di spedizione — che sopra i 30 euro e' zero:
-          // il fattorino consegnava gratis.
-          rider_fee_cents: compensoRiderCents({
-            storeLat: (sellerCoordMap.get(g.sellerId) ?? { lat: null }).lat ?? null,
-            storeLng: (sellerCoordMap.get(g.sellerId) ?? { lng: null }).lng ?? null,
-            deliveryLat: coordConsegna?.lat ?? null,
-            deliveryLng: coordConsegna?.lng ?? null,
-            pickupInStore: body.pickupInStore,
-          }),
+          // il fattorino consegnava gratis. Ora e' una cifra fissa e la distanza
+          // non c'entra piu': la fee di consegna la copre da sola.
+          rider_fee_cents: compensoRiderCents({ pickupInStore: body.pickupInStore }),
           application_fee_cents: codFeeCents,
           seller_payout_cents: codSellerPayoutCents,
           // In attesa della rimessa contanti del rider (un admin la conferma →
