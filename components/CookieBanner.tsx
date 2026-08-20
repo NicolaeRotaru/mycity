@@ -68,7 +68,15 @@ export default function CookieBanner() {
     const altezza = contenitoreRef.current?.offsetHeight ?? 0;
     const precedente = document.documentElement.style.scrollPaddingBottom;
     document.documentElement.style.scrollPaddingBottom = `${altezza + 16}px`;
-    return () => { document.documentElement.style.scrollPaddingBottom = precedente; };
+    // #124 — Sul telefono il banner copriva la barra «Aggiungi al carrello»
+    // della scheda prodotto: il pulsante che fa incassare restava sotto, e
+    // finche' non si rispondeva al banner non si poteva comprare. Ora il banner
+    // dichiara quanto e' alto e la barra si sposta sopra di lui.
+    document.documentElement.style.setProperty('--altezza-banner-cookie', `${altezza}px`);
+    return () => {
+      document.documentElement.style.scrollPaddingBottom = precedente;
+      document.documentElement.style.setProperty('--altezza-banner-cookie', '0px');
+    };
   }, [show]);
 
   if (!show) return null;

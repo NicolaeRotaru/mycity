@@ -52,7 +52,9 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
   return (
     <div
       className="md:hidden fixed left-0 right-0 z-30 transition-transform duration-300 animate-slide-up pb-safe"
-      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--tabbar-height))' }}
+      // #124 — Sopra la barra a schede e, quando c'e', sopra il banner dei
+      // cookie: prima ci finiva sotto e il pulsante d'acquisto spariva.
+      style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--tabbar-height) + var(--altezza-banner-cookie, 0px))' }}
       aria-label="Aggiungi al carrello (sticky)"
     >
       <div className="container mx-auto px-3">

@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   },
 };
 
-const LAST_UPDATED = '2026-05-26';
+const LAST_UPDATED = '2026-08-20';
 
 const TOC = [
   { id: 'impegno', label: 'Impegno per l’accessibilità' },
@@ -67,15 +67,27 @@ export default function AccessibilityStatementPage() {
       </LegalSection>
 
       <LegalSection id="accessibili" heading="Funzionalità accessibili">
+        <p className="text-sm text-ink-500">
+          Elenchiamo solo ciò che è verificato da un controllo automatico che gira
+          a ogni modifica del sito. Le voci che prima erano scritte qui senza una
+          prova dietro — compatibilità con tre lettori di schermo, contrasto
+          conforme ovunque, ridimensionamento al 200% — sono state tolte: una
+          dichiarazione di accessibilità che promette più di quanto può provare
+          non aiuta nessuno, e mette in difficoltà proprio chi si fida.
+        </p>
         <ul className="list-disc list-inside space-y-1">
-          <li>Navigazione completa da tastiera su tutte le pagine principali</li>
-          <li>Compatibilità con screen reader (NVDA, JAWS, VoiceOver) sui flussi critici</li>
-          <li>Contrasto colore conforme WCAG AA sui testi principali</li>
-          <li>Etichette ARIA su pulsanti, icone e immagini significative</li>
           <li>Skip-link per saltare la navigazione</li>
-          <li>Form con etichette esplicite e messaggi di errore associati</li>
-          <li>Ridimensionamento testo fino al 200% senza perdita di funzionalità</li>
-          <li>Indicatori di focus visibili su tutti gli elementi interattivi</li>
+          <li>
+            Controllo automatico <code>axe-core</code> sulle pagine del percorso
+            d&apos;acquisto (home, catalogo, scheda prodotto, carrello): nessuna
+            violazione di livello A o AA. Gira nella suite di prova a ogni modifica.
+          </li>
+          <li>Indicatori di focus visibili sugli elementi interattivi</li>
+          <li>Etichette esplicite sui campi dei moduli, con messaggi di errore associati</li>
+          <li>
+            Finestre di dialogo (filtri, foto a schermo intero, conferme) con uscita
+            da tastiera, fuoco che resta dentro e torna al punto di partenza
+          </li>
         </ul>
       </LegalSection>
 
@@ -83,28 +95,48 @@ export default function AccessibilityStatementPage() {
         <p>I seguenti contenuti non sono al momento pienamente accessibili:</p>
         <ul className="list-disc list-inside space-y-1">
           <li><strong>Mappe interattive</strong> (consegna in tempo reale): non
-          accessibili da tastiera/screen reader. Forniamo alternative testuali
-          per indirizzo e tempo di consegna stimato.</li>
-          <li><strong>Carosello &quot;Storie negozi&quot;</strong>: auto-advance può essere
-          difficile da gestire per utenti con disabilità motorie. È possibile
-          chiuderlo con il tasto Esc.</li>
-          <li><strong>Alcuni contenuti generati da utenti</strong> (recensioni
-          con foto): le foto caricate dagli utenti potrebbero non avere
-          descrizione alternativa.</li>
+          accessibili da tastiera e da lettore di schermo. Forniamo alternative
+          testuali per indirizzo e tempo di consegna stimato.</li>
+          <li><strong>Contenuti caricati dai clienti e dai negozi</strong> (foto
+          delle recensioni, foto dei prodotti): possono non avere una descrizione
+          alternativa scritta da chi li ha caricati.</li>
+          <li><strong>Contrasto del testo secondario</strong>: alcune scritte di
+          servizio in grigio chiaro su sfondo panna non raggiungono il rapporto
+          richiesto dal livello AA.</li>
+          <li><strong>Pagine fuori dal percorso d&apos;acquisto</strong>: il
+          controllo automatico copre oggi quattro pagine su decine. Sulle altre
+          non abbiamo ancora una verifica che possa fallire, quindi non
+          dichiariamo niente.</li>
         </ul>
         <p className="text-sm text-ink-500">
-          Stiamo lavorando per risolvere queste limitazioni entro <strong>dicembre 2026</strong>.
+          Ultima verifica: 20 agosto 2026. Le limitazioni qui sopra sono quelle
+          che conosciamo; l&apos;elenco cambia insieme al sito e viene aggiornato
+          a ogni controllo.
         </p>
       </LegalSection>
 
       <LegalSection id="metodologia" heading="Metodologia di valutazione">
-        <p>La valutazione di conformità è stata effettuata tramite:</p>
+        <p>Questa dichiarazione si basa su:</p>
         <ul className="list-disc list-inside space-y-1">
-          <li>Audit automatico con <code>axe-core</code> e <code>pa11y</code></li>
-          <li>Test manuale con screen reader (VoiceOver su macOS, NVDA su Windows)</li>
-          <li>Test di navigazione esclusivamente da tastiera sui flussi principali</li>
-          <li>Verifica contrasto con strumenti WebAIM Contrast Checker</li>
+          <li>
+            <strong>Autovalutazione</strong> (non una verifica di terzi).
+          </li>
+          <li>
+            Controllo automatico con <code>axe-core</code> dentro la suite di
+            prova del sito, sulle pagine del percorso d&apos;acquisto: se compare
+            una violazione di livello A o AA, la modifica non passa.
+          </li>
+          <li>
+            Lettura del codice e prove da tastiera sui percorsi principali fatte
+            dal team durante lo sviluppo.
+          </li>
         </ul>
+        <p className="text-sm text-ink-500">
+          Quello che <strong>non</strong> abbiamo ancora fatto, e che diremo qui
+          quando sarà fatto: prove con lettori di schermo reali (VoiceOver, NVDA,
+          JAWS), verifica del contrasto su tutta la tavolozza, e una valutazione
+          da parte di un soggetto esterno.
+        </p>
       </LegalSection>
 
       <LegalSection id="feedback" heading="Meccanismo di feedback">

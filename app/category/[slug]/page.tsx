@@ -8,6 +8,7 @@ import { trackCategoryViewed } from '@/lib/analytics/events';
 import { Filter, RotateCcw, Truck, Tag, PackageCheck, CircleDot, Star, X, Search } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import ProductGrid, { type SortOption } from '@/components/ProductGrid';
 import CollectionHeader from '@/components/CollectionHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -61,7 +62,13 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   const [minRating, setMinRating] = useState<number>(0);
   const [resultCount, setResultCount] = useState<number | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // #134 — Il pannello si dichiarava `aria-modal` e non si comportava da
+  // modale: da tastiera il fuoco restava dietro il velo, senza Esc e senza
+  // uscita. Lo stesso pannello nella pagina di ricerca era gia' a posto: era
+  // scritto li' dentro e nessuno l'aveva estratto.
+  const sheetRef = useRef<HTMLDivElement>(null);
   const filterTriggerRef = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(filtersOpen, sheetRef, filterTriggerRef, () => setFiltersOpen(false));
 
   const reset = () => {
     setMaxPrice(500);
@@ -364,7 +371,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       {filtersOpen && (
         <div className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label={t('filters')}>
           <div className="absolute inset-0 bg-black/40" onClick={() => setFiltersOpen(false)} />
-          <div className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] flex flex-col pb-safe">
+          <div ref={sheetRef} className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] flex flex-col pb-safe">
             <div className="sticky top-0 bg-white flex items-center justify-between px-4 py-3 border-b border-cream-200 rounded-t-2xl">
               <h2 className="font-serif font-bold text-ink-900 flex items-center gap-2">
                 <Filter size={16} strokeWidth={2.2} className="text-primary-600" />

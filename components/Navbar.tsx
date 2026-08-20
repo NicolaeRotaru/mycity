@@ -272,6 +272,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
 }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const pathname = usePathname();
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
@@ -283,16 +284,41 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
+  /**
+   * #144 — Il menu si dichiarava `role="menu"`, che e' un ruolo impegnativo:
+   * chi lo usa si aspetta le frecce su e giu', Home e Fine, un solo elemento
+   * raggiungibile col Tab, e l'uscita con Esc. Qui non c'era niente di tutto
+   * questo — solo dei link normali travestiti. La promessa sbagliata e' peggio
+   * di nessuna promessa: lo screen reader annuncia «menu» e la tastiera si
+   * comporta in un altro modo.
+   *
+   * La strada scelta e' la piu' onesta e la piu' economica: si toglie il
+   * travestimento (restano `<ul>` e `<li>` con link veri, che funzionano da
+   * sempre) e si aggiunge quello che davvero mancava — Esc che chiude e
+   * riporta il fuoco sul pulsante, e la chiusura quando il fuoco esce.
+   */
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open]);
+
   const initial = displayName?.[0]?.toUpperCase() ?? '?';
 
   return (
     <div ref={ref} className="relative ml-1">
       <button
         type="button"
+        ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 hover:bg-white/10 px-2 py-1.5 rounded-full transition-colors"
         aria-label="Menu account"
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={open}
       >
         {isSeller && storeLogo ? (
@@ -342,15 +368,14 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
               <p className="font-semibold text-ink-900 truncate">{displayName}</p>
             </div>
           </div>
-          <ul role="menu" className="py-1 text-ink-700">
+          <ul className="py-1 text-ink-700">
             {getAccountMenuItems(role).map((it) => (
               <MenuLink key={it.href} href={it.href} icon={it.icon} label={it.label} />
             ))}
-            <li role="separator"><div className="border-t border-ink-100 my-1" /></li>
-            <li role="none">
+            <li aria-hidden><div className="border-t border-ink-100 my-1" /></li>
+            <li>
               <button
                 type="button"
-                role="menuitem"
                 onClick={onSignOut}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-secondary-600 hover:bg-secondary-50 font-medium"
               >
@@ -366,8 +391,8 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
 };
 
 const MenuLink = ({ href, icon: Icon, label }: { href: string; icon: typeof Bell; label: string }) => (
-  <li role="none">
-    <Link href={href} role="menuitem" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-cream-100">
+  <li>
+    <Link href={href} className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-cream-100">
       <Icon size={16} strokeWidth={2.2} className="text-ink-500 shrink-0" aria-hidden />
       <span className="font-medium">{label}</span>
     </Link>

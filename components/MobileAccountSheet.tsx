@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Store, Bike, LogOut, X } from 'lucide-react';
 import { getAccountMenuItems, type MenuRole } from '@/lib/account-menu';
 import { useCloseOnBack } from './hooks/useCloseOnBack';
+import { useBottomSheetA11y } from './hooks/useBottomSheetA11y';
 
 type Props = {
   open: boolean;
@@ -39,16 +40,13 @@ export default function MobileAccountSheet({ open, onClose, role, displayName, s
     router.push(href);
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
-  }, [open, onClose]);
+  // #152 — Esc e blocco dello scorrimento c'erano gia'; mancavano la trappola
+  // del fuoco (da tastiera si finiva a navigare la pagina dietro il velo) e il
+  // ritorno del fuoco alla chiusura. Stesso hook degli altri pannelli, cosi'
+  // non ci sono piu' due modi di fare la stessa cosa.
+  const pannelloRef = useRef<HTMLDivElement>(null);
+  const nessunAvvio = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(open, pannelloRef, nessunAvvio, onClose);
 
   if (!open) return null;
 
@@ -60,7 +58,7 @@ export default function MobileAccountSheet({ open, onClose, role, displayName, s
   return (
     <div className="md:hidden fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Menu account">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] overflow-y-auto pb-safe">
+      <div ref={pannelloRef} className="absolute bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-warm-lg max-h-[85vh] overflow-y-auto pb-safe">
         <div className="sticky top-0 bg-cream-100 flex items-center justify-between px-4 py-3 border-b border-ink-100">
           <div className="flex items-center gap-3 min-w-0">
             {isSeller && storeLogo ? (

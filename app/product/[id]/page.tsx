@@ -46,6 +46,7 @@ import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { SocialProof } from '@/components/ui/SocialProof';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { trackReviewSubmitted } from '@/lib/analytics/events';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
@@ -61,6 +62,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
   const [activeImg, setActiveImg] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  /**
+   * #135 e #120 — Il visore a schermo intero era un `fixed inset-0` scritto a
+   * mano: nessun Esc, nessuna trappola del fuoco, nessun blocco dello
+   * scorrimento. Da tastiera si finiva a navigare la pagina sotto il velo nero,
+   * senza vedere dove si era e senza modo di chiudere; sul telefono la pagina
+   * scorreva dietro la foto. E si dichiarava `aria-modal`, cioe' prometteva
+   * esattamente quello che non faceva.
+   *
+   * Lo stesso hook dei pannelli filtri: Esc, fuoco che entra e torna al
+   * pulsante, scorrimento bloccato.
+   */
+  const lightboxRef = useRef<HTMLDivElement>(null);
+  const zoomTriggerRef = useRef<HTMLButtonElement>(null);
+  /** Quante foto ha il prodotto: l'elenco nasce piu' sotto, dopo i controlli
+   *  di caricamento, e gli hook devono stare tutti prima. */
+  const numeroFoto = useRef(1);
   // "Nuovo" calcolato post-hydration (come ProductCard): Date.now() differisce
   // server/client e su prodotti vicini al limite NEW_PRODUCT_DAYS causa mismatch.
   const [isNew, setIsNew] = useState(false);
@@ -181,6 +198,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     },
   });
 
+  useBottomSheetA11y(lightbox, lightboxRef, zoomTriggerRef, () => setLightbox(false));
+
+  // #135 — Le frecce sinistra/destra sfogliano le foto, come ci si aspetta da
+  // un visore a schermo intero. Prima si poteva solo con lo swipe o col mouse.
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      const n = numeroFoto.current;
+      if (n < 2) return;
+      if (e.key === 'ArrowLeft') setActiveImg((p) => (p - 1 + n) % n);
+      if (e.key === 'ArrowRight') setActiveImg((p) => (p + 1) % n);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [lightbox]);
+
   // Quando si chiude il lightbox (dove si naviga con frecce/swipe), riallinea
   // il carosello principale alla foto corrente.
   useEffect(() => {
@@ -256,6 +289,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const images: string[] = Array.isArray(product.images) && product.images.length > 0
     ? (product.images as string[])
     : ['https://placehold.co/600x600/F5EDD9/78716C?text=Foto+prodotto'];
+  numeroFoto.current = images.length;
 
   const avgRating = reviews.length
     ? reviews.reduce((s: number, r) => s + Number(r.rating), 0) / reviews.length
@@ -430,8 +464,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   />
                   <button
                     type="button"
+                    ref={i === activeImg ? zoomTriggerRef : undefined}
                     onClick={() => setLightbox(true)}
                     aria-label="Ingrandisci foto"
+                    // #135 — Da tastiera si raggiunge solo la foto in vista: le
+                    // altre sono nel carosello ma non sono ancora «qui», e
+                    // otto tabulazioni sulla stessa immagine non aiutano nessuno.
+                    tabIndex={i === activeImg ? 0 : -1}
                     className="absolute inset-0 z-[1] cursor-zoom-in"
                   />
                 </div>
@@ -488,6 +527,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         {/* LIGHTBOX a schermo intero — vede la foto intera, con navigazione */}
         {lightbox && (
           <div
+            ref={lightboxRef}
             className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
             onClick={() => setLightbox(false)}
             onTouchStart={(e) => { touchStartX.current = e.touches[0]?.clientX ?? null; }}
@@ -652,13 +692,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <div className="space-y-3">
               {optionGroups.map((g) => (
                 <div key={g.name}>
-                  <p className="text-sm font-semibold text-ink-700 mb-1.5">
+                  {/* #142 — Il titolo del gruppo (Taglia, Colore…) non era
+                      collegato ai pulsanti sotto: da screen reader si sentiva
+                      «M, premuto» senza sapere M di che cosa. */}
+                  <p id={`opt-${g.name}`} className="text-sm font-semibold text-ink-700 mb-1.5">
                     {findLabelForKey(g.name)}
                     {selectedOptions[g.name] && (
                       <span className="ml-1.5 font-normal text-ink-500">· {selectedOptions[g.name]}</span>
                     )}
                   </p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2" role="group" aria-labelledby={`opt-${g.name}`}>
                     {g.values.map((val) => {
                       const active = selectedOptions[g.name] === val;
                       return (
@@ -760,8 +803,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               )}
             </p>
 
-            <div className="flex items-center gap-3 pt-2 flex-wrap">
-              <label className="text-sm font-medium">Q.tà:</label>
+            {/* #142 — L'etichetta «Q.tà» era una label senza niente a cui
+                agganciarsi (`for` mancante, e nessun campo: i tre pezzi sono due
+                pulsanti e un numero). Per uno screen reader restava una parola
+                sospesa, e il numero cambiava in silenzio: si premeva «+» e non
+                veniva annunciato niente. Ora e' un gruppo con un nome, e il
+                valore si annuncia da solo quando cambia. */}
+            <div className="flex items-center gap-3 pt-2 flex-wrap" role="group" aria-label="Quantità">
+              <span className="text-sm font-medium" aria-hidden>Q.tà:</span>
               <div className="flex items-center border border-surface-300 rounded-lg">
                 <button
                   type="button"
@@ -770,7 +819,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   aria-label="Diminuisci quantità"
                   className="w-9 h-9 hover:bg-surface-50 rounded-l-lg disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >−</button>
-                <span className="w-10 text-center font-semibold">{qty}</span>
+                <output aria-live="polite" aria-atomic="true" className="w-10 text-center font-semibold">{qty}</output>
                 <button
                   type="button"
                   onClick={() => setQuantity(Math.min(maxQty, qty + 1))}
@@ -888,14 +937,18 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               onSubmit={(e) => { e.preventDefault(); submitReview.mutate(); }}
               className="space-y-3"
             >
-              <div className="flex gap-1">
+              {/* #142 — Le stelle erano cinque pulsanti senza stato: si sentiva
+                  «3 stelle, pulsante» sia prima sia dopo averlo premuto, e
+                  nessuno diceva che quel voto era quello scelto. */}
+              <div className="flex gap-1" role="group" aria-label="Il tuo voto">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <button
                     key={n}
                     type="button"
                     onClick={() => setReviewRating(n)}
+                    aria-pressed={n <= reviewRating}
                     className="text-3xl hover:scale-110 transition-transform"
-                    aria-label={`${n} stelle`}
+                    aria-label={`${n} ${n === 1 ? 'stella' : 'stelle'}`}
                   >
                     <span className={n <= reviewRating ? 'text-accent-700' : 'text-ink-300'}>★</span>
                   </button>

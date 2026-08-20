@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { useTranslations } from 'next-intl';
 
@@ -17,47 +18,6 @@ type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating'
 
 const SORT_OPTIONS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'discount_desc', 'rating'];
 
-// Bottom-sheet mobile: scroll-lock + Esc, focus-trap e ritorno del focus al
-// trigger alla chiusura (WCAG 2.1.2 / 2.4.3). Condiviso tra pannello filtri e ordina.
-function useBottomSheetA11y(
-  open: boolean,
-  sheetRef: RefObject<HTMLDivElement | null>,
-  triggerRef: RefObject<HTMLButtonElement | null>,
-  onClose: () => void,
-) {
-  useEffect(() => {
-    if (!open) return;
-    const trigger = triggerRef.current;
-    const focusables = () =>
-      sheetRef.current
-        ? Array.from(
-            sheetRef.current.querySelectorAll<HTMLElement>(
-              'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          ).filter((el) => el.offsetParent !== null)
-        : [];
-    // All'apertura sposta il focus dentro al pannello.
-    focusables()[0]?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { onClose(); return; }
-      if (e.key !== 'Tab') return;
-      const els = focusables();
-      if (els.length === 0) return;
-      const first = els[0];
-      const last = els[els.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-      trigger?.focus();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-}
 
 function SearchInner() {
   const params = useSearchParams();
