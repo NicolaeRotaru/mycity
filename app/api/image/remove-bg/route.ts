@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { verificaImmagineBase64 } from '@/lib/immagini-base64';
+import { jsonConTetto } from '@/lib/api/corpo';
 import { getBgRemovalProvider } from '@/lib/bg-removal';
 import {
   BgRemovalConfigError,
@@ -50,12 +51,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   // 3) Body + validazione
-  let json: unknown;
-  try {
-    json = await req.json();
-  } catch {
-    return ApiErrors.invalidRequest('Body JSON non valido.');
-  }
+  // #180 — Tetto vero sul corpo: l'immagine arriva come base64 dentro il JSON,
+  // quindi un corpo enorme finirebbe tutto in memoria prima di qualunque
+  // controllo. Otto megabyte coprono i cinque veri dell'immagine piu' il
+  // sovrapprezzo del base64.
+  const json = await jsonConTetto(req, 8 * 1024 * 1024);
+  if (json === undefined) return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+  if (json === null) return ApiErrors.invalidRequest('Body JSON non valido.');
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) {
     return ApiErrors.invalidRequest('media_type deve essere image/jpeg, image/png o image/webp.');

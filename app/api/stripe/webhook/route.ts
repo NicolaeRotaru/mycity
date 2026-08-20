@@ -432,7 +432,21 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     })
     .eq('id', pendingCheckoutId);
 
-  // Email buyer + seller (best-effort, per ogni ordine creato)
+  /**
+   * #176 — Le email non tengono piu' in ostaggio la risposta a Stripe.
+   *
+   * Stripe considera fallita una consegna che non riceve risposta entro pochi
+   * secondi, la ritenta, e dopo troppi fallimenti disattiva l'endpoint. Qui,
+   * per ogni ordine, si aspettavano DUE invii di posta (con un secondo
+   * tentativo interno ciascuno) piu' una lettura dell'utente venditore: con un
+   * carrello da tre negozi e Resend lento si arrivava tranquillamente oltre il
+   * limite. E il lavoro che conta — l'ordine — era gia' fatto.
+   *
+   * Gli ordini sono creati e registrati sopra: da qui in giu' e' tutto
+   * best-effort, e parte senza far aspettare nessuno. Se un'email fallisce si
+   * vede nel log, non nel fatto che Stripe smette di parlarci.
+   */
+  const avvisi = (async () => {
   for (const created of createdOrderIds) {
     const groupForOrder = groups.find((x) => x.sellerId === created.sellerId);
     const storeName = groupForOrder?.storeName ?? 'venditore';
@@ -470,6 +484,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       link: `/seller/orders/${created.orderId}`,
     });
   }
+  })();
+  // Non si aspetta: si registra soltanto se qualcosa va storto.
+  void avvisi.catch((e) => logger.warn('[webhook] avvisi post-ordine falliti', { message: e instanceof Error ? e.message : 'errore' }));
 }
 
 /**

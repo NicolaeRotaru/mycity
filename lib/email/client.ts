@@ -75,7 +75,15 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   let lastErr = 'unknown';
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const { data, error } = await resend.emails.send(payload);
+      // #176 — Un tetto di dieci secondi per tentativo. Senza, una chiamata
+      // appesa teneva ferma la risposta di chi la stava aspettando — nel caso
+      // peggiore il webhook di Stripe, che se non riceve risposta ritenta e poi
+      // disattiva l'endpoint.
+      const { data, error } = await Promise.race([
+        resend.emails.send(payload),
+        new Promise<never>((_, rifiuta) =>
+          setTimeout(() => rifiuta(new Error('invio email oltre i 10 secondi')), 10_000)),
+      ]);
       if (!error) return { ok: true, id: data?.id ?? '' };
       lastErr = error.message ?? 'resend error';
     } catch (err) {

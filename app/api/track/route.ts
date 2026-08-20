@@ -4,6 +4,7 @@ import { getCurrentUser } from '@/lib/supabase/server';
 import { recordActivity, type ActivityCategory } from '@/lib/activity';
 import { parseUserAgent } from '@/lib/user-agent';
 import { parseConsentCookie, CONSENT_COOKIE } from '@/lib/consent';
+import { jsonConTetto } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -102,7 +103,11 @@ export async function POST(request: Request) {
 
   let body: { event_type?: unknown; path?: unknown; referrer?: unknown; session_id?: unknown; metadata?: unknown };
   try {
-    body = await request.json();
+    // #180 — Tetto vero: questa rotta e' pubblica e accetta JSON da chiunque.
+    // Trentaduemila byte sono molto piu' di qualunque evento legittimo.
+    const letto = await jsonConTetto(request, 32 * 1024);
+    if (letto === undefined) return noContent(); // troppo grande: si scarta in silenzio
+    body = letto as typeof body;
   } catch {
     return noContent();
   }

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { cancellaAccount } from '@/lib/account/cancellazione';
 import { withAdminAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
@@ -16,43 +17,7 @@ export const runtime = 'nodejs';
  *  - errori dettagliati nel response (utile per debug, e' admin)
  */
 
-const SAFE_FIELDS = {
-  full_name: '[utente eliminato]',
-  phone: null,
-  address: null,
-  city: null,
-  zip: null,
-  store_name: null,
-  store_phone: null,
-  store_address: null,
-  store_lat: null,
-  store_lng: null,
-  store_logo: null,
-  store_media: null,
-  store_description: null,
-  is_approved: false,
-  role: 'buyer',
-};
 
-const KYC_FIELDS = {
-  legal_first_name: null,
-  legal_last_name: null,
-  legal_fiscal_code: null,
-  legal_birth_date: null,
-  legal_residence_addr: null,
-  legal_residence_city: null,
-  legal_residence_zip: null,
-  business_legal_name: null,
-  business_vat_number: null,
-  business_address: null,
-  business_city: null,
-  business_zip: null,
-  business_pec: null,
-  business_sdi: null,
-  billing_iban: null,
-  billing_card_last4: null,
-  approval_status: 'rejected',
-};
 
 async function handler(_req: NextRequest, caller: { id: string }, { params }: { params: { id: string } }) {
   const targetId = params.id;
@@ -80,29 +45,15 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
     .single();
   if (!targetProfile) return ApiErrors.notFound('Utente non trovato.');
 
-  // 5) Anonimizzazione resiliente
-  const full = await admin.from('profiles').update({ ...SAFE_FIELDS, ...KYC_FIELDS }).eq('id', targetId);
-  if (full.error) {
-    logger.warn('admin delete: full anonymize failed, fallback', full.error.message);
-    const safe = await admin.from('profiles').update(SAFE_FIELDS).eq('id', targetId);
-    if (safe.error) {
-      logger.error('admin delete: even safe anonymize failed', safe.error);
-      // L'admin si merita il dettaglio dell'errore
-      return NextResponse.json(
-        { error: `Anonimizzazione fallita: ${safe.error.message}`, code: safe.error.code },
-        { status: 500 },
-      );
-    }
-  }
-
-  // 6) Cancella da auth.users
-  const { error: delErr } = await admin.auth.admin.deleteUser(targetId);
-  if (delErr) {
-    logger.error('admin delete: auth deletion failed', delErr);
-    return NextResponse.json(
-      { error: `Profilo anonimizzato ma cancellazione auth fallita: ${delErr.message}` },
-      { status: 500 },
-    );
+  // #178 — Una pipeline sola, la stessa del cron. Prima questa strada
+  // anonimizzava il profilo e basta: la carta d'identita' e il selfie
+  // restavano nello storage, le recensioni col nome dentro restavano, e la
+  // newsletter continuava ad arrivare. Due strade per la stessa promessa —
+  // «i tuoi dati vengono cancellati» — e una delle due non la manteneva.
+  const esito = await cancellaAccount(admin, targetId);
+  if (!esito.ok) {
+    logger.error('admin delete: cancellazione fallita', { targetId, errore: esito.errore });
+    return NextResponse.json({ error: esito.errore }, { status: 500 });
   }
 
   await writeAudit({

@@ -372,9 +372,25 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const stockItems = stripeGroups.flatMap((g) =>
     g.items.map((it) => ({ product_id: it.productId, variant_id: it.variantId ?? null, qty: it.quantity })),
   );
+  /**
+   * #171 — Il codice sconto si restituisce a OGNI uscita, non solo all'ultima.
+   *
+   * Il claim avviene prima di parlare con Stripe. Da li' in poi ci sono cinque
+   * modi di uscire senza ordine: merce finita, riga di intento non scritta,
+   * Stripe che rifiuta... e su quattro di questi il codice restava «usato».
+   * Per un codice a uso unico vuol dire perso per sempre: il cliente lo ha in
+   * mano, il sistema lo dichiara consumato, e nessuno ha comprato niente.
+   */
+  const rilasciaCoupon = async () => {
+    if (!validatedCouponCode) return;
+    const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
+    if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
+  };
+
   const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
   if (reserveErr) {
     logger.warn('[stripe] reserve_stock fallita', { message: reserveErr.message });
+    await rilasciaCoupon();
     return ApiErrors.conflict('Alcuni articoli non sono più disponibili nelle quantità richieste.');
   }
 
@@ -409,6 +425,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   if (pendErr || !pending) {
     logger.error('[stripe] pending_checkout insert failed', pendErr);
     await admin.rpc('restore_stock', { p_items: stockItems }); // rilascia la riserva
+    await rilasciaCoupon(); // #171 — e anche il codice sconto
     return ApiErrors.internal('Errore nella preparazione del pagamento.');
   }
 
@@ -444,11 +461,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     await admin.rpc('restore_stock', { p_items: stockItems });
     // Il codice sconto era già stato «consumato» prima di creare la sessione:
     // se il pagamento non nasce va restituito, altrimenti quell'uso è perso per
-    // sempre. Nel codice non esisteva nessun punto che lo restituisse.
-    if (validatedCouponCode) {
-      const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
-      if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
-    }
+    // sempre.
+    await rilasciaCoupon();
     await admin
       .from('pending_checkouts')
       .update({ status: 'CANCELED' })

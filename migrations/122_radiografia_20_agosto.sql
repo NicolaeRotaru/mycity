@@ -336,6 +336,78 @@ COMMENT ON FUNCTION public.store_cards(int, int) IS
 
 GRANT EXECUTE ON FUNCTION public.store_cards(int, int) TO anon, authenticated;
 
+-- =========================================================
+-- ⑥ CANCELLARE UNA PERSONA NON CANCELLA I RESI  (#179)
+-- =========================================================
+-- L'anonimizzazione scritta nel codice («i resi restano, senza il nome») veniva
+-- vanificata dallo schema: `returns.buyer_id` e `returns.seller_id` puntavano
+-- agli utenti con ON DELETE CASCADE, quindi alla cancellazione dell'account le
+-- righe dei resi sparivano fisicamente — insieme a quelle delle conversazioni.
+--
+-- Non e' solo un dato perso: un reso e' una pratica con dei soldi dentro, e
+-- serve a noi (contestazioni, contabilita', obblighi fiscali) anche quando la
+-- persona se n'e' andata. La forma giusta e' quella gia' usata su `orders`:
+-- il legame si stacca (SET NULL) e la riga resta, anonima.
+DO $$
+BEGIN
+  -- Le colonne devono poter restare vuote.
+  ALTER TABLE public.returns        ALTER COLUMN buyer_id  DROP NOT NULL;
+  ALTER TABLE public.returns        ALTER COLUMN seller_id DROP NOT NULL;
+  ALTER TABLE public.conversations  ALTER COLUMN buyer_id  DROP NOT NULL;
+  ALTER TABLE public.conversations  ALTER COLUMN seller_id DROP NOT NULL;
+EXCEPTION WHEN undefined_column OR undefined_table THEN
+  NULL; -- schema diverso: si lascia com'e' invece di fermare tutto
+END $$;
+
+ALTER TABLE public.returns DROP CONSTRAINT IF EXISTS returns_buyer_id_fkey;
+ALTER TABLE public.returns ADD  CONSTRAINT returns_buyer_id_fkey
+  FOREIGN KEY (buyer_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+ALTER TABLE public.returns DROP CONSTRAINT IF EXISTS returns_seller_id_fkey;
+ALTER TABLE public.returns ADD  CONSTRAINT returns_seller_id_fkey
+  FOREIGN KEY (seller_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+
+ALTER TABLE public.conversations DROP CONSTRAINT IF EXISTS conversations_buyer_id_fkey;
+ALTER TABLE public.conversations ADD  CONSTRAINT conversations_buyer_id_fkey
+  FOREIGN KEY (buyer_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE public.conversations DROP CONSTRAINT IF EXISTS conversations_seller_id_fkey;
+ALTER TABLE public.conversations ADD  CONSTRAINT conversations_seller_id_fkey
+  FOREIGN KEY (seller_id) REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+COMMENT ON CONSTRAINT returns_buyer_id_fkey ON public.returns IS
+  'SET NULL, non CASCADE: cancellare una persona anonimizza il reso, non lo distrugge (#179).';
+
+-- =========================================================
+-- ⑦ DOPPIO CLIC, UN ORDINE SOLO  (#172)
+-- =========================================================
+-- Gli ordini in contanti non avevano nessuna protezione contro il doppio invio.
+-- Un doppio clic sul pulsante «Ordina» — o un tocco ripetuto su una rete lenta,
+-- che e' la cosa piu' naturale del mondo quando non succede niente — creava due
+-- ordini, riservava la merce due volte e addebitava il credito MyCity due volte.
+-- Il percorso con la carta era coperto (la sessione Stripe ha la sua riga di
+-- intento); quello in contanti no.
+--
+-- Il browser manda una chiave per tentativo di checkout: se arriva due volte, la
+-- seconda si riconosce e si restituiscono gli stessi ordini invece di crearne
+-- altri.
+CREATE TABLE IF NOT EXISTS public.cod_checkout_attempts (
+  chiave      text PRIMARY KEY,
+  user_id     uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  order_ids   jsonb NOT NULL DEFAULT '[]'::jsonb,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.cod_checkout_attempts IS
+  'Un tentativo di ordine in contanti per chiave: il doppio invio ritrova gli ordini gia'' creati invece di crearne altri (#172).';
+
+CREATE INDEX IF NOT EXISTS cod_checkout_attempts_utente_idx
+  ON public.cod_checkout_attempts (user_id, created_at DESC);
+
+ALTER TABLE public.cod_checkout_attempts ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.cod_checkout_attempts FROM anon, authenticated;
+-- Nessuna policy: ci scrive solo il server, con la chiave di servizio.
+
 COMMIT;
 
 NOTIFY pgrst, 'reload schema';

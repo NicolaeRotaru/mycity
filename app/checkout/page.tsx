@@ -438,6 +438,21 @@ export default function CheckoutPage() {
   const creditApplied = paymentMethod === 'cod' && useCredit ? Math.min(walletEuro, grandTotal) : 0;
   const finalTotal = Math.max(0, grandTotal - creditApplied);
 
+  /**
+   * #172 — L'impronta di QUESTO carrello, usata come chiave del tentativo di
+   * ordine. Cambia se cambia il contenuto o il totale, cosi' due ordini
+   * davvero diversi non si confondono, e due invii dello stesso ordine si'.
+   */
+  const carrelloImpronta = useMemo(() => {
+    const pezzi = cart.map((i) => `${i.id}:${i.variantId ?? ''}:${i.quantity}`).join('|');
+    const totale = Math.round(finalTotal * 100);
+    let h = 0;
+    for (const ch of `${pezzi}#${totale}#${pickupInStore ? 'ritiro' : 'consegna'}`) {
+      h = (h * 31 + ch.charCodeAt(0)) | 0;
+    }
+    return Math.abs(h).toString(36);
+  }, [cart, finalTotal, pickupInStore]);
+
   const placeOrders = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -470,9 +485,14 @@ export default function CheckoutPage() {
       // SICUREZZA: gli ordini COD vengono creati SERVER-SIDE (/api/orders/cod),
       // che ricalcola prezzi, spedizione e sconti dal DB. Il client invia solo
       // prodotti+quantità, l'indirizzo e l'eventuale coupon; nessun importo.
+      // #172 — Una chiave per tentativo di checkout: se il pulsante viene
+      // premuto due volte, o se la rete ritenta da sola, il server riconosce il
+      // doppione e restituisce gli ordini gia' creati invece di farne altri.
+      // Vive quanto il carrello: cambia solo quando cambia cosa si sta comprando.
+      const chiaveTentativo = `cod-${carrelloImpronta}`;
       const res = await fetch('/api/orders/cod', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', 'idempotency-key': chiaveTentativo },
         body: JSON.stringify({
           groups: groups.map((g) => ({
             sellerId: g.sellerId,

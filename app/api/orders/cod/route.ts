@@ -95,6 +95,38 @@ export const POST = withAuthRateLimit(
     const supa = await getServerSupabase();
     const admin = getAdminSupabase();
 
+    /**
+     * #172 — Doppio clic, un ordine solo.
+     *
+     * Il percorso in contanti non aveva nessuna protezione contro il doppio
+     * invio. Un secondo tocco sul pulsante — la cosa piu' naturale del mondo
+     * quando per due secondi non succede niente — creava DUE ordini, riservava
+     * la merce due volte e addebitava il credito MyCity due volte. Il negozio
+     * preparava due spese e il fattorino ne consegnava una: la differenza la
+     * rimettevamo noi.
+     *
+     * Il browser manda una chiave per tentativo (intestazione
+     * `Idempotency-Key`). Se quella chiave e' gia' passata di qui, si
+     * restituiscono gli ordini di allora invece di crearne altri.
+     */
+    const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    if (chiaveTentativo) {
+      const { data: gia } = await admin
+        .from('cod_checkout_attempts')
+        .select('order_ids')
+        .eq('chiave', chiaveTentativo)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      const ordiniGia = (gia?.order_ids as Array<{ id: string; sellerId: string; totalCents: number }> | null) ?? null;
+      if (ordiniGia && ordiniGia.length > 0) {
+        logger.info('[cod] tentativo ripetuto: restituisco gli ordini gia creati', { chiave: chiaveTentativo });
+        return NextResponse.json(
+          { orderIds: ordiniGia.map((o) => o.id), ordini: ordiniGia, ripetuto: true },
+          { status: 200 },
+        );
+      }
+    }
+
     // --- 1. Carica i prodotti dal DB (mai trust client su prezzo/seller/stock).
     const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
     const uniqueProductIds = [...new Set(allProductIds)];
@@ -292,6 +324,14 @@ export const POST = withAuthRateLimit(
             p_ref: oid,
           });
         }
+      }
+      // #171 — Anche il codice sconto torna disponibile. Era «consumato» col
+      // claim atomico prima di creare gli ordini: se gli ordini vengono
+      // annullati e il codice resta usato, il cliente lo ha in mano e il
+      // sistema lo considera bruciato, senza che nessuno abbia comprato niente.
+      if (validatedCouponCode) {
+        const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
+        if (relErr) logger.warn('[cod] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
       }
       createdOrderIds.length = 0;
       ordiniCreati.length = 0;
@@ -518,6 +558,15 @@ export const POST = withAuthRateLimit(
 
     // NB: il coupon è già stato claimato atomicamente sopra (claim_coupon, fix #36).
     // Non chiamiamo più increment_coupon_usage qui.
+
+    // #172 — Si registra il tentativo: se la stessa chiave torna (doppio clic,
+    // rete che ritenta), la prossima volta si esce subito con questi ordini.
+    if (chiaveTentativo && createdOrderIds.length > 0) {
+      const { error: errChiave } = await admin
+        .from('cod_checkout_attempts')
+        .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: ordiniCreati });
+      if (errChiave) logger.warn('[cod] tentativo non registrato', { message: errChiave.message });
+    }
 
     return NextResponse.json({ orderIds: createdOrderIds, ordini: ordiniCreati }, { status: 200 });
   },
