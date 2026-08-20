@@ -1,0 +1,61 @@
+name: Deriva migrazioni (produzione)
+
+# #233 — Il controllo che deve accorgersi delle migrazioni dimenticate non
+# poteva diventare rosso.
+#
+# Dentro la CI, `db:check-drift` gira contro il database che la CI stessa ha
+# appena ricostruito applicando tutte le migrazioni del repository: confronta
+# il repo con una copia del repo, quindi è verde per costruzione. Un verde che
+# non prova niente è peggio di nessun controllo, perché rassicura.
+#
+# Il confronto che conta è con il database VERO: quali migrazioni sono scritte
+# nel repository e non sono mai state applicate in produzione. È esattamente lo
+# scenario che il 19 agosto ha fermato a metà la migrazione 119 (la tabella
+# catalog_ai_jobs non esisteva perché la 099 non era mai stata applicata).
+#
+# Gira ogni notte e a comando, NON sulle richieste di unione: se il segreto
+# manca il lavoro fallisce con un messaggio chiaro — ma non blocca il lavoro di
+# nessuno, perché non è un controllo obbligatorio sulle PR.
+#
+# Serve il segreto SUPABASE_DB_URL (la stessa stringa usata dal backup). La
+# lettura è sola lettura: una SELECT su una tabella di sistema.
+
+on:
+  schedule:
+    - cron: "42 6 * * *" # ogni mattina alle 06:42 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  deriva:
+    name: Migrazioni nel repo ma non in produzione
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      - name: Verifica di avere la stringa di connessione
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DB" ]; then
+            echo "::error::SUPABASE_DB_URL non configurato: il controllo della deriva NON può girare. Aggiungilo in GitHub → Settings → Secrets (Supabase → Project Settings → Database → Connection string)."
+            exit 1
+          fi
+
+      - name: Confronta il repository con il database vero
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: npm run db:check-drift

@@ -41,11 +41,26 @@ export async function getServerSupabase() {
  * fidate (cancellazione utente, payout, riconciliazione, webhook handler).
  * MAI esporre risultati grezzi al client.
  */
-export function getAdminSupabase() {
+function creaClientAmministrativo() {
   const { url, key } = requireSupabaseService();
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+}
+
+let _admin: ReturnType<typeof creaClientAmministrativo> | null = null;
+
+export function getAdminSupabase() {
+  // #245 — Si riusa, come si fa gia' per Stripe. Prima ne nasceva uno nuovo a
+  // ogni richiesta: ogni client porta con se' la sua coda di connessioni e i
+  // suoi timer, e la sola creazione costa su ogni chiamata di API. Il client
+  // amministrativo non porta dentro nessuna sessione, quindi tenerlo da parte
+  // non mescola i dati di due persone: e' proprio la ragione per cui NON si
+  // puo' fare lo stesso con getServerSupabase(), che invece la sessione ce
+  // l'ha.
+  if (_admin) return _admin;
+  _admin = creaClientAmministrativo();
+  return _admin;
 }
 
 /**

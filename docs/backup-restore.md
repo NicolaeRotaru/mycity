@@ -4,9 +4,35 @@
 
 ---
 
+> ⚠️ **#238 — Questo documento prometteva una rete di sicurezza che potrebbe non
+> esistere.** Diceva «ripristino al minuto, perdita massima 5 minuti» su tutti i
+> piani; ma sul piano gratuito di Supabase il ripristino al minuto non c'è, e
+> ripristinare una copia giornaliera **sovrascrive la produzione**. Nel
+> frattempo `scripts/backup-db.sh` — scritto proprio perché «il piano gratuito
+> non ha il ripristino al minuto» — non lo eseguiva nessuno.
+>
+> Due documenti che si contraddicono su come si salvano i dati sono peggio di
+> nessun documento: qualcuno userà quello sbagliato come piano, il giorno
+> peggiore.
+>
+> **Da fare (5 minuti, e vale più di tre paragrafi):** aprire Supabase →
+> Settings → Billing e Database → Backups, e scrivere qui sotto cosa c'è
+> davvero, con la data.
+>
+> - Piano attivo: _da verificare_
+> - Ripristino al minuto (PITR): _da verificare_
+> - Copie giornaliere, quante conservate: _da verificare_
+> - Data del controllo: _mai fatto_
+>
+> **Quello che è certo, oggi:** la copia notturna di GitHub Actions
+> (`.github/workflows/backup-db.yml`) gira ogni notte alle 02:17 UTC, esce
+> cifrata (segreto `BACKUP_PASSPHRASE`), comprende gli utenti dal 20 agosto e
+> resta 30 giorni fra gli artefatti. È la rete che sappiamo esserci.
+
 ## TL;DR
 
-- **Database**: Supabase PITR (Point In Time Recovery) automatico, 7gg (free) / 14gg (Pro)
+- **Database**: copia notturna cifrata via GitHub Actions (30 giorni) + quello
+  che offre il piano Supabase attivo, da verificare (vedi avviso sopra)
 - **Storage** (immagini prodotti, stories, reviews): replicato su Supabase S3
 - **Codice**: GitHub origin/main + tutti i branch
 - **Env vars**: Render dashboard (NON in repo)
@@ -18,7 +44,7 @@
 
 | Asset | Frequenza backup | RPO | RTO |
 |---|---|---|---|
-| Postgres DB | continuo (WAL) | 0-5 min | 30 min |
+| Postgres DB | notturna (GitHub Actions, cifrata) | 24 h | 30 min |
 | Storage (immagini) | replicato S3 | 0 | 0 |
 | Codice | ogni push | 0 | 5 min (re-deploy) |
 | Env vars | manuale on change | – | 1h (re-input) |

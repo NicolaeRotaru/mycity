@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { hasConsent } from '@/lib/consent';
+import { opzioniSentry, SENTRY_DSN } from '@/lib/analytics/sentry-config';
 
 /**
  * Sentry minimal wrapper — installazione lazy.
@@ -16,52 +16,29 @@ import { hasConsent } from '@/lib/consent';
  *   1. https://sentry.io → New Project → Next.js
  *   2. Copia DSN (es. https://abc@o123.ingest.sentry.io/456)
  *   3. Aggiungi env Render: NEXT_PUBLIC_SENTRY_DSN=https://...
- *   4. Sentry inizializzato automaticamente al primo mount
+ *   4. L'accensione avviene in instrumentation-client.ts, prima del primo
+ *      disegno di pagina (#236). Qui resta solo la rete di sicurezza.
  */
 
-const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
+const DSN = SENTRY_DSN;
 let initialized = false;
 
+/**
+ * #236 — Rete di sicurezza. L'accensione vera avviene in
+ * `instrumentation-client.ts`, prima del primo disegno; questa resta per il
+ * caso in cui quel file non sia stato eseguito (versioni diverse di Next,
+ * ambienti di prova). `Sentry.init` chiamata due volte non fa danni: la
+ * seconda sostituisce la configurazione della prima.
+ */
 async function initSentry() {
   if (initialized || !DSN || typeof window === 'undefined') return;
   initialized = true;
   const Sentry = await import('@sentry/nextjs').catch(() => null);
   if (!Sentry) return;
-  const analyticsOk = hasConsent('analytics');
-  Sentry.init({
-    dsn: DSN,
-    tracesSampleRate: 0.1,
-    // Session replay = registrazione schermo → solo con consenso analytics (GDPR).
-    replaysSessionSampleRate: analyticsOk ? 0.05 : 0,
-    replaysOnErrorSampleRate: analyticsOk ? 1.0 : 0,
-    environment: process.env.NODE_ENV,
-    // 🟡-11: non inviare PII di default (IP/cookie/header). Esplicito anche se è
-    // il default dell'SDK, così non regredisce se cambia in futuro.
-    sendDefaultPii: false,
-    ignoreErrors: [
-      // Errori "rumorosi" che non sono actionable
-      'ResizeObserver loop limit exceeded',
-      'Non-Error promise rejection captured',
-      'AbortError',
-      'NetworkError when attempting to fetch resource',
-    ],
-    beforeSend(event) {
-      // 🟡-11: scrub difensivo di PII — cookie, header (Authorization), body e
-      // identità utente (teniamo solo l'id per correlare, mai email/ip).
-      if (event.request) {
-        delete event.request.cookies;
-        delete event.request.headers;
-        delete (event.request as { data?: unknown }).data;
-      }
-      if (event.user) {
-        delete event.user.email;
-        delete event.user.ip_address;
-        delete (event.user as { username?: unknown }).username;
-      }
-      return event;
-    },
-  });
+  if ((Sentry as { getClient?: () => unknown }).getClient?.()) return; // già acceso
+  Sentry.init(opzioniSentry() as Parameters<typeof Sentry.init>[0]);
 }
+
 
 export async function captureError(err: unknown, context?: Record<string, any>) {
   if (!DSN) {

@@ -22,14 +22,30 @@ type Bucket = { times: number[] };
 const buckets = new Map<string, Bucket>();
 const MAX_KEYS = 50_000;
 
+/**
+ * #237 — La pulizia che non puliva.
+ *
+ * Prima si cancellavano solo le chiavi ferme da piu' di un'ora. Sotto attacco
+ * — cinquantamila indirizzi diversi in pochi minuti — nessuna chiave e' vecchia
+ * di un'ora: il ciclo scorreva tutte e cinquantamila senza cancellarne una, e
+ * lo faceva a OGNI nuova chiave. Il freno anti-abuso diventava il modo piu'
+ * comodo per consumare memoria e tempo di calcolo: esattamente il danno che
+ * doveva impedire.
+ *
+ * Ora si cancella per anzianita' — le chiavi col colpo piu' vecchio per prime —
+ * fino a rientrare sotto il tetto, sempre. E si scende sotto la soglia di un
+ * buon margine, cosi' la pulizia non riparte a ogni inserimento.
+ */
+const QUOTA_DA_LIBERARE = 0.1; // si libera il 10% quando si tocca il tetto
+
 function gcIfNeeded() {
   if (buckets.size <= MAX_KEYS) return;
-  const now = Date.now();
-  for (const [key, b] of buckets) {
-    if (b.times.length === 0 || now - b.times[b.times.length - 1] > 60 * 60_000) {
-      buckets.delete(key);
-    }
-    if (buckets.size <= MAX_KEYS) break;
+  const daTogliere = Math.max(1, Math.ceil(MAX_KEYS * QUOTA_DA_LIBERARE));
+  const perAnzianita = Array.from(buckets.entries())
+    .map(([key, b]) => ({ key, ultimo: b.times.length > 0 ? b.times[b.times.length - 1] : 0 }))
+    .sort((a, b) => a.ultimo - b.ultimo);
+  for (let i = 0; i < daTogliere && i < perAnzianita.length; i++) {
+    buckets.delete(perAnzianita[i].key);
   }
 }
 

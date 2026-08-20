@@ -23,6 +23,14 @@ on:
     branches: [main]
   workflow_dispatch: {}
 
+
+# #244 — Il minimo indispensabile. Senza questo blocco ogni lavoro parte col
+# permesso predefinito del repository, che di norma è di SCRITTURA: uno script
+# di una dipendenza compromessa potrebbe scrivere sul codice o creare rilasci.
+# Qui serve solo leggere.
+permissions:
+  contents: read
+
 jobs:
   rilascia:
     name: Chiama Render

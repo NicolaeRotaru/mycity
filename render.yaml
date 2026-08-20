@@ -127,6 +127,16 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SENTRY_DSN
         sync: false
+      # #236 — Senza queste tre, le mappe del codice non vengono caricate e
+      # ogni traccia d'errore arriva illeggibile: righe di codice compresso,
+      # nomi di variabile di una lettera. Un errore che non si sa leggere e'
+      # quasi come un errore che non e' arrivato.
+      - key: SENTRY_AUTH_TOKEN
+        sync: false
+      - key: SENTRY_ORG
+        sync: false
+      - key: SENTRY_PROJECT
+        sync: false
       - key: NEXT_PUBLIC_APP_URL
         value: https://mycity-marketplace.com
       - key: NEXT_PUBLIC_WHATSAPP_NUMBER

@@ -24,11 +24,12 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# #243 — Prima erano elencati cinque nomi precisi: bastava un .env.production,
+# un .env.backup o un .env.render per finire nel repository con dentro le
+# chiavi vere. Ora si ignora tutto quello che comincia per .env, tranne il
+# foglio d'esempio, che deve restare visibile.
+.env*
+!.env.example
 
 # vercel
 .vercel
