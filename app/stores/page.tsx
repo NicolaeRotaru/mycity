@@ -58,6 +58,26 @@ const fetchStoresData = async () => {
       .order('name'),
   ]);
 
+  // #89 — Il conteggio vero, negozio per negozio.
+  //
+  // Prima si scaricavano al massimo 600 prodotti IN TUTTO, ordinati dal piu'
+  // recente, e da quel mucchio si contava quanti ne aveva ciascun negozio.
+  // Effetto: i negozi che non avevano pubblicato di recente comparivano in
+  // vetrina con «0 prodotti» pur avendone il catalogo pieno. Il negoziante
+  // apre la sua pagina, si vede a zero, e pensa che il sito sia rotto — o che
+  // sia stato messo da parte.
+  //
+  // `store_cards` (migrazione 122) prende i primi quattro prodotti DI OGNI
+  // negozio piu' il conteggio vero. Se non e' ancora applicata, si continua col
+  // giro di prima: meno preciso, ma niente si rompe.
+  const { data: schede } = await supabase.rpc('store_cards', { p_per_store: 4, p_limit: 500 });
+  const contiVeri = new Map<string, number>();
+  const prodottiPerNegozio = new Map<string, ProductLite[]>();
+  for (const riga of (schede ?? []) as Array<{ seller_id: string; prodotti: ProductLite[]; totale: number }>) {
+    contiVeri.set(riga.seller_id, riga.totale);
+    prodottiPerNegozio.set(riga.seller_id, riga.prodotti ?? []);
+  }
+
   const products = (productsRes.data ?? []) as ProductLite[];
   const reviewRows = (reviewsRes.data ?? []) as { store_id: string; avg: number | string; count: number }[];
   const categories = (categoriesRes.data ?? []) as Category[];
@@ -70,6 +90,17 @@ const fetchStoresData = async () => {
     countByStore[p.seller_id] = (countByStore[p.seller_id] ?? 0) + 1;
     if (p.category_id) {
       (categoriesByStore[p.seller_id] ??= new Set()).add(p.category_id);
+    }
+  }
+  // Dove la funzione ha risposto, il suo conteggio vince: e' quello vero.
+  for (const [sellerId, totale] of contiVeri) {
+    countByStore[sellerId] = totale;
+    const prodotti = prodottiPerNegozio.get(sellerId);
+    if (prodotti && prodotti.length > 0 && (productsByStore[sellerId]?.length ?? 0) === 0) {
+      productsByStore[sellerId] = prodotti;
+      for (const p of prodotti) {
+        if (p.category_id) (categoriesByStore[sellerId] ??= new Set()).add(p.category_id);
+      }
     }
   }
 

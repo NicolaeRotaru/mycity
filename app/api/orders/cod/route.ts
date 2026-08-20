@@ -455,6 +455,9 @@ export const POST = withAuthRateLimit(
 
       // Notifica in-app al venditore — nuovo ordine COD ricevuto
       await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
         user_id: g.sellerId,
         title: '🎉 Nuovo ordine!',
         body: `Ordine #${order.id.slice(0, 6).toUpperCase()} · €${(totalCents / 100).toFixed(2)} · pagamento alla consegna`,
@@ -484,6 +487,9 @@ export const POST = withAuthRateLimit(
       // non deve far fallire la creazione dell'ordine). Per gli ordini con carta
       // la conferma parte dal webhook Stripe; per il COD va inviata qui.
       await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
         user_id: user.id,
         title: '✅ Ordine ricevuto',
         body: `Il tuo ordine #${order.id.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,

@@ -273,6 +273,9 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   if (admins && admins.length > 0) {
     const notifications = admins.map((a: { id: string }) => ({
       user_id: a.id,
+      // #33 — categoria 'system': un allarme operativo non e' una promozione e
+      // non si spegne con gli interruttori del marketing.
+      category: 'system',
       title: `⚠️ ${fresh.length} alert operativi`,
       body: fresh.slice(0, 3).map((al) => al.detail).join('; '),
       link: '/admin/today',

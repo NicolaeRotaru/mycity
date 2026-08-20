@@ -50,8 +50,17 @@ const fetchNearData = async () => {
     ),
   ]);
 
+  // #89 — Stessa cosa di /stores: il taglio globale (400 prodotti in tutto)
+  // lasciava senza vetrina i negozi che non pubblicano da un po'. La funzione
+  // della migrazione 122 prende i primi quattro DI OGNI negozio; se non e'
+  // ancora applicata si resta al giro di prima.
+  const { data: schede } = await supabase.rpc('store_cards', { p_per_store: 4, p_limit: 500 });
   const productsByStore: Record<string, ProductLite[]> = {};
+  for (const riga of (schede ?? []) as Array<{ seller_id: string; prodotti: ProductLite[] }>) {
+    if (riga.prodotti && riga.prodotti.length > 0) productsByStore[riga.seller_id] = riga.prodotti;
+  }
   for (const p of (productsRes.data ?? []) as ProductLite[]) {
+    if (productsByStore[p.seller_id]?.length) continue;
     (productsByStore[p.seller_id] ??= []).push(p);
   }
 

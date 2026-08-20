@@ -461,6 +461,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
     // Notifica in-app al venditore (campanella) — nuovo ordine ricevuto
     await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
       user_id: created.sellerId,
       title: '📦 Nuovo ordine ricevuto',
       body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
@@ -598,6 +601,9 @@ async function handleSponsoredPurchase(session: Stripe.Checkout.Session) {
   }
 
   await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
     user_id: sellerId,
     title: '✨ Sponsorizzazione attiva',
     body: `Il tuo prodotto è "In primo piano" nella ricerca fino al ${endStr}.`,
@@ -658,6 +664,9 @@ async function handleSellerSubscription(session: Stripe.Checkout.Session) {
     .eq('id', sellerId);
 
   await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
     user_id: sellerId,
     title: '✅ Abbonamento attivo',
     body: 'Il tuo abbonamento venditore (€50/mese) è attivo. Grazie!',
@@ -694,6 +703,9 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
     .select('id');
   for (const r of rows ?? []) {
     await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
       user_id: r.id,
       title: '⚠️ Pagamento abbonamento non riuscito',
       body: 'Non siamo riusciti ad addebitare l’abbonamento mensile. Aggiorna il metodo di pagamento.',

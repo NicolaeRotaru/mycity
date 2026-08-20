@@ -123,6 +123,9 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
 
       // Notifica in-app al buyer (best-effort: non deve far fallire l'annullo).
       await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
         user_id: o.user_id,
         title: 'Ordine annullato',
         body: `L'ordine #${o.id.slice(0, 6).toUpperCase()} è stato annullato: il negozio non lo ha accettato in tempo.${isCardPaid ? ' Il rimborso è in corso.' : ''}`,

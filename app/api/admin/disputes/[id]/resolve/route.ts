@@ -129,6 +129,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   // Notifica chi ha aperto il reclamo.
   await admin.from('notifications').insert({
+        // #33 — la categoria decide se la persona vuole ancora ricevere
+        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+        category: 'order',
     user_id: dispute.opener_id,
     title:
       body.status === 'resolved_buyer'

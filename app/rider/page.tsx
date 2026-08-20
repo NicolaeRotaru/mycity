@@ -13,12 +13,32 @@ import { type OrderStatus } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { notify } from '@/lib/notifications';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useProfile } from '@/components/hooks/useProfile';
 import { trackRiderOrderAccepted } from '@/lib/analytics/events';
+
+/**
+ * Un ordine libero come lo vede il fattorino PRIMA di accettarlo: negozio,
+ * zona, importo, compenso. Nessun recapito — quelli arrivano dopo (#18, #32).
+ */
+type OrdineLibero = {
+  id: string;
+  seller_id: string;
+  store_name: string | null;
+  store_address: string | null;
+  delivery_city: string | null;
+  delivery_zip: string | null;
+  delivery_status: OrderStatus;
+  payment_method: string | null;
+  total_price: number;
+  shipping_cost: number;
+  rider_fee_cents: number | null;
+  delivery_slot: string | null;
+  articoli: number;
+  created_at: string;
+};
 
 type AvailableOrder = {
   id: string;
@@ -69,23 +89,50 @@ export default function RiderDashboardPage() {
   const { profile, userEmail } = useProfile();
 
   // Ordini ACCEPTED/READY senza rider + i miei ordini attivi
-  const { data: orders = [], isLoading } = useQuery({
+  /**
+   * #18 e #32 — Due letture separate, e non e' un dettaglio tecnico.
+   *
+   * Prima era una sola: «gli ordini liberi della citta' PIU' i miei», e portava
+   * indietro la riga intera — nome, indirizzo di casa e telefono di ogni
+   * cliente in attesa. Per decidere se accettare una consegna quei dati non
+   * servono: servono il negozio, la zona, l'importo e la fascia oraria. E dal
+   * momento in cui il fattorino accetta, i recapiti gli arrivano eccome.
+   *
+   * Ora: la bacheca degli ordini liberi viene da una vista che i recapiti non
+   * li ha proprio (`ordini_disponibili_rider`), e la riga intera si legge solo
+   * sugli ordini che quel fattorino ha preso.
+   */
+  const { data: datiRider, isLoading } = useQuery({
     queryKey: queryKeys.rider.orders,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          id, total_price, shipping_cost, delivery_status,
-          delivery_city, delivery_address, payment_method, user_id, rider_id,
-          seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_address ),
-          order_items ( id, quantity )
-        `)
-        .or(`and(delivery_status.in.(ACCEPTED,READY),rider_id.is.null),rider_id.eq.${user.id}`)
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as unknown as (AvailableOrder & { rider_id: string | null })[];
+
+      const [bacheca, miei] = await Promise.all([
+        supabase
+          .from('ordini_disponibili_rider')
+          .select('id, seller_id, store_name, store_address, delivery_city, delivery_zip, delivery_status, payment_method, total_price, shipping_cost, rider_fee_cents, delivery_slot, articoli, created_at')
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('orders')
+          .select(`
+            id, total_price, shipping_cost, delivery_status,
+            delivery_city, delivery_address, payment_method, user_id, rider_id,
+            seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_address ),
+            order_items ( id, quantity )
+          `)
+          .eq('rider_id', user.id)
+          .order('created_at', { ascending: true }),
+      ]);
+      if (miei.error) throw miei.error;
+
+      return {
+        // La vista puo' non esistere ancora (migrazione 122 da applicare): in
+        // quel caso la bacheca resta vuota e il fattorino vede solo i suoi
+        // ordini, invece di vedere un errore.
+        liberi: (bacheca.data ?? []) as unknown as OrdineLibero[],
+        miei: (miei.data ?? []) as unknown as (AvailableOrder & { rider_id: string | null })[],
+      };
     },
     refetchInterval: 60_000,   // dashboard rider: 1 min è sufficiente
     refetchOnWindowFocus: true, // appena torna sulla tab fa refresh subito
@@ -146,19 +193,24 @@ export default function RiderDashboardPage() {
 
   // Priorità per zona: gli ordini che cadono in una zona preferita vanno PRIMA
   // (la disponibilità promette "riceverai prima le consegne in queste zone").
-  const inPreferredZone = (o: { delivery_address: string | null; delivery_city: string | null }) => {
+  // #18 — La zona preferita si riconosce da citta' e CAP, non dall'indirizzo
+  // di casa: quello arriva solo dopo aver accettato.
+  const inPreferredZone = (o: { delivery_city: string | null; delivery_zip?: string | null; delivery_address?: string | null }) => {
     if (zones.length === 0) return false;
-    const hay = `${o.delivery_address ?? ''} ${o.delivery_city ?? ''}`.toLowerCase();
+    const hay = `${o.delivery_zip ?? ''} ${o.delivery_city ?? ''} ${o.delivery_address ?? ''}`.toLowerCase();
     return zones.some((z) => hay.includes(z.toLowerCase()));
   };
-  const byZone = <T extends { delivery_address: string | null; delivery_city: string | null }>(a: T, b: T) =>
+  const byZone = <T extends { delivery_city: string | null; delivery_zip?: string | null }>(a: T, b: T) =>
     (inPreferredZone(b) ? 1 : 0) - (inPreferredZone(a) ? 1 : 0);
+
+  const orders = datiRider?.miei ?? [];
+  const liberi = datiRider?.liberi ?? [];
 
   // Gli ordini annullati (CANCELED) non sono consegne attive: restano visibili
   // solo a buyer (proprietario) e admin, non al rider.
   const myActive   = orders.filter((o) => o.rider_id && o.delivery_status !== 'DELIVERED' && o.delivery_status !== 'CANCELED');
-  const available  = orders.filter((o) => !o.rider_id && o.delivery_status === 'READY').sort(byZone);
-  const inPrep     = orders.filter((o) => !o.rider_id && o.delivery_status === 'ACCEPTED').sort(byZone);
+  const available  = liberi.filter((o) => o.delivery_status === 'READY').sort(byZone);
+  const inPrep     = liberi.filter((o) => o.delivery_status === 'ACCEPTED').sort(byZone);
   const activeOne  = myActive[0];
 
   const claim = useMutation({
@@ -177,19 +229,12 @@ export default function RiderDashboardPage() {
       if (error) throw error;
       if (!data) throw new Error('Ordine già preso da un altro rider');
 
-      // Notifiche buyer + seller
-      notify({
-        userId: data.user_id,
-        title: 'Un rider ha preso il tuo ordine',
-        body: `Sta andando al negozio per ritirarlo`,
-        link: `/orders/${data.id}`,
-      });
-      notify({
-        userId: data.seller_id,
-        title: 'Rider in arrivo',
-        body: `Un rider sta venendo a ritirare l'ordine #${data.id.slice(0, 6).toUpperCase()}`,
-        link: `/seller/orders/${data.id}`,
-      });
+      // #44 — Qui c'era una chiamata a `notify()` dal browser. Non ha mai
+      // funzionato: la tabella delle notifiche non ha nessuna regola che
+      // permetta a una persona di scriverne una a un'altra, quindi il database
+      // rifiutava e la funzione si mangiava l'errore. Sembrava fatto e non era
+      // fatto. La notifica vera la scrive il trigger sul cambio di stato
+      // dell'ordine (migrazione 086), lato server, dove i permessi ci sono.
       return data;
     },
     onSuccess: (data) => {
@@ -367,9 +412,11 @@ export default function RiderDashboardPage() {
                     </div>
                     <span className="font-mono text-[11px] text-ink-400">#{o.id.slice(0, 6).toUpperCase()}</span>
                   </div>
+                  {/* #18 — Zona e CAP, non l'indirizzo di casa: quello compare
+                      appena l'ordine e' suo. */}
                   <DeliveryRoute
-                    store={o.seller?.store_name ?? 'Negozio'}
-                    cust={`${o.delivery_address ?? ''}${o.delivery_city ? ', ' + o.delivery_city : ''}`}
+                    store={o.store_name ?? 'Negozio'}
+                    cust={`${o.delivery_city ?? 'Piacenza'}${o.delivery_zip ? ' · ' + o.delivery_zip : ''}`}
                     small
                   />
                   <div className="mt-3 flex items-center justify-between">
@@ -402,8 +449,8 @@ export default function RiderDashboardPage() {
                       <span className="font-bold text-olive-700">{formatPrice(o.shipping_cost || 4.9)}</span>
                     </div>
                     <DeliveryRoute
-                      store={o.seller?.store_name ?? 'Negozio'}
-                      cust={`${o.delivery_address ?? ''}${o.delivery_city ? ', ' + o.delivery_city : ''}`}
+                      store={o.store_name ?? 'Negozio'}
+                      cust={`${o.delivery_city ?? 'Piacenza'}${o.delivery_zip ? ' · ' + o.delivery_zip : ''}`}
                       small
                     />
                   </div>
