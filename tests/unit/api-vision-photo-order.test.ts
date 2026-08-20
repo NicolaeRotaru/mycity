@@ -19,7 +19,12 @@ function makeReq(body: unknown): never {
     body: typeof body === 'string' ? body : JSON.stringify(body),
   }) as never;
 }
-const URLS = ['https://x/0.jpg', 'https://x/1.jpg', 'https://x/2.jpg'];
+// #205 — Le foto devono stare su uno degli host dichiarati (il nostro Storage).
+// Prima bastava che l'indirizzo cominciasse per http, e un venditore poteva far
+// scaricare al modello — e mettere in vetrina — una foto ospitata altrove.
+const STORAGE = 'https://abcdefgh.supabase.co/storage/v1/object/public/products';
+const URLS = [`${STORAGE}/0.jpg`, `${STORAGE}/1.jpg`, `${STORAGE}/2.jpg`];
+const URL_ESTRANEO = 'https://sito-di-un-altro.example/foto.jpg';
 
 describe('POST /api/vision/photo-order', () => {
   beforeEach(() => {
@@ -42,6 +47,11 @@ describe('POST /api/vision/photo-order', () => {
   });
   it('400 con meno di 2 foto', async () => {
     expect((await POST(makeReq({ imageUrls: [URLS[0]] }))).status).toBe(400);
+  });
+  it('400 se le foto stanno su un sito che non è il nostro (#205)', async () => {
+    const res = await POST(makeReq({ imageUrls: [URL_ESTRANEO, `${STORAGE}/1.jpg`] }));
+    expect(res.status).toBe(400);
+    expect(runMessageMock).not.toHaveBeenCalled();
   });
   it('200: order è permutazione completa, cover primo, note filtrate', async () => {
     const res = await POST(makeReq({ imageUrls: URLS }));

@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getAdminSupabase } from '@/lib/supabase/server';
+import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { apiSuccess, ApiErrors } from '@/lib/api/responses';
-import { rateLimitAsync } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import {
   fetchExternalSnapshot,
@@ -32,9 +32,18 @@ type Row = {
   external_sync_status: string | null;
 };
 
-async function loadRow(id: string): Promise<Row | null> {
-  const admin = getAdminSupabase();
-  const { data } = await admin
+/**
+ * #25 — La lettura passa dalla sessione, non dalla chiave che scavalca le
+ * regole. Prima anche la rotta pubblica leggeva col client amministrativo:
+ * chiunque conoscesse l'identificativo di una bozza — un prodotto non ancora
+ * pubblicato, o di un negozio sospeso — ne otteneva i dati esterni. Con il
+ * client legato alla sessione decide la RLS, come per ogni altra lettura.
+ * La SCRITTURA in sottofondo resta amministrativa: quella e' un lavoro del
+ * server, non dell'utente.
+ */
+async function loadRow(id: string, comeVisitatore = false): Promise<Row | null> {
+  const client = comeVisitatore ? await getServerSupabase() : getAdminSupabase();
+  const { data } = await client
     .from('products')
     .select('external_source_url, external_marketplace, external_data, external_synced_at, external_sync_status')
     .eq('id', id)
@@ -70,7 +79,18 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   const { id } = await ctx.params;
   if (!idSchema.safeParse(id).success) return ApiErrors.invalidRequest('ID non valido');
 
-  const row = await loadRow(id);
+  // #208 — Un tetto per indirizzo IP. Questa rotta e' pubblica e, quando il
+  // dato e' vecchio, fa partire una chiamata AI a pagamento: senza freno,
+  // bastava chiedere in ciclo per far spendere. Il debounce sotto vale per
+  // prodotto, quindi con mille prodotti valeva mille volte.
+  const limitePerIp = await rateLimitAsync({
+    key: `ext-refresh-ip:${getClientIp(_req)}`,
+    max: 30,
+    windowMs: 60_000,
+  });
+  if (!limitePerIp.allowed) return ApiErrors.rateLimited(limitePerIp.retryAfterSec);
+
+  const row = await loadRow(id, true);
   if (!row || !row.external_source_url) return apiSuccess({ external: null });
 
   const stale = isStale(row.external_synced_at);

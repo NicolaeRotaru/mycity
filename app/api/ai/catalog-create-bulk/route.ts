@@ -2,9 +2,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { classifyProductPolicy } from '@/lib/ai/moderation';
+import { fotoDaHostAmmesso } from '@/lib/ai/productContext';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { writeAudit } from '@/lib/audit';
 import { buildDraftProductInsert } from '@/lib/products/draftFromVision';
 import type { CategoryRow } from '@/lib/products/aiPatch';
 import {
@@ -69,17 +72,35 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     .order('name');
   const categories = (categoriesData ?? []) as CategoryRow[];
 
-  // Costruisci un insert validato per ogni item con almeno una foto valida.
-  const payloads = parsed.data.items
-    .map((item) => {
-      const imageUrls = item.imageUrls.filter((u) => /^https?:\/\//i.test(u));
-      if (imageUrls.length === 0) return null;
-      return buildDraftProductInsert({ draft: item.draft, imageUrls, categories, sellerId: user.id });
-    })
-    .filter((p): p is NonNullable<typeof p> => p !== null);
+  // #197 — Ogni prodotto passa dal filtro dei prodotti vietati PRIMA di
+  // entrare nel catalogo, uno per uno, e chi non passa viene scartato con il
+  // motivo. Prima il filtro esisteva solo sull'endpoint che non scrive.
+  // #205 — E le foto devono stare sul nostro Storage.
+  const scartati: Array<{ nome: string; motivo: string }> = [];
+  const payloads: NonNullable<ReturnType<typeof buildDraftProductInsert>>[] = [];
+  for (const item of parsed.data.items) {
+    const imageUrls = item.imageUrls.filter((u) => fotoDaHostAmmesso(u));
+    if (imageUrls.length === 0) {
+      scartati.push({ nome: String(item.draft.name ?? 'senza nome'), motivo: 'foto non caricate su MyCity' });
+      continue;
+    }
+    const verdetto = await classifyProductPolicy({
+      name: String(item.draft.name ?? ''),
+      description: String(item.draft.description ?? ''),
+      categorySlug: item.draft.category_slug ?? undefined,
+    }, 'catalog-create-bulk-policy');
+    if (!verdetto.allowed) {
+      scartati.push({ nome: String(item.draft.name ?? 'senza nome'), motivo: verdetto.reason });
+      continue;
+    }
+    payloads.push(buildDraftProductInsert({ draft: item.draft, imageUrls, categories, sellerId: user.id }));
+  }
 
   if (payloads.length === 0) {
-    return ApiErrors.invalidRequest('Nessun prodotto con foto valide da creare.');
+    const motivi = scartati.map((s2) => `${s2.nome}: ${s2.motivo}`).join(' · ');
+    return ApiErrors.invalidRequest(
+      motivi ? `Nessun prodotto pubblicabile. ${motivi}` : 'Nessun prodotto con foto valide da creare.',
+    );
   }
 
   const { data: created, error } = await admin
@@ -96,9 +117,28 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.badGateway('Non sono riuscito a creare i prodotti. Riprova.');
   }
 
+  // #196 — Chi ha scritto cosa. Le modifiche fatte dall'AI non lasciavano
+  // nessuna traccia: non si sapeva quale prodotto fosse stato toccato da un
+  // suggerimento accettato, ne' cosa c'era scritto prima. Se un prezzo o una
+  // descrizione uscivano sbagliati, non c'era modo di risalire — ne' di
+  // annullare. Qui si registra chi, cosa, e il valore precedente dei soli
+  // campi cambiati. Best-effort: non blocca la risposta.
+  for (const riga of created as unknown as ProductRow[]) {
+    void writeAudit({
+      actorId: user.id,
+      action: 'product.create',
+      targetTable: 'products',
+      targetId: riga.id,
+      metadata: { origine: 'vision-create-bulk', dopo: { name: riga.name, price: riga.price } },
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     count: created.length,
+    // #197 — Chi e' stato scartato e perche': senza questo il venditore carica
+    // dodici foto, ne vede nascere dieci e non sa quali due mancano.
+    scartati,
     products: (created as unknown as ProductRow[]).map((row) => productSnapshot(row, categories)),
   });
 });

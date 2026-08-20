@@ -196,20 +196,25 @@ export async function runMessage<TInput = unknown>(
     outputTokens: u.output_tokens,
     cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
     cacheReadTokens: u.cache_read_input_tokens ?? 0,
+    // #195 — Le ricerche sul web si pagano a richiesta e non erano contate.
+    webSearchRequests:
+      (u as { server_tool_use?: { web_search_requests?: number } }).server_tool_use?.web_search_requests ?? 0,
   };
   const estCostEur = estimateCostEur(args.model, usageTokens);
 
   // Accumula il costo reale nel circuit breaker dopo la chiamata riuscita.
   _recordAiCost(estCostEur);
 
-  // Telemetria aggregabile (feature, model, token, € stimati).
-  logger.info('ai_usage', {
+  // Telemetria aggregabile (feature, model, token, € stimati). Esce sempre:
+  // #195 — con logger.info in produzione non usciva affatto.
+  logger.spesa('ai_usage', {
     feature: args.feature,
     model: args.model,
     inputTokens: usageTokens.inputTokens,
     outputTokens: usageTokens.outputTokens,
     cacheWriteTokens: usageTokens.cacheWriteTokens,
     cacheReadTokens: usageTokens.cacheReadTokens,
+    webSearchRequests: usageTokens.webSearchRequests,
     estCostEur: Number(estCostEur.toFixed(6)),
   });
 

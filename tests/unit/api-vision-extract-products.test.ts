@@ -31,7 +31,10 @@ import { POST } from '@/app/api/vision/extract-products/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 import { AiCallError } from '@/lib/ai/run';
 
-const IMG = { image_base64: 'aGVsbG8gd29ybGQ=', media_type: 'image/jpeg' as const };
+// #207 — Ora i primi byte devono essere davvero quelli di una JPEG: questa e'
+// una intestazione vera, minima. Prima passava qualunque stringa base64.
+const JPEG_VERO = '/9j/4AAQSkZJRgABAQAAAQABAAA=';
+const IMG = { image_base64: JPEG_VERO, media_type: 'image/jpeg' as const };
 
 function makeReq(body: unknown): never {
   return new Request('http://localhost/api/vision/extract-products', {

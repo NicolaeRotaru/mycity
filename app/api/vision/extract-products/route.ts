@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { verificaImmagineBase64 } from '@/lib/immagini-base64';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError } from '@/lib/ai/run';
@@ -130,7 +131,6 @@ const EXTRACT_TOOL: Anthropic.Tool = {
   },
 };
 
-const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 const ImageItem = z.object({
   image_base64: z.string().min(1),
@@ -165,7 +165,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato sul server.');
 
   // Rate limit: 6 chiamate / 10 min (ogni call analizza molte foto = costosa).
-  const rl = rateLimit({ key: `vision-multi:${user.id}`, max: 6, windowMs: 10 * 60_000 });
+  // #203 — Il limitatore condiviso (Upstash quando c'e', memoria locale
+  // altrimenti). Quello vecchio viveva dentro una singola macchina: con due
+  // istanze in produzione il tetto valeva il doppio, e a ogni rilascio si
+  // azzerava.
+  const rl = await rateLimitAsync({ key: `vision-multi:${user.id}`, max: 6, windowMs: 10 * 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;
@@ -181,11 +185,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   const images = parsed.data.images;
   for (const img of images) {
-    if (!BASE64_RE.test(img.image_base64.slice(0, 4096))) {
-      return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
-    }
-    if (img.image_base64.length > 7_500_000) {
-      return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+  // #207 — Si controlla tutta la stringa, non i primi quattromila caratteri, e
+  // si guarda che i primi byte siano davvero quelli di una immagine del tipo
+  // dichiarato. Il controllo unico sta in lib/immagini-base64.ts.
+    const esitoImmagine = verificaImmagineBase64(img.image_base64, img.media_type);
+    if (!esitoImmagine.ok) {
+      return esitoImmagine.troppoGrande
+        ? ApiErrors.payloadTooLarge(esitoImmagine.motivo)
+        : ApiErrors.invalidRequest(esitoImmagine.motivo);
     }
   }
 

@@ -7,6 +7,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 const createMock = vi.fn();
 const infoMock = vi.fn();
+// #195 — la spesa esce da un canale suo, che in produzione non e' spento.
+const spesaMock = vi.fn();
 const errorMock = vi.fn();
 
 vi.mock('@/lib/ai/client', async (importActual) => {
@@ -18,7 +20,7 @@ vi.mock('@/lib/ai/client', async (importActual) => {
 });
 
 vi.mock('@/lib/logger', () => ({
-  logger: { info: (...a: unknown[]) => infoMock(...a), warn: vi.fn(), error: (...a: unknown[]) => errorMock(...a) },
+  logger: { info: (...a: unknown[]) => infoMock(...a), spesa: (...a: unknown[]) => spesaMock(...a), warn: vi.fn(), error: (...a: unknown[]) => errorMock(...a) },
 }));
 
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
@@ -95,7 +97,7 @@ describe('lib/ai/run · runMessage', () => {
       fakeMessage({ usage: { input_tokens: 100, output_tokens: 20, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 } }),
     );
     await runMessage({ feature: 'vision-extract', model: MODELS.vision, max_tokens: 50, messages: [] });
-    expect(infoMock).toHaveBeenCalledWith('ai_usage', expect.objectContaining({
+    expect(spesaMock).toHaveBeenCalledWith('ai_usage', expect.objectContaining({
       feature: 'vision-extract',
       model: MODELS.vision,
       estCostEur: expect.any(Number),

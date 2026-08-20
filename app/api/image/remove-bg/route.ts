@@ -4,6 +4,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { verificaImmagineBase64 } from '@/lib/immagini-base64';
 import { getBgRemovalProvider } from '@/lib/bg-removal';
 import {
   BgRemovalConfigError,
@@ -23,9 +24,6 @@ import {
 
 // Eseguito sempre lato server (provider key server-only).
 export const runtime = 'nodejs';
-
-// Validazione base64 (solo charset), come app/api/vision/extract-product/route.ts.
-const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
 const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 
@@ -64,12 +62,14 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
   const { image_base64, media_type } = parsed.data;
 
-  if (!BASE64_RE.test(image_base64.slice(0, 4096))) {
-    return ApiErrors.invalidRequest('image_base64 non è un valore base64 valido.');
-  }
-  // base64 ~= 4/3 byte raw: accettiamo fino a ~5 MB raw = ~7 MB base64.
-  if (image_base64.length > 7_500_000) {
-    return ApiErrors.payloadTooLarge('Immagine troppo grande. Massimo 5 MB.');
+  // #207 — Si controlla tutta la stringa, non i primi quattromila caratteri, e
+  // si guarda che i primi byte siano davvero quelli di una immagine del tipo
+  // dichiarato. Il controllo unico sta in lib/immagini-base64.ts.
+  const esitoImmagine = verificaImmagineBase64(image_base64, media_type);
+  if (!esitoImmagine.ok) {
+    return esitoImmagine.troppoGrande
+      ? ApiErrors.payloadTooLarge(esitoImmagine.motivo)
+      : ApiErrors.invalidRequest(esitoImmagine.motivo);
   }
 
   // 4) Rimozione sfondo → immagine su bianco

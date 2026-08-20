@@ -101,10 +101,15 @@ export function buildDraftProductInsert(opts: {
 
   const name = (draft.name ?? '').trim().slice(0, 120) || 'Nuovo prodotto';
   const description = (draft.description ?? '').trim().slice(0, 4000);
+  // #204 — Il prezzo mancante diventava silenziosamente 1 euro. Un prodotto da
+  // quaranta euro nasceva a uno, e se il venditore pubblicava la bozza senza
+  // accorgersene lo vendeva a uno: nessun avviso, nessuna traccia. Ora resta a
+  // zero, che nella scheda si vede come «da compilare» e blocca la
+  // pubblicazione, invece di sembrare una decisione.
   const price =
     typeof draft.suggested_price === 'number' && draft.suggested_price > 0
       ? Math.round(draft.suggested_price * 100) / 100
-      : 1;
+      : 0;
 
   return {
     name,

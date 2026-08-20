@@ -36,6 +36,13 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { AiCallError } from '@/lib/ai/run';
 import { AiConfigError } from '@/lib/ai/client';
 
+// #207 — Il controllo del formato guardava i primi 4096 caratteri e non
+// verificava che il tipo dichiarato corrispondesse al contenuto. Ora i primi
+// byte devono essere davvero quelli di una JPEG o di una PNG: queste sono
+// intestazioni vere, minime.
+const JPEG_VERO = '/9j/4AAQSkZJRgABAQAAAQABAAA=';
+const PNG_VERO = 'iVBORw0KGgoAAAANSUhEUg==';
+
 const GOOD_TOOL = {
   name: 'Sedia',
   description: 'Sedia in legno',
@@ -68,7 +75,7 @@ describe('POST /api/vision/extract-product', () => {
   });
 
   it('400 su media_type non supportato', async () => {
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/tiff' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/tiff' }));
     expect(res.status).toBe(400);
   });
 
@@ -78,12 +85,12 @@ describe('POST /api/vision/extract-product', () => {
   });
 
   it('413 se immagine troppo grande', async () => {
-    const res = await POST(makeReq({ image_base64: 'A'.repeat(7_500_001), media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO + 'A'.repeat(7_500_001), media_type: 'image/jpeg' }));
     expect(res.status).toBe(413);
   });
 
   it('200 con shape invariata e category_id risolto dallo slug', async () => {
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json).toEqual({
@@ -102,7 +109,7 @@ describe('POST /api/vision/extract-product', () => {
 
   it('blocca con 400 i prodotti vietati (policy_ok=false)', async () => {
     runMessageMock.mockResolvedValue({ toolInput: { ...GOOD_TOOL, policy_ok: false, policy_reason: 'arma da fuoco' } });
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(400);
     const json = await res.json();
     expect(json.error.message).toMatch(/non può essere pubblicato/i);
@@ -110,7 +117,7 @@ describe('POST /api/vision/extract-product', () => {
 
   it('le foto di bassa qualità NON bloccano (200 + image_quality/alt_text nel payload)', async () => {
     runMessageMock.mockResolvedValue({ toolInput: { ...GOOD_TOOL, image_quality: { score: 0.2, issues: ['sfocata'] } } });
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.image_quality.score).toBe(0.2);
@@ -121,7 +128,7 @@ describe('POST /api/vision/extract-product', () => {
     runMessageMock.mockResolvedValue({
       toolInput: { ...GOOD_TOOL, attributes: { colore: 'Nero', materiale: '  ', marca: 'Ikea' } },
     });
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     const json = await res.json();
     expect(json.attributes).toEqual({ colore: 'Nero', marca: 'Ikea' });
   });
@@ -129,8 +136,8 @@ describe('POST /api/vision/extract-product', () => {
   it('accetta images[] (2 foto) e invia N blocchi image + 1 testo', async () => {
     const res = await POST(makeReq({
       images: [
-        { image_base64: 'QUJD', media_type: 'image/jpeg' },
-        { image_base64: 'RUZH', media_type: 'image/png' },
+        { image_base64: JPEG_VERO, media_type: 'image/jpeg' },
+        { image_base64: PNG_VERO, media_type: 'image/png' },
       ],
     }));
     expect(res.status).toBe(200);
@@ -140,7 +147,7 @@ describe('POST /api/vision/extract-product', () => {
   });
 
   it('400 se più di 4 foto', async () => {
-    const imgs = Array.from({ length: 5 }, () => ({ image_base64: 'QUJD', media_type: 'image/jpeg' }));
+    const imgs = Array.from({ length: 5 }, () => ({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     const res = await POST(makeReq({ images: imgs }));
     expect(res.status).toBe(400);
   });
@@ -148,8 +155,8 @@ describe('POST /api/vision/extract-product', () => {
   it('413 se una delle foto in images[] è troppo grande', async () => {
     const res = await POST(makeReq({
       images: [
-        { image_base64: 'QUJD', media_type: 'image/jpeg' },
-        { image_base64: 'A'.repeat(7_500_001), media_type: 'image/jpeg' },
+        { image_base64: JPEG_VERO, media_type: 'image/jpeg' },
+        { image_base64: JPEG_VERO + 'A'.repeat(7_500_001), media_type: 'image/jpeg' },
       ],
     }));
     expect(res.status).toBe(413);
@@ -157,30 +164,30 @@ describe('POST /api/vision/extract-product', () => {
 
   it('502 se manca il blocco tool_use', async () => {
     runMessageMock.mockResolvedValue({ toolInput: undefined });
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(502);
   });
 
   it('503 su 401 upstream, 429 su 429, 502 altrimenti', async () => {
     runMessageMock.mockRejectedValue(new AiCallError('vision-extract', 401));
-    expect((await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }))).status).toBe(503);
+    expect((await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }))).status).toBe(503);
     __resetRateLimitBuckets();
     runMessageMock.mockRejectedValue(new AiCallError('vision-extract', 429));
-    expect((await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }))).status).toBe(429);
+    expect((await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }))).status).toBe(429);
     __resetRateLimitBuckets();
     runMessageMock.mockRejectedValue(new AiCallError('vision-extract', 500));
-    expect((await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }))).status).toBe(502);
+    expect((await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }))).status).toBe(502);
   });
 
   it('503 se config AI assente a runtime (AiConfigError)', async () => {
     runMessageMock.mockRejectedValue(new AiConfigError());
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(503);
   });
 
   it('200 con category_id null se il lookup categoria fallisce', async () => {
     vi.mocked(getServerSupabase).mockImplementationOnce(() => { throw new Error('db down'); });
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.category_id).toBeNull();
@@ -188,10 +195,10 @@ describe('POST /api/vision/extract-product', () => {
 
   it('429 dopo 10 chiamate / 5 min', async () => {
     for (let i = 0; i < 10; i++) {
-      const ok = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+      const ok = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
       expect(ok.status).toBe(200);
     }
-    const res = await POST(makeReq({ image_base64: 'QUJDRA==', media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(429);
   });
 });

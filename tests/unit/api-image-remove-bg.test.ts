@@ -19,7 +19,14 @@ vi.mock('@/lib/logger', () => ({
 import { POST } from '@/app/api/image/remove-bg/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
 
-const SMALL_B64 = 'QUJDRA=='; // "ABCD"
+// #207 — Il controllo del formato guardava i primi 4096 caratteri e non
+// verificava che il tipo dichiarato corrispondesse al contenuto. Ora i primi
+// byte devono essere davvero quelli di una JPEG o di una PNG: queste sono
+// intestazioni vere, minime.
+const JPEG_VERO = '/9j/4AAQSkZJRgABAQAAAQABAAA=';
+const PNG_VERO = 'iVBORw0KGgoAAAANSUhEUg==';
+
+const SMALL_B64 = JPEG_VERO;
 
 function makeReq(body: unknown): never {
   return new Request('http://localhost/api/image/remove-bg', {
@@ -50,7 +57,7 @@ describe('POST /api/image/remove-bg', () => {
   });
 
   it('400 su media_type non supportato', async () => {
-    const res = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/tiff' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/tiff' }));
     expect(res.status).toBe(400);
   });
 
@@ -60,30 +67,30 @@ describe('POST /api/image/remove-bg', () => {
   });
 
   it('413 se immagine troppo grande', async () => {
-    const res = await POST(makeReq({ image_base64: 'A'.repeat(7_500_001), media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO + 'A'.repeat(7_500_001), media_type: 'image/jpeg' }));
     expect(res.status).toBe(413);
   });
 
   it('200 (mock) ritorna image_base64 + media_type', async () => {
-    const res = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json).toEqual({ image_base64: SMALL_B64, media_type: 'image/jpeg' });
+    expect(json).toEqual({ image_base64: JPEG_VERO, media_type: 'image/jpeg' });
   });
 
   it('429 dopo 15 chiamate / 5 min', async () => {
     for (let i = 0; i < 15; i++) {
-      const ok = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/jpeg' }));
+      const ok = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
       expect(ok.status).toBe(200);
     }
-    const res = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(429);
   });
 
   it('503 se il provider reale non è configurato (removebg senza chiave)', async () => {
     vi.stubEnv('BG_REMOVAL_PROVIDER', 'removebg');
     vi.stubEnv('REMOVE_BG_API_KEY', '');
-    const res = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(503);
   });
 
@@ -96,7 +103,7 @@ describe('POST /api/image/remove-bg', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const res = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.media_type).toBe('image/png');
@@ -113,7 +120,7 @@ describe('POST /api/image/remove-bg', () => {
     vi.stubEnv('BG_REMOVAL_PROVIDER', 'removebg');
     vi.stubEnv('REMOVE_BG_API_KEY', 'test-key');
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 429 })));
-    const res = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(429);
   });
 
@@ -121,7 +128,7 @@ describe('POST /api/image/remove-bg', () => {
     vi.stubEnv('BG_REMOVAL_PROVIDER', 'removebg');
     vi.stubEnv('REMOVE_BG_API_KEY', 'test-key');
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 500 })));
-    const res = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(502);
   });
 
@@ -129,7 +136,7 @@ describe('POST /api/image/remove-bg', () => {
     vi.stubEnv('BG_REMOVAL_PROVIDER', 'removebg');
     vi.stubEnv('REMOVE_BG_API_KEY', 'test-key');
     vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 402 })));
-    const res = await POST(makeReq({ image_base64: SMALL_B64, media_type: 'image/jpeg' }));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(503);
   });
 });

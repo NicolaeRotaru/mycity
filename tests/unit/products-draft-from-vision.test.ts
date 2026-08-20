@@ -68,7 +68,10 @@ describe('buildDraftProductInsert', () => {
       sellerId: 's',
     });
     expect(out.name).toBe('Nuovo prodotto');
-    expect(out.price).toBe(1); // prezzo non valido → 1
+    // #204 — Prezzo non valido → resta a zero, cioe' «da compilare». Prima
+    // diventava 1 euro: un prodotto da quaranta euro nasceva a uno, e chi
+    // pubblicava la bozza senza accorgersene lo vendeva a uno.
+    expect(out.price).toBe(0);
     expect(out.category_id).toBeNull();
   });
 

@@ -71,11 +71,16 @@ export async function assertSafeText(text: string, feature = 'moderation-text'):
     // testo utente = DATO, isolato in messages
     messages: [{ role: 'user', content: `<contenuto>\n${text}\n</contenuto>` }],
   });
-  if (toolInput && toolInput.allowed === false) {
+  // #198 — Prima passava tutto quando il verdetto mancava: modello non
+  // raggiungibile, risposta tagliata, chiave scaduta — e il filtro Trust &
+  // Safety diventava un timbro automatico proprio nel momento in cui era
+  // rotto. Il resto del file (classifyProductPolicy) nega gia' in caso di
+  // dubbio: ora le due porte si comportano allo stesso modo.
+  if (!toolInput || toolInput.allowed !== true) {
     throw new UnsafeContentError({
       allowed: false,
-      reason: toolInput.reason ?? 'Contenuto non conforme alle policy.',
-      category: toolInput.category,
+      reason: toolInput?.reason ?? 'Contenuto non verificabile: classificazione non disponibile.',
+      category: toolInput?.category,
     });
   }
 }

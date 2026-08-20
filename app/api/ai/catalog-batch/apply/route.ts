@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { writeAudit } from '@/lib/audit';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
@@ -80,6 +81,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         .in('id', flaggedIds)
         .select('id');
       applied = (updated ?? []).length;
+      // #196 — Anche la de-pubblicazione automatica lascia traccia: e' la
+      // modifica piu' brusca che l'AI possa fare a un catalogo.
+      for (const riga of (updated ?? []) as Array<{ id: string }>) {
+        void writeAudit({
+          actorId: user.id,
+          action: 'product.hide',
+          targetTable: 'products',
+          targetId: riga.id,
+          metadata: { origine: 'ai-batch:moderate', dopo: { status: 'draft' } },
+        });
+      }
     }
   } else {
     // Patch: carica i prodotti correnti del venditore e applica uno per uno.
@@ -107,7 +119,20 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           .update(update)
           .eq('id', r.product_id)
           .eq('seller_id', user.id);
-        if (!error) applied += 1;
+        if (!error) {
+          applied += 1;
+          // #196 — Il lavoro massivo tocca decine di prodotti in un colpo: senza
+          // traccia, se qualcosa esce storto non si sa neanche da dove partire.
+          const prima: Record<string, unknown> = {};
+          for (const campo of Object.keys(update)) prima[campo] = (row as unknown as Record<string, unknown>)[campo];
+          void writeAudit({
+            actorId: user.id,
+            action: 'product.update',
+            targetTable: 'products',
+            targetId: r.product_id,
+            metadata: { origine: `ai-batch:${job.operation}`, campi: Object.keys(update), prima, dopo: update },
+          });
+        }
       }
     }
   }
