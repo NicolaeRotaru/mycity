@@ -100,10 +100,15 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
 
   // Transizione semplice (es. PICKED_UP → OUT_FOR_DELIVERY senza codice)
   const transition = useMutation({
-    mutationFn: async (params: { newStatus: OrderStatus; timestampField?: string }) => {
+    // #12 — Via il parametro `timestampField`: lasciava scrivere al BROWSER il
+    // nome di una colonna e il suo valore. Quei due orari (ritiro e consegna) li
+    // scrive gia' il database dentro `verify_pickup_code` e `verify_delivery_code`,
+    // ed e' giusto cosi': sono la prova di quando e' successo, e la prova non la
+    // scrive chi ha interesse a spostarla. Le regole del database rifiutavano
+    // comunque quella scrittura, quindi era anche codice che non funzionava.
+    mutationFn: async (params: { newStatus: OrderStatus }) => {
       if (!order) throw new Error('Ordine non caricato');
       const update: Record<string, any> = { delivery_status: params.newStatus };
-      if (params.timestampField) update[params.timestampField] = new Date().toISOString();
       const { error } = await supabase.from('orders').update(update).eq('id', order.id);
       if (error) throw error;
 

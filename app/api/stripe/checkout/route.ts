@@ -141,15 +141,25 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   // --- 2. Carica i seller (per storeName nei line_items Stripe).
   const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
+  // #16 — Si legge dalla VETRINA PUBBLICA, non dalla tabella dei profili.
+  //
+  // Da quando la 110 ha tolto la regola «chiunque puo' vedere i negozi
+  // approvati», questa lettura fatta con la sessione del cliente tornava
+  // VUOTA — senza errore, semplicemente zero righe. Due conseguenze silenziose:
+  // il controllo «il negozio e' chiuso adesso» non scattava mai (si poteva
+  // ordinare alle tre di notte, e il fattorino andava a vuoto), e le coordinate
+  // del negozio mancavano, quindi la consegna veniva prezzata sempre a tariffa
+  // fissa invece che sulla distanza. `seller_public_profiles` espone
+  // esattamente queste colonne, ed e' leggibile da chi ha un account.
   const { data: sellers } = await supa
-    .from('profiles')
-    .select('id, store_name, full_name, store_lat, store_lng, store_hours')
+    .from('seller_public_profiles')
+    .select('id, store_name, store_lat, store_lng, store_hours')
     .in('id', sellerIds);
 
   const sellerNameMap = new Map<string, string>();
   const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
   for (const s of sellers ?? []) {
-    sellerNameMap.set(s.id, s.store_name ?? s.full_name ?? 'Negozio');
+    sellerNameMap.set(s.id, s.store_name ?? 'Negozio');
     sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
   }
 
@@ -410,8 +420,14 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         zip: body.delivery.zip,
         phone: body.delivery.phone,
         notes: body.delivery.notes ?? null,
-        lat: coordConsegna?.lat ?? body.delivery.lat ?? null,
-        lng: coordConsegna?.lng ?? body.delivery.lng ?? null,
+        // #162 — Mai le coordinate mandate dal browser come ripiego. Erano
+        // quelle di un indirizzo salvato, che pero' la persona puo' aver
+        // corretto a mano un attimo prima: il testo dice una via e il punto
+        // sulla mappa ne indica un'altra, e il fattorino va dove dice il
+        // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
+        // coordinata che contraddice l'indirizzo scritto.
+        lat: coordConsegna?.lat ?? null,
+        lng: coordConsegna?.lng ?? null,
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
         // scrive su orders.delivery_slot. null per ritiro / non scelta.
         slot: body.pickupInStore ? null : (body.deliverySlot ?? null),

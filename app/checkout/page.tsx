@@ -11,8 +11,8 @@ import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
-import { haversineKm, riderFee } from '@/lib/geo';
+import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { shippingForEuro } from '@/lib/shipping';
 import { isExpressEligible } from '@/lib/products/express';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
@@ -39,10 +39,6 @@ type AddressForm = {
   phone: string;
   notes: string;
 };
-
-const SHIPPING_PER_ORDER = 4.9;
-
-const SHIPPING_COST_FOR = (subtotal: number) => (subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_PER_ORDER);
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -325,7 +321,17 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Partial<Record<keyof AddressForm, string>>>({});
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+      // #3 e #162 — Se cambia l'indirizzo, le coordinate di prima non valgono
+      // piu'. Prima restavano attaccate: si sceglieva un indirizzo salvato, si
+      // correggeva la via a mano, e il fattorino veniva mandato al punto
+      // vecchio — con la strada nuova scritta sulla scheda. Il costo della
+      // consegna, che dipende dalla distanza, veniva calcolato sullo stesso
+      // punto sbagliato.
+      ...(name === 'address' || name === 'city' || name === 'zip' ? { lat: null, lng: null } : {}),
+    }));
     setErrors((prev) => (prev[name as keyof AddressForm] ? { ...prev, [name]: undefined } : prev));
   };
 
@@ -399,19 +405,28 @@ export default function CheckoutPage() {
   const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
   const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>(stripeAvailable ? 'card' : 'cod');
-  const PICKUP_DISCOUNT_PERCENT = 10;
-
-  // Distanza-based shipping per ogni gruppo, se entrambe le coords sono note
-  const shippingFor = (g: { storeLat: number | null; storeLng: number | null; items: CartItem[] }): number => {
-    if (pickupInStore) return 0;
-    const subtotal = groupSubtotal(g);
-    if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
-    if (g.storeLat && g.storeLng && form.lat && form.lng) {
-      const km = haversineKm(g.storeLat, g.storeLng, form.lat, form.lng);
-      return riderFee(km);
-    }
-    return SHIPPING_COST_FOR(subtotal);
-  };
+  /**
+   * #3 — La spedizione la calcola la fonte unica, non questa pagina.
+   *
+   * La formula era riscritta qui dentro, con due costanti copiate a mano
+   * (4,90 e 10%). Due copie della stessa regola sono due regole: quella del
+   * server e quella del browser possono divergere in qualunque momento, e
+   * quando divergono il cliente vede un prezzo e ne paga un altro. E' gia'
+   * successo, ed e' il difetto piu' costoso da spiegare a chi compra.
+   *
+   * `shippingForEuro` e' la stessa funzione che usa il server quando crea
+   * l'ordine: gli stessi dati danno per forza lo stesso centesimo.
+   */
+  const shippingFor = (g: { storeLat: number | null; storeLng: number | null; items: CartItem[] }): number =>
+    shippingForEuro({
+      subtotal: groupSubtotal(g),
+      storeLat: g.storeLat,
+      storeLng: g.storeLng,
+      deliveryLat: form.lat,
+      deliveryLng: form.lng,
+      pickupInStore,
+      freeShipping: appliedCoupon?.freeShipping,
+    });
 
   const applyCoupon = async () => {
     setCouponError(null);

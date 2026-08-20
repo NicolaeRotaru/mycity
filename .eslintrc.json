@@ -1,11 +1,13 @@
 {
-  "extends": ["next/core-web-vitals", "plugin:jsx-a11y/recommended"],
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:jsx-a11y/recommended"
+  ],
   "rules": {
     "@next/next/no-img-element": "off",
     "@next/next/no-before-interactive-script-outside-document": "off",
     "react/no-unescaped-entities": "off",
     "react-hooks/exhaustive-deps": "warn",
-
     "no-restricted-syntax": [
       "error",
       {
@@ -13,11 +15,25 @@
         "message": "NEXT_PUBLIC_SITE_URL non esiste in questo progetto: il punto unico per l'indirizzo del sito e env.appUrl() in lib/env.ts. Una seconda variabile per la stessa cosa e il difetto che faceva rispondere 500 alla disiscrizione."
       }
     ],
-
     "jsx-a11y/label-has-associated-control": "warn",
     "jsx-a11y/click-events-have-key-events": "warn",
     "jsx-a11y/no-static-element-interactions": "warn",
     "jsx-a11y/no-noninteractive-element-interactions": "warn",
-    "jsx-a11y/no-autofocus": "warn"
+    "jsx-a11y/no-autofocus": "warn",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@/components/ErrorState",
+            "message": "#7 — Di ErrorState ne esiste uno solo: @/components/ui/ErrorState. Prima ce n'erano due, con nomi di proprieta' diversi (retry vs onRetry): importare quello sbagliato compilava e non mostrava il pulsante Riprova, in silenzio."
+          },
+          {
+            "name": "@/lib/notifications",
+            "message": "#44 — Le notifiche non si scrivono dal browser: la regola del database lo vieta e l'errore veniva ingoiato. Le scrive il server (trigger o rotta con client di servizio)."
+          }
+        ]
+      }
+    ]
   }
 }

@@ -13,7 +13,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import ProductGrid from '@/components/ProductGrid';
-import ErrorState from '@/components/ErrorState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
 import { UNIT_SUFFIX, CONDITION_LABELS, type ProductUnit, type ProductCondition } from '@/lib/products/schema';

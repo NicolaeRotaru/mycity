@@ -9,7 +9,7 @@ import ProductCard from './ProductCard';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
-import ErrorState from './ErrorState';
+import { ErrorState } from './ui/ErrorState';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { attachSellerProfiles, fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
 import { trackSearchPerformed } from '@/lib/analytics/events';

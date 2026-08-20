@@ -7,7 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
-import ErrorState from '@/components/ErrorState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 

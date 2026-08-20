@@ -168,8 +168,18 @@ export const POST = withAuthRateLimit(
 
     // --- 2. Coordinate negozio (per spedizione distanza-based).
     const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
+    // #16 — Si legge dalla VETRINA PUBBLICA, non dalla tabella dei profili.
+    //
+    // Da quando la 110 ha tolto la regola «chiunque puo' vedere i negozi
+    // approvati», questa lettura fatta con la sessione del cliente tornava
+    // VUOTA — senza errore, semplicemente zero righe. Due conseguenze silenziose:
+    // il controllo «il negozio e' chiuso adesso» non scattava mai (si poteva
+    // ordinare alle tre di notte, e il fattorino andava a vuoto), e le coordinate
+    // del negozio mancavano, quindi la consegna veniva prezzata sempre a tariffa
+    // fissa invece che sulla distanza. `seller_public_profiles` espone
+    // esattamente queste colonne, ed e' leggibile da chi ha un account.
     const { data: sellers } = await supa
-      .from('profiles')
+      .from('seller_public_profiles')
       .select('id, store_name, store_lat, store_lng, store_hours')
       .in('id', sellerIds);
     const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
@@ -442,8 +452,14 @@ export const POST = withAuthRateLimit(
           delivery_city: body.delivery.city,
           delivery_zip: body.delivery.zip,
           delivery_notes: body.delivery.notes ?? null,
-          delivery_lat: coordConsegna?.lat ?? body.delivery.lat ?? null,
-          delivery_lng: coordConsegna?.lng ?? body.delivery.lng ?? null,
+          // #162 — Mai le coordinate mandate dal browser come ripiego. Erano
+          // quelle di un indirizzo salvato, che pero' la persona puo' aver
+          // corretto a mano un attimo prima: il testo dice una via e il punto
+          // sulla mappa ne indica un'altra, e il fattorino va dove dice il
+          // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
+          // coordinata che contraddice l'indirizzo scritto.
+          delivery_lat: coordConsegna?.lat ?? null,
+          delivery_lng: coordConsegna?.lng ?? null,
         })
         .select('id')
         .single();

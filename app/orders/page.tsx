@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import Image from 'next/image';
 import EmptyState from '@/components/EmptyState';
-import ErrorState from '@/components/ErrorState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { clearCart } from '@/lib/cart';
 import { formatPrice, formatDate } from '@/lib/format';
