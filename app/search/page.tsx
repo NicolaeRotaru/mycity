@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownWideNarrow, X, Tag, PackageCheck, Check, Search, ChevronRight } from 'lucide-react';
 import ProductGrid from '@/components/ProductGrid';
 import SponsoredCarousel from '@/components/SponsoredCarousel';
@@ -10,6 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 import { useTranslations } from 'next-intl';
 
 type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating' | 'discount_desc';
@@ -63,16 +64,51 @@ function SearchInner() {
   const t = useTranslations('search');
   const ta = useTranslations('actions');
   const tn = useTranslations('nav');
+  const router = useRouter();
   const q = params.get('q') ?? '';
-  const [maxPrice, setMaxPrice] = useState<number>(500);
-  const [minPrice, setMinPrice] = useState<number>(0);
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [onlyOpenStores, setOnlyOpenStores] = useState(false);
-  const [freeShipping, setFreeShipping] = useState(false);
-  const [onlyPromo, setOnlyPromo] = useState(false);
-  const [onlyInStock, setOnlyInStock] = useState(false);
-  const [minRating, setMinRating] = useState<number>(0);
-  const [sort, setSort] = useState<SortOption>('relevance');
+
+  /**
+   * #118 — I filtri vivono nell'indirizzo, non solo nella memoria della pagina.
+   *
+   * Prima stavano in uno stato locale: bastava aprire un prodotto e premere
+   * Indietro per ritrovare la ricerca azzerata, e il link di una ricerca
+   * filtrata mandato a qualcuno apriva tutt'altro. La stessa pagina lo faceva
+   * gia' bene per il testo cercato (`q`): qui si applica lo stesso schema al
+   * resto.
+   */
+  const numeroDaUrl = (chiave: string, difetto: number) => {
+    const v = Number(params.get(chiave));
+    return Number.isFinite(v) && params.get(chiave) !== null ? v : difetto;
+  };
+  const [maxPrice, setMaxPrice] = useState<number>(() => numeroDaUrl('max', 500));
+  const [minPrice, setMinPrice] = useState<number>(() => numeroDaUrl('min', 0));
+  const [categoryId, setCategoryId] = useState<string>(() => params.get('cat') ?? '');
+  const [onlyOpenStores, setOnlyOpenStores] = useState(() => params.get('aperti') === '1');
+  const [freeShipping, setFreeShipping] = useState(() => params.get('da30') === '1');
+  const [onlyPromo, setOnlyPromo] = useState(() => params.get('promo') === '1');
+  const [onlyInStock, setOnlyInStock] = useState(() => params.get('disponibili') === '1');
+  const [minRating, setMinRating] = useState<number>(() => numeroDaUrl('stelle', 0));
+  const [sort, setSort] = useState<SortOption>(() => (params.get('ordine') as SortOption) ?? 'relevance');
+
+  // #118 — Ogni cambio di filtro riscrive l'indirizzo senza ricaricare la
+  // pagina e senza spostare lo scorrimento: cosi' Indietro riporta i filtri di
+  // prima e il link si puo' mandare a qualcuno.
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (categoryId) p.set('cat', categoryId);
+    if (minPrice > 0) p.set('min', String(minPrice));
+    if (maxPrice < 500) p.set('max', String(maxPrice));
+    if (onlyOpenStores) p.set('aperti', '1');
+    if (freeShipping) p.set('da30', '1');
+    if (onlyPromo) p.set('promo', '1');
+    if (onlyInStock) p.set('disponibili', '1');
+    if (minRating > 0) p.set('stelle', String(minRating));
+    if (sort !== 'relevance') p.set('ordine', sort);
+    const nuovo = p.toString();
+    if (nuovo === params.toString()) return;
+    router.replace(nuovo ? `/search?${nuovo}` : '/search', { scroll: false });
+  }, [q, categoryId, minPrice, maxPrice, onlyOpenStores, freeShipping, onlyPromo, onlyInStock, minRating, sort, params, router]);
 
   const { data: categories = [] } = useQuery({
     queryKey: queryKeys.categories.allList,
@@ -481,7 +517,10 @@ function SearchInner() {
           search={q || undefined}
           categoryId={categoryId || undefined}
           maxPrice={maxPrice < 500 ? maxPrice : undefined}
-          minPrice={minPrice > 0 ? minPrice : (freeShipping ? 30 : undefined)}
+          // #117 — I due filtri si sommano invece di escludersi: prima, con un
+          // prezzo minimo impostato, la spunta da-30-in-su non faceva piu'
+          // niente, restava accesa e contava fra i filtri attivi.
+          minPrice={Math.max(minPrice, freeShipping ? FREE_SHIPPING_THRESHOLD : 0) || undefined}
           onlyOpenStores={onlyOpenStores}
           onlyPromo={onlyPromo}
           onlyInStock={onlyInStock}

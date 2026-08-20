@@ -32,6 +32,17 @@ function SignUpInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const refCode = searchParams.get('ref')?.trim().toUpperCase() ?? null;
+  /**
+   * #112 — Dove torna chi si registra.
+   *
+   * Chi arrivava al checkout come ospite, cliccava «registrati» e confermava
+   * l'email, riatterrava sulla home: carrello ancora li', ma l'ordine da
+   * ricominciare da capo — e la bozza del checkout, salvata nella scheda del
+   * browser, persa insieme alla scheda che il client di posta apre nuova.
+   * L'accesso lo faceva gia' bene (`returnTo`), la registrazione no. Il link
+   * di conferma porta a /auth/callback, che accetta solo percorsi interni.
+   */
+  const returnTo = searchParams.get('returnTo') ?? '';
   // Ruolo preselezionato dai link di reclutamento (/sign-up?role=seller|rider).
   const roleParam = searchParams.get('role');
   const initialRole: Role = isRole(roleParam) ? roleParam : 'buyer';
@@ -42,6 +53,11 @@ function SignUpInner() {
   const [acceptTos, setAcceptTos] = useState(false);
   const [role, setRole] = useState<Role>(initialRole);
   const [captchaToken, setCaptchaToken] = useState('');
+  // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
+  // estensione che lo taglia, guasto loro), il modulo non resta bloccato per
+  // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'
+  // comunque sul server, quindi non si apre nessun buco.
+  const [captchaRotto, setCaptchaRotto] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,7 +66,7 @@ function SignUpInner() {
       toast.error('Devi accettare Termini e Privacy per registrarti');
       return;
     }
-    if (TURNSTILE_SITE_KEY && !captchaToken) {
+    if (TURNSTILE_SITE_KEY && !captchaToken && !captchaRotto) {
       toast.error('Completa il controllo anti-bot');
       return;
     }
@@ -66,7 +82,10 @@ function SignUpInner() {
         referrerId = ref?.id ?? null;
       }
 
-      const emailRedirectTo = `${APP_URL || window.location.origin}/auth/callback`;
+      const base = APP_URL || window.location.origin;
+      const emailRedirectTo = returnTo
+        ? `${base}/auth/callback?next=${encodeURIComponent(returnTo)}`
+        : `${base}/auth/callback`;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -92,7 +111,8 @@ function SignUpInner() {
       // confermava mai risultava iscritto lo stesso. La sorgente unica e' il
       // rientro da /auth/callback, dove l'iscrizione e' un fatto.
       toast.success('Registrazione completata! Controlla la tua email per confermare.');
-      router.push('/auth/verify-email');
+      // #112 — La pagina di verifica sa dove si stava andando, e lo dice.
+      router.push(returnTo ? `/auth/verify-email?returnTo=${encodeURIComponent(returnTo)}` : '/auth/verify-email');
     } catch (error) {
       toast.error(friendlyError(error));
     } finally {
@@ -191,10 +211,17 @@ function SignUpInner() {
           <div className="flex justify-center">
             <Turnstile
               siteKey={TURNSTILE_SITE_KEY}
-              onVerify={setCaptchaToken}
+              onVerify={(t) => { setCaptchaToken(t); setCaptchaRotto(null); }}
               onExpire={() => setCaptchaToken('')}
+              onError={(motivo) => setCaptchaRotto(motivo)}
             />
           </div>
+        )}
+        {captchaRotto && (
+          <p className="text-center text-sm text-ink-600">
+            {captchaRotto} Puoi provare lo stesso a registrarti: se non funziona,
+            ricarica la pagina o scrivici da <Link href="/contact" className="underline">Contatti</Link>.
+          </p>
         )}
 
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>

@@ -10,9 +10,9 @@ import SimpleQR from '@/components/SimpleQR';
 import ConfettiBurst from '@/components/ConfettiBurst';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { formatPrice } from '@/lib/format';
-import { addToCart, clearCart } from '@/lib/cart';
 import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { toast } from 'sonner';
+import { riordina } from '@/lib/riordino';
 import {
   BUYER_TIMELINE,
   ORDER_STATUS_ICON,
@@ -295,24 +295,21 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     return null;
   })();
 
-  const handleReorder = () => {
-    clearCart();
-    let added = 0;
-    for (const it of order.order_items) {
-      if (!it.product_id || !it.products?.name) continue;
-      addToCart({
-        id: it.product_id,
-        name: it.products.name,
-        price: Number(it.unit_price),
-        image: it.products.images?.[0],
+  // #113 — Una funzione sola per tutti e quattro i pulsanti «riordina»: chiede
+  // prima di svuotare il carrello e rilegge i prezzi di adesso.
+  const handleReorder = async () => {
+    const aggiunti = await riordina(
+      order.order_items.map((it) => ({
+        productId: it.product_id ?? '',
+        name: it.products?.name ?? '',
+        prezzoStorico: Number(it.unit_price),
+        image: it.products?.images?.[0],
         quantity: it.quantity,
         sellerId: order.seller_id ?? undefined,
         storeName: order.seller?.store_name ?? undefined,
-      });
-      added++;
-    }
-    toast.success(`${added} articoli aggiunti al carrello!`);
-    router.push('/cart');
+      })),
+    );
+    if (aggiunti > 0) router.push('/cart');
   };
 
   const orderRef = `#${order.id.slice(0, 6).toUpperCase()}`;

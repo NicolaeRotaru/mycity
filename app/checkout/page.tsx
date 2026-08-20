@@ -81,12 +81,19 @@ export default function CheckoutPage() {
       const lookupMap = new Map<string, string>(); // productId → seller_id (fonte: DB)
       const stockMap = new Map<string, number>();  // productId → stock disponibile (DB)
       const hasVariantsMap = new Map<string, boolean>(); // productId → ha varianti
+      const priceMap = new Map<string, number>(); // productId → prezzo di ADESSO (DB)
       const validIds = new Set<string>();
 
       if (cart.length > 0) {
+        // #114 — Anche il prezzo. Il totale mostrato qui veniva calcolato sui
+        // prezzi salvati nel carrello, che sono quelli del giorno in cui il
+        // prodotto e' stato aggiunto: il server, che rilegge dal database,
+        // ne addebitava altri. Chi aveva un carrello di una settimana prima
+        // vedeva 24 euro e si trovava 27 sull'estratto conto — o il contrario,
+        // e allora ci rimettevamo noi.
         const { data: products, error: pErr } = await supabase
           .from('products')
-          .select('id, seller_id, stock, has_variants')
+          .select('id, seller_id, stock, has_variants, price')
           .in('id', cart.map((c) => c.id));
         if (pErr) throw pErr;
         for (const p of products ?? []) {
@@ -100,6 +107,8 @@ export default function CheckoutPage() {
           // pulsante, senza che il negoziante potesse capire perché.
           stockMap.set(p.id, p.stock == null ? Number.POSITIVE_INFINITY : p.stock);
           hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
+          const prezzoVero = Number((p as { price?: number | string | null }).price ?? NaN);
+          if (Number.isFinite(prezzoVero)) priceMap.set(p.id, prezzoVero);
         }
       }
 
@@ -166,8 +175,24 @@ export default function CheckoutPage() {
             items: [],
           });
         }
-        sellerMap.get(sellerId)!.items.push(item);
+        // #114 — La riga entra nel gruppo col prezzo di adesso, non con quello
+        // che aveva quando e' stata messa nel carrello.
+        const prezzoAggiornato = priceMap.get(item.id);
+        sellerMap.get(sellerId)!.items.push(
+          prezzoAggiornato != null && prezzoAggiornato !== item.price
+            ? { ...item, price: prezzoAggiornato }
+            : item,
+        );
       }
+
+      // #114 — Quali prezzi sono cambiati sotto il naso del cliente: si dice,
+      // non si cambia il totale in silenzio.
+      const prezziCambiati = cart
+        .filter((it) => {
+          const adesso = priceMap.get(it.id);
+          return adesso != null && Math.abs(adesso - it.price) >= 0.01;
+        })
+        .map((it) => ({ id: it.id, name: it.name, prima: it.price, adesso: priceMap.get(it.id) as number }));
 
       // Disponibilità per riga: stock della variante se presente, altrimenti del
       // prodotto. Blocca e segnala invece di fallire dopo.
@@ -208,13 +233,14 @@ export default function CheckoutPage() {
         }
       }
 
-      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, expressStores };
+      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, expressStores, prezziCambiati };
     },
   });
 
   const groups = cartData?.groups ?? [];
   const orphans = useMemo(() => cartData?.orphans ?? [], [cartData]);
   const stockIssues = useMemo(() => cartData?.stockIssues ?? [], [cartData]);
+  const prezziCambiati = useMemo(() => cartData?.prezziCambiati ?? [], [cartData]);
   const variantIssues = useMemo(() => cartData?.variantIssues ?? [], [cartData]);
   const expressStores = useMemo(() => cartData?.expressStores ?? [], [cartData]);
 
@@ -301,10 +327,17 @@ export default function CheckoutPage() {
   // (salvato in handleSubmit), così non va perso dopo l'accesso.
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem('mc_checkout_draft');
+      // #112 — La bozza dell'ordine stava nella memoria della SCHEDA
+      // (sessionStorage): il link di conferma dell'email apre una scheda nuova,
+      // quindi chi si registrava dal checkout ritrovava il modulo vuoto e
+      // doveva riscrivere indirizzo, telefono e note. Ora sta nella memoria del
+      // browser (localStorage) e sopravvive alla scheda nuova. Si cancella
+      // comunque appena viene ripresa, come prima.
+      const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
       const draft = JSON.parse(raw) as Partial<typeof form>;
       setForm((prev) => ({ ...prev, ...draft }));
+      localStorage.removeItem('mc_checkout_draft');
       sessionStorage.removeItem('mc_checkout_draft');
     } catch { /* noop */ }
   }, []);
@@ -611,7 +644,7 @@ export default function CheckoutPage() {
     // Defer-the-wall: l'indirizzo si compila da ospiti; l'accesso è richiesto
     // solo qui, al commit, salvando la bozza per ripristinarla al ritorno.
     if (!authUser) {
-      try { sessionStorage.setItem('mc_checkout_draft', JSON.stringify(form)); } catch { /* noop */ }
+      try { localStorage.setItem('mc_checkout_draft', JSON.stringify(form)); } catch { /* noop */ }
       router.push('/sign-in?returnTo=/checkout');
       return;
     }
@@ -797,6 +830,21 @@ export default function CheckoutPage() {
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.</span>
+            </div>
+          )}
+
+          {/* #114 — Il prezzo e' cambiato da quando l'articolo e' entrato nel
+              carrello: si dice, con la cifra di prima e quella di adesso. Il
+              totale qui sotto e' gia' quello nuovo, cioe' quello che verra'
+              addebitato davvero. */}
+          {prezziCambiati.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+              <span>
+                <strong>Il prezzo è cambiato</strong> da quando avevi messo nel carrello:{' '}
+                {prezziCambiati.map((p) => `${p.name} (${formatPrice(p.prima)} → ${formatPrice(p.adesso)})`).join('; ')}.
+                Il totale qui sotto è già aggiornato.
+              </span>
             </div>
           )}
 

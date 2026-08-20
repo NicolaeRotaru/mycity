@@ -1,16 +1,17 @@
 'use client';
 
-import { useEffect, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { riordina } from '@/lib/riordino';
 import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import EmptyState from '@/components/EmptyState';
 import ErrorState from '@/components/ErrorState';
 import { Button } from '@/components/ui/Button';
-import { addToCart, clearCart } from '@/lib/cart';
+import { clearCart } from '@/lib/cart';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   type OrderStatus,
@@ -75,10 +76,18 @@ function StripeReturnHandler() {
       // solo il contrassegno: chi pagava con la carta tornava e ritrovava tutto
       // dentro, con lo stesso ordine pronto a essere rifatto per sbaglio.
       clearCart();
-      // Il webhook Stripe può arrivare con un ritardo di qualche secondo: ri-fetcha
-      // gli ordini dopo 2s e 5s per non mostrare "nessun ordine" al rientro (fix #22).
-      const t1 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 2000);
-      const t2 = setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), 5000);
+      // #116 — Il webhook Stripe crea l'ordine, e puo' metterci qualche
+      // secondo. Prima si riprovava due volte (2 s e 5 s) e poi ci si arrendeva:
+      // chi rientrava su una rete lenta, o quando Stripe rallentava, leggeva
+      // «Non hai ancora ordini» subito dopo aver pagato. Da li' la reazione e'
+      // sempre la stessa: si ripaga, o si chiama la banca.
+      //
+      // Ora si riprova a distanze crescenti fino a circa mezzo minuto, e finche'
+      // dura NON si mostra mai lo stato vuoto (vedi `stripeInCorso` sotto).
+      const attese = [1000, 2000, 4000, 8000, 15000];
+      const timers = attese.map((ms) =>
+        setTimeout(() => qc.invalidateQueries({ queryKey: queryKeys.orders.all }), ms),
+      );
       // Funnel: `purchase` (GA4) + `order_placed`, uno per ordine creato.
       //
       // #210 — L'importo non arriva piu' dallo stash del browser (era la stima
@@ -122,9 +131,11 @@ function StripeReturnHandler() {
             .catch(() => { /* niente evento: meglio mancante che sbagliato */ });
         }
       } catch { /* noop */ }
-      // Pulisce il param dall'URL senza ricaricare
-      router.replace('/orders');
-      return () => { clearTimeout(t1); clearTimeout(t2); };
+      // #116 — L'indirizzo si ripulisce DOPO l'ultima riprova: prima veniva
+      // tolto subito, quindi la pagina non sapeva piu' di essere appena tornata
+      // da un pagamento e mostrava lo stato vuoto.
+      const pulizia = setTimeout(() => router.replace('/orders'), 30_000);
+      return () => { timers.forEach(clearTimeout); clearTimeout(pulizia); };
     }
   }, [searchParams, router, qc]);
   return null;
@@ -138,6 +149,22 @@ const TRACKABLE: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
 
 export default function OrdersPage() {
   const router = useRouter();
+  /**
+   * #116 — Siamo appena tornati dal pagamento con carta?
+   *
+   * Si legge dall'indirizzo senza `useSearchParams`, che obbligherebbe a
+   * mettere in Suspense tutta la pagina. Vale per una finestra di trenta
+   * secondi: dentro quella finestra lo stato «non hai ancora ordini» non si
+   * mostra, perche' sarebbe falso e spingerebbe a pagare due volte.
+   */
+  const [stripeInCorso, setStripeInCorso] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (new URLSearchParams(window.location.search).get('stripe') !== 'success') return;
+    setStripeInCorso(true);
+    const t = setTimeout(() => setStripeInCorso(false), 30_000);
+    return () => clearTimeout(t);
+  }, []);
   const { data: orders = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: queryKeys.orders.all,
     queryFn: fetchOrders,
@@ -146,28 +173,21 @@ export default function OrdersPage() {
   // Riordino: riusa lo stesso modulo carrello (`@/lib/cart`) del dettaglio
   // ordine — stesso shape di addToCart, nessuna logica duplicata. Svuota il
   // carrello e reinserisce le righe dell'ordine, poi porta a /cart.
-  const handleReorder = (order: Order) => {
-    clearCart();
-    let added = 0;
-    for (const it of order.order_items) {
-      if (!it.product_id || !it.products?.name) continue;
-      addToCart({
-        id: it.product_id,
-        name: it.products.name,
-        price: Number(it.unit_price),
-        image: it.products.images?.[0],
+  // #113 — Stessa funzione del dettaglio ordine e della striscia in home:
+  // chiede prima di svuotare, e rilegge i prezzi di adesso.
+  const handleReorder = async (order: Order) => {
+    const aggiunti = await riordina(
+      order.order_items.map((it) => ({
+        productId: it.product_id ?? '',
+        name: it.products?.name ?? '',
+        prezzoStorico: Number(it.unit_price),
+        image: it.products?.images?.[0],
         quantity: it.quantity,
         sellerId: order.seller_id ?? undefined,
         storeName: order.seller?.store_name ?? undefined,
-      });
-      added++;
-    }
-    if (added === 0) {
-      toast.error('Nessun prodotto di questo ordine è più disponibile.');
-      return;
-    }
-    toast.success(`${added} ${added === 1 ? 'articolo aggiunto' : 'articoli aggiunti'} al carrello!`);
-    router.push('/cart');
+      })),
+    );
+    if (aggiunti > 0) router.push('/cart');
   };
 
   if (isLoading) {
@@ -194,6 +214,25 @@ export default function OrdersPage() {
             onRetry={() => refetch()}
           />
         )}
+      </div>
+    );
+  }
+
+  if (orders.length === 0 && stripeInCorso) {
+    // #116 — La regola, una sola: dentro la finestra del pagamento non si
+    // mostra MAI lo stato vuoto. Chi ha appena pagato non deve leggere «non hai
+    // ordini»: deve leggere che stiamo confermando.
+    return (
+      <div className="py-8">
+        <Suspense fallback={null}><StripeReturnHandler /></Suspense>
+        <div className="mx-auto max-w-md rounded-2xl border border-cream-300 bg-white p-8 text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-cream-300 border-t-primary-700" aria-hidden />
+          <h1 className="font-serif text-xl font-bold text-ink-900">Stiamo confermando il pagamento</h1>
+          <p className="mt-2 text-sm text-ink-600">
+            Ci vogliono pochi secondi. Non ricaricare la pagina e non pagare di nuovo:
+            il tuo ordine comparirà qui appena la banca conferma.
+          </p>
+        </div>
       </div>
     );
   }
