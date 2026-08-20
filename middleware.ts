@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { parseConsentCookie, CONSENT_COOKIE } from '@/lib/consent';
 import {
   EXPERIMENT_LIST,
   assignVariant,
@@ -74,8 +75,12 @@ function buildCsp(nonce: string, isDev: boolean): string {
     `script-src ${scriptSrc}`,
     // Tailwind + react-hook-form richiedono inline styles. Style-src e' meno
     // critico di script-src per XSS (style injection raramente exploitable).
-    "style-src 'self' 'unsafe-inline' https://unpkg.com",
-    `img-src 'self' data: blob: https://${supaHost} https://placehold.co https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://unpkg.com https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,
+    // #76 — unpkg.com non serve piu': le icone della mappa stanno in /public e
+    // il foglio di stile di Leaflet e' compilato dentro il sito. Un permesso in
+    // meno nella politica di sicurezza e' un posto in meno da cui puo' arrivare
+    // codice, e un destinatario in meno da dichiarare nell'informativa.
+    "style-src 'self' 'unsafe-inline'",
+    `img-src 'self' data: blob: https://${supaHost} https://placehold.co https://api.iconify.design https://images.pexels.com https://*.tile.openstreetmap.org https://*.stripe.com https://www.google-analytics.com https://*.googletagmanager.com https://*.posthog.com`,
     "font-src 'self' data:",
     // <video srcObject=MediaStream> per la fotocamera in-app, blob URL anteprime,
     // e i video MP4 self-hosted della home (Supabase Storage).
@@ -119,6 +124,12 @@ export async function middleware(req: NextRequest) {
   // (cookie) viene riusata; quella nuova viene generata, propagata al render
   // via header (corretta già al primo render, niente flicker) e persistita su
   // cookie nella response. Additivo: non tocca il routing né l'auth.
+  // #74 — Il cookie della prova A/B dura novanta giorni e serve a riconoscere
+  // lo stesso browser fra una visita e l'altra: e' un cookie di analisi, non
+  // tecnico, e va sotto lo stesso consenso di tutti gli altri. Senza consenso
+  // la variante si sceglie lo stesso — la pagina deve pur mostrare qualcosa —
+  // ma non si scrive niente sul dispositivo, e alla visita dopo si riparte.
+  const consensoAnalitico = parseConsentCookie(req.cookies.get(CONSENT_COOKIE)?.value).analytics;
   const newAssignments: Array<{ cookie: string; variant: string }> = [];
   for (const exp of EXPERIMENT_LIST) {
     const existing = req.cookies.get(expCookieName(exp.key))?.value;
@@ -127,7 +138,7 @@ export async function middleware(req: NextRequest) {
     } else {
       const variant = assignVariant(exp);
       reqHeaders.set(expHeaderName(exp.key), variant);
-      if (exp.enabled) newAssignments.push({ cookie: expCookieName(exp.key), variant });
+      if (exp.enabled && consensoAnalitico) newAssignments.push({ cookie: expCookieName(exp.key), variant });
     }
   }
 

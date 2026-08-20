@@ -388,6 +388,19 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                 </button>
               )}
             </div>
+
+            {/* #75 — Cosa viene raccolto, perche' e per quanto: scritto qui,
+                dove si accende, non solo in una pagina legale che nessuno apre.
+                La posizione e' il dato piu' invasivo che chiediamo, e chi la
+                condivide ha diritto di sapere cosa succede. */}
+            <p className="mt-3 border-t border-cream-200 pt-3 text-[12px] leading-relaxed text-ink-500">
+              Mentre è attiva, la tua posizione viene salvata al massimo una volta ogni
+              30 secondi e la vede il cliente di <em>questo</em> ordine, per sapere quando
+              arrivi. Si ferma da sola quando l&apos;ordine si chiude e non viene usata per
+              valutare il tuo lavoro. Puoi disattivarla in qualunque momento con il
+              pulsante qui sopra: l&apos;ordine resta tuo.{' '}
+              <Link href="/privacy" className="underline">Come trattiamo i tuoi dati</Link>
+            </p>
           </div>
         )}
 

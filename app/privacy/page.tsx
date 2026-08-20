@@ -97,6 +97,12 @@ export default function PrivacyPage() {
               <tr><td className="border px-3 py-2">Sicurezza, anti-frode</td><td className="border px-3 py-2">Legittimo interesse (art. 6.1.f)</td><td className="border px-3 py-2">12 mesi (log accessi)</td></tr>
               <tr><td className="border px-3 py-2">Newsletter e marketing</td><td className="border px-3 py-2">Consenso (art. 6.1.a)</td><td className="border px-3 py-2">Fino a revoca consenso</td></tr>
               <tr><td className="border px-3 py-2">Analytics aggregati</td><td className="border px-3 py-2">Consenso (cookie)</td><td className="border px-3 py-2">14 mesi</td></tr>
+              {/* #75 — La posizione del fattorino durante la consegna veniva
+                  raccolta di continuo e non compariva in nessuna riga di questa
+                  tabella: nessuna base giuridica dichiarata, nessun tempo di
+                  conservazione. È il trattamento più invasivo che facciamo, ed
+                  è quello che mancava. */}
+              <tr><td className="border px-3 py-2">Posizione del Rider durante la consegna</td><td className="border px-3 py-2">Esecuzione del contratto (art. 6.1.b) e legittimo interesse alla sicurezza e tracciabilità della consegna (art. 6.1.f)</td><td className="border px-3 py-2">Cancellata alla chiusura dell&apos;ordine</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>
@@ -119,7 +125,18 @@ export default function PrivacyPage() {
           <li><strong>PostHog Inc.</strong> (Stati Uniti — SCC) — statistiche di utilizzo e registrazione delle sessioni di navigazione (session replay), attiva solo con il consenso ai cookie analitici. Alla registrazione della sessione vengono mascherati i campi di inserimento; l&apos;identificativo dell&apos;utente viene collegato dopo l&apos;accesso.</li>
           <li><strong>Functional Software Inc. (Sentry)</strong> (Stati Uniti — SCC) — raccolta degli errori dell&apos;applicazione per la diagnosi dei guasti; può includere indirizzo IP e pagina in cui si è verificato l&apos;errore.</li>
           <li><strong>Google Ireland Ltd.</strong> — misurazione del traffico del sito, attiva solo con il consenso ai cookie analitici.</li>
+          {/* #76 — Mancavano i due fornitori che ricevono davvero le foto
+              caricate dai negozianti. La funzione «togli lo sfondo» manda
+              l'immagine a un servizio esterno: quel servizio riceve un dato che
+              non e' nostro, e finora non era dichiarato a nessuno. */}
+          <li><strong>Kaleido AI GmbH / Canva (remove.bg)</strong> (Austria/Australia — SCC) — rimozione dello sfondo dalle foto prodotto caricate dai venditori. Riceve la sola immagine, su richiesta esplicita del venditore.</li>
+          <li><strong>PhotoRoom SAS</strong> (Francia) — alternativa per la rimozione dello sfondo dalle foto prodotto. Riceve la sola immagine, su richiesta esplicita del venditore.</li>
         </ul>
+        <p className="text-sm text-ink-500">
+          Dei due fornitori per la rimozione dello sfondo ne è attivo uno solo alla
+          volta, scelto nella configurazione del sito: entrambi sono elencati perché
+          la scelta può cambiare senza modifiche a questa pagina.
+        </p>
         <p>
           <strong>Trasferimenti extra-UE:</strong> sono protetti da Standard Contractual Clauses
           adottate dalla Commissione Europea (Decisione 2021/914).

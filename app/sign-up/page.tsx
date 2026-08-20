@@ -13,6 +13,13 @@ import { Button } from '@/components/ui/Button';
 import { AuthShell, AuthAlternatives } from '@/components/ui/AuthShell';
 import { friendlyError } from '@/lib/errors';
 
+/**
+ * #79 — Quale versione dei testi legali si sta accettando. Va tenuta allineata
+ * alle costanti VERSION di app/privacy/page.tsx e app/terms/page.tsx: se i testi
+ * cambiano e questa no, il verbale dice il falso.
+ */
+const VERSIONE_TESTI_LEGALI = 'privacy-2.0+terms-2.0';
+
 type Role = 'buyer' | 'seller' | 'rider';
 
 const ROLES: { value: Role; Icon: LucideIcon; title: string; subtitle: string }[] = [
@@ -90,7 +97,17 @@ function SignUpInner() {
         email,
         password,
         options: {
-          data: { role, full_name: fullName.trim() || undefined },
+          // #79 — L'accettazione di Termini e Informativa non veniva registrata
+          // da nessuna parte: c'era la spunta nel modulo e basta. Il giorno in
+          // cui qualcuno contesta una condizione — un reso, una commissione —
+          // non c'e' modo di dimostrare che l'aveva accettata, ne' QUALE
+          // versione del testo aveva davanti. La versione viaggia con la
+          // registrazione e il server la mette a verbale al primo accesso.
+          data: {
+            role,
+            full_name: fullName.trim() || undefined,
+            versione_testi_accettati: VERSIONE_TESTI_LEGALI,
+          },
           captchaToken: captchaToken || undefined,
           emailRedirectTo,
         },
