@@ -43,9 +43,20 @@ const acquisto = {
   paymentMethod: 'card' as const,
   sellerId: 'negozio-1',
   checkoutId: 'carrello-9',
+  consensoAnalytics: true,
 };
 
 describe('l acquisto si conta dove il fatto è certo', () => {
+  it('chi ha detto no ai cookie non finisce comunque a PostHog', async () => {
+    // 21/8/2026 — Il browser il consenso lo rispettava, il server no: su OGNI
+    // ordine partiva verso gli Stati Uniti un dato d'acquisto legato
+    // all'identificativo della persona, anche da chi aveva risposto no. Due
+    // pagine pubbliche promettono che quel no viene rispettato.
+    const { contaAcquisto } = await import('@/lib/analytics/server');
+    await contaAcquisto({ ...acquisto, consensoAnalytics: false });
+    expect(inviato.length, 'il dato è partito lo stesso').toBe(0);
+  });
+
   it('manda l evento al raccoglitore, con importo e negozio veri', async () => {
     const { contaAcquisto } = await import('@/lib/analytics/server');
     await contaAcquisto(acquisto);

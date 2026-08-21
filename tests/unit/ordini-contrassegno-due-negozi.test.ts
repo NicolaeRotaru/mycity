@@ -84,6 +84,9 @@ vi.mock('@/lib/stripe/client', () => ({
 vi.mock('@/lib/analytics/server', () => ({
   contaAcquisto: vi.fn(async (a: Record<string, unknown>) => { acquistiContati.push(a); }),
   misuraAttiva: () => true,
+  // 21/8/2026 — Il consenso all'analitica adesso lo legge il server prima di
+  // contare: senza questa riga il finto non ha la funzione e la rotta cade.
+  analyticsConsentita: vi.fn(async () => true),
 }));
 
 vi.mock('@/lib/supabase/server', () => {

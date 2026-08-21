@@ -149,18 +149,24 @@ export const trackOrderPlaced = (
   sellerId: string,
   extra?: { coupon?: string; items?: GaItem[]; checkoutId?: string | null },
 ) => {
-  // #213 — `checkout_id` tiene insieme gli ordini nati dallo stesso carrello:
-  // due negozi fanno due ordini e due eventi, ma restano un acquisto solo.
-  // `$insert_id` rende l'evento idempotente: se parte due volte (un rientro
-  // sulla pagina, un tentativo ripetuto) PostHog ne conta comunque uno.
-  track('order_placed', {
-    order_id: orderId,
-    total_cents: totalCents,
-    payment_method: paymentMethod,
-    seller_id: sellerId,
-    checkout_id: extra?.checkoutId ?? orderId,
-    $insert_id: `order_placed:${orderId}`,
-  });
+  const checkoutId = extra?.checkoutId ?? orderId;
+  // 21/8/2026 — `order_placed` NON PARTE PIÙ DA QUI, E OGNI ACQUISTO TORNA A
+  // CONTARSI UNA VOLTA SOLA.
+  //
+  // Da quando l'evento parte anche dal server (#208), lo stesso acquisto veniva
+  // mandato due volte: una dal browser, una dal server. Il commento che stava
+  // qui diceva che `$insert_id` toglieva i doppioni — non è vero fra i due:
+  // PostHog li toglie a parità di istante, e browser e server mandano in due
+  // momenti diversi. Fatturato e numero di acquisti risultavano DOPPI, e ogni
+  // tasso di conversione e ritorno di campagna poggiava su quel numero.
+  //
+  // Fra i due si tiene il server, perché lì il fatto è certo: chi chiude la
+  // scheda dopo aver pagato ha comunque un ordine, e il browser quel caso lo
+  // perdeva. Il server rispetta anche il consenso, che è la seconda ragione.
+  //
+  // Resta il `purchase` di GA4 qui sotto: è un altro raccoglitore, con un altro
+  // percorso, e da lì non parte niente dal server.
+  void checkoutId;
   // Fix #16: items inclusi nel purchase per abilitare i report prodotto GA4.
   ga('purchase', {
     transaction_id: orderId,

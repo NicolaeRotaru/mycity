@@ -14,7 +14,7 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
-import { contaAcquisto } from '@/lib/analytics/server';
+import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
 
@@ -687,9 +687,12 @@ export const POST = withAuthRateLimit(
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
     // solo dal browser: chi chiudeva la scheda spariva dai conti, e il
     // fatturato in PostHog non riconciliava con la tabella degli ordini.
+    // Il consenso si legge UNA volta, non una per ordine: e' la stessa persona.
+    const consensoAnalytics = await analyticsConsentita(admin, user.id);
     void Promise.all(
       comunicazioni.map((c) =>
         contaAcquisto({
+          consensoAnalytics,
           orderId: c.orderId,
           buyerId: user.id,
           totalCents: c.totalCents,

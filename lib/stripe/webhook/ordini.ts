@@ -21,7 +21,7 @@ import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
-import { contaAcquisto } from '@/lib/analytics/server';
+import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { notifyAdmins, sessionePagata } from './comune';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
@@ -389,9 +389,11 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   // #208 — L'acquisto si conta qui, dove il fatto è certo: gli ordini sono
   // appena stati scritti. Prima partiva solo dal browser, al rientro sulla
   // pagina ordini: chi chiudeva la scheda dopo aver pagato spariva dai conti.
-  const misure = Promise.all(
+  const consensoAnalyticsPromise = analyticsConsentita(admin, buyerId);
+  const misure = consensoAnalyticsPromise.then((consensoAnalytics) => Promise.all(
     createdOrderIds.filter((c) => c.nuovo).map((c) =>
       contaAcquisto({
+        consensoAnalytics,
         orderId: c.orderId,
         buyerId,
         totalCents: c.totalCents,
@@ -400,7 +402,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
         checkoutId: pendingCheckoutId,
       }),
     ),
-  );
+  ));
 
   const avvisi = (async () => {
   for (const created of createdOrderIds) {
