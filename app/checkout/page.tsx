@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -9,6 +9,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
+import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
@@ -445,19 +446,45 @@ export default function CheckoutPage() {
   const finalTotal = Math.max(0, grandTotal - creditApplied);
 
   /**
-   * #172 — L'impronta di QUESTO carrello, usata come chiave del tentativo di
-   * ordine. Cambia se cambia il contenuto o il totale, cosi' due ordini
-   * davvero diversi non si confondono, e due invii dello stesso ordine si'.
+   * LA CHIAVE DEL TENTATIVO — chi ordina due volte la stessa spesa deve poterla
+   * ordinare due volte (21/8/2026).
+   *
+   * Qui c'era l'impronta del CARRELLO: contenuto + totale + ritiro, passati in
+   * un hash. Serviva a impedire che due clic sullo stesso pulsante creassero
+   * due ordini, e per quello funzionava.
+   *
+   * Ma quell'impronta non cambia mai. Maria compra due filoni ogni martedi':
+   * stesso carrello, stesso totale, stesso indirizzo, quindi stessa impronta —
+   * per sempre. Il martedi' dopo il server riconosceva la chiave, restituiva
+   * gli ordini della settimana prima e il sito le mostrava «Ordine effettuato».
+   * Lei aspettava il pane. Al negozio non era arrivato niente. Ed e' il caso
+   * piu' normale che esista per un panificio.
+   *
+   * La chiave adesso identifica IL TENTATIVO, non la spesa: nasce al primo
+   * invio, resta uguale se quell'invio viene ripetuto (doppio clic, rete che
+   * ritenta, pagina ricaricata a meta'), e muore quando l'ordine e' andato a
+   * buon fine. Il tentativo dopo ne avra' una nuova.
+   *
+   * Vive in `sessionStorage` perche' una pagina ricaricata mentre l'ordine
+   * parte e' esattamente il caso che il doppione deve coprire: se la chiave
+   * morisse col componente, quel ricaricamento creerebbe il secondo ordine.
    */
-  const carrelloImpronta = useMemo(() => {
-    const pezzi = cart.map((i) => `${i.id}:${i.variantId ?? ''}:${i.quantity}`).join('|');
-    const totale = Math.round(finalTotal * 100);
-    let h = 0;
-    for (const ch of `${pezzi}#${totale}#${pickupInStore ? 'ritiro' : 'consegna'}`) {
-      h = (h * 31 + ch.charCodeAt(0)) | 0;
-    }
-    return Math.abs(h).toString(36);
-  }, [cart, finalTotal, pickupInStore]);
+  const nuovaChiaveTentativo = useCallback(
+    () =>
+      chiaveTentativo(
+        typeof window === 'undefined' ? null : window.sessionStorage,
+        () =>
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      ),
+    [],
+  );
+
+  const chiudiIlTentativo = useCallback(
+    () => chiudiTentativo(typeof window === 'undefined' ? null : window.sessionStorage),
+    [],
+  );
 
   const placeOrders = useMutation({
     mutationFn: async () => {
@@ -495,7 +522,7 @@ export default function CheckoutPage() {
       // premuto due volte, o se la rete ritenta da sola, il server riconosce il
       // doppione e restituisce gli ordini gia' creati invece di farne altri.
       // Vive quanto il carrello: cambia solo quando cambia cosa si sta comprando.
-      const chiaveTentativo = `cod-${carrelloImpronta}`;
+      const chiaveTentativo = `cod-${nuovaChiaveTentativo()}`;
       const res = await fetch('/api/orders/cod', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'idempotency-key': chiaveTentativo },
@@ -546,6 +573,9 @@ export default function CheckoutPage() {
       return createdOrders;
     },
     onSuccess: (orderIds) => {
+      // Il tentativo e' andato a buon fine: la sua chiave ha finito il lavoro.
+      // Se restasse, il prossimo ordine identico si vedrebbe restituire questo.
+      chiudiIlTentativo();
       clearCart();
       // Behavioral Scientist + CRO: gratifica immediata su purchase success.
       // Flag in sessionStorage → la order detail page mostra ConfettiBurst.
