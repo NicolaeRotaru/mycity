@@ -17,16 +17,22 @@
 #
 # COSA C'E' DENTRO, E COSA NO.
 #
-# Acceso solo cio' che le prove usano davvero: il database, l'API pubblica
-# (PostgREST) e l'autenticazione. Spento tutto il resto — pannello Studio,
-# archivio file, tempo reale, posta finta, funzioni al bordo, statistiche —
-# perche' ogni pezzo acceso e' un contenitore da scaricare e avviare, e in CI
-# si paga in minuti a ogni giro.
+# Acceso solo cio' che serve: il database, l'API pubblica (PostgREST),
+# l'autenticazione e l'archivio file. Spento il resto — pannello Studio, tempo
+# reale, posta finta, funzioni al bordo, statistiche — perche' ogni pezzo acceso
+# e' un contenitore da scaricare e avviare, e in CI si paga in minuti a ogni
+# giro.
 #
-# ⚠️ Lo schema `storage` serve lo stesso: sette migrazioni lo nominano
-# (`002`, `035`, `039` e altre). Il servizio di archiviazione resta spento, ma
-# le tabelle di sistema che lo reggono le crea comunque l'avvio del database:
-# le migrazioni trovano `storage.buckets` e passano.
+# ⚠️ L'ARCHIVIO FILE RESTA ACCESO, e la prima versione di questo file diceva il
+# contrario. Ci avevo scritto che lo schema `storage` nasce comunque anche col
+# servizio spento. Non e' vero, e la CI l'ha detto al primo giro:
+#
+#   ✗ 002_categories_and_extras.sql
+#     ERROR:  relation "storage.buckets" does not exist
+#
+# Sette migrazioni nominano quello schema (`002`, `035`, `039` e altre), e chi
+# lo crea e' proprio il servizio che avevo spento. Costa un contenitore in piu'
+# a ogni giro: si paga, perche' l'alternativa e' non applicare le migrazioni.
 #
 # COME SI USA A MANO, sulla propria macchina (serve Docker):
 #   npx supabase start
@@ -70,7 +76,7 @@ enabled = false
 enabled = false
 
 [storage]
-enabled = false
+enabled = true
 
 [auth]
 enabled = true

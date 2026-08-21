@@ -52,11 +52,24 @@ echo "▶ leggo le chiavi locali"
 # `status -o env` stampa righe NOME="valore": e' il formato pensato per questo.
 stato="$(npx --yes supabase@2 status --workdir "$ROOT" -o env)"
 
-leggi() { echo "$stato" | grep "^$1=" | cut -d= -f2- | tr -d '"'; }
+# Il primo nome che esiste vince. La CLI di Supabase ha cambiato come chiama le
+# due chiavi — prima ANON_KEY e SERVICE_ROLE_KEY, adesso anche PUBLISHABLE_KEY e
+# SECRET_KEY — e questo pezzo non deve rompersi al prossimo cambio di nome.
+leggi() {
+  local nome v
+  for nome in "$@"; do
+    v="$(echo "$stato" | grep "^$nome=" | cut -d= -f2- | tr -d '"' || true)"
+    if [ -n "$v" ]; then echo "$v"; return 0; fi
+  done
+  # Non trovata: si esce a zero apposta. Con `set -e` un ritorno diverso
+  # ucciderebbe lo script qui, e il messaggio che spiega cosa manca — quello
+  # sotto — non lo leggerebbe nessuno.
+  return 0
+}
 
 URL="$(leggi API_URL)"
-ANON="$(leggi ANON_KEY)"
-SR="$(leggi SERVICE_ROLE_KEY)"
+ANON="$(leggi ANON_KEY PUBLISHABLE_KEY)"
+SR="$(leggi SERVICE_ROLE_KEY SECRET_KEY)"
 
 if [ -z "$URL" ] || [ -z "$ANON" ] || [ -z "$SR" ]; then
   echo "✗ Supabase e' partito ma non ho letto le sue chiavi. Senza, le prove"
