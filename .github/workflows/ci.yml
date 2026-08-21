@@ -40,13 +40,20 @@ jobs:
       # Riprodotto a mano prima di cambiare: su Node 20 il client non si
       # costruisce, su Node 22 si'.
       #
-      # ⚪ Resta una distanza da dire: la produzione gira su Node 24 (Vercel),
-      # la CI su 22. Meglio di 20, non uguale. Chiuderla del tutto e' un lavoro
-      # a parte, e va provato: qui non avevo un Node 24 con cui verificare.
+      # POI L'HO CHIUSA DEL TUTTO. Nel primo giro avevo messo 22 e scritto che
+      # la distanza con la produzione — che gira su Node 24 — restava aperta
+      # perche' non avevo un Node 24 con cui provare. Non era vero: bastava
+      # scaricarlo. Provato, e passa tutto:
+      #
+      #   943 prove unitarie verdi · typecheck pulito · lint senza errori ·
+      #   build di produzione riuscita, 173 pagine statiche generate
+      #
+      # Adesso la CI prova sulla stessa versione che serve i clienti. Il
+      # `engines` del progetto dice >=20, quindi 24 e' dentro le regole.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       # Storybook 8.x dichiara peer deps su React 18 + ecc, ma il monorepo usa
@@ -80,7 +87,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Install deps
@@ -101,7 +108,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Install deps
@@ -242,7 +249,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Install deps
@@ -284,7 +291,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: "npm"
 
       - name: Install deps
