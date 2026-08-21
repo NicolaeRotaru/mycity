@@ -44,6 +44,13 @@ function sorgenti(dir: string, dentro: string[] = []): string[] {
 /** Le istruzioni che il database rifiuta intere se una colonna non esiste. */
 const ISTRUZIONE = /\.(insert|update|select|upsert)\(/;
 
+// `.rpc(` sta fuori apposta, e non per dimenticanza. Una funzione che ancora
+// non esiste non ha un «senza»: la strada e' nuova per intero, e chiamarla
+// prima della migrazione da' un errore che l'utente vede e capisce («non e'
+// stato possibile chiudere il ritiro»), non un ordine che sparisce in
+// silenzio. Il danno che questo controllo previene e' l'altro: un'istruzione
+// che funzionava ieri e oggi fallisce intera per una colonna di troppo.
+
 describe('nessuna colonna della migrazione 124 viaggia senza ripiego', () => {
   const nuove = [...new Set([...CAMPI_124, ...COLONNE_124])];
 
