@@ -71,8 +71,9 @@ enabled = false
 enabled = false
 
 # La posta finta: serve solo a guardare le email a mano, e in CI non guarda
-# nessuno.
-[inbucket]
+# nessuno. Si chiamava [inbucket]: la CLI adesso avvisa che quel nome e' in
+# pensione e vuole questo. Un avviso di oggi e' un errore fra due versioni.
+[local_smtp]
 enabled = false
 
 [storage]
