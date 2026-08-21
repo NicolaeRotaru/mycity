@@ -32,9 +32,23 @@ COMMENT ON COLUMN public.orders.gross_total_cents IS
   'Lordo di vendita in centesimi PRIMA dello scomputo del credito MyCity. total_price e'' invece la cassa attesa (netto, dopo il credito). Il rimborso divide per questo, perche'' e'' la base su cui e'' calcolato seller_payout_cents.';
 
 -- Ordini gia' esistenti: il lordo e' il totale piu' il credito applicato.
-UPDATE public.orders
-   SET gross_total_cents = round(total_price * 100)::int + coalesce(wallet_applied_cents, 0)
- WHERE gross_total_cents IS NULL;
+--
+-- La chiave `mycity.allow_order_write` non e' un aggiramento, e' la stessa che
+-- usano le funzioni del progetto (`confirm_pickup_by_seller` la mette in cima).
+-- Serve perche' `enforce_order_update_rules` (migrazione 114) rifiuta qualunque
+-- scrittura su un campo fuori dalla lista consentita, e questa colonna nuova e'
+-- fuori da quella lista per costruzione: e' esattamente cio' che la protegge
+-- dal browser. Il grilletto scatta per RIGA, quindi su una tabella ordini vuota
+-- non scatta mai: e' il motivo per cui questa migrazione passava sul database di
+-- prova ricostruito da zero e si e' fermata al primo database con dentro un
+-- ordine vero. Prova che lo dimostra: tests/sql/rls/09.
+DO $$
+BEGIN
+  PERFORM set_config('mycity.allow_order_write', '1', true);
+  UPDATE public.orders
+     SET gross_total_cents = round(total_price * 100)::int + coalesce(wallet_applied_cents, 0)
+   WHERE gross_total_cents IS NULL;
+END$$;
 
 -- Campo protetto per costruzione: `enforce_order_update_rules` (migrazione 114)
 -- confronta la riga intera meno una lista di campi consentiti, quindi ogni
