@@ -37,7 +37,7 @@ const STEPS = [
   {
     icon: ShoppingCart,
     title: 'Ordina, paghi come vuoi',
-    body: 'Aggiungi al carrello e al checkout scegli come pagare: carta o contanti alla consegna, decidi tu. Consegna in 24-48h.',
+    body: 'Aggiungi al carrello e al checkout scegli come pagare: carta o contanti alla consegna, decidi tu. Consegna in 30-60 minuti.',
     cta: 'Inizia a esplorare',
     href: '/search',
   },

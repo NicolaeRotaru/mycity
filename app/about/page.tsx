@@ -8,7 +8,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 
 export const metadata = {
   title: 'Chi siamo · MyCity',
-  description: 'MyCity è il marketplace dei negozi locali. Compra dai commercianti della tua città, ricevi a casa in 24-48h.',
+  description: 'MyCity è il marketplace dei negozi locali. Compra dai commercianti della tua città, ricevi a casa in 30-60 minuti.',
   alternates: { canonical: '/about' },
   openGraph: {
     title: 'Chi siamo · MyCity',
@@ -23,7 +23,7 @@ export const metadata = {
 // Copy marketing statica della pagina chi-siamo. Una metrica ("negozi attivi")
 // viene resa LIVE da una count query (vedi buildStats); le altre restano claim.
 const STATS = [
-  { value: '24-48h', label: 'tempi di consegna' },
+  { value: '30-60 min', label: 'tempi di consegna' },
   { value: '100%', label: 'venditori locali verificati' },
   { value: '0€', label: 'commissioni mensili per i negozi' },
   { value: 'Pay-on-delivery', label: 'paghi alla consegna, anche in contanti' },

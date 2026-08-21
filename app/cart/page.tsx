@@ -178,7 +178,7 @@ export default function CartPage() {
                         <p className="text-xs font-semibold text-ink-500">{item.variantLabel}</p>
                       )}
                       <p className="text-xs text-olive-600 font-semibold flex items-center gap-1">
-                        <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Spedizione 24-48h
+                        <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Consegna in 30-60 min
                       </p>
                       <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                         <div className="flex items-center gap-2">

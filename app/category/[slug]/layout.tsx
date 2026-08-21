@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 export const revalidate = 600;
 
 const CATEGORY_LONG_DESC: Record<string, string> = {
-  alimentari: 'Alimentari freschi e tipici dei negozi di Piacenza. Consegna a casa in 24-48h o ritiro in negozio.',
+  alimentari: 'Alimentari freschi e tipici dei negozi di Piacenza. Consegna a casa in 30-60 minuti o ritiro in negozio.',
   abbigliamento: 'Abbigliamento donna, uomo e bambino dei negozi di Piacenza. Compra online dai brand locali.',
   casa: 'Casa, arredamento e cucina dai negozi di Piacenza. Consegna locale rapida.',
   elettronica: 'Elettronica e accessori dai negozi di Piacenza. Garanzia e supporto locale.',
@@ -42,7 +42,7 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
     return { title: 'Categoria non trovata · MyCity', robots: { index: false } };
   }
   const name = cat.name;
-  const desc = CATEGORY_LONG_DESC[params.slug] ?? `Acquista ${name.toLowerCase()} dai negozi di Piacenza su MyCity. Consegna 24-48h.`;
+  const desc = CATEGORY_LONG_DESC[params.slug] ?? `Acquista ${name.toLowerCase()} dai negozi di Piacenza su MyCity. Consegna in 30-60 minuti.`;
   return {
     title: `${name} a Piacenza — Compra online dai negozi locali · MyCity`,
     description: desc,

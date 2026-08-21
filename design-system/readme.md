@@ -19,7 +19,7 @@ The real product copy is **Italian**; this guide keeps brand copy in Italian and
 
 - **Address the reader as "tu"** (informal). "I negozi veri di Piacenza, **ora a casa tua**." "Cambi idea? **Ti rimborsiamo** senza domande."
 - **Lead with the reassurance, not the feature.** The #1 hook is always risk-removal: *paghi alla consegna*, *zero rischi*, *l'account serve solo per confermare l'ordine*. Honesty is explicit ("il framing è ONESTO").
-- **Concrete & local.** Names places and products: "i commercianti della tua via", "Coppa Piacentina DOP", "verde dei colli piacentini", "Piacenza · 29121". Numbers are specific: "24–48h", "€5 di sconto", "Reso entro 14 giorni".
+- **Concrete & local.** Names places and products: "i commercianti della tua via", "Coppa Piacentina DOP", "verde dei colli piacentini", "Piacenza · 29121". Numbers are specific: "30-60 min", "€5 di sconto", "Reso entro 14 giorni".
 - **Sentence case** for almost everything; headlines too. UPPERCASE is reserved for tiny eyebrows and micro-badges ("I PIÙ AMATI", "-30%"), always with wide tracking.
 - **Headlines** are short, declarative, often two-part with a line break and one italic emphasis word in terracotta: "I negozi *veri* di Piacenza, / ora a casa tua." "Ordini dai negozi di Piacenza. / *Paghi alla consegna.*"
 - **Emoji:** essentially **none in product UI** — the codebase explicitly removed status emoji in favour of Lucide icons ("Emoji + Lucide mixati distruggono brand coherence"). Emoji appear only in lightweight marketing surfaces like the promo ticker.

@@ -45,7 +45,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   const storeName = product.profiles?.store_name ?? 'MyCity';
   const img = Array.isArray(product.images) && product.images[0] ? [product.images[0]] : undefined;
   const desc =
-    (product.description ?? `${product.name} su MyCity. Acquisto da ${storeName}, consegna locale 24-48h.`).slice(0, 160);
+    (product.description ?? `${product.name} su MyCity. Acquisto da ${storeName}, consegna locale in 30-60 minuti.`).slice(0, 160);
 
   return {
     title: `${product.name} — ${storeName} a Piacenza · MyCity`,

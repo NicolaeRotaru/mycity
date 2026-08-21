@@ -8,7 +8,7 @@ const [open, setOpen] = React.useState(false);
     <Button variant="secondary" onClick={() => setOpen(false)}>Annulla</Button>
     <Button variant="primary" onClick={() => setOpen(false)}>Conferma</Button>
   </>}>
-  Il rider arriva in 24–48h. Tieni pronti €18,90 in contanti.
+  Il rider arriva in 30-60 minuti. Tieni pronti €18,90 in contanti.
 </Modal>
 ```
 

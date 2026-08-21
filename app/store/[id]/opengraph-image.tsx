@@ -86,7 +86,7 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 22, opacity: 0.9 }}>
-          <span>Acquista locale · consegna in 24-48h · pagamento alla consegna</span>
+          <span>Acquista locale · consegna in 30-60 min · pagamento alla consegna</span>
         </div>
       </div>
     ),

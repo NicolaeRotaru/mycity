@@ -61,7 +61,7 @@ export default function ContactSection({ ctx }: { ctx: SectionContext }) {
             valide per tutti gli ordini su MyCity — consegna locale + pagamento alla consegna. */}
         <span className="inline-flex items-center gap-2.5 text-ink-700">
           <Truck size={16} className="shrink-0 text-olive-600" aria-hidden />
-          Consegna in 24–48h
+          Consegna in 30-60 min
         </span>
         <span className="inline-flex items-center gap-2.5 text-ink-700">
           <Banknote size={16} className="shrink-0 text-olive-600" aria-hidden />

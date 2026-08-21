@@ -276,7 +276,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     ? '—'
     : status === 'OUT_FOR_DELIVERY'
     ? (riderEtaMin != null ? `~${riderEtaMin} min` : 'In arrivo a breve')
-    : 'Oggi se disponibile · 24-48h';
+    : '30-60 min dalla conferma';
   const etaCaption = isDelivered ? 'Stato consegna' : 'Consegna stimata';
 
   // Hint relativo "consegna stimata" da accepted_at/ready_at, quando sensato:

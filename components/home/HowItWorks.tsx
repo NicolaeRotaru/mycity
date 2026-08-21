@@ -42,7 +42,7 @@ const STEPS: Step[] = [
     Icon: Banknote,
     color: 'olive',
     title: 'Ricevi e paghi alla consegna',
-    desc: 'Te lo portiamo a casa in 24-48h. Paghi al rider quando arriva: zero rischi.',
+    desc: 'Te lo portiamo a casa in 30-60 minuti. Paghi al rider quando arriva: zero rischi.',
   },
 ];
 

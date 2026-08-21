@@ -60,12 +60,12 @@ export type Branding = z.infer<typeof brandingSchema>;
 
 export const DEFAULT_WEDGE_ITEMS: { icon: WedgeIconKey; text: string }[] = [
   { icon: 'banknote', text: 'Paghi alla consegna' },
-  { icon: 'zap', text: 'Consegna in 24-48h' },
+  { icon: 'zap', text: 'Consegna in 30-60 min' },
   { icon: 'mappin', text: 'Negozi veri di Piacenza' },
 ];
 
 export const DEFAULT_FOOTER_TAGLINE =
-  'Il marketplace dei negozi di Piacenza. Compra dai commercianti locali, ricevi a casa in 24-48h.';
+  'Il marketplace dei negozi di Piacenza. Compra dai commercianti locali, ricevi a casa in 30-60 minuti.';
 
 export function defaultBranding(): Branding {
   return {
