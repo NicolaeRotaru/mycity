@@ -401,7 +401,7 @@ export default function CheckoutPage() {
 
   // Pagamento: 'cod' = contanti alla consegna (sempre disponibile);
   // 'card' = Stripe Checkout, disponibile solo se la sitewide publishable
-  // key e' configurata su Render (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
+  // key e' configurata in produzione (NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).
   const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
   const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>(stripeAvailable ? 'card' : 'cod');

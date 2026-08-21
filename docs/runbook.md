@@ -140,11 +140,18 @@ torna indietro in **meno di 5**.
 
 **Come si fa (è un clic):**
 
-1. Render → il servizio → scheda **Events**.
-2. Trova l'ultimo rilascio con la spunta verde, quello **prima** di quello rotto.
-3. Bottone **Rollback**. I rilasci di Render sono immutabili: sta ripubblicando
-   esattamente quei file, non ricostruendo niente.
-4. Aspetta il verde e ricontrolla la pagina che era rotta.
+1. Vercel → il progetto **mycity** → scheda **Deployments**.
+2. Trova l'ultimo rilascio marcato **Production** con lo stato *Ready*, quello
+   **prima** di quello rotto.
+3. Menù **⋯** su quella riga → **Instant Rollback** (o *Promote to Production*).
+   I rilasci di Vercel sono immutabili: sta ripuntando il dominio su file che
+   esistono già, non ricostruendo niente. Per questo è veloce.
+4. Aspetta che il dominio mostri quel rilascio e ricontrolla la pagina rotta.
+
+⚠️ Fino al 21/8/2026 questi quattro passi dicevano «Render → Events →
+Rollback». Il sito è su Vercel, quindi quella procedura non avrebbe funzionato
+— e l'avresti scoperto col sito giù e il cronometro che corre. Nicola ha
+confermato di non usare più Render.
 
 **Se il guasto nasce da una migrazione del database, il ritorno del codice NON
 basta.** Il codice vecchio parlerà con un database nuovo, e la rottura resta —
@@ -171,7 +178,7 @@ git pull
 git add -A
 git commit -m "hotfix: <description>"
 git push origin main
-# Render auto-deploy parte in ~2 min
+# Vercel pubblica in ~2 min
 ```
 
 **Sempre**:
@@ -187,7 +194,7 @@ git push origin main
 
 **Diagnosi**:
 1. Vai su cron-job.org → Cronjobs → verifica "Last execution" status
-2. Se 401 → `CRON_SECRET` mismatched. Verifica env Render.
+2. Se 401 → `CRON_SECRET` mismatched. Verifica le variabili d'ambiente su Vercel.
 3. Se 500 → bug nel codice. Sentry dovrebbe averlo catturato.
 4. Se OK ma 0 email inviate → check `email_queue`:
    ```sql
@@ -206,7 +213,7 @@ git push origin main
 **Diagnosi**:
 1. Stripe Dashboard → Developers → Webhooks → verifica endpoint status
 2. Se errori → guarda payload + risposta
-3. Verifica `STRIPE_WEBHOOK_SECRET` su Render env
+3. Verifica `STRIPE_WEBHOOK_SECRET` fra le variabili d'ambiente su Vercel
 4. Tentativi falliti vengono ri-tentati da Stripe per 3gg
 
 **Workaround manuale**:
@@ -267,7 +274,7 @@ git push origin main
 | Evento | Azione |
 |---|---|
 | SOS rider | Apri `/admin/sos`, chiama 112 e numero rider |
-| Sito giù | Verifica UptimeRobot, ping Render support |
+| Sito giù | Verifica UptimeRobot, vercel.com/help |
 | Frode evidente | Sospendi user via SQL (vedi #3) |
 | Buyer arrabbiato (telefonata) | Apri ticket WhatsApp, prometti risposta entro 24h |
 
@@ -277,7 +284,7 @@ git push origin main
 
 | Vendor | Contatto | Urgenza |
 |---|---|---|
-| Render | support.render.com | 24/7 chat |
+| Vercel | vercel.com/help | 24/7 |
 | Supabase | support@supabase.io | 24/7 email |
 | Stripe | dashboard.stripe.com → Help | 24/7 |
 | Cloudflare | dashboard.cloudflare.com → Support | 24/7 |

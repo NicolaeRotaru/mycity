@@ -1,7 +1,8 @@
 name: Backup database
 
 # Perché questo file esiste: lo script scripts/backup-db.sh era scritto bene e
-# non lo eseguiva nessuno. Nessun blocco periodico in render.yaml, nessun lavoro
+# non lo eseguiva nessuno. Nessun blocco periodico nella configurazione di
+# rilascio, nessun lavoro
 # in CI, nessuna voce nell'elenco dei cron: zero backup. E l'unica copia
 # possibile finiva sul disco del contenitore, che si azzera a ogni rilascio.
 #

@@ -93,7 +93,7 @@ export const logger = {
   /**
    * #195 — La spesa. Non e' un messaggio di servizio: e' un numero che deve
    * restare. Prima usciva con `logger.info`, che in produzione e' spento se
-   * LOG_LEVEL non vale 'info' — e infatti non e' impostato in render.yaml.
+   * LOG_LEVEL non vale 'info' — e infatti non e' impostato in produzione.
    * Risultato: quanto costa l'AI in produzione non si vedeva da nessuna parte.
    * Questa esce sempre, come gli avvisi, e resta riconoscibile per grep.
    */
