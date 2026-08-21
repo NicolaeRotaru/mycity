@@ -89,15 +89,35 @@ function buildSchema() {
     }
 
     // --- ALTER TABLE ADD COLUMN ---
-    const alterRe = /alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+add\s+column\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s+([^;,]+)/gi;
+    //
+    // #4 — QUI IL GENERATORE PERDEVA LE COLONNE, E IN SILENZIO.
+    //
+    // La regola di prima leggeva «alter table X add column Y ...» e si
+    // fermava lì: una sola colonna per istruzione. Ma in SQL si scrive
+    // benissimo `alter table orders add column a …, add column b …,
+    // add column c …`, ed è come sono nate le colonne dei soldi nella
+    // migrazione 024: `seller_payout_cents` era la settima della fila, quindi
+    // nei tipi non compariva affatto. Stessa sorte per `kyc_selfie_url`.
+    //
+    // Non dava nessun errore: il file si generava, il test guardava solo i
+    // nomi delle tabelle, e nel frattempo cinque file di codice nominavano una
+    // colonna che secondo i tipi «non esiste». Un buco che non si vede è
+    // peggio di uno che si vede.
+    //
+    // Adesso si prende l'istruzione intera e si cercano dentro TUTTE le
+    // clausole `add column`.
+    const alterStmtRe = /alter\s+table\s+(?:if\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s+([\s\S]*?);/gi;
     let a;
-    while ((a = alterRe.exec(sql)) !== null) {
+    while ((a = alterStmtRe.exec(sql)) !== null) {
       const table = a[1];
-      const colName = a[2];
-      const colDef = a[3];
-      if (!tables[table]) tables[table] = {};
-      const parsed = parseColumnLine(`${colName} ${colDef}`);
-      if (parsed) tables[table][parsed.name] = { tsType: parsed.tsType, nullable: parsed.nullable, hasDefault: parsed.hasDefault };
+      const corpo = a[2];
+      const addColRe = /add\s+column\s+(?:if\s+not\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?\s+([^,]+)/gi;
+      let c;
+      while ((c = addColRe.exec(corpo)) !== null) {
+        if (!tables[table]) tables[table] = {};
+        const parsed = parseColumnLine(`${c[1]} ${c[2]}`);
+        if (parsed) tables[table][parsed.name] = { tsType: parsed.tsType, nullable: parsed.nullable, hasDefault: parsed.hasDefault };
+      }
     }
 
     // --- DROP TABLE --- (riflette le rimozioni: lo schema netto, non solo le create)

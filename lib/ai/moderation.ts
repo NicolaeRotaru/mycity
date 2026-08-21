@@ -4,8 +4,23 @@ import { MODELS } from '@/lib/ai/client';
 import { runMessage } from '@/lib/ai/run';
 
 /**
- * Gate Trust & Safety condiviso (testo + policy prodotto). Da cablare nelle
- * route in PR successive (description, vision, listing create, chat, recensioni).
+ * Gate Trust & Safety condiviso (testo + policy prodotto).
+ *
+ * ⚠️ #5 — QUESTO FILE È RESTATO SPENTO PER MESI, E IL COMMENTO DICEVA IL
+ * CONTRARIO. C'era scritto «da cablare nelle route in PR successive», e quelle
+ * PR non sono mai arrivate: cercando `assertSafeText` e `classifyProductPolicy`
+ * in tutto il progetto si trovavano zero usi fuori da qui. Un filtro che esiste
+ * e non gira, in un'ispezione DSA, è peggio di uno che non c'è: prova che il
+ * rischio era stato riconosciuto.
+ *
+ * Adesso è collegato. Chi passa da dove:
+ *  · `assertSafeText`        → ai/description, ai/product-chat (testo libero)
+ *  · `classifyProductPolicy` → ai/catalog-create, ai/catalog-create-bulk,
+ *                              ai/catalog-apply, vision/extract-product
+ *
+ * Se una rotta nuova accetta testo libero o pubblica una scheda, passa di qui:
+ * la prova in tests/unit/il-filtro-e-collegato.test.ts diventa rossa se
+ * qualcuno stacca uno di questi collegamenti.
  *
  * Esperti senior consultati:
  * - Trust & Safety Lead: "Un solo gate, due ingressi: testo libero e

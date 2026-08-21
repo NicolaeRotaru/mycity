@@ -8,6 +8,7 @@ import { env } from '@/lib/env';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate, refundIssuedTemplate, giftCardRecipientTemplate, giftCardBuyerTemplate } from '@/lib/email/templates';
 import { logger } from '@/lib/logger';
+import { contaAcquisto } from '@/lib/analytics/server';
 
 export const runtime = 'nodejs';
 // Stripe webhook: leggi raw body, niente parsing automatico Next
@@ -528,6 +529,22 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
    * best-effort, e parte senza far aspettare nessuno. Se un'email fallisce si
    * vede nel log, non nel fatto che Stripe smette di parlarci.
    */
+  // #208 — L'acquisto si conta qui, dove il fatto è certo: gli ordini sono
+  // appena stati scritti. Prima partiva solo dal browser, al rientro sulla
+  // pagina ordini: chi chiudeva la scheda dopo aver pagato spariva dai conti.
+  const misure = Promise.all(
+    createdOrderIds.filter((c) => c.nuovo).map((c) =>
+      contaAcquisto({
+        orderId: c.orderId,
+        buyerId,
+        totalCents: c.totalCents,
+        paymentMethod: 'card',
+        sellerId: c.sellerId,
+        checkoutId: pendingCheckoutId,
+      }),
+    ),
+  );
+
   const avvisi = (async () => {
   for (const created of createdOrderIds) {
     // 164 — Solo gli ordini nati adesso. Gli altri le comunicazioni le hanno
@@ -572,6 +589,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   })();
   // Non si aspetta: si registra soltanto se qualcosa va storto.
   void avvisi.catch((e) => logger.warn('[webhook] avvisi post-ordine falliti', { message: e instanceof Error ? e.message : 'errore' }));
+  void misure.catch((e) => logger.warn('[webhook] misura acquisto fallita', { message: e instanceof Error ? e.message : 'errore' }));
 }
 
 /**

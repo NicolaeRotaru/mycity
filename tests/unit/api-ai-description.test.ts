@@ -42,7 +42,14 @@ describe('POST /api/ai/description', () => {
     vi.clearAllMocks();
     __resetRateLimitBuckets();
     vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
-    runMessageMock.mockResolvedValue({ text: 'Una descrizione calda e onesta del prodotto locale.' });
+    // #5 — Da questa rotta passa ora anche il filtro Trust & Safety, che è
+    // una chiamata a parte riconoscibile dal nome (`…-policy`). Qui risponde
+    // «ammesso»: le prove di questo file riguardano la generazione del testo,
+    // non il filtro — quello ha le sue in `il-filtro-e-collegato.test.ts`.
+    runMessageMock.mockImplementation(async (opts: { feature?: string }) => {
+      if (opts?.feature?.endsWith('-policy')) return { toolInput: { allowed: true }, text: '' };
+      return { text: 'Una descrizione calda e onesta del prodotto locale.' };
+    });
   });
 
   it('400 su JSON non valido', async () => {
@@ -66,26 +73,39 @@ describe('POST /api/ai/description', () => {
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.description).toMatch(/descrizione/i);
-    const arg = runMessageMock.mock.calls[0][0];
+    // La prima chiamata ora è il filtro Trust & Safety (#5): quella che
+    // genera il testo è l'altra.
+    const arg = runMessageMock.mock.calls
+      .map((c) => c[0])
+      .find((a: { feature?: string }) => a.feature === 'ai-description');
     expect(arg.model).toBe(MODELS.fast);
     expect(typeof arg.system).toBe('string');
     expect(JSON.stringify(arg.messages)).toContain('Pomodori ciliegino');
   });
 
   it('500 se il modello non restituisce testo', async () => {
-    runMessageMock.mockResolvedValue({ text: '' });
+    runMessageMock.mockImplementation(async (opts: { feature?: string }) => {
+      if (opts?.feature?.endsWith('-policy')) return { toolInput: { allowed: true }, text: '' };
+      return { text: '' };
+    });
     const res = await POST(makeReq({ name: 'Pomodori' }));
     expect(res.status).toBe(500);
   });
 
   it('429 quando runMessage segnala rate limit upstream (AiCallError 429)', async () => {
-    runMessageMock.mockRejectedValue(new AiCallError('ai-description', 429));
+    runMessageMock.mockImplementation(async (opts: { feature?: string }) => {
+      if (opts?.feature?.endsWith('-policy')) return { toolInput: { allowed: true }, text: '' };
+      throw new AiCallError('ai-description', 429);
+    });
     const res = await POST(makeReq({ name: 'Pomodori' }));
     expect(res.status).toBe(429);
   });
 
   it('503 quando la config AI è assente a runtime (AiConfigError)', async () => {
-    runMessageMock.mockRejectedValue(new AiConfigError());
+    runMessageMock.mockImplementation(async (opts: { feature?: string }) => {
+      if (opts?.feature?.endsWith('-policy')) return { toolInput: { allowed: true }, text: '' };
+      throw new AiConfigError();
+    });
     const res = await POST(makeReq({ name: 'Pomodori' }));
     expect(res.status).toBe(503);
   });

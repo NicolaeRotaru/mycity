@@ -58,3 +58,43 @@ describe('Database types (generato da migrations)', () => {
     expect(k).toBe('role');
   });
 });
+
+/**
+ * #4 — IL GENERATORE PERDEVA COLONNE, E PROPRIO QUELLE DEI SOLDI.
+ *
+ * L'istruzione SQL `alter table X add column a …, add column b …` è normale, e
+ * il generatore ne leggeva solo la prima colonna. Nella migrazione 024 le
+ * colonne dei soldi arrivano in fila: `seller_payout_cents` era la settima,
+ * quindi nei tipi non compariva affatto — mentre cinque file di codice la
+ * nominano. Stessa sorte per `kyc_selfie_url`.
+ *
+ * Non dava nessun errore: il file si generava, questo test guardava solo i
+ * nomi delle tabelle, e il buco passava. Ora si controllano anche le colonne,
+ * e sono quelle su cui passano i soldi e i documenti d'identità.
+ */
+describe('il generatore non perde colonne per strada', () => {
+  it('le colonne dei soldi sull ordine ci sono tutte', () => {
+    const ordine: Tables['orders']['Row'] = {} as Tables['orders']['Row'];
+    // Se una di queste manca dai tipi, TypeScript non compila questo file.
+    const _controllo: Array<number | null | undefined> = [
+      ordine.seller_payout_cents,
+      ordine.application_fee_cents,
+      ordine.gross_total_cents,
+      ordine.rider_fee_cents,
+      ordine.delivery_fee_cents,
+      ordine.wallet_applied_cents,
+      ordine.refunded_amount_cents,
+    ];
+    expect(_controllo.length).toBe(7);
+  });
+
+  it('anche i documenti d identità, che nascono dalla stessa istruzione', () => {
+    const profilo: Tables['profiles']['Row'] = {} as Tables['profiles']['Row'];
+    const _controllo: Array<string | null | undefined> = [
+      profilo.kyc_selfie_url,
+      profilo.kyc_id_doc_front_url,
+      profilo.kyc_id_doc_back_url,
+    ];
+    expect(_controllo.length).toBe(3);
+  });
+});

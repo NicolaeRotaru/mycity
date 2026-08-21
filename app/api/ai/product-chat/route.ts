@@ -6,6 +6,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
+import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 
 /**
  * Assistente AI agentico per la scheda prodotto.
@@ -190,6 +191,21 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   while (history.length > 0 && history[0].role !== 'user') history.shift();
   if (history.length === 0 || history[history.length - 1].role !== 'user') {
     return ApiErrors.invalidRequest('Scrivi un messaggio per l\'assistente.');
+  }
+
+  // #5 — Il filtro Trust & Safety c'era, scritto per intero, e non era
+  // collegato a nessuna rotta. Qui passa il testo libero che il venditore
+  // scrive all'assistente: è una delle due porte scoperte. Si controlla
+  // l'ultimo messaggio, quello appena arrivato — la storia è già passata di
+  // qui ai giri precedenti.
+  try {
+    await assertSafeText(history[history.length - 1].content, 'ai-product-chat-policy');
+  } catch (err) {
+    if (err instanceof UnsafeContentError) {
+      return ApiErrors.invalidRequest(`Questo messaggio non si puo' usare: ${err.verdict.reason}`);
+    }
+    if (err instanceof AiCallError) return mapAiError(err, 'ai-product-chat-policy');
+    return ApiErrors.internal('Errore AI.');
   }
 
   const product = body.product && typeof body.product === 'object' ? body.product : {};

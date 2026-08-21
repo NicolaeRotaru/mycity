@@ -21,6 +21,8 @@ const cancellati: Array<{ tabella: string; valore: unknown }> = [];
 // #159 — campanelle e posta partite davvero.
 const campanelle: Array<Record<string, unknown>> = [];
 const postaInviata: Array<Record<string, unknown>> = [];
+// #208 — acquisti contati dal server.
+const acquistiContati: Array<Record<string, unknown>> = [];
 
 /** Fa fallire la riserva della merce a partire da questa chiamata (1-based). */
 let riservaFallisceAllaChiamata = 0;
@@ -78,6 +80,10 @@ vi.mock('@/lib/email/templates', () => ({
 }));
 vi.mock('@/lib/stripe/client', () => ({
   computeOrderSplit: vi.fn(() => ({ applicationFeeCents: 100, sellerPayoutCents: 900 })),
+}));
+vi.mock('@/lib/analytics/server', () => ({
+  contaAcquisto: vi.fn(async (a: Record<string, unknown>) => { acquistiContati.push(a); }),
+  misuraAttiva: () => true,
 }));
 
 vi.mock('@/lib/supabase/server', () => {
@@ -192,6 +198,7 @@ beforeEach(() => {
   cancellati.length = 0;
   campanelle.length = 0;
   postaInviata.length = 0;
+  acquistiContati.length = 0;
   chiamateRiserva = 0;
   riservaFallisceAllaChiamata = 0;
   vi.resetModules();
@@ -251,6 +258,28 @@ describe('ordine in contanti da due negozi', () => {
 
     expect(campanelle.length, 'campanelle di un ordine annullato').toBe(0);
     expect(postaInviata.length, 'email di un ordine annullato').toBe(0);
+  });
+
+  /**
+   * #208 — L'acquisto veniva contato solo se il cliente tornava sulla pagina
+   * ordini. Chi chiudeva la scheda dopo aver pagato aveva un ordine nel
+   * database e nessun acquisto nella misura: il fatturato misurato era più
+   * basso del vero di una quantità che nessuno conosce.
+   */
+  it('conta un acquisto per ogni ordine creato, col negozio vero', async () => {
+    await esegui();
+    expect(acquistiContati.length).toBe(2);
+    expect(acquistiContati.map((a) => a.sellerId)).toEqual([
+      'aaaaaaaa-0000-0000-0000-000000000001',
+      'bbbbbbbb-0000-0000-0000-000000000002',
+    ]);
+    expect(acquistiContati.every((a) => a.paymentMethod === 'cod')).toBe(true);
+  });
+
+  it('un ordine annullato non finisce nei conti', async () => {
+    riservaFallisceAllaChiamata = 2;
+    await esegui();
+    expect(acquistiContati.length).toBe(0);
   });
 
   it('quando va tutto bene gli avvisi partono, uno per negozio', async () => {

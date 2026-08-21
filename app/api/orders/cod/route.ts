@@ -14,6 +14,7 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
+import { contaAcquisto } from '@/lib/analytics/server';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -608,6 +609,22 @@ export const POST = withAuthRateLimit(
         logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
       }
     }
+
+    // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
+    // solo dal browser: chi chiudeva la scheda spariva dai conti, e il
+    // fatturato in PostHog non riconciliava con la tabella degli ordini.
+    void Promise.all(
+      comunicazioni.map((c) =>
+        contaAcquisto({
+          orderId: c.orderId,
+          buyerId: user.id,
+          totalCents: c.totalCents,
+          paymentMethod: 'cod',
+          sellerId: c.sellerId,
+          checkoutId: chiaveTentativo ?? c.orderId,
+        }),
+      ),
+    ).catch(() => { /* già registrato dentro contaAcquisto */ });
 
     // NB: il coupon è già stato claimato atomicamente sopra (claim_coupon, fix #36).
     // Non chiamiamo più increment_coupon_usage qui.
