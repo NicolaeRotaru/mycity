@@ -211,3 +211,54 @@ $migra$;
 
 REVOKE ALL ON FUNCTION public.confirm_pickup_by_seller(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.confirm_pickup_by_seller(uuid, text) TO authenticated;
+
+
+-- ───────────────────────────────────────────────────────────────────────────
+-- ③ IL RIMBORSO SI PUO' DISFARE, SE STRIPE NON L'HA FATTO
+--
+-- `refundOrder` registra il rimborso nel database PRIMA di chiamare Stripe, e
+-- lo fa per una ragione giusta: due percorsi partiti insieme sullo stesso
+-- ordine leggevano entrambi «zero rimborsato» e il denaro usciva due volte.
+-- La rivendicazione prima dei soldi ha chiuso quella corsa.
+--
+-- Ha pero' aperto l'altra porta. Se Stripe rifiuta — carta scaduta, importo
+-- gia' catturato, rete che cade — il database dice «rimborsato» e il cliente
+-- non ha ricevuto niente. Peggio: il tetto dentro `accumula_rimborso` impedisce
+-- di riprovare, perche' quella cifra risulta gia' rimborsata. L'ordine diventa
+-- non rimborsabile da nessuna strada: ne' reso, ne' reclamo, ne' annullamento.
+-- L'unico rimedio era una scrittura a mano nel database.
+--
+-- Questa funzione toglie ESATTAMENTE quello che quella chiamata aveva messo, e
+-- serve solo a quello: si usa nel ramo di errore, subito dopo un rifiuto di
+-- Stripe. Non scende mai sotto zero, cosi' non puo' diventare una strada per
+-- cancellare rimborsi veri.
+-- ───────────────────────────────────────────────────────────────────────────
+CREATE OR REPLACE FUNCTION public.storna_rimborso(p_order_id uuid, p_delta int)
+RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE nuovo int;
+BEGIN
+  IF p_delta <= 0 THEN
+    RAISE EXCEPTION 'storna_rimborso: importo non valido' USING ERRCODE = '22023';
+  END IF;
+
+  UPDATE public.orders o
+     SET refunded_amount_cents = greatest(coalesce(o.refunded_amount_cents, 0) - p_delta, 0)
+   WHERE o.id = p_order_id
+  RETURNING o.refunded_amount_cents INTO nuovo;
+
+  IF nuovo IS NULL THEN
+    RAISE EXCEPTION 'storna_rimborso: ordine inesistente' USING ERRCODE = 'P0002';
+  END IF;
+
+  RETURN nuovo;
+END$$;
+
+COMMENT ON FUNCTION public.storna_rimborso(uuid, int) IS
+  'Disfa la registrazione di un rimborso che Stripe ha rifiutato. Solo il server.';
+
+REVOKE ALL ON FUNCTION public.storna_rimborso(uuid, int) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.storna_rimborso(uuid, int) TO service_role;

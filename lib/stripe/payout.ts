@@ -502,6 +502,51 @@ async function notifyRefundBuyer(
   }
 }
 
+/**
+ * LA QUOTA DEL NEGOZIO SU UN RIMBORSO ANTICIPATO, PER TUTTI E DUE I MODI DI PAGARE.
+ *
+ * Quando si rimborsa un ordine il cui bonifico al negozio NON è ancora partito,
+ * `reverseOrderTransfer` non ha niente da stornare e risponde zero: giusto, il
+ * bonifico non c'è. Ma se ci si ferma lì, al momento del pagamento il negozio
+ * riceve il netto pieno, rimborso compreso, e la differenza la mette MyCity.
+ *
+ * Questa funzione la registra in `seller_payout_reversed_cents`, così il
+ * pagamento successivo versa il residuo, che è quello che al negozio spetta
+ * davvero.
+ *
+ * PERCHÉ È UNA FUNZIONE SOLA (21/8/2026). Questo blocco esisteva solo nel ramo
+ * dei contanti. Il ramo della carta non aveva niente di equivalente, e non è il
+ * caso raro: il bonifico parte un'ora dopo la consegna, mentre resi e reclami
+ * arrivano dopo. Ogni reso pagato con carta prima del bonifico era una perdita
+ * della piattaforma, in silenzio. Con due copie il difetto poteva nascere una
+ * volta sola; con una copia sola non può nascere affatto.
+ *
+ * @returns i centesimi effettivamente addebitati al negozio da questa chiamata.
+ */
+async function addebitaQuotaVenditoreSeNonPagato(
+  admin: ReturnType<typeof getAdminSupabase>,
+  order: { id: string; payout_status?: string | null; seller_payout_cents?: number | null; seller_payout_reversed_cents?: number | null },
+  sellerShare: number,
+  giaStornato: number,
+): Promise<number> {
+  if (giaStornato !== 0 || sellerShare <= 0 || order.payout_status === 'TRANSFERRED') return giaStornato;
+
+  const giaAddebitato = order.seller_payout_reversed_cents ?? 0;
+  const nettoVenditore = order.seller_payout_cents ?? 0;
+  const nuovoAddebito = Math.min(giaAddebitato + sellerShare, nettoVenditore);
+  const { error: errQuota } = await admin
+    .from('orders')
+    .update({ seller_payout_reversed_cents: nuovoAddebito })
+    .eq('id', order.id);
+  if (errQuota) {
+    logger.error('[refundOrder] quota venditore non addebitata', {
+      orderId: order.id, message: errQuota.message,
+    });
+    return giaStornato;
+  }
+  return nuovoAddebito - giaAddebitato;
+}
+
 export async function refundOrder(
   opts: RefundOrderOpts,
 ): Promise<{ refundId: string; reversedCents: number }> {
@@ -581,29 +626,7 @@ export async function refundOrder(
       grossCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet) : 0;
     let { reversedCents } = await reverseOrderTransfer(order, sellerShare);
 
-  // 046 — Se il payout NON è ancora partito, `reverseOrderTransfer` è un no-op:
-  // giusto, non c'è niente da stornare. Ma prima finiva lì, e la quota del
-  // venditore non veniva registrata da nessuna parte: al momento del pagamento
-  // il cron gli versava il netto pieno, rimborso compreso. La perdita restava
-  // alla piattaforma, in silenzio, su ogni rimborso parziale anticipato.
-  // Ora la quota si accumula lo stesso: il pagamento successivo verserà il
-  // residuo, che è quello che gli spetta davvero.
-  if (reversedCents === 0 && sellerShare > 0 && order.payout_status !== 'TRANSFERRED') {
-    const giaAddebitato = order.seller_payout_reversed_cents ?? 0;
-    const nettoVenditore = order.seller_payout_cents ?? 0;
-    const nuovoAddebito = Math.min(giaAddebitato + sellerShare, nettoVenditore);
-    const { error: errQuota } = await admin
-      .from('orders')
-      .update({ seller_payout_reversed_cents: nuovoAddebito })
-      .eq('id', order.id);
-    if (errQuota) {
-      logger.error('[refundOrder] quota venditore non addebitata', {
-        orderId: order.id, message: errQuota.message,
-      });
-    } else {
-      reversedCents = nuovoAddebito - giaAddebitato;
-    }
-  }
+  reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, reversedCents);
 
   // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
   // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
@@ -652,28 +675,60 @@ export async function refundOrder(
 
   // --- Carta: refund reale Stripe + claw-back del transfer se già pagato.
   const stripe = getStripe();
-  const refund = await stripe.refunds.create(
-    {
-      payment_intent: order.stripe_payment_intent,
-      amount: safeAmountCents,
-      metadata: {
-        order_id: order.id,
-        ...(opts.reason ? { reason: opts.reason } : {}),
-        ...(opts.metadata ?? {}),
+  let refund: Stripe.Refund;
+  try {
+    refund = await stripe.refunds.create(
+      {
+        payment_intent: order.stripe_payment_intent,
+        amount: safeAmountCents,
+        metadata: {
+          order_id: order.id,
+          ...(opts.reason ? { reason: opts.reason } : {}),
+          ...(opts.metadata ?? {}),
+        },
       },
-    },
-    // Idempotency-Key: doppio-click su risoluzione dispute/reso NON genera doppio rimborso.
-    // 051 — La chiave portava solo l'importo di QUESTO rimborso: due rimborsi
-    // parziali uguali sullo stesso ordine (due volte 10 €) avevano la stessa
-    // chiave, e il secondo non avveniva. Ora porta il totale cumulato, che è
-    // diverso a ogni passo e uguale a se stesso su un ritentativo.
-    { idempotencyKey: opts.idempotencyKey ?? `refund_${order.id}_tot_${newRefundedTotal}` },
-  );
+      // Idempotency-Key: doppio-click su risoluzione dispute/reso NON genera doppio rimborso.
+      // 051 — La chiave portava solo l'importo di QUESTO rimborso: due rimborsi
+      // parziali uguali sullo stesso ordine (due volte 10 €) avevano la stessa
+      // chiave, e il secondo non avveniva. Ora porta il totale cumulato, che è
+      // diverso a ogni passo e uguale a se stesso su un ritentativo.
+      { idempotencyKey: opts.idempotencyKey ?? `refund_${order.id}_tot_${newRefundedTotal}` },
+    );
+  } catch (err) {
+    // 21/8/2026 — SE STRIPE DICE DI NO, IL DATABASE NON PUÒ DIRE DI SÌ.
+    //
+    // La riga sopra registra il rimborso PRIMA di chiamare Stripe, e lo fa per
+    // una ragione giusta: chiude la corsa in cui due percorsi partiti insieme
+    // fanno uscire il denaro due volte. Ma se Stripe rifiuta — carta scaduta,
+    // rete che cade — restava scritto «rimborsato» su un cliente che non aveva
+    // ricevuto niente. E il tetto dentro `accumula_rimborso` impediva pure di
+    // riprovare: quell'ordine diventava non rimborsabile da nessuna strada.
+    //
+    // Qui si toglie esattamente quello che quella chiamata aveva messo, così
+    // riprovare è possibile. Riprovare è anche sicuro: la chiave di
+    // idempotenza dipende dal totale cumulato, che dopo lo storno torna quello
+    // di prima — se il rimborso a Stripe era passato davvero e a cadere è stata
+    // solo la risposta, il secondo tentativo ritrova quello, non ne crea un altro.
+    const { error: errStorno } = await admin
+      .rpc('storna_rimborso', { p_order_id: order.id, p_delta: safeAmountCents });
+    if (errStorno) {
+      logger.error('[refundOrder] STORNO FALLITO: l ordine resta segnato come rimborsato senza esserlo', {
+        orderId: order.id, centesimi: safeAmountCents, message: errStorno.message,
+      });
+    }
+    throw err;
+  }
   const sellerNet = order.seller_payout_cents ?? 0;
   const sellerShare =
     grossCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet) : 0;
 
-  const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
+  const { reversedCents: stornatoCarta } = await reverseOrderTransfer(order, sellerShare);
+  // 21/8/2026 — QUESTA RIGA NON C'ERA, E LA DIFFERENZA LA METTEVA MYCITY.
+  // Il ramo dei contanti addebitava la quota del negozio anche quando il
+  // bonifico non era ancora partito; il ramo della carta no. E non e' il caso
+  // raro: il bonifico parte un'ora dopo la consegna, mentre resi e reclami
+  // arrivano dopo. Ogni reso pagato con carta era una perdita nostra.
+  const reversedCents = await addebitaQuotaVenditoreSeNonPagato(admin, order, sellerShare, stornatoCarta);
 
   // Rimborso totale: si recupera anche il compenso del fattorino, altrimenti la
   // piattaforma restituisce tutto al cliente e paga la consegna di tasca sua.
