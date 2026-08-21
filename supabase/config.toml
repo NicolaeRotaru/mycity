@@ -1,0 +1,106 @@
+# =============================================================================
+# Supabase locale, per far girare in CI le prove che oggi si saltano da sole
+# =============================================================================
+# A COSA SERVE.
+#
+# Due gruppi di prove chiedono un indirizzo Supabase vero — quelle sui permessi
+# viste da fuori (PostgREST) e quelle che aprono il sito in un browser. Senza,
+# si saltano, e la CI resta verde su cose che non ha provato.
+#
+# La strada scritta sulla carta #139 era comprare un progetto Supabase di prova:
+# 10 dollari al mese, per sempre, piu' tre segreti da tenere su GitHub — fra cui
+# la chiave di servizio, che apre tutto.
+#
+# Questa e' l'altra strada. La CI si avvia un Supabase suo, dentro il runner,
+# che vive quanto il giro e poi sparisce. Non costa niente, non ha segreti da
+# custodire, e nasce vuoto ogni volta: due giri non possono sporcarsi a vicenda.
+#
+# COSA C'E' DENTRO, E COSA NO.
+#
+# Acceso solo cio' che serve: il database, l'API pubblica (PostgREST),
+# l'autenticazione e l'archivio file. Spento il resto — pannello Studio, tempo
+# reale, posta finta, funzioni al bordo, statistiche — perche' ogni pezzo acceso
+# e' un contenitore da scaricare e avviare, e in CI si paga in minuti a ogni
+# giro.
+#
+# ⚠️ L'ARCHIVIO FILE RESTA ACCESO, e la prima versione di questo file diceva il
+# contrario. Ci avevo scritto che lo schema `storage` nasce comunque anche col
+# servizio spento. Non e' vero, e la CI l'ha detto al primo giro:
+#
+#   ✗ 002_categories_and_extras.sql
+#     ERROR:  relation "storage.buckets" does not exist
+#
+# Sette migrazioni nominano quello schema (`002`, `035`, `039` e altre), e chi
+# lo crea e' proprio il servizio che avevo spento. Costa un contenitore in piu'
+# a ogni giro: si paga, perche' l'alternativa e' non applicare le migrazioni.
+#
+# COME SI USA A MANO, sulla propria macchina (serve Docker):
+#   npx supabase start
+#   psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -f migrations/001_*.sql   # e via
+#   npx supabase status          # stampa indirizzo e chiavi locali
+#   npx supabase stop
+#
+# In CI fa tutto il lavoro `.github/workflows/ci.yml`.
+# =============================================================================
+
+project_id = "mycity"
+
+[api]
+enabled = true
+port = 54321
+# Solo lo schema pubblico: le prove guardano quello che vede un estraneo dal
+# browser, ed e' esattamente cio' che PostgREST espone in produzione.
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# La stessa versione della produzione: una prova che gira su un motore diverso
+# da quello vero puo' dire di si' dove il vero direbbe di no.
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+[realtime]
+enabled = false
+
+[studio]
+enabled = false
+
+# La posta finta: serve solo a guardare le email a mano, e in CI non guarda
+# nessuno. Si chiamava [inbucket]: la CLI adesso avvisa che quel nome e' in
+# pensione e vuole questo. Un avviso di oggi e' un errore fra due versioni.
+[local_smtp]
+enabled = false
+
+[storage]
+enabled = true
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# In CI non c'e' nessuno che apre una casella di posta per confermare un
+# indirizzo: senza questo, ogni iscrizione di prova resterebbe in sospeso.
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = false
+enable_confirmations = false
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false

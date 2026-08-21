@@ -8,12 +8,33 @@ name: Rilascio dopo CI verde
 # Questo file è la metà che si può mettere nel repository: rilascia SOLO quando
 # la CI di main è passata.
 #
-# ⚠️ Per farlo diventare l'unica strada servono due cose, entrambe di Nicola:
-#   1. in render.yaml mettere `autoDeploy: false` (una riga)
-#   2. aggiungere il segreto RENDER_DEPLOY_HOOK
-#      (Render → servizio → Settings → Deploy Hook → copia l'indirizzo)
+# ⚠️ IL SITO VERO LO RILASCIA VERCEL, NON RENDER (trovato il 21/8/2026).
 #
-# Finché il segreto manca, questo lavoro si limita a dirlo e non fa nulla: non
+# Questo file, e la carta #141 che lo accompagnava, parlavano solo di Render. Ma
+# guardando i rilasci veri: ogni unione su `main` fa partire subito un rilascio
+# di PRODUZIONE su Vercel, senza aspettare la CI. Le tre unioni del 21 agosto —
+# #230, #231, #232 — hanno fatto esattamente questo, ognuna entro pochi secondi
+# dall'unione.
+#
+# Vuol dire che spegnere `autoDeploy` in render.yaml NON avrebbe chiuso il buco:
+# Vercel avrebbe continuato a pubblicare lo stesso. Il gancio va messo dove passa
+# il sito, e il sito passa da Vercel.
+#
+# ⚠️ Per far diventare questo l'unica strada servono due cose, e vanno fatte in
+# QUESTO ordine — al contrario il sito smette di aggiornarsi e basta:
+#
+#   1. i segreti, su GitHub → Settings → Secrets and variables → Actions:
+#      · VERCEL_TOKEN      (Vercel → Account Settings → Tokens → Create)
+#      · VERCEL_ORG_ID     e  VERCEL_PROJECT_ID
+#        (Vercel → il progetto → Settings → General, in fondo)
+#      · RENDER_DEPLOY_HOOK, solo se il servizio Render e' ancora acceso
+#        (Render → servizio → Settings → Deploy Hook)
+#
+#   2. SOLO DOPO, due parole nel repository:
+#      · in `vercel.json`:  "main": true   diventa   "main": false
+#      · in `render.yaml`:  autoDeploy: true   diventa   autoDeploy: false
+#
+# Finché i segreti mancano, questo lavoro si limita a dirlo e non fa nulla: non
 # blocca niente e non rilascia niente.
 
 on:
@@ -32,8 +53,56 @@ permissions:
   contents: read
 
 jobs:
+  vercel:
+    name: Chiama Vercel (e' qui che vive il sito)
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    timeout-minutes: 15
+    steps:
+      - name: Verifica di avere le chiavi
+        id: chiavi
+        env:
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          ORG: ${{ secrets.VERCEL_ORG_ID }}
+          PROGETTO: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ORG" ] || [ -z "$PROGETTO" ]; then
+            echo "::warning::VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID non configurati: nessun rilascio da qui. Oggi Vercel pubblica da solo a ogni unione su main, SENZA aspettare la CI."
+            echo "pronto=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pronto=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.chiavi.outputs.pronto == 'true'
+        uses: actions/checkout@v4
+        with:
+          # Il commit che la CI ha appena promosso, non la punta di adesso: fra
+          # la fine della CI e questo passo qualcuno puo' aver spinto altro, e
+          # quello non l'ha provato nessuno.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Setup Node
+        if: steps.chiavi.outputs.pronto == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Rilascia in produzione
+        if: steps.chiavi.outputs.pronto == 'true'
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx --yes vercel@latest pull --yes --environment=production --token="$TOKEN"
+          npx --yes vercel@latest build --prod --token="$TOKEN"
+          npx --yes vercel@latest deploy --prebuilt --prod --token="$TOKEN"
+
   rilascia:
-    name: Chiama Render
+    name: Chiama Render (solo se il servizio e' ancora acceso)
     runs-on: ubuntu-latest
     # Solo su CI passata. `workflow_dispatch` non porta conclusion: si accetta.
     if: >-
