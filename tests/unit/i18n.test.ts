@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { resolveLocale, SUPPORTED_LOCALES, DEFAULT_LOCALE } from '@/i18n';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { resolveLocale, SUPPORTED_LOCALES, DEFAULT_LOCALE, RILEVAMENTO_LINGUA_ATTIVO } from '@/i18n';
 
 describe('SUPPORTED_LOCALES', () => {
   it('includes it and en', () => {
@@ -69,5 +71,38 @@ describe('messages JSON', () => {
   it('en.json actions.save returns Save', async () => {
     const en = (await import('@/messages/en.json')).default;
     expect(en.actions.save).toBe('Save');
+  });
+});
+
+/**
+ * #7 e #83 — LA LINGUA NON SI LEGGE PIÙ A OGNI RENDER, ED È UNA SCELTA.
+ *
+ * Due danni in una riga sola. Un visitatore col browser in inglese riceveva
+ * una pagina marcata `lang="en"` con dentro il 92% di testo italiano. E
+ * leggere cookie e intestazioni nel guscio comune rendeva dinamica OGNI rotta
+ * del sito: 2 pagine statiche su 203, anche /privacy e /terms che non cambiano
+ * mai. Dopo la riparazione sono 96.
+ *
+ * `resolveLocale` resta com'era — è la regola che riuseremo il giorno in cui
+ * la traduzione sarà completa — ma oggi il render non la chiama.
+ */
+describe('il rilevamento della lingua è spento finché la traduzione è a metà', () => {
+  it('è dichiarato spento, non spento per caso', () => {
+    expect(RILEVAMENTO_LINGUA_ATTIVO).toBe(false);
+  });
+
+  it('il guscio comune non legge più cookie né intestazioni', () => {
+    const sorgente = readFileSync(join(process.cwd(), 'i18n.ts'), 'utf8');
+    // Sono queste due letture a rendere dinamica ogni pagina del sito.
+    expect(sorgente).not.toContain("from 'next/headers'");
+    expect(sorgente).not.toMatch(/await cookies\(\)/);
+    expect(sorgente).not.toMatch(/await headers\(\)/);
+  });
+
+  it('il selettore di lingua non è esposto: sceglierla non cambierebbe niente', () => {
+    const footer = readFileSync(join(process.cwd(), 'components/Footer.tsx'), 'utf8');
+    // Il nome compare in un commento che spiega la scelta: quello che conta è
+    // che il componente non sia importato, cioè non finisca nella pagina.
+    expect(footer).not.toMatch(/^import .*LocaleSwitcher/m);
   });
 });

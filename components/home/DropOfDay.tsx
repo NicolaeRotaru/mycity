@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Drop = {
   id: string;
@@ -158,7 +159,7 @@ export default function DropOfDay() {
               alt={drop.product.name}
               fill
               sizes="(min-width: 768px) 400px, 100vw"
-              unoptimized
+              loader={caricatoreFotoRemote}
               className="object-cover"
             />
             <div className="absolute top-4 left-4 bg-accent-500 text-ink-900 px-3 py-1 rounded-full text-sm font-bold">

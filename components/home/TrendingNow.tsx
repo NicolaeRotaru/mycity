@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Trending = {
   product_id: string;
@@ -134,7 +135,7 @@ export default function TrendingNow() {
                     alt={p.name}
                     fill
                     sizes="(min-width: 1024px) 16vw, (min-width: 640px) 25vw, 33vw"
-                    unoptimized
+                    loader={caricatoreFotoRemote}
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (

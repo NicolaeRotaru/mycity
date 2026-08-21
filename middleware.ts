@@ -54,6 +54,103 @@ function findRoleRule(pathname: string) {
   return ROLE_PROTECTED.find((r) => pathname.startsWith(r.prefix));
 }
 
+/**
+ * 086 — C'È UNA SESSIONE, O È UN VISITATORE QUALUNQUE?
+ *
+ * La sessione Supabase vive nei cookie: si chiamano `sb-<progetto>-auth-token`
+ * (a volte spezzati in `.0`, `.1` quando sono lunghi). Se non ce n'è nessuno,
+ * non c'è niente da verificare — e si può uscire senza nemmeno costruire il
+ * client Supabase.
+ *
+ * Perché conta: la scorciatoia scritta poco più sotto («la maggior parte del
+ * traffico pubblico esce subito») non scattava mai sul catalogo, perché il
+ * gate dei venditori si applica proprio a tutte le pagine che contano — home,
+ * prodotto, negozio, carrello, ricerca. Quindi per ogni visitatore, crawler
+ * compreso, si costruiva un client Supabase per niente.
+ */
+function haCookieDiSessione(req: NextRequest): boolean {
+  for (const c of req.cookies.getAll()) {
+    if (c.name.startsWith('sb-') && c.name.includes('-auth-token')) return true;
+  }
+  return false;
+}
+
+/**
+ * 086 — RUOLO E APPROVAZIONE, RILETTI UNA VOLTA OGNI DIECI MINUTI.
+ *
+ * Per chi ha fatto l'accesso partivano DUE attese di rete infilate davanti a
+ * ogni pagina: la verifica del token (che va davvero a chiedere a Supabase) e
+ * subito dopo una SELECT su `profiles`. Su ogni passaggio di pagina, home
+ * compresa. Ed è la persona che compra: quella che aspetta di più è quella
+ * che ci porta i soldi.
+ *
+ * Il ruolo si mette quindi in un cookie firmato che dura dieci minuti. Firmato
+ * e non semplice, perché un cookie che il browser può riscrivere non è una
+ * fonte su cui decidere.
+ *
+ * ⚠️ IL LIMITE, DICHIARATO: questa scorciatoia vale SOLO per il gate dei
+ * venditori sul catalogo. Le aree protette — /admin, /seller, /rider —
+ * rileggono sempre il profilo vero, perché su quelle un ruolo vecchio di
+ * dieci minuti vorrebbe dire lasciare dentro qualcuno che è appena stato
+ * tolto. Comodità sul catalogo, verità sui permessi.
+ */
+const RUOLO_COOKIE = 'mc_ruolo';
+const RUOLO_COOKIE_MAX_AGE = 10 * 60;
+
+function segretoRuolo(): string | null {
+  return process.env.MIDDLEWARE_CACHE_SECRET || process.env.UNSUBSCRIBE_SECRET || null;
+}
+
+async function firmaRuolo(dato: string, segreto: string): Promise<string> {
+  const chiave = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(segreto),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const firma = await crypto.subtle.sign('HMAC', chiave, new TextEncoder().encode(dato));
+  return btoa(String.fromCharCode(...new Uint8Array(firma)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+type ProfiloInCache = { role: string | undefined; approved: boolean };
+
+async function leggiRuoloDalCookie(
+  req: NextRequest,
+  userId: string,
+): Promise<ProfiloInCache | null> {
+  const segreto = segretoRuolo();
+  if (!segreto) return null;
+  const grezzo = req.cookies.get(RUOLO_COOKIE)?.value;
+  if (!grezzo) return null;
+  const [dato, firma] = grezzo.split('.');
+  if (!dato || !firma) return null;
+  // Il dato porta dentro l'id della persona: un cookie di qualcun altro non vale.
+  const [id, ruolo, approvato] = dato.split('|');
+  if (id !== userId) return null;
+  if ((await firmaRuolo(dato, segreto)) !== firma) return null;
+  return { role: ruolo || undefined, approved: approvato === '1' };
+}
+
+async function scriviRuoloNelCookie(
+  res: NextResponse,
+  userId: string,
+  profilo: ProfiloInCache,
+): Promise<void> {
+  const segreto = segretoRuolo();
+  if (!segreto) return;
+  const dato = `${userId}|${profilo.role ?? ''}|${profilo.approved ? '1' : '0'}`;
+  res.cookies.set({
+    name: RUOLO_COOKIE,
+    value: `${dato}.${await firmaRuolo(dato, segreto)}`,
+    maxAge: RUOLO_COOKIE_MAX_AGE,
+    path: '/',
+    sameSite: 'lax',
+    httpOnly: true,
+  });
+}
+
 function getSupabaseHost(): string {
   try {
     return SUPABASE_URL ? new URL(SUPABASE_URL).host : '*.supabase.co';
@@ -178,6 +275,21 @@ export async function middleware(req: NextRequest) {
   // Eccezione: venditori loggati sul catalogo → gate modalità acquisto.
   if (!needsAuth && !needsSellerGate) return res;
 
+  // 086 — Senza cookie di sessione non c'è niente da verificare: non si
+  // costruisce nemmeno il client Supabase. È il caso di ogni visitatore
+  // anonimo e di ogni crawler, cioè della maggior parte del traffico sul
+  // catalogo — dove la scorciatoia qui sopra non scatta mai, perché il gate
+  // dei venditori copre tutte le pagine che contano.
+  if (!haCookieDiSessione(req)) {
+    if (!needsAuth) return res;
+    const url = req.nextUrl.clone();
+    url.pathname = '/sign-in';
+    url.searchParams.set('returnTo', pathname);
+    const r = NextResponse.redirect(url);
+    r.headers.set('Content-Security-Policy', csp);
+    return r;
+  }
+
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     // Fail-closed: se mancano le env Supabase, blocca le rotte protette invece di lasciarle passare.
     if (needsAuth) {
@@ -232,15 +344,28 @@ export async function middleware(req: NextRequest) {
     return withCsp(NextResponse.redirect(url));
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, is_approved')
-    .eq('id', user.id)
-    .single();
-
   type ProfileRole = 'buyer' | 'seller' | 'rider' | 'admin';
-  const role = profile?.role as ProfileRole | undefined;
-  const approved = !!profile?.is_approved;
+
+  // 086 — Sulle aree protette il profilo si rilegge SEMPRE: un ruolo vecchio
+  // di dieci minuti lascerebbe dentro qualcuno appena tolto. Sul catalogo
+  // invece basta sapere se è un venditore, e quello può aspettare.
+  let profilo = roleRule ? null : await leggiRuoloDalCookie(req, user.id);
+  let daSalvare = false;
+  if (!profilo) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, is_approved')
+      .eq('id', user.id)
+      .single();
+    profilo = {
+      role: profile?.role as ProfileRole | undefined,
+      approved: !!profile?.is_approved,
+    };
+    daSalvare = true;
+  }
+  const role = profilo.role as ProfileRole | undefined;
+  const approved = profilo.approved;
+  if (daSalvare) await scriviRuoloNelCookie(res, user.id, profilo);
 
   // Entrata modalità acquisto venditore (?shop=1 dal pulsante SellerShell).
   if (role === 'seller' && req.nextUrl.searchParams.get(SHOPPING_MODE_QUERY) === '1') {

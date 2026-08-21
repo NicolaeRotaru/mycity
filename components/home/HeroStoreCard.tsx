@@ -11,6 +11,7 @@ import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 type StoreMediaItem = { type: 'image' | 'video'; url: string };
 type Store = {
@@ -124,7 +125,7 @@ export default function HeroStoreCard() {
               pill "Aperto ora / Chiuso" sovrapposta in alto a sinistra. */}
           <div className="relative h-44 w-full overflow-hidden">
             {cover ? (
-              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="(max-width: 768px) 100vw, 384px" unoptimized className="object-cover" />
+              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="(max-width: 768px) 100vw, 384px" loader={caricatoreFotoRemote} className="object-cover" />
             ) : (
               <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600">
                 <span className="absolute inset-0 flex items-center justify-center text-white/40">
@@ -185,7 +186,7 @@ export default function HeroStoreCard() {
                     return (
                       <div key={p.id} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
                         <div className="aspect-square rounded mb-1.5 overflow-hidden bg-gradient-to-br from-accent-100 to-primary-100 relative">
-                          {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" unoptimized className="object-cover" />}
+                          {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" loader={caricatoreFotoRemote} className="object-cover" />}
                         </div>
                         <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
                         <p className="text-xs font-semibold text-ink-900">{formatPrice(Number(p.price))}</p>

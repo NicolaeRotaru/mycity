@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Item = {
   id: string;
@@ -111,7 +112,7 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro
                     alt={p.name}
                     fill
                     sizes="(min-width: 768px) 160px, 50vw"
-                    unoptimized
+                    loader={caricatoreFotoRemote}
                     className="object-cover"
                   />
                 )}

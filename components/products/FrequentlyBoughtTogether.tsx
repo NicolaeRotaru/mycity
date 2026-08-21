@@ -11,6 +11,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 /**
  * "Spesso comprati insieme" — cross-sell della PDP.
@@ -100,7 +101,7 @@ export function FrequentlyBoughtTogether({
                     alt={p.name}
                     fill
                     sizes="(min-width: 1024px) 220px, 45vw"
-                    unoptimized
+                    loader={caricatoreFotoRemote}
                     className="object-cover"
                   />
                 )}

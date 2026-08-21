@@ -48,6 +48,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { trackReviewSubmitted } from '@/lib/analytics/events';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -498,7 +499,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     fill
                     priority={i === 0}
                     sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw"
-                    unoptimized
+                    loader={caricatoreFotoRemote}
                     className="object-cover"
                   />
                   <button
@@ -556,7 +557,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     activeImg === i ? 'border-primary-600' : 'border-transparent hover:border-surface-300'
                   }`}
                 >
-                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-cover" />
+                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" loader={caricatoreFotoRemote} className="object-cover" />
                 </button>
               ))}
             </div>

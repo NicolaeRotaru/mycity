@@ -90,22 +90,32 @@ test.describe('Locale switching i18n', () => {
     expect(r.status()).toBe(400);
   });
 
-  test('LocaleSwitcher è presente in Footer', async ({ page }) => {
+  // #7 — Questi due controlli pretendevano il contrario di una scelta presa
+  // apposta, e non fallivano solo perché il giro end-to-end in CI si
+  // auto-salta quando mancano i segreti del Supabase di prova. Il giorno in
+  // cui quei segreti si configurano, la CI diventava rossa su una cosa giusta.
+  //
+  // La scelta: il selettore di lingua è tolto dal footer finché la traduzione
+  // non è completa (29 file su 347), e la pagina si dichiara italiana perché
+  // il contenuto è italiano. Si riaccendono insieme, cambiando
+  // RILEVAMENTO_LINGUA_ATTIVO in i18n.ts.
+  test.skip('LocaleSwitcher è presente in Footer', async ({ page }) => {
     await page.goto('/');
-    // Footer ha il toggle con icona Globe + label 'EN' (default it → next è en)
     const footer = page.locator('footer');
     await expect(footer).toBeVisible();
     const switcher = footer.locator('button[aria-label*="English"], button[aria-label*="italiano"]').first();
     await expect(switcher).toBeVisible();
   });
 
-  test('Accept-Language header risolve a en se cookie missing', async ({ request }) => {
-    // Cookie clearer + Accept-Language en
+  test('la pagina si dichiara italiana anche a un browser inglese', async ({ request }) => {
+    // Il contenuto è italiano al 92%: marcarla `lang="en"` faceva provare ai
+    // lettori per non vedenti a pronunciare l'italiano con la fonetica
+    // inglese, e a Google indicizzare come inglese una pagina italiana.
     const r = await request.get('/', {
       headers: { 'accept-language': 'en-US,en;q=0.9' },
     });
     expect(r.status()).toBe(200);
     const body = await r.text();
-    expect(body).toMatch(/<html[^>]+lang="en"/);
+    expect(body).toMatch(/<html[^>]+lang="it"/);
   });
 });
