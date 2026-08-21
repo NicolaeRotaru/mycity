@@ -4,6 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
+import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 
 /**
  * Logica condivisa di payout / reversal / refund per il modello SCT
@@ -62,13 +63,17 @@ export type PayoutResult =
  */
 export async function releaseOrderPayout(orderId: string): Promise<PayoutResult> {
   const admin = getAdminSupabase();
-  const { data: order, error } = await admin
-    .from('orders')
-    // 046 — serve anche quanto è già stato addebitato al venditore: il payout
-    // deve versare il residuo, non il netto pieno.
-    .select('id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, stripe_charge_id, stripe_transfer_group, delivery_status')
-    .eq('id', orderId)
-    .single();
+  // 046 — serve anche quanto è già stato addebitato al venditore: il payout
+  // deve versare il residuo, non il netto pieno.
+  // Il ripiego copre la finestra fra l'unione del codice e la firma sulla
+  // migrazione 124: senza, una `select` che nomina una colonna inesistente
+  // fallisce e nessun pagamento partirebbe (lib/db/migrazione-124.ts).
+  const COLONNE_PAYOUT = 'id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, stripe_charge_id, stripe_transfer_group, delivery_status';
+  const { data: order, error } = await conRipiegoSchema(
+    'orders.select (payout venditore)',
+    () => admin.from('orders').select(COLONNE_PAYOUT).eq('id', orderId).single(),
+    () => admin.from('orders').select(senzaColonne(COLONNE_PAYOUT, COLONNE_124)).eq('id', orderId).single(),
+  );
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
   if (order.delivery_status !== 'DELIVERED') {
@@ -195,11 +200,12 @@ export const FILTRO_RIDER_RITENTABILI =
 
 export async function releaseRiderPayout(orderId: string): Promise<PayoutResult> {
   const admin = getAdminSupabase();
-  const { data: order, error } = await admin
-    .from('orders')
-    .select('id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, rider_payout_tentativo, stripe_charge_id, stripe_transfer_group')
-    .eq('id', orderId)
-    .single();
+  const COLONNE_RIDER = 'id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, rider_payout_tentativo, stripe_charge_id, stripe_transfer_group';
+  const { data: order, error } = await conRipiegoSchema(
+    'orders.select (compenso fattorino)',
+    () => admin.from('orders').select(COLONNE_RIDER).eq('id', orderId).single(),
+    () => admin.from('orders').select(senzaColonne(COLONNE_RIDER, COLONNE_124)).eq('id', orderId).single(),
+  );
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
   if (order.delivery_status !== 'DELIVERED') return { ok: false, code: 'NOT_DELIVERED', reason: 'Ordine non consegnato' };
@@ -500,11 +506,12 @@ export async function refundOrder(
   opts: RefundOrderOpts,
 ): Promise<{ refundId: string; reversedCents: number }> {
   const admin = getAdminSupabase();
-  const { data: order, error } = await admin
-    .from('orders')
-    .select('id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status')
-    .eq('id', opts.orderId)
-    .single();
+  const COLONNE_RIMBORSO = 'id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status';
+  const { data: order, error } = await conRipiegoSchema(
+    'orders.select (rimborso)',
+    () => admin.from('orders').select(COLONNE_RIMBORSO).eq('id', opts.orderId).single(),
+    () => admin.from('orders').select(senzaColonne(COLONNE_RIMBORSO, COLONNE_124)).eq('id', opts.orderId).single(),
+  );
 
   if (error || !order) throw new Error('refundOrder: ordine non trovato');
 

@@ -22,6 +22,7 @@ import { reverseOrderTransfer, reverseRiderTransfer } from '@/lib/stripe/payout'
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
+import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { notifyAdmins } from './comune';
 
@@ -200,11 +201,16 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
     return;
   }
 
-  const { data: order } = await admin
-    .from('orders')
-    .select('id, refunded_amount_cents, gross_total_cents, total_price, payment_status')
-    .eq('stripe_payment_intent', paymentIntent)
-    .maybeSingle();
+  // Prima che la migrazione 124 sia applicata, `gross_total_cents` non esiste e
+  // il database rifiuta la lettura INTERA: l'ordine risultava «non trovato», il
+  // rimborso rifiutato dalla banca non veniva registrato e nessuno avvisava
+  // l'admin. I soldi restavano fermi in silenzio (lib/db/migrazione-124.ts).
+  const COLONNE_RIMBORSO_FALLITO = 'id, refunded_amount_cents, gross_total_cents, total_price, payment_status';
+  const { data: order } = await conRipiegoSchema(
+    'orders.select (rimborso rifiutato)',
+    () => admin.from('orders').select(COLONNE_RIMBORSO_FALLITO).eq('stripe_payment_intent', paymentIntent).maybeSingle(),
+    () => admin.from('orders').select(senzaColonne(COLONNE_RIMBORSO_FALLITO, COLONNE_124)).eq('stripe_payment_intent', paymentIntent).maybeSingle(),
+  );
   if (!order) {
     logger.warn('[stripe] rimborso fallito: nessun ordine trovato', { refundId: refund.id, paymentIntent });
     return;

@@ -24,6 +24,7 @@ import { logger } from '@/lib/logger';
 import { contaAcquisto } from '@/lib/analytics/server';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { notifyAdmins, sessionePagata } from './comune';
+import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 
 export type PendingGroup = {
   sellerId: string;
@@ -240,48 +241,53 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       shippingCents: g.shippingCents,
     });
 
-    const { data: order, error: orderErr } = await admin
-      .from('orders')
-      .insert({
-        user_id: buyerId,
-        seller_id: g.sellerId,
-        total_price: g.totalCents / 100,
-        // 055 — Con la carta non c'e' credito MyCity da scomputare, quindi il
-        // lordo e il netto coincidono. Si scrive lo stesso, perche' il
-        // rimborso divide sempre per questa colonna e non deve chiedersi da
-        // quale strada e' arrivato l'ordine.
-        gross_total_cents: g.totalCents,
-        shipping_cost: g.shippingCents / 100,
-        delivery_fee_cents: deliveryFeeCents,
-        // Compenso del fattorino: dipende dalla distanza, non da quanto ha
-        // pagato il cliente (vedi commento in lib/shipping.ts).
-        rider_fee_cents: g.riderFeeCents ?? null,
-        discount_amount: (g.couponPortionCents + g.pickupPortionCents) / 100,
-        coupon_code: couponCode,
-        pickup_in_store: pickupInStore,
-        // Fascia di consegna scelta dal buyer (dal pending_checkout.delivery.slot).
-        delivery_slot: pickupInStore ? null : (delivery.slot ?? null),
-        payment_status: 'PAID',
-        payment_method: 'card',
-        delivery_status: 'NEW',
-        stripe_session_id: session.id,
-        stripe_payment_intent: paymentIntent,
-        stripe_charge_id: stripeChargeId,
-        stripe_transfer_group: transferGroup,
-        application_fee_cents: feeCents,
-        seller_payout_cents: payoutCents,
-        payout_status: 'HELD',
-        delivery_full_name: delivery.full_name,
-        delivery_phone: delivery.phone,
-        delivery_address: delivery.address,
-        delivery_city: delivery.city,
-        delivery_zip: delivery.zip,
-        delivery_notes: delivery.notes,
-        delivery_lat: delivery.lat,
-        delivery_lng: delivery.lng,
-      })
-      .select('id')
-      .single();
+    // Come nella rotta contanti: se la migrazione 124 non è ancora applicata,
+    // l'inserimento si ripete senza i campi nuovi invece di far fallire
+    // l'ordine (lib/db/migrazione-124.ts).
+    const rigaOrdine = {
+      user_id: buyerId,
+      seller_id: g.sellerId,
+      total_price: g.totalCents / 100,
+      // 055 — Con la carta non c'e' credito MyCity da scomputare, quindi il
+      // lordo e il netto coincidono. Si scrive lo stesso, perche' il
+      // rimborso divide sempre per questa colonna e non deve chiedersi da
+      // quale strada e' arrivato l'ordine.
+      gross_total_cents: g.totalCents,
+      shipping_cost: g.shippingCents / 100,
+      delivery_fee_cents: deliveryFeeCents,
+      // Compenso del fattorino: dipende dalla distanza, non da quanto ha
+      // pagato il cliente (vedi commento in lib/shipping.ts).
+      rider_fee_cents: g.riderFeeCents ?? null,
+      discount_amount: (g.couponPortionCents + g.pickupPortionCents) / 100,
+      coupon_code: couponCode,
+      pickup_in_store: pickupInStore,
+      // Fascia di consegna scelta dal buyer (dal pending_checkout.delivery.slot).
+      delivery_slot: pickupInStore ? null : (delivery.slot ?? null),
+      payment_status: 'PAID',
+      payment_method: 'card',
+      delivery_status: 'NEW',
+      stripe_session_id: session.id,
+      stripe_payment_intent: paymentIntent,
+      stripe_charge_id: stripeChargeId,
+      stripe_transfer_group: transferGroup,
+      application_fee_cents: feeCents,
+      seller_payout_cents: payoutCents,
+      payout_status: 'HELD',
+      delivery_full_name: delivery.full_name,
+      delivery_phone: delivery.phone,
+      delivery_address: delivery.address,
+      delivery_city: delivery.city,
+      delivery_zip: delivery.zip,
+      delivery_notes: delivery.notes,
+      delivery_lat: delivery.lat,
+      delivery_lng: delivery.lng,
+    };
+
+    const { data: order, error: orderErr } = await conRipiegoSchema(
+      'orders.insert (carta)',
+      () => admin.from('orders').insert(rigaOrdine).select('id').single(),
+      () => admin.from('orders').insert(senzaCampi(rigaOrdine, CAMPI_124)).select('id').single(),
+    );
 
     // Idempotenza order-level: unique (stripe_session_id, seller_id).
     // Se la riga esiste già (es. webhook ri-eseguito), skip silenzioso.

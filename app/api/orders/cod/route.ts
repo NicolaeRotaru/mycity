@@ -15,6 +15,7 @@ import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { contaAcquisto } from '@/lib/analytics/server';
+import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -425,60 +426,67 @@ export const POST = withAuthRateLimit(
         shippingCents: shipping,
       });
 
-      const { data: order, error: orderErr } = await admin
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          seller_id: g.sellerId,
-          total_price: totalCents / 100,
-          // 055 — Il lordo di vendita, scritto accanto al netto.
-          // `total_price` e' la cassa che il fattorino deve riportare: il
-          // totale DOPO lo scomputo del credito MyCity. Ma la quota del
-          // negozio (`seller_payout_cents`) nasce sul LORDO. Il rimborso
-          // usava il primo come denominatore e la seconda come numeratore:
-          // su un ordine da 50 euro pagato con 20 di credito recuperava dal
-          // negozio il 67% in piu' del dovuto. Ora il lordo resta scritto.
-          gross_total_cents: grossTotalCents,
-          shipping_cost: shipping / 100,
-          delivery_fee_cents: deliveryFeeCents,
-          // Il compenso del fattorino, scritto alla creazione dell'ordine e
-          // scollegato da quanto ha pagato il cliente. Prima questa colonna non
-          // veniva popolata da nessuna parte, quindi al momento del pagamento si
-          // ricadeva sul prezzo di spedizione — che sopra i 30 euro e' zero:
-          // il fattorino consegnava gratis. Ora e' una cifra fissa e la distanza
-          // non c'entra piu': la fee di consegna la copre da sola.
-          rider_fee_cents: compensoRiderCents({ pickupInStore: body.pickupInStore }),
-          application_fee_cents: codFeeCents,
-          seller_payout_cents: codSellerPayoutCents,
-          // In attesa della rimessa contanti del rider (un admin la conferma →
-          // confirm_cod_remittance → 'HELD' → payout venditore in slice 3).
-          payout_status: 'AWAITING_REMITTANCE',
-          discount_amount: discountCents / 100,
-          wallet_applied_cents: walletAppliedCents,
-          coupon_code: validatedCouponCode,
-          pickup_in_store: body.pickupInStore,
-          // Fascia di consegna scelta dal buyer (null per ritiro / non scelta).
-          delivery_slot: body.pickupInStore ? null : (body.deliverySlot ?? null),
-          payment_method: 'cod',
-          payment_status: 'PENDING',
-          delivery_status: 'NEW',
-          delivery_full_name: body.delivery.fullName,
-          delivery_phone: body.delivery.phone,
-          delivery_address: body.delivery.address,
-          delivery_city: body.delivery.city,
-          delivery_zip: body.delivery.zip,
-          delivery_notes: body.delivery.notes ?? null,
-          // #162 — Mai le coordinate mandate dal browser come ripiego. Erano
-          // quelle di un indirizzo salvato, che pero' la persona puo' aver
-          // corretto a mano un attimo prima: il testo dice una via e il punto
-          // sulla mappa ne indica un'altra, e il fattorino va dove dice il
-          // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
-          // coordinata che contraddice l'indirizzo scritto.
-          delivery_lat: coordConsegna?.lat ?? null,
-          delivery_lng: coordConsegna?.lng ?? null,
-        })
-        .select('id')
-        .single();
+      // La riga dell'ordine, con dentro i campi che nascono con la migrazione
+      // 124. Se quella non è ancora applicata al database, l'inserimento si
+      // ripete senza — vedi lib/db/migrazione-124.ts: PostgreSQL non ignora
+      // una colonna che non conosce, fa fallire l'istruzione intera, e senza
+      // ripiego non nascerebbe nessun ordine fino alla firma sul database.
+      const rigaOrdine = {
+        user_id: user.id,
+        seller_id: g.sellerId,
+        total_price: totalCents / 100,
+        // 055 — Il lordo di vendita, scritto accanto al netto.
+        // `total_price` e' la cassa che il fattorino deve riportare: il
+        // totale DOPO lo scomputo del credito MyCity. Ma la quota del
+        // negozio (`seller_payout_cents`) nasce sul LORDO. Il rimborso
+        // usava il primo come denominatore e la seconda come numeratore:
+        // su un ordine da 50 euro pagato con 20 di credito recuperava dal
+        // negozio il 67% in piu' del dovuto. Ora il lordo resta scritto.
+        gross_total_cents: grossTotalCents,
+        shipping_cost: shipping / 100,
+        delivery_fee_cents: deliveryFeeCents,
+        // Il compenso del fattorino, scritto alla creazione dell'ordine e
+        // scollegato da quanto ha pagato il cliente. Prima questa colonna non
+        // veniva popolata da nessuna parte, quindi al momento del pagamento si
+        // ricadeva sul prezzo di spedizione — che sopra i 30 euro e' zero:
+        // il fattorino consegnava gratis. Ora e' una cifra fissa e la distanza
+        // non c'entra piu': la fee di consegna la copre da sola.
+        rider_fee_cents: compensoRiderCents({ pickupInStore: body.pickupInStore }),
+        application_fee_cents: codFeeCents,
+        seller_payout_cents: codSellerPayoutCents,
+        // In attesa della rimessa contanti del rider (un admin la conferma →
+        // confirm_cod_remittance → 'HELD' → payout venditore in slice 3).
+        payout_status: 'AWAITING_REMITTANCE',
+        discount_amount: discountCents / 100,
+        wallet_applied_cents: walletAppliedCents,
+        coupon_code: validatedCouponCode,
+        pickup_in_store: body.pickupInStore,
+        // Fascia di consegna scelta dal buyer (null per ritiro / non scelta).
+        delivery_slot: body.pickupInStore ? null : (body.deliverySlot ?? null),
+        payment_method: 'cod',
+        payment_status: 'PENDING',
+        delivery_status: 'NEW',
+        delivery_full_name: body.delivery.fullName,
+        delivery_phone: body.delivery.phone,
+        delivery_address: body.delivery.address,
+        delivery_city: body.delivery.city,
+        delivery_zip: body.delivery.zip,
+        delivery_notes: body.delivery.notes ?? null,
+        // #162 — Mai le coordinate mandate dal browser come ripiego. Erano
+        // quelle di un indirizzo salvato, che pero' la persona puo' aver
+        // corretto a mano un attimo prima: il testo dice una via e il punto
+        // sulla mappa ne indica un'altra, e il fattorino va dove dice il
+        // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
+        // coordinata che contraddice l'indirizzo scritto.
+        delivery_lat: coordConsegna?.lat ?? null,
+        delivery_lng: coordConsegna?.lng ?? null,
+      };
+
+      const { data: order, error: orderErr } = await conRipiegoSchema(
+        'orders.insert (cod)',
+        () => admin.from('orders').insert(rigaOrdine).select('id').single(),
+        () => admin.from('orders').insert(senzaCampi(rigaOrdine, CAMPI_124)).select('id').single(),
+      );
 
       if (orderErr || !order) {
         await rollbackCreatedCodOrders();
