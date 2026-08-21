@@ -128,7 +128,8 @@ export default {
         'sidebar':     '25',
         'mobile-nav':  '30',      // MobileTabBar fisso bottom
         'banner':      '35',      // PWAInstallBanner, WelcomeCreditBanner
-        'overlay':     '40',      // SOS button, FAB
+        'overlay':     '40',      // FAB: assistenza, copilot
+        'emergenza':   '45',      // SOS del fattorino: sta sopra ogni altro pulsante
         'modal':       '50',      // Modal portal
         'toast':       '60',      // toast notifications
         'tour':        '70',      // BuyerOnboardingTour

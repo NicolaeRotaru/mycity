@@ -16,7 +16,7 @@ export interface ProductCardProps {
   discountPercent?: number;
   /** Units left. 0 = sold out; ≤3 = low-stock flame badge. */
   stock?: number;
-  /** Delivery ETA chip on the photo: { today: boolean; short: 'Oggi'|'Domani'|'24–48h' }. */
+  /** Delivery ETA chip on the photo: { today: boolean; short: 'Oggi'|'Domani'|'30-60 min' }. */
   eta?: { today: boolean; short: string };
   isNew?: boolean;
   freeShipping?: boolean;

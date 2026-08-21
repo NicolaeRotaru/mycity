@@ -54,7 +54,7 @@ const HERO_CHIPS = [
 const DEFAULT_TRUST_BULLETS = [
   { Icon: Banknote,  color: 'olive',     t: 'Puoi pagare alla consegna', d: 'Carta o contanti, decidi tu: l’account serve solo per confermare l’ordine.' },
   { Icon: HomeIcon,  color: 'primary',   t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
-  { Icon: Truck,     color: 'accent',    t: 'Consegna in 24-48h',       d: 'Rider del territorio, percorsi brevi.' },
+  { Icon: Truck,     color: 'accent',    t: 'Consegna in 30-60 min',    d: 'Rider del territorio, percorsi brevi.' },
   { Icon: RotateCcw, color: 'secondary', t: 'Reso entro 14 giorni',     d: 'Cambi idea? Ti rimborsiamo senza domande.' },
 ] as const;
 
@@ -150,7 +150,7 @@ function HomeBlock({
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <Check size={16} strokeWidth={2.4} className="text-olive-600" />
-                    Oggi se disponibile · 24-48h negli altri casi
+                    In 30-60 minuti, dai negozi della tua zona
                   </span>
                   <span className="inline-flex items-center gap-1.5">
                     <Check size={16} strokeWidth={2.4} className="text-olive-600" />

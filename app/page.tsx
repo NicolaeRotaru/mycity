@@ -26,7 +26,7 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
       <>
         Alimentari, abbigliamento, casa, elettronica: ordini dai commercianti
         della tua via in pochi tap e <strong className="text-ink-900">puoi pagare alla consegna</strong>.
-        A casa in 24-48h.
+        A casa in 30-60 minuti.
       </>
     ),
     ctaPrimary: 'Inizia a esplorare',
@@ -42,7 +42,7 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
     subhead: (
       <>
         Carta o contanti, decidi tu: scegli dai commercianti della tua città e
-        <strong className="text-ink-900"> puoi pagare alla consegna</strong>. A casa in 24-48h.
+        <strong className="text-ink-900"> puoi pagare alla consegna</strong>. A casa in 30-60 minuti.
       </>
     ),
     ctaPrimary: 'Scopri cosa c’è oggi',

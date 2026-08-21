@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { X, MapPin, ShoppingCart, Gift, ArrowRight } from 'lucide-react';
 import { useProfile } from './hooks/useProfile';
@@ -37,24 +38,44 @@ const STEPS = [
   {
     icon: ShoppingCart,
     title: 'Ordina, paghi come vuoi',
-    body: 'Aggiungi al carrello e al checkout scegli come pagare: carta o contanti alla consegna, decidi tu. Consegna in 24-48h.',
+    body: 'Aggiungi al carrello e al checkout scegli come pagare: carta o contanti alla consegna, decidi tu. Consegna in 30-60 minuti.',
     cta: 'Inizia a esplorare',
     href: '/search',
   },
 ];
 
 export default function BuyerOnboardingTour() {
+  const pathname = usePathname();
   const { isAuthenticated, isBuyer } = useProfile();
   const [onboarded, setOnboarded] = useLocalStorage<boolean>(KEY, false);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
 
+  /**
+   * 21/8/2026 — IL TOUR SI APRIVA SOPRA IL PAGAMENTO, E IL SUO ULTIMO PULSANTE
+   * PORTAVA VIA DALL'ORDINE.
+   *
+   * Il tour parte per chi si e' appena registrato, un secondo e mezzo dopo che
+   * la pagina si apre, e nessuna pagina era esclusa. Ma il sito chiede l'account
+   * proprio all'ultimo clic del checkout: quindi quasi tutti si registrano
+   * mentre stanno comprando, e tornavano sul pagamento giusto in tempo per
+   * vederselo comparire davanti. L'ultimo passo del tour manda alla ricerca.
+   *
+   * Un tour di benvenuto e' una cosa che si guarda quando si ha tempo. Chi sta
+   * pagando non ce l'ha, e interromperlo li' costa un ordine.
+   */
+  const dentroUnAcquisto =
+    pathname.startsWith('/checkout') ||
+    pathname.startsWith('/cart') ||
+    pathname.startsWith('/orders/');
+
   useEffect(() => {
     if (!isAuthenticated || !isBuyer || onboarded) return;
+    if (dentroUnAcquisto) return;
     // Defer 1.5s per non sovrapporsi a banner welcome
     const t = setTimeout(() => setOpen(true), 1500);
     return () => clearTimeout(t);
-  }, [isAuthenticated, isBuyer, onboarded]);
+  }, [isAuthenticated, isBuyer, onboarded, dentroUnAcquisto]);
 
   const close = () => {
     setOnboarded(true);

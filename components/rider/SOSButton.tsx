@@ -78,10 +78,23 @@ export default function SOSButton({ orderId }: Props) {
 
   return (
     <>
+      {/*
+        21/8/2026 — IL PULSANTE DI EMERGENZA ERA COPERTO, E SUL TELEFONO NON SI
+        POTEVA PREMERE.
+        Stava a `bottom-24 right-4 z-40`, cioe' la scatola identica al pulsante
+        Assistenza: stessa misura, stesso angolo, stesso piano. Quando due cose
+        stanno sullo stesso piano vince quella disegnata dopo, e l'Assistenza e'
+        montata dopo nella pagina. Sotto i 768px la copriva al cento per cento.
+        Il fattorino lavora dal telefono, e questo e' il pulsante che si preme
+        quando qualcuno e' in difficolta' per strada.
+        Adesso ha un posto suo (piu' in alto) e un piano suo (`emergenza`, sopra
+        `overlay`): anche se domani nasce un altro pulsante flottante, il SOS
+        resta sopra.
+      */}
       <button
         onClick={() => setOpen(true)}
         aria-label="SOS emergenza"
-        className="fixed bottom-24 right-4 z-40 bg-rose-600 hover:bg-rose-700 text-white rounded-full w-14 h-14 shadow-2xl flex items-center justify-center ring-4 ring-rose-200 animate-pulse-slow"
+        className="fixed bottom-44 right-4 z-emergenza bg-rose-600 hover:bg-rose-700 text-white rounded-full w-14 h-14 shadow-2xl flex items-center justify-center ring-4 ring-rose-200 animate-pulse-slow"
       >
         <AlertTriangle size={22} strokeWidth={2.4} />
       </button>

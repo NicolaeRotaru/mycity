@@ -34,7 +34,7 @@ export default function RootOG() {
           I negozi di Piacenza, a casa tua
         </div>
         <div style={{ fontSize: 30, opacity: 0.92, marginTop: 16 }}>
-          Ordini dai commercianti del tuo quartiere · consegna in 24–48h · paghi alla consegna
+          Ordini dai commercianti del tuo quartiere · consegna in 30-60 min · paghi alla consegna
         </div>
       </div>
     ),

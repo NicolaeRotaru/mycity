@@ -213,7 +213,7 @@ const Footer = () => {
               <Banknote size={14} strokeWidth={2} className="text-olive-600" /> Pagamento alla consegna
             </span>
             <span className="flex items-center gap-1.5">
-              <Truck size={14} strokeWidth={2} className="text-olive-600" /> Spedizione 24-48h
+              <Truck size={14} strokeWidth={2} className="text-olive-600" /> Consegna in 30-60 min
             </span>
             <span className="flex items-center gap-1.5">
               <Lock size={14} strokeWidth={2} className="text-olive-600" /> Acquisto sicuro

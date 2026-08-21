@@ -36,7 +36,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'In quanto tempo arriva l\'ordine?',
-        a: 'Le consegne avvengono in 24-48h nei comuni serviti. Per ordini effettuati prima delle 12, molti venditori consegnano in giornata.',
+        a: 'In 30-60 minuti dalla conferma del negozio, nei comuni serviti e negli orari di apertura del negozio. Se il negozio \u00e8 chiuso te lo diciamo prima che tu paghi: l\u2019ordine parte alla riapertura.',
       },
       {
         q: 'Posso ritirare in negozio?',

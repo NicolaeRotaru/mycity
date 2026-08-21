@@ -40,7 +40,7 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   }
   const name = store.store_name ?? 'Negozio';
   const desc =
-    (store.store_description ?? `Compra online da ${name} su MyCity. Consegna locale 24-48h o ritiro in negozio.`).slice(0, 160);
+    (store.store_description ?? `Compra online da ${name} su MyCity. Consegna locale in 30-60 minuti o ritiro in negozio.`).slice(0, 160);
   const img = store.store_logo ? [store.store_logo] : undefined;
 
   const cityHint = store.store_address ? ' a Piacenza' : '';

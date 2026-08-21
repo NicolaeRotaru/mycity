@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { resolveAiPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { CatalogJobResult, CatalogOperation } from '@/lib/ai/catalogBatch';
+import { senzaCampiEconomici } from '@/lib/ai/catalogBatch';
 
 /**
  * Applica i risultati di un job AI massivo, dopo che il venditore li ha rivisti.
@@ -109,7 +110,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         const row = current.get(r.product_id);
         if (!row) continue;
         const { update } = resolveAiPatch({
-          patch: r.patch,
+          // Seconda guardia, e non e' un doppione: la prima sta dove il
+          // risultato del lotto viene letto, questa dove viene SCRITTO. Se
+          // domani un patch arriva da un'altra strada — un ritentativo, un
+          // formato nuovo — il prezzo non passa lo stesso.
+          patch: senzaCampiEconomici(r.patch),
           current: { attributes: row.attributes ?? null, category_id: row.category_id, has_variants: row.has_variants },
           categories,
         });

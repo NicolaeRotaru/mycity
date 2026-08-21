@@ -69,5 +69,5 @@ export const VALUE_PROPS = [
   { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra €${FREE_SHIPPING_THRESHOLD}` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
-  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: 'oggi se disponibile, altrimenti 24-48h' },
+  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: 'in 30-60 minuti dalla conferma del negozio' },
 ] as const;

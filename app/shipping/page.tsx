@@ -31,8 +31,8 @@ export default function ShippingPage() {
         </div>
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Zap size={28} className="text-primary-600" aria-hidden /></div>
-          <div className="font-bold text-primary-900">Consegna 24-48h</div>
-          <div className="text-sm text-primary-800 mt-1">Nei comuni serviti</div>
+          <div className="font-bold text-primary-900">Consegna in 30-60 min</div>
+          <div className="text-sm text-primary-800 mt-1">Nei comuni serviti, negli orari di apertura del negozio</div>
         </div>
         <div className="bg-secondary-50 border border-secondary-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Store size={28} className="text-secondary-600" aria-hidden /></div>
@@ -44,12 +44,12 @@ export default function ShippingPage() {
       <section className="prose prose-gray max-w-none space-y-6 text-ink-700 leading-relaxed">
         <div>
           <h2 className="text-xl font-bold text-ink-900 mb-2">Tempi di consegna</h2>
-          <p>La maggior parte degli ordini viene consegnata in <strong>24-48 ore</strong> dalla conferma da parte del
-          venditore. Per ordini effettuati prima delle 12:00 nei giorni feriali, molti venditori consegnano in giornata.</p>
+          <p>Consegniamo in <strong>30-60 minuti</strong> dalla conferma del venditore. È la nostra promessa:
+          il negozio è nella tua città, il rider fa un percorso breve.</p>
           <ul className="list-disc pl-5">
-            <li>Ordine entro le 12:00 → consegna in giornata o il giorno successivo</li>
-            <li>Ordine dopo le 12:00 → consegna entro 48h</li>
-            <li>Weekend e festivi → consegna il primo giorno feriale successivo</li>
+            <li>Il tempo parte da quando il negozio conferma l’ordine, non da quando lo invii</li>
+            <li>Vale negli orari di apertura del negozio che hai scelto</li>
+            <li>Se il negozio è chiuso, l’ordine parte alla riapertura e te lo diciamo prima che tu paghi</li>
           </ul>
         </div>
 

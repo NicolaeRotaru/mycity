@@ -1,19 +1,19 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Zap, Wallet } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Wallet } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
+import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
-import { isExpressEligible } from '@/lib/products/express';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -78,8 +78,6 @@ export default function CheckoutPage() {
       const stockMap = new Map<string, number>();  // productId → stock disponibile (DB)
       const hasVariantsMap = new Map<string, boolean>(); // productId → ha varianti
       const priceMap = new Map<string, number>(); // productId → prezzo di ADESSO (DB)
-      const expressPerProdotto = new Map<string, boolean | null>(); // #85
-      const expressPerNegozio = new Map<string, boolean>();          // #85
       const validIds = new Set<string>();
 
       if (cart.length > 0) {
@@ -120,7 +118,6 @@ export default function CheckoutPage() {
           hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
           const prezzoVero = Number((p as { price?: number | string | null }).price ?? NaN);
           if (Number.isFinite(prezzoVero)) priceMap.set(p.id, prezzoVero);
-          expressPerProdotto.set(p.id, (p as { express_enabled?: boolean | null }).express_enabled ?? null);
         }
       }
 
@@ -160,7 +157,6 @@ export default function CheckoutPage() {
             lat: s.store_lat,
             lng: s.store_lng,
           });
-          expressPerNegozio.set(s.id, Boolean((s as { offers_express?: boolean }).offers_express));
         }
       }
 
@@ -232,23 +228,20 @@ export default function CheckoutPage() {
 
       const groupsArr = Array.from(sellerMap.values());
 
-      // #85 — L'express non costa piu' due letture in piu'.
+      // LA PROMESSA DI CONSEGNA E' UNA SOLA: 30-60 minuti (Nicola, 21/8/2026).
       //
-      // Prima si rileggevano le STESSE righe di `products` e `profiles` gia'
-      // lette qui sopra, solo per due colonne: due viaggi di rete aggiuntivi
-      // dentro il checkout, il punto in cui la gente e' piu' impaziente. Ora le
-      // due colonne si chiedono subito, insieme al resto.
+      // Qui c'era il calcolo di quali negozi facessero l'«Express», che serviva
+      // a un riquadro con scritto «Express ~30-60 min per questi negozi,
+      // altrimenti standard 24-48h». Erano due promesse diverse nella stessa
+      // schermata, e il cliente non poteva sapere quale valesse per lui.
+      // Il riquadro non c'e' piu' e il calcolo con lui.
       //
-      // Se la migrazione 071 non fosse applicata, `express_enabled` e
-      // `offers_express` non esisterebbero: la lettura fallirebbe per intero e
-      // il checkout si fermerebbe. Non e' un rischio teorico che vale la pena
-      // correre in silenzio, quindi il ripiego resta esplicito piu' sotto.
-      const expressStores = groupsArr
-        .filter((g) => expressPerNegozio.get(g.sellerId)
-          && g.items.every((it) => isExpressEligible(expressPerProdotto.get(it.id) ?? null, expressPerNegozio.get(g.sellerId) ?? false)))
-        .map((g) => g.storeName);
-
-      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, expressStores, prezziCambiati };
+      // `express_enabled` e `offers_express` restano nelle due letture qui
+      // sopra: non le usa piu' nessuno per il testo, ma toglierle vorrebbe dire
+      // mettere le mani nel ripiego che tiene in piedi il checkout se la
+      // migrazione 071 non e' applicata. Non si tocca quel ripiego per due
+      // colonne che non costano un viaggio in piu'.
+      return { groups: groupsArr, orphans: orphanItems, stockIssues, variantIssues, prezziCambiati };
     },
   });
 
@@ -257,7 +250,6 @@ export default function CheckoutPage() {
   const stockIssues = useMemo(() => cartData?.stockIssues ?? [], [cartData]);
   const prezziCambiati = useMemo(() => cartData?.prezziCambiati ?? [], [cartData]);
   const variantIssues = useMemo(() => cartData?.variantIssues ?? [], [cartData]);
-  const expressStores = useMemo(() => cartData?.expressStores ?? [], [cartData]);
 
   // Auto-rimozione degli articoli non più disponibili (id stale dopo re-seed,
   // prodotto rimosso/non-disponibile, venditore sospeso): li togliamo dal
@@ -454,19 +446,45 @@ export default function CheckoutPage() {
   const finalTotal = Math.max(0, grandTotal - creditApplied);
 
   /**
-   * #172 — L'impronta di QUESTO carrello, usata come chiave del tentativo di
-   * ordine. Cambia se cambia il contenuto o il totale, cosi' due ordini
-   * davvero diversi non si confondono, e due invii dello stesso ordine si'.
+   * LA CHIAVE DEL TENTATIVO — chi ordina due volte la stessa spesa deve poterla
+   * ordinare due volte (21/8/2026).
+   *
+   * Qui c'era l'impronta del CARRELLO: contenuto + totale + ritiro, passati in
+   * un hash. Serviva a impedire che due clic sullo stesso pulsante creassero
+   * due ordini, e per quello funzionava.
+   *
+   * Ma quell'impronta non cambia mai. Maria compra due filoni ogni martedi':
+   * stesso carrello, stesso totale, stesso indirizzo, quindi stessa impronta —
+   * per sempre. Il martedi' dopo il server riconosceva la chiave, restituiva
+   * gli ordini della settimana prima e il sito le mostrava «Ordine effettuato».
+   * Lei aspettava il pane. Al negozio non era arrivato niente. Ed e' il caso
+   * piu' normale che esista per un panificio.
+   *
+   * La chiave adesso identifica IL TENTATIVO, non la spesa: nasce al primo
+   * invio, resta uguale se quell'invio viene ripetuto (doppio clic, rete che
+   * ritenta, pagina ricaricata a meta'), e muore quando l'ordine e' andato a
+   * buon fine. Il tentativo dopo ne avra' una nuova.
+   *
+   * Vive in `sessionStorage` perche' una pagina ricaricata mentre l'ordine
+   * parte e' esattamente il caso che il doppione deve coprire: se la chiave
+   * morisse col componente, quel ricaricamento creerebbe il secondo ordine.
    */
-  const carrelloImpronta = useMemo(() => {
-    const pezzi = cart.map((i) => `${i.id}:${i.variantId ?? ''}:${i.quantity}`).join('|');
-    const totale = Math.round(finalTotal * 100);
-    let h = 0;
-    for (const ch of `${pezzi}#${totale}#${pickupInStore ? 'ritiro' : 'consegna'}`) {
-      h = (h * 31 + ch.charCodeAt(0)) | 0;
-    }
-    return Math.abs(h).toString(36);
-  }, [cart, finalTotal, pickupInStore]);
+  const nuovaChiaveTentativo = useCallback(
+    () =>
+      chiaveTentativo(
+        typeof window === 'undefined' ? null : window.sessionStorage,
+        () =>
+          typeof crypto !== 'undefined' && 'randomUUID' in crypto
+            ? crypto.randomUUID()
+            : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      ),
+    [],
+  );
+
+  const chiudiIlTentativo = useCallback(
+    () => chiudiTentativo(typeof window === 'undefined' ? null : window.sessionStorage),
+    [],
+  );
 
   const placeOrders = useMutation({
     mutationFn: async () => {
@@ -504,7 +522,7 @@ export default function CheckoutPage() {
       // premuto due volte, o se la rete ritenta da sola, il server riconosce il
       // doppione e restituisce gli ordini gia' creati invece di farne altri.
       // Vive quanto il carrello: cambia solo quando cambia cosa si sta comprando.
-      const chiaveTentativo = `cod-${carrelloImpronta}`;
+      const chiaveTentativo = `cod-${nuovaChiaveTentativo()}`;
       const res = await fetch('/api/orders/cod', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'idempotency-key': chiaveTentativo },
@@ -555,6 +573,9 @@ export default function CheckoutPage() {
       return createdOrders;
     },
     onSuccess: (orderIds) => {
+      // Il tentativo e' andato a buon fine: la sua chiave ha finito il lavoro.
+      // Se restasse, il prossimo ordine identico si vedrebbe restituire questo.
+      chiudiIlTentativo();
       clearCart();
       // Behavioral Scientist + CRO: gratifica immediata su purchase success.
       // Flag in sessionStorage → la order detail page mostra ConfettiBurst.
@@ -762,13 +783,6 @@ export default function CheckoutPage() {
 
           {/* STEP 2 — Quando vuoi riceverlo (consegna / express / ritiro) */}
           <StepCard n={2} icon={Truck} title="Quando vuoi riceverlo">
-            {expressStores.length > 0 && !pickupInStore && (
-              <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-800 flex items-start gap-2 mb-3">
-                <Zap size={16} className="shrink-0 mt-0.5 text-accent-600" aria-hidden />
-                <span><strong>Consegna Express disponibile</strong> (~30–60 min, se ci sono rider) per: {expressStores.join(', ')}. Altrimenti consegna standard 24–48h.</span>
-              </div>
-            )}
-
             {pickupInStore ? (
               <div className="flex items-center gap-2 rounded-xl border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-800">
                 <Store size={16} className="text-olive-700 shrink-0" aria-hidden /> Ritiro in negozio selezionato — nessun costo di consegna. Vai tu quando l&apos;ordine è pronto.
@@ -790,7 +804,7 @@ export default function CheckoutPage() {
                 <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
                   <div>
                     <p className="font-bold text-ink-900">Consegna a domicilio</p>
-                    <p className="text-sm text-ink-600">Standard 24–48h{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
+                    <p className="text-sm text-ink-600">In 30-60 minuti dalla conferma del negozio{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>
                   <span className="font-serif text-lg font-extrabold text-ink-900">
                     {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}

@@ -14,8 +14,9 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
-import { contaAcquisto } from '@/lib/analytics/server';
+import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
+import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -120,19 +121,84 @@ export const POST = withAuthRateLimit(
      */
     const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
     if (chiaveTentativo) {
-      const { data: gia } = await admin
+      /**
+       * 21/8/2026 — LA CHIAVE SI RIVENDICA PRIMA, NON DOPO.
+       *
+       * Qui si LEGGEVA soltanto, e la riga veniva scritta in fondo alla rotta,
+       * dopo aver creato gli ordini. Fra la lettura e la scrittura ci sono
+       * centinaia di righe: due invii partiti nello stesso istante — il doppio
+       * clic vero, quello che parte prima che il pulsante si spenga — leggevano
+       * entrambi «nessuna chiave» e creavano entrambi gli ordini. La difesa
+       * copriva il secondo clic lento, non quello veloce, che e' il caso comune.
+       *
+       * Adesso la chiave si prende all'inizio, con una INSERT: la chiave e'
+       * chiave primaria, quindi il secondo invio prende un errore di duplicato
+       * (23505) e non arriva mai a creare niente. Gli ordini veri si scrivono
+       * dentro la stessa riga alla fine.
+       */
+      const { error: errRivendica } = await admin
         .from('cod_checkout_attempts')
-        .select('order_ids')
-        .eq('chiave', chiaveTentativo)
-        .eq('user_id', user.id)
-        .maybeSingle();
-      const ordiniGia = (gia?.order_ids as Array<{ id: string; sellerId: string; totalCents: number }> | null) ?? null;
-      if (ordiniGia && ordiniGia.length > 0) {
-        logger.info('[cod] tentativo ripetuto: restituisco gli ordini gia creati', { chiave: chiaveTentativo });
-        return NextResponse.json(
-          { orderIds: ordiniGia.map((o) => o.id), ordini: ordiniGia, ripetuto: true },
-          { status: 200 },
-        );
+        .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: [] });
+
+      if (errRivendica) {
+        if ((errRivendica as { code?: string }).code !== '23505') {
+          logger.error('[cod] rivendicazione del tentativo fallita', {
+            chiave: chiaveTentativo, message: errRivendica.message,
+          });
+          return NextResponse.json({ error: 'Impossibile registrare l ordine, riprova.' }, { status: 503 });
+        }
+
+        // Chiave gia' presa: o e' lo stesso invio ripetuto, o e' il gemello
+        // partito un istante fa. In entrambi i casi qui NON si creano ordini.
+        const { data: gia } = await admin
+          .from('cod_checkout_attempts')
+          .select('order_ids, created_at')
+          .eq('chiave', chiaveTentativo)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        const ordiniGia = (gia?.order_ids as Array<{ id: string; sellerId: string; totalCents: number }> | null) ?? null;
+        if (ordiniGia && ordiniGia.length > 0) {
+          logger.info('[cod] tentativo ripetuto: restituisco gli ordini gia creati', { chiave: chiaveTentativo });
+          return NextResponse.json(
+            { orderIds: ordiniGia.map((o) => o.id), ordini: ordiniGia, ripetuto: true },
+            { status: 200 },
+          );
+        }
+
+        /**
+         * Rivendicata ma senza ordini. Due casi diversi, e vanno distinti o la
+         * cura diventa peggiore del male.
+         *
+         * Se la riga e' di POCHI SECONDI fa, il gemello sta ancora lavorando:
+         * si dice «sto arrivando», e il doppione non nasce.
+         *
+         * Se invece e' VECCHIA, quell'invio e' morto per strada — la rotta e'
+         * caduta, il server e' stato riavviato — e la chiave e' rimasta a
+         * occupare il posto. Senza questa via d'uscita il cliente resterebbe
+         * bloccato per sempre su quel carrello: ogni nuovo tentativo
+         * riproverebbe la stessa chiave e prenderebbe lo stesso 409. La riga
+         * abbandonata si toglie e si riprova.
+         */
+        const nataDa = gia?.created_at ? Date.now() - new Date(gia.created_at as string).getTime() : 0;
+        const decisione = decisioneSuChiaveOccupata({ ordiniGia: null, natoDaMs: nataDa });
+        if (decisione === 'chiave-abbandonata') {
+          logger.warn('[cod] tentativo abbandonato: libero la chiave e riprovo', {
+            chiave: chiaveTentativo, secondi: Math.round(nataDa / 1000),
+          });
+          await admin.from('cod_checkout_attempts').delete().eq('chiave', chiaveTentativo).eq('user_id', user.id);
+          const { error: errRiprova } = await admin
+            .from('cod_checkout_attempts')
+            .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: [] });
+          if (errRiprova) {
+            return NextResponse.json({ error: 'Ordine gia in corso, attendi qualche secondo.', inCorso: true }, { status: 409 });
+          }
+        } else {
+          logger.warn('[cod] invio gemello ancora in corso sulla stessa chiave', { chiave: chiaveTentativo });
+          return NextResponse.json(
+            { error: 'Ordine gia in corso, attendi qualche secondo.', inCorso: true },
+            { status: 409 },
+          );
+        }
       }
     }
 
@@ -621,9 +687,12 @@ export const POST = withAuthRateLimit(
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
     // solo dal browser: chi chiudeva la scheda spariva dai conti, e il
     // fatturato in PostHog non riconciliava con la tabella degli ordini.
+    // Il consenso si legge UNA volta, non una per ordine: e' la stessa persona.
+    const consensoAnalytics = await analyticsConsentita(admin, user.id);
     void Promise.all(
       comunicazioni.map((c) =>
         contaAcquisto({
+          consensoAnalytics,
           orderId: c.orderId,
           buyerId: user.id,
           totalCents: c.totalCents,
@@ -640,10 +709,14 @@ export const POST = withAuthRateLimit(
     // #172 — Si registra il tentativo: se la stessa chiave torna (doppio clic,
     // rete che ritenta), la prossima volta si esce subito con questi ordini.
     if (chiaveTentativo && createdOrderIds.length > 0) {
+      // La riga esiste gia' dall'inizio (rivendicata): qui si riempie con gli
+      // ordini veri, cosi' un invio ripetuto li ritrova invece di ricrearli.
       const { error: errChiave } = await admin
         .from('cod_checkout_attempts')
-        .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: ordiniCreati });
-      if (errChiave) logger.warn('[cod] tentativo non registrato', { message: errChiave.message });
+        .update({ order_ids: ordiniCreati })
+        .eq('chiave', chiaveTentativo)
+        .eq('user_id', user.id);
+      if (errChiave) logger.warn('[cod] tentativo non completato', { message: errChiave.message });
     }
 
     return NextResponse.json({ orderIds: createdOrderIds, ordini: ordiniCreati }, { status: 200 });

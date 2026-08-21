@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   alternates: { canonical: '/stores' },
   openGraph: {
     title: 'Negozi di Piacenza · MyCity',
-    description: 'Tutti i negozi locali di Piacenza in un solo posto. Consegna in 24-48h.',
+    description: 'Tutti i negozi locali di Piacenza in un solo posto. Consegna in 30-60 minuti.',
     type: 'website',
     locale: 'it_IT',
     siteName: 'MyCity',

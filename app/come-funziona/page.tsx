@@ -5,7 +5,7 @@ import HowItWorks from '@/components/home/HowItWorks';
 export const metadata = {
   title: 'Come funziona · MyCity',
   description:
-    'Come funziona MyCity: scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. Te lo portiamo a casa in 24-48h, reso entro 14 giorni.',
+    'Come funziona MyCity: scegli dai negozi di Piacenza, ordini in pochi tap e paghi alla consegna. Te lo portiamo a casa in 30-60 minuti, reso entro 14 giorni.',
   alternates: { canonical: '/come-funziona' },
   openGraph: {
     title: 'Come funziona · MyCity',
@@ -48,7 +48,7 @@ export default function ComeFunzionaPage() {
           <br className="hidden sm:block" /> ora a casa tua
         </h1>
         <p className="mt-4 text-lg text-ink-600">
-          Ordini dai negozi della tua città e <strong>paghi alla consegna</strong>. Te lo portiamo a casa in 24-48h.
+          Ordini dai negozi della tua città e <strong>paghi alla consegna</strong>. Te lo portiamo a casa in 30-60 minuti.
         </p>
       </section>
 

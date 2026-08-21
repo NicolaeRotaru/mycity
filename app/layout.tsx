@@ -41,7 +41,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',
   description:
-    'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 24-48h, pagamento alla consegna.',
+    'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 30-60 minuti, pagamento alla consegna.',
   manifest: '/manifest.json',
   icons: {
     icon: [

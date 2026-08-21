@@ -7,7 +7,7 @@
 ## 1. Vision & Mission
 
 **Vision**: rendere il commercio di prossimità di Piacenza visibile, ordinabile
-online e consegnabile a casa in 24-48h, mantenendo l'anima dei negozi locali.
+online e consegnabile a casa in 30-60 minuti, mantenendo l'anima dei negozi locali.
 
 **Mission**: offrire a buyer locali un'alternativa concreta ai marketplace globali
 (Amazon, Glovo) per supportare l'economia della propria città; offrire ai
