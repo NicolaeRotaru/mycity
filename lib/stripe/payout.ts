@@ -203,7 +203,12 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
   if (order.delivery_status !== 'DELIVERED') return { ok: false, code: 'NOT_DELIVERED', reason: 'Ordine non consegnato' };
-  if (order.payment_method !== 'card') return { ok: false, code: 'BAD_STATE', reason: 'COD: il rider incassa i contanti' };
+  // 155 — Sul contrassegno il compenso il fattorino se l'e' gia' tenuto dal
+  // contante al momento della conferma dell'incasso (app/api/rider/cash-confirm):
+  // l'atteso della rimessa e' il totale MENO il suo compenso. Non c'e' nessun
+  // bonifico da fare, ed e' scritto sull'ordine come 'CASH_WITHHELD' invece di
+  // restare NULL — che voleva dire «mai pagato» e nessuno sapeva distinguerlo.
+  if (order.payment_method !== 'card') return { ok: false, code: 'BAD_STATE', reason: 'COD: il compenso e gia trattenuto dal contante' };
   if (!order.rider_id) return { ok: false, code: 'BAD_STATE', reason: 'Nessun rider assegnato' };
   if (order.rider_payout_status === 'TRANSFERRED') return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già versato' };
 
@@ -269,7 +274,20 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
     return { ok: true, transferId: transfer.id };
   } catch (err) {
     logger.error('[stripe] rider transfer failed', err);
-    await admin.from('orders').update({ rider_payout_status: 'HELD' }).eq('id', order.id);
+    // 156 — Il ritorno a 'HELD' veniva rifiutato dal database, che quello stato
+    // non lo prevedeva (vincolo della 119), e l'errore non lo guardava nessuno:
+    // il compenso restava in 'PROCESSING', che nessun giro del cron ripesca.
+    // Un bonifico fallito una volta non ripartiva mai piu'. La migrazione 124
+    // aggiunge lo stato; qui l'errore si vede.
+    const { error: errRitorno } = await admin
+      .from('orders')
+      .update({ rider_payout_status: 'HELD' })
+      .eq('id', order.id);
+    if (errRitorno) {
+      logger.error('[stripe] compenso fattorino bloccato in PROCESSING', {
+        orderId: order.id, message: errRitorno.message,
+      });
+    }
     return { ok: false, code: 'TRANSFER_FAILED', reason: 'Transfer rider fallito' };
   }
 }

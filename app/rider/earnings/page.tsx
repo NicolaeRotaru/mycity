@@ -9,6 +9,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Card } from '@/components/ui/Card';
 import { queryKeys } from '@/lib/queries/keys';
 import RiderConnectButton from '@/components/rider/RiderConnectButton';
+import { compensoConsegnaEuro } from '@/lib/shipping';
+import { riepilogoFattorino } from '@/lib/guadagni/fattorino';
 
 type PeriodKey = 'today' | '7d' | '30d' | 'all';
 const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
@@ -20,6 +22,7 @@ const PERIODS: { key: PeriodKey; label: string; days: number | null }[] = [
 
 const DAILY_GOAL = 5; // consegne/giorno per il bonus
 
+
 export default function RiderEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('7d');
 
@@ -30,13 +33,21 @@ export default function RiderEarningsPage() {
       if (!user) throw new Error('Non autenticato');
       const { data, error } = await supabase
         .from('orders')
-        .select('id, shipping_cost, delivered_at, rider_payout_status, payment_method, delivery_city, delivery_address')
+        // 163 — `shipping_cost` e' quanto ha pagato il CLIENTE per la
+        // spedizione. Il compenso del fattorino e' `rider_fee_cents`, che e'
+        // un'altra cosa da quando la migrazione 111 le ha separate: sopra i 30
+        // euro di spesa la spedizione e' gratis e `shipping_cost` vale zero,
+        // mentre il compenso c'e' eccome. La pagina mostrava quindi consegne da
+        // 0,00 € e un totale piu' basso del dovuto — sul numero grosso in base
+        // al quale il fattorino decide se continuare a lavorare con noi.
+        .select('id, shipping_cost, rider_fee_cents, delivered_at, rider_payout_status, payment_method, delivery_city, delivery_address')
         .eq('rider_id', user.id)
         .eq('delivery_status', 'DELIVERED')
         .order('delivered_at', { ascending: false });
       if (error) throw error;
       type EarningOrder = {
-        id: string; shipping_cost: number | null; delivered_at: string | null;
+        id: string; shipping_cost: number | null; rider_fee_cents: number | null;
+        delivered_at: string | null;
         rider_payout_status: string | null; payment_method: string | null;
         delivery_city: string | null; delivery_address: string | null;
       };
@@ -56,10 +67,14 @@ export default function RiderEarningsPage() {
     return orders.filter((o) => o.delivered_at && new Date(o.delivered_at).getTime() >= cutoff);
   }, [orders, period]);
 
-  const totalEarned = filtered.reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
-  const avgPerDelivery = filtered.length > 0 ? totalEarned / filtered.length : 0;
-  const paid = filtered.filter((o) => o.rider_payout_status === 'TRANSFERRED').reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
-  const pending = filtered.filter((o) => o.payment_method === 'card' && o.rider_payout_status !== 'TRANSFERRED').reduce((s, o) => s + Number(o.shipping_cost || 0), 0);
+  // I conti stanno in lib/guadagni/fattorino.ts: sono soldi di una persona e
+  // vanno provati fuori dal componente (#163).
+  const riepilogo = riepilogoFattorino(filtered);
+  const totalEarned = riepilogo.totale;
+  const avgPerDelivery = riepilogo.media;
+  const paid = riepilogo.versati;
+  const pending = riepilogo.inArrivo;
+  const inContanti = riepilogo.inContanti;
 
   // Consegne di oggi per il bonus giornaliero.
   const todayCount = useMemo(() => {
@@ -83,7 +98,7 @@ export default function RiderEarningsPage() {
     for (const o of orders) {
       const k = (o.delivered_at ?? '').slice(0, 10);
       if (k in days) {
-        days[k].total += Number(o.shipping_cost || 0);
+        days[k].total += compensoConsegnaEuro(o);
         days[k].count += 1;
       }
     }
@@ -210,8 +225,12 @@ export default function RiderEarningsPage() {
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-bold text-olive-900">Compensi sul tuo IBAN</p>
               <p className="mt-1 text-xs leading-relaxed text-olive-800">
-                <strong>{formatPrice(paid)}</strong> già versati · <strong>{formatPrice(pending)}</strong> in arrivo (consegne con carta).
-                I contanti li incassi direttamente alla consegna.
+                <strong>{formatPrice(paid)}</strong> già versati · <strong>{formatPrice(pending)}</strong> in arrivo
+                (consegne con carta) · <strong>{formatPrice(inContanti)}</strong> tenuti in contanti alla consegna.
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-olive-700">
+                Sulle consegne in contanti il compenso te lo tieni tu dall&apos;incasso: rimetti in
+                cassa il totale dell&apos;ordine meno il tuo compenso.
               </p>
               <div className="mt-3">
                 <RiderConnectButton />
@@ -245,7 +264,7 @@ export default function RiderEarningsPage() {
                 </div>
                 <span className="inline-flex items-center gap-1 font-bold text-olive-700">
                   <Banknote size={14} className="text-olive-600" aria-hidden />
-                  {formatPrice(o.shipping_cost || 0)}
+                  {formatPrice(compensoConsegnaEuro(o))}
                 </span>
               </div>
             ))}

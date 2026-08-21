@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
+import { riepilogoNegozio } from '@/lib/guadagni/negozio';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
 import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
 
@@ -27,9 +28,12 @@ type OrderRow = {
   created_at: string;
   delivery_status: string;
   payment_method: string | null;
+  payment_status: string | null;
   payout_status: string | null;
   payout_at: string | null;
   seller_payout_cents: number | null;
+  seller_payout_reversed_cents: number | null;
+  refunded_amount_cents: number | null;
   application_fee_cents: number | null;
   stripe_transfer_id: string | null;
   stripe_reversal_id: string | null;
@@ -69,7 +73,15 @@ export default function SellerEarningsPage() {
       const { data, error } = await supabase
         .from('orders')
         .select(
-          'id, total_price, created_at, delivery_status, payment_method, payout_status, payout_at, seller_payout_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id',
+          // 060 — `seller_payout_reversed_cents` e `payment_status` non erano
+          // nemmeno letti: senza il primo un ordine parzialmente stornato
+          // entrava per intero nell'incassato, senza il secondo un ordine
+          // parzialmente rimborsato contava pieno nel lordo. Il negoziante
+          // vedeva un numero piu' alto di quello arrivato sull'IBAN, e quando
+          // lo confrontava con la sua dashboard Stripe i conti non tornavano.
+          // E' la telefonata «dove sono i miei soldi», che sul payout erode la
+          // fiducia piu' di qualunque altra cosa.
+          'id, total_price, created_at, delivery_status, payment_method, payment_status, payout_status, payout_at, seller_payout_cents, seller_payout_reversed_cents, refunded_amount_cents, application_fee_cents, stripe_transfer_id, stripe_reversal_id',
         )
         .eq('seller_id', user.id)
         // #90 — Un tetto esplicito. Queste pagine leggevano la tabella intera:
@@ -99,15 +111,14 @@ export default function SellerEarningsPage() {
     [cardOrders],
   );
 
-  const grossCents = activeCard.reduce((s, o) => s + Math.round(Number(o.total_price) * 100), 0);
-  const feeCents = activeCard.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0);
-
-  const heldCents = cardOrders
-    .filter((o) => o.payout_status === 'HELD' || o.payout_status === 'PENDING_SELLER_ONBOARDING')
-    .reduce((s, o) => s + (o.seller_payout_cents ?? 0), 0);
-  const paidCents = cardOrders
-    .filter((o) => o.payout_status === 'TRANSFERRED')
-    .reduce((s, o) => s + (o.seller_payout_cents ?? 0), 0);
+  // I conti stanno in lib/guadagni/negozio.ts: sono soldi di una persona e
+  // vanno provati fuori dal componente (#60).
+  const riepilogo = riepilogoNegozio(filtered);
+  const grossCents = riepilogo.lordoCents;
+  const feeCents = riepilogo.commissioniCents;
+  const heldCents = riepilogo.inArrivoCents;
+  const paidCents = riepilogo.versatiCents;
+  const stornatiCents = riepilogo.stornatiCents;
 
   // Contanti (COD): ordini pagati alla consegna e consegnati nel periodo (dato reale).
   const codCollected = useMemo(
@@ -164,7 +175,13 @@ export default function SellerEarningsPage() {
       <div className="mb-5 grid grid-cols-1 gap-4 md:grid-cols-3">
         <Stat label="Fatturato lordo (carta)" value={formatPrice(grossCents / 100)} hint={`${activeCard.length} ordini`} tone="primary" />
         <Stat label="Commissione marketplace" value={'− ' + formatPrice(feeCents / 100)} hint="Trattenuta automaticamente" tone="secondary" />
-        <Stat label="Incassato" value={formatPrice(paidCents / 100)} hint={`${formatPrice(heldCents / 100)} in arrivo dopo la consegna`} tone="olive" highlight />
+        <Stat
+          label="Incassato"
+          value={formatPrice(paidCents / 100)}
+          hint={`${formatPrice(heldCents / 100)} in arrivo dopo la consegna${stornatiCents > 0 ? ` · ${formatPrice(stornatiCents / 100)} storni` : ''}`}
+          tone="olive"
+          highlight
+        />
       </div>
 
       {/* Daily chart + COD cash card */}
@@ -211,7 +228,10 @@ export default function SellerEarningsPage() {
             <h2 className="mb-1 flex items-center gap-2 font-bold text-olive-900"><Landmark size={20} className="text-olive-600" aria-hidden /> Bonifici</h2>
             <p className="text-sm text-olive-800">
               <strong>{formatPrice(paidCents / 100)}</strong> già versati ·{' '}
-              <strong>{formatPrice(heldCents / 100)}</strong> in attesa di liquidazione.
+              <strong>{formatPrice(heldCents / 100)}</strong> in attesa di liquidazione
+              {stornatiCents > 0 && (
+                <> · <strong>{formatPrice(stornatiCents / 100)}</strong> tornati indietro per rimborsi o contestazioni</>
+              )}.
             </p>
             <p className="mt-1 text-xs text-olive-700">
               Pagamento automatico ~24 ore dopo la consegna, verso l&apos;IBAN registrato su Stripe.

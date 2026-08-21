@@ -258,6 +258,29 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   // lib/stripe/client.ts), quindi questo caso è la rete di sicurezza per le
   // sessioni create prima di quella modifica e per i casi di confine.
   if (pending.status === 'EXPIRED') {
+    // 162 — Prima di rimborsare, guarda se degli ordini sono gia' nati.
+    //
+    // Il caso: il pagamento riesce, il webhook muore a meta' (creati gli
+    // ordini dei primi negozi, non quelli degli ultimi), passano due ore, il
+    // record scade. Al tentativo successivo si finiva qui e si rimborsava
+    // tutto — mentre il negozio stava preparando un ordine PAID e NEW che
+    // nessuno annullava. Un cliente rimborsato a merce in lavorazione.
+    const { data: ordiniGiaNati } = await admin
+      .from('orders')
+      .select('id')
+      .eq('stripe_session_id', session.id);
+    if (ordiniGiaNati && ordiniGiaNati.length > 0) {
+      logger.error('[stripe] riserva scaduta ma con ordini gia creati: nessun rimborso automatico', {
+        pendingCheckoutId, ordini: ordiniGiaNati.length,
+      });
+      await notifyAdmins(
+        '⚠️ Carrello scaduto con ordini gia creati',
+        `Il carrello ${pendingCheckoutId} risulta scaduto ma ha gia' ${ordiniGiaNati.length} ordine/i in corso. Non e' stato rimborsato niente: va guardato a mano prima di decidere.`,
+        '/admin/orders',
+      );
+      return;
+    }
+
     logger.error('[stripe] pagamento su una riserva scaduta: rimborso', { pendingCheckoutId });
     const importoCents = session.amount_total ?? 0;
     const pi = typeof session.payment_intent === 'string' ? session.payment_intent : null;

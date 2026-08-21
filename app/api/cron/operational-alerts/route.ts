@@ -145,6 +145,75 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     });
   }
 
+  // 5b) I DUE STATI IN CUI I SOLDI SI FERMANO E NESSUNO LO SA  (#167)
+  //
+  // Il giro guardava PROCESSING e FAILED e si fermava li'. Mancavano proprio i
+  // due stati in cui oggi un pagamento resta fermo per giorni:
+  //  · PENDING_SELLER_ONBOARDING — il negozio non ha completato l'attivazione
+  //    dei pagamenti, e nessuno lo chiama;
+  //  · AWAITING_REMITTANCE — contanti in mano al fattorino di cui nessun admin
+  //    ha confermato la rimessa.
+  // Un pagamento bloccato si scopriva quando telefonava il negoziante
+  // arrabbiato. Su un marketplace appena partito e' il silenzio che costa un
+  // negozio.
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+  const { data: onboardingFermi } = await admin
+    .from('orders')
+    .select('id, seller_id, profiles!orders_seller_id_fkey(store_name)')
+    .eq('payout_status', 'PENDING_SELLER_ONBOARDING')
+    .lt('created_at', oneDayAgo)
+    .limit(20);
+  for (const o of onboardingFermi ?? []) {
+    const r = o as { id: string; profiles?: { store_name?: string } | null };
+    alerts.push({
+      key: `PAYOUT_ONBOARDING_FERMO|${r.id}`,
+      type: 'PAYOUT_ONBOARDING_FERMO',
+      detail: `Ordine #${r.id.slice(0, 8)}: ${r.profiles?.store_name ?? 'il negozio'} non ha finito l'attivazione dei pagamenti, il bonifico e fermo da >24h`,
+      url: `/admin/orders/${r.id}`,
+    });
+  }
+
+  const quarantottOreFa = new Date(Date.now() - 48 * 60 * 60_000).toISOString();
+  const { data: rimesseFerme } = await admin
+    .from('orders')
+    .select('id, rider_id')
+    .eq('payout_status', 'AWAITING_REMITTANCE')
+    .eq('delivery_status', 'DELIVERED')
+    .lt('delivered_at', quarantottOreFa)
+    .limit(20);
+  for (const o of rimesseFerme ?? []) {
+    const r = o as { id: string; rider_id: string | null };
+    alerts.push({
+      key: `RIMESSA_NON_CONFERMATA|${r.id}`,
+      type: 'RIMESSA_NON_CONFERMATA',
+      detail: `Ordine #${r.id.slice(0, 8)}: contanti consegnati da >48h e rimessa mai confermata (rider ${r.rider_id?.slice(0, 8) ?? '—'})`,
+      url: '/admin/orders',
+    });
+  }
+
+  // 5c) Ordini fermi su «Pronto» senza fattorino: il negozio ha preparato e la
+  //     merce e' li' da ore. E' lo stato terminale di ogni consegna che non
+  //     trova un fattorino, e prima non lo guardava nessuno.
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
+  const { data: prontiFermi } = await admin
+    .from('orders')
+    .select('id, ready_at, pickup_in_store')
+    .eq('delivery_status', 'READY')
+    .is('rider_id', null)
+    .lt('ready_at', twoHoursAgo)
+    .limit(20);
+  for (const o of prontiFermi ?? []) {
+    const r = o as { id: string; pickup_in_store: boolean | null };
+    alerts.push({
+      key: `PRONTO_SENZA_FATTORINO|${r.id}`,
+      type: 'PRONTO_SENZA_FATTORINO',
+      detail: r.pickup_in_store
+        ? `Ordine #${r.id.slice(0, 8)}: pronto da >2h e il cliente non e ancora passato a ritirarlo`
+        : `Ordine #${r.id.slice(0, 8)}: pronto da >2h e nessun fattorino l'ha preso`,
+      url: `/admin/orders/${r.id}`,
+    });
+  }
+
   // 6) Consegne in-flight stallate: ASSIGNED ma non ritirato da >30min (consegna orfana)
   const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
   const { data: stalledAssigned } = await admin

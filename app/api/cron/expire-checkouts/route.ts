@@ -24,26 +24,96 @@ export const runtime = 'nodejs';
 export const POST = withCronAuth(async (): Promise<NextResponse> => {
   const admin = getAdminSupabase();
 
-  const { data, error } = await admin
+  // 162 — PRIMA DI RIMETTERE IN VENDITA, GUARDA SE E' GIA' STATO VENDUTO.
+  //
+  // La riserva della merce dura due ore. Se il pagamento riesce ma il webhook
+  // muore a meta' — creati gli ordini dei primi negozi, non quelli degli
+  // ultimi — il record resta PENDING mentre gli ordini dei gruppi precedenti
+  // esistono davvero. Questo giro li ignorava: rimetteva in magazzino la merce
+  // di TUTTI i gruppi, compresi quelli gia' venduti, e liberava il codice
+  // sconto gia' consumato. Poi il tentativo successivo di Stripe trovava il
+  // record EXPIRED e rimborsava tutto, mentre il negozio stava preparando.
+  // Doppia vendita della stessa merce e un cliente rimborsato a merce in
+  // lavorazione: poco probabile, devastante quando capita.
+  //
+  // Adesso si guarda prima: si prendono i candidati, si tolgono quelli che
+  // hanno gia' un ordine, e solo il resto scade.
+  const { data: candidati, error: errLettura } = await admin
     .from('pending_checkouts')
-    .update({ status: 'EXPIRED' })
+    .select('id, groups, coupon_code, stripe_session_id')
     .eq('status', 'PENDING')
-    .lt('expires_at', new Date().toISOString())
-    .select('id, groups, coupon_code');
+    .lt('expires_at', new Date().toISOString());
 
-  if (error) {
-    logger.error('[cron] expire-checkouts failed', error);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (errLettura) {
+    logger.error('[cron] expire-checkouts: lettura fallita', errLettura);
+    return NextResponse.json({ ok: false, error: errLettura.message }, { status: 500 });
   }
 
-  const count = data?.length ?? 0;
+  const sessioni = (candidati ?? [])
+    .map((c) => (c as { stripe_session_id?: string | null }).stripe_session_id)
+    .filter((x): x is string => !!x);
+  const conOrdini = new Set<string>();
+  if (sessioni.length > 0) {
+    const { data: ordini, error: errOrdini } = await admin
+      .from('orders')
+      .select('stripe_session_id')
+      .in('stripe_session_id', sessioni);
+    if (errOrdini) {
+      // Meglio non scadere niente che ripristinare merce gia' venduta.
+      logger.error('[cron] expire-checkouts: controllo ordini fallito, nessuna scadenza applicata', errOrdini);
+      return NextResponse.json({ ok: false, error: errOrdini.message }, { status: 500 });
+    }
+    for (const o of ordini ?? []) {
+      const sid = (o as { stripe_session_id?: string | null }).stripe_session_id;
+      if (sid) conOrdini.add(sid);
+    }
+  }
+
+  const daSalvare = (candidati ?? []).filter((c) => {
+    const sid = (c as { stripe_session_id?: string | null }).stripe_session_id;
+    return !!sid && conOrdini.has(sid);
+  });
+  if (daSalvare.length > 0) {
+    // Non si tocca niente e si avvisa: un carrello pagato a meta' e' un caso
+    // da guardare a mano, non da chiudere in silenzio.
+    logger.error('[cron] carrelli scaduti ma con ordini gia creati: non toccati', {
+      ids: daSalvare.map((c) => c.id),
+    });
+    const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+    const righe = (admins ?? []).map((a) => ({
+      category: 'system',
+      user_id: a.id,
+      title: '⚠️ Carrello scaduto con ordini gia creati',
+      body: `${daSalvare.length} carrello/i sono scaduti ma hanno gia' degli ordini: la merce NON e' stata rimessa in vendita. Vanno chiusi a mano.`,
+      link: '/admin/orders',
+    }));
+    if (righe.length > 0) await admin.from('notifications').insert(righe);
+  }
+
+  const daScadere = (candidati ?? []).filter((c) => !daSalvare.includes(c));
+  const ids = daScadere.map((c) => c.id);
+
+  let data: typeof daScadere = [];
+  if (ids.length > 0) {
+    const { error } = await admin
+      .from('pending_checkouts')
+      .update({ status: 'EXPIRED' })
+      .in('id', ids);
+    if (error) {
+      logger.error('[cron] expire-checkouts failed', error);
+      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    }
+    data = daScadere;
+  }
+
+  const count = data.length;
 
   // Rilascia lo stock riservato al checkout per i pending scaduti (P0-4).
   // NB (audit 🟡-5): includere variant_id, altrimenti per i prodotti con varianti
   // restore_stock incrementa products.stock (poi sovrascritto dal trigger di
   // rollup) e lo stock della VARIANTE riservato non viene mai ripristinato.
   // Identico al gemello nel webhook checkout.session.expired.
-  for (const pc of data ?? []) {
+  for (const pc of data) {
     const groups =
       (pc.groups as Array<{ items?: Array<{ productId: string; quantity: number; variantId?: string | null }> }> | null) ?? [];
     const items = groups.flatMap((g) =>
@@ -67,5 +137,5 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     logger.info(`[cron] expired ${count} pending checkouts`);
   }
 
-  return NextResponse.json({ ok: true, expired: count }, { status: 200 });
+  return NextResponse.json({ ok: true, expired: count, saltati: daSalvare.length }, { status: 200 });
 });

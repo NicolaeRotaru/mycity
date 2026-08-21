@@ -232,6 +232,29 @@ REVOKE ALL ON FUNCTION public.confirm_pickup_by_seller(uuid, text) FROM PUBLIC, 
 GRANT EXECUTE ON FUNCTION public.confirm_pickup_by_seller(uuid, text) TO authenticated;
 
 -- =========================================================
+-- ②bis GLI STATI DEL COMPENSO DEL FATTORINO CHE IL CODICE USA GIA'  (#155, #156)
+-- =========================================================
+-- Il vincolo non prevedeva 'HELD', ma il codice ce lo scrive: e' lo stato in
+-- cui `releaseRiderPayout` riporta un bonifico fallito, ed e' il primo della
+-- lista dei ritentabili. L'UPDATE veniva rifiutato dal database e l'errore
+-- finiva in un log: il compenso restava in 'PROCESSING', che nessun giro del
+-- cron ripesca. Un bonifico fallito una volta non ripartiva mai piu'.
+--
+-- 'CASH_WITHHELD' e' lo stato dei contanti: sul contrassegno il fattorino
+-- trattiene il suo compenso dall'incasso e rimette il resto. Non c'e' nessun
+-- bonifico da fare, ed e' diverso da «non ancora pagato».
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_rider_payout_status_check;
+ALTER TABLE public.orders
+  ADD CONSTRAINT orders_rider_payout_status_check
+  CHECK (rider_payout_status IS NULL OR rider_payout_status IN (
+    'HELD', 'PENDING_RIDER_ONBOARDING', 'PROCESSING', 'TRANSFERRED', 'FAILED',
+    'REVERSED', 'AWAITING_REMITTANCE', 'CASH_WITHHELD'
+  ));
+
+COMMENT ON COLUMN public.orders.rider_payout_status IS
+  'Stato del compenso al fattorino. CASH_WITHHELD = consegna in contanti: il compenso se l''e'' tenuto dall''incasso e ha rimesso il resto, nessun bonifico da fare.';
+
+-- =========================================================
 -- ③ LA BACHECA DEL FATTORINO NON MOSTRA I RITIRI  (#154)
 -- =========================================================
 -- Un ordine che il cliente sta andando a ritirare compariva fra quelli liberi:
