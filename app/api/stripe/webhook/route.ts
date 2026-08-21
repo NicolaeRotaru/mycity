@@ -142,6 +142,21 @@ export async function POST(req: NextRequest) {
         await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
         break;
       }
+      // 066 — L'esito buono va registrato quanto quello cattivo: senza i
+      // riusciti non esiste un tasso di autorizzazione, esiste solo un conto
+      // di fallimenti senza denominatore.
+      case 'payment_intent.succeeded': {
+        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        break;
+      }
+      // 063 — Un rimborso creato non e' un rimborso arrivato. Se la banca del
+      // cliente lo rifiuta (carta chiusa, conto non piu' valido) i soldi
+      // rientrano alla piattaforma, ma il database continuava a dichiarare il
+      // cliente rimborsato: lui chiama, e per noi risultava gia' liquidato.
+      case 'charge.refund.updated': {
+        await handleRefundUpdated(event.data.object as Stripe.Refund);
+        break;
+      }
       default:
         // Eventi non gestiti: log e basta
         logger.info('Unhandled Stripe event', { type: event.type });
@@ -265,6 +280,34 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     return;
   }
 
+  // 065 — QUADRATURA: QUELLO CHE E' ENTRATO E QUELLO CHE AVEVAMO PREVENTIVATO.
+  //
+  // Il checkout calcola il totale atteso e lo salva in
+  // `pending_checkouts.total_cents`. Il webhook lo leggeva e non lo usava mai.
+  // Eppure le due cifre possono divergere: i totali per gruppo passano da un
+  // `Math.max(0, …)` mentre Stripe applica lo sconto sull'intera sessione,
+  // quindi quando quel taglio scatta la somma dei gruppi non coincide piu' con
+  // l'addebito. Non e' sfruttabile da fuori — gli importi li ricalcola il
+  // server — ma senza questo confronto nascevano ordini con importi diversi da
+  // quanto e' entrato in cassa, e nessuno se ne accorgeva fino alla
+  // riconciliazione. E' il controllo piu' economico che esista sul percorso
+  // dei soldi: due numeri e una sottrazione.
+  const attesoCents = typeof pending.total_cents === 'number' ? pending.total_cents : null;
+  const incassatoCents = session.amount_total ?? null;
+  if (attesoCents !== null && incassatoCents !== null && Math.abs(incassatoCents - attesoCents) > 1) {
+    logger.error('[stripe] incasso diverso dal preventivo: ordini non creati', {
+      pendingCheckoutId, attesoCents, incassatoCents,
+    });
+    await notifyAdmins(
+      '⚠️ Incasso diverso dal preventivo',
+      `Sul carrello ${pendingCheckoutId} Stripe ha incassato €${(incassatoCents / 100).toFixed(2)} ma il preventivo era €${(attesoCents / 100).toFixed(2)}. Nessun ordine creato: va guardato a mano.`,
+      '/admin/orders',
+    );
+    // Si lancia: l'evento resta non processato, Stripe riprova e nel frattempo
+    // nessun ordine nasce con un importo che non torna.
+    throw new Error(`quadratura fallita su ${pendingCheckoutId}: incassati ${incassatoCents}, attesi ${attesoCents}`);
+  }
+
   const groups = pending.groups as PendingGroup[];
   const delivery = pending.delivery as PendingDelivery;
   const pickupInStore = !!pending.pickup_in_store;
@@ -304,7 +347,10 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
   const buyerEmail = session.customer_details?.email ?? session.customer_email ?? null;
   const buyerName = session.customer_details?.name ?? delivery.full_name;
-  const createdOrderIds: Array<{ orderId: string; sellerId: string; totalCents: number; itemsCount: number }> = [];
+  // `nuovo` distingue gli ordini creati adesso da quelli ripescati perche'
+  // gia' esistevano da un tentativo precedente (#164): solo i primi meritano
+  // email e campanella.
+  const createdOrderIds: Array<{ orderId: string; sellerId: string; totalCents: number; itemsCount: number; nuovo: boolean }> = [];
 
   // Crea N ordini, uno per gruppo
   for (const g of groups) {
@@ -325,6 +371,11 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
         user_id: buyerId,
         seller_id: g.sellerId,
         total_price: g.totalCents / 100,
+        // 055 — Con la carta non c'e' credito MyCity da scomputare, quindi il
+        // lordo e il netto coincidono. Si scrive lo stesso, perche' il
+        // rimborso divide sempre per questa colonna e non deve chiedersi da
+        // quale strada e' arrivato l'ordine.
+        gross_total_cents: g.totalCents,
         shipping_cost: g.shippingCents / 100,
         delivery_fee_cents: deliveryFeeCents,
         // Compenso del fattorino: dipende dalla distanza, non da quanto ha
@@ -369,11 +420,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
           .eq('seller_id', g.sellerId)
           .maybeSingle();
         if (existing?.id) {
+          // 164 — Questo ordine c'era gia': l'ha creato un tentativo
+          // precedente, che poi e' morto su un gruppo successivo. Le sue email
+          // e la sua campanella sono gia' partite. Se lo si segna come nuovo,
+          // al secondo giro il negoziante riceve una seconda «Nuovo ordine» e
+          // il cliente una seconda conferma: telefonano per capire se sono due
+          // ordini, e il cliente teme il doppio addebito.
           createdOrderIds.push({
             orderId: existing.id,
             sellerId: g.sellerId,
             totalCents: g.totalCents,
             itemsCount: g.items.reduce((s, it) => s + it.quantity, 0),
+            nuovo: false,
           });
           continue;
         }
@@ -406,6 +464,7 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
       sellerId: g.sellerId,
       totalCents: g.totalCents,
       itemsCount: g.items.reduce((s, it) => s + it.quantity, 0),
+      nuovo: true,
     });
   }
 
@@ -448,6 +507,9 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
    */
   const avvisi = (async () => {
   for (const created of createdOrderIds) {
+    // 164 — Solo gli ordini nati adesso. Gli altri le comunicazioni le hanno
+    // gia' avute nel tentativo precedente.
+    if (!created.nuovo) continue;
     const groupForOrder = groups.find((x) => x.sellerId === created.sellerId);
     const storeName = groupForOrder?.storeName ?? 'venditore';
 
@@ -991,7 +1053,7 @@ async function handleDisputeCreated(dispute: Stripe.Dispute) {
  * fatto all'apertura) → annulla l'ordine (semantica rimborso).
  */
 async function handleDisputeClosed(dispute: Stripe.Dispute) {
-  const orders = await findOrdersForDispute(dispute, 'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_fee_cents, shipping_cost');
+  const orders = await findOrdersForDispute(dispute, 'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, payout_tentativo, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_payout_tentativo, rider_fee_cents, shipping_cost');
   if (orders.length === 0) return;
   const admin = getAdminSupabase();
   const ids = orders.map((o) => o.id);
@@ -1006,18 +1068,52 @@ async function handleDisputeClosed(dispute: Stripe.Dispute) {
 
     const daRipagare = orders.filter((o) => o.payout_status === 'REVERSED');
     if (daRipagare.length > 0) {
-      await admin
-        .from('orders')
-        .update({
-          payout_status: 'HELD',       // torna fra i candidati del prossimo giro
-          stripe_transfer_id: null,    // il transfer precedente e' stato stornato
-          stripe_reversal_id: null,
-          seller_payout_reversed_cents: 0,
-          payout_at: null,
-        })
-        .in('id', daRipagare.map((o) => o.id));
+      // 158 — Riga per riga, perche' il numero del tentativo sale di uno. E'
+      // quel numero a rendere diversa la chiave di idempotenza del bonifico:
+      // con la chiave vecchia Stripe avrebbe restituito il transfer gia'
+      // stornato, e il venditore avrebbe vinto la causa senza essere pagato.
+      for (const o of daRipagare) {
+        await admin
+          .from('orders')
+          .update({
+            payout_status: 'HELD',       // torna fra i candidati del prossimo giro
+            stripe_transfer_id: null,    // il transfer precedente e' stato stornato
+            stripe_reversal_id: null,
+            seller_payout_reversed_cents: 0,
+            payout_at: null,
+            payout_tentativo: ((o as { payout_tentativo?: number }).payout_tentativo ?? 0) + 1,
+          })
+          .eq('id', o.id);
+      }
       logger.info('[stripe] contestazione vinta: payout rimessi in coda', {
         ordini: daRipagare.length,
+      });
+    }
+
+    // 158 — E IL FATTORINO? All'apertura della contestazione gli veniva
+    // richiamato indietro il compenso (`reverseRiderTransfer`, poche righe
+    // sopra), ed e' il caso normale: il bonifico parte un'ora dopo la
+    // consegna, la contestazione arriva settimane dopo. Poi qui si rimetteva
+    // in coda solo il venditore. Il fattorino restava a 'REVERSED' per
+    // sempre: la consegna l'aveva fatta, la piattaforma teneva l'incasso, e
+    // lui non veniva pagato — senza nessun avviso. Su chi e' pagato a
+    // consegna, questo e' abbandono alla seconda volta.
+    const riderDaRipagare = orders.filter((o) => o.rider_payout_status === 'REVERSED' && o.rider_id);
+    if (riderDaRipagare.length > 0) {
+      for (const o of riderDaRipagare) {
+        await admin
+          .from('orders')
+          .update({
+            rider_payout_status: 'HELD',
+            rider_transfer_id: null,
+            rider_payout_reversed_cents: 0,
+            rider_payout_at: null,
+            rider_payout_tentativo: ((o as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0) + 1,
+          })
+          .eq('id', o.id);
+      }
+      logger.info('[stripe] contestazione vinta: compensi fattorino rimessi in coda', {
+        ordini: riderDaRipagare.length,
       });
     }
 
@@ -1121,4 +1217,110 @@ async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
     paymentIntent: pi.id,
     lastError: pi.last_payment_error?.message ?? null,
   });
+  await registraTentativoPagamento(pi, 'failed');
+}
+
+async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
+  await registraTentativoPagamento(pi, 'succeeded');
+}
+
+/**
+ * 066 — L'ESITO DI OGNI TENTATIVO DI PAGAMENTO, SCRITTO DOVE SI PUO' CONTARE.
+ *
+ * Del rifiuto di una carta restava una riga di log e nient'altro: il motivo —
+ * fondi insufficienti, rifiuto dell'emittente, 3D Secure non completato —
+ * finiva su Sentry e spariva. Cosi' alla domanda base del prodotto pagamenti,
+ * «quanti tentativi vanno a buon fine e perche' falliscono gli altri», non si
+ * poteva rispondere: ogni intervento sul checkout era una scommessa, e
+ * un'interruzione dei pagamenti si sarebbe vista solo dal calo degli ordini.
+ *
+ * Best-effort: una misura non deve mai far fallire un pagamento.
+ */
+async function registraTentativoPagamento(
+  pi: Stripe.PaymentIntent,
+  esito: 'succeeded' | 'failed',
+): Promise<void> {
+  try {
+    const admin = getAdminSupabase();
+    const errore = pi.last_payment_error;
+    const pendingId = typeof pi.metadata?.pending_checkout_id === 'string'
+      ? pi.metadata.pending_checkout_id
+      : null;
+    // La charge arriva espansa solo se qualcuno l'ha chiesto: quando c'e' si
+    // legge l'esito di rete e quello del 3D Secure, quando non c'e' restano
+    // vuoti. Meglio un campo vuoto che un campo riempito con la cosa sbagliata.
+    const charge = typeof pi.latest_charge === 'object' && pi.latest_charge !== null
+      ? (pi.latest_charge as Stripe.Charge)
+      : null;
+    const { error } = await admin.from('payment_attempts').insert({
+      payment_intent_id: pi.id,
+      pending_checkout_id: pendingId,
+      user_id: typeof pi.metadata?.buyer_user_id === 'string' ? pi.metadata.buyer_user_id : null,
+      amount_cents: pi.amount ?? null,
+      status: esito,
+      decline_code: errore?.decline_code ?? charge?.outcome?.reason ?? null,
+      error_code: errore?.code ?? null,
+      network_status: charge?.outcome?.network_status ?? null,
+      three_d_secure: charge?.payment_method_details?.card?.three_d_secure?.result ?? null,
+    });
+    // 23505 = lo stesso evento e' gia' stato registrato: e' idempotenza, non un guasto.
+    if (error && (error as { code?: string }).code !== '23505') {
+      logger.warn('[stripe] tentativo di pagamento non registrato', { paymentIntent: pi.id, message: error.message });
+    }
+  } catch (e) {
+    logger.warn('[stripe] tentativo di pagamento non registrato', { paymentIntent: pi.id, e });
+  }
+}
+
+/**
+ * 063 — UN RIMBORSO CHE FALLISCE DOPO L'EMISSIONE.
+ *
+ * `refundOrder` scrive payment_status='REFUNDED' e refunded_amount_cents
+ * subito dopo `refunds.create`, cioe' su un rimborso ancora in stato
+ * 'pending'. Se poi la banca del cliente lo rifiuta, i soldi rientrano alla
+ * piattaforma mentre il database continua a dire che il cliente e' stato
+ * rimborsato: lui non riceve niente, chiama, e ai nostri occhi risulta gia'
+ * liquidato. E' l'innesco tipico di una contestazione che poi si perde,
+ * perche' le nostre prove dicono il contrario di quello che e' successo.
+ */
+async function handleRefundUpdated(refund: Stripe.Refund) {
+  if (refund.status !== 'failed' && refund.status !== 'canceled') return;
+
+  const admin = getAdminSupabase();
+  const paymentIntent = typeof refund.payment_intent === 'string'
+    ? refund.payment_intent
+    : refund.payment_intent?.id ?? null;
+  if (!paymentIntent) {
+    logger.warn('[stripe] rimborso fallito senza payment_intent', { refundId: refund.id });
+    return;
+  }
+
+  const { data: order } = await admin
+    .from('orders')
+    .select('id, refunded_amount_cents, gross_total_cents, total_price, payment_status')
+    .eq('stripe_payment_intent', paymentIntent)
+    .maybeSingle();
+  if (!order) {
+    logger.warn('[stripe] rimborso fallito: nessun ordine trovato', { refundId: refund.id, paymentIntent });
+    return;
+  }
+
+  const tornatoIndietro = refund.amount ?? 0;
+  const restante = Math.max(0, (order.refunded_amount_cents ?? 0) - tornatoIndietro);
+  const { error } = await admin
+    .from('orders')
+    .update({
+      refunded_amount_cents: restante,
+      payment_status: restante > 0 ? 'PARTIALLY_REFUNDED' : 'PAID',
+    })
+    .eq('id', order.id);
+  if (error) {
+    logger.error('[stripe] rimborso fallito non registrato', { orderId: order.id, message: error.message });
+  }
+
+  await notifyAdmins(
+    '⚠️ Rimborso rifiutato dalla banca',
+    `Il rimborso di €${(tornatoIndietro / 100).toFixed(2)} sull'ordine ${order.id} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo.`,
+    '/admin/orders',
+  );
 }

@@ -18,6 +18,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 const inseriti: Array<Record<string, unknown>> = [];
 const cancellati: Array<{ tabella: string; valore: unknown }> = [];
+// #159 — campanelle e posta partite davvero.
+const campanelle: Array<Record<string, unknown>> = [];
+const postaInviata: Array<Record<string, unknown>> = [];
 
 /** Fa fallire la riserva della merce a partire da questa chiamata (1-based). */
 let riservaFallisceAllaChiamata = 0;
@@ -66,7 +69,9 @@ vi.mock('@/lib/promotions', () => ({
   fetchActiveDiscounts: vi.fn(async () => new Map()),
   discountedUnitCents: vi.fn((prezzo: number) => Math.round(prezzo * 100)),
 }));
-vi.mock('@/lib/email/client', () => ({ sendEmail: vi.fn(async () => ({ ok: true, id: 'e1' })) }));
+vi.mock('@/lib/email/client', () => ({
+  sendEmail: vi.fn(async (m: Record<string, unknown>) => { postaInviata.push(m); return { ok: true, id: 'e1' }; }),
+}));
 vi.mock('@/lib/email/templates', () => ({
   orderConfirmedBuyerTemplate: vi.fn(() => ({ subject: 's', html: 'h' })),
   newOrderSellerTemplate: vi.fn(() => ({ subject: 's', html: 'h' })),
@@ -119,6 +124,14 @@ vi.mock('@/lib/supabase/server', () => {
         }),
       };
     }
+    if (table === 'notifications') {
+      return {
+        insert: (valori: Record<string, unknown>) => {
+          campanelle.push(valori);
+          return Promise.resolve({ error: null });
+        },
+      };
+    }
     return risolvibile({ data: [], error: null });
   };
 
@@ -135,7 +148,13 @@ vi.mock('@/lib/supabase/server', () => {
   };
 
   return {
-    getAdminSupabase: () => ({ from, rpc }),
+    getAdminSupabase: () => ({
+      from,
+      rpc,
+      // Serve alla mail «Nuovo ordine» verso il venditore: senza, quel ramo
+      // finiva nel catch e la posta al negozio non veniva nemmeno tentata.
+      auth: { admin: { getUserById: async (id: string) => ({ data: { user: { id, email: `${id}@test.it` } } }) } },
+    }),
     getServerSupabase: async () => ({
       auth: { getUser: async () => ({ data: { user: { id: 'cliente-1', email: 'cliente@test.it' } } }) },
       from,
@@ -171,6 +190,8 @@ beforeEach(() => {
   rpcCalls.length = 0;
   inseriti.length = 0;
   cancellati.length = 0;
+  campanelle.length = 0;
+  postaInviata.length = 0;
   chiamateRiserva = 0;
   riservaFallisceAllaChiamata = 0;
   vi.resetModules();
@@ -213,5 +234,36 @@ describe('ordine in contanti da due negozi', () => {
     const res = await esegui();
     expect(res.status).toBe(409);
     expect(inseriti.length).toBe(0);
+  });
+
+  /**
+   * #159 — Gli avvisi partivano dentro il ciclo, un negozio per volta. Se il
+   * secondo falliva, l'annullamento cancellava gli ordini ma non poteva
+   * richiamare indietro le email gia' uscite ne' le campanelle gia' scritte:
+   * il negozio A si metteva a preparare pane e fiori per un ordine che non
+   * esiste, e il cliente aveva in casella «Ordine ricevuto» dopo aver letto
+   * «Alcuni articoli non sono piu' disponibili».
+   */
+  it('quando il secondo negozio fallisce, nessuno riceve avvisi del primo', async () => {
+    riservaFallisceAllaChiamata = 2;
+    const res = await esegui();
+    expect(res.status).toBe(409);
+
+    expect(campanelle.length, 'campanelle di un ordine annullato').toBe(0);
+    expect(postaInviata.length, 'email di un ordine annullato').toBe(0);
+  });
+
+  it('quando va tutto bene gli avvisi partono, uno per negozio', async () => {
+    const res = await esegui();
+    expect(res.status).toBe(200);
+
+    // Due ordini: due campanelle al venditore + due al cliente.
+    expect(campanelle.length).toBe(4);
+    // Due email al venditore + due di conferma al cliente.
+    expect(postaInviata.length).toBe(4);
+    // E i link puntano agli ordini veri, non a pagine cancellate.
+    for (const c of campanelle) {
+      expect(String(c.link)).toMatch(/ord-[12]/);
+    }
   });
 });

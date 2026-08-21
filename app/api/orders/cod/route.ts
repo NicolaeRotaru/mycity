@@ -326,6 +326,10 @@ export const POST = withAuthRateLimit(
     const ordiniCreati: Array<{ id: string; sellerId: string; totalCents: number }> = [];
     const reservedStockPerGroup: Array<Array<{ product_id: string; variant_id: string | null; qty: number }>> = [];
     const walletAppliedPerGroup: number[] = [];
+    // #159 — Gli avvisi da mandare a fine giro, non uno per volta dentro il
+    // ciclo: se un negozio successivo fallisce non deve restare in giro la
+    // posta di un ordine che poi viene cancellato.
+    const comunicazioni: Array<{ orderId: string; sellerId: string; totalCents: number; itemsCount: number }> = [];
 
     const rollbackCreatedCodOrders = async () => {
       for (let j = createdOrderIds.length - 1; j >= 0; j--) {
@@ -352,6 +356,7 @@ export const POST = withAuthRateLimit(
       }
       createdOrderIds.length = 0;
       ordiniCreati.length = 0;
+      comunicazioni.length = 0;
       reservedStockPerGroup.length = 0;
       walletAppliedPerGroup.length = 0;
     };
@@ -425,6 +430,14 @@ export const POST = withAuthRateLimit(
           user_id: user.id,
           seller_id: g.sellerId,
           total_price: totalCents / 100,
+          // 055 — Il lordo di vendita, scritto accanto al netto.
+          // `total_price` e' la cassa che il fattorino deve riportare: il
+          // totale DOPO lo scomputo del credito MyCity. Ma la quota del
+          // negozio (`seller_payout_cents`) nasce sul LORDO. Il rimborso
+          // usava il primo come denominatore e la seconda come numeratore:
+          // su un ordine da 50 euro pagato con 20 di credito recuperava dal
+          // negozio il 67% in piu' del dovuto. Ora il lordo resta scritto.
+          gross_total_cents: grossTotalCents,
           shipping_cost: shipping / 100,
           delivery_fee_cents: deliveryFeeCents,
           // Il compenso del fattorino, scritto alla creazione dell'ordine e
@@ -511,67 +524,89 @@ export const POST = withAuthRateLimit(
         return ApiErrors.internal('Errore nella creazione ordine.');
       }
 
+      // 159 — GLI AVVISI PARTONO SOLO QUANDO L'ORDINE C'E' DAVVERO, TUTTO.
+      //
+      // Qui, dentro il ciclo, per ogni negozio partivano subito campanella ed
+      // email al venditore e al cliente. Poi bastava che il negozio successivo
+      // non avesse piu' la merce: `rollbackCreatedCodOrders` cancellava gli
+      // ordini gia' nati, ma le email erano gia' uscite e le campanelle
+      // restavano scritte. Il cliente leggeva «Alcuni articoli non sono piu'
+      // disponibili» e credeva di non aver ordinato, ma aveva in casella
+      // «Ordine ricevuto»; il negozio A aveva «Nuovo ordine» con un link a una
+      // pagina che non esiste piu', e cominciava a preparare pane e fiori per
+      // un ordine che non c'e'.
+      //
+      // La strada della carta lo faceva gia' bene: invia solo dopo aver
+      // controllato che tutti i gruppi abbiano il loro ordine. Adesso si
+      // accumula e si manda alla fine.
+      comunicazioni.push({
+        orderId: order.id,
+        sellerId: g.sellerId,
+        totalCents,
+        itemsCount: g.items.reduce((sum, it) => sum + it.quantity, 0),
+      });
+
+      createdOrderIds.push(order.id);
+      ordiniCreati.push({ id: order.id, sellerId: g.sellerId, totalCents });
+    }
+
+    // --- 6. Adesso che TUTTI gli ordini esistono, si avvisa. (#159)
+    for (const c of comunicazioni) {
       // Notifica in-app al venditore — nuovo ordine COD ricevuto
       await admin.from('notifications').insert({
         // #33 — la categoria decide se la persona vuole ancora ricevere
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
-        user_id: g.sellerId,
+        user_id: c.sellerId,
         title: '🎉 Nuovo ordine!',
-        body: `Ordine #${order.id.slice(0, 6).toUpperCase()} · €${(totalCents / 100).toFixed(2)} · pagamento alla consegna`,
-        link: `/seller/orders/${order.id}`,
+        body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · €${(c.totalCents / 100).toFixed(2)} · pagamento alla consegna`,
+        link: `/seller/orders/${c.orderId}`,
       });
 
       // Email al venditore (oltre alla notifica) — per la carta parte dal webhook,
       // per il COD va inviata qui. Best-effort.
       try {
-        const { data: sellerAuth } = await admin.auth.admin.getUserById(g.sellerId);
+        const { data: sellerAuth } = await admin.auth.admin.getUserById(c.sellerId);
         const sellerEmail = sellerAuth?.user?.email;
         if (sellerEmail) {
-          const itemsCount = g.items.reduce((s, it) => s + it.quantity, 0);
           const t = newOrderSellerTemplate({
             sellerName: null,
-            orderId: order.id,
-            total: totalCents / 100,
-            itemsCount,
+            orderId: c.orderId,
+            total: c.totalCents / 100,
+            itemsCount: c.itemsCount,
           });
           await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
         }
       } catch (e) {
-        logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: order.id, e });
+        logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
       }
 
       // Conferma al BUYER — notifica in-app + email (best-effort: un errore qui
       // non deve far fallire la creazione dell'ordine). Per gli ordini con carta
       // la conferma parte dal webhook Stripe; per il COD va inviata qui.
       await admin.from('notifications').insert({
-        // #33 — la categoria decide se la persona vuole ancora ricevere
-        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
         user_id: user.id,
         title: '✅ Ordine ricevuto',
-        body: `Il tuo ordine #${order.id.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,
-        link: `/orders/${order.id}`,
+        body: `Il tuo ordine #${c.orderId.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,
+        link: `/orders/${c.orderId}`,
       });
       try {
         const { data: sellerProfile } = await admin
           .from('profiles')
           .select('store_name')
-          .eq('id', g.sellerId)
+          .eq('id', c.sellerId)
           .single();
         const t = orderConfirmedBuyerTemplate({
           name: body.delivery.fullName,
-          orderId: order.id,
-          total: totalCents / 100,
+          orderId: c.orderId,
+          total: c.totalCents / 100,
           storeName: sellerProfile?.store_name ?? 'il negozio',
         });
         await sendEmail({ to: user.email, subject: t.subject, html: t.html, text: t.text });
       } catch (e) {
-        logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: order.id, e });
+        logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
       }
-
-      createdOrderIds.push(order.id);
-      ordiniCreati.push({ id: order.id, sellerId: g.sellerId, totalCents });
     }
 
     // NB: il coupon è già stato claimato atomicamente sopra (claim_coupon, fix #36).
