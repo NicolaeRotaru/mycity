@@ -29,7 +29,33 @@ import type { AiProductPatch, CategoryRow } from '@/lib/products/aiPatch';
  * guardandolo. Questo elenco e' il perimetro, e vive qui perche' e' una
  * decisione, non una dimenticanza.
  */
-const CAMPI_ECONOMICI = ['price', 'compare_at_price', 'stock', 'unlimited_stock', 'status'] as const;
+export const CAMPI_ECONOMICI = ['price', 'compare_at_price', 'stock', 'unlimited_stock', 'status'] as const;
+
+/**
+ * 21/8/2026 — IL FRENO C'ERA, ED ERA NEL POSTO IN CUI NON POTEVA FERMARE NIENTE.
+ *
+ * L'elenco qui sopra veniva usato in un punto solo: per costruire lo SCHEMA che
+ * si manda al modello (`PROPRIETA_SOLO_TESTO`). Cioè si CHIEDEVA al modello di
+ * non toccare il prezzo. Un modello che lo tocca lo stesso — succede, e succede
+ * di più sulle richieste lunghe — passava dritto: il patch arrivava con dentro
+ * `price`, e chi lo applicava lo scriveva.
+ *
+ * Il pulsante «Applica tutte» del Catalog Copilot scrive fino a duecento
+ * modifiche in fila, e l'anteprima è una lista scorrevole di una riga per
+ * prodotto: uno zero perso dal modello — 20 € che diventano 2 € — entra in
+ * vetrina senza che il negoziante lo veda. Non se ne accorge nessuno finché non
+ * arrivano gli ordini al prezzo sbagliato.
+ *
+ * Un freno che chiede per favore non è un freno. Adesso i campi economici si
+ * TOLGONO dal patch, qui, che è il punto da cui passa ogni risultato del lotto.
+ */
+export function senzaCampiEconomici<T extends Record<string, unknown>>(patch: T): T {
+  const pulito: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(patch)) {
+    if (!(CAMPI_ECONOMICI as readonly string[]).includes(k)) pulito[k] = v;
+  }
+  return pulito as T;
+}
 
 const PROPRIETA_SOLO_TESTO: Record<string, unknown> = Object.fromEntries(
   Object.entries(PRODUCT_PATCH_PROPERTIES).filter(
@@ -196,7 +222,9 @@ export function parseCatalogBatchEntry(
         : (verdettoPresente ? undefined : 'Verdetto non disponibile: da controllare a mano.'),
     };
   }
-  const patch = input.patch && typeof input.patch === 'object' ? (input.patch as AiProductPatch) : {};
+  const grezzo = input.patch && typeof input.patch === 'object' ? (input.patch as AiProductPatch) : {};
+  // Il prezzo si cambia uno per uno, guardandolo: dal lotto non esce mai.
+  const patch = senzaCampiEconomici(grezzo);
   return {
     product_id: productId,
     patch,

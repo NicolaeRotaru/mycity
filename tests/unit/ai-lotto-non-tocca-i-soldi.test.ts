@@ -88,3 +88,51 @@ describe('la banda di sicurezza sul prezzo', () => {
     expect(update.price).toBe(99);
   });
 });
+
+/**
+ * 21/8/2026 — IL FRENO C'ERA, ED ERA NEL POSTO IN CUI NON POTEVA FERMARE NIENTE.
+ *
+ * Le prove qui sopra guardavano lo SCHEMA mandato al modello: dicevano che al
+ * modello non chiediamo il prezzo. Ma «non chiedere» non è «non accettare». Un
+ * modello che il prezzo lo propone lo stesso — succede, e succede di più sulle
+ * richieste lunghe — passava dritto fino alla scrittura.
+ *
+ * Il pulsante «Applica tutte» scrive fino a duecento modifiche in fila, e
+ * l'anteprima è una lista scorrevole di una riga per prodotto: uno zero perso
+ * dal modello (20 € che diventano 2 €) entrava in vetrina senza che il
+ * negoziante lo vedesse.
+ *
+ * Queste prove guardano il patch che ESCE, non lo schema che entra.
+ */
+describe('il prezzo non esce mai dal lavoro massivo', () => {
+  it('un modello che propone il prezzo lo stesso non lo spunta', async () => {
+    const { parseCatalogBatchEntry } = await import('@/lib/ai/catalogBatch');
+    const esito = parseCatalogBatchEntry('improve', {
+      customId: 'p1',
+      status: 'succeeded',
+      toolInput: {
+        patch: { name: 'Coppa Piacentina DOP', description: 'Buona', price: 2, stock: 999, status: 'draft' },
+        summary: 'migliorata',
+      },
+    } as never);
+
+    expect(esito.patch, 'il prezzo è passato dal lotto').not.toHaveProperty('price');
+    expect(esito.patch).not.toHaveProperty('stock');
+    expect(esito.patch).not.toHaveProperty('status');
+    // Il testo, che è il mestiere del lotto, resta.
+    expect(esito.patch).toMatchObject({ name: 'Coppa Piacentina DOP', description: 'Buona' });
+  });
+
+  it('la funzione che toglie i campi economici li toglie davvero, tutti', async () => {
+    const { senzaCampiEconomici, CAMPI_ECONOMICI } = await import('@/lib/ai/catalogBatch');
+    const conTutto = Object.fromEntries([
+      ...CAMPI_ECONOMICI.map((c) => [c, 1]),
+      ['name', 'x'],
+    ]);
+    const pulito = senzaCampiEconomici(conTutto);
+    for (const campo of CAMPI_ECONOMICI) {
+      expect(pulito, `${campo} è ancora nel patch`).not.toHaveProperty(campo);
+    }
+    expect(pulito).toEqual({ name: 'x' });
+  });
+});
