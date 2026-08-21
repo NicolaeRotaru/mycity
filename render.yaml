@@ -40,6 +40,19 @@ services:
     # verde; per usarlo servono due cose: mettere `false` qui e aggiungere il
     # segreto RENDER_DEPLOY_HOOK. Lasciato `true` per non fermare i rilasci
     # senza il tuo ok.
+    #
+    # ⚠️ E PRIMA DI TUTTO: QUESTA RIGA DA SOLA NON CHIUDE IL BUCO (21/8/2026).
+    # Il sito vero lo pubblica VERCEL, non Render: ogni unione su `main` fa
+    # partire un rilascio di produzione su Vercel entro pochi secondi, senza
+    # aspettare la CI — verificato sulle tre unioni del 21 agosto. Mettere
+    # `false` qui spegne un rilascio che forse non e' nemmeno quello che serve
+    # il sito, e lascia aperto quello che lo serve davvero. Il gancio su Vercel
+    # sta in .github/workflows/deploy-dopo-ci.yml, con l'ordine giusto delle
+    # mosse scritto in cima a quel file.
+    #
+    # ⚪ Non ho potuto vedere se il servizio Render e' ancora acceso: da qui
+    # Render non lo raggiungo. Se e' spento, questa riga non fa niente in nessun
+    # caso; se e' acceso, va spenta insieme all'altra, non al posto dell'altra.
     autoDeploy: true
     # --include=dev: con NODE_ENV=production (impostato sotto) npm salta le
     # devDependencies, ma servono per COMPILARE — tailwind, postcss, i tipi, il

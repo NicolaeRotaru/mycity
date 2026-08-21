@@ -120,6 +120,30 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
         run: npm run test:integration
 
+      # #139 — SENZA I SEGRETI LE PROVE NON SI SALTANO PIU': LA CI SI AVVIA UN
+      # SUPABASE SUO.
+      #
+      # Prima qui c'era solo un bivio: coi segreti di un progetto di prova le
+      # prove giravano, senza si saltavano con un avviso. Sono sempre mancati,
+      # quindi non hanno mai girato — e il verde della CI copriva dei permessi
+      # che nessuno aveva guardato da fuori.
+      #
+      # Adesso la CI se lo avvia da sola dentro il runner: vive quanto il giro e
+      # poi sparisce. Non costa niente (un progetto di prova costa 10 dollari al
+      # mese), non ha nessuna chiave da custodire su GitHub, e nasce vuoto ogni
+      # volta, quindi due giri non possono sporcarsi a vicenda.
+      #
+      # I segreti restano ammessi e hanno la precedenza: se un giorno esistono,
+      # gira il passo qui sopra e questo non parte.
+      - name: Avvia un Supabase locale
+        if: steps.rls.outputs.enabled != 'true'
+        run: bash tests/supabase-locale/avvia.sh
+
+      - name: I permessi visti da fuori, contro il Supabase locale
+        id: locale
+        if: steps.rls.outputs.enabled != 'true'
+        run: npm run test:integration
+
       # #229 — UN SEGNO VERDE CHE NON VUOL DIRE «TUTTO PROVATO».
       #
       # Due gruppi di prove si auto-saltano quando mancano i segreti, e finora
@@ -132,11 +156,13 @@ jobs:
         run: |
           {
             if [ "${{ steps.rls.outputs.enabled }}" = "true" ]; then
-              echo "✅ **Prove d'integrazione sui permessi**: girate."
+              echo "✅ **Prove d'integrazione sui permessi**: girate, contro il progetto di prova dei segreti."
+            elif [ "${{ steps.locale.outcome }}" = "success" ]; then
+              echo "✅ **Prove d'integrazione sui permessi**: girate, contro un Supabase avviato qui dentro."
             else
               echo "⚠️ **Prove d'integrazione sui permessi: NON girate.**"
               echo ""
-              echo "Mancano i segreti \`SUPABASE_TEST_URL\`, \`SUPABASE_TEST_ANON_KEY\`, \`SUPABASE_TEST_SERVICE_ROLE_KEY\`."
+              echo "Nessun segreto di un progetto di prova, e il Supabase locale non e' partito."
               echo "Il verde qui sopra non dice che i permessi sul database sono a posto: dice che non sono stati provati."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
