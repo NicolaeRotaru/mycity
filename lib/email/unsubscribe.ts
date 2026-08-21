@@ -70,7 +70,7 @@ export function verificaDisiscrizione(
 }
 
 export function linkDisiscrizione(email: string, ambito: AmbitoDisiscrizione): string {
-  // Il dominio scritto a mano qui non era quello vero (render.yaml dice
+  // Il dominio scritto a mano qui non era quello vero (la configurazione diceva
   // mycity-marketplace.com): un link di disiscrizione che porta altrove non vale.
   const base = env.appUrl();
   return `${base}/api/unsubscribe?token=${encodeURIComponent(firmaDisiscrizione(email, ambito))}`;

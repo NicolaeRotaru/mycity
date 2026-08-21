@@ -1,40 +1,34 @@
 name: Rilascio dopo CI verde
 
-# A cosa serve: oggi il rilascio parte da solo a ogni push su main
-# (`autoDeploy: true` in render.yaml) e non aspetta la CI. I due corrono in
-# parallelo, quindi un test rosso finisce in produzione comunque: la CI diventa
-# un referto che arriva dopo il funerale.
+# A COSA SERVE. Il rilascio del sito partiva da solo a ogni unione su `main`,
+# senza aspettare i controlli. I due correvano in parallelo, quindi un controllo
+# rosso finiva in produzione lo stesso: la CI diventava un referto che arriva
+# dopo il funerale.
 #
-# Questo file è la metà che si può mettere nel repository: rilascia SOLO quando
-# la CI di main è passata.
+# Questo lavoro rilascia SOLO quando i controlli di `main` sono passati, e
+# rilascia il commit che i controlli hanno promosso — non la punta di adesso,
+# perche' fra la fine dei controlli e questo passo qualcuno puo' aver spinto
+# altro, e quello non l'ha provato nessuno.
 #
-# ⚠️ IL SITO VERO LO RILASCIA VERCEL, NON RENDER (trovato il 21/8/2026).
+# IL SITO VIVE SU VERCEL. Fino al 21/8/2026 questo file parlava anche di Render,
+# e la carta #141 mandava Nicola a spegnere il rilascio automatico li'. Era il
+# bersaglio sbagliato: guardando i rilasci veri, ogni unione su `main` faceva
+# partire una pubblicazione di PRODUZIONE su Vercel entro pochi secondi. Nicola
+# ha poi confermato di non usare piu' Render, e il pezzo e' stato tolto: una
+# strada morta lasciata nel file e' una trappola per chi legge di fretta.
 #
-# Questo file, e la carta #141 che lo accompagnava, parlavano solo di Render. Ma
-# guardando i rilasci veri: ogni unione su `main` fa partire subito un rilascio
-# di PRODUZIONE su Vercel, senza aspettare la CI. Le tre unioni del 21 agosto —
-# #230, #231, #232 — hanno fatto esattamente questo, ognuna entro pochi secondi
-# dall'unione.
-#
-# Vuol dire che spegnere `autoDeploy` in render.yaml NON avrebbe chiuso il buco:
-# Vercel avrebbe continuato a pubblicare lo stesso. Il gancio va messo dove passa
-# il sito, e il sito passa da Vercel.
-#
-# ⚠️ Per far diventare questo l'unica strada servono due cose, e vanno fatte in
-# QUESTO ordine — al contrario il sito smette di aggiornarsi e basta:
+# ⚠️ PERCHE' QUESTO NON E' ANCORA L'UNICA STRADA. Servono due cose, in QUESTO
+# ordine — al contrario il sito smette di aggiornarsi e basta:
 #
 #   1. i segreti, su GitHub → Settings → Secrets and variables → Actions:
-#      · VERCEL_TOKEN      (Vercel → Account Settings → Tokens → Create)
-#      · VERCEL_ORG_ID     e  VERCEL_PROJECT_ID
+#      · VERCEL_TOKEN       (Vercel → Account Settings → Tokens → Create)
+#      · VERCEL_ORG_ID      e  VERCEL_PROJECT_ID
 #        (Vercel → il progetto → Settings → General, in fondo)
-#      · RENDER_DEPLOY_HOOK, solo se il servizio Render e' ancora acceso
-#        (Render → servizio → Settings → Deploy Hook)
 #
-#   2. SOLO DOPO, due parole nel repository:
-#      · in `vercel.json`:  "main": true   diventa   "main": false
-#      · in `render.yaml`:  autoDeploy: true   diventa   autoDeploy: false
+#   2. SOLO DOPO, una parola in `vercel.json`:
+#      "main": true   diventa   "main": false
 #
-# Finché i segreti mancano, questo lavoro si limita a dirlo e non fa nulla: non
+# Finche' i segreti mancano, questo lavoro si limita a dirlo e non fa nulla: non
 # blocca niente e non rilascia niente.
 
 on:
@@ -100,35 +94,3 @@ jobs:
           npx --yes vercel@latest pull --yes --environment=production --token="$TOKEN"
           npx --yes vercel@latest build --prod --token="$TOKEN"
           npx --yes vercel@latest deploy --prebuilt --prod --token="$TOKEN"
-
-  rilascia:
-    name: Chiama Render (solo se il servizio e' ancora acceso)
-    runs-on: ubuntu-latest
-    # Solo su CI passata. `workflow_dispatch` non porta conclusion: si accetta.
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
-    timeout-minutes: 10
-    steps:
-      - name: Verifica di avere il gancio di rilascio
-        id: gancio
-        env:
-          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: |
-          if [ -z "$HOOK" ]; then
-            echo "::warning::RENDER_DEPLOY_HOOK non configurato: nessun rilascio da qui. Oggi rilascia Render da solo a ogni push, SENZA aspettare la CI."
-            echo "pronto=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "pronto=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Rilascia
-        if: steps.gancio.outputs.pronto == 'true'
-        env:
-          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
-        run: |
-          codice="$(curl -sS -o /tmp/risposta.txt -w '%{http_code}' -X POST "$HOOK")"
-          echo "Risposta di Render: $codice"
-          cat /tmp/risposta.txt || true
-          # Un rilascio che non parte non deve passare per riuscito.
-          [ "$codice" -ge 200 ] && [ "$codice" -lt 300 ]

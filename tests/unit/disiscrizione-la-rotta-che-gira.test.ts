@@ -86,7 +86,7 @@ describe('la rotta che disiscrive davvero', () => {
 describe('il link stampato dentro le email', () => {
   it('non punta a un dominio scritto a mano', () => {
     // Prima cadeva su 'https://mycity.it', che non e' il sito vero
-    // (render.yaml dichiara mycity-marketplace.com): un link di disiscrizione
+    // (il dominio vero e' mycity-marketplace.com): un link di disiscrizione
     // che porta altrove vale come non averlo.
     const link = linkDisiscrizione('maria@example.it', 'marketing');
     expect(link).not.toContain('mycity.it/');

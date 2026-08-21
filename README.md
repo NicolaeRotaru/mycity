@@ -10,7 +10,7 @@ Buyer, Seller, Rider, Admin — un singolo prodotto, 3+1 ruoli.
 - **Payments**: Stripe Checkout + Connect (escrow) + COD
 - **Email**: Resend (transactional)
 - **AI**: Claude API (Anthropic) — description writer, photo extract
-- **Hosting**: Render
+- **Hosting**: Vercel
 - **DNS**: Netsons + Cloudflare proxy
 - **Observability**: PostHog (analytics + replay) + Sentry (errors)
 - **Maps**: Leaflet + OpenStreetMap (tiles) + Nominatim (geocoding)
@@ -190,13 +190,17 @@ Quando aggiungi una nuova migration:
 
 ## Deploy
 
-Push su branch `main` → Render auto-deploy.
+Push su branch `main` → Vercel pubblica in produzione.
+(⚠️ oggi parte senza aspettare i controlli: vedi
+`.github/workflows/deploy-dopo-ci.yml` per il gancio che lo lega alla CI, e
+cosa manca per accenderlo.)
 
 ```bash
 git push origin main
 ```
 
-Variabili d'ambiente: settale su Render → Dashboard → Environment.
+Variabili d'ambiente: settale su Vercel → il progetto → Settings → Environment
+Variables. (Fino al 21/8/2026 qui c'era scritto Render: il sito e' su Vercel.)
 
 ## Documenti strategici
 

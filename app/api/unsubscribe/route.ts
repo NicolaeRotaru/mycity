@@ -13,7 +13,8 @@ export const runtime = 'nodejs';
  * Due difetti riparati qui, trovati dalla radiografia del 18/8:
  *
  * ① L'indirizzo di ritorno veniva letto da NEXT_PUBLIC_SITE_URL, che in questo
- *    progetto non esiste: non è in .env.example, non è in render.yaml, non è in
+ *    progetto non esiste: non è in .env.example, non è fra le variabili di
+ *    produzione, non è in
  *    lib/env.ts. Valeva quindi stringa vuota, e `NextResponse.redirect('/?...')`
  *    con un indirizzo relativo in Next 15 lancia «URL is malformed». La pagina
  *    rispondeva errore. Il punto unico dichiarato è `env.appUrl()`.

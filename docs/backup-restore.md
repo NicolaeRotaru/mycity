@@ -35,7 +35,7 @@
   che offre il piano Supabase attivo, da verificare (vedi avviso sopra)
 - **Storage** (immagini prodotti, stories, reviews): replicato su Supabase S3
 - **Codice**: GitHub origin/main + tutti i branch
-- **Env vars**: Render dashboard (NON in repo)
+- **Env vars**: Vercel → progetto → Settings → Environment Variables (NON in repo)
 - **Restore drill**: ogni 3 mesi, documenta tempi
 
 ---
@@ -168,7 +168,8 @@ rclone sync supabase:reviews gdrive:mycity-backup/reviews/
 **Step-by-step (tempo target: 30 min)**:
 
 1. **STOP scritture**: metti app in modalità manutenzione
-   - Render dashboard → env `MAINTENANCE_MODE=true` (TODO implementare se manca)
+   - Vercel → progetto → Settings → Environment Variables → `MAINTENANCE_MODE=true`
+     (TODO implementare se manca)
 
 2. **Trigger restore PITR**:
    - Supabase → Database → Backups → "Restore to point in time"
@@ -180,7 +181,7 @@ rclone sync supabase:reviews gdrive:mycity-backup/reviews/
    - Esegui count query (vedi sezione 4)
 
 4. **Riprendi traffico**:
-   - Render env `MAINTENANCE_MODE=false`
+   - Vercel → variabili d'ambiente → `MAINTENANCE_MODE=false`
    - Verifica app risponde correttamente
 
 5. **Post-mortem**:
@@ -191,13 +192,13 @@ rclone sync supabase:reviews gdrive:mycity-backup/reviews/
 
 1. Tutti i branch locali sui tuoi PC sono backup
 2. Push su nuovo repo GitHub (tu o team)
-3. Render auto-deploy dopo aver aggiornato il git URL
-4. Rotate tutte le secret (env vars Render)
+3. Vercel ripubblica dopo aver aggiornato il git URL
+4. Rotate tutte le secret (variabili d'ambiente su Vercel)
 
-### Scenario: Render down (rare ma possibile)
+### Scenario: Vercel down (raro ma possibile)
 
 1. Setup mirror su Vercel (1h prep)
-2. DNS Netsons → cambio CNAME da Render a Vercel
+2. DNS Netsons → sposta il CNAME su un altro fornitore gia' pronto
 3. TTL Netsons di solito 1h → totale downtime ~2h
 
 ---
@@ -222,13 +223,13 @@ rclone sync supabase:reviews gdrive:mycity-backup/reviews/
 
 | Secret | Dove | Procedura rotation |
 |---|---|---|
-| Supabase service role | Render env | Supabase Dashboard → Settings → API → Reset |
-| Stripe secret | Render env | Stripe Dashboard → Developers → API keys → Roll |
-| Stripe webhook secret | Render env | Stripe Dashboard → Webhooks → reveal/rotate |
-| Resend API key | Render env | Resend dashboard → API Keys → revoke + new |
-| Anthropic API key | Render env | console.anthropic.com → Settings → Keys |
-| CRON_SECRET | Render env + cron-job.org | Generate random 32 char + update both |
-| Cloudflare Turnstile | Render env | Turnstile dashboard → Sites → rotate |
+| Supabase service role | Vercel env | Supabase Dashboard → Settings → API → Reset |
+| Stripe secret | Vercel env | Stripe Dashboard → Developers → API keys → Roll |
+| Stripe webhook secret | Vercel env | Stripe Dashboard → Webhooks → reveal/rotate |
+| Resend API key | Vercel env | Resend dashboard → API Keys → revoke + new |
+| Anthropic API key | Vercel env | console.anthropic.com → Settings → Keys |
+| CRON_SECRET | Vercel env + cron-job.org | Generate random 32 char + update both |
+| Cloudflare Turnstile | Vercel env | Turnstile dashboard → Sites → rotate |
 
 ---
 
