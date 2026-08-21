@@ -186,6 +186,14 @@ jobs:
       - name: Controlli di permessi e privacy
         run: bash tests/sql/harness/run.sh mycity_ci
 
+      # La ricostruzione qui sopra parte da tabelle VUOTE: una migrazione che
+      # riscrive righe esistenti li' non riscrive niente, e passa comunque. La
+      # 124 e' passata cosi' e si e' fermata sul primo database con dentro un
+      # ordine vero. Qui l'ultima migrazione si applica su un database che ha
+      # gia' dei dati, che e' il giro che fa la produzione.
+      - name: L'ultima migrazione regge un database con dentro degli ordini
+        run: bash tests/sql/harness/migrazione-su-database-pieno.sh mycity_pieno_ci
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
