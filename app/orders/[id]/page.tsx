@@ -176,12 +176,19 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
 
   const cancel = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.rpc('cancel_order', { p_order_id: id });
-      if (error) throw error;
-      const r = data as { ok: boolean; reason?: string };
-      if (!r.ok) {
-        if (r.reason === 'TOO_LATE') throw new Error('Il negozio ha già accettato l\'ordine, non puoi più annullarlo.');
-        throw new Error('Impossibile annullare');
+      // 21/8/2026 — Qui si chiamava `cancel_order` del database, che annulla e
+      // rimette la merce a magazzino ma NON restituisce i soldi: un ordine
+      // pagato con carta finiva annullato con l'incasso ancora a noi, e il
+      // cliente leggeva «Niente addebiti». Il rimborso è una chiamata a Stripe
+      // e le chiavi stanno sul server, quindi si passa da lì.
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`/api/orders/${id}/cancel`, {
+        method: 'POST',
+        headers: session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {},
+      });
+      if (!res.ok) {
+        const corpo = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(corpo.error || 'Impossibile annullare');
       }
     },
     onSuccess: () => {

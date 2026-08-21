@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
-import { refundOrder } from '@/lib/stripe/payout';
+import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -30,90 +30,40 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   }
 
   const admin = getAdminSupabase();
-  const { data: order, error } = await admin
+  const { data: riga, error } = await admin
     .from('orders')
-    .select('id, user_id, total_price, payment_method, payment_status, delivery_status, stripe_payment_intent, wallet_applied_cents, cash_confirmed_at, cash_collected_cents, refunded_amount_cents')
+    .select(COLONNE_ANNULLO)
     .eq('id', params.id)
     .single();
-  if (error || !order) return ApiErrors.notFound('Ordine non trovato');
+  if (error || !riga) return ApiErrors.notFound('Ordine non trovato');
+  const order = riga as unknown as OrdineDaAnnullare;
   if (order.delivery_status === 'CANCELED') return ApiErrors.conflict('Ordine già annullato');
 
   const reason = body.reason?.trim() || 'Ordine annullato dall’amministrazione';
-  let refundId: string | null = null;
 
-  // 053 — Prima la condizione era `payment_status === 'PAID'` soltanto. Un
-  // ordine già rimborsato in parte ha stato 'PARTIALLY_REFUNDED': annullandolo
-  // si finiva nel ramo «niente da rimborsare», e il residuo — la parte di soldi
-  // che il cliente non aveva mai riavuto — non tornava indietro. Nessun
-  // messaggio, nessun errore: semplicemente non succedeva.
-  const isPaidCard =
-    order.payment_method === 'card' &&
-    !!order.stripe_payment_intent &&
-    (order.payment_status === 'PAID' || order.payment_status === 'PARTIALLY_REFUNDED');
+  // La logica del denaro sta in un posto solo (lib/ordini/annulla.ts), perché
+  // era una copia unica dentro questa rotta e il percorso del cliente non
+  // l'attraversava mai: chi annullava dal sito non veniva rimborsato.
+  const esito = await annullaERimborsa(admin, order, {
+    reason,
+    metadata: { canceled_by: user.id, source: 'admin_cancel' },
+    motivoCredito: 'order_admin_canceled',
+  });
 
-  // Contanti già incassati dal fattorino: qui non c'è nulla da rimborsare via
-  // Stripe, e annullare in silenzio lascerebbe il cliente senza merce e senza
-  // soldi. Prima l'ordine in contanti restava 'PENDING' per sempre, quindi
-  // questo caso non era nemmeno distinguibile: veniva trattato come «mai
-  // pagato» e portato a 'FAILED'. La restituzione dei contanti è un fatto
-  // fisico: la decide una persona, non questo endpoint.
-  const contantiIncassati =
-    order.payment_method === 'cod' &&
-    !!(order as { cash_confirmed_at?: string | null }).cash_confirmed_at;
-
-  if (contantiIncassati) {
-    return ApiErrors.conflict(
-      'Ordine già incassato in contanti dal fattorino: la restituzione va gestita a mano ' +
-      '(rimborso al cliente o nota di credito). Registra la scelta prima di annullare.',
-    );
-  }
-
-  if (isPaidCard) {
-    if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
-    try {
-      // 053 — Si rimborsa il RESIDUO, non il totale: sul totale ci pensava già
-      // il tetto dentro refundOrder, ma dirlo qui rende il conto leggibile e
-      // toglie ogni dubbio su quanto sta uscendo.
-      const totaleCent = Math.round(Number(order.total_price) * 100);
-      const giaRimborsato = Number((order as { refunded_amount_cents?: number }).refunded_amount_cents ?? 0);
-      const residuoCent = Math.max(0, totaleCent - giaRimborsato);
-      const res = await refundOrder({
-        orderId: order.id,
-        amountCents: residuoCent,
-        reason,
-        metadata: { canceled_by: user.id, source: 'admin_cancel' },
-        notifyBuyer: true,
-      });
-      refundId = res.refundId;
-    } catch (err) {
-      logger.error('[admin cancel] refund failed', err);
-      return ApiErrors.badGateway('Rimborso Stripe fallito: ' + (err instanceof Error ? err.message : 'unknown'));
+  if (!esito.ok) {
+    if (esito.motivo === 'CONTANTI_INCASSATI') {
+      return ApiErrors.conflict(
+        'Ordine già incassato in contanti dal fattorino: la restituzione va gestita a mano ' +
+        '(rimborso al cliente o nota di credito). Registra la scelta prima di annullare.',
+      );
     }
-    // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
-  } else {
-    const { error: updErr } = await admin
-      .from('orders')
-      .update({
-        delivery_status: 'CANCELED',
-        canceled_at: new Date().toISOString(),
-        ...(order.payment_status === 'PENDING' ? { payment_status: 'FAILED' } : {}),
-      })
-      .eq('id', order.id);
-    if (updErr) return ApiErrors.internal('Annullamento fallito');
-    // Ripristina lo stock riservato (COD non ancora consegnato: merce mai uscita).
-    await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
-    // Restituisce il credito wallet se il buyer ne aveva usato (fix #34).
-    const walletCents = Number((order as { wallet_applied_cents?: number }).wallet_applied_cents ?? 0);
-    if (walletCents > 0) {
-      const { error: wErr } = await admin.rpc('wallet_credit', {
-        p_user: order.user_id,
-        p_cents: walletCents,
-        p_reason: 'order_admin_canceled',
-        p_ref: order.id,
-      });
-      if (wErr) logger.warn('[admin cancel] storno wallet fallito', { orderId: order.id, err: wErr.message });
+    if (esito.motivo === 'STRIPE_NON_CONFIGURATO') return ApiErrors.unavailable('Stripe non configurato');
+    if (esito.motivo === 'RIMBORSO_FALLITO') {
+      return ApiErrors.badGateway('Rimborso Stripe fallito: ' + (esito.dettaglio ?? 'unknown'));
     }
+    return ApiErrors.internal('Annullamento fallito');
   }
+  const refundId = esito.refundId;
 
   // Notifica in-app al buyer.
   await admin.from('notifications').insert({
