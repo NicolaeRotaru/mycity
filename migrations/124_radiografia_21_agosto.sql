@@ -292,6 +292,111 @@ REVOKE ALL    ON public.ordini_disponibili_rider FROM anon, authenticated;
 GRANT  SELECT ON public.ordini_disponibili_rider TO authenticated;
 
 -- =========================================================
+-- ③bis LA VETRINA PUBBLICA AVEVA PERSO DUE COLONNE, E SEI PAGINE NON APRIVANO
+-- =========================================================
+-- Trovato riparando il riquadro della home. La migrazione 108b aveva messo
+-- sulla vetrina pubblica i due booleani che dicono se un negozio puo' incassare
+-- — servono al bollino «Negozio Verificato», e sono solo booleani: niente IBAN,
+-- niente identificativo Stripe. La 112, piu' tarda, ha ricreato la vista senza
+-- quei due campi, scrivendo nel commento che «la forma definitiva sta nella
+-- migrazione 114». Nella 114 non c'e' mai arrivata.
+--
+-- Effetto, non teorico: sei punti del sito chiedono quelle due colonne —
+-- l'elenco negozi, i negozi vicini, la pagina del negozio, il riquadro in cima
+-- alla home, la scheda del venditore e la vetrina in home. PostgREST rifiuta la
+-- richiesta intera («column does not exist»), quindi quelle pagine non
+-- ricevevano niente: non un negozio senza bollino, proprio nessun negozio.
+--
+-- Il controllo in tests/sql/rls/08 diventa rosso se qualcuno le toglie ancora.
+DROP VIEW IF EXISTS public.seller_public_profiles;
+
+CREATE VIEW public.seller_public_profiles AS
+SELECT
+  id,
+  store_name,
+  store_address,
+  store_lat,
+  store_lng,
+  store_phone,
+  store_logo,
+  store_hours,
+  store_media,
+  store_description,
+  store_customization,
+  store_site,
+  offers_express,
+  founded_year,
+  is_approved,
+  stripe_charges_enabled,
+  stripe_payouts_enabled,
+  role,
+  created_at
+FROM public.profiles
+WHERE is_approved = true
+  AND store_name IS NOT NULL
+  AND role = 'seller';
+
+COMMENT ON VIEW public.seller_public_profiles IS
+  'Vetrina pubblica negozi approvati (solo colonne non sensibili, piu'' i due booleani di stato pagamento che servono al bollino Verificato). @foreignKey (id) references public.profiles (id)';
+
+REVOKE ALL    ON public.seller_public_profiles FROM anon, authenticated;
+GRANT  SELECT ON public.seller_public_profiles TO anon, authenticated;
+
+-- =========================================================
+-- ③ter IL RIQUADRO IN CIMA ALLA HOME IN UNA CHIAMATA SOLA  (#83)
+-- =========================================================
+-- Il riquadro faceva fino a tre giri in fila prima di sapere quale foto
+-- caricare: negozio del mese → eventuale ripiego sulla vetrina → dettaglio del
+-- negozio; solo l'ultimo passo (prodotti e recensioni) era in parallelo. Tre
+-- attese di rete infilate una dietro l'altra nella prima cosa che si vede
+-- aprendo il sito.
+CREATE OR REPLACE FUNCTION public.vetrina_home(p_mese date)
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = public
+AS $$
+  WITH scelto AS (
+    SELECT COALESCE(
+      (SELECT som.seller_id FROM public.shop_of_month som WHERE som.month = p_mese LIMIT 1),
+      (SELECT v.id FROM public.seller_public_profiles v ORDER BY v.created_at DESC LIMIT 1)
+    ) AS id
+  ),
+  negozio AS (
+    SELECT v.* FROM public.seller_public_profiles v JOIN scelto s ON s.id = v.id
+  ),
+  prodotti AS (
+    SELECT p.id, p.name, p.price, p.images
+      FROM public.products p JOIN scelto s ON s.id = p.seller_id
+     WHERE p.status = 'available'
+     LIMIT 10
+  ),
+  recensioni AS (
+    SELECT count(*)::int AS conto, round(avg(r.rating)::numeric, 2) AS media
+      FROM public.store_reviews r JOIN scelto s ON s.id = r.store_id
+  )
+  SELECT CASE
+    WHEN (SELECT id FROM negozio) IS NULL THEN NULL
+    ELSE jsonb_build_object(
+      'store', to_jsonb((SELECT n FROM negozio n)),
+      'products', COALESCE((SELECT jsonb_agg(to_jsonb(p)) FROM prodotti p), '[]'::jsonb),
+      'reviews', CASE
+        WHEN (SELECT conto FROM recensioni) > 0
+          THEN jsonb_build_object('avg', (SELECT media FROM recensioni), 'count', (SELECT conto FROM recensioni))
+        ELSE NULL
+      END
+    )
+  END;
+$$;
+
+COMMENT ON FUNCTION public.vetrina_home(date) IS
+  'Il riquadro in cima alla home in una chiamata sola: negozio in vetrina, i suoi prodotti e le sue recensioni. Prima erano fino a tre giri di rete in fila, davanti alla prima cosa che si vede aprendo il sito.';
+
+REVOKE ALL ON FUNCTION public.vetrina_home(date) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.vetrina_home(date) TO anon, authenticated;
+
+-- =========================================================
 -- ④ L'ESITO DI OGNI TENTATIVO DI PAGAMENTO  (#66)
 -- =========================================================
 -- Del rifiuto di una carta restava un `logger.warn` e nient'altro: la domanda

@@ -44,55 +44,28 @@ export default function HeroStoreCard() {
     queryKey: ['home', 'hero-store'],
     staleTime: 10 * 60 * 1000,
     queryFn: async (): Promise<{ store: Store; products: Prod[]; reviews: Reviews | null } | null> => {
-      // #211 — Il mese e' quello di Piacenza, non di Greenwich.
-      const monthIso = primoDelMesePiacenza();
-
-      // 1) Negozio del mese (pick admin), se presente — poi vetrina pubblica per i flag trust.
-      const { data: som } = await supabase
-        .from('shop_of_month')
-        .select('seller_id')
-        .eq('month', monthIso)
-        .maybeSingle();
-      let storeId = (som as { seller_id?: string } | null)?.seller_id ?? null;
-
-      // 2) Fallback: ultimo negozio approvato in vetrina pubblica.
-      if (!storeId) {
-        const { data: s } = await supabase
-          .from('seller_public_profiles')
-          .select('id')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        storeId = (s as { id?: string } | null)?.id ?? null;
+      // #83 — UNA CHIAMATA SOLA, NON TRE IN FILA.
+      //
+      // Prima si facevano fino a tre giri uno dietro l'altro prima di sapere
+      // quale foto caricare: negozio del mese → eventuale ripiego sulla
+      // vetrina → dettaglio del negozio; e solo l'ultimo passo (prodotti e
+      // recensioni) era in parallelo. Tre attese di rete infilate nella prima
+      // cosa che si vede aprendo il sito.
+      //
+      // Ora è una funzione sola nel database (`vetrina_home`, migrazione 124),
+      // che torna negozio, prodotti e recensioni insieme.
+      //
+      // #211 — Il mese è quello di Piacenza, non di Greenwich.
+      const { data: risposta, error } = await supabase.rpc('vetrina_home', {
+        p_mese: primoDelMesePiacenza(),
+      });
+      if (error) {
+        // Il riquadro non è mai vuoto: senza dati si mostra il segnaposto.
+        return null;
       }
-      if (!storeId) return null;
-
-      const { data: storeRow } = await supabase
-        .from('seller_public_profiles')
-        .select('id, store_name, store_address, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled')
-        .eq('id', storeId)
-        .maybeSingle();
-      const store = (storeRow as Store | null) ?? null;
-      if (!store) return null;
-
-      // Prodotti reali + statistiche recensioni (RPC aggregata): la card mostra
-      // rating e numero recensioni solo se esistono recensioni vere.
-      const [prodsRes, reviewsRes] = await Promise.all([
-        supabase
-          .from('products')
-          .select('id, name, price, images')
-          .eq('seller_id', store.id)
-          .eq('status', 'available')
-          .limit(10),
-        supabase.rpc('store_review_stats', { p_store_ids: [store.id] }),
-      ]);
-
-      const stat = ((reviewsRes.data ?? []) as { store_id: string; avg: number | string; count: number }[])[0];
-      const reviews: Reviews | null = stat && Number(stat.count) > 0
-        ? { avg: Number(stat.avg), count: Number(stat.count) }
-        : null;
-
-      return { store, products: (prodsRes.data ?? []) as Prod[], reviews };
+      const v = risposta as { store: Store; products: Prod[] | null; reviews: Reviews | null } | null;
+      if (!v?.store) return null;
+      return { store: v.store, products: v.products ?? [], reviews: v.reviews };
     },
   });
 
