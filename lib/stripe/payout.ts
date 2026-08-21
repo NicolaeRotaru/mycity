@@ -66,7 +66,7 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
     .from('orders')
     // 046 — serve anche quanto è già stato addebitato al venditore: il payout
     // deve versare il residuo, non il netto pieno.
-    .select('id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, stripe_charge_id, stripe_transfer_group, delivery_status')
+    .select('id, seller_id, payout_status, seller_payout_cents, seller_payout_reversed_cents, payout_tentativo, stripe_charge_id, stripe_transfer_group, delivery_status')
     .eq('id', orderId)
     .single();
 
@@ -142,7 +142,12 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
       },
       // Idempotency-Key: anche se DB/processo falliscono e si ritenta, Stripe
       // restituisce lo stesso transfer e NON ne crea un secondo.
-      { idempotencyKey: `payout_seller_${order.id}` },
+      //
+      // 158 — Il numero del tentativo fa parte della chiave. Senza, dopo una
+      // contestazione VINTA il bonifico non ripartiva: era gia' stato stornato
+      // e Stripe, con la stessa chiave, restituiva quello vecchio. Il negozio
+      // vinceva la causa e non veniva pagato lo stesso.
+      { idempotencyKey: `payout_seller_${order.id}_t${(order as { payout_tentativo?: number }).payout_tentativo ?? 0}` },
     );
 
     const { error: errFine } = await admin
@@ -192,13 +197,18 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, stripe_charge_id, stripe_transfer_group')
+    .select('id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, rider_payout_tentativo, stripe_charge_id, stripe_transfer_group')
     .eq('id', orderId)
     .single();
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
   if (order.delivery_status !== 'DELIVERED') return { ok: false, code: 'NOT_DELIVERED', reason: 'Ordine non consegnato' };
-  if (order.payment_method !== 'card') return { ok: false, code: 'BAD_STATE', reason: 'COD: il rider incassa i contanti' };
+  // 155 — Sul contrassegno il compenso il fattorino se l'e' gia' tenuto dal
+  // contante al momento della conferma dell'incasso (app/api/rider/cash-confirm):
+  // l'atteso della rimessa e' il totale MENO il suo compenso. Non c'e' nessun
+  // bonifico da fare, ed e' scritto sull'ordine come 'CASH_WITHHELD' invece di
+  // restare NULL — che voleva dire «mai pagato» e nessuno sapeva distinguerlo.
+  if (order.payment_method !== 'card') return { ok: false, code: 'BAD_STATE', reason: 'COD: il compenso e gia trattenuto dal contante' };
   if (!order.rider_id) return { ok: false, code: 'BAD_STATE', reason: 'Nessun rider assegnato' };
   if (order.rider_payout_status === 'TRANSFERRED') return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già versato' };
 
@@ -247,7 +257,8 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
         transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
         metadata: { order_id: order.id, rider_id: order.rider_id, kind: 'rider_fee' },
       },
-      { idempotencyKey: `payout_rider_${order.id}` },
+      // 158 — Come per il venditore: il numero del tentativo entra nella chiave.
+      { idempotencyKey: `payout_rider_${order.id}_t${(order as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0}` },
     );
 
     const { error: errFineRider } = await admin
@@ -263,7 +274,20 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
     return { ok: true, transferId: transfer.id };
   } catch (err) {
     logger.error('[stripe] rider transfer failed', err);
-    await admin.from('orders').update({ rider_payout_status: 'HELD' }).eq('id', order.id);
+    // 156 — Il ritorno a 'HELD' veniva rifiutato dal database, che quello stato
+    // non lo prevedeva (vincolo della 119), e l'errore non lo guardava nessuno:
+    // il compenso restava in 'PROCESSING', che nessun giro del cron ripesca.
+    // Un bonifico fallito una volta non ripartiva mai piu'. La migrazione 124
+    // aggiunge lo stato; qui l'errore si vede.
+    const { error: errRitorno } = await admin
+      .from('orders')
+      .update({ rider_payout_status: 'HELD' })
+      .eq('id', order.id);
+    if (errRitorno) {
+      logger.error('[stripe] compenso fattorino bloccato in PROCESSING', {
+        orderId: order.id, message: errRitorno.message,
+      });
+    }
     return { ok: false, code: 'TRANSFER_FAILED', reason: 'Transfer rider fallito' };
   }
 }
@@ -478,18 +502,31 @@ export async function refundOrder(
   const admin = getAdminSupabase();
   const { data: order, error } = await admin
     .from('orders')
-    .select('id, user_id, total_price, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status')
+    .select('id, user_id, total_price, gross_total_cents, seller_payout_cents, seller_payout_reversed_cents, payout_status, stripe_payment_intent, stripe_transfer_id, stripe_reversal_id, refunded_amount_cents, payment_method, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost, delivery_status')
     .eq('id', opts.orderId)
     .single();
 
   if (error || !order) throw new Error('refundOrder: ordine non trovato');
 
-  // Clamp di sicurezza: mai rimborsare più del residuo rimborsabile (totale − già rimborsato).
-  // Il clamp al solo `orderTotalCents` permetteva un over-accredito wallet su ordini COD con
-  // rimborsi parziali multipli (il secondo rimborso ignorava il già accreditato).
-  const orderTotalCents = Math.round(Number(order.total_price) * 100);
+  // 055 — DUE BASI DIVERSE, E IL CONTO NON TORNAVA.
+  //
+  // `total_price` e' la cassa attesa: il totale DOPO lo scomputo del credito
+  // MyCity. `seller_payout_cents` invece nasce sul LORDO, prima del credito.
+  // La quota da recuperare dal negozio si calcolava come
+  // `rimborso × netto_venditore / total_price`: numeratore e denominatore da
+  // due basi diverse. Su un ordine da 50 euro pagato con 20 euro di credito,
+  // un rimborso da 10 euro recuperava dal negozio 10×netto/30 invece di
+  // 10×netto/50 — il 67% in piu' del dovuto, tolto al negoziante senza motivo.
+  //
+  // E un ordine coperto per intero dal credito (gift card da 50 su un ordine
+  // da 50) aveva total_price = 0: il tetto era zero, quindi quell'ordine non
+  // era rimborsabile in nessun modo, ne' dal reso ne' dal reclamo.
+  //
+  // Ora il lordo e' una colonna sua (migrazione 124). Il ripiego su
+  // total_price serve solo agli ordini nati prima.
+  const grossCents = order.gross_total_cents ?? Math.round(Number(order.total_price) * 100);
   const alreadyRefunded = order.refunded_amount_cents ?? 0;
-  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, orderTotalCents - alreadyRefunded));
+  const safeAmountCents = Math.max(0, Math.min(opts.amountCents, grossCents - alreadyRefunded));
   if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
 
   // 051 — LA RIVENDICAZIONE VIENE PRIMA DEI SOLDI.
@@ -513,7 +550,7 @@ export async function refundOrder(
 
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
   const newRefundedTotal = Number(rivendicato.totale_rimborsato ?? 0);
-  const isFull = newRefundedTotal >= orderTotalCents;
+  const isFull = newRefundedTotal >= grossCents;
 
   // --- COD (🟠-18): nessuna charge Stripe → accredito sul wallet del buyer.
   // Idempotente: ref stabile (idempotencyKey del chiamante, es. return_<id>) +
@@ -534,7 +571,7 @@ export async function refundOrder(
     // no-op se l'ordine non è TRANSFERRED o è già stato stornato.
     const sellerNet = order.seller_payout_cents ?? 0;
     const sellerShare =
-      orderTotalCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / orderTotalCents), sellerNet) : 0;
+      grossCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet) : 0;
     let { reversedCents } = await reverseOrderTransfer(order, sellerShare);
 
   // 046 — Se il payout NON è ancora partito, `reverseOrderTransfer` è un no-op:
@@ -627,7 +664,7 @@ export async function refundOrder(
   );
   const sellerNet = order.seller_payout_cents ?? 0;
   const sellerShare =
-    orderTotalCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / orderTotalCents), sellerNet) : 0;
+    grossCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet) : 0;
 
   const { reversedCents } = await reverseOrderTransfer(order, sellerShare);
 

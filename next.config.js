@@ -48,6 +48,15 @@ const nextConfig = {
       { protocol: 'https', hostname: 'api.iconify.design' },
       { protocol: 'https', hostname: 'images.pexels.com' },
     ],
+    // ⚠️ #99 — QUESTE DUE RIGHE VALGONO SOLO PER L'OTTIMIZZATORE DI NEXT.
+    // Le foto di prodotti e negozi NON ci passano: usano il caricatore in
+    // lib/image-loader.ts, che gira l'indirizzo alla trasformazione immagini
+    // di Supabase. Per quelle, formato e durata della cache li decide Supabase.
+    // La scelta è voluta — il ridimensionamento costa CPU, e sul loro CDN non
+    // lo paghiamo noi — ma finché non era scritta da nessuna parte chi leggeva
+    // il progetto credeva efficaci due righe che non lo erano.
+    // Il segnale che la farebbe rivedere: il conto delle trasformazioni
+    // Supabase che supera il risparmio di CPU su Render.
     formats: ['image/avif', 'image/webp'],
     // Media Supabase = immutabili (URL versionato per upload) → cache lunga.
     minimumCacheTTL: 31536000, // 1 anno

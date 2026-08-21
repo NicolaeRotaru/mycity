@@ -302,6 +302,7 @@ export interface Database {
           icon: string | null;
           created_at: string | null;
           sort_order: number;
+          featured: boolean;
         };
         Insert: {
           id?: string;
@@ -311,6 +312,7 @@ export interface Database {
           icon?: string | null;
           created_at?: string | null;
           sort_order?: number;
+          featured?: boolean;
         };
         Update: {
           id?: string;
@@ -320,6 +322,7 @@ export interface Database {
           icon?: string | null;
           created_at?: string | null;
           sort_order?: number;
+          featured?: boolean;
         };
         Relationships: [];
       };
@@ -350,6 +353,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      cod_checkout_attempts: {
+        Row: {
+          chiave: string;
+          user_id: string;
+          order_ids: Json;
+          created_at: string;
+        };
+        Insert: {
+          chiave: string;
+          user_id: string;
+          order_ids?: Json;
+          created_at?: string;
+        };
+        Update: {
+          chiave?: string;
+          user_id?: string;
+          order_ids?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       cod_reconciliations: {
         Row: {
           id: string;
@@ -364,6 +388,7 @@ export interface Database {
           reviewed_at: string | null;
           created_at: string | null;
           remitted_at: string | null;
+          remitted_by: string | null;
         };
         Insert: {
           id?: string;
@@ -378,6 +403,7 @@ export interface Database {
           reviewed_at?: string | null;
           created_at?: string | null;
           remitted_at?: string | null;
+          remitted_by?: string | null;
         };
         Update: {
           id?: string;
@@ -392,6 +418,43 @@ export interface Database {
           reviewed_at?: string | null;
           created_at?: string | null;
           remitted_at?: string | null;
+          remitted_by?: string | null;
+        };
+        Relationships: [];
+      };
+      consent_log: {
+        Row: {
+          id: string;
+          user_id: string | null;
+          anon_id: string | null;
+          categoria: string;
+          valore: boolean;
+          versione_testo: string | null;
+          ip: string | null;
+          user_agent: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string | null;
+          anon_id?: string | null;
+          categoria: string;
+          valore: boolean;
+          versione_testo?: string | null;
+          ip?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string | null;
+          anon_id?: string | null;
+          categoria?: string;
+          valore?: boolean;
+          versione_testo?: string | null;
+          ip?: string | null;
+          user_agent?: string | null;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -658,6 +721,8 @@ export interface Database {
           metadata: Json | null;
           created_at: string;
           claimed_at: string | null;
+          attempts: number;
+          last_error: string | null;
         };
         Insert: {
           id?: string;
@@ -669,6 +734,8 @@ export interface Database {
           metadata?: Json | null;
           created_at?: string;
           claimed_at?: string | null;
+          attempts?: number;
+          last_error?: string | null;
         };
         Update: {
           id?: string;
@@ -680,6 +747,8 @@ export interface Database {
           metadata?: Json | null;
           created_at?: string;
           claimed_at?: string | null;
+          attempts?: number;
+          last_error?: string | null;
         };
         Relationships: [];
       };
@@ -750,6 +819,7 @@ export interface Database {
           redeemed_at: string | null;
           expires_at: string;
           created_at: string;
+          stripe_session_id: string | null;
         };
         Insert: {
           code: string;
@@ -763,6 +833,7 @@ export interface Database {
           redeemed_at?: string | null;
           expires_at?: string;
           created_at?: string;
+          stripe_session_id?: string | null;
         };
         Update: {
           code?: string;
@@ -776,6 +847,7 @@ export interface Database {
           redeemed_at?: string | null;
           expires_at?: string;
           created_at?: string;
+          stripe_session_id?: string | null;
         };
         Relationships: [];
       };
@@ -848,6 +920,30 @@ export interface Database {
           user_id?: string;
           quantity?: number;
           joined_at?: string | null;
+        };
+        Relationships: [];
+      };
+      le: {
+        Row: {
+          code: string | null;
+          referred_email: string | null;
+          status: string | null;
+          bonus_awarded: boolean | null;
+          converted_at: string | null;
+        };
+        Insert: {
+          code?: string | null;
+          referred_email?: string | null;
+          status?: string | null;
+          bonus_awarded?: boolean | null;
+          converted_at?: string | null;
+        };
+        Update: {
+          code?: string | null;
+          referred_email?: string | null;
+          status?: string | null;
+          bonus_awarded?: boolean | null;
+          converted_at?: string | null;
         };
         Relationships: [];
       };
@@ -970,6 +1066,8 @@ export interface Database {
           body: string;
           read_at: string | null;
           created_at: string;
+          edited_at: string | null;
+          body_original: string | null;
         };
         Insert: {
           id?: string;
@@ -978,6 +1076,8 @@ export interface Database {
           body: string;
           read_at?: string | null;
           created_at?: string;
+          edited_at?: string | null;
+          body_original?: string | null;
         };
         Update: {
           id?: string;
@@ -986,6 +1086,8 @@ export interface Database {
           body?: string;
           read_at?: string | null;
           created_at?: string;
+          edited_at?: string | null;
+          body_original?: string | null;
         };
         Relationships: [];
       };
@@ -997,6 +1099,12 @@ export interface Database {
           city: string | null;
           active: boolean | null;
           created_at: string | null;
+          confirm_token: string | null;
+          confirmed_at: string | null;
+          consent_ip: string | null;
+          consent_source: string | null;
+          consent_text_version: string | null;
+          unsubscribed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -1005,6 +1113,12 @@ export interface Database {
           city?: string | null;
           active?: boolean | null;
           created_at?: string | null;
+          confirm_token?: string | null;
+          confirmed_at?: string | null;
+          consent_ip?: string | null;
+          consent_source?: string | null;
+          consent_text_version?: string | null;
+          unsubscribed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -1013,6 +1127,12 @@ export interface Database {
           city?: string | null;
           active?: boolean | null;
           created_at?: string | null;
+          confirm_token?: string | null;
+          confirmed_at?: string | null;
+          consent_ip?: string | null;
+          consent_source?: string | null;
+          consent_text_version?: string | null;
+          unsubscribed_at?: string | null;
         };
         Relationships: [];
       };
@@ -1157,18 +1277,66 @@ export interface Database {
           delivery_status: string | null;
           created_at: string | null;
           seller_id: string | null;
+          rider_id: string | null;
+          delivery_full_name: string | null;
+          delivery_phone: string | null;
+          delivery_address: string | null;
+          delivery_city: string | null;
+          delivery_zip: string | null;
+          delivery_notes: string | null;
+          delivery_lat: number | null;
+          delivery_lng: number | null;
+          shipping_cost: number | null;
+          rider_lat: number | null;
+          rider_lng: number | null;
+          rider_position_updated_at: string | null;
+          accepted_at: string | null;
+          ready_at: string | null;
+          picked_up_at: string | null;
+          delivered_at: string | null;
+          canceled_at: string | null;
           coupon_code: string | null;
+          discount_amount: number | null;
           pickup_in_store: boolean | null;
           stripe_session_id: string | null;
+          stripe_payment_intent: string | null;
+          stripe_charge_id: string | null;
+          stripe_transfer_id: string | null;
+          stripe_refund_id: string | null;
+          payment_method: string | null;
+          application_fee_cents: number | null;
+          seller_payout_cents: number | null;
+          payout_status: string | null;
+          payout_at: string | null;
+          cash_collected_cents: number | null;
+          cash_photo_url: string | null;
+          cash_signature_url: string | null;
+          cash_confirmed_at: string | null;
+          cash_collected_by: string | null;
+          delivery_photo_url: string | null;
+          delivery_signature_url: string | null;
+          invoice_sdi_status: string | null;
+          invoice_sdi_id: string | null;
+          invoice_issued_at: string | null;
           stripe_transfer_group: string | null;
           stripe_reversal_id: string | null;
           dispute_status: string | null;
           disputed_at: string | null;
           rider_payout_status: string | null;
+          rider_transfer_id: string | null;
+          rider_payout_at: string | null;
           refunded_amount_cents: number;
           wallet_applied_cents: number;
           delivery_fee_cents: number;
           delivery_slot: string | null;
+          rider_fee_cents: number | null;
+          seller_payout_reversed_cents: number;
+          rider_payout_reversed_cents: number;
+          reversal_error: string | null;
+          internal_dispute_status: string | null;
+          gross_total_cents: number | null;
+          payout_tentativo: number;
+          rider_payout_tentativo: number;
         };
         Insert: {
           id?: string;
@@ -1178,18 +1346,66 @@ export interface Database {
           delivery_status?: string | null;
           created_at?: string | null;
           seller_id?: string | null;
+          rider_id?: string | null;
+          delivery_full_name?: string | null;
+          delivery_phone?: string | null;
+          delivery_address?: string | null;
+          delivery_city?: string | null;
+          delivery_zip?: string | null;
+          delivery_notes?: string | null;
+          delivery_lat?: number | null;
+          delivery_lng?: number | null;
+          shipping_cost?: number | null;
+          rider_lat?: number | null;
+          rider_lng?: number | null;
+          rider_position_updated_at?: string | null;
+          accepted_at?: string | null;
+          ready_at?: string | null;
+          picked_up_at?: string | null;
+          delivered_at?: string | null;
+          canceled_at?: string | null;
           coupon_code?: string | null;
+          discount_amount?: number | null;
           pickup_in_store?: boolean | null;
           stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          stripe_charge_id?: string | null;
+          stripe_transfer_id?: string | null;
+          stripe_refund_id?: string | null;
+          payment_method?: string | null;
+          application_fee_cents?: number | null;
+          seller_payout_cents?: number | null;
+          payout_status?: string | null;
+          payout_at?: string | null;
+          cash_collected_cents?: number | null;
+          cash_photo_url?: string | null;
+          cash_signature_url?: string | null;
+          cash_confirmed_at?: string | null;
+          cash_collected_by?: string | null;
+          delivery_photo_url?: string | null;
+          delivery_signature_url?: string | null;
+          invoice_sdi_status?: string | null;
+          invoice_sdi_id?: string | null;
+          invoice_issued_at?: string | null;
           stripe_transfer_group?: string | null;
           stripe_reversal_id?: string | null;
           dispute_status?: string | null;
           disputed_at?: string | null;
           rider_payout_status?: string | null;
+          rider_transfer_id?: string | null;
+          rider_payout_at?: string | null;
           refunded_amount_cents?: number;
           wallet_applied_cents?: number;
           delivery_fee_cents?: number;
           delivery_slot?: string | null;
+          rider_fee_cents?: number | null;
+          seller_payout_reversed_cents?: number;
+          rider_payout_reversed_cents?: number;
+          reversal_error?: string | null;
+          internal_dispute_status?: string | null;
+          gross_total_cents?: number | null;
+          payout_tentativo?: number;
+          rider_payout_tentativo?: number;
         };
         Update: {
           id?: string;
@@ -1199,18 +1415,108 @@ export interface Database {
           delivery_status?: string | null;
           created_at?: string | null;
           seller_id?: string | null;
+          rider_id?: string | null;
+          delivery_full_name?: string | null;
+          delivery_phone?: string | null;
+          delivery_address?: string | null;
+          delivery_city?: string | null;
+          delivery_zip?: string | null;
+          delivery_notes?: string | null;
+          delivery_lat?: number | null;
+          delivery_lng?: number | null;
+          shipping_cost?: number | null;
+          rider_lat?: number | null;
+          rider_lng?: number | null;
+          rider_position_updated_at?: string | null;
+          accepted_at?: string | null;
+          ready_at?: string | null;
+          picked_up_at?: string | null;
+          delivered_at?: string | null;
+          canceled_at?: string | null;
           coupon_code?: string | null;
+          discount_amount?: number | null;
           pickup_in_store?: boolean | null;
           stripe_session_id?: string | null;
+          stripe_payment_intent?: string | null;
+          stripe_charge_id?: string | null;
+          stripe_transfer_id?: string | null;
+          stripe_refund_id?: string | null;
+          payment_method?: string | null;
+          application_fee_cents?: number | null;
+          seller_payout_cents?: number | null;
+          payout_status?: string | null;
+          payout_at?: string | null;
+          cash_collected_cents?: number | null;
+          cash_photo_url?: string | null;
+          cash_signature_url?: string | null;
+          cash_confirmed_at?: string | null;
+          cash_collected_by?: string | null;
+          delivery_photo_url?: string | null;
+          delivery_signature_url?: string | null;
+          invoice_sdi_status?: string | null;
+          invoice_sdi_id?: string | null;
+          invoice_issued_at?: string | null;
           stripe_transfer_group?: string | null;
           stripe_reversal_id?: string | null;
           dispute_status?: string | null;
           disputed_at?: string | null;
           rider_payout_status?: string | null;
+          rider_transfer_id?: string | null;
+          rider_payout_at?: string | null;
           refunded_amount_cents?: number;
           wallet_applied_cents?: number;
           delivery_fee_cents?: number;
           delivery_slot?: string | null;
+          rider_fee_cents?: number | null;
+          seller_payout_reversed_cents?: number;
+          rider_payout_reversed_cents?: number;
+          reversal_error?: string | null;
+          internal_dispute_status?: string | null;
+          gross_total_cents?: number | null;
+          payout_tentativo?: number;
+          rider_payout_tentativo?: number;
+        };
+        Relationships: [];
+      };
+      payment_attempts: {
+        Row: {
+          id: string;
+          payment_intent_id: string;
+          pending_checkout_id: string | null;
+          user_id: string | null;
+          amount_cents: number | null;
+          status: string;
+          decline_code: string | null;
+          error_code: string | null;
+          network_status: string | null;
+          three_d_secure: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          payment_intent_id: string;
+          pending_checkout_id?: string | null;
+          user_id?: string | null;
+          amount_cents?: number | null;
+          status: string;
+          decline_code?: string | null;
+          error_code?: string | null;
+          network_status?: string | null;
+          three_d_secure?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          payment_intent_id?: string;
+          pending_checkout_id?: string | null;
+          user_id?: string | null;
+          amount_cents?: number | null;
+          status?: string;
+          decline_code?: string | null;
+          error_code?: string | null;
+          network_status?: string | null;
+          three_d_secure?: string | null;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -1397,18 +1703,39 @@ export interface Database {
           product_id: string;
           user_id: string | null;
           viewed_at: string;
+          view_fingerprint: string | null;
         };
         Insert: {
           id: number;
           product_id: string;
           user_id?: string | null;
           viewed_at?: string;
+          view_fingerprint?: string | null;
         };
         Update: {
           id?: number;
           product_id?: string;
           user_id?: string | null;
           viewed_at?: string;
+          view_fingerprint?: string | null;
+        };
+        Relationships: [];
+      };
+      product_views_daily: {
+        Row: {
+          product_id: string;
+          giorno: string;
+          visite: number;
+        };
+        Insert: {
+          product_id: string;
+          giorno: string;
+          visite?: number;
+        };
+        Update: {
+          product_id?: string;
+          giorno?: string;
+          visite?: number;
         };
         Relationships: [];
       };
@@ -1423,10 +1750,19 @@ export interface Database {
           status: string | null;
           created_at: string | null;
           category_id: string | null;
+          stock: number | null;
           attributes: Json | null;
           unit: string | null;
+          compare_at_price: number | null;
+          condition: string | null;
+          tags: string;
+          express_enabled: boolean | null;
           has_variants: boolean;
           external_source_url: string | null;
+          external_marketplace: string | null;
+          external_data: Json | null;
+          external_synced_at: string | null;
+          external_sync_status: string;
         };
         Insert: {
           id?: string;
@@ -1438,10 +1774,19 @@ export interface Database {
           status?: string | null;
           created_at?: string | null;
           category_id?: string | null;
+          stock?: number | null;
           attributes?: Json | null;
           unit?: string | null;
+          compare_at_price?: number | null;
+          condition?: string | null;
+          tags?: string;
+          express_enabled?: boolean | null;
           has_variants?: boolean;
           external_source_url?: string | null;
+          external_marketplace?: string | null;
+          external_data?: Json | null;
+          external_synced_at?: string | null;
+          external_sync_status?: string;
         };
         Update: {
           id?: string;
@@ -1453,10 +1798,19 @@ export interface Database {
           status?: string | null;
           created_at?: string | null;
           category_id?: string | null;
+          stock?: number | null;
           attributes?: Json | null;
           unit?: string | null;
+          compare_at_price?: number | null;
+          condition?: string | null;
+          tags?: string;
+          express_enabled?: boolean | null;
           has_variants?: boolean;
           external_source_url?: string | null;
+          external_marketplace?: string | null;
+          external_data?: Json | null;
+          external_synced_at?: string | null;
+          external_sync_status?: string;
         };
         Relationships: [];
       };
@@ -1471,27 +1825,82 @@ export interface Database {
           store_phone: string | null;
           created_at: string | null;
           full_name: string | null;
+          phone: string | null;
+          address: string | null;
+          city: string | null;
+          zip: string | null;
           store_address: string | null;
           store_logo: string | null;
           store_hours: Json | null;
           referral_code: string | null;
+          referred_by: string | null;
           store_media: Json | null;
+          store_description: string | null;
           legal_first_name: string | null;
+          legal_last_name: string | null;
+          legal_fiscal_code: string | null;
+          legal_birth_date: string | null;
+          legal_residence_addr: string | null;
+          legal_residence_city: string | null;
+          legal_residence_zip: string | null;
           business_legal_name: string | null;
+          business_vat_number: string | null;
+          business_form: string | null;
+          business_address: string | null;
+          business_city: string | null;
+          business_zip: string | null;
+          business_pec: string | null;
+          business_sdi: string | null;
           approval_status: string | null;
+          approval_requested_at: string | null;
+          approved_at: string | null;
+          approved_by: string | null;
+          rejection_reason: string | null;
           tos_accepted_at: string | null;
+          privacy_accepted_at: string | null;
+          data_accuracy_confirmed_at: string | null;
           billing_iban: string | null;
+          billing_card_last4: string | null;
+          subscription_status: string | null;
+          subscription_renews_at: string | null;
           stripe_account_id: string | null;
+          stripe_charges_enabled: boolean | null;
+          stripe_payouts_enabled: boolean | null;
+          stripe_details_submitted: boolean | null;
+          kyc_id_doc_front_url: string | null;
+          kyc_id_doc_back_url: string | null;
+          kyc_selfie_url: string | null;
+          kyc_provider_check_id: string | null;
+          kyc_provider_status: string | null;
+          kyc_provider_checked_at: string | null;
+          rider_vehicle_type: string | null;
+          rider_vehicle_plate: string | null;
+          rider_license_url: string | null;
+          rider_license_expires_on: string | null;
+          rider_insurance_url: string | null;
+          rider_insurance_expires_on: string | null;
+          rider_haccp_url: string | null;
+          rider_haccp_expires_on: string | null;
           account_type: string | null;
           public_profile_enabled: boolean;
+          public_handle: string | null;
+          public_bio: string | null;
+          public_avatar_url: string | null;
           deletion_requested_at: string | null;
           store_customization: Json;
           rider_is_online: boolean;
+          rider_schedule: Json | null;
+          rider_zones: string;
           notif_order_updates: boolean;
+          notif_promos: boolean;
+          notif_groups: boolean;
+          notif_newsletter: boolean;
+          email_marketing: boolean;
           offers_express: boolean;
           store_site: Json;
           wallet_balance_cents: number;
           stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
           founded_year: number | null;
         };
         Insert: {
@@ -1504,27 +1913,82 @@ export interface Database {
           store_phone?: string | null;
           created_at?: string | null;
           full_name?: string | null;
+          phone?: string | null;
+          address?: string | null;
+          city?: string | null;
+          zip?: string | null;
           store_address?: string | null;
           store_logo?: string | null;
           store_hours?: Json | null;
           referral_code?: string | null;
+          referred_by?: string | null;
           store_media?: Json | null;
+          store_description?: string | null;
           legal_first_name?: string | null;
+          legal_last_name?: string | null;
+          legal_fiscal_code?: string | null;
+          legal_birth_date?: string | null;
+          legal_residence_addr?: string | null;
+          legal_residence_city?: string | null;
+          legal_residence_zip?: string | null;
           business_legal_name?: string | null;
+          business_vat_number?: string | null;
+          business_form?: string | null;
+          business_address?: string | null;
+          business_city?: string | null;
+          business_zip?: string | null;
+          business_pec?: string | null;
+          business_sdi?: string | null;
           approval_status?: string | null;
+          approval_requested_at?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          rejection_reason?: string | null;
           tos_accepted_at?: string | null;
+          privacy_accepted_at?: string | null;
+          data_accuracy_confirmed_at?: string | null;
           billing_iban?: string | null;
+          billing_card_last4?: string | null;
+          subscription_status?: string | null;
+          subscription_renews_at?: string | null;
           stripe_account_id?: string | null;
+          stripe_charges_enabled?: boolean | null;
+          stripe_payouts_enabled?: boolean | null;
+          stripe_details_submitted?: boolean | null;
+          kyc_id_doc_front_url?: string | null;
+          kyc_id_doc_back_url?: string | null;
+          kyc_selfie_url?: string | null;
+          kyc_provider_check_id?: string | null;
+          kyc_provider_status?: string | null;
+          kyc_provider_checked_at?: string | null;
+          rider_vehicle_type?: string | null;
+          rider_vehicle_plate?: string | null;
+          rider_license_url?: string | null;
+          rider_license_expires_on?: string | null;
+          rider_insurance_url?: string | null;
+          rider_insurance_expires_on?: string | null;
+          rider_haccp_url?: string | null;
+          rider_haccp_expires_on?: string | null;
           account_type?: string | null;
           public_profile_enabled?: boolean;
+          public_handle?: string | null;
+          public_bio?: string | null;
+          public_avatar_url?: string | null;
           deletion_requested_at?: string | null;
           store_customization?: Json;
           rider_is_online?: boolean;
+          rider_schedule?: Json | null;
+          rider_zones?: string;
           notif_order_updates?: boolean;
+          notif_promos?: boolean;
+          notif_groups?: boolean;
+          notif_newsletter?: boolean;
+          email_marketing?: boolean;
           offers_express?: boolean;
           store_site?: Json;
           wallet_balance_cents?: number;
           stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
           founded_year?: number | null;
         };
         Update: {
@@ -1537,27 +2001,82 @@ export interface Database {
           store_phone?: string | null;
           created_at?: string | null;
           full_name?: string | null;
+          phone?: string | null;
+          address?: string | null;
+          city?: string | null;
+          zip?: string | null;
           store_address?: string | null;
           store_logo?: string | null;
           store_hours?: Json | null;
           referral_code?: string | null;
+          referred_by?: string | null;
           store_media?: Json | null;
+          store_description?: string | null;
           legal_first_name?: string | null;
+          legal_last_name?: string | null;
+          legal_fiscal_code?: string | null;
+          legal_birth_date?: string | null;
+          legal_residence_addr?: string | null;
+          legal_residence_city?: string | null;
+          legal_residence_zip?: string | null;
           business_legal_name?: string | null;
+          business_vat_number?: string | null;
+          business_form?: string | null;
+          business_address?: string | null;
+          business_city?: string | null;
+          business_zip?: string | null;
+          business_pec?: string | null;
+          business_sdi?: string | null;
           approval_status?: string | null;
+          approval_requested_at?: string | null;
+          approved_at?: string | null;
+          approved_by?: string | null;
+          rejection_reason?: string | null;
           tos_accepted_at?: string | null;
+          privacy_accepted_at?: string | null;
+          data_accuracy_confirmed_at?: string | null;
           billing_iban?: string | null;
+          billing_card_last4?: string | null;
+          subscription_status?: string | null;
+          subscription_renews_at?: string | null;
           stripe_account_id?: string | null;
+          stripe_charges_enabled?: boolean | null;
+          stripe_payouts_enabled?: boolean | null;
+          stripe_details_submitted?: boolean | null;
+          kyc_id_doc_front_url?: string | null;
+          kyc_id_doc_back_url?: string | null;
+          kyc_selfie_url?: string | null;
+          kyc_provider_check_id?: string | null;
+          kyc_provider_status?: string | null;
+          kyc_provider_checked_at?: string | null;
+          rider_vehicle_type?: string | null;
+          rider_vehicle_plate?: string | null;
+          rider_license_url?: string | null;
+          rider_license_expires_on?: string | null;
+          rider_insurance_url?: string | null;
+          rider_insurance_expires_on?: string | null;
+          rider_haccp_url?: string | null;
+          rider_haccp_expires_on?: string | null;
           account_type?: string | null;
           public_profile_enabled?: boolean;
+          public_handle?: string | null;
+          public_bio?: string | null;
+          public_avatar_url?: string | null;
           deletion_requested_at?: string | null;
           store_customization?: Json;
           rider_is_online?: boolean;
+          rider_schedule?: Json | null;
+          rider_zones?: string;
           notif_order_updates?: boolean;
+          notif_promos?: boolean;
+          notif_groups?: boolean;
+          notif_newsletter?: boolean;
+          email_marketing?: boolean;
           offers_express?: boolean;
           store_site?: Json;
           wallet_balance_cents?: number;
           stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
           founded_year?: number | null;
         };
         Relationships: [];
@@ -1619,7 +2138,6 @@ export interface Database {
           rewarded: boolean | null;
           rewarded_at: string | null;
           created_at: string | null;
-          code: string | null;
         };
         Insert: {
           id?: string;
@@ -1629,7 +2147,6 @@ export interface Database {
           rewarded?: boolean | null;
           rewarded_at?: string | null;
           created_at?: string | null;
-          code?: string | null;
         };
         Update: {
           id?: string;
@@ -1639,7 +2156,6 @@ export interface Database {
           rewarded?: boolean | null;
           rewarded_at?: string | null;
           created_at?: string | null;
-          code?: string | null;
         };
         Relationships: [];
       };
@@ -1733,6 +2249,7 @@ export interface Database {
           comment: string | null;
           created_at: string | null;
           photo_urls: string | null;
+          verified_purchase: boolean | null;
         };
         Insert: {
           id?: string;
@@ -1742,6 +2259,7 @@ export interface Database {
           comment?: string | null;
           created_at?: string | null;
           photo_urls?: string | null;
+          verified_purchase?: boolean | null;
         };
         Update: {
           id?: string;
@@ -1751,6 +2269,7 @@ export interface Database {
           comment?: string | null;
           created_at?: string | null;
           photo_urls?: string | null;
+          verified_purchase?: boolean | null;
         };
         Relationships: [];
       };
@@ -2051,6 +2570,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      sponsored_tracking_rate: {
+        Row: {
+          campaign_id: string;
+          kind: string;
+          minuto: string;
+          conteggio: number;
+        };
+        Insert: {
+          campaign_id: string;
+          kind: string;
+          minuto: string;
+          conteggio?: number;
+        };
+        Update: {
+          campaign_id?: string;
+          kind?: string;
+          minuto?: string;
+          conteggio?: number;
+        };
+        Relationships: [];
+      };
       store_reviews: {
         Row: {
           id: string;
@@ -2063,6 +2603,7 @@ export interface Database {
           seller_reply: string | null;
           seller_reply_at: string | null;
           photo_urls: string;
+          helpful_count: number;
         };
         Insert: {
           id?: string;
@@ -2075,6 +2616,7 @@ export interface Database {
           seller_reply?: string | null;
           seller_reply_at?: string | null;
           photo_urls?: string;
+          helpful_count?: number;
         };
         Update: {
           id?: string;
@@ -2087,6 +2629,7 @@ export interface Database {
           seller_reply?: string | null;
           seller_reply_at?: string | null;
           photo_urls?: string;
+          helpful_count?: number;
         };
         Relationships: [];
       };
@@ -2096,18 +2639,21 @@ export interface Database {
           type: string;
           processed_at: string | null;
           processed: boolean;
+          claimed_at: string | null;
         };
         Insert: {
           event_id: string;
           type: string;
           processed_at?: string | null;
           processed?: boolean;
+          claimed_at?: string | null;
         };
         Update: {
           event_id?: string;
           type?: string;
           processed_at?: string | null;
           processed?: boolean;
+          claimed_at?: string | null;
         };
         Relationships: [];
       };

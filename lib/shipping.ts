@@ -63,3 +63,28 @@ export function compensoRiderCents(opts: {
 }): number {
   return opts.pickupInStore ? 0 : COMPENSO_RIDER_CENTS;
 }
+
+/**
+ * Il compenso già deciso per UNA consegna, in euro (#163).
+ *
+ * `compensoRiderCents` dice quanto SPETTA a un ordine nuovo; questa dice
+ * quanto è stato scritto sull'ordine e quindi quanto verrà davvero versato o
+ * trattenuto dal contante. Le due cose divergono negli ordini vecchi, e la
+ * pagina dei guadagni deve mostrare la seconda.
+ *
+ * Il ripiego su `shipping_cost` copre le consegne fatte prima della migrazione
+ * 111, quando il compenso non aveva una colonna sua: è lo stesso ripiego di
+ * `releaseRiderPayout`, così la pagina e il bonifico dicono lo stesso numero.
+ *
+ * Perché serviva: la pagina sommava `shipping_cost`, cioè quanto ha pagato il
+ * CLIENTE per la spedizione. Sopra i 30 euro di spesa quella cifra è zero,
+ * mentre il compenso c'è: il fattorino vedeva consegne da 0,00 € e un totale
+ * più basso del dovuto — sul numero in base al quale decide se continuare a
+ * lavorare con noi.
+ */
+export function compensoConsegnaEuro(o: {
+  rider_fee_cents?: number | null;
+  shipping_cost?: number | string | null;
+}): number {
+  return o.rider_fee_cents != null ? o.rider_fee_cents / 100 : Number(o.shipping_cost || 0);
+}

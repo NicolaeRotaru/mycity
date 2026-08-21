@@ -120,6 +120,27 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_TEST_SERVICE_ROLE_KEY }}
         run: npm run test:integration
 
+      # #229 — UN SEGNO VERDE CHE NON VUOL DIRE «TUTTO PROVATO».
+      #
+      # Due gruppi di prove si auto-saltano quando mancano i segreti, e finora
+      # lo dicevano solo con un avviso dentro il log — dove non guarda nessuno.
+      # Fuori restava una spunta verde identica a quella di una CI che ha
+      # provato tutto. Adesso, quando qualcosa non ha girato, sta scritto in
+      # cima al riepilogo della CI, che è la prima cosa che si vede.
+      - name: Dichiara cosa NON ha girato
+        if: always()
+        run: |
+          {
+            if [ "${{ steps.rls.outputs.enabled }}" = "true" ]; then
+              echo "✅ **Prove d'integrazione sui permessi**: girate."
+            else
+              echo "⚠️ **Prove d'integrazione sui permessi: NON girate.**"
+              echo ""
+              echo "Mancano i segreti \`SUPABASE_TEST_URL\`, \`SUPABASE_TEST_ANON_KEY\`, \`SUPABASE_TEST_SERVICE_ROLE_KEY\`."
+              echo "Il verde qui sopra non dice che i permessi sul database sono a posto: dice che non sono stati provati."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   rls-locale:
     name: Controlli database (Postgres locale, senza chiavi)
     runs-on: ubuntu-latest
@@ -185,6 +206,19 @@ jobs:
         env:
           SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/mycity_ci
         run: npm run db:check-drift
+
+      # #4 — I tipi del database sono generati dalle migrazioni, ma nessuno
+      # controllava che fossero aggiornati. Peggio: il generatore perdeva
+      # silenziosamente le colonne dichiarate in fila nella stessa istruzione
+      # `alter table` — fra cui `seller_payout_cents`, che cinque file di
+      # codice nominano. Il file si generava lo stesso e nessuno se ne
+      # accorgeva. Adesso: si rigenera, e se il risultato e' diverso da quello
+      # committato il passo diventa rosso.
+      - name: I tipi del database sono aggiornati
+        run: |
+          npm run db:types
+          git diff --exit-code lib/database.types.ts \
+            || { echo "::error::lib/database.types.ts non e' aggiornato: esegui 'npm run db:types' e committa il risultato."; exit 1; }
 
   e2e-tests:
     name: E2E smoke (Playwright)
@@ -267,3 +301,19 @@ jobs:
           STATUS=$?
           kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
           exit $STATUS
+
+      # #229 — Vedi il gemello nel job dei test d'integrazione: un verde che
+      # non vuol dire «tutto provato» va detto dove si guarda, non nel log.
+      - name: Dichiara cosa NON ha girato
+        if: always()
+        run: |
+          {
+            if [ "${{ steps.e2e.outputs.enabled }}" = "true" ]; then
+              echo "✅ **Prove end-to-end (browser vero)**: girate."
+            else
+              echo "⚠️ **Prove end-to-end (browser vero): NON girate.**"
+              echo ""
+              echo "Mancano i segreti \`SUPABASE_TEST_URL\` e \`SUPABASE_TEST_ANON_KEY\` (un progetto Supabase di PROVA, mai quello vero)."
+              echo "Nessun percorso del sito è stato aperto in un browser in questa CI."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -61,7 +61,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   const supa = await getServerSupabase();
   const { data: order, error } = await supa
     .from('orders')
-    .select('id, rider_id, total_price, payment_method, delivery_status, cash_confirmed_at')
+    .select('id, rider_id, total_price, rider_fee_cents, shipping_cost, pickup_in_store, payment_method, delivery_status, cash_confirmed_at')
     .eq('id', body.orderId)
     .single();
 
@@ -76,9 +76,22 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     return ApiErrors.conflict("Incasso gia' confermato");
   }
 
-  // L'ATTESO è autoritativo (dal DB): il rider risponde dell'intero total_price
-  // a prescindere da quanto dichiara di aver incassato.
-  const expectedCents = Math.round(Number(order.total_price) * 100);
+  // 155 — IL FATTORINO NON LAVORAVA GRATIS PER SBAGLIO: PER COSTRUZIONE.
+  //
+  // Sul contrassegno gli si chiedeva di rimettere TUTTO il contante, fee di
+  // consegna compresa. E l'unica funzione che paga un fattorino esce subito
+  // con «COD: il rider incassa i contanti»: nessun bonifico partiva mai.
+  // Risultato: su ogni consegna pagata in contanti — il metodo naturale del
+  // cliente anziano di Piacenza — il fattorino consegnava e non prendeva
+  // niente. Alla prima settimana i fattorini smettono di prendere quegli
+  // ordini e la consegna si ferma.
+  //
+  // La strada scelta e' la piu' semplice e la piu' onesta: il compenso se lo
+  // tiene dal contante che ha in mano, e rimette il resto. Nessun bonifico da
+  // fare, nessun saldo piattaforma da anticipare. L'atteso scende di
+  // conseguenza, qui e nella quadratura di fine giornata.
+  const compensoTrattenutoCents = compensoTrattenuto(order);
+  const expectedCents = Math.max(0, Math.round(Number(order.total_price) * 100) - compensoTrattenutoCents);
 
   // Cap difensivo: rifiuta importi palesemente fuori range (errore di battitura/abuso).
   if (body.cashCollectedCents > expectedCents * 2 + 1000) {
@@ -119,6 +132,11 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
       // carta. Conseguenza: l'annullamento da pannello trattava un contante già
       // incassato come un ordine mai pagato, e non restituiva niente al cliente.
       payment_status: 'PAID',
+      // 155 — Il compenso e' stato pagato, in contanti, adesso. Prima questo
+      // campo restava NULL per sempre e non c'era modo di distinguere «pagato
+      // in contanti» da «mai pagato».
+      rider_payout_status: compensoTrattenutoCents > 0 ? 'CASH_WITHHELD' : null,
+      rider_payout_at: compensoTrattenutoCents > 0 ? now.toISOString() : null,
     })
     .eq('id', body.orderId)
     .eq('rider_id', user.id)
@@ -159,7 +177,34 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 });
 
 type AdminSupabase = ReturnType<typeof import('@/lib/supabase/server').getAdminSupabase>;
-type ReconciliationRow = { total_price: number | string | null; cash_collected_cents: number | null };
+type ReconciliationRow = {
+  total_price: number | string | null;
+  cash_collected_cents: number | null;
+  rider_fee_cents: number | null;
+  shipping_cost: number | string | null;
+  pickup_in_store: boolean | null;
+};
+
+/**
+ * Quanto il fattorino trattiene dal contante come proprio compenso (#155).
+ *
+ * Fonte unica: la usano sia la conferma dell'incasso sia la quadratura di fine
+ * giornata, così l'atteso è lo stesso numero in tutti e due i posti. Il
+ * ripiego su `shipping_cost` copre gli ordini nati prima della migrazione 111,
+ * quando il compenso non aveva una colonna sua — è lo stesso ripiego che fa
+ * `releaseRiderPayout`. Sul ritiro in negozio non c'è consegna, quindi non c'è
+ * compenso.
+ */
+function compensoTrattenuto(o: {
+  rider_fee_cents?: number | null;
+  shipping_cost?: number | string | null;
+  pickup_in_store?: boolean | null;
+}): number {
+  if (o.pickup_in_store) return 0;
+  return o.rider_fee_cents != null
+    ? Math.max(0, o.rider_fee_cents)
+    : Math.max(0, Math.round(Number(o.shipping_cost ?? 0) * 100));
+}
 
 /** La data (AAAA-MM-GG) nel fuso di Piacenza, non in quello di Greenwich. */
 function giornoLocale(d: Date): string {
@@ -203,14 +248,20 @@ async function upsertReconciliation(admin: AdminSupabase, riderId: string, isoDa
   // fa emergere come ammanco un rider che non conferma, invece di farlo sparire.
   const { data: deliveredRows } = await admin
     .from('orders')
-    .select('total_price, cash_collected_cents')
+    .select('total_price, cash_collected_cents, rider_fee_cents, shipping_cost, pickup_in_store')
     .eq('rider_id', riderId)
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
     .gte('delivered_at', start)
     .lt('delivered_at', end);
   const rows = (deliveredRows ?? []) as ReconciliationRow[];
-  const expected = rows.reduce((s, r) => s + Math.round(Number(r.total_price) * 100), 0);
+  // 155 — L'atteso e' il contante MENO il compenso che il fattorino si tiene:
+  // e' quello che deve davvero riportare in cassa. Sommare i total_price
+  // interi faceva risultare un ammanco pari al compenso su ogni consegna.
+  const expected = rows.reduce(
+    (s, r) => s + Math.max(0, Math.round(Number(r.total_price) * 100) - compensoTrattenuto(r)),
+    0,
+  );
   const collected = rows.reduce((s, r) => s + Number(r.cash_collected_cents ?? 0), 0);
 
   const status = Math.abs(expected - collected) <= 50 ? 'OK' : 'MISMATCH';

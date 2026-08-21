@@ -30,6 +30,10 @@ const state: {
 
 // Query-builder chainabile e "awaitable" che risolve sempre a `result`.
 export const filtriVisti: { in: unknown[][] } = { in: [] };
+/** Cosa è stato scritto sull'ordine alla conferma (#155). */
+export const aggiornamenti: Array<Record<string, unknown>> = [];
+/** Cosa è finito nella quadratura giornaliera (#155). */
+export const quadrature: Array<Record<string, unknown>> = [];
 
 function qb(result: unknown) {
   const chain = () => builder;
@@ -75,12 +79,22 @@ vi.mock('@/lib/supabase/server', () => ({
       if (table === 'orders') {
         return {
           // UPDATE condizionato (doppia cassa): risolve a state.claimed
-          update: () => qb({ data: state.claimed, error: null }),
+          update: (valori: Record<string, unknown>) => {
+            aggiornamenti.push(valori);
+            return qb({ data: state.claimed, error: null });
+          },
           // SELECT della riconciliazione: risolve alle righe consegnate/incassate
           select: () => qb({ data: state.reconRows, error: null }),
         };
       }
-      if (table === 'cod_reconciliations') return { upsert: () => Promise.resolve({ error: null }) };
+      if (table === 'cod_reconciliations') {
+        return {
+          upsert: (riga: Record<string, unknown>) => {
+            quadrature.push(riga);
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
       if (table === 'profiles') return { select: () => qb({ data: [], error: null }) };
       if (table === 'notifications') return { insert: () => Promise.resolve({ error: null }) };
       return { select: () => qb({ data: [], error: null }) };
@@ -99,48 +113,54 @@ async function callPost(body: Record<string, unknown>) {
 
 beforeEach(() => {
   filtriVisti.in.length = 0;
+  aggiornamenti.length = 0;
+  quadrature.length = 0;
   state.user = { id: 'rider-1' };
   // Ordine COD da €10 (sotto la soglia €50, niente prova obbligatoria).
   state.order = {
     id: ORDER_ID,
     rider_id: 'rider-1',
     total_price: 10,
+    // Compenso del fattorino: 3 euro, fisso (lib/constants).
+    rider_fee_cents: 300,
+    shipping_cost: 0,
+    pickup_in_store: false,
     payment_method: 'cod',
     delivery_status: 'DELIVERED',
     cash_confirmed_at: null,
   };
   state.claimed = [{ id: ORDER_ID }];
-  state.reconRows = [{ total_price: 10, cash_collected_cents: 1000 }];
+  state.reconRows = [{ total_price: 10, cash_collected_cents: 700, rider_fee_cents: 300, shipping_cost: 0, pickup_in_store: false }];
 });
 
 describe('POST /api/rider/cash-confirm', () => {
   it('prima conferma valida → 200', async () => {
-    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
     expect(res.status).toBe(200);
   });
 
   it('doppia conferma concorrente: la seconda riceve 409 (guard atomico)', async () => {
     // L'UPDATE condizionato non matcha: un'altra richiesta ha già vinto la corsa.
     state.claimed = [];
-    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
     expect(res.status).toBe(409);
   });
 
   it('incasso già confermato (fast-path) → 409', async () => {
     state.order = { ...(state.order as object), cash_confirmed_at: '2026-01-01T00:00:00Z' };
-    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
     expect(res.status).toBe(409);
   });
 
   it('ordine di un altro rider → 403', async () => {
     state.user = { id: 'rider-2' };
-    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
     expect(res.status).toBe(403);
   });
 
   it('ordine non COD → 409', async () => {
     state.order = { ...(state.order as object), payment_method: 'card' };
-    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
     expect(res.status).toBe(409);
   });
 
@@ -150,13 +170,52 @@ describe('POST /api/rider/cash-confirm', () => {
   // stessa UPDATE atomica, e questa prova cerca proprio lì: se qualcuno la
   // rimette in un `if` o la toglie, questa diventa rossa.
   it('la conferma dell\'incasso filtra sullo stato di consegna dentro la UPDATE', async () => {
-    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
     expect(res.status).toBe(200);
     const filtroStato = filtriVisti.in.find(
       (args) => args[0] === 'delivery_status',
     );
     expect(filtroStato).toBeTruthy();
     expect(filtroStato?.[1]).toEqual(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']);
+  });
+
+  /**
+   * #155 — IL FATTORINO NON VENIVA PAGATO PER NESSUNA CONSEGNA IN CONTANTI.
+   *
+   * Gli si chiedeva di rimettere TUTTO il contante, fee di consegna compresa,
+   * e l'unica funzione che paga un fattorino esce subito sugli ordini in
+   * contanti: nessun bonifico partiva mai. Consegnava e non prendeva niente.
+   *
+   * Adesso il compenso se lo tiene dal contante che ha in mano: l'atteso è il
+   * totale meno il suo compenso, qui e nella quadratura di fine giornata.
+   */
+  it('l\'atteso è il totale meno il compenso che il fattorino si tiene', async () => {
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
+    expect(res.status).toBe(200);
+    const corpo = await res.json();
+    // Ordine da 10 euro, compenso 3: in cassa deve tornare 7, non 10.
+    expect(corpo.expectedCents).toBe(700);
+    expect(corpo.delta).toBe(0);
+  });
+
+  it('la quadratura di fine giornata usa lo stesso atteso', async () => {
+    await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
+    expect(quadrature[0]?.expected_cents).toBe(700);
+    expect(quadrature[0]?.status).toBe('OK');
+  });
+
+  it('il compenso trattenuto viene scritto sull\'ordine, invece di restare vuoto per sempre', async () => {
+    await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
+    expect(aggiornamenti[0]?.rider_payout_status).toBe('CASH_WITHHELD');
+    expect(aggiornamenti[0]?.rider_payout_at).toBeTruthy();
+  });
+
+  it('sul ritiro in negozio non c\'è consegna, quindi non c\'è compenso da trattenere', async () => {
+    state.order = { ...(state.order as object), pickup_in_store: true };
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+    expect(res.status).toBe(200);
+    const corpo = await res.json();
+    expect(corpo.expectedCents).toBe(1000);
   });
 
   // 189 — La giornata di cassa è quella di Piacenza, non quella di Greenwich:
@@ -166,7 +225,7 @@ describe('POST /api/rider/cash-confirm', () => {
     try {
       // 30 giugno, 22:30 a Piacenza = 20:30 UTC. Il giorno giusto è il 30, non il 1º luglio.
       vi.setSystemTime(new Date('2026-06-30T20:30:00Z'));
-      const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });
+      const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
       expect(res.status).toBe(200);
     } finally {
       vi.useRealTimers();

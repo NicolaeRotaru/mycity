@@ -48,6 +48,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { trackReviewSubmitted } from '@/lib/analytics/events';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -438,36 +439,14 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     router.push('/checkout');
   };
 
-  const productSchema = {
-    '@context': 'https://schema.org',
-    '@type': 'Product',
-    name: product.name,
-    description: product.description ?? undefined,
-    image: images,
-    offers: {
-      '@type': 'Offer',
-      price: price.toFixed(2),
-      priceCurrency: 'EUR',
-      availability: isOutOfStock
-        ? 'https://schema.org/OutOfStock'
-        : 'https://schema.org/InStock',
-      seller: sellerProfile?.store_name
-        ? { '@type': 'LocalBusiness', name: sellerProfile.store_name }
-        : undefined,
-    },
-    aggregateRating: avgRating > 0 ? {
-      '@type': 'AggregateRating',
-      ratingValue: avgRating.toFixed(1),
-      reviewCount: reviews.length,
-    } : undefined,
-  };
+  // #83 — I dati strutturati del prodotto sono passati nel guscio
+  // (app/product/[id]/layout.tsx), che è un componente server: finiscono
+  // nell'HTML subito, invece di comparire solo dopo che il JavaScript è stato
+  // scaricato e avviato. Un prezzo che compare al secondo giro del crawler è
+  // un prezzo che nei risultati può mancare.
 
   return (
     <div className="container mx-auto px-4 sm:px-6 py-6">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }}
-      />
       <Breadcrumb className="mb-4" items={[
         { label: 'Home', href: '/' },
         ...(product.categories?.name && product.categories?.slug
@@ -498,7 +477,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     fill
                     priority={i === 0}
                     sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw"
-                    unoptimized
+                    loader={caricatoreFotoRemote}
                     className="object-cover"
                   />
                   <button
@@ -556,7 +535,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     activeImg === i ? 'border-primary-600' : 'border-transparent hover:border-surface-300'
                   }`}
                 >
-                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" unoptimized className="object-cover" />
+                  <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="80px" loading="lazy" loader={caricatoreFotoRemote} className="object-cover" />
                 </button>
               ))}
             </div>

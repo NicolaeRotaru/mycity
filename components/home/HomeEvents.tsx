@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { CalendarDays, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Ev = {
   id: string;
@@ -63,7 +64,7 @@ export default function HomeEvents() {
           >
             <div className="relative aspect-[16/9] bg-gradient-to-br from-primary-100 to-secondary-100">
               {e.cover_image_url && (
-                <Image src={sizedImage(e.cover_image_url, 'card')} alt="" fill sizes="(max-width: 640px) 100vw, 25vw" unoptimized className="object-cover" />
+                <Image src={sizedImage(e.cover_image_url, 'card')} alt="" fill sizes="(max-width: 640px) 100vw, 25vw" loader={caricatoreFotoRemote} className="object-cover" />
               )}
               {e.discount_percent ? (
                 <span className="absolute top-2 right-2 bg-accent-500 text-ink-900 text-xs font-bold px-2 py-0.5 rounded-full">

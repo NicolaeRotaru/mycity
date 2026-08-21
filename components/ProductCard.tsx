@@ -14,6 +14,7 @@ import { Badge } from './ui/Badge';
 import { useFavorites } from './hooks/useFavorites';
 import { useProfile } from './hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 interface ProductCardProps {
   id: string;
@@ -157,7 +158,7 @@ const ProductCard = ({
           sizes="(min-width: 1024px) 220px, (min-width: 640px) 33vw, 45vw"
           priority={priority}
           loading={priority ? undefined : 'lazy'}
-          unoptimized
+          loader={caricatoreFotoRemote}
           className="object-cover transition-transform duration-300 group-hover:scale-110"
         />
         <button

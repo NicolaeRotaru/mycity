@@ -6,6 +6,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
+import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 
 /**
  * AI Description Writer per seller.
@@ -64,6 +65,34 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     if (profile?.store_name) storeName = profile.store_name;
   } catch {
     // store_name è opzionale per il prompt: prosegui con '—'.
+  }
+
+  // #5 — IL FILTRO ESISTEVA, SCRITTO PER INTERO, E NON ERA COLLEGATO A NIENTE.
+  //
+  // lib/ai/moderation.ts contiene un filtro Trust & Safety completo, con le
+  // categorie vietate e la regola «nel dubbio si blocca». Il commento in cima
+  // diceva «da cablare nelle route in PR successive», e quelle PR non sono mai
+  // arrivate: cercando i suoi nomi in tutto il progetto si trovavano zero usi
+  // fuori dal file stesso.
+  //
+  // In un'ispezione DSA un filtro che esiste e non gira è peggio di uno che
+  // non c'è, perché prova che il rischio era stato riconosciuto. Qui passa il
+  // testo libero che il venditore manda al modello: è la porta scoperta.
+  try {
+    await assertSafeText(
+      [name, body.current ?? '', body.category ?? ''].filter(Boolean).join('\n'),
+      'ai-description-policy',
+    );
+  } catch (err) {
+    if (err instanceof UnsafeContentError) {
+      return ApiErrors.invalidRequest(`Questo testo non si puo' usare: ${err.verdict.reason}`);
+    }
+    // Il filtro è una chiamata al modello come le altre: se quella cade, la
+    // risposta dev'essere la stessa che darebbe la generazione, non un errore
+    // non gestito che arriva al browser come 500 muto.
+    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiCallError) return mapAiError(err, 'ai-description-policy');
+    return ApiErrors.internal('Errore AI.');
   }
 
   // Dati utente come DATO (in messages), mai come istruzioni (system).

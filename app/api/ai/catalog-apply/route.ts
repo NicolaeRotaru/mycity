@@ -11,6 +11,7 @@ import {
   PRODUCT_SNAPSHOT_COLS,
   type ProductRow,
 } from '@/lib/products/aiSnapshot';
+import { classifyProductPolicy } from '@/lib/ai/moderation';
 
 /**
  * Applica al prodotto un patch confermato dal venditore nella chat Assistenza.
@@ -69,6 +70,25 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   if (Object.keys(update).length === 0) {
     return ApiErrors.invalidRequest('Nessuna modifica valida da applicare.');
+  }
+
+  // #5 — Il cancello sui prodotti vietati c'era sulla rotta che li crea, e
+  // mancava qui, dove una scheda già pubblicata viene RISCRITTA. Un prodotto
+  // ammesso alla nascita e trasformato dopo in qualcos'altro passava senza
+  // controlli: un filtro che si può aggirare cambiando strada non è un filtro.
+  // Si controlla solo se la modifica tocca nome o descrizione, cioè quello che
+  // il filtro guarda: sul prezzo o sulla scorta non ha niente da dire.
+  const nome = typeof update.name === 'string' ? update.name : (current.name ?? '');
+  const descrizione =
+    typeof update.description === 'string' ? update.description : (current.description ?? '');
+  if (typeof update.name === 'string' || typeof update.description === 'string') {
+    const verdetto = await classifyProductPolicy(
+      { name: nome, description: descrizione },
+      'catalog-apply-policy',
+    );
+    if (!verdetto.allowed) {
+      return ApiErrors.invalidRequest(`Questa modifica non si puo' pubblicare: ${verdetto.reason}`);
+    }
   }
 
   const { data: updated, error } = await admin

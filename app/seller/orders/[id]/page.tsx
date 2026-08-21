@@ -28,6 +28,7 @@ type OrderRow = {
   total_price: number;
   shipping_cost: number;
   delivery_status: OrderStatus;
+  pickup_in_store?: boolean | null;
   payment_method?: string | null;
   created_at: string;
   accepted_at: string | null;
@@ -121,12 +122,13 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   const { id } = params;
   const qc = useQueryClient();
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [codiceRitiro, setCodiceRitiro] = useState('');
 
   const { data: order, isLoading } = useQuery({
     queryKey: queryKeys.seller.order(id),
     queryFn: async () => {
       const sel = (pay: string) => `
-          id, user_id, total_price, shipping_cost, delivery_status,${pay} created_at,
+          id, user_id, total_price, shipping_cost, delivery_status, pickup_in_store,${pay} created_at,
           accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
           rider_id,
@@ -223,6 +225,48 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  /**
+   * #154 — IL RITIRO IN NEGOZIO NON ARRIVAVA MAI A «CONSEGNATO».
+   *
+   * L'unico modo di chiudere un ordine era il bottone del fattorino, e su un
+   * ritiro il fattorino non c'è. L'ordine restava in «pronto» per sempre: il
+   * negoziante consegnava la merce a mano, incassava zero e vedeva il
+   * pagamento fermo all'infinito; il cliente vedeva «in corso» e non poteva
+   * nemmeno lasciare una recensione, che pretende un ordine consegnato.
+   *
+   * Il codice è lo stesso che il cliente mostrerebbe al fattorino: sul ritiro
+   * lo mostra al negoziante. Cinque errori e si blocca per un quarto d'ora,
+   * come per le consegne.
+   */
+  const confermaRitiro = useMutation({
+    mutationFn: async (codice: string) => {
+      const { data, error } = await supabase.rpc('confirm_pickup_by_seller', {
+        p_order_id: id,
+        p_code: codice.trim(),
+      });
+      if (error) throw error;
+      const esito = data as { ok?: boolean; reason?: string } | null;
+      if (!esito?.ok) {
+        const motivi: Record<string, string> = {
+          WRONG_CODE: 'Codice sbagliato. Fattelo rileggere dal cliente.',
+          LOCKED: 'Troppi tentativi sbagliati: riprova fra un quarto d\u2019ora.',
+          FORBIDDEN: 'Questo ordine non è del tuo negozio.',
+          NOT_PICKUP: 'Questo ordine non è un ritiro in negozio: lo chiude il fattorino.',
+          WRONG_STATUS: 'L\u2019ordine non è ancora pronto.',
+          ORDER_NOT_FOUND: 'Ordine non trovato.',
+        };
+        throw new Error(motivi[esito?.reason ?? ''] ?? 'Non è stato possibile chiudere il ritiro.');
+      }
+    },
+    onSuccess: () => {
+      setCodiceRitiro('');
+      qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
+      toast.success('Ritiro confermato: ordine consegnato');
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
   if (isLoading) return <LoadingState />;
   if (!order) return <EmptyState icon={Package} title="Ordine non trovato" description="L'ordine non esiste o non hai i permessi per vederlo." ctaLabel="Tutti gli ordini" ctaHref="/seller/orders" />;
 
@@ -302,7 +346,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
               onClick={() => transition.mutate({ newStatus: 'READY', timestampField: 'ready_at' })}
               loading={transition.isPending}
             >
-              Pronto per il rider
+              {order.pickup_in_store ? 'Pronto per il ritiro' : 'Pronto per il rider'}
             </Button>
             {/* Print thermal label — Operations Manager: 1 click vs scrivere a mano */}
             <a
@@ -337,7 +381,43 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           </div>
         </div>
       )}
-      {order.delivery_status === 'READY' && !order.rider_id && (
+      {/* RITIRO IN NEGOZIO: lo chiude il venditore, non il fattorino (#154) */}
+      {order.pickup_in_store && ['ACCEPTED', 'READY'].includes(order.delivery_status) && (
+        <div className="bg-white border border-primary-200 rounded-xl p-5">
+          <p className="text-sm font-bold text-ink-900">Il cliente viene a ritirare in negozio</p>
+          <p className="mt-1 text-sm text-ink-600">
+            Quando passa a prendere l&apos;ordine, fatti leggere il suo codice di ritiro e scrivilo
+            qui: l&apos;ordine risulta consegnato e{' '}
+            {cod
+              ? 'i contanti restano in cassa da te.'
+              : 'il bonifico parte al prossimo giro.'}
+          </p>
+          <form
+            className="mt-3 flex flex-wrap items-center gap-2"
+            onSubmit={(e) => { e.preventDefault(); confermaRitiro.mutate(codiceRitiro); }}
+          >
+            <label htmlFor="codice-ritiro" className="sr-only">Codice di ritiro del cliente</label>
+            <input
+              id="codice-ritiro"
+              value={codiceRitiro}
+              onChange={(e) => setCodiceRitiro(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="000000"
+              className="w-36 rounded-lg border border-cream-300 px-3 py-2 font-mono text-lg tracking-[0.3em] text-ink-900"
+            />
+            <Button
+              type="submit"
+              icon={CheckCircle2}
+              loading={confermaRitiro.isPending}
+              disabled={codiceRitiro.length !== 6}
+            >
+              Consegnato al cliente
+            </Button>
+          </form>
+        </div>
+      )}
+      {order.delivery_status === 'READY' && !order.rider_id && !order.pickup_in_store && (
         <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-800 flex items-center gap-2">
           <Clock size={16} aria-hidden className="shrink-0" /> In attesa che un rider prenda in carico questo ordine.
         </div>

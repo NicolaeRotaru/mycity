@@ -11,6 +11,7 @@ import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 type StoreMediaItem = { type: 'image' | 'video'; url: string };
 type Store = {
@@ -43,55 +44,28 @@ export default function HeroStoreCard() {
     queryKey: ['home', 'hero-store'],
     staleTime: 10 * 60 * 1000,
     queryFn: async (): Promise<{ store: Store; products: Prod[]; reviews: Reviews | null } | null> => {
-      // #211 — Il mese e' quello di Piacenza, non di Greenwich.
-      const monthIso = primoDelMesePiacenza();
-
-      // 1) Negozio del mese (pick admin), se presente — poi vetrina pubblica per i flag trust.
-      const { data: som } = await supabase
-        .from('shop_of_month')
-        .select('seller_id')
-        .eq('month', monthIso)
-        .maybeSingle();
-      let storeId = (som as { seller_id?: string } | null)?.seller_id ?? null;
-
-      // 2) Fallback: ultimo negozio approvato in vetrina pubblica.
-      if (!storeId) {
-        const { data: s } = await supabase
-          .from('seller_public_profiles')
-          .select('id')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        storeId = (s as { id?: string } | null)?.id ?? null;
+      // #83 — UNA CHIAMATA SOLA, NON TRE IN FILA.
+      //
+      // Prima si facevano fino a tre giri uno dietro l'altro prima di sapere
+      // quale foto caricare: negozio del mese → eventuale ripiego sulla
+      // vetrina → dettaglio del negozio; e solo l'ultimo passo (prodotti e
+      // recensioni) era in parallelo. Tre attese di rete infilate nella prima
+      // cosa che si vede aprendo il sito.
+      //
+      // Ora è una funzione sola nel database (`vetrina_home`, migrazione 124),
+      // che torna negozio, prodotti e recensioni insieme.
+      //
+      // #211 — Il mese è quello di Piacenza, non di Greenwich.
+      const { data: risposta, error } = await supabase.rpc('vetrina_home', {
+        p_mese: primoDelMesePiacenza(),
+      });
+      if (error) {
+        // Il riquadro non è mai vuoto: senza dati si mostra il segnaposto.
+        return null;
       }
-      if (!storeId) return null;
-
-      const { data: storeRow } = await supabase
-        .from('seller_public_profiles')
-        .select('id, store_name, store_address, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled')
-        .eq('id', storeId)
-        .maybeSingle();
-      const store = (storeRow as Store | null) ?? null;
-      if (!store) return null;
-
-      // Prodotti reali + statistiche recensioni (RPC aggregata): la card mostra
-      // rating e numero recensioni solo se esistono recensioni vere.
-      const [prodsRes, reviewsRes] = await Promise.all([
-        supabase
-          .from('products')
-          .select('id, name, price, images')
-          .eq('seller_id', store.id)
-          .eq('status', 'available')
-          .limit(10),
-        supabase.rpc('store_review_stats', { p_store_ids: [store.id] }),
-      ]);
-
-      const stat = ((reviewsRes.data ?? []) as { store_id: string; avg: number | string; count: number }[])[0];
-      const reviews: Reviews | null = stat && Number(stat.count) > 0
-        ? { avg: Number(stat.avg), count: Number(stat.count) }
-        : null;
-
-      return { store, products: (prodsRes.data ?? []) as Prod[], reviews };
+      const v = risposta as { store: Store; products: Prod[] | null; reviews: Reviews | null } | null;
+      if (!v?.store) return null;
+      return { store: v.store, products: v.products ?? [], reviews: v.reviews };
     },
   });
 
@@ -124,7 +98,7 @@ export default function HeroStoreCard() {
               pill "Aperto ora / Chiuso" sovrapposta in alto a sinistra. */}
           <div className="relative h-44 w-full overflow-hidden">
             {cover ? (
-              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="(max-width: 768px) 100vw, 384px" unoptimized className="object-cover" />
+              <Image src={sizedImage(cover, 'hero')} alt="" fill sizes="(max-width: 768px) 100vw, 384px" loader={caricatoreFotoRemote} className="object-cover" />
             ) : (
               <div aria-hidden className="absolute inset-0 bg-gradient-to-br from-primary-500 via-primary-600 to-secondary-600">
                 <span className="absolute inset-0 flex items-center justify-center text-white/40">
@@ -185,7 +159,7 @@ export default function HeroStoreCard() {
                     return (
                       <div key={p.id} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
                         <div className="aspect-square rounded mb-1.5 overflow-hidden bg-gradient-to-br from-accent-100 to-primary-100 relative">
-                          {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" unoptimized className="object-cover" />}
+                          {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="96px" loader={caricatoreFotoRemote} className="object-cover" />}
                         </div>
                         <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
                         <p className="text-xs font-semibold text-ink-900">{formatPrice(Number(p.price))}</p>
