@@ -19,6 +19,7 @@ import type Stripe from 'stripe';
 import { reverseOrderTransfer, reverseRiderTransfer } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { findOrdersForDispute, notifyAdmins } from './comune';
 
 /**
@@ -93,17 +94,23 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
       // con la chiave vecchia Stripe avrebbe restituito il transfer gia'
       // stornato, e il venditore avrebbe vinto la causa senza essere pagato.
       for (const o of daRipagare) {
-        await admin
-          .from('orders')
-          .update({
-            payout_status: 'HELD',       // torna fra i candidati del prossimo giro
-            stripe_transfer_id: null,    // il transfer precedente e' stato stornato
-            stripe_reversal_id: null,
-            seller_payout_reversed_cents: 0,
-            payout_at: null,
-            payout_tentativo: ((o as { payout_tentativo?: number }).payout_tentativo ?? 0) + 1,
-          })
-          .eq('id', o.id);
+        const valori = {
+          payout_status: 'HELD',       // torna fra i candidati del prossimo giro
+          stripe_transfer_id: null,    // il transfer precedente e' stato stornato
+          stripe_reversal_id: null,
+          seller_payout_reversed_cents: 0,
+          payout_at: null,
+          payout_tentativo: ((o as { payout_tentativo?: number }).payout_tentativo ?? 0) + 1,
+        };
+        // Prima della migrazione 124 la colonna del tentativo non esiste e
+        // l'aggiornamento fallirebbe intero: il venditore vincerebbe la
+        // contestazione e resterebbe comunque a mani vuote. Rimetterlo in
+        // coda senza quel numero e' meglio che non rimetterlo affatto.
+        await conRipiegoSchema(
+          'orders.update (contestazione vinta, venditore)',
+          () => admin.from('orders').update(valori).eq('id', o.id),
+          () => admin.from('orders').update(senzaCampi(valori, ['payout_tentativo'])).eq('id', o.id),
+        );
       }
       logger.info('[stripe] contestazione vinta: payout rimessi in coda', {
         ordini: daRipagare.length,
@@ -121,16 +128,18 @@ export async function handleDisputeClosed(dispute: Stripe.Dispute) {
     const riderDaRipagare = orders.filter((o) => o.rider_payout_status === 'REVERSED' && o.rider_id);
     if (riderDaRipagare.length > 0) {
       for (const o of riderDaRipagare) {
-        await admin
-          .from('orders')
-          .update({
-            rider_payout_status: 'HELD',
-            rider_transfer_id: null,
-            rider_payout_reversed_cents: 0,
-            rider_payout_at: null,
-            rider_payout_tentativo: ((o as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0) + 1,
-          })
-          .eq('id', o.id);
+        const valori = {
+          rider_payout_status: 'HELD',
+          rider_transfer_id: null,
+          rider_payout_reversed_cents: 0,
+          rider_payout_at: null,
+          rider_payout_tentativo: ((o as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0) + 1,
+        };
+        await conRipiegoSchema(
+          'orders.update (contestazione vinta, fattorino)',
+          () => admin.from('orders').update(valori).eq('id', o.id),
+          () => admin.from('orders').update(senzaCampi(valori, ['rider_payout_tentativo'])).eq('id', o.id),
+        );
       }
       logger.info('[stripe] contestazione vinta: compensi fattorino rimessi in coda', {
         ordini: riderDaRipagare.length,

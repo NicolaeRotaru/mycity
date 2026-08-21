@@ -18,6 +18,7 @@
  */
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 
 export type DisputeOrderRow = {
   id: string;
@@ -41,12 +42,25 @@ export async function findOrdersForDispute(dispute: Stripe.Dispute, columns: str
   const admin = getAdminSupabase();
   const pi = typeof dispute.payment_intent === 'string' ? dispute.payment_intent : null;
   const chargeId = typeof dispute.charge === 'string' ? dispute.charge : (dispute.charge?.id ?? null);
+  // Il ripiego copre la finestra fra l'unione del codice e la firma sulla
+  // migrazione 124. Senza, una `select` che nomina `payout_tentativo` prima
+  // che la colonna esista fallisce INTERA: qui l'errore non veniva nemmeno
+  // guardato, quindi la contestazione vinta trovava zero ordini e il venditore
+  // restava senza soldi in silenzio (lib/db/migrazione-124.ts).
+  const ridotte = senzaColonne(columns, COLONNE_124);
+  const cerca = async (campo: 'stripe_payment_intent' | 'stripe_charge_id', valore: string) =>
+    conRipiegoSchema(
+      `orders.select (contestazione per ${campo})`,
+      () => admin.from('orders').select(columns).eq(campo, valore),
+      () => admin.from('orders').select(ridotte).eq(campo, valore),
+    );
+
   if (pi) {
-    const { data } = await admin.from('orders').select(columns).eq('stripe_payment_intent', pi);
+    const { data } = await cerca('stripe_payment_intent', pi);
     if (data && data.length > 0) return data as unknown as DisputeOrderRow[];
   }
   if (chargeId) {
-    const { data } = await admin.from('orders').select(columns).eq('stripe_charge_id', chargeId);
+    const { data } = await cerca('stripe_charge_id', chargeId);
     if (data && data.length > 0) return data as unknown as DisputeOrderRow[];
   }
   return [];

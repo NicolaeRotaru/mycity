@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 
 export const runtime = 'nodejs';
 
@@ -117,39 +118,53 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // Postgres serializza due conferme concorrenti e la seconda non matcha più
   // (0 righe), così non può sovrascrivere cash_collected_cents/le prove.
   // Stesso pattern del claim payout in lib/stripe/payout.ts.
-  const { data: claimed, error: updErr } = await admin
-    .from('orders')
-    .update({
-      cash_collected_cents: body.cashCollectedCents,
-      cash_photo_url: body.photoUrl ?? null,
-      cash_signature_url: body.signatureUrl ?? null,
-      delivery_photo_url: body.deliveryPhotoUrl ?? null,
-      cash_confirmed_at: now.toISOString(),
-      cash_collected_by: user.id,
-      // L'ordine in contanti diventa PAGATO qui, che è il momento in cui i soldi
-      // sono davvero passati di mano. Prima restava 'PENDING' per sempre: in
-      // tutto il codice l'unico punto che scriveva 'PAID' era il webhook della
-      // carta. Conseguenza: l'annullamento da pannello trattava un contante già
-      // incassato come un ordine mai pagato, e non restituiva niente al cliente.
-      payment_status: 'PAID',
-      // 155 — Il compenso e' stato pagato, in contanti, adesso. Prima questo
-      // campo restava NULL per sempre e non c'era modo di distinguere «pagato
-      // in contanti» da «mai pagato».
-      rider_payout_status: compensoTrattenutoCents > 0 ? 'CASH_WITHHELD' : null,
-      rider_payout_at: compensoTrattenutoCents > 0 ? now.toISOString() : null,
-    })
-    .eq('id', body.orderId)
-    .eq('rider_id', user.id)
-    .is('cash_confirmed_at', null)
-    // 056/172 — il commento in cima al file dichiarava questa guardia
-    // («il rider puo' aggiornare solo i propri ordini con delivery_status
-    // PICKED_UP/OUT_FOR_DELIVERY/DELIVERED, controllo server-side») e nel codice
-    // non c'era: un fattorino poteva marcare PAGATO un ordine appena assegnato,
-    // mai ritirato e mai consegnato — e da lì l'ordine risultava incassato.
-    // Ora la condizione sta dentro la stessa UPDATE, quindi la decide il
-    // database e non un `if` che qualcuno può spostare.
-    .in('delivery_status', ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'])
-    .select('id');
+  // Lo stato 'CASH_WITHHELD' nasce con la migrazione 124: prima di quella il
+  // vincolo del database lo rifiuta, e con lui l'intero aggiornamento. Il
+  // ripiego conferma comunque l'incasso, senza scrivere quel campo
+  // (lib/db/migrazione-124.ts).
+  const CAMPI_COMPENSO = ['rider_payout_status', 'rider_payout_at'] as const;
+  const aggiornamento = {
+    cash_collected_cents: body.cashCollectedCents,
+    cash_photo_url: body.photoUrl ?? null,
+    cash_signature_url: body.signatureUrl ?? null,
+    delivery_photo_url: body.deliveryPhotoUrl ?? null,
+    cash_confirmed_at: now.toISOString(),
+    cash_collected_by: user.id,
+    // L'ordine in contanti diventa PAGATO qui, che è il momento in cui i soldi
+    // sono davvero passati di mano. Prima restava 'PENDING' per sempre: in
+    // tutto il codice l'unico punto che scriveva 'PAID' era il webhook della
+    // carta. Conseguenza: l'annullamento da pannello trattava un contante già
+    // incassato come un ordine mai pagato, e non restituiva niente al cliente.
+    payment_status: 'PAID',
+    // 155 — Il compenso e' stato pagato, in contanti, adesso. Prima questo
+    // campo restava NULL per sempre e non c'era modo di distinguere «pagato
+    // in contanti» da «mai pagato».
+    rider_payout_status: compensoTrattenutoCents > 0 ? 'CASH_WITHHELD' : null,
+    rider_payout_at: compensoTrattenutoCents > 0 ? now.toISOString() : null,
+  };
+
+  const conferma = (valori: Record<string, unknown>) =>
+    admin
+      .from('orders')
+      .update(valori)
+      .eq('id', body.orderId)
+      .eq('rider_id', user.id)
+      .is('cash_confirmed_at', null)
+      // 056/172 — il commento in cima al file dichiarava questa guardia
+      // («il rider puo' aggiornare solo i propri ordini con delivery_status
+      // PICKED_UP/OUT_FOR_DELIVERY/DELIVERED, controllo server-side») e nel codice
+      // non c'era: un fattorino poteva marcare PAGATO un ordine appena assegnato,
+      // mai ritirato e mai consegnato — e da lì l'ordine risultava incassato.
+      // Ora la condizione sta dentro la stessa UPDATE, quindi la decide il
+      // database e non un `if` che qualcuno può spostare.
+      .in('delivery_status', ['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'])
+      .select('id');
+
+  const { data: claimed, error: updErr } = await conRipiegoSchema(
+    'orders.update (conferma incasso)',
+    () => conferma(aggiornamento),
+    () => conferma(senzaCampi(aggiornamento, CAMPI_COMPENSO)),
+  );
 
   if (updErr) return ApiErrors.internal('Update fallito');
   if (!claimed || claimed.length === 0) {
