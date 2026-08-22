@@ -70,8 +70,49 @@ export const env = {
   vapidSubject: () => readEnv('VAPID_SUBJECT') ?? 'mailto:no-reply@mycity.it',
 
   // App URL pubblico (per link in email, redirect Stripe, ecc.)
-  appUrl: () => readEnv('NEXT_PUBLIC_APP_URL') ?? 'http://localhost:3000',
+  appUrl: () => readEnv('NEXT_PUBLIC_APP_URL') ?? indirizzoDiRipiego(),
 };
+
+/**
+ * L'indirizzo del sito quando NEXT_PUBLIC_APP_URL non c'è.
+ *
+ * PERCHE' ESISTE. Il 22/8/2026, a sito già spostato su Vercel, questa riga
+ * ripiegava dritta su `http://localhost:3000` — e quella variabile su Vercel non
+ * era stata messa. Risultato in produzione, controllabile guardando l'HTML che
+ * il sito serviva davvero:
+ *
+ *   <link rel="canonical" href="http://localhost:3000">
+ *   <meta property="og:url"   content="http://localhost:3000">
+ *   <meta property="og:image" content="http://localhost:3000/opengraph-image?…">
+ *
+ * Cioè: a Google stavamo dichiarando che l'indirizzo ufficiale di ogni pagina è
+ * un computer che non esiste, e ogni link condiviso su WhatsApp o Facebook
+ * mostrava l'anteprima rotta. Nessun errore nei log, nessun allarme: il sito
+ * rispondeva 200 e sembrava a posto.
+ *
+ * Un ripiego che punta al computer di chi sviluppa va bene solo mentre si
+ * sviluppa. In rete deve puntare a qualcosa che in rete esiste — e Vercel ci
+ * dice sempre due indirizzi veri, senza che nessuno debba configurarli:
+ * il dominio di produzione del progetto, e l'indirizzo di questa singola
+ * pubblicazione (che è quello giusto per le anteprime delle proposte di
+ * modifica, dove puntare alla produzione sarebbe sbagliato).
+ *
+ * Resta vero che NEXT_PUBLIC_APP_URL va messa: è lei a decidere il dominio con
+ * cui il sito si presenta, ed è per questo che /api/health continua a dire
+ * «non sto in piedi» finché manca. Questo è il paracadute, non la scala.
+ */
+function indirizzoDiRipiego(): string {
+  const dominioDiProduzione = readEnv('NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL');
+  const questaPubblicazione = readEnv('NEXT_PUBLIC_VERCEL_URL');
+  // In un'anteprima si resta sull'anteprima: mandare un pagamento di prova a
+  // rimbalzare sulla produzione è peggio del problema che si sta risolvendo.
+  const anteprima = readEnv('NEXT_PUBLIC_VERCEL_ENV') === 'preview';
+  const host = anteprima
+    ? (questaPubblicazione ?? dominioDiProduzione)
+    : (dominioDiProduzione ?? questaPubblicazione);
+  if (host) return host.startsWith('http') ? host : `https://${host}`;
+  return 'http://localhost:3000';
+}
 
 export function requireSupabasePublic() {
   const url = env.supabaseUrl();

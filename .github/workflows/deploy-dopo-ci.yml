@@ -78,11 +78,15 @@ jobs:
           # quello non l'ha provato nessuno.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      # La stessa versione su cui gira la produzione (progetto Vercel: 24.x,
+      # `engines.node` in package.json: 24.x). Qui c'era 20: `vercel build`
+      # costruisce con il Node del runner, quindi il pacchetto che finiva online
+      # era compilato su una versione diversa da quella che poi lo esegue.
       - name: Setup Node
         if: steps.chiavi.outputs.pronto == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Rilascia in produzione
         if: steps.chiavi.outputs.pronto == 'true'

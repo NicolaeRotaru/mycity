@@ -15,7 +15,7 @@
 | **PostHog** | Events, session replay (mascherato PII), user ID | https://posthog.com/dpa | ❌ | TBD (EU instance riduce esposizione) |
 | **Sentry** | Error stacks, breadcrumbs, user ID | https://sentry.io/legal/dpa/ | ❌ | TBD |
 | **Cloudflare** (Turnstile) | IP address, browser fingerprint | https://www.cloudflare.com/cloudflare-customer-dpa/ | ❌ | TBD |
-| **Render** | Server logs (può contenere IP/UA) | https://render.com/legal/dpa | ❌ | TBD |
+| **Vercel** | Server logs / log delle funzioni (può contenere IP/UA) | https://vercel.com/legal/dpa | ❌ | TBD — sostituisce Render, dismesso ad agosto 2026 col passaggio dell'hosting |
 | **Google Analytics** (GA4) | IP anonymized, events, user ID | https://business.safety.google/adsprocessorterms/ | ❌ | TBD (Consent Mode v2 attivo) |
 
 ## Vendor che NON processano dati personali (no DPA)

@@ -17,8 +17,8 @@ import { readConsent } from '@/lib/consent';
  * Setup (account MyCity = US):
  *   1. Account su https://us.posthog.com
  *   2. Copia Project API Key (phc_…)
- *   3. Render env: NEXT_PUBLIC_POSTHOG_KEY=phc_xxx
- *   4. Render env: NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+ *   3. Vercel → Settings → Environment Variables: NEXT_PUBLIC_POSTHOG_KEY=phc_xxx
+ *   4. Vercel → Settings → Environment Variables: NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
  */
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;

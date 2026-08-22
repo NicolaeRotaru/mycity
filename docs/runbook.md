@@ -192,11 +192,24 @@ git push origin main
 
 ### `/api/cron/send-emails` o `/api/cron/abandoned-carts` silenzio
 
+**Chi li fa partire**: Vercel. L'elenco e le cadenze stanno in `vercel.json`
+→ `crons`; a parole sono descritti in `docs/crons.json`.
+
 **Diagnosi**:
-1. Vai su cron-job.org → Cronjobs → verifica "Last execution" status
-2. Se 401 → `CRON_SECRET` mismatched. Verifica le variabili d'ambiente su Vercel.
-3. Se 500 → bug nel codice. Sentry dovrebbe averlo catturato.
-4. Se OK ma 0 email inviate → check `email_queue`:
+1. Vercel → il progetto **mycity** → scheda **Cron Jobs**: c'è l'ultimo giro di
+   ognuno e come è finito. (Da riga di comando: `vercel crons ls`.)
+2. Se 401 → `CRON_SECRET` non c'è, o non è identico. Vercel manda da solo
+   `Authorization: Bearer <CRON_SECRET>` prendendolo dalla variabile del
+   progetto: se la variabile manca, i lavori partono lo stesso e si prendono un
+   401 — sembrano andati, non hanno fatto niente. Vercel → Settings →
+   Environment Variables.
+3. Se 405 → la rotta non accetta il GET. Vercel bussa **solo** in GET: ogni
+   rotta sotto `app/api/cron/` deve esportare un `GET`.
+4. Se 500 → bug nel codice. Sentry dovrebbe averlo catturato.
+5. Se 504 → il lavoro ha sforato il tempo massimo. Il tetto è in `vercel.json`
+   → `functions`; alzarlo è l'ultima spiaggia, prima si guarda perché ci mette
+   tanto.
+6. Se OK ma 0 email inviate → check `email_queue`:
    ```sql
    SELECT count(*), template
    FROM public.email_queue
@@ -274,7 +287,7 @@ git push origin main
 | Evento | Azione |
 |---|---|
 | SOS rider | Apri `/admin/sos`, chiama 112 e numero rider |
-| Sito giù | Verifica UptimeRobot, vercel.com/help |
+| Sito giù | Verifica UptimeRobot, poi Vercel → Deployments → Instant Rollback (§4-bis). Supporto: vercel.com/help |
 | Frode evidente | Sospendi user via SQL (vedi #3) |
 | Buyer arrabbiato (telefonata) | Apri ticket WhatsApp, prometti risposta entro 24h |
 

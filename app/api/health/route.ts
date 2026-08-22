@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /**
- * Controllo di salute, per i monitor esterni e per Render.
+ * Controllo di salute, per i monitor esterni.
  *
  * Tre difetti riparati qui, trovati dalla radiografia del 18/8:
  *
@@ -17,17 +17,24 @@ export const dynamic = 'force-dynamic';
  *    dallo sviluppo la risposta pubblica è {status, timestamp}; il dettaglio
  *    resta, ma dietro il segreto dei lavori periodici.
  *
- * ② (176, 234) Un guasto NON fatale rispondeva 503, e 503 su questa rotta per
- *    Render vuol dire «istanza morta, riavviala». Bastava che mancasse la chiave
- *    della posta — con cui il sito vende benissimo — per far togliere dal
- *    traffico un'istanza sana; e un database lento sotto carico produceva un
- *    riavvio proprio nel momento peggiore.
- *    Ora è fatale solo ciò senza cui il sito non serve una pagina: il database e
- *    le variabili di Supabase. Il resto è «degradato», e degradato risponde 200:
- *    il monitor lo vede nel corpo, Render non spegne niente.
+ * ② (176, 234) Un guasto NON fatale rispondeva 503. Nasceva contro Render, dove
+ *    503 su questa rotta voleva dire «istanza morta, riavviala»: bastava che
+ *    mancasse la chiave della posta — con cui il sito vende benissimo — per far
+ *    togliere dal traffico un'istanza sana.
+ *    Su Vercel nessuno spegne niente in base a questa rotta: non ci sono istanze
+ *    da riavviare. La regola però resta giusta lo stesso, per un altro motivo:
+ *    è il monitor esterno che sveglia una persona alle tre di notte, e va
+ *    svegliata solo se il sito non serve una pagina. Fatale è solo questo — il
+ *    database e le variabili di Supabase. Il resto è «degradato», e degradato
+ *    risponde 200: il monitor lo vede scritto nel corpo e non chiama nessuno.
  *
  * ③ (021) Nessun freno: la rotta interroga il database a ogni chiamata. Sessanta
  *    al minuto per indirizzo bastano a qualunque monitor onesto.
+ *    ⚠️ Il freno qui è quello in memoria, e su Vercel la memoria non è condivisa
+ *    fra le chiamate: vale dentro una singola istanza tiepida, non su tutte.
+ *    Per questa rotta basta — non c'è niente da rubare — ma non prendere questo
+ *    punto come prova che il freno del sito regga: quello vero passa da Upstash
+ *    (vedi lib/rate-limit.ts).
  */
 
 // Senza queste il sito non risponde: sono le uniche che valgono un 503.
@@ -40,11 +47,20 @@ const ENV_VITALI = [
 
 // Senza queste manca un pezzo (incassare, spedire posta, far girare i cron) ma
 // il sito sta in piedi: si segnala, non si spegne.
+//
+// UPSTASH_REDIS_REST_URL è entrato in questa lista con il passaggio a Vercel.
+// Su Render il sito era UNA macchina accesa, e il freno anti-abuso in memoria
+// bastava: il contatore lo vedevano tutte le richieste. Su Vercel ogni richiesta
+// può finire su una copia diversa, ognuna col suo contatore che parte da zero —
+// dieci tentativi di accesso a testa diventano dieci per ogni copia. Senza
+// Upstash il freno non è rotto, è molto più largo di quanto dica il numero
+// scritto nel codice. Va visto, quindi va chiesto qui.
 const ENV_IMPORTANTI = [
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'RESEND_API_KEY',
   'CRON_SECRET',
+  'UPSTASH_REDIS_REST_URL',
 ];
 
 export async function GET(request: Request) {
@@ -97,6 +113,9 @@ export async function GET(request: Request) {
     ? {
         status,
         timestamp: new Date().toISOString(),
+        // Su Vercel questo NON è «da quanto il sito è su»: è l'età della singola
+        // copia che ha risposto, spesso pochi secondi. Si tiene perché in locale
+        // dice ancora la verità, ma non è un dato su cui ragionare in produzione.
         uptimeSec: process.uptime?.() ?? null,
         latencyMs: Date.now() - startedAt,
         checks,

@@ -11,7 +11,8 @@ import { isPushConfigured, sendPushToUser } from '@/lib/push/send';
  * (pushed_at marcato dopo il tentativo). Le subscription morte (404/410) vengono
  * rimosse dal sender.
  *
- * Trigger esterno (es. cron-job.org ogni 1-5 min):
+ * Cadenza: ogni 5 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
+ * A mano si chiama così:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://yoursite/api/cron/send-push
  */
 export const runtime = 'nodejs';

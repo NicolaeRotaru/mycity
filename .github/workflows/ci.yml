@@ -73,7 +73,8 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
           NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL || 'http://localhost:3000' }}
           # i NEXT_PUBLIC_* sopra sono placeholder solo per superare il build;
-          # in produzione vengono dal hosting (Render). Mai mettere chiavi reali qui.
+          # in produzione vengono dal hosting (Vercel → Settings → Environment
+          # Variables). Mai mettere chiavi reali qui.
         run: npm run build
 
   unit-tests:
