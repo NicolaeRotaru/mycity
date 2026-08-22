@@ -110,7 +110,7 @@ export class CorpoTroppoGrande extends Error {
  * comportamento — e ogni riscrittura in piu' e' un'occasione in piu' di
  * sbagliare su rotte che toccano i soldi.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line
 export async function jsonRichiesta(req: Request, maxBytes: number = TETTO_JSON): Promise<any> {
   const dati = await jsonConTetto(req, maxBytes);
   if (dati === undefined) throw new CorpoTroppoGrande(maxBytes);

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
@@ -38,9 +39,29 @@ function isCod(method: string | null | undefined): boolean {
   return m === 'cod' || m === 'cash';
 }
 
+/** Quanti ordini si leggono per volta. Se ne servono altri, si chiedono. */
+const PAGINA = 100;
+
 export default function SellerOrdersPage() {
-  const { data: orders = [], isLoading } = useQuery({
-    queryKey: queryKeys.seller.orders,
+  /**
+   * 22/8/2026 — QUESTA PAGINA RISCARICAVA TUTTA LA STORIA DEL NEGOZIO OGNI
+   * TRENTA SECONDI.
+   *
+   * Non c'era nessun limite: ogni ricarica automatica portava indietro OGNI
+   * ordine mai ricevuto, con dentro nome e indirizzo di ogni cliente, e le
+   * righe degli articoli di ognuno. E' la pagina che il negoziante tiene
+   * aperta tutto il giorno sul telefono: con mille ordini erano megabyte ogni
+   * mezzo minuto, sul suo traffico dati.
+   *
+   * Adesso si leggono i cento piu' recenti — che e' quello che si guarda — e
+   * chi vuole gli altri li chiede. La ricarica automatica passa a novanta
+   * secondi: gli ordini nuovi arrivano comunque con la notifica.
+   */
+  const [limite, setLimite] = useState(PAGINA);
+
+  const { data: orders = [], isLoading, isFetching } = useQuery({
+    queryKey: [...queryKeys.seller.orders, limite],
+    placeholderData: (precedente) => precedente,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -49,7 +70,8 @@ export default function SellerOrdersPage() {
           .from('orders')
           .select(cols)
           .eq('seller_id', user.id)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: false })
+          .limit(limite);
       // payment_method serve per il badge "Contanti". Se la colonna non è (ancora)
       // presente in questo ambiente, ricadiamo sulla select senza romperci.
       const withPay = await base(`
@@ -66,7 +88,7 @@ export default function SellerOrdersPage() {
       if (fallback.error) throw fallback.error;
       return (fallback.data ?? []) as unknown as Order[];
     },
-    refetchInterval: 30_000,
+    refetchInterval: 90_000,
   });
 
   if (isLoading) return <LoadingState />;
@@ -147,6 +169,21 @@ export default function SellerOrdersPage() {
                 </div>
               </section>
             ),
+          )}
+
+          {/* Se sono arrivati esattamente quanti se ne erano chiesti, ce ne
+              sono altri: si chiedono, invece di tirarli giu' tutti ogni volta. */}
+          {orders.length >= limite && (
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => setLimite((n: number) => n + PAGINA)}
+                disabled={isFetching}
+                className="rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700 disabled:opacity-50"
+              >
+                {isFetching ? 'Carico…' : 'Carica altri ordini'}
+              </button>
+            </div>
           )}
         </div>
       )}

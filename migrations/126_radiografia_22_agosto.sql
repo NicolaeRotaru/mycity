@@ -539,3 +539,96 @@ CREATE TRIGGER prodotti_alimentari_allergeni
 REVOKE ALL ON FUNCTION public.alimentare_senza_allergeni_non_si_pubblica() FROM PUBLIC, anon, authenticated;
 
 NOTIFY pgrst, 'reload schema';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⑩ L'INDICE CHE SERVE AL NEGOZIANTE PER APRIRE I SUOI ORDINI
+-- ═══════════════════════════════════════════════════════════════════════════
+-- La pagina degli ordini del negozio chiede «i miei ordini, dal piu' recente».
+-- L'unico indice disponibile era (seller_id, delivery_status): buono per
+-- filtrare per stato, inutile per l'ordinamento. Il database prendeva tutte le
+-- righe del negozio e le ordinava ogni volta, a ogni ricarica automatica —
+-- ogni trenta secondi, per ogni negoziante che tiene la pagina aperta.
+--
+-- Con pochi ordini non si vede. Il giorno in cui un negozio ne ha diecimila,
+-- quella pagina diventa il pezzo piu' lento del sito, ed e' la pagina su cui il
+-- negoziante lavora tutto il giorno.
+--
+-- Costa pochi millisecondi in piu' a ogni ordine scritto e toglie
+-- l'ordinamento a ogni lettura.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE INDEX IF NOT EXISTS orders_seller_created_idx
+  ON public.orders (seller_id, created_at DESC);
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⑪ I NUMERI DEL NEGOZIO LI SOMMA IL DATABASE, NON IL TELEFONO
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Il cruscotto del venditore scaricava OGNI ordine che quel negozio abbia mai
+-- ricevuto — riga per riga, con dentro i dati di consegna dei clienti — per
+-- fare quattro somme nel browser. Con mille ordini sono megabyte di dati
+-- personali che viaggiano fino a un telefono per produrre quattro numeri.
+--
+-- Il database quelle somme le fa in millisecondi e non manda niente in giro.
+-- Il precedente giusto e' gia' nel progetto: migrations/052 fa la stessa cosa
+-- per le medie delle recensioni.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.numeri_del_negozio(p_seller uuid, p_giorni int DEFAULT 30)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+DECLARE
+  v_da timestamptz := now() - make_interval(days => greatest(p_giorni, 1));
+  v_esito jsonb;
+BEGIN
+  -- I numeri di un negozio li vede quel negozio, o l'amministrazione. Non e'
+  -- una funzione da vetrina.
+  IF auth.uid() IS DISTINCT FROM p_seller AND NOT public.is_admin() THEN
+    RAISE EXCEPTION 'forbidden' USING ERRCODE = '42501';
+  END IF;
+
+  -- La regola di che cosa «conta nel fatturato» e' la stessa del browser
+  -- (lib/metriche-venditore.ts): non annullato E pagato. Scriverla due volte in
+  -- due posti e' come si producono due numeri diversi per la stessa domanda:
+  -- qui e' copiata alla lettera, e la prova in tests/unit lo verifica.
+  WITH conta AS (
+    SELECT *
+      FROM public.orders
+     WHERE seller_id = p_seller
+       AND delivery_status IS DISTINCT FROM 'CANCELED'
+       AND payment_status IN ('PAID', 'PARTIALLY_REFUNDED')
+  )
+  SELECT jsonb_build_object(
+    'ordini_totali',        (SELECT count(*) FROM public.orders WHERE seller_id = p_seller),
+    'ordini_contati',       count(*),
+    'ordini_nel_periodo',   count(*) FILTER (WHERE created_at >= v_da),
+    'incasso_totale_cents',
+      coalesce(sum(round(total_price * 100)::int), 0),
+    'commissione_totale_cents',
+      coalesce(sum(coalesce(application_fee_cents, 0)), 0),
+    -- Spedizione e quota di consegna non sono soldi del negozio: la prima va al
+    -- fattorino, la seconda alla piattaforma.
+    'non_del_negozio_cents',
+      coalesce(sum(round(coalesce(shipping_cost, 0) * 100)::int + coalesce(delivery_fee_cents, 0)), 0),
+    'incasso_nel_periodo_cents',
+      coalesce(sum(round(total_price * 100)::int) FILTER (WHERE created_at >= v_da), 0),
+    'clienti_distinti',     count(DISTINCT user_id) FILTER (WHERE created_at >= v_da)
+  )
+  INTO v_esito
+  FROM conta;
+
+  RETURN coalesce(v_esito, '{}'::jsonb);
+END$$;
+
+COMMENT ON FUNCTION public.numeri_del_negozio(uuid, int) IS
+  'I quattro numeri del cruscotto venditore, sommati dal database. Prima il browser scaricava ogni ordine per farli a mano.';
+
+REVOKE ALL ON FUNCTION public.numeri_del_negozio(uuid, int) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.numeri_del_negozio(uuid, int) TO authenticated, service_role;
+
+NOTIFY pgrst, 'reload schema';

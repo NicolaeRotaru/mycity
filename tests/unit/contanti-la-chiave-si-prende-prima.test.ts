@@ -176,8 +176,9 @@ vi.mock('@/lib/supabase/server', () => {
     }
     if (table === 'notifications') {
       return {
-        insert: (valori: Record<string, unknown>) => {
-          campanelle.push(valori);
+        insert: (valori: Record<string, unknown> | Record<string, unknown>[]) => {
+          if (Array.isArray(valori)) campanelle.push(...valori);
+          else campanelle.push(valori);
           return Promise.resolve({ error: null });
         },
       };

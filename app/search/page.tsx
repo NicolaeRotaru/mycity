@@ -40,8 +40,31 @@ function SearchInner() {
     const v = Number(params.get(chiave));
     return Number.isFinite(v) && params.get(chiave) !== null ? v : difetto;
   };
+  /**
+   * 22/8/2026 — IL CURSORE DEL PREZZO SPARAVA UNA RICHIESTA A OGNI SCATTO.
+   *
+   * Trascinando la manopola da 0 a 200 il valore cambia quaranta volte (lo
+   * scatto e' di 5 euro): quaranta chiavi di cache diverse, quaranta richieste
+   * al database, e quaranta riscritture dell'indirizzo — cioe' quaranta voci
+   * nella cronologia, che rendono il tasto Indietro inutilizzabile.
+   *
+   * Due stati invece di uno: quello «in corso» muove la manopola e il numero a
+   * schermo subito, quello «assestato» si aggiorna 300 millisecondi dopo
+   * l'ultimo movimento ed e' l'unico che entra nella ricerca e nell'indirizzo.
+   * E' lo stesso schema gia' usato dalla barra di ricerca.
+   */
+  const [maxPrezzoInCorso, setMaxPrezzoInCorso] = useState<number>(() => numeroDaUrl('max', 500));
+  const [minPrezzoInCorso, setMinPrezzoInCorso] = useState<number>(() => numeroDaUrl('min', 0));
   const [maxPrice, setMaxPrice] = useState<number>(() => numeroDaUrl('max', 500));
   const [minPrice, setMinPrice] = useState<number>(() => numeroDaUrl('min', 0));
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setMinPrice(minPrezzoInCorso);
+      setMaxPrice(maxPrezzoInCorso);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [minPrezzoInCorso, maxPrezzoInCorso]);
   const [categoryId, setCategoryId] = useState<string>(() => params.get('cat') ?? '');
   const [onlyOpenStores, setOnlyOpenStores] = useState(() => params.get('aperti') === '1');
   const [freeShipping, setFreeShipping] = useState(() => params.get('da30') === '1');
@@ -86,6 +109,8 @@ function SearchInner() {
     setCategoryId('');
     setMaxPrice(500);
     setMinPrice(0);
+    setMaxPrezzoInCorso(500);
+    setMinPrezzoInCorso(0);
     setOnlyOpenStores(false);
     setFreeShipping(false);
     setOnlyPromo(false);
@@ -128,9 +153,9 @@ function SearchInner() {
   const categoryName = categories.find((c) => c.id === categoryId)?.name;
   const chips: Chip[] = [];
   if (categoryId) chips.push({ key: 'cat', label: t('filterCategory', { name: categoryName ?? '' }), clear: () => setCategoryId('') });
-  if (minPrice > 0 && maxPrice < 500) chips.push({ key: 'price', label: t('filterPriceRange', { min: minPrice, max: maxPrice }), clear: () => { setMinPrice(0); setMaxPrice(500); } });
-  else if (maxPrice < 500) chips.push({ key: 'pmax', label: t('filterPrice', { max: maxPrice }), clear: () => setMaxPrice(500) });
-  else if (minPrice > 0) chips.push({ key: 'pmin', label: t('filterPriceMin', { min: minPrice }), clear: () => setMinPrice(0) });
+  if (minPrice > 0 && maxPrice < 500) chips.push({ key: 'price', label: t('filterPriceRange', { min: minPrice, max: maxPrice }), clear: () => { setMinPrice(0); setMaxPrice(500); setMinPrezzoInCorso(0); setMaxPrezzoInCorso(500); } });
+  else if (maxPrice < 500) chips.push({ key: 'pmax', label: t('filterPrice', { max: maxPrice }), clear: () => { setMaxPrice(500); setMaxPrezzoInCorso(500); } });
+  else if (minPrice > 0) chips.push({ key: 'pmin', label: t('filterPriceMin', { min: minPrice }), clear: () => { setMinPrice(0); setMinPrezzoInCorso(0); } });
   if (minRating > 0) chips.push({ key: 'rating', label: t('chip.minRating', { rating: minRating }), clear: () => setMinRating(0) });
   if (freeShipping) chips.push({ key: 'free', label: t('chip.freeShipping'), clear: () => setFreeShipping(false) });
   if (onlyPromo) chips.push({ key: 'promo', label: t('chip.promotion'), clear: () => setOnlyPromo(false) });
@@ -180,15 +205,15 @@ function SearchInner() {
       <div className="py-3">
         <div className="flex justify-between items-center mb-1.5">
           <span className="text-[11px] font-semibold text-ink-500 uppercase tracking-wider">{t('price')}</span>
-          <span className="font-bold text-primary-700 text-xs">€{minPrice} – €{maxPrice}{maxPrice >= 500 ? '+' : ''}</span>
+          <span className="font-bold text-primary-700 text-xs">€{minPrezzoInCorso} – €{maxPrezzoInCorso}{maxPrezzoInCorso >= 500 ? '+' : ''}</span>
         </div>
         <input
           type="range"
           min={0}
           max={500}
           step={5}
-          value={minPrice}
-          onChange={(e) => setMinPrice(Math.min(Number(e.target.value), maxPrice - 5))}
+          value={minPrezzoInCorso}
+          onChange={(e) => setMinPrezzoInCorso(Math.min(Number(e.target.value), maxPrezzoInCorso - 5))}
           className="w-full accent-primary-600"
           aria-label={t('minPrice')}
         />
@@ -197,8 +222,8 @@ function SearchInner() {
           min={5}
           max={500}
           step={5}
-          value={maxPrice}
-          onChange={(e) => setMaxPrice(Math.max(Number(e.target.value), minPrice + 5))}
+          value={maxPrezzoInCorso}
+          onChange={(e) => setMaxPrezzoInCorso(Math.max(Number(e.target.value), minPrezzoInCorso + 5))}
           className="w-full accent-primary-600"
           aria-label={t('maxPrice')}
         />

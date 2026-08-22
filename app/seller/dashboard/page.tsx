@@ -63,7 +63,7 @@ export default function SellerDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      const [{ count: productCount }, { count: availableCount }, { data: items }, { data: storeReviews }, ordiniRes] = await Promise.all([
+      const [{ count: productCount }, { count: availableCount }, { data: items }, { data: storeReviews }, ordiniRes, numeriRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }).eq('seller_id', user.id),
         supabase.from('products').select('id', { count: 'exact', head: true })
           .eq('seller_id', user.id).eq('status', 'available'),
@@ -75,15 +75,42 @@ export default function SellerDashboard() {
         // venditore, con le stesse colonne: cosi' i tre «fatturato» diventano
         // uno solo. Qui sotto si mostrano due grandezze dette per nome —
         // «incassato» (lordo) e «il tuo netto» — non una sola ambigua.
+        // 22/8/2026 — QUI SI SCARICAVA OGNI ORDINE CHE IL NEGOZIO ABBIA MAI
+        // RICEVUTO, per fare quattro somme nel browser. Con mille ordini sono
+        // megabyte che viaggiano fino a un telefono per produrre quattro numeri.
+        // Adesso il browser legge solo gli ultimi trenta giorni — quelli che
+        // servono ai riquadri «oggi / 7 giorni / 30 giorni» — e i totali di
+        // sempre li somma il database, che ci mette millisecondi.
         supabase.from('orders')
           .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, created_at')
-          .eq('seller_id', user.id),
+          .eq('seller_id', user.id)
+          .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
+        supabase.rpc('numeri_del_negozio', { p_seller: user.id, p_giorni: 30 }),
       ]);
       if (ordiniRes.error) throw ordiniRes.error;
       const ordini = ordiniRes.data ?? [];
       const daInizioOggi = inizioGiornoPiacenza(giornoPiacenza());
       const metriche = (da?: Date) => metricheVenditore(ordini as never[], da);
-      const totali = metriche();
+
+      // I totali di sempre arrivano dal database. Se la funzione non c'e'
+      // ancora (migrazione 126 non applicata) si ricade sugli ultimi trenta
+      // giorni: un numero piu' basso del vero, ma mai un errore a schermo.
+      const numeri = (numeriRes?.data ?? null) as {
+        incasso_totale_cents?: number;
+        commissione_totale_cents?: number;
+        non_del_negozio_cents?: number;
+      } | null;
+      const totali = numeri
+        ? {
+            incassatoCents: numeri.incasso_totale_cents ?? 0,
+            tuoNettoCents: Math.max(
+              0,
+              (numeri.incasso_totale_cents ?? 0)
+                - (numeri.commissione_totale_cents ?? 0)
+                - (numeri.non_del_negozio_cents ?? 0),
+            ),
+          }
+        : metriche();
       const oggi = metriche(daInizioOggi);
       const sette = metriche(new Date(Date.now() - 7 * 86400000));
       const trenta = metriche(new Date(Date.now() - 30 * 86400000));

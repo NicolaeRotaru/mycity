@@ -627,18 +627,54 @@ export const POST = withAuthRateLimit(
     }
 
     // --- 6. Adesso che TUTTI gli ordini esistono, si avvisa. (#159)
-    for (const c of comunicazioni) {
-      // Notifica in-app al venditore — nuovo ordine COD ricevuto
-      await admin.from('notifications').insert({
-        // #33 — la categoria decide se la persona vuole ancora ricevere
-        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+    /**
+     * 22/8/2026 — IL CLIENTE ASPETTAVA CHE PARTISSE TUTTA LA POSTA.
+     *
+     * Questo blocco stava DENTRO la risposta: per ogni negozio del carrello due
+     * campanelle, due letture e due email, tutte in fila e tutte attese. Con
+     * due negozi sono una decina di viaggi verso il servizio di posta prima che
+     * la persona veda «Ordine effettuato» — su una rete lenta, secondi di
+     * schermata ferma dopo che l'ordine c'e' gia'.
+     *
+     * La strada della carta lo fa gia' bene: prepara e lascia andare. Qui si
+     * copia quello schema. Le campanelle diventano una scrittura sola per
+     * tutte, e le email partono senza essere aspettate: se una fallisce si
+     * annota, non blocca nessuno.
+     *
+     * NOTA onesta sull'ambiente: questo funziona perche' il processo resta vivo
+     * dopo la risposta. In un ambiente che spegne il processo appena risponde
+     * servirebbe una coda — la stessa che gia' esiste per le email di ciclo di
+     * vita.
+     */
+    const campanelle = comunicazioni.flatMap((c) => [
+      {
         category: 'order',
         user_id: c.sellerId,
         title: '🎉 Nuovo ordine!',
         body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · €${(c.totalCents / 100).toFixed(2)} · pagamento alla consegna`,
         link: `/seller/orders/${c.orderId}`,
-      });
+      },
+      {
+        category: 'order',
+        user_id: user.id,
+        title: '✅ Ordine ricevuto',
+        body: `Il tuo ordine #${c.orderId.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,
+        link: `/orders/${c.orderId}`,
+      },
+    ]);
+    if (campanelle.length > 0) {
+      const { error: errCampanelle } = await admin.from('notifications').insert(campanelle);
+      if (errCampanelle) {
+        logger.warn('[cod] campanelle non scritte', { message: errCampanelle.message });
+      }
+    }
 
+    // Le email: preparate qui, spedite senza far aspettare chi ha ordinato.
+    // L'indirizzo si prende ADESSO: dentro la funzione che parte per conto suo
+    // TypeScript non sa piu' che era stato controllato.
+    const emailCliente = user.email;
+    void (async () => {
+      for (const c of comunicazioni) {
       // Email al venditore (oltre alla notifica) — per la carta parte dal webhook,
       // per il COD va inviata qui. Best-effort.
       try {
@@ -657,16 +693,8 @@ export const POST = withAuthRateLimit(
         logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
       }
 
-      // Conferma al BUYER — notifica in-app + email (best-effort: un errore qui
-      // non deve far fallire la creazione dell'ordine). Per gli ordini con carta
-      // la conferma parte dal webhook Stripe; per il COD va inviata qui.
-      await admin.from('notifications').insert({
-        category: 'order',
-        user_id: user.id,
-        title: '✅ Ordine ricevuto',
-        body: `Il tuo ordine #${c.orderId.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,
-        link: `/orders/${c.orderId}`,
-      });
+      // Conferma al cliente. Per gli ordini con carta parte dal webhook Stripe;
+      // per il contrassegno va inviata qui.
       try {
         const { data: sellerProfile } = await admin
           .from('profiles')
@@ -679,11 +707,14 @@ export const POST = withAuthRateLimit(
           total: c.totalCents / 100,
           storeName: sellerProfile?.store_name ?? 'il negozio',
         });
-        await sendEmail({ to: user.email, subject: t.subject, html: t.html, text: t.text });
+        if (emailCliente) {
+          await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text });
+        }
       } catch (e) {
         logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
       }
-    }
+      }
+    })().catch((e) => logger.warn('[cod] invio delle comunicazioni interrotto', { e }));
 
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
     // solo dal browser: chi chiudeva la scheda spariva dai conti, e il

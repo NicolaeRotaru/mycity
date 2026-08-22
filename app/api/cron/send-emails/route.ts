@@ -127,6 +127,31 @@ export const POST = handler;
 // eslint-disable-next-line
 async function processBatch(supa: any, batch: { id: string; user_id: string; template: string; attempts?: number }[]): Promise<NextResponse> {
   let sent = 0, skipped = 0, errors = 0;
+
+  /**
+   * 22/8/2026 — QUATTRO VIAGGI AL DATABASE PER OGNI EMAIL SPEDITA.
+   *
+   * Il ciclo faceva tutto in fila, riga per riga: leggi il profilo, leggi
+   * l'indirizzo dall'autenticazione, spedisci, scrivi l'esito. Con quindici
+   * email sono sessanta viaggi in sequenza, ognuno con la sua attesa — e la
+   * prenotazione delle righe scade dopo quindici minuti.
+   *
+   * I profili si leggono tutti insieme, una volta. Non tocco il turno atomico
+   * di `claim_pending_emails`: e' quello che impedisce il doppio invio quando
+   * due istanze girano insieme, ed e' l'unica strada sicura.
+   */
+  const profili = new Map<string, { full_name?: string | null; email_marketing?: boolean | null }>();
+  const idPersone = [...new Set(batch.map((r) => r.user_id))];
+  if (idPersone.length > 0) {
+    const { data: righeProfilo } = await supa
+      .from('profiles')
+      .select('id, full_name, email_marketing')
+      .in('id', idPersone);
+    for (const p of (righeProfilo ?? []) as Array<{ id: string; full_name: string | null; email_marketing: boolean | null }>) {
+      profili.set(p.id, p);
+    }
+  }
+
   for (const row of batch) {
     const tpl = TEMPLATES[row.template];
     if (!tpl) {
@@ -134,8 +159,7 @@ async function processBatch(supa: any, batch: { id: string; user_id: string; tem
       await annullaRiga(supa, row.id);
       continue;
     }
-    // Lookup utente email + preferenza marketing
-    const { data: userProfile } = await supa.from('profiles').select('id, full_name, email_marketing').eq('id', row.user_id).single();
+    const userProfile = profili.get(row.user_id) ?? null;
     // welcome/tutorial = onboarding relazionale → partono sempre. Gli altri
     // (promo / re-engagement / win-back) sono marketing → solo con consenso.
     const isMarketing = !TRANSACTIONAL_TEMPLATES.has(row.template);
