@@ -16,7 +16,8 @@ import { logger } from '@/lib/logger';
  *   via UPDATE … RETURNING (atomic claim)."
  * - Trust & Safety: "Authorization via CRON_SECRET header. Service role only."
  *
- * Trigger esterno (es. cron-job.org ogni 5 min):
+ * Cadenza: ogni 10 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
+ * A mano si chiama così:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://yoursite/api/cron/send-emails
  */
 

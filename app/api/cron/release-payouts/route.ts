@@ -41,7 +41,9 @@ const PAYOUT_DISPUTE_FILTER = 'dispute_status.is.null,dispute_status.eq.WON';
  * Best-effort per ordine: un transfer fallito non blocca il batch; il giro
  * successivo riprende i rimanenti (limit BATCH_LIMIT per esecuzione).
  *
- * Setup esterno (gate +1h → schedula frequente, es. ogni 15 min, per pagare
+ * Cadenza: ogni 15 minuti — il cancello è «+1h dalla consegna», quindi si
+ * guarda spesso per pagare vicino alla scadenza. Chi la fa partire sta in
+ * `vercel.json` → `crons`. A mano si chiama così (gate +1h → schedula frequente, per pagare
  * il venditore entro ~1h dalla consegna):
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
  *     https://yourapp.com/api/cron/release-payouts
@@ -198,3 +200,11 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     { status: 200 },
   );
 });
+
+// I lavori periodici di Vercel bussano in GET, sempre — non c'è modo di
+// chiedergli un POST. Questa rotta nasceva POST-e-basta, dai tempi del cron
+// esterno: su Vercel avrebbe risposto «405 metodo non ammesso» a ogni giro, e
+// il lavoro non sarebbe mai partito. Stesso identico handler, stesso controllo
+// del segreto: cambia solo la porta da cui si entra. Il POST resta valido
+// perché il cron esterno continua a girare finché non lo spegni.
+export const GET = POST;

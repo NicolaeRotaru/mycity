@@ -1,10 +1,25 @@
 /**
  * Rate limiter sliding-window — adapter pattern.
  *
+ * ⚠️ SU VERCEL UPSTASH NON E' PIU' UN OPZIONALE.
+ *
+ * Questo file nasce quando il sito girava su Render: UNA macchina accesa, un
+ * solo contatore in memoria, e il freno funzionava come dice il numero scritto
+ * nel codice. Su Vercel non esiste «la macchina»: ogni richiesta puo' finire su
+ * una copia diversa, e ogni copia parte con i contatori vuoti. «Dieci tentativi
+ * di accesso al minuto» diventa dieci PER COPIA — e le copie le decide il
+ * traffico, non noi. Chi vuole forzare una password non deve nemmeno saperlo:
+ * gli basta bussare tanto.
+ *
+ * Quindi: senza UPSTASH_REDIS_REST_URL/TOKEN il freno non e' rotto, e' molto
+ * piu' largo di quanto sembri. In produzione le due variabili vanno messe. La
+ * rotta /api/health lo dichiara «degradato» se mancano, cosi' la cosa si vede
+ * invece di restare un'ipotesi in un commento.
+ *
  * Esperti consultati:
- * - SRE: "In-memory funziona su single instance Render. Su scale-out o
- *   serverless multi-region usa Upstash Redis REST API (HTTP, no socket).
- *   Fallback automatico a in-memory se Upstash non configurato."
+ * - SRE: "In-memory funzionava su singola istanza Render. Su serverless serve
+ *   Upstash Redis REST API (HTTP, no socket). Fallback automatico a in-memory
+ *   se Upstash non configurato."
  * - Security Engineer: "Rate limit DEVE proteggere comunque, anche se Redis
  *   e' giu'. Fail-open su Redis error = fail su in-memory locale, mai aperto."
  *
@@ -170,6 +185,13 @@ export async function rateLimitAsync(opts: RateLimitOptions): Promise<RateLimitR
  * (l'ingresso della piattaforma). Se un giorno se ne aggiunge un altro — per
  * esempio un CDN davanti — si alza questo numero via variabile d'ambiente,
  * senza toccare il codice.
+ *
+ * ⚠️ Su Vercel questo numero va lasciato a 1. Vercel RISCRIVE `x-forwarded-for`
+ * con l'indirizzo vero di chi chiama e non ci lascia passare quello che il
+ * chiamante si è scritto da solo: la catena arriva qui con una voce sola, che è
+ * già quella giusta. Alzare il numero non renderebbe niente più sicuro — farebbe
+ * solo leggere una posizione che non esiste, e il ripiego finirebbe per contare
+ * tutti insieme sotto la stessa chiave.
  */
 const PROXY_FIDATI = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? '1') || 1);
 
@@ -181,6 +203,11 @@ const PROXY_FIDATI = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? '1') |
  * pezzo è quindi quello che ha scritto il chiamante, che può inventarselo: con
  * `X-Forwarded-For: <numero casuale>` a ogni richiesta si otteneva un contatore
  * nuovo ogni volta, e il limite sui tentativi di accesso non contava più nulla.
+ *
+ * Su Vercel quel buco è chiuso anche a monte — la piattaforma riscrive
+ * l'intestazione e butta via quello che ha scritto il chiamante — ma la lettura
+ * da destra si tiene: costa niente, dà lo stesso risultato, e resta giusta il
+ * giorno in cui davanti al sito ci finisce un CDN.
  *
  * Si legge invece da destra, scartando i proxy fidati: quello è l'indirizzo
  * scritto dalla nostra infrastruttura, che il chiamante non può falsificare.

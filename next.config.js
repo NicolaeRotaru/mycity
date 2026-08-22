@@ -56,7 +56,9 @@ const nextConfig = {
     // lo paghiamo noi — ma finché non era scritta da nessuna parte chi leggeva
     // il progetto credeva efficaci due righe che non lo erano.
     // Il segnale che la farebbe rivedere: il conto delle trasformazioni
-    // Supabase che supera il risparmio di CPU su Render.
+    // Supabase che supera quello che risparmiamo non ridimensionando noi.
+    // (Su Vercel il ridimensionamento si paga a immagine ottimizzata, quindi
+    // il confronto è ancora più diretto di quando il sito stava su Render.)
     formats: ['image/avif', 'image/webp'],
     // Media Supabase = immutabili (URL versionato per upload) → cache lunga.
     minimumCacheTTL: 31536000, // 1 anno

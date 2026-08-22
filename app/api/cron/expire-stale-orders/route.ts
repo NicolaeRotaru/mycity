@@ -22,7 +22,8 @@ export const runtime = 'nodejs';
  * Idempotente: la transizione di stato condizionata fa sì che ogni ordine sia
  * processato una sola volta anche se il cron si sovrappone.
  *
- * Setup esterno (cron-job.org): POST autenticato ogni ~30 min
+ * Cadenza: ogni 30 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
+ * A mano si chiama così:
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
  *     https://yourapp.com/api/cron/expire-stale-orders
  */
@@ -148,3 +149,11 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
 
   return NextResponse.json({ ok: true, canceled, refunded, failed }, { status: 200 });
 });
+
+// I lavori periodici di Vercel bussano in GET, sempre — non c'è modo di
+// chiedergli un POST. Questa rotta nasceva POST-e-basta, dai tempi del cron
+// esterno: su Vercel avrebbe risposto «405 metodo non ammesso» a ogni giro, e
+// il lavoro non sarebbe mai partito. Stesso identico handler, stesso controllo
+// del segreto: cambia solo la porta da cui si entra. Il POST resta valido
+// perché il cron esterno continua a girare finché non lo spegni.
+export const GET = POST;

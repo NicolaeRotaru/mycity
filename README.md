@@ -200,7 +200,13 @@ git push origin main
 ```
 
 Variabili d'ambiente: settale su Vercel → il progetto → Settings → Environment
-Variables. (Fino al 21/8/2026 qui c'era scritto Render: il sito e' su Vercel.)
+Variables. L'elenco di cosa serve, e cosa succede se manca, sta in
+[`.env.example`](.env.example).
+
+**Come è configurato l'hosting — e cosa cambia perché il sito vive lì (regione,
+lavori periodici, tetti di durata, freno anti-abuso, versione di Node):**
+[`docs/hosting-vercel.md`](docs/hosting-vercel.md). `vercel.json` non accetta
+commenti, quindi la spiegazione sta lì: si aggiornano insieme.
 
 ## Documenti strategici
 
@@ -208,6 +214,7 @@ Variables. (Fino al 21/8/2026 qui c'era scritto Render: il sito e' su Vercel.)
 - [`docs/unit-economics.md`](docs/unit-economics.md) — Unit economics + breakeven
 - [`docs/acquisition-plan-90d.md`](docs/acquisition-plan-90d.md) — Piano acquisition 90 giorni
 - [`docs/runbook.md`](docs/runbook.md) — Operazioni critiche (refund, dispute, ban)
+- [`docs/hosting-vercel.md`](docs/hosting-vercel.md) — Come è configurato l'hosting su Vercel
 - [`docs/backup-restore.md`](docs/backup-restore.md) — Strategia backup + restore drill
 
 ## Licenza

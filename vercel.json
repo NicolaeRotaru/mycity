@@ -1,8 +1,31 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+
+  "regions": ["cdg1"],
+
   "git": {
     "deploymentEnabled": {
       "main": true
     }
-  }
+  },
+
+  "functions": {
+    "app/api/cron/**/route.ts": { "maxDuration": 300 },
+    "app/api/ai/**/route.ts": { "maxDuration": 120 },
+    "app/api/image/remove-bg/route.ts": { "maxDuration": 60 },
+    "app/api/account/export/route.ts": { "maxDuration": 60 },
+    "app/api/stripe/webhook/route.ts": { "maxDuration": 60 }
+  },
+
+  "crons": [
+    { "path": "/api/cron/send-push", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/send-emails", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/release-payouts", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/operational-alerts", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/expire-checkouts", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/expire-stale-orders", "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/abandoned-carts", "schedule": "0 * * * *" },
+    { "path": "/api/cron/external-price-alerts", "schedule": "0 * * * *" },
+    { "path": "/api/cron/process-deletions", "schedule": "0 4 * * *" }
+  ]
 }

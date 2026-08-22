@@ -19,7 +19,8 @@ export const runtime = 'nodejs';
  * - SRE (dedup): "Senza memoria, ad ogni run re-invii lo stesso alert → alert
  *   fatigue. Cooldown per (tipo+entità) via operational_alert_log."
  *
- * Setup cron esterno (cron-job.org, Render):
+ * Cadenza: ogni 15 minuti. Chi la fa partire sta in `vercel.json` → `crons`.
+ * A mano si chiama così:
  *   curl -X POST -H "Authorization: Bearer $CRON_SECRET" \
  *     https://yourapp.com/api/cron/operational-alerts
  * Schedule: ogni 15 minuti (per stuck), 1 ora (per riconciliazione)
@@ -367,3 +368,11 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     details: fresh,
   });
 });
+
+// I lavori periodici di Vercel bussano in GET, sempre — non c'è modo di
+// chiedergli un POST. Questa rotta nasceva POST-e-basta, dai tempi del cron
+// esterno: su Vercel avrebbe risposto «405 metodo non ammesso» a ogni giro, e
+// il lavoro non sarebbe mai partito. Stesso identico handler, stesso controllo
+// del segreto: cambia solo la porta da cui si entra. Il POST resta valido
+// perché il cron esterno continua a girare finché non lo spegni.
+export const GET = POST;

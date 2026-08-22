@@ -182,7 +182,7 @@ I cron (`abandoned-carts, expire-checkouts, operational-alerts, process-deletion
 *Red flag:* cron che riprocessa gli stessi record; invii senza dedup; `release-payouts` senza guardia di idempotenza; health check cosmetico (200 anche con DB giù).
 
 ### 4.9 Performance & scalabilità — *[Performance]*
-N+1 nelle liste (catalogo, ordini, admin)? Query calde indicizzate? Rate limit in-memory (`lib/rate-limit.ts`) regge in multi-istanza su Render o serve Upstash? Bundle client contenuto (`optimizePackageImports`, mappa in dynamic import)? Immagini ottimizzate (AVIF/WebP, cache TTL)? Realtime (tracking rider, chat) sostenibile? `revalidate`/cache sulle pagine pubbliche?
+N+1 nelle liste (catalogo, ordini, admin)? Query calde indicizzate? Rate limit in-memory (`lib/rate-limit.ts`) regge su Vercel — dove ogni richiesta puo' finire su una copia diversa, coi contatori a zero — o serve Upstash? Bundle client contenuto (`optimizePackageImports`, mappa in dynamic import)? Immagini ottimizzate (AVIF/WebP, cache TTL)? Realtime (tracking rider, chat) sostenibile? `revalidate`/cache sulle pagine pubbliche?
 *Red flag:* `select('*')` su tabelle grandi; loop di query per riga; rate limit azzerato a ogni cold start; mappa non lazy; assenza paginazione.
 
 ### 4.10 Frontend, UX & resilienza client — *[Frontend]*

@@ -38,6 +38,7 @@ describe('GET /api/health', () => {
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
     process.env.RESEND_API_KEY = 're_test';
     process.env.CRON_SECRET = 'cron_test';
+    process.env.UPSTASH_REDIS_REST_URL = 'https://upstash.test';
   });
 
   afterEach(() => {
@@ -71,14 +72,30 @@ describe('GET /api/health', () => {
   });
 
   // 176 + 234 — Questo è il caso che prima faceva spegnere il sito: senza la
-  // chiave della posta rispondeva 503, e per Render 503 su questa rotta vuol
-  // dire «istanza morta». Il marketplace vende benissimo senza spedire email.
-  it('senza la chiave delle email dice «degradato» ma risponde 200: Render non deve spegnere niente', async () => {
+  // chiave della posta rispondeva 503, e per Render 503 su questa rotta voleva
+  // dire «istanza morta». Su Vercel non c'è nessuna istanza da spegnere, ma la
+  // regola resta: 503 qui è quello che sveglia una persona di notte, e il
+  // marketplace vende benissimo senza spedire email.
+  it('senza la chiave delle email dice «degradato» ma risponde 200: nessuno va svegliato per la posta', async () => {
     delete process.env.RESEND_API_KEY;
     const res = await GET(req());
     expect(res.status).toBe(200);
     const json = await res.json();
     expect(json.status).toBe('degraded');
+  });
+
+  // Il freno anti-abuso condiviso non è un lusso da quando il sito sta su
+  // Vercel: senza Upstash ogni copia della funzione conta per conto suo, e
+  // «dieci tentativi al minuto» diventano dieci per ogni copia. Non è un guasto
+  // — il ripiego in memoria c'è sempre — ma va VISTO, e l'unico posto da cui si
+  // vede è questa rotta.
+  it('senza Upstash dice «degradato»: il freno anti-abuso non è più condiviso', async () => {
+    delete process.env.UPSTASH_REDIS_REST_URL;
+    const res = await GET(req());
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.status).toBe('degraded');
+    expect(json.checks.envOpzionali.error).toContain('UPSTASH_REDIS_REST_URL');
   });
 
   // 021 + 238 — La risposta pubblica non è una mappa di dove il sito è scoperto.

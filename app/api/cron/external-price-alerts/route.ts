@@ -17,7 +17,8 @@ import { detectExternalChange, changeMessage } from '@/lib/products/externalAler
  * per giro (la verifica usa l'AI: costosa) e sempre solo sugli stale, così i giri
  * si distribuiscono nel tempo.
  *
- * Trigger esterno (cron-job.org, es. ogni ora):
+ * Cadenza: ogni ora. Chi la fa partire sta in `vercel.json` → `crons`.
+ * A mano si chiama così:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://yoursite/api/cron/external-price-alerts
  */
 

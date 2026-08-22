@@ -18,7 +18,8 @@ import { logger } from '@/lib/logger';
  *   Niente vendita aggressiva."
  * - Trust & Safety: "Idempotent via recovery_email_sent_at flag = mai 2 email."
  *
- * Trigger esterno (cron-job.org ogni ora):
+ * Cadenza: ogni ora. Chi la fa partire sta in `vercel.json` → `crons`.
+ * A mano si chiama così:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://yoursite/api/cron/abandoned-carts
  */
 

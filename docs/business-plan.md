@@ -140,7 +140,7 @@ Vedi documento dedicato: [`unit-economics.md`](unit-economics.md)
 
 | Voce | Costo |
 |---|---|
-| Render hosting | €25 |
+| Vercel hosting (Pro) | €25 |
 | Supabase Pro (al 1° €1k MRR) | €25 |
 | Dominio Netsons | €1 |
 | Resend (free fino 3k email) | €0 |

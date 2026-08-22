@@ -25,7 +25,7 @@
 | Rider compensation (zona vicina <3km) | €3,00 | A carico MyCity se spedizione gratis |
 | SMS notifica (Twilio opz.) | €0,10 | Se attivato |
 | Email transactional (Resend) | €0,00 | Free tier |
-| Server compute (proporzionale) | €0,02 | Render scale-down |
+| Server compute (proporzionale) | €0,02 | Vercel: si paga a invocazione, non a macchina accesa |
 | **TOTALE COSTI** | **€3,45** | |
 
 ### Margine per ordine
