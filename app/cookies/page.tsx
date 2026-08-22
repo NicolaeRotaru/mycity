@@ -62,6 +62,10 @@ export default function CookiesPage() {
           { name: 'NEXT_LOCALE', purpose: 'La lingua che hai scelto per il sito', duration: '1 anno', provider: 'Prima parte' },
           { name: 'mycity_shopping_mode', purpose: 'Per i venditori: ricorda se stai navigando come negozio o come cliente', duration: 'Sessione', provider: 'Prima parte' },
           { name: 'mc_cid', purpose: 'Identificativo del registro dei consensi: serve solo a legare la scelta che hai fatto sui cookie a chi l\'ha fatta, quando non hai un account. Non è leggibile dal browser e non serve a profilare.', duration: '6 mesi', provider: 'Prima parte' },
+          // 22/8/2026 — c'era e non era dichiarato. Un cookie tecnico non ha
+          // bisogno del consenso, ma va scritto nell'informativa lo stesso:
+          // quello che non si dichiara sembra nascosto.
+          { name: 'mc_ruolo', purpose: 'Ricorda per pochi minuti il tuo ruolo e se il tuo negozio è approvato, così non serve rileggere il profilo dal database a ogni pagina. È firmato, non è leggibile dal browser e non contiene dati personali.', duration: '10 minuti', provider: 'Prima parte' },
           { name: '__cf_bm', purpose: 'Anti-bot Cloudflare (sicurezza)', duration: '30 minuti', provider: 'Cloudflare' },
           { name: 'cf-turnstile-*', purpose: 'CAPTCHA Turnstile', duration: 'Sessione', provider: 'Cloudflare' },
           { name: '__stripe_mid / __stripe_sid', purpose: 'Anti-frode pagamenti', duration: '1 anno / 30 min', provider: 'Stripe' },

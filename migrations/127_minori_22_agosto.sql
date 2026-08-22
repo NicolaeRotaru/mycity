@@ -681,3 +681,80 @@ BEGIN
   RETURN jsonb_build_object('rilasciati', v_released, 'saltati_senza_incasso', v_saltati);
 END;
 $function$;
+
+-- ── ⑮ Le categorie mostrate e quelle registrate non coincidevano ──────────
+--
+-- Il banner mostra quattro categorie — necessari, funzionali, statistiche,
+-- marketing — e ne registra due. Il vincolo sulla tabella non ammetteva
+-- nemmeno il valore 'functional', quindi non era una dimenticanza rimediabile
+-- a metà: la categoria non aveva proprio dove andare.
+--
+-- Il giorno in cui qualcuno chiede «dimostrate che vi aveva detto di sì», per
+-- i cookie funzionali non c'è niente da mostrare — pur avendoglielo chiesto.
+ALTER TABLE public.consent_log
+  DROP CONSTRAINT IF EXISTS consent_log_categoria_check;
+
+ALTER TABLE public.consent_log
+  ADD CONSTRAINT consent_log_categoria_check
+  CHECK (categoria IN ('necessari', 'functional', 'analytics', 'marketing', 'privacy_terms'));
+
+-- ── ⑯ Il fattorino vedeva i recapiti di ogni consegna, per sempre ─────────
+--
+-- La regola era `rider_id = auth.uid()`: senza limite di tempo e senza limite
+-- di stato. Un fattorino che ha lavorato sei mesi si porta dietro nome,
+-- telefono e indirizzo di ogni cliente che ha servito, e continua a poterli
+-- leggere anche dopo aver smesso di lavorare con noi.
+--
+-- Non è un buco: è la regola scritta male. Il fattorino quei dati DEVE averli
+-- mentre consegna, e per un po' dopo — un cliente che chiama il giorno dopo
+-- per una consegna sbagliata va potuto ritrovare. Non gli servono a novembre
+-- quelli di maggio.
+--
+-- Adesso: gli ordini aperti sempre, i consegnati per sette giorni. Lo storico
+-- dei compensi — che è quello per cui il fattorino apre davvero quella pagina —
+-- lo serve una vista senza recapiti.
+DROP POLICY IF EXISTS "Riders can view available and own orders" ON public.orders;
+
+CREATE POLICY "Riders can view available and own orders"
+  ON public.orders
+  FOR SELECT
+  TO authenticated
+  USING (
+    rider_id = (SELECT auth.uid())
+    AND (
+      delivery_status <> 'DELIVERED'
+      OR delivered_at IS NULL
+      OR delivered_at > now() - interval '7 days'
+    )
+  );
+
+-- Lo storico dei compensi, senza un solo recapito.
+--
+-- Il fattorino apre quella pagina per una domanda sola: quanto ho guadagnato.
+-- Per rispondere non serve sapere dove abita chi ha ordinato. Resta la città,
+-- che è un'informazione grossa e serve a riconoscere il giro.
+CREATE OR REPLACE VIEW public.rider_consegne_storico AS
+SELECT
+  o.id,
+  o.rider_id,
+  o.delivered_at,
+  o.delivery_status,
+  o.payment_method,
+  o.shipping_cost,
+  o.rider_fee_cents,
+  o.total_price,
+  o.delivery_city
+FROM public.orders o
+WHERE o.rider_id = (SELECT auth.uid())
+  AND o.delivery_status = 'DELIVERED';
+
+ALTER VIEW public.rider_consegne_storico SET (security_invoker = off);
+
+COMMENT ON VIEW public.rider_consegne_storico IS
+  'DEFINER PER SCELTA (22/8/2026). Lo storico dei compensi del fattorino, senza '
+  'nome, telefono e indirizzo dei clienti. Il filtro `rider_id = auth.uid()` sta '
+  'dentro la vista: ogni fattorino vede solo le proprie consegne. Serve a far '
+  'restringere la regola su `orders` — che dava i recapiti di ogni consegna per '
+  'sempre — senza togliere al fattorino il conto di quello che ha guadagnato.';
+
+GRANT SELECT ON public.rider_consegne_storico TO authenticated;

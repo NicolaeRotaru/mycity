@@ -1033,12 +1033,16 @@ export default function CheckoutPage() {
           type="submit"
           form="checkout-form"
           disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}
-          aria-label={paymentMethod === 'card' ? 'Paga con carta e conferma ordine' : 'Conferma ordine'}
+          aria-label={
+            paymentMethod === 'card'
+              ? 'Paga con carta e conferma ordine'
+              : 'Ordina e paga alla consegna'
+          }
           className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
         >
           {isCheckingOut
             ? (paymentMethod === 'card' ? 'Apertura…' : 'Elaborazione…')
-            : (paymentMethod === 'card' ? 'Paga con carta' : 'Conferma ordine')}
+            : (paymentMethod === 'card' ? 'Paga con carta' : 'Ordina e paga alla consegna')}
         </button>
       </div>
     </div>

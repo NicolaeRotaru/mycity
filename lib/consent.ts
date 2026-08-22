@@ -84,6 +84,9 @@ export function writeConsent(partial: Partial<ConsentState>) {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
+      // 22/8/2026 — mancava, e il banner la chiede: le categorie mostrate e
+      // quelle registrate devono essere le stesse.
+      functional: next.functional,
       analytics: next.analytics,
       marketing: next.marketing,
       // #69 — La versione va come TESTO. `CONSENT_VERSION` e' un numero, e la

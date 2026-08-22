@@ -19,6 +19,11 @@ export const runtime = 'nodejs';
  */
 
 const Body = z.object({
+  // 22/8/2026 — `functional` mancava. Il banner mostra quattro categorie e ne
+  // registrava due: per i cookie funzionali il consenso veniva chiesto e non
+  // scritto da nessuna parte. È facoltativo per non rifiutare le versioni
+  // vecchie del banner che ancora non lo mandano.
+  functional: z.boolean().optional(),
   analytics: z.boolean(),
   marketing: z.boolean(),
   versione: z.string().max(40).optional(),
@@ -78,11 +83,14 @@ export async function POST(request: Request) {
   const userAgent = request.headers.get('user-agent')?.slice(0, 300) ?? null;
   const versione = parsed.data.versione ?? null;
 
-  const righe = (['analytics', 'marketing'] as const).map((categoria) => ({
+  const categorie = (['analytics', 'marketing'] as const).map((c) => c as string);
+  if (typeof parsed.data.functional === 'boolean') categorie.unshift('functional');
+
+  const righe = categorie.map((categoria) => ({
     user_id: userId,
     anon_id: userId ? null : anonId,
     categoria,
-    valore: parsed.data[categoria],
+    valore: parsed.data[categoria as 'analytics' | 'marketing' | 'functional'] as boolean,
     versione_testo: versione,
     ip,
     user_agent: userAgent,

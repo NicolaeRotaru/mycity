@@ -194,6 +194,37 @@ export default function TermsPage() {
           Il rimborso è effettuato entro 14 giorni dalla ricezione della merce restituita, con lo
           stesso mezzo di pagamento usato per l&apos;acquisto.
         </p>
+
+        {/* 22/8/2026 — Il modulo di recesso tipo mancava. L'allegato I, parte B
+            del Codice del Consumo dice che il venditore lo deve MOSTRARE, non
+            che il consumatore lo deve usare: il pulsante «Richiedi reso» resta
+            la strada comoda, questo è il testo che chi vuole può copiare. */}
+        <div className="mt-4 rounded-xl border border-cream-300 bg-cream-50 p-4">
+          <h3 className="font-semibold text-ink-900 mb-2">Modulo di recesso tipo</h3>
+          <p className="text-sm text-ink-600 mb-3">
+            Non sei obbligato a usarlo: il modo più veloce resta il pulsante &quot;Richiedi
+            reso&quot; nel dettaglio dell&apos;ordine. Se preferisci scrivere, copia questo testo.
+          </p>
+          <pre className="whitespace-pre-wrap text-sm text-ink-800 font-mono leading-relaxed">
+{`Destinatario: ${chiSiamo.denominazione}${chiSiamo.indirizzo ? `, ${chiSiamo.indirizzo}` : ''}${chiSiamo.emailResi ? `
+Email: ${chiSiamo.emailResi}` : ''}
+
+Con la presente notifico il recesso dal mio contratto di vendita
+dei seguenti beni:
+
+  ...........................................................
+
+Ordine n. ..................................................
+Ordinato il ................ / Ricevuto il ................
+
+Nome del consumatore: ......................................
+Indirizzo del consumatore: .................................
+
+Firma (solo se il modulo è inviato su carta): ..............
+
+Data: ......................................................`}
+          </pre>
+        </div>
       </LegalSection>
 
       <LegalSection id="garanzia" heading="8. Garanzia legale di conformità">
@@ -281,29 +312,80 @@ export default function TermsPage() {
         </p>
       </LegalSection>
 
+      {/* 22/8/2026 — Prima qui c'era scritto «possiamo modificare i presenti
+          Termini in qualsiasi momento» e che continuare a usare il sito vale
+          come accettazione. Una clausola così, in un contratto con un
+          consumatore, è di quelle che un giudice può dichiarare nulle: non
+          dice PERCHÉ le condizioni possono cambiare, e fa valere il silenzio
+          come un sì. Adesso i motivi sono elencati, e chi non ci sta se ne va
+          senza pagare niente. */}
       <LegalSection id="modifiche" heading="15. Modifiche ai Termini">
         <p>
-          Possiamo modificare i presenti Termini in qualsiasi momento. Le modifiche sostanziali
-          saranno comunicate con preavviso di <strong>30 giorni</strong> via email e notifica in
-          piattaforma. L&apos;uso continuato del Servizio dopo l&apos;entrata in vigore costituisce
-          accettazione delle modifiche. Se non accetti, puoi cancellare l&apos;account prima
-          dell&apos;entrata in vigore.
+          Possiamo modificare questi Termini per un motivo <strong>giustificato</strong>: una legge
+          nuova o un provvedimento di un&apos;autorità; un cambiamento tecnico o di costo dei
+          fornitori da cui dipendiamo (pagamenti, consegne, hosting); l&apos;introduzione di
+          funzioni nuove o la chiusura di funzioni esistenti; la correzione di errori materiali.
+        </p>
+        <p>
+          Le modifiche sostanziali te le comunichiamo con <strong>30 giorni</strong> di preavviso,
+          via email e con un avviso nel sito, e la comunicazione dice cosa cambia e perché.
+        </p>
+        <p>
+          Se non accetti la modifica <strong>puoi recedere senza costi e senza motivazione</strong>
+          entro la data di entrata in vigore, scrivendoci o cancellando l&apos;account dalle
+          <Link href="/profile/settings" className="text-primary-700 underline"> Impostazioni</Link>.
+          Gli ordini già effettuati restano regolati dalle condizioni in vigore quando li hai fatti.
+        </p>
+        <p className="text-sm text-ink-600">
+          Per i venditori professionali il preavviso di 30 giorni e l&apos;indicazione dei motivi
+          sono quelli previsti dal Regolamento europeo 2019/1150 sui rapporti fra piattaforme e
+          imprese.
         </p>
       </LegalSection>
 
-      <LegalSection id="odr" heading="16. Risoluzione delle controversie (ODR)">
+      <LegalSection id="odr" heading="16. Se qualcosa non va: reclami e controversie">
+        {/* 22/8/2026 — Qui si mandavano i consumatori alla piattaforma ODR
+            europea, che la Commissione ha spento il 20 luglio 2025. Un link a
+            una pagina morta dentro la sezione «cosa fare se abbiamo un
+            problema» è peggio di non avere la sezione: chi ci prova ci sbatte
+            contro nel momento in cui è già arrabbiato. */}
         <p>
-          Per i consumatori è disponibile la piattaforma europea di risoluzione delle controversie
-          online (ODR):{' '}
-          <a href="https://ec.europa.eu/consumers/odr/" target="_blank" rel="noopener noreferrer" className="text-primary-700 underline">
-            ec.europa.eu/consumers/odr
-          </a>.
-          {chiSiamo.emailReclami && (
+          <strong>Prima cosa: scrivici.</strong> Quasi tutto si risolve così.
+          {chiSiamo.emailReclami ? (
             <>
-              Inoltre, puoi contattare il nostro servizio clienti scrivendo a{' '}
-              <a href={`mailto:${chiSiamo.emailReclami}`} className="text-primary-700 underline">{chiSiamo.emailReclami}</a>.
+              {' '}Manda un&apos;email a{' '}
+              <a href={`mailto:${chiSiamo.emailReclami}`} className="text-primary-700 underline">{chiSiamo.emailReclami}</a>
+              {' '}spiegando cosa è successo e allegando il numero dell&apos;ordine.
             </>
+          ) : (
+            <> Usa il modulo nella pagina <Link href="/contact" className="text-primary-700 underline">Contatti</Link>, indicando il numero dell&apos;ordine.</>
           )}
+          {' '}Ti rispondiamo entro <strong>5 giorni lavorativi</strong>. Se la risposta richiede
+          più tempo te lo diciamo, con una data.
+        </p>
+        <p>
+          <strong>Se la risposta non ti soddisfa.</strong> La piattaforma europea di risoluzione
+          delle controversie online (ODR) <strong>non è più attiva</strong>: la Commissione europea
+          l&apos;ha chiusa il 20 luglio 2025. Restano queste strade, tutte facoltative e nessuna
+          obbligatoria prima di rivolgersi a un giudice:
+        </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>
+            la <strong>conciliazione paritetica</strong> davanti a un organismo iscritto
+            nell&apos;elenco ADR tenuto dal Ministero delle Imprese e del Made in Italy;
+          </li>
+          <li>
+            la <strong>mediazione civile</strong> presso un organismo iscritto al registro del
+            Ministero della Giustizia;
+          </li>
+          <li>
+            una segnalazione all&apos;<strong>Autorità Garante della Concorrenza e del Mercato</strong>
+            {' '}(AGCM) o all&apos;associazione dei consumatori che preferisci.
+          </li>
+        </ul>
+        <p className="text-sm text-ink-600">
+          MyCity non ha ancora aderito a uno specifico organismo ADR. La legge lo consente: quando
+          lo faremo, il nome dell&apos;organismo comparirà qui e te lo comunicheremo.
         </p>
       </LegalSection>
 

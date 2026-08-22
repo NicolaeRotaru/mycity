@@ -187,6 +187,11 @@ export async function POST(request: Request) {
       path: '/',
       sameSite: 'lax',
       httpOnly: true,
+      // 22/8/2026 — mancava, ed è l'unico cookie del sito che ne era senza.
+      // Senza `secure` il browser lo manda anche su una connessione in chiaro:
+      // su una rete wifi aperta chiunque ascolti lo legge, e con quello segue
+      // la persona da una visita all'altra.
+      secure: true,
     });
   }
   return res;

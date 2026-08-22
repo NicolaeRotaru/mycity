@@ -15,8 +15,26 @@ import { captureError } from '@/lib/analytics/sentry';
 
 type LogContext = Record<string, unknown> | unknown;
 
-// 🟡-10: chiavi che non devono MAI finire in log/Sentry in chiaro.
-const PII_KEYS = /^(email|password|pass|token|authorization|auth|cookie|phone|tel|iban|card|card_number|cvv|secret|api_?key|access_token|refresh_token|ssn|fiscal_?code|vat)$/i;
+/**
+ * 22/8/2026 — IL FILTRO CERCAVA IL NOME ESATTO, E NELLA REALTÀ I NOMI SONO COMPOSTI.
+ *
+ * Il confronto era ancorato («^…$»), quindi oscurava `phone` ma lasciava
+ * passare `delivery_phone`. Nel codice vero i campi si chiamano così:
+ * `delivery_phone`, `billing_iban`, `delivery_address`, `delivery_full_name`,
+ * `customer_email`. Il filtro difendeva la forma che nessuno usa e lasciava
+ * scoperta quella che si usa dappertutto.
+ *
+ * Il database aveva già la regola giusta — `activity_key_sensibile` nella
+ * migrazione 115 confronta per SOMIGLIANZA — ma il registro delle attività e i
+ * log dell'applicazione non si parlavano.
+ *
+ * Adesso si oscura ogni chiave che CONTIENE una di queste parole. Il prezzo è
+ * qualche oscuramento in più del necessario (`nome_file` finisce oscurato), e
+ * si paga volentieri: un dato personale in chiaro nei log finisce dentro
+ * Sentry, che sta fuori dall'Europa, e da lì non lo togli più.
+ */
+const PII_KEYS =
+  /(email|password|passwd|\bpass\b|token|authorization|\bauth\b|cookie|phone|tel|iban|card|cvv|secret|api_?key|ssn|fiscal|codice_?fiscale|\bcf\b|vat|partita_?iva|pec|address|indirizzo|name|nome|cognome|surname|birth|nascita)/i;
 
 function redact(value: unknown, depth = 0): unknown {
   if (depth > 4 || value == null) return value;
