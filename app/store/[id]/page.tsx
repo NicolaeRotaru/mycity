@@ -1,4 +1,6 @@
 'use client';
+import { VendutoDa } from '@/components/products/VendutoDa';
+import { Segnala } from '@/components/Segnala';
 import { use, type CSSProperties } from 'react';
 
 import Link from 'next/link';
@@ -140,6 +142,15 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
           `tabs`: l'hero resta in testa e le altre sezioni si raggruppano nelle
           tab Prodotti / Info & orari / Recensioni (solo presentazione). */}
       <SectionRenderer sections={sections} ctx={ctx} tabs />
+
+      {/* Chi vende davvero: ragione sociale, sede, partita IVA. Il cliente ha
+          diritto di sapere con chi sta stipulando il contratto, e prima sulla
+          pagina del negozio non c'era scritto da nessuna parte. */}
+      <VendutoDa sellerId={store.id} storeName={store.store_name} />
+
+      <div className="pt-2">
+        <Segnala tipo="negozio" oggettoId={store.id} />
+      </div>
     </div>
   );
 }

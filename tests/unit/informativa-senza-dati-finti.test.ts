@@ -67,7 +67,7 @@ describe('la frase sul titolare', () => {
       capitale: null,
       emailPrivacy: 'privacy@mycity.it',
       referentePrivacy: 'Nicolae Rotaru',
-      emailDpo: null,
+      emailDpo: null, emailResi: null, emailReclami: null, emailLegale: null, emailSicurezza: null, emailSegnalazioni: null,
     });
     expect(frase).toBe('MyCity.');
     expect(frase).not.toMatch(/Via Roma/);
@@ -84,7 +84,7 @@ describe('la frase sul titolare', () => {
       capitale: '10.000 € i.v.',
       emailPrivacy: 'privacy@mycity.it',
       referentePrivacy: 'Nicolae Rotaru',
-      emailDpo: null,
+      emailDpo: null, emailResi: null, emailReclami: null, emailLegale: null, emailSicurezza: null, emailSegnalazioni: null,
     });
     expect(frase).toContain('IT01234567891');
     expect(frase).toContain('Via Garibaldi 3');
@@ -161,7 +161,7 @@ describe('la riga di identita in fondo alle pagine', () => {
     expect(rigaIdentita({
       denominazione: 'MyCity',
       indirizzo: null, partitaIva: null, rea: null, pec: null, capitale: null,
-      emailPrivacy: 'privacy@mycity.it', referentePrivacy: 'Nicolae Rotaru', emailDpo: null,
+      emailPrivacy: 'privacy@mycity.it', referentePrivacy: 'Nicolae Rotaru', emailDpo: null, emailResi: null, emailReclami: null, emailLegale: null, emailSicurezza: null, emailSegnalazioni: null,
     })).toBe('');
   });
 
@@ -173,7 +173,7 @@ describe('la riga di identita in fondo alle pagine', () => {
       rea: 'PC-123456',
       pec: 'mycity@pec-vera.it',
       capitale: '10.000 € i.v.',
-      emailPrivacy: 'privacy@mycity.it', referentePrivacy: 'Nicolae Rotaru', emailDpo: null,
+      emailPrivacy: 'privacy@mycity.it', referentePrivacy: 'Nicolae Rotaru', emailDpo: null, emailResi: null, emailReclami: null, emailLegale: null, emailSicurezza: null, emailSegnalazioni: null,
     });
     expect(riga).toContain('IT01234567891');
     expect(riga).toContain('PC-123456');
@@ -184,7 +184,7 @@ describe('la riga di identita in fondo alle pagine', () => {
     expect(rigaIdentita({
       denominazione: 'MyCity',
       indirizzo: null, partitaIva: null, rea: null, pec: null, capitale: null,
-      emailPrivacy: 'privacy@mycity.it', referentePrivacy: null, emailDpo: null,
+      emailPrivacy: 'privacy@mycity.it', referentePrivacy: null, emailDpo: null, emailResi: null, emailReclami: null, emailLegale: null, emailSicurezza: null, emailSegnalazioni: null,
     })).toBe('');
     expect(eSegnaposto('IT00000000000')).toBe(true);
   });
@@ -197,5 +197,45 @@ describe('chi risponde della privacy', () => {
     expect(t.referentePrivacy).toBeTruthy();
     // Un DPO e' una nomina formale: dichiararlo senza averla fatta e' falso.
     expect(t.emailDpo).toBeNull();
+  });
+});
+
+/**
+ * 22/8/2026 — QUATTRO CASELLE SCRITTE A MANO NELLE PAGINE LEGALI.
+ *
+ * Nei Termini c'erano `resi@`, `reclami@`, `legal@` e `security@`, e nelle
+ * impostazioni `privacy@`: tutti indirizzi scritti dentro il testo, su un
+ * dominio che non e' quello di produzione. Chi esercita il recesso, chi apre un
+ * reclamo, chi segnala una falla scriveva a una casella che non riceve niente,
+ * e non riceveva mai risposta. Un obbligo dichiarato e non erogato.
+ *
+ * Sistemarli non basta: il quinto nasce identico, perche' scrivere l'indirizzo
+ * dentro la frase e' quello che viene naturale. Questo controllo legge i file e
+ * diventa rosso il giorno in cui ne entra uno.
+ */
+describe('nessun recapito scritto a mano nelle pagine legali', () => {
+  const pagine = [
+    'app/terms/page.tsx',
+    'app/privacy/page.tsx',
+    'app/cookies/page.tsx',
+    'app/profile/settings/page.tsx',
+  ];
+
+  it('ogni indirizzo email viene dalla configurazione, non dal testo', async () => {
+    const { readFileSync, existsSync } = await import('node:fs');
+    const scrittiAMano: string[] = [];
+    for (const f of pagine) {
+      if (!existsSync(f)) continue;
+      const testo = readFileSync(f, 'utf8');
+      // `mailto:` seguito da qualcosa che NON e' un'espressione: cioe' un
+      // indirizzo battuto a tastiera.
+      for (const m of testo.matchAll(/mailto:(?!\$\{)([^"'`\s>]+)/g)) {
+        scrittiAMano.push(`${f} → ${m[1]}`);
+      }
+    }
+    expect(
+      scrittiAMano,
+      `questi recapiti sono scritti dentro il testo invece di venire da lib/legal/titolare.ts:\n  ${scrittiAMano.join('\n  ')}`,
+    ).toEqual([]);
   });
 });

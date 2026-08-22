@@ -227,6 +227,9 @@ const AttributesFields = ({
             <div key={f.key} className={f.type === 'textarea' ? 'sm:col-span-2' : undefined}>
               <label htmlFor={id} className="block text-sm font-medium text-ink-700 mb-1">
                 {f.label}
+                {/* Un campo obbligatorio si vede prima di premere «Pubblica»,
+                    non dopo: sugli alimentari qui c'e' l'allergene. */}
+                {f.required && <span className="ml-1 text-secondary-700" title="Obbligatorio">*</span>}
                 {f.unit && <span className="text-ink-400 ml-1">({f.unit})</span>}
               </label>
               {renderInput(f)}

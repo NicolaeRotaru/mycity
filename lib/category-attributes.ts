@@ -25,7 +25,24 @@ export type AttributeField = {
    * disponibilità. Solo dove ha senso avere più varianti.
    */
   variantable?: boolean;
+  /**
+   * 22/8/2026 — CAMPO CHE NON SI PUO' LASCIARE VUOTO.
+   *
+   * Un prodotto alimentare si poteva pubblicare e vendere senza dichiarare gli
+   * allergeni. Non e' un dettaglio di completezza: il regolamento europeo
+   * 1169/2011 impone che l'informazione sugli allergeni sia disponibile PRIMA
+   * dell'acquisto anche nella vendita a distanza, e per chi e' allergico e'
+   * la differenza fra una spesa e un ricovero.
+   *
+   * Chi vende un prodotto senza allergeni scrive «Nessuno dei 14 allergeni»:
+   * e' una dichiarazione, non un campo lasciato in bianco — e la differenza fra
+   * le due cose e' esattamente il punto.
+   */
+  required?: boolean;
 };
+
+/** Il valore da scegliere quando un alimento non contiene allergeni. */
+export const NESSUN_ALLERGENE = 'Nessuno dei 14 allergeni';
 
 export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
   alimentari: [
@@ -37,8 +54,15 @@ export const CATEGORY_ATTRIBUTES: Record<string, AttributeField[]> = {
     { key: 'senza_glutine', label: 'Senza glutine', type: 'checkbox' },
     { key: 'senza_lattosio', label: 'Senza lattosio', type: 'checkbox' },
     { key: 'vegano', label: 'Vegano', type: 'checkbox' },
-    { key: 'allergeni', label: 'Allergeni', type: 'text', placeholder: 'Es. Glutine, lattosio, frutta a guscio' },
-    { key: 'ingredienti', label: 'Ingredienti', type: 'textarea', placeholder: 'Lista degli ingredienti' },
+    {
+      key: 'allergeni',
+      label: 'Allergeni',
+      type: 'text',
+      required: true,
+      placeholder: 'Es. Glutine, lattosio, frutta a guscio',
+      helpText: `Obbligatorio. Se il prodotto non ne contiene nessuno, scrivi «${NESSUN_ALLERGENE}».`,
+    },
+    { key: 'ingredienti', label: 'Ingredienti', type: 'textarea', required: true, placeholder: 'Lista degli ingredienti' },
     { key: 'valori_nutrizionali', label: 'Valori nutrizionali (per 100g)', type: 'textarea', placeholder: 'Energia, grassi, carboidrati, proteine, sale' },
     { key: 'conservazione', label: 'Conservazione', type: 'select', options: ['Temperatura ambiente', 'Frigorifero', 'Freezer', 'Luogo fresco e asciutto'] },
     { key: 'scadenza', label: 'Scadenza', type: 'date' },

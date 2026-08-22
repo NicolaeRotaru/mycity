@@ -40,6 +40,25 @@ export type Titolare = {
   referentePrivacy: string | null;
   /** Nominato davvero un DPO formale? Se no, la pagina non deve citarne uno. */
   emailDpo: string | null;
+  /**
+   * 22/8/2026 — LE CASELLE SCRITTE A MANO NELLE PAGINE LEGALI.
+   *
+   * Nei Termini e nelle impostazioni c'erano quattro indirizzi scritti dentro
+   * il testo — resi@, reclami@, legal@, security@ — tutti su un dominio che non
+   * e' quello di produzione. Chi esercita il recesso, chi apre un reclamo, chi
+   * segnala una falla scriveva a una casella che non riceve niente, e non
+   * riceveva mai risposta: un obbligo dichiarato e non erogato.
+   *
+   * Adesso vivono qui, come tutti gli altri dati del titolare, e valgono la
+   * stessa regola: se la variabile d'ambiente non c'e', la riga non si stampa.
+   * Meglio una riga in meno che un indirizzo che non risponde.
+   */
+  emailResi: string | null;
+  emailReclami: string | null;
+  emailLegale: string | null;
+  emailSicurezza: string | null;
+  /** Il punto di contatto unico per autorita' e utenti (obblighi DSA). */
+  emailSegnalazioni: string | null;
 };
 
 /** Forme di segnaposto che non devono finire su una pagina pubblica. */
@@ -76,6 +95,11 @@ export function titolare(): Titolare {
     emailPrivacy: process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY?.trim() || 'privacy@mycity.it',
     referentePrivacy: process.env.NEXT_PUBLIC_TITOLARE_REFERENTE_PRIVACY?.trim() || 'Nicolae Rotaru',
     emailDpo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_DPO),
+    emailResi: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_RESI),
+    emailReclami: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_RECLAMI),
+    emailLegale: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_LEGALE),
+    emailSicurezza: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_SICUREZZA),
+    emailSegnalazioni: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_SEGNALAZIONI),
   };
 }
 

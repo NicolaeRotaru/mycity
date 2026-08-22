@@ -34,6 +34,8 @@ import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 import { SellerCard } from '@/components/products/SellerCard';
+import { VendutoDa } from '@/components/products/VendutoDa';
+import { Segnala } from '@/components/Segnala';
 import { AllergensAccordion } from '@/components/products/AllergensAccordion';
 import { FrequentlyBoughtTogether } from '@/components/products/FrequentlyBoughtTogether';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
@@ -612,6 +614,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <SellerCard
               sellerId={(sellerProfile?.id ?? product.seller_id) as string}
               storeName={product.profiles?.store_name ?? 'Negozio'}
+            />
+          )}
+
+          {/* Chi vende davvero: ragione sociale, sede, partita IVA. Prima non
+              c'era da nessuna parte, e il cliente non sapeva con chi stava
+              stipulando il contratto. */}
+          {/* Il canale per dirci che qualcosa non va: prima non esisteva
+              da nessuna parte sul sito. */}
+          <div className="pt-1">
+            <Segnala tipo="prodotto" oggettoId={product.id} />
+          </div>
+
+          {(sellerProfile?.id ?? product.seller_id) && (
+            <VendutoDa
+              sellerId={(sellerProfile?.id ?? product.seller_id) as string}
+              storeName={product.profiles?.store_name}
             />
           )}
 

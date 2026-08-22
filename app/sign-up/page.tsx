@@ -1,5 +1,6 @@
 'use client';
 
+import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -18,7 +19,7 @@ import { friendlyError } from '@/lib/errors';
  * alle costanti VERSION di app/privacy/page.tsx e app/terms/page.tsx: se i testi
  * cambiano e questa no, il verbale dice il falso.
  */
-const VERSIONE_TESTI_LEGALI = 'privacy-2.0+terms-2.0';
+
 
 type Role = 'buyer' | 'seller' | 'rider';
 

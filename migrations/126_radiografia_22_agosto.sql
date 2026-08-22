@@ -251,3 +251,291 @@ REVOKE ALL ON FUNCTION public.confirm_cod_remittance(uuid, date) FROM PUBLIC, an
 GRANT EXECUTE ON FUNCTION public.confirm_cod_remittance(uuid, date) TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⑥ LA POSIZIONE DEL FATTORINO SI CANCELLA A CONSEGNA FATTA
+-- ═══════════════════════════════════════════════════════════════════════════
+-- L'informativa privacy promette, nella tabella delle conservazioni, che la
+-- posizione del fattorino si cancella a fine consegna. Nel codice non la
+-- cancellava nessuno: `rider_lat`, `rider_lng` e `rider_position_updated_at`
+-- restavano sull'ordine per sempre.
+--
+-- E' un dato personale di un lavoratore — dove si trovava, a che ora, ogni
+-- pochi minuti — tenuto senza limite contro una promessa scritta. Il difetto
+-- non e' solo la conservazione: e' la distanza fra quello che l'informativa
+-- dice e quello che il sistema fa. Quella distanza, davanti al Garante, e'
+-- l'unica cosa che conta.
+--
+-- Qui si chiude in due mosse: le funzioni che chiudono un ordine cancellano le
+-- tre colonne, e una passata sola pulisce quelli gia' chiusi.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- La consegna arrivata a destinazione.
+DO $migra$
+DECLARE corpo text;
+BEGIN
+  SELECT pg_get_functiondef(p.oid) INTO corpo
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE n.nspname = 'public' AND p.proname = 'verify_delivery_code';
+  IF corpo IS NULL THEN
+    RAISE NOTICE 'verify_delivery_code non esiste: niente da riparare';
+    RETURN;
+  END IF;
+
+  corpo := replace(corpo,
+    'UPDATE public.orders SET delivery_status = ''DELIVERED'', delivered_at = now() WHERE id = p_order_id;',
+    'UPDATE public.orders SET delivery_status = ''DELIVERED'', delivered_at = now(),'
+    || ' rider_lat = NULL, rider_lng = NULL, rider_position_updated_at = NULL'
+    || ' WHERE id = p_order_id;');
+
+  IF corpo NOT LIKE '%rider_position_updated_at = NULL%' THEN
+    RAISE EXCEPTION 'verify_delivery_code: non ho trovato la riga della consegna da riparare — fermo qui invece di lasciarla com''era';
+  END IF;
+
+  EXECUTE corpo;
+END
+$migra$;
+
+REVOKE ALL ON FUNCTION public.verify_delivery_code(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.verify_delivery_code(uuid, text) TO authenticated;
+
+-- Gli ordini gia' chiusi: una passata sola, adesso.
+UPDATE public.orders
+   SET rider_lat = NULL, rider_lng = NULL, rider_position_updated_at = NULL
+ WHERE delivery_status IN ('DELIVERED', 'CANCELED')
+   AND (rider_lat IS NOT NULL OR rider_lng IS NOT NULL OR rider_position_updated_at IS NOT NULL);
+
+-- E il guardiano che tiene la promessa anche domani: qualunque strada porti un
+-- ordine a «consegnato» o «annullato», la posizione sparisce con lui. Cosi' la
+-- regola non dipende dal fatto che ci si ricordi di scriverla in ogni funzione
+-- nuova.
+CREATE OR REPLACE FUNCTION public.cancella_posizione_a_ordine_chiuso()
+RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+BEGIN
+  IF NEW.delivery_status IN ('DELIVERED', 'CANCELED') THEN
+    NEW.rider_lat := NULL;
+    NEW.rider_lng := NULL;
+    NEW.rider_position_updated_at := NULL;
+  END IF;
+  RETURN NEW;
+END$$;
+
+COMMENT ON FUNCTION public.cancella_posizione_a_ordine_chiuso() IS
+  'La posizione del fattorino si cancella quando l ordine si chiude: e la promessa scritta nell informativa privacy.';
+
+DROP TRIGGER IF EXISTS ordini_cancella_posizione_a_chiusura ON public.orders;
+CREATE TRIGGER ordini_cancella_posizione_a_chiusura
+  BEFORE UPDATE OF delivery_status ON public.orders
+  FOR EACH ROW
+  EXECUTE FUNCTION public.cancella_posizione_a_ordine_chiuso();
+
+REVOKE ALL ON FUNCTION public.cancella_posizione_a_ordine_chiuso() FROM PUBLIC, anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⑦ CHI VENDE HA UN NOME, UNA SEDE E UNA PARTITA IVA — E SI VEDONO
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Sulle pagine prodotto e negozio non c'era nessuna traccia di CHI sta vendendo
+-- davvero: solo l'insegna. Niente ragione sociale, niente sede, niente partita
+-- IVA. Per un marketplace non e' una gentilezza: e' l'obbligo di informazione
+-- precontrattuale (Codice del Consumo, art. 49) e l'obbligo del prestatore di
+-- servizi della societa' dell'informazione (d.lgs. 70/2003). Il cliente ha
+-- diritto di sapere con chi sta stipulando il contratto.
+--
+-- Sono dati d'IMPRESA, non dati personali da minimizzare: una partita IVA e una
+-- sede legale sono pubbliche per costruzione, stanno sulla visura camerale.
+-- Vanno nella vetrina pubblica, accanto all'insegna.
+--
+-- Le colonne aggiunte sono quattro: ragione sociale, forma giuridica, partita
+-- IVA e sede (indirizzo, citta', CAP). Restano fuori PEC e codice SDI, che
+-- servono alla fatturazione e non al cliente.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+DROP VIEW IF EXISTS public.seller_public_profiles;
+
+CREATE VIEW public.seller_public_profiles AS
+SELECT
+  id,
+  store_name,
+  store_address,
+  store_lat,
+  store_lng,
+  store_phone,
+  store_logo,
+  store_hours,
+  store_media,
+  store_description,
+  store_customization,
+  store_site,
+  offers_express,
+  founded_year,
+  is_approved,
+  stripe_charges_enabled,
+  stripe_payouts_enabled,
+  role,
+  created_at,
+  -- Chi vende, per legge. Dati d'impresa, non dati personali.
+  business_legal_name,
+  business_form,
+  business_vat_number,
+  business_address,
+  business_city,
+  business_zip
+FROM public.profiles
+WHERE is_approved = true
+  AND store_name IS NOT NULL
+  AND role = 'seller';
+
+COMMENT ON VIEW public.seller_public_profiles IS
+  'Vetrina pubblica negozi approvati: colonne non sensibili, i due booleani di stato pagamento che servono al bollino Verificato, e i dati identificativi d impresa che il cliente ha diritto di vedere prima di comprare. @foreignKey (id) references public.profiles (id)';
+
+REVOKE ALL    ON public.seller_public_profiles FROM anon, authenticated;
+GRANT  SELECT ON public.seller_public_profiles TO anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⑧ IL CANALE PER SEGNALARE UN CONTENUTO ILLECITO (obblighi DSA)
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Sul sito non c'era nessun modo di segnalare un contenuto illecito: nessun
+-- pulsante, nessuna rotta, nessun registro. Il regolamento europeo sui servizi
+-- digitali lo chiede a ogni piattaforma che ospita contenuti di terzi, e per un
+-- marketplace non e' burocrazia: e' il modo in cui un titolare di marchio, o un
+-- cliente che vede un prodotto pericoloso, ce lo puo' dire.
+--
+-- La tabella e' minima di proposito: chi segnala, che cosa, perche', in che
+-- stato e con quale esito motivato. Nessun campo che non serva a rispondere.
+--
+-- Chi puo' scrivere: chiunque, anche senza account (una segnalazione che
+-- pretende la registrazione e' una segnalazione che non arriva). Chi puo'
+-- leggere: solo l'amministrazione. Chi ha fatto una segnalazione da loggato
+-- puo' rileggere le sue, per sapere com'e' finita.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE TABLE IF NOT EXISTS public.segnalazioni (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tipo          text NOT NULL CHECK (tipo IN ('prodotto', 'negozio', 'recensione', 'messaggio')),
+  oggetto_id    uuid NOT NULL,
+  motivo        text NOT NULL CHECK (motivo IN (
+                  'contraffatto', 'illecito', 'pericoloso', 'ingannevole',
+                  'proprieta_intellettuale', 'odio_o_molestie', 'altro')),
+  dettaglio     text CHECK (dettaglio IS NULL OR length(dettaglio) <= 2000),
+  segnalante_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  email_contatto text CHECK (email_contatto IS NULL OR length(email_contatto) <= 320),
+  stato         text NOT NULL DEFAULT 'ricevuta'
+                  CHECK (stato IN ('ricevuta', 'in_esame', 'accolta', 'respinta')),
+  esito_motivato text CHECK (esito_motivato IS NULL OR length(esito_motivato) <= 2000),
+  deciso_da     uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  deciso_at     timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+COMMENT ON TABLE public.segnalazioni IS
+  'Segnalazioni di contenuti illeciti (DSA). Ogni segnalazione ha diritto a un esito motivato.';
+
+CREATE INDEX IF NOT EXISTS segnalazioni_da_esaminare_idx
+  ON public.segnalazioni (created_at DESC) WHERE stato IN ('ricevuta', 'in_esame');
+CREATE INDEX IF NOT EXISTS segnalazioni_oggetto_idx
+  ON public.segnalazioni (tipo, oggetto_id);
+
+ALTER TABLE public.segnalazioni ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "chiunque puo segnalare" ON public.segnalazioni;
+CREATE POLICY "chiunque puo segnalare" ON public.segnalazioni
+  FOR INSERT TO anon, authenticated
+  WITH CHECK (
+    -- Se dichiari un autore, quell'autore devi essere tu.
+    segnalante_id IS NULL OR segnalante_id = auth.uid()
+  );
+
+DROP POLICY IF EXISTS "le mie segnalazioni le rileggo" ON public.segnalazioni;
+CREATE POLICY "le mie segnalazioni le rileggo" ON public.segnalazioni
+  FOR SELECT TO authenticated
+  USING (segnalante_id = auth.uid() OR public.is_admin());
+
+DROP POLICY IF EXISTS "solo l amministrazione decide" ON public.segnalazioni;
+CREATE POLICY "solo l amministrazione decide" ON public.segnalazioni
+  FOR UPDATE TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+REVOKE ALL    ON public.segnalazioni FROM anon, authenticated;
+GRANT INSERT  ON public.segnalazioni TO anon, authenticated;
+GRANT SELECT, UPDATE ON public.segnalazioni TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- ⑨ UN ALIMENTARE NON SI PUBBLICA SENZA ALLERGENI
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Si poteva pubblicare e vendere un prodotto alimentare senza dichiarare gli
+-- allergeni: la scheda restava vuota e nessuno lo impediva. Non e' un dettaglio
+-- di completezza — il regolamento europeo 1169/2011 vuole quell'informazione
+-- PRIMA dell'acquisto anche nella vendita a distanza, e per chi e' allergico e'
+-- la differenza fra una spesa e un ricovero.
+--
+-- PERCHE' IL CONTROLLO STA QUI E NON SOLO NEL MODULO. Al catalogo si arriva da
+-- almeno quattro strade: il modulo del venditore, l'assistente AI, la creazione
+-- in blocco, l'importazione da un altro sito. Un controllo scritto nel modulo
+-- copre una strada su quattro, e le altre tre sono proprio quelle che
+-- riempiono il catalogo in fretta. Il database e' l'unico posto da cui non si
+-- passa intorno.
+--
+-- La bozza resta libera: si blocca la PUBBLICAZIONE, cioe' il momento in cui il
+-- prodotto diventa comprabile. Chi vende un alimento senza allergeni scrive
+-- «Nessuno dei 14 allergeni»: e' una dichiarazione, non un campo in bianco.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION public.alimentare_senza_allergeni_non_si_pubblica()
+RETURNS trigger LANGUAGE plpgsql SET search_path = public AS $$
+DECLARE
+  v_radice text;
+  v_allergeni text;
+BEGIN
+  -- Solo i prodotti comprabili. Bozze e archiviati passano.
+  IF NEW.status IS DISTINCT FROM 'available' THEN
+    RETURN NEW;
+  END IF;
+  IF NEW.category_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- La categoria di primo livello: le sottocategorie ereditano dal padre.
+  WITH RECURSIVE risali AS (
+    SELECT id, parent_id, slug FROM public.categories WHERE id = NEW.category_id
+    UNION ALL
+    SELECT c.id, c.parent_id, c.slug
+      FROM public.categories c JOIN risali r ON c.id = r.parent_id
+  )
+  SELECT slug INTO v_radice FROM risali WHERE parent_id IS NULL LIMIT 1;
+
+  IF v_radice IS DISTINCT FROM 'alimentari' THEN
+    RETURN NEW;
+  END IF;
+
+  v_allergeni := btrim(coalesce(NEW.attributes ->> 'allergeni', ''));
+  IF v_allergeni = '' THEN
+    RAISE EXCEPTION 'Un prodotto alimentare non si puo pubblicare senza dichiarare gli allergeni. Se non ne contiene nessuno, scrivi «Nessuno dei 14 allergeni».'
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END$$;
+
+COMMENT ON FUNCTION public.alimentare_senza_allergeni_non_si_pubblica() IS
+  'Reg. UE 1169/2011: l informazione sugli allergeni deve esserci prima dell acquisto, anche a distanza.';
+
+DROP TRIGGER IF EXISTS prodotti_alimentari_allergeni ON public.products;
+CREATE TRIGGER prodotti_alimentari_allergeni
+  BEFORE INSERT OR UPDATE OF status, attributes, category_id ON public.products
+  FOR EACH ROW
+  EXECUTE FUNCTION public.alimentare_senza_allergeni_non_si_pubblica();
+
+REVOKE ALL ON FUNCTION public.alimentare_senza_allergeni_non_si_pubblica() FROM PUBLIC, anon, authenticated;
+
+NOTIFY pgrst, 'reload schema';

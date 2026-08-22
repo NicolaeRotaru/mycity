@@ -148,6 +148,37 @@ SELECT 'l ordine con l incasso registrato diventa pagabile',
        'stato: ' || payout_status
   FROM public.orders WHERE id = 'b0000000-0000-0000-0000-0000000000b1';
 
+
+-- ---------------------------------------------------------------------------
+-- ③ La posizione del fattorino sparisce quando l'ordine si chiude
+-- ---------------------------------------------------------------------------
+-- L'informativa privacy promette che si cancella a fine consegna. Non la
+-- cancellava nessuno: restava sull'ordine per sempre. E' un dato personale di
+-- un lavoratore — dove si trovava, a che ora — tenuto senza limite contro una
+-- promessa scritta.
+INSERT INTO public.orders (
+  id, user_id, seller_id, rider_id, total_price, gross_total_cents, payment_method, payment_status,
+  delivery_status, payout_status, seller_payout_cents,
+  rider_lat, rider_lng, rider_position_updated_at,
+  delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip
+) VALUES (
+  'b0000000-0000-0000-0000-0000000000c1',
+  '33333333-3333-3333-3333-333333333333', '11111111-1111-1111-1111-111111111111',
+  '22222222-2222-2222-2222-222222222222',
+  25.00, 2500, 'card', 'PAID', 'OUT_FOR_DELIVERY', 'HELD', 2250,
+  45.0526, 9.6930, now(),
+  'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121'
+);
+
+UPDATE public.orders SET delivery_status = 'DELIVERED', delivered_at = now()
+ WHERE id = 'b0000000-0000-0000-0000-0000000000c1';
+
+INSERT INTO esiti
+SELECT 'la posizione del fattorino sparisce a consegna fatta',
+       rider_lat IS NULL AND rider_lng IS NULL AND rider_position_updated_at IS NULL,
+       'lat: ' || coalesce(rider_lat::text, 'nulla') || ' · lng: ' || coalesce(rider_lng::text, 'nulla')
+  FROM public.orders WHERE id = 'b0000000-0000-0000-0000-0000000000c1';
+
 -- =============================================================================
 -- Verdetto
 -- =============================================================================
