@@ -898,7 +898,7 @@ export default function CheckoutPage() {
           )}
 
           {orphans.length > 0 && (
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 space-y-3">
+            <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
                 <span><strong>{orphans.length} {orphans.length === 1 ? 'prodotto non è più disponibile' : 'prodotti non sono più disponibili'}</strong>: {orphans.map((o) => o.name).join(', ')}.</span>
@@ -917,8 +917,14 @@ export default function CheckoutPage() {
             </div>
           )}
 
+          {/* 22/8/2026 — QUESTI RIQUADRI NON VENIVANO MAI ANNUNCIATI.
+              Compaiono dopo che la pagina e' gia' a schermo, e senza
+              `role="alert"` uno screen reader non li legge: chi non vede sente
+              solo che il pulsante di conferma non risponde piu', senza sapere
+              perche'. `role="alert"` li fa leggere appena compaiono — e' la
+              stessa correzione gia' applicata ai campi del modulo. */}
           {stockIssues.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.</span>
             </div>
@@ -929,7 +935,7 @@ export default function CheckoutPage() {
               totale qui sotto e' gia' quello nuovo, cioe' quello che verra'
               addebitato davvero. */}
           {prezziCambiati.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 <strong>Il prezzo è cambiato</strong> da quando avevi messo nel carrello:{' '}
@@ -940,7 +946,7 @@ export default function CheckoutPage() {
           )}
 
           {variantIssues.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 <strong>Scegli le opzioni</strong> (taglia/colore) per: {variantIssues.map((v) => v.name).join(', ')}.{' '}
@@ -950,7 +956,7 @@ export default function CheckoutPage() {
           )}
 
           {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 flex items-start gap-2">
+            <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span><strong>Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.</span>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
+import { useRef, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { X, MapPin, ShoppingCart, Gift, ArrowRight } from 'lucide-react';
@@ -82,6 +83,12 @@ export default function BuyerOnboardingTour() {
     setOpen(false);
   };
 
+  // Fuoco dentro il riquadro, uscita con Esc, ritorno dov'era: le tre cose che
+  // rendono un pannello un pannello anche senza mouse.
+  const pannelloRef = useRef<HTMLDivElement>(null);
+  const nessunAvvio = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(open, pannelloRef, nessunAvvio, close);
+
   const next = () => {
     if (step >= STEPS.length - 1) close();
     else setStep(step + 1);
@@ -94,7 +101,20 @@ export default function BuyerOnboardingTour() {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
-      <div className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md shadow-warm-lg overflow-hidden animate-slide-up">
+      {/* 22/8/2026 — QUESTO PANNELLO COPRIVA LO SCHERMO SENZA DIRE DI ESSERLO.
+          Si apre da solo al primo accesso e prende tutta la pagina, ma per uno
+          screen reader era un pezzo di pagina qualunque: nessun annuncio, e da
+          tastiera nessuna via d'uscita — Esc non faceva niente e il fuoco
+          restava fuori dal riquadro, sopra una pagina coperta da un velo. E' la
+          prima cosa che vede chi entra: restarci chiusi dentro e' la prima
+          impressione peggiore che si possa dare. */}
+      <div
+        ref={pannelloRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titolo-tour"
+        className="relative bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md shadow-warm-lg overflow-hidden animate-slide-up"
+      >
         <div className="absolute top-3 right-3">
           <button onClick={close} aria-label="Chiudi tour" className="text-ink-400 hover:text-ink-700 p-1.5 rounded-full hover:bg-cream-100">
             <X size={18} />
@@ -105,11 +125,17 @@ export default function BuyerOnboardingTour() {
           <div className="w-16 h-16 mx-auto rounded-full bg-primary-100 text-primary-700 flex items-center justify-center">
             <Icon size={28} strokeWidth={2.2} />
           </div>
-          <h2 className="font-serif text-2xl font-bold text-ink-900">{s.title}</h2>
+          <h2 id="titolo-tour" className="font-serif text-2xl font-bold text-ink-900">{s.title}</h2>
           <p className="text-ink-600 leading-relaxed">{s.body}</p>
 
+          {/* I pallini dicono a che punto si e', ma solo a chi li vede: questa
+              riga dice la stessa cosa a chi ascolta. */}
+          <p className="sr-only" role="status" aria-live="polite">
+            Passo {step + 1} di {STEPS.length}: {s.title}
+          </p>
+
           {/* Step dots */}
-          <div className="flex items-center justify-center gap-1.5 pt-2">
+          <div className="flex items-center justify-center gap-1.5 pt-2" aria-hidden>
             {STEPS.map((_, i) => (
               <span
                 key={i}

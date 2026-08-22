@@ -220,7 +220,21 @@ export default function CartPage() {
                               aria-label={`Diminuisci quantità di ${item.name}`}
                               className="w-10 h-10 hover:bg-cream-100 rounded-l-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             >−</button>
-                            <span className="w-8 text-center font-semibold">{item.quantity}</span>
+                            {/* 22/8/2026 — LA QUANTITA' CAMBIAVA IN SILENZIO.
+                                Si premeva «+» e non veniva annunciato niente:
+                                chi non vede lo schermo doveva rileggere la riga
+                                per capire se il tocco era andato a segno.
+                                `<output aria-live>` fa dire al lettore il numero
+                                nuovo appena cambia — e' la stessa cosa che fa
+                                gia' la scheda prodotto. */}
+                            <output
+                              aria-live="polite"
+                              aria-atomic="true"
+                              aria-label={`Quantità di ${item.name}`}
+                              className="w-8 text-center font-semibold"
+                            >
+                              {item.quantity}
+                            </output>
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
@@ -308,6 +322,12 @@ export default function CartPage() {
               </span>
               <span className="font-semibold text-ink-900">{formatPrice(platformDeliveryFee)}</span>
             </div>
+
+            {/* Il totale cambia a ogni «+», «−» e rimozione: qui si dice anche
+                a chi non lo vede cambiare. */}
+            <p className="sr-only" role="status" aria-live="polite">
+              Carrello aggiornato: {count} {count === 1 ? 'articolo' : 'articoli'}, totale {formatPrice(finalTotal)}
+            </p>
 
             <div className="border-t border-cream-300 pt-3 flex justify-between items-baseline">
               <span className="font-bold">Totale</span>
