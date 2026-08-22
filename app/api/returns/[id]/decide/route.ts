@@ -62,6 +62,51 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   let refundedAt: string | null = null;
   let newStatus: string = body.decision;
 
+  /**
+   * 21/8/2026 — PRIMA SI PRENDE IL TURNO, POI ESCONO I SOLDI.
+   *
+   * Qui il rimborso partiva PRIMA della guardia di stato, e il commento diceva
+   * che tanto era «protetto dalla chiave di idempotenza di Stripe». Vero per il
+   * denaro: Stripe rimborsa una volta sola. Falso per i conti nostri:
+   * `accumula_rimborso` e' un incremento senza chiave, quindi due decisioni
+   * partite insieme sullo stesso reso incrementavano DUE VOLTE
+   * `refunded_amount_cents`. L'ordine risultava rimborsato per il doppio di
+   * quello che era davvero uscito, il residuo che spettava al cliente diventava
+   * irrimborsabile e il rendiconto del negozio sottraeva due volte la stessa
+   * cifra.
+   *
+   * Adesso la rivendicazione dello stato viene prima: passa una decisione sola.
+   * Se poi il rimborso fallisce, lo stato torna indietro (piu' sotto), cosi' il
+   * reso resta decidibile invece di restare bloccato a meta'.
+   */
+  const statoRivendicato = body.decision === 'APPROVED' ? 'APPROVED' : body.decision;
+  const { data: rivendicato, error: errRivendica } = await admin
+    .from('returns')
+    .update({
+      status: statoRivendicato,
+      decided_at: new Date().toISOString(),
+      decided_by: user.id,
+      decision_notes: body.notes ?? null,
+      refund_amount_cents: body.refundAmountCents ?? null,
+    })
+    .eq('id', params.id)
+    .eq('status', 'REQUESTED')
+    .select('id');
+
+  if (errRivendica) return ApiErrors.internal('Update fallito');
+  if (!rivendicato || rivendicato.length === 0) {
+    return ApiErrors.conflict("Reso già deciso da un'altra sessione");
+  }
+
+  /** Rimette il reso in attesa: si usa solo quando i soldi non sono usciti. */
+  const rimettiInAttesa = async () => {
+    await admin
+      .from('returns')
+      .update({ status: 'REQUESTED', decided_at: null, decided_by: null, refund_amount_cents: null })
+      .eq('id', params.id)
+      .eq('status', statoRivendicato);
+  };
+
   if (body.decision === 'APPROVED' && body.refundAmountCents) {
     const { data: order } = await admin
       .from('orders')
@@ -74,6 +119,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
     // Carta ma Stripe non configurato → NON marcare come rimborsato in silenzio.
     if (isCard && !isStripeConfigured()) {
+      await rimettiInAttesa();
       return ApiErrors.unavailable('Stripe non configurato: impossibile emettere il rimborso ora.');
     }
 
@@ -95,30 +141,25 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         newStatus = 'REFUNDED';
       } catch (err) {
         logger.error('[returns] refund failed', err);
+        // I soldi non sono usciti: il reso torna decidibile invece di restare
+        // fermo su «approvato» senza rimborso.
+        await rimettiInAttesa();
         return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
       }
     }
   }
 
-  // Guard di stato atomico: solo UNA decisione passa (anti doppio-click).
-  // L'eventuale refund è già protetto dall'idempotencyKey lato Stripe.
-  const { data: updated, error: updErr } = await admin
-    .from('returns')
-    .update({
-      status: newStatus,
-      decided_at: new Date().toISOString(),
-      decided_by: user.id,
-      decision_notes: body.notes ?? null,
-      refund_amount_cents: body.refundAmountCents ?? null,
-      refund_id: refundId,
-      refunded_at: refundedAt,
-    })
-    .eq('id', params.id)
-    .eq('status', 'REQUESTED')
-    .select('id');
-
-  if (updErr) return ApiErrors.internal('Update fallito');
-  if (!updated || updated.length === 0) return ApiErrors.conflict("Reso già deciso da un'altra sessione");
+  // Il turno era gia' stato preso sopra: qui si scrive solo l'esito del
+  // rimborso. Se lo stato non e' cambiato (rifiuto, o approvazione senza
+  // rimborso immediato) questa scrittura non tocca niente di nuovo.
+  if (newStatus !== statoRivendicato || refundId) {
+    const { error: updErr } = await admin
+      .from('returns')
+      .update({ status: newStatus, refund_id: refundId, refunded_at: refundedAt })
+      .eq('id', params.id)
+      .eq('status', statoRivendicato);
+    if (updErr) return ApiErrors.internal('Update fallito');
+  }
 
   // Notifica buyer
   await admin.from('notifications').insert({

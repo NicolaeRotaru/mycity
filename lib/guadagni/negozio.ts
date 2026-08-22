@@ -43,12 +43,34 @@ export function nettoDopoStorni(o: OrdineNegozio): number {
   return Math.max(0, (o.seller_payout_cents ?? 0) - (o.seller_payout_reversed_cents ?? 0));
 }
 
+/**
+ * 22/8/2026 — I BONIFICI DEL CONTRASSEGNO NON SI VEDEVANO DA NESSUNA PARTE.
+ *
+ * Qui gli ordini in contanti venivano scartati alla prima riga, tutti. Ma il
+ * contrassegno non finisce nel contante e basta: quando il fattorino porta la
+ * cassa e un responsabile la conferma, parte un bonifico vero al negozio, con
+ * lo stesso `payout_status` degli altri. Scartandoli, quei bonifici non
+ * comparivano ne' fra i versati ne' fra quelli in arrivo: il negoziante li
+ * riceveva sull'IBAN senza trovarli scritti da nessuna parte.
+ *
+ * E il contrassegno e' il modo di pagare normale del cliente di Piacenza:
+ * e' la maggioranza degli incassi, non un caso di bordo.
+ *
+ * Restano fuori — giustamente — gli ordini fermi al contante puro
+ * (`CASH_IN_STORE`, `AWAITING_REMITTANCE`): li' un bonifico non e' ancora
+ * partito, e metterli fra i versati sarebbe la stessa bugia al contrario.
+ */
+const STATI_CON_BONIFICO = ['TRANSFERRED', 'HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING'];
+
 export function riepilogoNegozio(ordini: OrdineNegozio[]): RiepilogoNegozio {
   const conCarta = ordini.filter((o) => o.payment_method !== 'cod');
   const attivi = conCarta.filter(
     (o) => o.payout_status !== 'REFUNDED' && o.payout_status !== 'REVERSED',
   );
 
+  // Per i bonifici si guardano tutti gli ordini, contrassegno compreso: quello
+  // che conta e' se un bonifico e' partito, non con che cosa ha pagato il cliente.
+  const conBonifico = ordini.filter((o) => STATI_CON_BONIFICO.includes(o.payout_status ?? ''));
   const somma = (righe: OrdineNegozio[]) => righe.reduce((s, o) => s + nettoDopoStorni(o), 0);
 
   return {
@@ -57,12 +79,39 @@ export function riepilogoNegozio(ordini: OrdineNegozio[]): RiepilogoNegozio {
       0,
     ),
     commissioniCents: attivi.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0),
-    versatiCents: somma(conCarta.filter((o) => o.payout_status === 'TRANSFERRED')),
+    versatiCents: somma(conBonifico.filter((o) => o.payout_status === 'TRANSFERRED')),
     inArrivoCents: somma(
-      conCarta.filter((o) =>
+      conBonifico.filter((o) =>
         ['HELD', 'PENDING_SELLER_ONBOARDING', 'PROCESSING'].includes(o.payout_status ?? ''),
       ),
     ),
-    stornatiCents: conCarta.reduce((s, o) => s + (o.seller_payout_reversed_cents ?? 0), 0),
+    stornatiCents: ordini.reduce((s, o) => s + (o.seller_payout_reversed_cents ?? 0), 0),
+  };
+}
+
+/** Cosa mostrare nel riquadro «Contanti» della pagina Guadagni. */
+export type RiepilogoContanti = {
+  /** Il contante materiale che il cliente ha dato al fattorino. */
+  incassatoDalFattorinoCents: number;
+  /** Quello che arrivera' davvero sull'IBAN: il netto, meno gli storni. */
+  nettoAlNegozioCents: number;
+  /** Quanto di quel netto e' gia' stato versato. */
+  giaVersatoCents: number;
+};
+
+/**
+ * Il contante che il cliente consegna e il netto che arriva al negozio sono due
+ * numeri diversi, e la pagina mostrava il primo chiamandolo col nome del
+ * secondo. Dentro il contante ci sono la consegna, la spedizione e la
+ * commissione: soldi che al negozio non arrivano. Qui si separano.
+ */
+export function riepilogoContanti(ordini: OrdineNegozio[], consegnato: (o: OrdineNegozio) => boolean): RiepilogoContanti {
+  const contanti = ordini.filter((o) => o.payment_method === 'cod' && consegnato(o));
+  return {
+    incassatoDalFattorinoCents: contanti.reduce((s, o) => s + Math.round(Number(o.total_price || 0) * 100), 0),
+    nettoAlNegozioCents: contanti.reduce((s, o) => s + nettoDopoStorni(o), 0),
+    giaVersatoCents: contanti
+      .filter((o) => o.payout_status === 'TRANSFERRED')
+      .reduce((s, o) => s + nettoDopoStorni(o), 0),
   };
 }

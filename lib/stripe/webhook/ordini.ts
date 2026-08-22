@@ -179,9 +179,46 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
       `Sul carrello ${pendingCheckoutId} Stripe ha incassato €${(incassatoCents / 100).toFixed(2)} ma il preventivo era €${(attesoCents / 100).toFixed(2)}. Nessun ordine creato: va guardato a mano.`,
       '/admin/orders',
     );
-    // Si lancia: l'evento resta non processato, Stripe riprova e nel frattempo
-    // nessun ordine nasce con un importo che non torna.
-    throw new Error(`quadratura fallita su ${pendingCheckoutId}: incassati ${incassatoCents}, attesi ${attesoCents}`);
+    // 22/8/2026 — UNO SCARTO DETERMINISTICO NON SI RITENTA: SI CHIUDE.
+    //
+    // Qui si lanciava, perche' Stripe riprovasse. Ma questo scarto nasce dal
+    // modo in cui i due totali sono calcolati: se c'e' una volta, c'e' tutte le
+    // volte. Ogni ritentativo falliva identico, gli amministratori ricevevano lo
+    // stesso avviso a ripetizione, e il cliente restava con i soldi presi e
+    // nessun ordine — senza che nessun rimborso partisse mai. Nel caso peggiore
+    // Stripe, dopo giorni di fallimenti, disattiva l'indirizzo del webhook: da
+    // quel momento si fermano TUTTI i pagamenti, non solo questo.
+    //
+    // Adesso e' uno stato finale: si rimborsa (con la stessa chiave stabile gia'
+    // usata per la riserva scaduta, quindi un doppio arrivo non fa due
+    // rimborsi), si avvisa una volta sola e si risponde bene, cosi' Stripe non
+    // ritenta.
+    const pagamento = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+    if (pagamento && incassatoCents > 0) {
+      try {
+        await stripe.refunds.create(
+          {
+            payment_intent: pagamento,
+            metadata: { motivo: 'quadratura_fallita', pending_checkout_id: pendingCheckoutId },
+          },
+          { idempotencyKey: `refund_quadratura_${pendingCheckoutId}` },
+        );
+      } catch (err) {
+        // Qui il ritentativo ha senso: un rimborso fallito per un motivo
+        // tecnico puo' riuscire al secondo colpo.
+        logger.error('[stripe] rimborso su quadratura fallita non riuscito', { pendingCheckoutId, err });
+        throw err;
+      }
+    }
+    // Prima che la migrazione 126 sia applicata lo stato 'MISMATCH' non e'
+    // ammesso dal vincolo e la scrittura fallirebbe: in quel caso si segna
+    // 'CANCELED', che il carrello lo chiude comunque.
+    await conRipiegoSchema(
+      'pending_checkouts.update (quadratura fallita)',
+      () => admin.from('pending_checkouts').update({ status: 'MISMATCH' }).eq('id', pendingCheckoutId),
+      () => admin.from('pending_checkouts').update({ status: 'CANCELED' }).eq('id', pendingCheckoutId),
+    );
+    return;
   }
 
   const groups = pending.groups as PendingGroup[];

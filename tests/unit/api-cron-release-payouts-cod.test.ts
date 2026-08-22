@@ -13,6 +13,7 @@ type OrderRow = {
   payout_status: string;
   delivery_status: string;
   dispute_status?: string | null;
+  payout_claimed_at?: string | null;
 };
 const state: { orders: OrderRow[] } = { orders: [] };
 const releaseOrderPayoutMock = vi.fn(async (_id: string) => ({ ok: true as const, transferId: 'tr_1' }));
@@ -50,14 +51,19 @@ function ordersBuilder(rows: OrderRow[]) {
     }
     return true;
   };
+  // 22/8/2026 — il giro rimette in coda i turni rimasti appesi: la finta
+  // tabella deve saper rispondere anche a una scrittura, non solo a una lettura.
+  let patch: Record<string, unknown> | null = null;
   const b: Record<string, unknown> = {
     select: () => b,
+    update: (v: Record<string, unknown>) => ((patch = v), b),
     eq: (c: string, v: unknown) => ((f[c] = v), b),
     in: (c: string, v: unknown[]) => ((f[`in:${c}`] = v), b),
     is: (c: string, v: unknown) => (v === null ? (f[`isnull:${c}`] = true) : null, b),
     not: () => b,
     or: (expr: string) => (ors.push(expr), b),
     lte: () => b,
+    lt: (c: string, v: unknown) => ((f[`lt:${c}`] = v), b),
     limit: () => b,
     then: (resolve: (x: unknown) => unknown) => {
       const out = rows.filter(
@@ -66,8 +72,11 @@ function ordersBuilder(rows: OrderRow[]) {
           (f.payout_status === undefined || o.payout_status === f.payout_status) &&
           (f.delivery_status === undefined || o.delivery_status === f.delivery_status) &&
           (f['in:payout_status'] === undefined || (f['in:payout_status'] as string[]).includes(o.payout_status)) &&
+          (f['lt:payout_claimed_at'] === undefined ||
+            (o.payout_claimed_at != null && o.payout_claimed_at < (f['lt:payout_claimed_at'] as string))) &&
           disputeOk(o),
       );
+      if (patch) for (const o of out) Object.assign(o, patch);
       return resolve({ data: out.map((o) => ({ id: o.id })), error: null });
     },
   };
@@ -140,5 +149,54 @@ describe('release-payouts — chargeback (audit 🟠-6)', () => {
     const res = await run();
     expect((await res.json()).released).toBe(1);
     expect(releaseOrderPayoutMock).toHaveBeenCalledWith('ok1');
+  });
+});
+
+/**
+ * 22/8/2026 — IL BONIFICO RIMASTO A META' TORNA IN CODA.
+ *
+ * `releaseOrderPayout` prende il turno scrivendo PROCESSING e poi chiama
+ * Stripe. Se il processo muore in mezzo, quello stato resta scritto e i
+ * candidati del giro dopo sono solo HELD e PENDING_SELLER_ONBOARDING: quel
+ * pagamento non ripartiva mai piu', e per il negoziante il bonifico e' lo
+ * stipendio.
+ *
+ * Questa prova diventa rossa se il recupero dei turni appesi sparisce.
+ */
+describe('release-payouts — i turni rimasti appesi', () => {
+  it('rimette in coda un bonifico fermo in PROCESSING da piu di quindici minuti', async () => {
+    const venti_minuti_fa = new Date(Date.now() - 20 * 60_000).toISOString();
+    state.orders = [
+      {
+        id: 'appeso1',
+        payment_method: 'card',
+        payout_status: 'PROCESSING',
+        delivery_status: 'DELIVERED',
+        dispute_status: null,
+        payout_claimed_at: venti_minuti_fa,
+      },
+    ];
+    const res = await run();
+    const body = await res.json();
+    expect(body.appesiRimessiInCoda).toBe(1);
+    expect(state.orders[0].payout_status).toBe('HELD');
+  });
+
+  it('NON tocca un turno preso un minuto fa: quello sta ancora lavorando', async () => {
+    const un_minuto_fa = new Date(Date.now() - 60_000).toISOString();
+    state.orders = [
+      {
+        id: 'invcorso1',
+        payment_method: 'card',
+        payout_status: 'PROCESSING',
+        delivery_status: 'DELIVERED',
+        dispute_status: null,
+        payout_claimed_at: un_minuto_fa,
+      },
+    ];
+    const res = await run();
+    const body = await res.json();
+    expect(body.appesiRimessiInCoda).toBe(0);
+    expect(state.orders[0].payout_status).toBe('PROCESSING');
   });
 });

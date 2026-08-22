@@ -24,11 +24,13 @@ const EVENT = {
 
 const state: {
   insertResult: { error: unknown };
+  insertPayload: Record<string, unknown> | null;
   existing: { data: { processed: boolean } | null };
   /** Righe restituite dalla rivendicazione: vuoto = un altro l'ha già presa. */
   rivendicate: Array<{ event_id: string }>;
 } = {
   insertResult: { error: null },
+  insertPayload: null,
   existing: { data: { processed: false } },
   rivendicate: [{ event_id: 'evt_dup' }],
 };
@@ -76,7 +78,10 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       if (table === 'stripe_event_log') {
         return {
-          insert: () => Promise.resolve(state.insertResult),
+          insert: (payload: Record<string, unknown>) => {
+            state.insertPayload = payload;
+            return Promise.resolve(state.insertResult);
+          },
           select: () => ({ eq: () => ({ single: () => Promise.resolve(state.existing) }) }),
           update: updateChain,
         };
@@ -103,6 +108,7 @@ describe('POST /api/stripe/webhook — idempotenza', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     state.insertResult = { error: null };
+    state.insertPayload = null;
     state.existing = { data: { processed: false } };
     state.rivendicate = [{ event_id: 'evt_dup' }];
   });
@@ -150,5 +156,28 @@ describe('POST /api/stripe/webhook — idempotenza', () => {
     const json = await res.json();
     expect(json.duplicated).toBeUndefined();
     expect(eventLogUpdate).toHaveBeenCalledTimes(1); // riprocessato e rimarcato
+  });
+});
+
+/**
+ * 22/8/2026 — LA RIVENDICAZIONE NASCEVA VUOTA, E LA PRIMA CONSEGNA NON ERA
+ * PROTETTA.
+ *
+ * La riga dell'evento entrava con `claimed_at` a NULL, e la rivendicazione
+ * accetta chi trova `claimed_at IS NULL`: mentre la prima consegna dell'evento
+ * era ancora al lavoro, la seconda passava lo stesso e i due gestori giravano
+ * in parallelo. Sugli ordini c'era un indice unico a salvare la situazione; su
+ * rimborsi e contestazioni no: doppio recupero dei soldi e giacenza raddoppiata,
+ * perche' `restore_stock_for_order` e' una somma senza guardia.
+ *
+ * Il turno si prende con la riga: questa prova diventa rossa se torna vuota.
+ */
+describe('il turno sull evento Stripe si prende subito', () => {
+  it('scrive l ora della rivendicazione gia nella riga dell evento', async () => {
+    state.insertResult = { error: null };
+    state.insertPayload = null;
+    await POST(makeReq());
+    expect(state.insertPayload).toBeTruthy();
+    expect(state.insertPayload!.claimed_at, 'la riga nasce senza turno preso').toBeTruthy();
   });
 });
