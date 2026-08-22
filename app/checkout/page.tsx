@@ -714,10 +714,14 @@ export default function CheckoutPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok || !data?.url) {
+      // 22/8/2026 — la rotta risponde al contratto `{ ok, data }`. Il vecchio
+      // posto resta come ripiego finché non è tutto pubblicato.
+      const corpo = data as { data?: { url?: string }; url?: string };
+      const indirizzo = corpo.data?.url ?? corpo.url;
+      if (!res.ok || !indirizzo) {
         throw new Error(apiErrorMessage(data, 'Errore creazione pagamento'));
       }
-      return data.url as string;
+      return indirizzo;
     },
     onSuccess: (url) => {
       // Stash del valore d'acquisto per emettere `purchase` (GA4) + `order_placed`

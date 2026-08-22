@@ -132,7 +132,16 @@ const EXTRACT_TOOL: Anthropic.Tool = {
   },
 };
 
-const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+// 22/8/2026 — LE GIF ERANO DICHIARATE E RIFIUTATE.
+//
+// Questo elenco le accettava, e la validazione più a valle le buttava fuori
+// con un messaggio che parlava d'altro. Chi caricava una GIF leggeva un
+// errore che non nominava il formato: provava di nuovo, con la stessa GIF.
+//
+// Delle due strade — accettarle davvero o smettere di prometterle — la
+// seconda è quella onesta con quello che il sito sa fare oggi: se un giorno
+// servono, si aggiungono anche alla lista dei tipi ammessi e alla loro firma.
+const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 const ImageItem = z.object({
   image_base64: z.string().min(1),
   media_type: z.enum(MEDIA_TYPES),

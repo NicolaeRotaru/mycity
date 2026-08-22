@@ -19,9 +19,19 @@ import { requireSupabasePublic } from '@/lib/env';
  * Questo modulo non importa `next/headers`: si può caricare da qualunque
  * contesto server, anche dove il modulo dei cookie non è disponibile.
  */
-export function creaClientAnonimo(): SupabaseClient {
+/**
+ * 22/8/2026 — Con `gettone` il client porta l'identità di chi ha chiamato.
+ *
+ * Serve alle rotte che autenticano col gettone nell'intestazione: senza, la
+ * query successiva arriva al database come sconosciuta, e le regole per riga
+ * non trovano nessuno a cui applicarsi.
+ */
+export function creaClientAnonimo(opzioni?: { gettone?: string }): SupabaseClient {
   const { url, key } = requireSupabasePublic();
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    ...(opzioni?.gettone
+      ? { global: { headers: { Authorization: `Bearer ${opzioni.gettone}` } } }
+      : {}),
   });
 }

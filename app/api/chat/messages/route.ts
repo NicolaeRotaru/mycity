@@ -5,6 +5,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { rispostaPerErroreDatabase } from '@/lib/api/errore-database';
 
 export const runtime = 'nodejs';
 
@@ -42,7 +43,12 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
     .select('id, created_at')
     .single();
 
-  if (error || !data) return ApiErrors.forbidden('Impossibile inviare il messaggio');
+  // 22/8/2026 — qui si rispondeva 403 per qualunque guasto: permesso negato,
+  // connessione caduta, database in manutenzione. Chi legge 403 pensa di non
+  // poter scrivere a quella persona e smette di provare — e nei log non resta
+  // niente, perché un 403 è una risposta normale che nessuno va a guardare.
+  if (error) return rispostaPerErroreDatabase(error, 'chat/messages', 'Impossibile inviare il messaggio');
+  if (!data) return ApiErrors.internal('Impossibile inviare il messaggio');
 
   return NextResponse.json({ id: data.id, createdAt: data.created_at }, { status: 200 });
 });

@@ -112,43 +112,67 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   }
 
   const allIds = orders.map((o) => o.id);
-  await admin
-    .from('orders')
-    .update({
+  const idFalliti = stornoFallito.map((f) => f.id);
+
+  /**
+   * 22/8/2026 — SEI SCRITTURE SEPARATE PER LA STESSA COSA.
+   *
+   * Lo stesso ordine veniva aggiornato fino a cinque volte di fila, ogni volta
+   * per un campo diverso: prima lo stato del pagamento, poi lo stato della
+   * consegna, poi l'importo rimborsato, poi lo stato del versamento, poi
+   * l'errore di storno. Nessuna transazione intorno, e nessun rimedio se una
+   * delle cinque falliva.
+   *
+   * Un guasto a metà lasciava l'ordine in uno stato che non esiste: rimborsato
+   * ma ancora da versare al negozio, oppure con l'importo rimborsato scritto e
+   * il pagamento ancora «pagato». Sono i due stati da cui nascono i soldi
+   * pagati due volte.
+   *
+   * Adesso ogni ordine riceve UNA scrittura sola, con tutti i suoi campi
+   * insieme: o passa tutta o non passa niente, e non esiste più il «metà».
+   *
+   * NON l'ho spostata in una funzione del database, che sarebbe la casa giusta
+   * per una transazione vera: significherebbe riscrivere la regola sui soldi in
+   * un secondo posto, ed è esattamente il difetto da cui è nato questo lavoro.
+   * Quando ci sarà, questa resta una chiamata sola da sostituire.
+   */
+  const adesso = new Date().toISOString();
+  for (const o of orders) {
+    const patch: Record<string, unknown> = {
       payment_status: 'REFUNDED',
       stripe_refund_id: refundId,
-    })
-    .in('id', allIds);
+      // Il rimborso pieno vale il totale dell'ordine.
+      refunded_amount_cents: Math.round(Number(o.total_price) * 100),
+    };
 
-  // 054 — Un ordine già CONSEGNATO non diventa «annullato» perché è stato
-  // rimborsato: la consegna c'è stata. Prima si riscriveva lo stato di tutti, e
-  // sparivano dalle liste operative consegne realmente effettuate.
-  const daAnnullare = orders.filter((o) => o.delivery_status !== 'DELIVERED').map((o) => o.id);
-  if (daAnnullare.length > 0) {
-    await admin
-      .from('orders')
-      .update({ delivery_status: 'CANCELED', canceled_at: new Date().toISOString() })
-      .in('id', daAnnullare);
-  }
-  // refunded_amount_cents per ordine (refund pieno = totale ordine).
-  for (const o of orders) {
-    await admin
-      .from('orders')
-      .update({ refunded_amount_cents: Math.round(Number(o.total_price) * 100) })
-      .eq('id', o.id);
-  }
+    // 054 — Un ordine già CONSEGNATO non diventa «annullato» perché è stato
+    // rimborsato: la consegna c'è stata. Prima si riscriveva lo stato di tutti,
+    // e sparivano dalle liste operative consegne realmente effettuate.
+    if (o.delivery_status !== 'DELIVERED') {
+      patch.delivery_status = 'CANCELED';
+      patch.canceled_at = adesso;
+    }
 
-  // payout_status: i pagati sono già 'REVERSED' dal reversal; gli altri 'REFUNDED'.
-  const idFalliti = stornoFallito.map((f) => f.id);
-  const refundedIds = allIds.filter((id) => !reversedIds.includes(id) && !idFalliti.includes(id));
-  if (refundedIds.length > 0) {
-    await admin.from('orders').update({ payout_status: 'REFUNDED' }).in('id', refundedIds);
-  }
-  for (const f of stornoFallito) {
-    await admin
-      .from('orders')
-      .update({ payout_status: 'REVERSAL_FAILED', reversal_error: f.motivo.slice(0, 500) })
-      .eq('id', f.id);
+    // payout_status: i pagati sono già 'REVERSED' dallo storno; gli altri
+    // 'REFUNDED'; quelli il cui storno è fallito vanno segnati come tali,
+    // perché sono soldi che restano al negozio e vanno recuperati a mano.
+    const fallito = stornoFallito.find((f) => f.id === o.id);
+    if (fallito) {
+      patch.payout_status = 'REVERSAL_FAILED';
+      patch.reversal_error = fallito.motivo.slice(0, 500);
+    } else if (!reversedIds.includes(o.id)) {
+      patch.payout_status = 'REFUNDED';
+    }
+
+    const { error: errPatch } = await admin.from('orders').update(patch).eq('id', o.id);
+    if (errPatch) {
+      logger.error(errPatch, { context: 'stripe-refund-patch', orderId: o.id });
+      await notifyAdmins(
+        '⚠️ Rimborso registrato a metà',
+        `Il rimborso ${refundId} è uscito da Stripe ma l'ordine ${o.id} non è stato aggiornato: va sistemato a mano prima che qualcuno lo veda come ancora da pagare.`,
+        '/admin/orders',
+      );
+    }
   }
   if (stornoFallito.length > 0) {
     await notifyAdmins(

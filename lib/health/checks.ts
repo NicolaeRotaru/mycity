@@ -96,7 +96,14 @@ async function checkAuth(): Promise<ServiceHealth> {
     return svc('auth', 'Autenticazione', 'Accesso, registrazione, recupero password', 'unknown', null, 'Non configurato');
   }
   const r = await timed(async () => {
-    const res = await fetch(`${url}/auth/v1/health`, { headers: { apikey: key } });
+    // 22/8/2026 — `withTimeout` smette di ASPETTARE, non chiude la chiamata:
+    // la richiesta resta appesa a consumare una connessione, e su un servizio
+    // lento ne restano appese una per ogni giro del controllo di salute. Il
+    // segnale di annullamento la chiude per davvero.
+    const res = await fetch(`${url}/auth/v1/health`, {
+      headers: { apikey: key },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   });
   return svc(
@@ -129,7 +136,11 @@ async function checkEmail(): Promise<ServiceHealth> {
   }
   const r = await timed(async () => {
     // GET read-only: verifica la raggiungibilità dell'API, non invia email.
-    const res = await fetch('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${key}` } });
+    // Vedi checkAuth: `withTimeout` non chiude la chiamata, questo sì.
+    const res = await fetch('https://api.resend.com/domains', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   });
   return svc(

@@ -4,7 +4,7 @@ import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { logger } from '@/lib/logger';
 import { segretiCombaciano } from '@/lib/api/segreti';
 import { ApiErrors } from './responses';
-import { rateLimitAsync } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { purchaseBlockReason } from '@/lib/shopping-access';
 
 // 22/8/2026 — spostata in lib/api/segreti.ts: i chiamanti sono due, e la
@@ -23,8 +23,35 @@ const secretsMatch = segretiCombaciano;
  */
 
 type Profile = { id: string; role: string; is_approved: boolean };
-type Handler<T> = (ctx: { user: User; profile: Profile; req: NextRequest }) => Promise<NextResponse<T>>;
-type GenericHandler = (ctx: { user: User; profile: Profile; req: NextRequest }) => Promise<NextResponse>;
+
+/**
+ * 22/8/2026 — CHI ENTRA COL GETTONE POI PARLAVA AL DATABASE DA SCONOSCIUTO.
+ *
+ * L'autenticazione accetta due strade: il gettone nell'intestazione
+ * `Authorization` (le chiamate del browser) e il cookie di sessione. Ma il
+ * client che le rotte usano dopo — `getServerSupabase()` — legge SOLO i
+ * cookie. Chi entrava col gettone risultava autenticato al controllo e poi,
+ * nella query, era `auth.uid() = NULL`: per le regole per riga uno sconosciuto.
+ *
+ * Le rotte lo aggiravano usando il client amministrativo, che scavalca le
+ * regole per riga del tutto. Funziona, e sposta tutta la difesa dentro il
+ * codice della rotta: se una riga di `if` viene dimenticata, sotto non c'è
+ * più niente.
+ *
+ * Adesso chi autentica restituisce anche il client giusto — quello che porta
+ * l'identità di chi ha chiamato, comunque sia entrato. L'amministrativo resta
+ * per quello che DEVE scavalcarle, e a quel punto è una scelta, non un ripiego.
+ */
+export type ClientDiChiChiama = ReturnType<typeof creaClientAnonimo>;
+type Contesto = {
+  user: User;
+  profile: Profile;
+  req: NextRequest;
+  /** Il client che porta l'identità di chi ha chiamato: rispetta le regole per riga. */
+  supaUtente: ClientDiChiChiama;
+};
+type Handler<T> = (ctx: Contesto) => Promise<NextResponse<T>>;
+type GenericHandler = (ctx: Contesto) => Promise<NextResponse>;
 
 // 22/8/2026 — una fabbrica sola, condivisa con lib/supabase/auth-server.ts.
 // Prima erano due copie con impostazioni diverse, e questa, quando le variabili
@@ -39,7 +66,7 @@ function getSupabaseAuthClient() {
 }
 
 async function authenticate(req: NextRequest): Promise<
-  | { ok: true; user: User; profile: Profile }
+  | { ok: true; user: User; profile: Profile; supaUtente: ClientDiChiChiama }
   | { ok: false; response: NextResponse }
 > {
   // Tentativo 1: Bearer token nell'Authorization header (client fetch)
@@ -49,17 +76,31 @@ async function authenticate(req: NextRequest): Promise<
     : null;
 
   let user: User | null = null;
+  let supaUtente: ClientDiChiChiama | null = null;
 
   if (bearer) {
     const supa = getSupabaseAuthClient();
     if (!supa) return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
     const { data, error } = await supa.auth.getUser(bearer);
-    if (!error && data?.user) user = data.user;
+    if (!error && data?.user) {
+      user = data.user;
+      // Il client per le query dopo: porta il gettone, quindi per il database
+      // è la persona che ha chiamato e non uno sconosciuto.
+      try {
+        supaUtente = creaClientAnonimo({ gettone: bearer });
+      } catch (e) {
+        logger.error('[auth] client per l utente non creabile', e);
+        return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+      }
+    }
   } else {
     // Tentativo 2: cookie session (server-side)
     try {
-      const { getCurrentUser } = await import('@/lib/supabase/server');
+      const { getCurrentUser, getServerSupabase } = await import('@/lib/supabase/server');
       user = await getCurrentUser();
+      // Col cookie il client giusto è quello che legge i cookie: porta già la
+      // sessione, quindi le regole per riga vedono la persona.
+      if (user) supaUtente = (await getServerSupabase()) as unknown as ClientDiChiChiama;
     } catch (e) {
       // 22/8/2026 — questo catch inghiottiva tutto e faceva uscire 401 «devi
       // accedere» anche quando il problema era nostro. Un guasto di
@@ -73,7 +114,7 @@ async function authenticate(req: NextRequest): Promise<
     }
   }
 
-  if (!user) return { ok: false, response: ApiErrors.unauthorized() };
+  if (!user || !supaUtente) return { ok: false, response: ApiErrors.unauthorized() };
 
   // Fetch profile via service-role (admin), NON via client anon. Il client anon
   // non porta la sessione utente: con auth.uid()=NULL le policy RLS di `profiles`
@@ -94,7 +135,7 @@ async function authenticate(req: NextRequest): Promise<
   }
   if (!profile) return { ok: false, response: ApiErrors.forbidden('Profilo non trovato') };
 
-  return { ok: true, user, profile };
+  return { ok: true, user, profile, supaUtente };
 }
 
 /** Blocco acquisto per ruolo (admin, rider, …). Null = può acquistare. */
@@ -111,7 +152,7 @@ export function withAuth(handler: GenericHandler) {
   return async (req: NextRequest): Promise<NextResponse> => {
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
-    return handler({ user: auth.user, profile: auth.profile, req });
+    return handler({ user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente });
   };
 }
 
@@ -134,13 +175,47 @@ export type AuthRateLimitOpts = {
   windowMs: number;
 };
 
+
+/**
+ * 22/8/2026 — IL FRENO SCATTAVA DOPO L'AUTENTICAZIONE, NON PRIMA.
+ *
+ * Il freno per utente è quello giusto per chi ha un account: due persone
+ * dietro lo stesso indirizzo di rete — un ufficio, la rete di un operatore
+ * mobile — non si penalizzano a vicenda.
+ *
+ * Ma stava DOPO `authenticate()`, che per ogni richiesta fa una chiamata al
+ * servizio di autenticazione e una lettura del profilo. Chi bussa senza un
+ * gettone valido non arrivava mai al freno: veniva respinto dopo, e ogni
+ * tentativo era comunque costato due chiamate. Diecimila tentativi al minuto
+ * da un solo indirizzo erano ventimila chiamate, tutte pagate da noi, per
+ * respingere sempre la stessa persona.
+ *
+ * Adesso ci sono due soglie. Una larga per indirizzo di rete, PRIMA di
+ * autenticare — abbastanza alta che nessun uso normale la tocchi, abbastanza
+ * bassa che una raffica si fermi subito. E quella per utente, dopo, che resta
+ * la difesa vera contro l'abuso di chi un account ce l'ha.
+ */
+const TETTO_PER_RETE = 300;
+const FINESTRA_RETE_MS = 60_000;
+
+async function frenoDiRete(req: NextRequest, nome: string): Promise<NextResponse | null> {
+  const rl = await rateLimitAsync({
+    key: `rete:${nome}:${getClientIp(req)}`,
+    max: TETTO_PER_RETE,
+    windowMs: FINESTRA_RETE_MS,
+  });
+  return rl.allowed ? null : ApiErrors.rateLimited(rl.retryAfterSec);
+}
+
 export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
   return async (req: NextRequest): Promise<NextResponse> => {
+    const frenato = await frenoDiRete(req, opts.name);
+    if (frenato) return frenato;
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
-    return handler({ user: auth.user, profile: auth.profile, req });
+    return handler({ user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente });
   };
 }
 
@@ -155,7 +230,7 @@ export function withSellerAuth(handler: GenericHandler) {
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
       return ApiErrors.forbidden('Solo seller approvati o admin');
     }
-    return handler({ user: auth.user, profile: auth.profile, req });
+    return handler({ user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente });
   };
 }
 
@@ -164,6 +239,8 @@ export function withSellerAuth(handler: GenericHandler) {
  */
 export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
   return async (req: NextRequest): Promise<NextResponse> => {
+    const frenato = await frenoDiRete(req, opts.name);
+    if (frenato) return frenato;
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     const { profile } = auth;
@@ -172,7 +249,7 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
     }
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
-    return handler({ user: auth.user, profile: auth.profile, req });
+    return handler({ user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente });
   };
 }
 
@@ -184,7 +261,7 @@ export function withAdminAuth(handler: GenericHandler) {
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
-    return handler({ user: auth.user, profile: auth.profile, req });
+    return handler({ user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente });
   };
 }
 
@@ -193,12 +270,14 @@ export function withAdminAuth(handler: GenericHandler) {
  */
 export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
   return async (req: NextRequest): Promise<NextResponse> => {
+    const frenato = await frenoDiRete(req, opts.name);
+    if (frenato) return frenato;
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
-    return handler({ user: auth.user, profile: auth.profile, req });
+    return handler({ user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente });
   };
 }
 
