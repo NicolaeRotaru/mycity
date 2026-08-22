@@ -105,13 +105,20 @@ export default function GoogleAnalytics() {
 }
 
 /**
- * Helper per tracciare eventi e-commerce. Chiamare da componenti client (es.
- * "Aggiungi al carrello", checkout, completed purchase). Se l'utente non ha
- * dato consenso, è no-op.
+ * 22/8/2026 — QUI C'ERA UNA SECONDA PORTA VERSO GOOGLE ANALYTICS, SENZA
+ * CANCELLO. L'HO TOLTA.
+ *
+ * Si chiamava `trackEvent` e diceva di essere «no-op se l'utente non ha dato
+ * consenso». Non lo era. L'unico controllo che faceva era «esiste window.gtag?»
+ * — e window.gtag esiste sempre, anche senza consenso, perche' lo definisce lo
+ * script che gira per primo proprio per poter mandare il segnale di consenso.
+ *
+ * E' lo stesso identico difetto gia' corretto dentro `ga()` in
+ * lib/analytics/events.ts, dove sta scritto che «gtag non e' presente» non era
+ * un cancello vero.
+ *
+ * Non la chiamava nessuno: era solo esportata, in attesa che qualcuno la
+ * trovasse. Chi ha bisogno di mandare un evento usa `ga()`, che il consenso lo
+ * legge davvero. Due porte per la stessa cosa sono il modo in cui il difetto
+ * torna.
  */
-export function trackEvent(name: string, params: Record<string, unknown> = {}) {
-  if (typeof window === 'undefined' || !window.gtag) return;
-  try {
-    window.gtag('event', name, params);
-  } catch { /* noop */ }
-}

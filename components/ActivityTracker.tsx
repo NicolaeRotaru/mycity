@@ -25,7 +25,8 @@ import { hasConsent } from '@/lib/consent';
  */
 
 type TrackPayload = {
-  event_type: 'page_view' | 'login' | 'logout' | 'signup';
+  // Solo i tre che il sito manda davvero: l'elenco del server dice gli stessi.
+  event_type: 'page_view' | 'login' | 'logout';
   path?: string;
   referrer?: string;
   session_id?: string;

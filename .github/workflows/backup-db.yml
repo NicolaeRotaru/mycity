@@ -37,8 +37,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 22/8/2026 — IL CLIENT DELLA COPIA NON ERA AGGANCIATO AL SERVER, E LA
+      # COPIA NOTTURNA ERA GIA' ROTTA.
+      #
+      # `pg_dump` si rifiuta di lavorare quando il server e' piu' recente di
+      # lui. Qui si installava «qualunque versione ci sia nei pacchetti del
+      # computer di turno»: su Ubuntu 24.04 e' la 16.
+      #
+      # Il database di produzione, controllato oggi, gira la 17. Quindi non e'
+      # un rischio futuro: e' un guasto presente. La copia notturna dei dati
+      # falliva gia', e falliva di notte, dove non guarda nessuno.
+      #
+      # Adesso la versione e' scritta qui sotto e si installa esattamente
+      # quella, dal deposito ufficiale di PostgreSQL. Quando Supabase
+      # aggiornera' ancora, questo lavoro diventera' rosso con un messaggio che
+      # si capisce, invece che con un errore di versione in fondo a un log.
       - name: Installa il client Postgres
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+        env:
+          # La versione del database di produzione (controllata il 22/8/2026).
+          VERSIONE_ATTESA: "17"
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "postgresql-client-${VERSIONE_ATTESA}"
+          pg_dump --version
+          pg_dump --version | grep -q " ${VERSIONE_ATTESA}\." || {
+            echo "::error::pg_dump non e' la versione ${VERSIONE_ATTESA}: la copia userebbe un client sbagliato."
+            exit 1
+          }
 
       - name: Verifica di sapere dove copiare
         env:
@@ -112,8 +144,40 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 22/8/2026 — IL CLIENT DELLA COPIA NON ERA AGGANCIATO AL SERVER, E LA
+      # COPIA NOTTURNA ERA GIA' ROTTA.
+      #
+      # `pg_dump` si rifiuta di lavorare quando il server e' piu' recente di
+      # lui. Qui si installava «qualunque versione ci sia nei pacchetti del
+      # computer di turno»: su Ubuntu 24.04 e' la 16.
+      #
+      # Il database di produzione, controllato oggi, gira la 17. Quindi non e'
+      # un rischio futuro: e' un guasto presente. La copia notturna dei dati
+      # falliva gia', e falliva di notte, dove non guarda nessuno.
+      #
+      # Adesso la versione e' scritta qui sotto e si installa esattamente
+      # quella, dal deposito ufficiale di PostgreSQL. Quando Supabase
+      # aggiornera' ancora, questo lavoro diventera' rosso con un messaggio che
+      # si capisce, invece che con un errore di versione in fondo a un log.
       - name: Installa il client Postgres
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+        env:
+          # La versione del database di produzione (controllata il 22/8/2026).
+          VERSIONE_ATTESA: "17"
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends "postgresql-client-${VERSIONE_ATTESA}"
+          pg_dump --version
+          pg_dump --version | grep -q " ${VERSIONE_ATTESA}\." || {
+            echo "::error::pg_dump non e' la versione ${VERSIONE_ATTESA}: la copia userebbe un client sbagliato."
+            exit 1
+          }
 
       - name: Verifica di avere i segreti
         env:

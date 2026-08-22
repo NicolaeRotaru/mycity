@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { messaggioSenzaDatiPersonali } from '@/lib/analytics/events';
 
 /**
@@ -44,5 +44,54 @@ describe('il messaggio che esce verso PostHog', () => {
 
   it('regge un messaggio vuoto', () => {
     expect(messaggioSenzaDatiPersonali('')).toBe('');
+  });
+});
+
+/**
+ * 22/8/2026 — QUELLO CHE LE PERSONE SCRIVONO NELLA RICERCA PARTIVA COSI'
+ * COM'E'.
+ *
+ * Nella casella di ricerca la gente non scrive solo «pane». Scrive il proprio
+ * indirizzo email, il numero d'ordine, il telefono. Quel testo andava dritto
+ * nel sistema di analisi, che sta negli Stati Uniti e non è dichiarato per
+ * contenere dati personali.
+ *
+ * La pulizia esisteva già in quel file, scritta per gli errori. Alla ricerca
+ * non era mai stata applicata. Queste prove diventano rosse se ci si torna.
+ */
+describe('quello che si scrive nella ricerca', () => {
+  it("non porta l'email di chi cerca", async () => {
+    const inviati: Array<{ nome: string; props: Record<string, unknown> }> = [];
+    vi.doMock('@/lib/analytics/posthog', () => ({
+      track: (nome: string, props: Record<string, unknown>) => inviati.push({ nome, props }),
+    }));
+    vi.resetModules();
+    const { trackSearchPerformed } = await import('@/lib/analytics/events');
+
+    trackSearchPerformed('ordine di mario.rossi@gmail.com', 3);
+
+    const evento = inviati.find((e) => e.nome === 'search_performed');
+    expect(evento, "l'evento di ricerca non è partito").toBeTruthy();
+    expect(String(evento?.props.query)).not.toContain('mario.rossi@gmail.com');
+    expect(String(evento?.props.query)).not.toContain('@');
+    // Il numero di risultati è la parte utile: quella deve arrivare intera.
+    expect(evento?.props.result_count).toBe(3);
+    vi.doUnmock('@/lib/analytics/posthog');
+    vi.resetModules();
+  });
+
+  it('una ricerca normale arriva leggibile', async () => {
+    const inviati: Array<{ nome: string; props: Record<string, unknown> }> = [];
+    vi.doMock('@/lib/analytics/posthog', () => ({
+      track: (nome: string, props: Record<string, unknown>) => inviati.push({ nome, props }),
+    }));
+    vi.resetModules();
+    const { trackSearchPerformed } = await import('@/lib/analytics/events');
+
+    trackSearchPerformed('pane di segale', 12);
+
+    expect(inviati.find((e) => e.nome === 'search_performed')?.props.query).toBe('pane di segale');
+    vi.doUnmock('@/lib/analytics/posthog');
+    vi.resetModules();
   });
 });

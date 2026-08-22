@@ -52,7 +52,12 @@ export default function ProductViewTracker({ productId, price, category, sellerI
     const key = `mc_viewed_${productId}`;
     if (sessionStorage.getItem(key)) return;
     sessionStorage.setItem(key, '1');
-    trackProductViewed(productId, { price, category, seller_id: sellerId });
+    trackProductViewed(productId, {
+      // In centesimi, come gli altri eventi che portano un prezzo.
+      priceCents: price != null ? Math.round(price * 100) : undefined,
+      category,
+      seller_id: sellerId,
+    });
 
     (async () => {
       // #88 — Il token gia' in memoria basta: qui serve solo distinguere una

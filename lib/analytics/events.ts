@@ -67,11 +67,34 @@ export const trackSignedOut = () =>
   track('signed_out');
 
 // Discovery funnel
-export const trackProductViewed = (productId: string, props?: { price?: number; category?: string; seller_id?: string }) => {
-  track('product_viewed', { product_id: productId, ...props });
+/**
+ * 22/8/2026 — NEL CATALOGO EVENTI I PREZZI VIAGGIAVANO META' IN EURO E META'
+ * IN CENTESIMI.
+ *
+ * «Prodotto visto» mandava `price`, un numero in euro con la virgola. Gli altri
+ * tre eventi che portano un prezzo — carrello, cassa, ordine — mandano interi
+ * in centesimi. Tre su quattro seguivano la regola.
+ *
+ * Il nome della proprieta' cambiava, quindi nessuno sommava mele con pere per
+ * sbaglio. Ma chi scrive una domanda sui dati deve ricordarsi che per un evento
+ * su quattro l'unita' e' diversa, e prima o poi non se lo ricorda.
+ *
+ * Adesso anche questo manda centesimi. In euro resta solo il numero che va a
+ * Google Analytics, che li vuole cosi'.
+ */
+export const trackProductViewed = (
+  productId: string,
+  props?: { priceCents?: number; category?: string; seller_id?: string },
+) => {
+  track('product_viewed', {
+    product_id: productId,
+    price_cents: props?.priceCents,
+    category: props?.category,
+    seller_id: props?.seller_id,
+  });
   ga('view_item', {
     currency: 'EUR',
-    value: props?.price,
+    value: props?.priceCents != null ? eur(props.priceCents) : undefined,
     items: [{ item_id: productId, item_category: props?.category, item_brand: props?.seller_id }],
   });
 };
@@ -79,9 +102,24 @@ export const trackProductViewed = (productId: string, props?: { price?: number; 
 export const trackStoreViewed = (sellerId: string) =>
   track('store_viewed', { seller_id: sellerId });
 
+/**
+ * 22/8/2026 — QUELLO CHE LE PERSONE SCRIVONO NELLA RICERCA PARTIVA COSI' COM'E'.
+ *
+ * Nella casella di ricerca la gente non scrive solo «pane». Scrive il proprio
+ * indirizzo email, il numero d'ordine, il telefono, il nome di un'altra
+ * persona. Quel testo andava dritto nel sistema di analisi, che sta negli Stati
+ * Uniti e non e' dichiarato per contenere dati personali.
+ *
+ * La pulizia esisteva gia' in questo stesso file, scritta per gli errori. Alla
+ * ricerca non era mai stata applicata.
+ *
+ * Il numero di risultati — la parte utile, quella che dice cosa manca in
+ * catalogo — non ne risente: passa intero.
+ */
 export const trackSearchPerformed = (query: string, resultCount: number) => {
-  track('search_performed', { query, result_count: resultCount });
-  ga('search', { search_term: query, result_count: resultCount });
+  const pulita = messaggioSenzaDatiPersonali(query);
+  track('search_performed', { query: pulita, result_count: resultCount });
+  ga('search', { search_term: pulita, result_count: resultCount });
 };
 
 export const trackCategoryViewed = (slug: string) =>

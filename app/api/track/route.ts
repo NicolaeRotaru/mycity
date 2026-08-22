@@ -24,20 +24,29 @@ export const runtime = 'nodejs';
 const VID_COOKIE = 'mc_vid';
 const VID_MAX_AGE = 60 * 60 * 24 * 365; // 1 anno
 
+/**
+ * 22/8/2026 — DUE TIPI DI EVENTO AMMESSI CHE NESSUNO HA MAI MANDATO.
+ *
+ * Qui c'erano cinque tipi ammessi, ognuno col suo testo pronto. Il sito ne
+ * manda tre. `session_start` e' stato sostituito dal campo `new_session` dentro
+ * i dati della prima vista, ed e' rimasto qui per dimenticanza; `signup` non e'
+ * mai stato emesso da nessuna parte.
+ *
+ * Un elenco di cose ammesse che elenca cose che non arrivano non e' innocuo:
+ * chi legge crede che quegli eventi esistano, e va a cercarli in una tabella
+ * dove non ci sono mai stati. Chi conta le sessioni deve guardare
+ * `metadata->>'new_session'`, che e' dove il dato vive davvero.
+ */
 const ALLOWED_EVENTS: Record<string, ActivityCategory> = {
   page_view: 'visitor',
-  session_start: 'visitor',
   login: 'auth',
   logout: 'auth',
-  signup: 'auth',
 };
 
 const SUMMARY: Record<string, (path?: string) => string> = {
   page_view: (p) => `Pagina vista: ${p || '/'}`,
-  session_start: () => 'Nuova sessione avviata',
   login: () => 'Accesso effettuato',
   logout: () => 'Disconnessione',
-  signup: () => 'Registrazione completata',
 };
 
 function readCookie(header: string | null, name: string): string | null {
