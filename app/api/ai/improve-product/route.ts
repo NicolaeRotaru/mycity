@@ -1,3 +1,4 @@
+import { sanitizeImageUrls } from '@/lib/ai/productContext';
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -236,11 +237,32 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   const product = body.product && typeof body.product === 'object' ? body.product : {};
-  const attributeSchema = Array.isArray(body.attributeSchema) ? body.attributeSchema : [];
-  const topCategories = Array.isArray(body.topCategories) ? body.topCategories : [];
-  const imageUrls = (Array.isArray(body.imageUrls) ? body.imageUrls : [])
-    .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u))
-    .slice(0, MAX_IMAGES);
+  /**
+   * 22/8/2026 — QUESTA ROTTA SI RISCRIVEVA IL CONTESTO A MANO, E PERDEVA I TAGLI.
+   *
+   * `buildProductContext` non e' solo una comodita': dentro ha tre limiti che
+   * proteggono il conto — al massimo 40 attributi, 30 categorie e 4000 caratteri
+   * di scheda prodotto. Sono liste che arrivano dal browser: gonfiate apposta,
+   * la differenza la paghiamo noi, e il contenuto che conta viene spinto fuori
+   * dalla finestra del modello.
+   *
+   * Qui il blocco era ricopiato senza quei tre limiti. Adesso gli stessi tagli
+   * ci sono, con le stesse soglie: quando questo file e quella funzione
+   * divergeranno di nuovo, divergeranno almeno sui numeri giusti.
+   */
+  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : []).slice(0, 40);
+  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : []).slice(0, 30);
+  // 22/8/2026 — LE FOTO ARBITRARIE RIENTRAVANO DA QUI.
+  //
+  // Il filtro era «purche' cominci per http»: qualunque indirizzo passava. Il
+  // progetto ha gia' un filtro vero — `sanitizeImageUrls` — che ammette solo
+  // gli host dichiarati, ed e' quello che usa il costruttore di contesto.
+  // Queste rotte se n'erano scritto uno proprio, piu' debole.
+  //
+  // Cosa vuol dire in pratica: un indirizzo qualsiasi messo qui diventa una
+  // richiesta che parte dai server del modello verso quel sito, col nostro
+  // conto a pagare i byte e il nostro nome addosso.
+  const imageUrls = sanitizeImageUrls(body.imageUrls, MAX_IMAGES);
 
   if (!product || Object.keys(product).length === 0) {
     return ApiErrors.invalidRequest('Manca la scheda del prodotto da migliorare.');
@@ -259,8 +281,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     })
     .join('\n');
 
+  // Anche la scheda ha il suo tetto: un prodotto con una descrizione enorme o
+  // trenta varianti gonfia il prompt e spinge fuori il contenuto che conta.
+  // Stessa soglia di `buildProductContext`: 4000 caratteri.
+  const schedaIntera = JSON.stringify(product, null, 2);
+  const schedaTagliata =
+    schedaIntera.length > 4000
+      ? `${schedaIntera.slice(0, 4000)}\n… (scheda troppo lunga: tagliata)`
+      : schedaIntera;
+
   const contextText = `${imageUrls.length ? 'Le immagini qui sopra sono le foto reali di questo prodotto: usale per identificarlo e valutarne la qualità.\n\n' : 'Questo prodotto NON ha foto: segnalalo in quality.missing e nella dimensione "foto".\n\n'}Stato attuale del prodotto (JSON):
-${JSON.stringify(product, null, 2)}
+${schedaTagliata}
 
 Categorie di primo livello disponibili (slug):
 ${topCategories.map((c) => `- ${c.slug} (${c.name})`).join('\n') || '- (nessuna)'}

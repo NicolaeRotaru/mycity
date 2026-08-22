@@ -36,6 +36,9 @@ export type BatchResultEntry<TInput = unknown> = {
   text?: string;
   toolInput?: TInput;
   errorType?: string;
+  /** Quanto e' costata questa risposta, per il tetto di spesa giornaliero. */
+  tokenIn?: number;
+  tokenOut?: number;
 };
 
 function toHandle(b: Anthropic.Messages.MessageBatch): BatchHandle {
@@ -88,7 +91,19 @@ export async function* streamBatchResults<TInput = unknown>(
         if (block.type === 'text') text += (text ? ' ' : '') + block.text;
         else if (block.type === 'tool_use' && toolInput === undefined) toolInput = block.input as TInput;
       }
-      yield { customId: entry.custom_id, status: 'succeeded', text: text.trim(), toolInput };
+      // 22/8/2026 — I TOKEN SPESI DAL LOTTO NON LI CONTAVA NESSUNO.
+      // Ogni risposta porta con se' quanto e' costata: qui viene riportata su,
+      // cosi' chi legge i risultati puo' registrarla sul tetto giornaliero come
+      // fa `runMessage` per le chiamate singole.
+      const uso = entry.result.message.usage;
+      yield {
+        customId: entry.custom_id,
+        status: 'succeeded',
+        text: text.trim(),
+        toolInput,
+        tokenIn: uso?.input_tokens ?? 0,
+        tokenOut: uso?.output_tokens ?? 0,
+      };
     } else {
       yield {
         customId: entry.custom_id,

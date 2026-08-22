@@ -1,3 +1,4 @@
+import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -83,6 +84,30 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.invalidRequest('JSON non valido');
   }
   const instruction = typeof body.instruction === 'string' ? body.instruction.trim().slice(0, 1000) : '';
+  /**
+   * 22/8/2026 — TESTO LIBERO CHE ARRIVAVA AL MODELLO SENZA PASSARE DAL FILTRO.
+   *
+   * Il filtro anti-contenuti (`assertSafeText`) e' una chiamata al modello come
+   * le altre, e la sua intestazione dice che ogni testo scritto da una persona
+   * ci deve passare. Su questa rotta non ci passava: il testo andava dritto al
+   * modello. Il difetto non e' teorico — e' il pezzo di sistema che ci difende
+   * dal far generare, col nostro nome e il nostro conto, cose che non vogliamo
+   * generare.
+   *
+   * Se il filtro stesso non risponde, la risposta e' la stessa che darebbe la
+   * generazione: un messaggio leggibile, non un 500 muto.
+   */
+  try {
+    await assertSafeText(instruction, 'ai-copilot-policy');
+  } catch (err) {
+    if (err instanceof UnsafeContentError) {
+      return ApiErrors.invalidRequest(`Questo testo non si puo' usare: ${err.verdict.reason}`);
+    }
+    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiCallError) return mapAiError(err, 'ai-copilot-policy');
+    return ApiErrors.internal('Errore AI.');
+  }
+
   if (!instruction) return ApiErrors.invalidRequest('Scrivi un\'istruzione per il copilot.');
 
   const admin = getAdminSupabase();

@@ -1,3 +1,5 @@
+import { AiConfigError } from '@/lib/ai/client';
+import { AiCallError, mapAiError } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -65,6 +67,18 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       attributes: current.attributes ?? null,
       category_id: current.category_id,
       has_variants: current.has_variants,
+      // 22/8/2026 — IL FRENO SUL PREZZO ESISTE, E' PROVATO, E NON SI ACCENDEVA MAI.
+      //
+      // `resolveAiPatch` rifiuta un prezzo che si scosta di piu' del 30% da
+      // quello attuale. Ma il prezzo attuale non gli arrivava: questo oggetto
+      // non lo conteneva, quindi dentro la funzione valeva zero, e con zero il
+      // confronto «scostamento oltre il 30%» non scatta mai. Il freno era
+      // scritto, coperto da una prova sulla libreria, e in produzione inerte.
+      //
+      // La prova che c'era non poteva accorgersene: chiamava la libreria
+      // passandole il prezzo. Quella nuova (tests/unit) chiama la ROTTA, che e'
+      // il punto in cui il difetto viveva.
+      price: current.price,
     },
     categories,
   });
@@ -82,14 +96,26 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const nome = typeof update.name === 'string' ? update.name : (current.name ?? '');
   const descrizione =
     typeof update.description === 'string' ? update.description : (current.description ?? '');
-  if (typeof update.name === 'string' || typeof update.description === 'string') {
-    const verdetto = await classifyProductPolicy(
-      { name: nome, description: descrizione },
-      'catalog-apply-policy',
-    );
-    if (!verdetto.allowed) {
-      return ApiErrors.invalidRequest(`Questa modifica non si puo' pubblicare: ${verdetto.reason}`);
+  try {
+    if (typeof update.name === 'string' || typeof update.description === 'string') {
+      const verdetto = await classifyProductPolicy(
+        { name: nome, description: descrizione },
+        'catalog-apply-policy',
+      );
+      if (!verdetto.allowed) {
+        return ApiErrors.invalidRequest(`Questa modifica non si puo' pubblicare: ${verdetto.reason}`);
+      }
     }
+  } catch (err) {
+    // 22/8/2026 — IL FILTRO E' UNA CHIAMATA AL MODELLO COME LE ALTRE.
+    // Se quella cade — modello giu', chiave scaduta, rete — qui non c'era
+    // nessuna rete di protezione: l'eccezione usciva grezza e al venditore
+    // arrivava un 500 muto mentre stava applicando una modifica. Adesso riceve
+    // lo stesso messaggio leggibile che riceverebbe se fosse caduta la
+    // generazione.
+    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiCallError) return mapAiError(err, 'ai-catalog-apply-policy');
+    return ApiErrors.internal('Errore AI.');
   }
 
   const { data: updated, error } = await admin

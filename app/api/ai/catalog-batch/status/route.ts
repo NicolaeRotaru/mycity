@@ -1,3 +1,5 @@
+import { MODELS, estimateCostEur } from '@/lib/ai/client';
+import { registraSpesaAi } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -66,8 +68,30 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
   // Terminato: recupera e parsa i risultati una volta sola.
   try {
     const results: CatalogJobResult[] = [];
+    // 22/8/2026 — LA SPESA DEL LOTTO NON VENIVA REGISTRATA DA NESSUNA PARTE.
+    // Il tetto giornaliero contava solo le chiamate singole: il lotto — che e'
+    // il canale che spende di piu' in un colpo solo — restava fuori dal conto,
+    // quindi il tetto non si muoveva mentre i soldi uscivano. Qui i token
+    // tornati indietro diventano euro e finiscono nello stesso contatore.
+    let tokenIn = 0;
+    let tokenOut = 0;
     for await (const entry of streamBatchResults(job.batch_id)) {
+      tokenIn += entry.tokenIn ?? 0;
+      tokenOut += entry.tokenOut ?? 0;
       results.push(parseCatalogBatchEntry(job.operation, entry));
+    }
+    if (tokenIn > 0 || tokenOut > 0) {
+      // Stesso modello che il lotto usa alla partenza (MODELS.fast).
+      const costo = estimateCostEur(MODELS.fast, {
+        inputTokens: tokenIn,
+        outputTokens: tokenOut,
+        cacheWriteTokens: 0,
+        cacheReadTokens: 0,
+      });
+      registraSpesaAi(costo);
+      logger.info('[ai] spesa del lotto registrata', {
+        jobId: job.id, tokenIn, tokenOut, costoEur: costo.toFixed(4),
+      });
     }
     const { data: updated } = await admin
       .from('catalog_ai_jobs')
