@@ -21,13 +21,30 @@ finito. Tutto quello che sotto è scritto discende da questa frase.
 Il database (Supabase, progetto `Mycity`) sta a **Parigi**, regione `eu-west-3`.
 Vercel, se non gli si dice niente, esegue le funzioni a **Washington** (`iad1`).
 
-Il 22/8/2026 la produzione rispondeva con l'intestazione
-`x-vercel-id: iad1:iad1::iad1::…`: ogni pagina del sito attraversava l'Atlantico
-per fare le sue domande al database, e riattraversava per la risposta. Non una
-volta a pagina: **una volta per query**, e una pagina di catalogo ne fa parecchie.
+**Come si verifica, e come NON si verifica.** L'intestazione `x-vercel-id` non
+basta: il suo primo pezzo è il punto di rete che ha ricevuto la richiesta, e
+quello segue *chi chiama*, non dove gira la funzione. Chiamando da un computer
+americano leggi `iad1` comunque, anche a funzione europea.
+
+La risposta senza ambiguità è nel registro del rilascio, campo `regions`:
+
+```
+produzione   (main, 21/8)        "regions": ["iad1"]     ← Washington
+anteprima    (questo ramo, 22/8) "regions": ["cdg1"]     ← Parigi
+```
+
+Il primo è il prima, il secondo è il dopo. Con Washington ogni pagina del sito
+attraversava l'Atlantico per fare le sue domande al database e riattraversava per
+la risposta — non una volta a pagina: **una volta per query**, e una pagina di
+catalogo ne fa parecchie.
 
 `cdg1` è Parigi, cioè la stessa città del database. È il modo più economico che
 esiste di rendere un sito più veloce: una riga di configurazione.
+
+*(Effetto collaterale da sapere: dichiarare `maxDuration` diversi per gruppi di
+rotte fa impacchettare quei gruppi separatamente. Questo rilascio ha 9 funzioni
+dove la produzione ne aveva 6. È voluto — un tetto giusto per ognuna vale più di
+qualche avvio a freddo in più — ma non è un dettaglio invisibile.)*
 
 Il freno: `tests/unit/lavori-periodici-agganciati-a-vercel.test.ts` diventa rosso
 se qualcuno toglie la regione.

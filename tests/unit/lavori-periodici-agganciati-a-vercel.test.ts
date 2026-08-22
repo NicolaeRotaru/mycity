@@ -93,9 +93,11 @@ describe('lavori periodici: quello che c\'e\' sul disco e quello che Vercel chia
   });
 
   it('la regione delle funzioni sta vicino al database (Supabase e\' a Parigi, eu-west-3)', () => {
-    // Il 22/8/2026 l'intestazione x-vercel-id della produzione diceva `iad1`:
-    // Washington. Ogni pagina del sito attraversava l'Atlantico per parlare col
-    // database, due volte, a ogni query.
+    // Il 22/8/2026 il registro del rilascio di produzione diceva
+    // `"regions": ["iad1"]` — Washington — mentre il database sta a Parigi. Ogni
+    // pagina attraversava l'Atlantico per parlare col database, a ogni query.
+    // (Il campo `regions` del rilascio e' la prova; l'intestazione x-vercel-id
+    // NON lo e': il suo primo pezzo segue chi chiama, non dove gira la funzione.)
     const regioni: string[] = (vercelJson() as { regions?: string[] }).regions ?? [];
     expect(regioni).toContain('cdg1');
   });
