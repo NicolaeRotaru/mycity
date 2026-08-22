@@ -45,7 +45,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
     return () => clearTimeout(id);
   }, [q]);
 
-  const { data: suggestions = [] } = useQuery({
+  const { data: suggestions = [], isFetching: suggerimentiInArrivo } = useQuery({
     queryKey: queryKeys.search.suggest(debounced),
     enabled: debounced.length >= 2,
     queryFn: async (): Promise<Suggestion[]> => {
@@ -185,9 +185,13 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
         )}
       </form>
 
-      {/* L'annuncio onesto: quanti suggerimenti ci sono davvero, adesso. */}
+      {/* L'annuncio onesto: quanti suggerimenti ci sono davvero, adesso.
+          22/8/2026 — mentre stanno ancora arrivando non si annuncia niente:
+          prima lo screen reader diceva «Nessun suggerimento» e un istante dopo
+          «sei suggerimenti», e chi non vede lo schermo aveva gia' cambiato
+          idea. */}
       <p className="sr-only" role="status" aria-live="polite">
-        {open && debounced.length >= 2
+        {open && debounced.length >= 2 && !suggerimentiInArrivo
           ? (suggestions.length === 0
               ? `Nessun suggerimento per ${debounced}`
               : `${suggestions.length} suggeriment${suggestions.length === 1 ? 'o' : 'i'} disponibil${suggestions.length === 1 ? 'e' : 'i'}`)
@@ -196,7 +200,23 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
 
       {open && debounced.length >= 2 && (
         <div aria-label="Suggerimenti di ricerca" className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-warm-lg ring-1 ring-ink-100 overflow-hidden z-50 max-h-[60vh] overflow-y-auto">
-          {suggestions.length === 0 ? (
+          {/* 22/8/2026 — «NESSUN RISULTATO» MENTRE I RISULTATI STANNO
+              ARRIVANDO. Il riquadro si apre appena si scrivono due lettere e
+              mostrava subito il vuoto: per qualche decimo di secondo il sito
+              diceva che quella cosa non c'e', poi compariva. Su una ricerca
+              lenta chi legge in fretta chiude e se ne va convinto che il
+              prodotto non ci sia. Adesso, finche' arrivano, si vedono tre righe
+              in attesa. */}
+          {suggerimentiInArrivo && suggestions.length === 0 ? (
+            <ul className="divide-y divide-ink-50" aria-hidden>
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="flex items-center gap-3 p-3">
+                  <span className="h-10 w-10 shrink-0 animate-pulse rounded-lg bg-cream-200" />
+                  <span className="h-3 flex-1 animate-pulse rounded bg-cream-200" />
+                </li>
+              ))}
+            </ul>
+          ) : suggestions.length === 0 ? (
             <div className="p-6 text-center text-sm text-ink-500">
               Nessun risultato per &laquo;{debounced}&raquo;.
               <Link href={`/search?q=${encodeURIComponent(debounced)}`} className="block mt-2 text-primary-600 font-semibold hover:underline">

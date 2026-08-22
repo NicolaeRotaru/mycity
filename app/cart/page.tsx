@@ -1,5 +1,6 @@
 'use client';
 
+import { shippingForEuro } from '@/lib/shipping';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -75,7 +76,6 @@ export default function CartPage() {
   const total = cartTotal(items);
   const count = cartCount(items);
   const freeShipping = total >= FREE_SHIPPING_THRESHOLD;
-  const shippingCost = freeShipping ? 0 : 4.9;
 
   if (items.length === 0) {
     return (
@@ -113,6 +113,35 @@ export default function CartPage() {
   // all'ultimo passo — dove l'abbandono costa di piu'. Stessa matematica del
   // checkout: una fee per gruppo-negozio.
   const platformDeliveryFee = groups.length * (PLATFORM_DELIVERY_FEE_CENTS / 100);
+
+  /**
+   * 22/8/2026 — LA SPEDIZIONE ERA UN 4,90 SCRITTO A MANO, E PER TUTTO IL
+   * CARRELLO.
+   *
+   * Due errori in una riga. Il primo: il numero era battuto qui dentro, mentre
+   * il prezzo vero lo decide `shippingForEuro` — quella che usa il checkout e
+   * usano le due rotte che creano l'ordine. Il secondo, piu' caro: era UNA
+   * spedizione per tutto il carrello, ma la spedizione si paga PER NEGOZIO. Con
+   * due negozi il carrello prometteva 4,90 e il checkout ne chiedeva 9,80: il
+   * raddoppio compariva all'ultimo passo, dove l'abbandono costa di piu'.
+   *
+   * Adesso e' la stessa funzione del checkout, chiamata per gruppo-negozio,
+   * con le coordinate a null finche' non c'e' un indirizzo — esattamente come
+   * fa il checkout prima che la persona lo scriva.
+   */
+  const shippingCost = groups.reduce(
+    (somma, g) =>
+      somma
+      + shippingForEuro({
+        subtotal: g.items.reduce((s, it) => s + it.price * it.quantity, 0),
+        storeLat: null,
+        storeLng: null,
+        deliveryLat: null,
+        deliveryLng: null,
+        pickupInStore: false,
+      }),
+    0,
+  );
   const finalTotal = total + shippingCost + platformDeliveryFee;
   const groupSubtotal = (g: { items: CartItem[] }) =>
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);

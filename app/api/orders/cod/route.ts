@@ -8,6 +8,7 @@ import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
+import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -352,6 +353,31 @@ export const POST = withAuthRateLimit(
       zip: body.delivery.zip,
     });
 
+    /**
+     * 22/8/2026 — L'ORDINE NASCEVA SENZA DESTINAZIONE.
+     *
+     * Se l'indirizzo non e' fra quelli salvati dalla persona — cioe' la prima
+     * volta che qualcuno ordina, che e' il caso piu' importante — qui non
+     * c'erano coordinate, e l'ordine finiva nel database con
+     * `delivery_lat/lng` a vuoto. Effetto: la mappa della consegna senza
+     * destinazione, nessuna stima di quanto manca, e il fattorino che va a
+     * naso su un indirizzo che il sistema conosce solo come testo.
+     *
+     * Il browser le calcolava e le mandava, ma il server le buttava — ed era
+     * giusto: il prezzo dipende dalla distanza, e un numero che arriva dal
+     * browser si puo' cambiare. Adesso se le calcola lui.
+     *
+     * ATTENZIONE, e' il punto: queste coordinate NON entrano nel prezzo. La
+     * spedizione resta calcolata come oggi, sulle coordinate degli indirizzi
+     * salvati o sulla tariffa fissa. Servono a far vedere dove va la spesa.
+     */
+    const coordPerLaMappa =
+      coordConsegna ?? (await coordinateDiUnIndirizzo({
+        address: body.delivery.address,
+        city: body.delivery.city,
+        zip: body.delivery.zip,
+      }));
+
     const shippingPerGroupCents = body.groups.map((g, i) => {
       const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
       return shippingCentsFor({
@@ -545,8 +571,8 @@ export const POST = withAuthRateLimit(
         // sulla mappa ne indica un'altra, e il fattorino va dove dice il
         // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
         // coordinata che contraddice l'indirizzo scritto.
-        delivery_lat: coordConsegna?.lat ?? null,
-        delivery_lng: coordConsegna?.lng ?? null,
+        delivery_lat: coordPerLaMappa?.lat ?? null,
+        delivery_lng: coordPerLaMappa?.lng ?? null,
       };
 
       const { data: order, error: orderErr } = await conRipiegoSchema(

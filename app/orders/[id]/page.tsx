@@ -100,13 +100,17 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
       )
     `)
     .eq('id', id)
-    .single();
+    .maybeSingle();
   // 110 — Prima qui c'era `if (error) return null`: un errore di rete o un
   // database lento diventavano «Ordine non trovato», cioè un messaggio che dice
   // alla persona una cosa falsa e senza rimedio. Non trovato e non raggiungibile
   // sono due cose diverse: la prima non ha ritentativo, la seconda sì.
   if (error) throw error;
-  return data as unknown as OrderRow;
+  // 22/8/2026 — `.single()` trattava «nessuna riga» come un errore, e la
+  // pagina finiva nel ramo del guasto di rete: «problema di collegamento» con
+  // un «Riprova» che su un ordine inesistente non potra' mai funzionare.
+  // Adesso «non trovato» torna `null` e va nel suo ramo, che c'e' gia'.
+  return (data ?? null) as unknown as OrderRow | null;
 };
 
 // Timestamp del singolo step della timeline (se registrato).

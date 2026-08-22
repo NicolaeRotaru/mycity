@@ -11,6 +11,7 @@ import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
+import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -303,6 +304,13 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     zip: body.delivery.zip,
   });
 
+  const coordPerLaMappa =
+    coordConsegna ?? (await coordinateDiUnIndirizzo({
+      address: body.delivery.address,
+      city: body.delivery.city,
+      zip: body.delivery.zip,
+    }));
+
   const shippingPerGroupCents = stripeGroups.map((g, i) => {
     const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
     return shippingCentsFor({
@@ -428,8 +436,16 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         // sulla mappa ne indica un'altra, e il fattorino va dove dice il
         // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
         // coordinata che contraddice l'indirizzo scritto.
-        lat: coordConsegna?.lat ?? null,
-        lng: coordConsegna?.lng ?? null,
+        //
+        // 22/8/2026 — «SI GEOCODIFICA DOPO» NON SUCCEDEVA. Quel «dopo» non
+        // esisteva da nessuna parte: l'ordine con carta nasceva senza
+        // destinazione esattamente come quello in contanti, e la mappa della
+        // consegna restava vuota. Adesso, quando l'indirizzo non e' fra quelli
+        // salvati, la destinazione se la calcola il server. NON entra nel
+        // prezzo: quello e' gia' stato deciso qui sopra, sulle coordinate
+        // salvate o sulla tariffa fissa.
+        lat: coordPerLaMappa?.lat ?? null,
+        lng: coordPerLaMappa?.lng ?? null,
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
         // scrive su orders.delivery_slot. null per ritiro / non scelta.
         slot: body.pickupInStore ? null : (body.deliverySlot ?? null),

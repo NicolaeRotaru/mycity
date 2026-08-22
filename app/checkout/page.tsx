@@ -520,24 +520,23 @@ export default function CheckoutPage() {
       }
       if (groups.length === 0) throw new Error('Il carrello è vuoto');
 
-      // Coords delivery: usa quelle dell'indirizzo salvato; altrimenti geocoda
-      let deliveryLat: number | null = form.lat;
-      let deliveryLng: number | null = form.lng;
-      if (deliveryLat == null || deliveryLng == null) {
-        try {
-          // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
-          const res = await fetch('/api/geocode', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ q: `${form.address}, ${form.zip} ${form.city}, Italia` }),
-          });
-          const json = await res.json();
-          if (json && json.lat != null && json.lng != null) {
-            deliveryLat = json.lat;
-            deliveryLng = json.lng;
-          }
-        } catch {}
-      }
+      /**
+       * 22/8/2026 — QUESTA GEOLOCALIZZAZIONE ERA LAVORO BUTTATO.
+       *
+       * Qui il browser risolveva l'indirizzo scritto a mano e mandava le
+       * coordinate al server. Il server le buttava — giustamente: il prezzo
+       * della consegna dipende dalla distanza, e un numero che arriva dal
+       * browser si puo' cambiare. Quindi era una chiamata di rete in piu' su
+       * ogni checkout, proprio nel momento in cui la persona ha la carta in
+       * mano, per un risultato che nessuno usava.
+       *
+       * Adesso la destinazione se la calcola il server (lib/geocodifica.ts), e
+       * qui restano solo le coordinate dell'indirizzo GIA' SALVATO: sono le
+       * stesse su cui il server calcola il prezzo, quindi l'anteprima e
+       * l'addebito dicono la stessa cifra.
+       */
+      const deliveryLat: number | null = form.lat;
+      const deliveryLng: number | null = form.lng;
 
       // SICUREZZA: gli ordini COD vengono creati SERVER-SIDE (/api/orders/cod),
       // che ricalcola prezzi, spedizione e sconti dal DB. Il client invia solo
@@ -1003,7 +1002,16 @@ export default function CheckoutPage() {
           (form="checkout-form"): nessuna logica nuova, solo un secondo trigger.
           Nascosta su desktop (lì c'è la sidebar sticky). Non intrappola il focus:
           è un singolo bottone nel flusso tab naturale. */}
-      <div className="lg:hidden fixed inset-x-0 bottom-0 z-sticky bg-white border-t border-cream-300 shadow-warm-lg px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3">
+      {/* 22/8/2026 — IL BANNER DEI COOKIE COPRIVA «CONFERMA ORDINE».
+          Sul telefono questa barra sta incollata in fondo, e il banner dei
+          cookie pure: chi non ha ancora scelto se ne trova due sovrapposte, con
+          il banner sopra. Il pulsante che chiude l'ordine — l'ultimo tocco di
+          tutto il percorso — resta sotto e non si preme. La barra del prodotto
+          (StickyAddToCart) lo sapeva gia' e si alzava; questa no. */}
+      <div
+        className="lg:hidden fixed inset-x-0 bottom-0 z-sticky bg-white border-t border-cream-300 shadow-warm-lg px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--altezza-banner-cookie, 0px))' }}
+      >
         <div className="leading-tight">
           <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
