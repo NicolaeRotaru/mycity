@@ -2,19 +2,15 @@ import type { NextRequest, NextResponse } from 'next/server';
 import { type User } from '@supabase/supabase-js';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { logger } from '@/lib/logger';
-import { timingSafeEqual } from 'node:crypto';
+import { segretiCombaciano } from '@/lib/api/segreti';
 import { ApiErrors } from './responses';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { purchaseBlockReason } from '@/lib/shopping-access';
 
-/** Confronto a tempo costante per secret (anti timing-attack). */
-function secretsMatch(a: string | null | undefined, b: string | null | undefined): boolean {
-  if (!a || !b) return false;
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
+// 22/8/2026 — spostata in lib/api/segreti.ts: i chiamanti sono due, e la
+// rotta di stato — che aveva lo stesso bisogno — non potendola importare da
+// qui si era riscritta il confronto con `===`.
+const secretsMatch = segretiCombaciano;
 
 /**
  * Middleware riusabili per API routes.

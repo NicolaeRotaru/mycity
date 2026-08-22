@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { richiestaConTetto } from '@/lib/api/corpo';
+import { tipoDaiPrimiByte, ESTENSIONE_PER_TIPO } from '@/lib/upload/firma-del-file';
 
 export const runtime = 'nodejs';
 
@@ -55,9 +56,31 @@ export const POST = withAuthRateLimit({ name: 'kyc-upload', max: 20, windowMs: 1
 
   const admin = getAdminSupabase();
 
-  const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const path = `${user.id}/${kind}-${Date.now()}.${ext}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
+
+  /**
+   * 22/8/2026 — DUE CONTROLLI SI FIDAVANO DI CHI CARICA.
+   *
+   * ① Il tipo del file veniva dall'intestazione che scrive il chiamante: un
+   *    file qualunque presentato come `image/jpeg` passava la lista dei tipi
+   *    ammessi, perché nessuno guardava i primi byte.
+   *
+   * ② L'estensione era «tutto quello che segue l'ultimo punto del nome»,
+   *    senza lista bianca, e finiva dentro il percorso di salvataggio: il nome
+   *    scelto da chi carica decideva come si chiamava il file da noi.
+   *
+   * Adesso la firma vera si legge dai byte, e l'estensione si ricava dal tipo
+   * verificato con una mappa chiusa — come fa già lib/products/rehostImages.ts.
+   */
+  const tipoVero = tipoDaiPrimiByte(bytes);
+  if (!tipoVero || tipoVero !== file.type) {
+    return ApiErrors.invalidRequest(
+      'Il file non è del formato che dichiara. Carica un JPG, PNG, WEBP o PDF vero.',
+    );
+  }
+
+  const ext = ESTENSIONE_PER_TIPO[tipoVero];
+  const path = `${user.id}/${kind}-${Date.now()}.${ext}`;
 
   const { error: upErr } = await admin.storage
     .from('kyc-docs')

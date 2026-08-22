@@ -97,8 +97,24 @@ function haCookieDiSessione(req: NextRequest): boolean {
 const RUOLO_COOKIE = 'mc_ruolo';
 const RUOLO_COOKIE_MAX_AGE = 10 * 60;
 
+/**
+ * 22/8/2026 — IL COOKIE DEL RUOLO ERA FIRMATO CON LA CHIAVE DELLE DISISCRIZIONI.
+ *
+ * C'era un ripiego su `UNSUBSCRIBE_SECRET`, e non era teorico: la variabile
+ * giusta non compariva né in `.env.example` né in `render.yaml`, quindi il
+ * ripiego era la strada che girava davvero. La stessa chiave firmava così due
+ * cose diverse: il cookie che porta ruolo e stato di approvazione di una
+ * persona, e i link di disiscrizione presenti in fondo a ogni email spedita.
+ *
+ * Una chiave che esce in ogni email non è più un segreto. E una chiave sola per
+ * due scopi vuol dire che chi ne conosce uno può falsificare l'altro.
+ *
+ * Il ripiego è sparito. Con `null` il codice si comporta già bene da solo:
+ * rilegge il profilo dal database, che è la verità — perde solo la comodità
+ * della cache.
+ */
 function segretoRuolo(): string | null {
-  return process.env.MIDDLEWARE_CACHE_SECRET || process.env.UNSUBSCRIBE_SECRET || null;
+  return process.env.MIDDLEWARE_CACHE_SECRET || null;
 }
 
 async function firmaRuolo(dato: string, segreto: string): Promise<string> {

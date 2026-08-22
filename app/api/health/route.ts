@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { segretiCombaciano, gettoneBearer } from '@/lib/api/segreti';
 
 export const runtime = 'nodejs';
 // Sempre fresh: i monitor esterni devono sapere lo stato reale, no cache.
@@ -151,7 +152,12 @@ export async function GET(request: Request) {
   const segreto = process.env.CRON_SECRET;
   const autorizzato =
     process.env.NODE_ENV !== 'production' ||
-    (!!segreto && request.headers.get('authorization') === `Bearer ${segreto}`);
+    // 22/8/2026 — era `=== \`Bearer ${segreto}\``. Un confronto che esce al
+    // primo carattere diverso racconta, col tempo di risposta, quanti
+    // caratteri iniziali hai azzeccato: il segreto si ricostruisce da fuori un
+    // carattere alla volta. Il progetto aveva già lo strumento giusto, chiuso
+    // in un altro file.
+    (!!segreto && segretiCombaciano(gettoneBearer(request.headers.get('authorization')), segreto));
 
   const corpo = autorizzato
     ? {
