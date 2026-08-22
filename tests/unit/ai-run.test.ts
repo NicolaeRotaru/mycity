@@ -118,7 +118,13 @@ describe('lib/ai/run · mapAiError', () => {
     expect(r401.status).toBe(503);
     const r429 = mapAiError(new AiCallError('f', 429), 'f');
     expect(r429.status).toBe(429);
-    expect(r429.headers.get('Retry-After')).toBe('60');
+    // 22/8/2026 — L'attesa non e' piu' una costante secca. Se Anthropic non
+    // dichiara quanto aspettare restano i 60 secondi di ripiego, piu' un
+    // margine casuale di pochi secondi perche' i venditori fermati insieme non
+    // ripartano tutti nello stesso istante.
+    const attesa = Number(r429.headers.get('Retry-After'));
+    expect(attesa).toBeGreaterThanOrEqual(60);
+    expect(attesa).toBeLessThan(65);
     const r500 = mapAiError(new AiCallError('f', 500), 'f');
     expect(r500.status).toBe(502);
     // log: solo {feature, status}, mai il messaggio raw

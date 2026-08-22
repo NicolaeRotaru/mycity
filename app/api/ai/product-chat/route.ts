@@ -294,12 +294,26 @@ ${attrLines || '- (nessuno)'}`;
       tool_choice: { type: 'auto' },
     });
 
-    // reply = prosa del modello; se ha solo chiamato il tool, usa il suo reply.
+    // 22/8/2026 — AL VENDITORE ARRIVAVA IL RACCONTO DELLA RICERCA, NON LA
+    // RISPOSTA.
+    //
+    // Qui ci sono due testi. Uno e' la prosa libera che il modello scrive
+    // mentre lavora: «cerco sul web», «ho trovato tre schede simili». L'altro
+    // e' il campo `reply` dello strumento, cioe' la risposta che il modello ha
+    // deciso di dare al venditore.
+    //
+    // La prosa libera vinceva sempre. E con la ricerca sul web accesa (fino a
+    // cinque giri) la prosa libera c'e' quasi sempre, perche' il modello
+    // commenta fra una ricerca e l'altra e noi concateniamo tutti i pezzi.
+    // Risultato: nella chat compariva il diario di bordo al posto della
+    // risposta.
+    //
+    // La chat del catalogo fa gia' il contrario, ed e' quella giusta: vince la
+    // risposta curata, la prosa e' il ripiego.
     const reply =
-      text ||
       (typeof toolInput?.reply === 'string' && toolInput.reply.trim()
         ? toolInput.reply.trim()
-        : 'Fatto.');
+        : text) || 'Fatto.';
     const patch =
       toolInput?.patch && typeof toolInput.patch === 'object' ? toolInput.patch : {};
 

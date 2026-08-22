@@ -10,6 +10,7 @@ import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapsho
 import type { CatalogJobResult, CatalogOperation } from '@/lib/ai/catalogBatch';
 import { senzaCampiEconomici } from '@/lib/ai/catalogBatch';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { classifyProductPolicy } from '@/lib/ai/moderation';
 
 /**
  * Applica i risultati di un job AI massivo, dopo che il venditore li ha rivisti.
@@ -106,7 +107,64 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         .in('id', ids);
       const current = new Map((rows ?? []).map((r) => [(r as { id: string }).id, r as unknown as ProductRow]));
 
+      // 22/8/2026 — IL LOTTO SCRIVEVA NOME E DESCRIZIONE SENZA IL FILTRO.
+      //
+      // La rotta gemella che applica una modifica sola lo dice con parole sue:
+      // «un filtro che si puo' aggirare cambiando strada non e' un filtro». Il
+      // filtro dei prodotti vietati stava li' e non qui, dove il lavoro
+      // massivo riscrive nome e descrizione di decine di prodotti in un colpo.
+      //
+      // Adesso c'e' anche qui, e si controlla solo chi tocca nome o
+      // descrizione: sul prezzo o sulla scorta il filtro non ha niente da
+      // dire. I controlli partono tutti insieme, non in fila, perche' un lotto
+      // e' fatto di decine di prodotti e ognuno e' un'andata e ritorno verso
+      // il modello.
+      //
+      // Detto onestamente: questa NON e' copertura piena. Il venditore
+      // modifica i propri prodotti anche dal browser, scrivendo dritto sul
+      // database, e quella strada non passa da nessuna rotta e quindi da
+      // nessun filtro. Chiudere qui toglie una scorciatoia; la porta grande
+      // resta aperta per come e' fatto il progetto, ed e' una decisione da
+      // prendere a monte, non una riga da aggiungere qui.
+      const daFiltrare = results.filter((r) => {
+        if (!r.patch || Object.keys(r.patch).length === 0) return false;
+        if (!current.has(r.product_id)) return false;
+        const patch = r.patch as Record<string, unknown>;
+        return typeof patch.name === 'string' || typeof patch.description === 'string';
+      });
+      const verdetti = await Promise.allSettled(
+        daFiltrare.map((r) => {
+          const row = current.get(r.product_id) as ProductRow;
+          const patch = r.patch as Record<string, unknown>;
+          return classifyProductPolicy(
+            {
+              name: typeof patch.name === 'string' ? patch.name : (row.name ?? ''),
+              description:
+                typeof patch.description === 'string'
+                  ? patch.description
+                  : (row.description ?? ''),
+            },
+            'catalog-batch-apply-policy',
+          );
+        }),
+      );
+      // Chi non passa — o su cui il filtro e' caduto — non si scrive: nel
+      // dubbio si nega, come fa il filtro stesso quando risponde.
+      const bloccati = new Set<string>();
+      daFiltrare.forEach((r, i) => {
+        const esito = verdetti[i];
+        if (esito.status === 'rejected' || !esito.value.allowed) bloccati.add(r.product_id);
+      });
+      if (bloccati.size > 0) {
+        logger.warn('catalog-batch apply: modifiche scartate dal filtro', {
+          sellerId: user.id,
+          scartati: bloccati.size,
+          controllati: daFiltrare.length,
+        });
+      }
+
       for (const r of results) {
+        if (bloccati.has(r.product_id)) continue;
         if (!r.patch || Object.keys(r.patch).length === 0) continue;
         const row = current.get(r.product_id);
         if (!row) continue;

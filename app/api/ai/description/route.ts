@@ -53,7 +53,20 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }
-  const name = body.name?.trim();
+  // 22/8/2026 — I TAGLI STAVANO IN UN PUNTO SOLO DEI DUE.
+  //
+  // La descrizione attuale finiva tagliata a 500 caratteri nel blocco che va
+  // al modello, ma entrava intera nel filtro di conformita' qui sotto. Nome e
+  // categoria non erano tagliati da nessuna delle due parti. Un campo lungo
+  // non fa danni gravi (venti chiamate al giorno per venditore, modello
+  // piccolo), ma i due percorsi devono leggere lo stesso testo: se il filtro
+  // vede piu' del modello, o meno, non sta piu' controllando cio' che esce.
+  //
+  // Adesso si taglia una volta sola, subito dopo il parse, e si usano queste
+  // tre variabili in tutti e due i posti.
+  const name = body.name?.trim().slice(0, 200);
+  const attuale = (body.current ?? '').slice(0, 500);
+  const categoria = (body.category ?? '').slice(0, 100);
   if (!name || name.length < 2) {
     return ApiErrors.invalidRequest('Specifica il nome del prodotto');
   }
@@ -81,7 +94,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // testo libero che il venditore manda al modello: è la porta scoperta.
   try {
     await assertSafeText(
-      [name, body.current ?? '', body.category ?? ''].filter(Boolean).join('\n'),
+      [name, attuale, categoria].filter(Boolean).join('\n'),
       'ai-description-policy',
     );
   } catch (err) {
@@ -98,9 +111,9 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   // Dati utente come DATO (in messages), mai come istruzioni (system).
   const userBlock = `Negozio: ${storeName}
-Categoria: ${body.category ?? '—'}
+Categoria: ${categoria || '—'}
 Nome prodotto: ${name}
-${body.current ? `Descrizione attuale (da migliorare): ${body.current.slice(0, 500)}` : ''}`;
+${attuale ? `Descrizione attuale (da migliorare): ${attuale}` : ''}`;
 
   try {
     const { text } = await runMessage({
