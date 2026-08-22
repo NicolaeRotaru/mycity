@@ -45,7 +45,25 @@ function sqlTypeToTs(sqlType) {
 
 /** Estrae il nome colonna + tipo + nullable da una riga di definizione. */
 function parseColumnLine(line) {
-  const cleaned = line.trim().replace(/,$/, '');
+  // 22/8/2026 — LE COLONNE SCRITTE SU PIU' RIGHE SPARIVANO, IN SILENZIO.
+  //
+  // La riga qui sotto confronta con un'espressione che NON attraversa gli a
+  // capo: una colonna dichiarata cosi'
+  //
+  //     ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'order'
+  //       CHECK (category IN ('order', 'promo', …))
+  //
+  // non veniva riconosciuta affatto, e finiva fuori dai tipi senza che niente
+  // lo dicesse. E' successo davvero a `notifications.category`, che il codice
+  // usa in cinque punti: secondo i tipi generati non esisteva.
+  //
+  // E' la stessa famiglia del difetto #4 (le colonne in fila nella stessa
+  // istruzione): un generatore che perde pezzi in silenzio rende i tipi una
+  // rete con dei buchi, e una rete con dei buchi e' peggio di nessuna rete —
+  // perche' ci si appoggia.
+  //
+  // Gli a capo diventano spazi prima di guardare.
+  const cleaned = line.trim().replace(/\s+/g, ' ').replace(/,$/, '');
   // Skip constraint lines
   if (/^(constraint|primary key|foreign key|unique|check|exclude)\b/i.test(cleaned)) return null;
   const m = cleaned.match(/^"?([a-z_][a-z0-9_]*)"?\s+(.+)$/i);

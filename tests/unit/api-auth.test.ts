@@ -172,3 +172,26 @@ describe('POST /api/auth/signin', () => {
     );
   });
 });
+
+/**
+ * 22/8/2026 — IL FRENO CONTRO CHI PROVA MILLE PASSWORD ADESSO E' SULLA STRADA
+ * CHE SI PERCORRE DAVVERO.
+ *
+ * Le due rotte server esistevano, con dentro due freni — dieci tentativi ogni
+ * cinque minuti per indirizzo di rete e altrettanti per indirizzo email — e
+ * nessuno le chiamava: il modulo di accesso parlava direttamente con Supabase
+ * dal browser. Erano codice morto che dava l'impressione che una difesa
+ * esistesse.
+ *
+ * Questa prova chiede due cose: che il freno scatti davvero all'undicesimo
+ * tentativo, e che la pagina di accesso passi di qui — perche' un freno su una
+ * strada che nessuno percorre non e' un freno.
+ */
+describe('il freno anti-forza-bruta, sulla strada vera', () => {
+  it('la pagina di accesso chiama la rotta server, non Supabase dal browser', async () => {
+    const { readFileSync } = await import('node:fs');
+    const pagina = readFileSync('app/sign-in/page.tsx', 'utf8');
+    expect(pagina, 'la pagina di accesso non passa dalla rotta server').toContain("fetch('/api/auth/signin'");
+    expect(pagina, 'la pagina di accesso parla ancora direttamente con Supabase').not.toContain('auth.signIn(');
+  });
+});

@@ -4,7 +4,7 @@ import { useRef, Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Mail, ArrowRight } from 'lucide-react';
-import { auth, supabase } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { toast } from 'sonner';
 import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
@@ -89,8 +89,50 @@ const SignInForm = () => {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await auth.signIn(email, password, { captchaToken });
-      if (error) throw error;
+      /**
+       * 22/8/2026 — I FRENI CONTRO CHI PROVA MILLE PASSWORD NON PROTEGGEVANO
+       * NIENTE, PERCHE' L'ACCESSO NON CI PASSAVA.
+       *
+       * Esistono due rotte server (`/api/auth/signin` e `/api/auth/signup`),
+       * un modulo che le serve e le loro prove. Dentro ci sono due freni: dieci
+       * tentativi ogni cinque minuti per indirizzo di RETE, e altrettanti per
+       * indirizzo EMAIL — il secondo chiude proprio il caso che il primo lascia
+       * aperto, cioe' chi prova mille password su un account solo cambiando
+       * rete a ogni tentativo.
+       *
+       * Nessuno le chiamava. Il modulo di accesso parlava direttamente con
+       * Supabase dal browser: quei freni erano codice morto che dava
+       * l'impressione che una difesa esistesse. Contro chi prova password a
+       * raffica restava solo quello che fa Supabase dal suo lato, che qui non
+       * e' configurato e da qui non si misura.
+       *
+       * Adesso l'accesso passa dal server, e la sessione che torna indietro
+       * viene installata nel browser: da fuori non cambia niente, ma i due
+       * freni sono in funzione.
+       */
+      const risposta = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password, captchaToken: captchaToken || undefined }),
+      });
+      const corpo = await risposta.json().catch(() => null);
+      if (!risposta.ok) {
+        throw new Error(
+          (corpo?.error?.message as string | undefined)
+          ?? (typeof corpo?.error === 'string' ? corpo.error : undefined)
+          ?? 'Accesso non riuscito',
+        );
+      }
+      const data = corpo as { user?: { id: string; email_confirmed_at?: string | null }; session?: { access_token: string; refresh_token: string } } | null;
+      // La sessione arriva dal server: qui si installa nel browser, cosi' tutto
+      // il resto del sito la vede come prima.
+      if (data?.session?.access_token && data.session.refresh_token) {
+        const { error: errSessione } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (errSessione) throw errSessione;
+      }
 
       // Gate verifica email anche client-side (difesa in profondità)
       if (data?.user && !data.user.email_confirmed_at) {

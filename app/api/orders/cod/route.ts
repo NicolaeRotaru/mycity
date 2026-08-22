@@ -1,3 +1,4 @@
+import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
@@ -384,21 +385,30 @@ export const POST = withAuthRateLimit(
         zip: body.delivery.zip,
       }));
 
-    const shippingPerGroupCents = body.groups.map((g, i) => {
-      const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
-      return shippingCentsFor({
-        subtotal: subtotalPerGroupCents[i] / 100,
-        storeLat: coord.lat,
-        storeLng: coord.lng,
-        deliveryLat: coordConsegna?.lat ?? null,
-        deliveryLng: coordConsegna?.lng ?? null,
-        pickupInStore: body.pickupInStore,
-        freeShipping: couponFreeShipping,
-      });
+    /**
+     * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DELLA CARTA.
+     *
+     * Qui sotto c'erano duecento righe di aritmetica identiche a quelle della
+     * rotta con carta: spedizione per negozio, sconto del ritiro, fee di
+     * consegna, tetto sugli sconti, ripartizione col resto piu' grande. La
+     * storia scritta nei commenti dice che almeno tre volte una riparazione e'
+     * stata fatta da una parte sola — e ogni volta il cliente pagava un
+     * importo diverso a seconda di come sceglieva di pagare.
+     */
+    const prezzi = prezziDelCarrello({
+      gruppi: body.groups.map((g, i) => ({
+        sellerId: g.sellerId,
+        subtotalCents: subtotalPerGroupCents[i],
+      })),
+      coordinateNegozio: (sellerId) => sellerCoordMap.get(sellerId) ?? { lat: null, lng: null },
+      consegnaLat: coordConsegna?.lat ?? null,
+      consegnaLng: coordConsegna?.lng ?? null,
+      pickupInStore: body.pickupInStore,
+      couponSpedizioneGratis: couponFreeShipping,
+      couponScontoCents: couponDiscountCents,
     });
-    const pickupDiscountCents = body.pickupInStore
-      ? Math.round(grandSubtotalCents * (PICKUP_DISCOUNT_PERCENT / 100))
-      : 0;
+    const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
+    const pickupDiscountCents = prezzi.pickupDiscountCents;
 
     // 058 / 165 — LA STESSA MATEMATICA DELLA CARTA, NON UNA SUA IMITAZIONE.
     //
@@ -411,11 +421,9 @@ export const POST = withAuthRateLimit(
     //    con totale negativo, cioe' un negozio che paga il cliente.
     // La rotta della carta ha gia' risolto tutte e due le cose con due funzioni
     // scritte e provate. Non serviva una seconda versione: serviva usarle.
-    const grandShippingCents = shippingPerGroupCents.reduce((s, x) => s + x, 0);
-    const tettoScontoCents = Math.max(0, grandSubtotalCents + grandShippingCents - 1);
-    const scontiLimitati = riduciAlTetto(couponDiscountCents, pickupDiscountCents, tettoScontoCents);
-    const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotalPerGroupCents);
-    const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotalPerGroupCents);
+    const grandShippingCents = prezzi.grandShippingCents;
+    const quoteCoupon = prezzi.gruppi.map((g) => g.couponPortionCents);
+    const quoteRitiro = prezzi.gruppi.map((g) => g.pickupPortionCents);
 
     // --- 5. Inserisci N ordini (uno per gruppo) con il client admin.
     const createdOrderIds: string[] = [];
@@ -471,8 +479,8 @@ export const POST = withAuthRateLimit(
       const discountCents = couponPortionCents + pickupPortionCents;
       // Fee di consegna piattaforma (€3): solo per consegna a domicilio, mai per
       // ritiro in negozio. Il cliente la paga in contanti insieme all'ordine.
-      const deliveryFeeCents = body.pickupInStore ? 0 : PLATFORM_DELIVERY_FEE_CENTS;
-      const grossTotalCents = Math.max(0, subtotal + shipping + deliveryFeeCents - discountCents);
+      const deliveryFeeCents = prezzi.gruppi[i].deliveryFeeCents;
+      const grossTotalCents = prezzi.gruppi[i].totalCents;
 
       // RISERVA ATOMICA DELLO STOCK del gruppo PRIMA di creare l'ordine (P0-4).
       // Con variante, la riserva scala lo stock della variante.

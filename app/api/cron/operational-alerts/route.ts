@@ -350,11 +350,15 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   // sito non ha finito di lavorare — e nessuno la guardava. E' il posto dove
   // «i soldi sono entrati e l'ordine non esiste» resta in silenzio.
   const trentaMinutiFa = new Date(Date.now() - 30 * 60_000).toISOString();
+  // La riga porta l'ora in cui il turno e' stato preso (`claimed_at`, scritta
+  // all'inserimento): su questa tabella non esiste `created_at`, ed e' proprio
+  // il tipo di svista che il controllo in tests/unit/nessuna-colonna-che-non-esiste
+  // e' li' a fermare.
   const { data: eventiFermi, error: errEventi } = await admin
     .from('stripe_event_log')
-    .select('event_id, type, created_at')
+    .select('event_id, type, claimed_at')
     .eq('processed', false)
-    .lt('created_at', trentaMinutiFa)
+    .lt('claimed_at', trentaMinutiFa)
     .limit(20);
   if (errEventi) controlliSaltati.push('eventi Stripe non lavorati');
   for (const e of eventiFermi ?? []) {

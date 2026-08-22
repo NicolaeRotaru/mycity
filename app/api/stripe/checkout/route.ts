@@ -1,3 +1,4 @@
+import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
@@ -311,37 +312,39 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       zip: body.delivery.zip,
     }));
 
-  const shippingPerGroupCents = stripeGroups.map((g, i) => {
-    const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
-    return shippingCentsFor({
-      subtotal: subtotalPerGroupCents[i] / 100,
-      storeLat: coord.lat,
-      storeLng: coord.lng,
-      deliveryLat: coordConsegna?.lat ?? null,
-      deliveryLng: coordConsegna?.lng ?? null,
-      pickupInStore: body.pickupInStore,
-      freeShipping: couponFreeShipping,
-    });
+  /**
+   * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DEI CONTANTI.
+   *
+   * Queste duecento righe di aritmetica esistevano anche nell'altra rotta,
+   * uguali. Ogni riparazione andava fatta due volte, e almeno tre volte e'
+   * stata fatta una volta sola: il cliente pagava un importo diverso a seconda
+   * di come sceglieva di pagare.
+   */
+  const prezzi = prezziDelCarrello({
+    gruppi: stripeGroups.map((g, i) => ({
+      sellerId: g.sellerId,
+      subtotalCents: subtotalPerGroupCents[i],
+    })),
+    coordinateNegozio: (sellerId) => sellerCoordMap.get(sellerId) ?? { lat: null, lng: null },
+    consegnaLat: coordConsegna?.lat ?? null,
+    consegnaLng: coordConsegna?.lng ?? null,
+    pickupInStore: body.pickupInStore,
+    couponSpedizioneGratis: couponFreeShipping,
+    couponScontoCents: couponDiscountCents,
   });
-  const grandShippingCents = shippingPerGroupCents.reduce((s, x) => s + x, 0);
+  const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
+  const grandShippingCents = prezzi.grandShippingCents;
 
   // 4c. Sconto ritiro in negozio: PICKUP_DISCOUNT_PERCENT sul subtotale carrello.
-  const pickupDiscountCents = body.pickupInStore
-    ? Math.round(grandSubtotalCents * (PICKUP_DISCOUNT_PERCENT / 100))
-    : 0;
+  const pickupDiscountCents = prezzi.pickupDiscountCents;
 
   // 4c-bis. Fee di consegna piattaforma: PLATFORM_DELIVERY_FEE_CENTS per ogni
   // gruppo (= una consegna fisica per venditore). Zero per il ritiro in negozio.
   // La incassa MyCity: viene scalata dal payout del venditore nel webhook.
-  const deliveryFeePerGroupCents = stripeGroups.map(() =>
-    body.pickupInStore ? 0 : PLATFORM_DELIVERY_FEE_CENTS,
-  );
+  const deliveryFeePerGroupCents = prezzi.gruppi.map((g) => g.deliveryFeeCents);
 
   // Clamp difensivo finale: lo sconto totale non può superare (subtotale+spedizione-1c).
-  const totalDiscountCents = Math.min(
-    couponDiscountCents + pickupDiscountCents,
-    Math.max(0, grandSubtotalCents + grandShippingCents - 1),
-  );
+  const totalDiscountCents = prezzi.scontoApplicatoCents;
 
   // Le quote per negozio si calcolano dallo sconto GIÀ limitato, non da quello
   // richiesto: è lo sconto limitato che finisce sulla carta del cliente. E si
@@ -349,9 +352,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // torna al centesimo con l'importo addebitato. Prima si usavano i valori non
   // limitati, arrotondati uno per uno: i totali per negozio e l'addebito
   // divergevano.
-  const scontiLimitati = riduciAlTetto(couponDiscountCents, pickupDiscountCents, totalDiscountCents);
-  const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotalPerGroupCents);
-  const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotalPerGroupCents);
+  const quoteCoupon = prezzi.gruppi.map((g) => g.couponPortionCents);
+  const quoteRitiro = prezzi.gruppi.map((g) => g.pickupPortionCents);
 
   const groupPersisted = stripeGroups.map((g, i) => {
     const subtotal = subtotalPerGroupCents[i];
@@ -359,10 +361,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     const deliveryFeeCents = deliveryFeePerGroupCents[i];
     const couponPortionCents = quoteCoupon[i];
     const pickupPortionCents = quoteRitiro[i];
-    const totalCents = Math.max(
-      0,
-      subtotal + shipping + deliveryFeeCents - couponPortionCents - pickupPortionCents,
-    );
+    const totalCents = prezzi.gruppi[i].totalCents;
     const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
     return {
       sellerId: g.sellerId,
