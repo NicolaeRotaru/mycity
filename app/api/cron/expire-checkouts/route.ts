@@ -43,7 +43,14 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .from('pending_checkouts')
     .select('id, groups, coupon_code, stripe_session_id')
     .eq('status', 'PENDING')
-    .lt('expires_at', new Date().toISOString());
+    .lt('expires_at', new Date().toISOString())
+    // 22/8/2026 — non c'era nessun tetto. Se per un guasto restassero
+    // diecimila carrelli scaduti, questo giro proverebbe a chiuderli tutti in
+    // un colpo: il tempo massimo del lavoro scade a metà, e il giro dopo
+    // ricomincia dallo stesso punto senza mai arrivare in fondo. Duecento per
+    // volta, ogni trenta minuti, sono quattrocento all'ora: il resto lo prende
+    // il giro successivo, e prima o poi la coda si svuota davvero.
+    .limit(200);
 
   if (errLettura) {
     logger.error('[cron] expire-checkouts: lettura fallita', errLettura);
@@ -91,7 +98,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     if (righe.length > 0) await admin.from('notifications').insert(righe);
   }
 
-  const daScadere = (candidati ?? []).filter((c) => !daSalvare.includes(c));
+  // `includes` su un elenco costa un giro dell'elenco per ogni candidato: con
+  // duecento candidati sono quarantamila confronti. Un insieme risponde subito.
+  const salvati = new Set(daSalvare);
+  const daScadere = (candidati ?? []).filter((c) => !salvati.has(c));
   const ids = daScadere.map((c) => c.id);
 
   /**

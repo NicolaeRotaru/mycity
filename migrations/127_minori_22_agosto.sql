@@ -758,3 +758,112 @@ COMMENT ON VIEW public.rider_consegne_storico IS
   'sempre — senza togliere al fattorino il conto di quello che ha guadagnato.';
 
 GRANT SELECT ON public.rider_consegne_storico TO authenticated;
+
+-- ── ⑰ Le categorie di un negozio, senza scaricarne il catalogo ────────────
+--
+-- La pagina dei negozi scaricava fino a seicento prodotti interi — nome,
+-- prezzo, immagini — per ricavarne una cosa sola: quali categorie tocca ogni
+-- negozio, che serve al filtro in cima alla pagina.
+--
+-- Seicento righe con le foto per ottenere una manciata di coppie
+-- (negozio, categoria). E siccome erano seicento IN TUTTO, ordinate dal più
+-- recente, i negozi che non pubblicavano da un po' restavano fuori dal filtro:
+-- il cliente sceglieva «Gastronomia» e la bottega spariva pur avendo il banco
+-- pieno.
+--
+-- Qui la domanda si fa al database, che è dove sta la risposta.
+CREATE OR REPLACE FUNCTION public.categorie_per_negozio()
+RETURNS TABLE(seller_id uuid, categorie uuid[])
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT p.seller_id, array_agg(DISTINCT p.category_id) AS categorie
+    FROM public.products p
+    JOIN public.seller_public_profiles s ON s.id = p.seller_id
+   WHERE p.status = 'available'
+     AND p.category_id IS NOT NULL
+   GROUP BY p.seller_id;
+$function$;
+
+COMMENT ON FUNCTION public.categorie_per_negozio() IS
+  'Quali categorie tocca ogni negozio. Sostituisce lo scarico di seicento '
+  'prodotti interi fatto solo per dedurlo — che oltretutto tagliava fuori i '
+  'negozi che non pubblicavano da un po.';
+
+GRANT EXECUTE ON FUNCTION public.categorie_per_negozio() TO anon, authenticated;
+
+-- ── ⑱ I tre filtri che tagliavano nel browser ─────────────────────────────
+--
+-- «Aperto adesso», «voto minimo» e «in promozione» si applicavano DOPO che le
+-- righe erano arrivate al telefono. Siccome tagliare dopo avrebbe accorciato
+-- l'elenco, il codice chiedeva quattro volte le righe che servivano — fino a
+-- quattrocento prodotti interi, con le foto, per mostrarne novantasei.
+--
+-- E con tre filtri stretti anche quattrocento potevano non bastare: l'elenco
+-- usciva corto senza che nessuno lo dicesse. Non «pochi risultati»: risultati
+-- mancanti.
+--
+-- Qui il database risponde alle tre domande. Il browser le usa come filtro
+-- prima di chiedere i prodotti, così il tetto si applica alle righe giuste.
+
+-- Quali negozi sono aperti in questo momento, secondo il loro orario.
+-- L'orario è nel fuso di Piacenza, il server gira su Greenwich: la conversione
+-- si fa qui, una volta, invece che in ogni pagina.
+CREATE OR REPLACE FUNCTION public.negozi_aperti_adesso()
+RETURNS TABLE(seller_id uuid)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  adesso timestamptz := now();
+  ora_locale time := (adesso AT TIME ZONE 'Europe/Rome')::time;
+  giorno text := lower(to_char(adesso AT TIME ZONE 'Europe/Rome', 'Dy'));
+BEGIN
+  RETURN QUERY
+  SELECT s.id
+    FROM public.seller_public_profiles s
+   WHERE s.store_hours IS NOT NULL
+     AND EXISTS (
+       SELECT 1
+         FROM jsonb_array_elements(
+                COALESCE(s.store_hours -> giorno, '[]'::jsonb)
+              ) AS fascia
+        WHERE jsonb_array_length(fascia) = 2
+          AND (fascia ->> 0) ~ '^[0-9]{1,2}:[0-9]{2}$'
+          AND (fascia ->> 1) ~ '^[0-9]{1,2}:[0-9]{2}$'
+          AND ora_locale >= (fascia ->> 0)::time
+          AND ora_locale <  (fascia ->> 1)::time
+     );
+END;
+$function$;
+
+COMMENT ON FUNCTION public.negozi_aperti_adesso() IS
+  'I negozi aperti in questo momento. Il giorno e l ora sono quelli di Piacenza, '
+  'non di Greenwich. Serve a far tagliare il filtro «aperto adesso» al database '
+  'invece che al browser, dove accorciava l elenco in silenzio.';
+
+GRANT EXECUTE ON FUNCTION public.negozi_aperti_adesso() TO anon, authenticated;
+
+-- Quali prodotti hanno almeno un certo voto medio.
+CREATE OR REPLACE FUNCTION public.prodotti_con_voto_almeno(p_min numeric)
+RETURNS TABLE(product_id uuid)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+  SELECT r.product_id
+    FROM public.reviews r
+   GROUP BY r.product_id
+  HAVING avg(r.rating)::numeric >= COALESCE(p_min, 0);
+$function$;
+
+COMMENT ON FUNCTION public.prodotti_con_voto_almeno(numeric) IS
+  'I prodotti con voto medio almeno pari a quello chiesto. Serve a far tagliare '
+  'il filtro «voto minimo» al database invece che al browser.';
+
+GRANT EXECUTE ON FUNCTION public.prodotti_con_voto_almeno(numeric) TO anon, authenticated;
