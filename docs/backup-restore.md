@@ -33,7 +33,8 @@
 
 - **Database**: copia notturna cifrata via GitHub Actions (30 giorni) + quello
   che offre il piano Supabase attivo, da verificare (vedi avviso sopra)
-- **Storage** (immagini prodotti, stories, reviews): replicato su Supabase S3
+- **Storage** (immagini prodotti, stories, reviews): ⚠️ **NESSUNA COPIA NOSTRA.**
+  Le foto vivono in un posto solo. Se si perdono, si perdono (vedi §1)
 - **Codice**: GitHub origin/main + tutti i branch
 - **Env vars**: Vercel → progetto → Settings → Environment Variables (NON in repo)
 - **Restore drill**: ogni 3 mesi, documenta tempi
@@ -45,7 +46,7 @@
 | Asset | Frequenza backup | RPO | RTO |
 |---|---|---|---|
 | Postgres DB | notturna (GitHub Actions, cifrata) | 24 h | 30 min |
-| Storage (immagini) | replicato S3 | 0 | 0 |
+| Storage (immagini) | ⚠️ **nessuna copia** | ∞ | ∞ |
 | Codice | ogni push | 0 | 5 min (re-deploy) |
 | Env vars | manuale on change | – | 1h (re-input) |
 | DNS Netsons | static | – | 1h (re-config) |
@@ -95,8 +96,29 @@ Dove trovi `SUPABASE_DB_URL`:
 
 ### Storage backup
 
-Supabase Storage è già backuppato (S3 replication 11 9s).
-Per ulteriore sicurezza, sync settimanale:
+> ⚠️ **22/8/2026 — QUESTA PAGINA DICEVA UNA COSA CHE NON È VERA.**
+>
+> Qui c'era scritto «Supabase Storage è già backuppato (S3 replication 11 9s)»,
+> e nella tabella §1 le immagini avevano RPO 0 e RTO 0 — cioè: perdita zero,
+> ripristino immediato. Non esiste nessuna copia delle foto: né uno script, né
+> un passo del lavoro notturno, né un secchio nostro. La replica di cui parlava
+> la riga è la durabilità interna del fornitore, che protegge da un disco
+> rotto — non da una cancellazione, non da una chiave compromessa, non dalla
+> chiusura del progetto.
+>
+> È il tipo di riga più pericoloso che ci sia in un documento di ripristino:
+> chi lo legge in emergenza smette di cercare la copia, perché il documento
+> gli dice che c'è.
+>
+> **Stato vero: le foto dei prodotti non hanno nessuna copia. Se il progetto
+> Supabase sparisce, spariscono con lui, e con loro ogni scheda del catalogo.**
+> Rifarle vuol dire richiamare ogni negoziante a rifotografare tutto.
+>
+> Il comando qui sotto è la strada per rimediare, e non è mai stato eseguito.
+> Serve un secchio di destinazione e le chiavi: fino ad allora questa sezione
+> è un piano, non una rete.
+
+Sync settimanale (da configurare — **oggi non gira**):
 
 ```bash
 # rclone configurato con bucket Supabase + bucket personale

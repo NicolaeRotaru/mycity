@@ -38,7 +38,7 @@ const PRODOTTO = {
   has_variants: false,
 };
 
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/rate-limit', () => ({
   rateLimitAsync: vi.fn(async () => ({ allowed: true, retryAfterSec: 0 })),
   getClientIp: () => '1.2.3.4',

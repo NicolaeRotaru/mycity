@@ -160,7 +160,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   }
 
   if (count > 0) {
-    logger.info(`[cron] expired ${count} pending checkouts`);
+    logger.spesa(`[cron] expired ${count} pending checkouts`);
   }
 
   return NextResponse.json({ ok: true, expired: count, saltati: daSalvare.length }, { status: 200 });

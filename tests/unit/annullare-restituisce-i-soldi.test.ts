@@ -19,7 +19,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const refundOrderMock = vi.fn(async (_opts: { orderId: string; amountCents: number }) => ({ refundId: 're_1', reversedCents: 0 }));
 vi.mock('@/lib/stripe/payout', () => ({ refundOrder: (o: unknown) => refundOrderMock(o as { orderId: string; amountCents: number }) }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 
 import { annullaERimborsa, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
 

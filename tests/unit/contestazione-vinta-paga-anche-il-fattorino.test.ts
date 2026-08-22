@@ -34,7 +34,7 @@ function event() {
   };
 }
 
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/stripe/client', () => ({
   getStripe: () => ({ webhooks: { constructEvent: () => event() } }),
   computeApplicationFeeCents: () => 0,

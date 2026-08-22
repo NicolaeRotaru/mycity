@@ -89,7 +89,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   } else {
     appesiRimessiInCoda = appesi?.length ?? 0;
     if (appesiRimessiInCoda > 0) {
-      logger.info('[cron] bonifici rimasti a meta rimessi in coda', { ordini: appesiRimessiInCoda });
+      // 22/8/2026 — `logger.info` in produzione non esce: LOG_LEVEL non e'
+      // 'info' e non lo e' mai stato. Un rendiconto sui soldi che nessuno puo'
+      // leggere e' come non scriverlo. `spesa` esce sempre, apposta.
+      logger.spesa('[cron] bonifici rimasti a meta rimessi in coda', { ordini: appesiRimessiInCoda });
     }
   }
 
@@ -249,7 +252,8 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   }
 
   if (released > 0 || failed > 0 || riderReleased > 0 || riderFailed > 0 || codReleased > 0 || codFailed > 0) {
-    logger.info(
+    // Il rendiconto dei pagamenti: esce sempre, non solo in sviluppo.
+    logger.spesa(
       `[cron] release-payouts: seller released=${released} skipped=${skipped} failed=${failed} · rider released=${riderReleased} skipped=${riderSkipped} failed=${riderFailed} · cod released=${codReleased} skipped=${codSkipped} failed=${codFailed}`,
     );
   }

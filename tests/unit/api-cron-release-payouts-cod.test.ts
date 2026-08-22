@@ -22,7 +22,7 @@ const releaseRiderPayoutMock = vi.fn(async (_id: string) => ({ ok: false as cons
 vi.mock('@/lib/api/middleware', () => ({
   withCronAuth: (h: (req: unknown) => unknown) => (req: unknown) => h(req),
 }));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));
 vi.mock('@/lib/stripe/payout', () => ({
   releaseOrderPayout: (id: string) => releaseOrderPayoutMock(id),

@@ -32,7 +32,7 @@ vi.mock('@/lib/ai/client', () => ({
 }));
 vi.mock('@/lib/env', () => ({ env: { anthropicKey: () => 'chiave-finta' } }));
 vi.mock('@/lib/rate-limit', () => ({ rateLimitAsync: async () => ({ allowed: true }) }));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth:
     (h: (ctx: { user: { id: string }; req: Request }) => unknown) =>

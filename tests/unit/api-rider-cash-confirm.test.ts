@@ -61,7 +61,7 @@ vi.mock('@/lib/api/middleware', () => ({
       handler({ user: state.user, req }),
 }));
 
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 
 vi.mock('@/lib/supabase/server', () => ({
   getServerSupabase: async () => ({

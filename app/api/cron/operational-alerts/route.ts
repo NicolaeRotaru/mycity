@@ -40,16 +40,31 @@ const COOLDOWN_HOURS = 6;
 export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
   const admin = getAdminSupabase();
   const alerts: AlertRow[] = [];
+  /**
+   * 22/8/2026 — IL SORVEGLIANTE FALLIVA IN SILENZIO E SI REGISTRAVA COME SANO.
+   *
+   * Quattordici letture, e di nessuna si guardava l'esito: una che fallisce
+   * lascia `data` vuoto, il ciclo non trova niente da segnalare, e il giro
+   * finisce con «nessuna anomalia». Peggio: `withCronAuth` scrive il battito,
+   * quindi anche il freno anti-silenzio si dichiara soddisfatto.
+   *
+   * E' il difetto peggiore di un sorvegliante: non che non veda: che dica di
+   * aver visto. Adesso i controlli non eseguiti si contano, si dicono nella
+   * risposta, e se ce ne sono la risposta e' un errore — cosi' il battito non
+   * conta come «tutto guardato» e il freno anti-silenzio puo' scattare.
+   */
+  const controlliSaltati: string[] = [];
 
   // 1) Ordini stuck in NEW da piu' di 1 ora (seller non accetta = bad UX buyer)
   const oneHourAgo = new Date(Date.now() - 60 * 60_000).toISOString();
-  const { data: stuckNew } = await admin
+  const { data: stuckNew, error: err_stuckNew } = await admin
     .from('orders')
     .select('id, created_at, total_price, seller_id, profiles!orders_seller_id_fkey(store_name)')
     .eq('delivery_status', 'NEW')
     .lt('created_at', oneHourAgo)
     .order('created_at', { ascending: true })
     .limit(20);
+  if (err_stuckNew) controlliSaltati.push('ordini fermi in NEW');
 
   for (const o of stuckNew ?? []) {
     const seller = (o as { profiles?: { store_name?: string } | null }).profiles;
@@ -65,12 +80,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   // 2) Rider con ordine OUT_FOR_DELIVERY ma nessun aggiornamento da 45 minuti
   const fortyFiveMinAgo = new Date(Date.now() - 45 * 60_000).toISOString();
-  const { data: stuckRiders } = await admin
+  const { data: stuckRiders, error: err_stuckRiders } = await admin
     .from('orders')
     .select('id, rider_id, picked_up_at, profiles!orders_rider_id_fkey(full_name)')
     .eq('delivery_status', 'OUT_FOR_DELIVERY')
     .lt('picked_up_at', fortyFiveMinAgo)
     .limit(10);
+  if (err_stuckRiders) controlliSaltati.push('ordini senza fattorino');
 
   for (const o of stuckRiders ?? []) {
     const rider = (o as { profiles?: { full_name?: string } | null }).profiles;
@@ -86,7 +102,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   // 3) Cash on delivery non riconciliato del giorno precedente
   const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-  const { data: codMissing } = await admin
+  const { data: codMissing, error: err_codMissing } = await admin
     .from('orders')
     .select('id, total_price, rider_id, profiles!orders_rider_id_fkey(full_name)')
     .eq('payment_method', 'cod')
@@ -95,6 +111,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     .gte('created_at', yesterday + 'T00:00:00Z')
     .lte('created_at', yesterday + 'T23:59:59Z')
     .limit(20);
+  if (err_codMissing) controlliSaltati.push('incassi in contanti mancanti');
 
   for (const o of codMissing ?? []) {
     const rider = (o as { profiles?: { full_name?: string } | null }).profiles;
@@ -109,13 +126,14 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   // 4) Seller con KYC pending da piu' di 48h
   const twoDaysAgo = new Date(Date.now() - 2 * 86_400_000).toISOString();
-  const { data: kycPending } = await admin
+  const { data: kycPending, error: err_kycPending } = await admin
     .from('profiles')
     .select('id, store_name, kyc_provider_checked_at')
     .eq('role', 'seller')
     .eq('kyc_provider_status', 'PENDING')
     .lt('kyc_provider_checked_at', twoDaysAgo)
     .limit(20);
+  if (err_kycPending) controlliSaltati.push('verifiche identita in attesa');
 
   for (const p of kycPending ?? []) {
     const id = (p as { id: string }).id;
@@ -128,13 +146,14 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   }
 
   // 5) Divergenza denaro: payout bloccati/falliti su ordini consegnati da >1h
-  const { data: payoutStuck } = await admin
+  const { data: payoutStuck, error: err_payoutStuck } = await admin
     .from('orders')
     .select('id, payout_status, rider_payout_status')
     .eq('delivery_status', 'DELIVERED')
     .or('payout_status.in.(PROCESSING,FAILED),rider_payout_status.in.(PROCESSING,FAILED)')
     .lt('delivered_at', oneHourAgo)
     .limit(20);
+  if (err_payoutStuck) controlliSaltati.push('bonifici anomali');
   for (const o of payoutStuck ?? []) {
     const r = o as { id: string; payout_status: string | null; rider_payout_status: string | null };
     alerts.push({
@@ -157,12 +176,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   // arrabbiato. Su un marketplace appena partito e' il silenzio che costa un
   // negozio.
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
-  const { data: onboardingFermi } = await admin
+  const { data: onboardingFermi, error: err_onboardingFermi } = await admin
     .from('orders')
     .select('id, seller_id, profiles!orders_seller_id_fkey(store_name)')
     .eq('payout_status', 'PENDING_SELLER_ONBOARDING')
     .lt('created_at', oneDayAgo)
     .limit(20);
+  if (err_onboardingFermi) controlliSaltati.push('attivazioni pagamenti ferme');
   for (const o of onboardingFermi ?? []) {
     const r = o as { id: string; profiles?: { store_name?: string } | null };
     alerts.push({
@@ -174,13 +194,14 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   }
 
   const quarantottOreFa = new Date(Date.now() - 48 * 60 * 60_000).toISOString();
-  const { data: rimesseFerme } = await admin
+  const { data: rimesseFerme, error: err_rimesseFerme } = await admin
     .from('orders')
     .select('id, rider_id')
     .eq('payout_status', 'AWAITING_REMITTANCE')
     .eq('delivery_status', 'DELIVERED')
     .lt('delivered_at', quarantottOreFa)
     .limit(20);
+  if (err_rimesseFerme) controlliSaltati.push('rimesse contanti non confermate');
   for (const o of rimesseFerme ?? []) {
     const r = o as { id: string; rider_id: string | null };
     alerts.push({
@@ -195,13 +216,14 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   //     merce e' li' da ore. E' lo stato terminale di ogni consegna che non
   //     trova un fattorino, e prima non lo guardava nessuno.
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60_000).toISOString();
-  const { data: prontiFermi } = await admin
+  const { data: prontiFermi, error: err_prontiFermi } = await admin
     .from('orders')
     .select('id, ready_at, pickup_in_store')
     .eq('delivery_status', 'READY')
     .is('rider_id', null)
     .lt('ready_at', twoHoursAgo)
     .limit(20);
+  if (err_prontiFermi) controlliSaltati.push('ordini pronti e fermi');
   for (const o of prontiFermi ?? []) {
     const r = o as { id: string; pickup_in_store: boolean | null };
     alerts.push({
@@ -216,12 +238,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   // 6) Consegne in-flight stallate: ASSIGNED ma non ritirato da >30min (consegna orfana)
   const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
-  const { data: stalledAssigned } = await admin
+  const { data: stalledAssigned, error: err_stalledAssigned } = await admin
     .from('orders')
     .select('id, ready_at, profiles!orders_rider_id_fkey(full_name)')
     .eq('delivery_status', 'ASSIGNED')
     .lt('ready_at', thirtyMinAgo)
     .limit(10);
+  if (err_stalledAssigned) controlliSaltati.push('ordini assegnati e fermi');
   for (const o of stalledAssigned ?? []) {
     const rider = (o as { profiles?: { full_name?: string } | null }).profiles;
     const id = (o as { id: string }).id;
@@ -234,12 +257,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   }
 
   // 7) Riconciliazioni COD in MISMATCH (rider che non quadra)
-  const { data: mismatches } = await admin
+  const { data: mismatches, error: err_mismatches } = await admin
     .from('cod_reconciliations')
     .select('rider_id, for_date, expected_cents, collected_cents')
     .eq('status', 'MISMATCH')
     .gte('for_date', yesterday)
     .limit(20);
+  if (err_mismatches) controlliSaltati.push('quadrature contanti');
   for (const m of mismatches ?? []) {
     const mm = m as { rider_id: string; for_date: string; expected_cents: number; collected_cents: number };
     alerts.push({
@@ -252,13 +276,94 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   // 8) Dead-man's switch: cron critici che hanno smesso di girare (audit 🟠-25).
   // I heartbeat sono scritti da withCronAuth; qui segnaliamo chi supera la soglia.
-  const { data: heartbeats } = await admin.from('cron_heartbeats').select('name, last_run_at');
-  for (const c of staleCrons((heartbeats ?? []) as CronHeartbeat[], Date.now())) {
+  const { data: heartbeats, error: err_heartbeats } = await admin.from('cron_heartbeats').select('name, last_run_at');
+  if (err_heartbeats) controlliSaltati.push('battiti dei lavori periodici');
+
+  /**
+   * 22/8/2026 — IL FRENO ANTI-SILENZIO ERA DISINNESCATO.
+   *
+   * `staleCrons` sa distinguere «fermo da troppo» da «non e' MAI partito», e
+   * per il secondo caso vuole sapere da quando esiste il sistema — altrimenti
+   * non puo' dire se e' un lavoro morto o solo appena installato. Quel valore
+   * non gli veniva passato: senza, il ramo «mai partito» calcola zero minuti e
+   * non segnala mai niente.
+   *
+   * E' il caso peggiore che ci sia: un lavoro periodico configurato male, che
+   * non e' partito nemmeno una volta, non ha nessun battito da confrontare —
+   * quindi il sorvegliante lo guardava e taceva. Il pagamento ai negozi, le
+   * email, la scadenza dei carrelli: fermi, e nessuno avvisato.
+   *
+   * La data d'installazione e' il battito piu' vecchio che esiste: se il
+   * sistema scriveva battiti tre giorni fa, un lavoro senza nessun battito non
+   * e' «appena installato».
+   */
+  const battiti = (heartbeats ?? []) as CronHeartbeat[];
+  const quandoBattiti = battiti
+    .map((h) => (h.last_run_at ? new Date(h.last_run_at).getTime() : NaN))
+    .filter((t) => Number.isFinite(t));
+  const installatoDaMs = quandoBattiti.length > 0 ? Math.min(...quandoBattiti) : undefined;
+
+  for (const c of staleCrons(battiti, Date.now(), undefined, installatoDaMs)) {
     alerts.push({
       key: `CRON_STALE|${c.name}`,
       type: 'CRON_STALE',
       detail: `Cron "${c.name}" fermo da ${c.staleMin} min (soglia ${c.thresholdMin}): scheduler o deploy down?`,
       url: '/admin/today',
+    });
+  }
+
+  // 8b) IL BONIFICO CHE TORNA SEMPRE IN HELD, E NESSUNO GUARDA HELD  (22/8/2026)
+  //
+  // Quando un trasferimento a Stripe fallisce, il codice riporta l'ordine a
+  // 'HELD' perche' il giro dopo riprovi. Ma se fallisce SEMPRE — un conto
+  // bloccato, un IBAN sbagliato — quell'ordine rimbalza fra HELD e PROCESSING
+  // all'infinito, e nessun allarme guarda HELD: e' lo stato normale di un
+  // pagamento in attesa. Il negozio non viene pagato e nessuno lo sa.
+  //
+  // Il giro dei bonifici parte un'ora dopo la consegna. Un ordine consegnato da
+  // piu' di TRE ore e ancora trattenuto non sta aspettando: e' fermo.
+  const treOreFa = new Date(Date.now() - 3 * 60 * 60_000).toISOString();
+  const { data: trattenutiTroppo, error: errTrattenuti } = await admin
+    .from('orders')
+    .select('id, seller_id, delivered_at, profiles!orders_seller_id_fkey(store_name)')
+    .eq('payout_status', 'HELD')
+    .eq('payment_method', 'card')
+    .eq('delivery_status', 'DELIVERED')
+    .lt('delivered_at', treOreFa)
+    .limit(20);
+  if (errTrattenuti) controlliSaltati.push('bonifici trattenuti oltre la finestra');
+  for (const o of trattenutiTroppo ?? []) {
+    const r = o as { id: string; profiles?: { store_name?: string } | null };
+    alerts.push({
+      key: `PAYOUT_TRATTENUTO|${r.id}`,
+      type: 'PAYOUT_TRATTENUTO',
+      detail: `Ordine #${r.id.slice(0, 8)}: consegnato da oltre 3 ore e il bonifico a ${r.profiles?.store_name ?? 'il negozio'} non e ancora partito. Il giro paga a consegna +1h: qui qualcosa lo respinge.`,
+      url: `/admin/orders/${r.id}`,
+    });
+  }
+
+  // 8c) GLI EVENTI STRIPE RIMASTI A META'  (22/8/2026)
+  //
+  // Ogni evento di Stripe viene scritto in `stripe_event_log` e marcato
+  // `processed` solo quando il gestore e' arrivato in fondo. Una riga che resta
+  // `processed=false` e' un pagamento, un rimborso o una contestazione che il
+  // sito non ha finito di lavorare — e nessuno la guardava. E' il posto dove
+  // «i soldi sono entrati e l'ordine non esiste» resta in silenzio.
+  const trentaMinutiFa = new Date(Date.now() - 30 * 60_000).toISOString();
+  const { data: eventiFermi, error: errEventi } = await admin
+    .from('stripe_event_log')
+    .select('event_id, type, created_at')
+    .eq('processed', false)
+    .lt('created_at', trentaMinutiFa)
+    .limit(20);
+  if (errEventi) controlliSaltati.push('eventi Stripe non lavorati');
+  for (const e of eventiFermi ?? []) {
+    const r = e as { event_id: string; type: string | null };
+    alerts.push({
+      key: `STRIPE_EVENT_NON_LAVORATO|${r.event_id}`,
+      type: 'STRIPE_EVENT_NON_LAVORATO',
+      detail: `Evento Stripe ${r.type ?? '?'} (${r.event_id.slice(0, 14)}) ricevuto da oltre 30 minuti e mai lavorato fino in fondo.`,
+      url: '/admin/orders',
     });
   }
 
@@ -280,8 +385,18 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     });
   }
 
+  if (controlliSaltati.length > 0) {
+    logger.error('[cron] sorvegliante incompleto: NON dichiarare sano quello che non ha guardato', {
+      saltati: controlliSaltati,
+    });
+    return NextResponse.json(
+      { ok: false, alerts: alerts.length, controlliSaltati },
+      { status: 500 },
+    );
+  }
+
   if (alerts.length === 0) {
-    return NextResponse.json({ ok: true, alerts: 0, message: 'No anomalies detected' });
+    return NextResponse.json({ ok: true, alerts: 0, controlliSaltati, message: 'No anomalies detected' });
   }
 
   // Dedup: scarta gli alert la cui (tipo+entità) è già stata notificata entro
@@ -312,9 +427,18 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   // l'invio: un allarme non recapitato deve essere visibile come tale.
   const adminEmail = process.env.SUPPORT_EMAIL?.trim() || null;
   if (!adminEmail) {
+    // 22/8/2026 — UN ALLARME CHE NON ARRIVA E' UN FALLIMENTO, NON UN AVVISO.
+    // Qui si scriveva nel log e si tirava dritto, rispondendo bene: ci sono
+    // anomalie fresche, nessuno le riceve, e il giro si dichiara riuscito. Il
+    // battito veniva scritto lo stesso, quindi nemmeno il freno anti-silenzio
+    // se ne accorgeva. Adesso risponde con un errore: il guasto si vede.
     logger.error('[operational-alerts] SUPPORT_EMAIL non configurata: allarmi non recapitati', {
       anomalie: fresh.length,
     });
+    return NextResponse.json(
+      { ok: false, alerts: alerts.length, fresh: fresh.length, errore: 'SUPPORT_EMAIL non configurata: nessuno riceve gli allarmi' },
+      { status: 500 },
+    );
   }
   const body = `
     <h2>⚠️ Alert operational MyCity</h2>
@@ -333,7 +457,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         html: body,
       });
     } catch (err) {
+      // Stessa ragione: se l'invio fallisce mentre ci sono anomalie fresche,
+      // il giro NON e' riuscito.
       logger.error('[cron-alerts] email send failed', err);
+      return NextResponse.json(
+        { ok: false, alerts: alerts.length, fresh: fresh.length, errore: 'allarmi non recapitati' },
+        { status: 500 },
+      );
     }
   }
 

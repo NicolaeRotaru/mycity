@@ -13,7 +13,7 @@ vi.mock('@/lib/api/middleware', () => ({
 }));
 
 vi.mock('@/lib/logger', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() },
 }));
 
 // Configurabile per-test: risultati delle query

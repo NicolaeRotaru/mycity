@@ -124,7 +124,32 @@ WHERE seller_id = '<seller-uuid>';
 5. Verifica: signup, search, order placement funzionano
 6. Distruggi il test project
 
-**Time SLA per disaster reale**: ~30 min dal trigger al ripristino prod.
+> ⚠️ **22/8/2026 — I TRENTA MINUTI QUI SOTTO NON LI HA MAI CRONOMETRATI NESSUNO.**
+>
+> «~30 min dal trigger al ripristino» è una stima scritta a tavolino. La prova
+> di ripristino non è mai stata fatta — lo dice la riga «Data del controllo:
+> _mai fatto_» poco sopra — quindi non sappiamo:
+>
+> - se il file della copia notturna si riapre davvero su un database vuoto;
+> - quanto ci mette;
+> - se dopo il ripristino il sito parte, o se manca qualcosa che nessuno ha
+>   pensato di includere.
+>
+> Una copia mai riprovata non è una copia: è un file di cui speriamo bene. E la
+> speranza si scopre sbagliata nel momento peggiore.
+>
+> **Cosa chiude davvero questo punto** (in ordine di valore):
+> 1. una prova di ripristino vera, cronometrata, con la data scritta qui;
+> 2. un passo mensile nel lavoro notturno che riapplichi il dump su un database
+>    vuoto — un ripristino che gira da solo è l'unica prova che regge nel tempo;
+> 3. una copia fuori da GitHub (gli artefatti durano 30 giorni, e vivono nello
+>    stesso posto del codice: un accesso compromesso li prende tutti e due).
+>
+> Il passo ② è preparato in `.github/workflows/backup-db.yml` (lavoro
+> `prova-di-ripristino`, mensile) e gira da solo: non serve nessuna chiave in
+> più oltre a quelle che la copia usa già.
+
+**Time SLA per disaster reale**: stimato ~30 min, **mai misurato** (vedi sopra).
 
 ---
 

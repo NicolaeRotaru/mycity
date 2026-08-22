@@ -43,7 +43,7 @@ function risolvibile(valore: unknown) {
   return b;
 }
 
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
   // Il wrapper vero prende (opzioni, gestore) e passa al gestore
   // { user, profile, req }: qui si salta autenticazione e limite di richieste.
