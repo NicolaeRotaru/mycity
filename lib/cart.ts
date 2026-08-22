@@ -32,18 +32,56 @@ const bumpUpdatedAt = () => {
 export const getCart = (): CartItem[] => {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '[]');
+    const letto = JSON.parse(localStorage.getItem(KEY) ?? '[]');
+    // 22/8/2026 — se il valore salvato non è un elenco, il carrello viene
+    // restituito com'è e il primo `.map()` esplode in faccia alla persona. Può
+    // succedere per un salvataggio a metà, o per un'altra scheda che ha scritto
+    // sotto la stessa chiave.
+    return Array.isArray(letto) ? letto : [];
   } catch {
     return [];
   }
 };
 
-export const saveCart = (items: CartItem[]) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(KEY, JSON.stringify(items));
+/**
+ * 22/8/2026 — «AGGIUNGI AL CARRELLO» POTEVA NON FARE NIENTE, IN SILENZIO.
+ *
+ * `localStorage.setItem` non è una scrittura che riesce sempre: lancia se lo
+ * spazio del browser è pieno, e in navigazione privata su alcuni browser lancia
+ * comunque. Qui non era protetta, quindi l'eccezione risaliva fino a chi aveva
+ * premuto il pulsante: nessun prodotto aggiunto, nessun messaggio, niente.
+ *
+ * Il carrello resta comunque in memoria per questa visita — l'evento parte lo
+ * stesso — ma la persona deve sapere che al prossimo giro non lo ritrova.
+ */
+export type EsitoSalvataggio = { salvato: boolean; motivo?: string };
+
+let ultimoAvviso = 0;
+
+export const saveCart = (items: CartItem[]): EsitoSalvataggio => {
+  if (typeof window === 'undefined') return { salvato: false };
+
+  let salvato = true;
+  let motivo: string | undefined;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(items));
+  } catch (e) {
+    salvato = false;
+    motivo =
+      'Il browser non riesce a salvare il carrello. Libera spazio, oppure esci dalla navigazione privata: adesso funziona, ma alla prossima visita non lo ritrovi.';
+    // Una volta ogni cinque minuti: chi aggiunge dieci prodotti non merita
+    // dieci avvisi identici.
+    const ora = Date.now();
+    if (ora - ultimoAvviso > 5 * 60_000) {
+      ultimoAvviso = ora;
+      window.dispatchEvent(new CustomEvent('cart:non-salvato', { detail: { motivo, errore: e } }));
+    }
+  }
+
   bumpUpdatedAt();
   window.dispatchEvent(new Event('cart:updated'));
   void syncAbandonedCart(items);
+  return { salvato, motivo };
 };
 
 export const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {

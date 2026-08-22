@@ -23,9 +23,18 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
     setZip(loc.zip);
   }, [loc.zip]);
 
+  // 22/8/2026 — il salvataggio usciva in silenzio su un CAP incompleto: la
+  // persona premeva «Salva», il riquadro restava lì, e nessuno le diceva cosa
+  // c'era di sbagliato.
+  const [erroreCap, setErroreCap] = useState<string | null>(null);
+
   const save = () => {
     const cleaned = zip.replace(/\D/g, '').slice(0, 5);
-    if (cleaned.length !== 5) return;
+    if (cleaned.length !== 5) {
+      setErroreCap('Il CAP ha cinque cifre. Per Piacenza città è 29121.');
+      return;
+    }
+    setErroreCap(null);
     const newLoc: Location = { city: cleaned.startsWith('291') ? 'Piacenza' : loc.city, zip: cleaned };
     setLoc(newLoc);
     if (typeof window !== 'undefined') {
@@ -101,14 +110,21 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
             <input
               type="text"
               value={zip}
-              onChange={(e) => setZip(e.target.value)}
+              onChange={(e) => { setZip(e.target.value); setErroreCap(null); }}
               maxLength={5}
               inputMode="numeric"
               pattern="[0-9]{5}"
               placeholder="29121"
               aria-label="Codice di avviamento postale (CAP)"
+              aria-invalid={erroreCap ? true : undefined}
+              aria-describedby={erroreCap ? 'cap-errore' : undefined}
               className="w-full border border-ink-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
             />
+            {erroreCap && (
+              <p id="cap-errore" role="alert" className="mt-1 text-xs text-rose-600">
+                {erroreCap}
+              </p>
+            )}
             <button
               onClick={save}
               disabled={zip.replace(/\D/g, '').length !== 5}

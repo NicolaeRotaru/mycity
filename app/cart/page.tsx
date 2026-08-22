@@ -13,7 +13,7 @@ import EmptyState from '@/components/EmptyState';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { CartUpsell } from '@/components/cart/CartUpsell';
-import { Banknote, Check, Lightbulb, Lock, Package, RotateCcw, ShieldCheck, ShoppingCart, Store, Trash2 } from 'lucide-react';
+import { AlertCircle, Banknote, Check, Lightbulb, Lock, Package, RotateCcw, ShieldCheck, ShoppingCart, Store, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 /** Iniziali del negozio per il mini-logo: "Salumeria Verdi" → "SV". */
@@ -41,25 +41,65 @@ export default function CartPage() {
     return () => window.removeEventListener('cart:updated', refresh);
   }, []);
 
-  // #119 — La stessa lettura che fa il checkout, fatta qui: cosi' il limite si
-  // vede dove si sceglie la quantita', non tre schermate dopo.
+  /**
+   * #119 e, dal 22/8/2026, due difetti che stavano qui dentro.
+   *
+   * ① LE VARIANTI NON SI GUARDAVANO. Si leggeva solo `products.stock`, ma su un
+   *    prodotto con varianti la scorta vera sta su `product_variants`: il
+   *    carrello lasciava alzare la quantità oltre quello che c'era, e il muro
+   *    arrivava alla cassa. Il checkout la variante la guarda già; qui no.
+   *
+   * ② LA LETTURA NON SI RIFACEVA AL CAMBIO DI QUANTITÀ. La dipendenza era
+   *    `items.length`: togliendo una riga e aggiungendone un'altra il numero
+   *    resta uguale, quindi la scorta del prodotto nuovo non veniva mai chiesta.
+   *    Adesso dipende dagli identificativi veri.
+   */
+  const chiaviCarrello = items
+    .map((i) => `${i.id}::${i.variantId ?? ''}`)
+    .sort()
+    .join(',');
+
   useEffect(() => {
-    const ids = Array.from(new Set(getCart().map((i) => i.id)));
+    const carrello = getCart();
+    const ids = Array.from(new Set(carrello.map((i) => i.id)));
+    const idVarianti = Array.from(
+      new Set(carrello.map((i) => i.variantId).filter((v): v is string => !!v)),
+    );
     if (ids.length === 0) return;
     let vivo = true;
     void (async () => {
       const { supabase } = await import('@/lib/supabase/client');
-      const { data } = await supabase.from('products').select('id, stock').in('id', ids);
-      if (!vivo || !data) return;
+      const [prodottiRes, variantiRes] = await Promise.all([
+        supabase.from('products').select('id, stock').in('id', ids),
+        idVarianti.length > 0
+          ? supabase.from('product_variants').select('id, stock').in('id', idVarianti)
+          : Promise.resolve({ data: [] as Array<{ id: string; stock: number | null }> }),
+      ]);
+      if (!vivo) return;
       const mappa: Record<string, number | null> = {};
-      for (const p of data as Array<{ id: string; stock: number | null }>) mappa[p.id] = p.stock;
+      for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null }>) {
+        mappa[p.id] = p.stock;
+      }
+      // La variante si indicizza con la sua chiave di riga, così una riga con
+      // variante non eredita la scorta del prodotto intero.
+      for (const v of (variantiRes.data ?? []) as Array<{ id: string; stock: number | null }>) {
+        mappa[`variante::${v.id}`] = v.stock;
+      }
       setDisponibilita(mappa);
     })();
     return () => { vivo = false; };
-  }, [items.length]);
+  }, [chiaviCarrello]);
 
-  /** Il massimo prendibile per quella riga: null/assente = nessun limite noto. */
-  const massimo = (id: string): number | null => {
+  /**
+   * Il massimo prendibile per quella riga: null/assente = nessun limite noto.
+   * Con una variante scelta comanda la scorta della variante, non quella del
+   * prodotto intero.
+   */
+  const massimo = (id: string, variantId?: string | null): number | null => {
+    if (variantId) {
+      const v = disponibilita[`variante::${variantId}`];
+      if (typeof v === 'number') return v;
+    }
     const s = disponibilita[id];
     return typeof s === 'number' ? s : null;
   };
@@ -206,9 +246,43 @@ export default function CartPage() {
                       {item.variantLabel && (
                         <p className="text-xs font-semibold text-ink-500">{item.variantLabel}</p>
                       )}
-                      <p className="text-xs text-olive-600 font-semibold flex items-center gap-1">
-                        <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Consegna in 30-60 min
-                      </p>
+                      {/* 22/8/2026 — questa riga diceva «Disponibile» sempre,
+                          anche su una riga esaurita. La scorta era già letta
+                          qui sopra e serviva solo a limitare il pulsante «+»:
+                          la persona leggeva «Disponibile», non riusciva ad
+                          alzare la quantità, e non capiva perché. */}
+                      {(() => {
+                        const rimasti = massimo(item.id, item.variantId);
+                        if (rimasti === 0) {
+                          return (
+                            <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+                              <AlertCircle size={13} strokeWidth={2.5} aria-hidden />
+                              Non più disponibile · toglilo per continuare
+                            </p>
+                          );
+                        }
+                        if (rimasti !== null && rimasti < item.quantity) {
+                          return (
+                            <p className="text-xs text-amber-700 font-semibold flex items-center gap-1">
+                              <AlertCircle size={13} strokeWidth={2.5} aria-hidden />
+                              Ne restano {rimasti} · abbassa la quantità
+                            </p>
+                          );
+                        }
+                        if (rimasti !== null && rimasti <= 3) {
+                          return (
+                            <p className="text-xs text-amber-700 font-semibold flex items-center gap-1">
+                              <AlertCircle size={13} strokeWidth={2.5} aria-hidden />
+                              Ne restano solo {rimasti} · Consegna in 30-60 min
+                            </p>
+                          );
+                        }
+                        return (
+                          <p className="text-xs text-olive-600 font-semibold flex items-center gap-1">
+                            <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Consegna in 30-60 min
+                          </p>
+                        );
+                      })()}
                       <div className="flex items-center justify-between mt-2 flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <div className="flex flex-col">
@@ -238,16 +312,16 @@ export default function CartPage() {
                             <button
                               type="button"
                               onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
-                              disabled={massimo(item.id) != null && item.quantity >= (massimo(item.id) as number)}
+                              disabled={massimo(item.id, item.variantId) != null && item.quantity >= (massimo(item.id, item.variantId) as number)}
                               aria-label={`Aumenta quantità di ${item.name}`}
                               className="w-10 h-10 hover:bg-cream-100 rounded-r-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             >+</button>
                           </div>
-                          {massimo(item.id) != null && item.quantity >= (massimo(item.id) as number) && (
+                          {massimo(item.id, item.variantId) != null && item.quantity >= (massimo(item.id, item.variantId) as number) && (
                             <p className="mt-1 text-[11px] text-ink-500">
-                              {(massimo(item.id) as number) === 1
+                              {(massimo(item.id, item.variantId) as number) === 1
                                 ? 'Ne resta solo uno'
-                                : `Disponibili ${massimo(item.id)}`}
+                                : `Disponibili ${massimo(item.id, item.variantId)}`}
                             </p>
                           )}
                           </div>

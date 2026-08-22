@@ -32,26 +32,45 @@ export default function PWAInstallBanner() {
   const [show, setShow] = useState(false);
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
 
+  /**
+   * 22/8/2026 — L'ASCOLTO SI APRIVA TROPPO TARDI, E COSÌ NON SI APRIVA MAI.
+   *
+   * Il browser emette `beforeinstallprompt` una volta sola, presto, subito dopo
+   * il caricamento. Qui l'ascolto veniva registrato SOLO dalla terza visita in
+   * poi — e alla terza visita, quando finalmente si registrava, l'evento era
+   * già passato. Il banner non compariva mai: non alla prima visita per
+   * scelta, e non alla terza per un errore di sequenza.
+   *
+   * Adesso l'ascolto si apre sempre, e l'evento si mette da parte. È il
+   * momento di MOSTRARE il banner che dipende dal numero di visite, non il
+   * momento di ascoltare.
+   */
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // Already installed? hide
     if (window.matchMedia('(display-mode: standalone)').matches) return;
-    if (dismissed) return;
 
-    const nextVisits = visits + 1;
-    setVisits(nextVisits);
-    if (nextVisits < MIN_VISITS) return;
-
-    // Listen for beforeinstallprompt
     const handler = (e: Event) => {
       e.preventDefault();
       setPromptEvent(e as BeforeInstallPromptEvent);
-      setShow(true);
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  // Il conteggio delle visite: una volta per montaggio, separato dall'ascolto.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
+    if (dismissed) return;
+    setVisits(visits + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Si mostra quando ci sono tutte e tre le condizioni: l'evento è arrivato,
+  // le visite bastano, e la persona non l'ha già chiuso.
+  useEffect(() => {
+    setShow(!!promptEvent && !dismissed && visits >= MIN_VISITS);
+  }, [promptEvent, dismissed, visits]);
 
   const dismiss = () => {
     setDismissed(true);

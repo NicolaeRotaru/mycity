@@ -397,6 +397,7 @@ export default function CheckoutPage() {
   // Coupon
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{ coupon: Coupon; discount: number; freeShipping: boolean } | null>(null);
+  const [verificaCodice, setVerificaCodice] = useState(false);
   const [couponError, setCouponError] = useState<string | null>(null);
 
   // Ritiro in negozio (-10%, no spedizione)
@@ -446,16 +447,22 @@ export default function CheckoutPage() {
 
   const applyCoupon = async () => {
     setCouponError(null);
-    const result = await validateCouponFromBrowser(couponCode, grandSubtotal);
-    if (!result.ok) {
-      setCouponError(result.reason);
-      setAppliedCoupon(null);
-      return;
+    setVerificaCodice(true);
+    try {
+      const result = await validateCouponFromBrowser(couponCode, grandSubtotal);
+      if (!result.ok) {
+        setCouponError(result.reason);
+        setAppliedCoupon(null);
+        return;
+      }
+      setAppliedCoupon({ coupon: result.coupon, discount: result.discount, freeShipping: result.freeShipping });
+      trackCouponApplied(result.coupon.code, Math.round(result.discount * 100));
+      toast.success(`Codice "${result.coupon.code}" applicato`);
+    } finally {
+      setVerificaCodice(false);
     }
-    setAppliedCoupon({ coupon: result.coupon, discount: result.discount, freeShipping: result.freeShipping });
-    trackCouponApplied(result.coupon.code, Math.round(result.discount * 100));
-    toast.success(`Codice "${result.coupon.code}" applicato`);
   };
+
 
   const grandSubtotal = groups.reduce((s, g) => s + groupSubtotal(g), 0);
   const pickupDiscount = pickupInStore ? Math.round(grandSubtotal * (PICKUP_DISCOUNT_PERCENT / 100) * 100) / 100 : 0;
@@ -468,6 +475,41 @@ export default function CheckoutPage() {
   // Stripe, dove il credito arriverà più avanti). Mai più del totale dell'ordine.
   const creditApplied = paymentMethod === 'cod' && useCredit ? Math.min(walletEuro, grandTotal) : 0;
   const finalTotal = Math.max(0, grandTotal - creditApplied);
+
+  /**
+   * 22/8/2026 — LO SCONTO RESTAVA QUELLO DI PRIMA SE IL CARRELLO CAMBIAVA.
+   *
+   * Il coupon si verificava una volta, al momento di premere «Applica», e
+   * l'importo restava congelato. Poi la persona toglieva un prodotto: lo sconto
+   * calcolato su cinquanta euro restava attaccato a un carrello da venti. Nei
+   * casi peggiori — «10 € su una spesa da 40» — lo sconto sopravviveva a un
+   * carrello che non aveva più diritto ad averlo, e il rifiuto arrivava alla
+   * cassa, dopo che la persona aveva già messo l'indirizzo.
+   *
+   * Qui si rifà il conto quando cambia il totale. Se il codice non vale più,
+   * lo si toglie dicendo perché — non in silenzio alla fine.
+   */
+  useEffect(() => {
+    const codice = appliedCoupon?.coupon.code;
+    if (!codice) return;
+    let vivo = true;
+    void (async () => {
+      const esito = await validateCouponFromBrowser(codice, grandSubtotal);
+      if (!vivo) return;
+      if (!esito.ok) {
+        setAppliedCoupon(null);
+        setCouponError(esito.reason);
+        toast.warning(`Il codice "${codice}" non vale più su questo carrello: ${esito.reason}`);
+        return;
+      }
+      // Stesso codice, importo aggiornato al carrello di adesso.
+      if (esito.discount !== appliedCoupon.discount || esito.freeShipping !== appliedCoupon.freeShipping) {
+        setAppliedCoupon({ coupon: esito.coupon, discount: esito.discount, freeShipping: esito.freeShipping });
+      }
+    })();
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grandSubtotal, appliedCoupon?.coupon.code]);
 
   /**
    * LA CHIAVE DEL TENTATIVO — chi ordina due volte la stessa spesa deve poterla
@@ -993,6 +1035,7 @@ export default function CheckoutPage() {
               onCodeChange={(c) => { setCouponCode(c); setCouponError(null); }}
               onApply={applyCoupon}
               onRemove={() => { setAppliedCoupon(null); setCouponCode(''); }}
+              applying={verificaCodice}
             />
 
             <OrderSummary
