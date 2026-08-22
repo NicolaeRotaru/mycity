@@ -6,6 +6,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { giornoLocale } from '@/lib/tempo/giorno-locale';
 
 export const runtime = 'nodejs';
 
@@ -212,12 +213,6 @@ type ReconciliationRow = {
  * `releaseRiderPayout`. Sul ritiro in negozio non c'è consegna, quindi non c'è
  * compenso.
  */
-/** La data (AAAA-MM-GG) nel fuso di Piacenza, non in quello di Greenwich. */
-function giornoLocale(d: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit',
-  }).format(d);
-}
 
 /** Mezzanotte locale di quel giorno, espressa in UTC. */
 function inizioGiornoLocale(isoDate: string): Date {

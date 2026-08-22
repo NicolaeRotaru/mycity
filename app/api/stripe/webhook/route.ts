@@ -98,6 +98,32 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+
+        /**
+         * 22/8/2026 — «COMPLETATA» NON VUOL DIRE «PAGATA».
+         *
+         * Stripe manda `checkout.session.completed` anche quando il pagamento
+         * è ancora in sospeso — un bonifico che deve arrivare, un metodo
+         * asincrono che può fallire ore dopo. Il controllo c'era, ma dentro il
+         * gestore degli ORDINI: buoni regalo, spazi sponsorizzati e abbonamenti
+         * passavano da qui e nessuno guardava se i soldi erano arrivati.
+         *
+         * Un buono regalo emesso su un pagamento mai andato a buon fine è un
+         * buono che qualcuno spende davvero, a spese nostre.
+         *
+         * Adesso il controllo è uno solo e sta prima dello smistamento: quello
+         * che vale per gli ordini vale per tutto il resto, senza doverselo
+         * ricordare in quattro posti.
+         */
+        if (!sessionePagata(session)) {
+          logger.warn('[stripe] sessione completata ma non pagata: nessuna azione', {
+            session: session.id,
+            kind: session.metadata?.kind ?? 'ordine',
+            paymentStatus: session.payment_status,
+          });
+          return NextResponse.json({ received: true, nonPagata: true }, { status: 200 });
+        }
+
         // Flussi separati dagli ordini (nessun pending_checkout).
         if (session.metadata?.kind === 'gift_card') {
           await handleGiftCardPurchase(session);
@@ -150,14 +176,14 @@ export async function POST(req: NextRequest) {
         break;
       }
       case 'payment_intent.payment_failed': {
-        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+        await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent, event.id);
         break;
       }
       // 066 — L'esito buono va registrato quanto quello cattivo: senza i
       // riusciti non esiste un tasso di autorizzazione, esiste solo un conto
       // di fallimenti senza denominatore.
       case 'payment_intent.succeeded': {
-        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent);
+        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent, event.id);
         break;
       }
       // 063 — Un rimborso creato non e' un rimborso arrivato. Se la banca del

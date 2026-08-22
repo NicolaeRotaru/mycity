@@ -587,3 +587,97 @@ BEGIN
          allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp']
    WHERE id IN ('avatars', 'stores');
 END $$;
+
+-- ── ⑬ Il tasso di autorizzazione era strutturalmente sbagliato ────────────
+--
+-- L'idea era giusta: lo stesso evento Stripe può arrivare più volte, e non
+-- deve gonfiare il conto. Ma la chiave scelta era `(payment_intent_id, status)`,
+-- e quella non identifica un evento: identifica un pagamento.
+--
+-- Una carta rifiutata tre volte di fila — fondi insufficienti, poi 3D Secure
+-- non completato, poi rifiuto dell'emittente — è LO STESSO PaymentIntent con
+-- tre rifiuti diversi. Il vincolo ne teneva uno e buttava via gli altri due in
+-- silenzio (23505 è trattato come idempotenza, non come guasto).
+--
+-- Quindi il tasso di autorizzazione era falso per costruzione, e sempre nella
+-- stessa direzione: migliore di quello vero. Il numero che serve a capire se
+-- stiamo perdendo vendite alla cassa era truccato al rialzo.
+--
+-- Adesso la chiave è l'evento: `stripe_event_id`, che Stripe garantisce unico
+-- per ogni consegna. Le righe già presenti restano; per loro la colonna è
+-- vuota e l'indice unico le ignora (in PostgreSQL i NULL non collidono fra
+-- loro).
+ALTER TABLE public.payment_attempts
+  ADD COLUMN IF NOT EXISTS stripe_event_id text;
+
+DROP INDEX IF EXISTS public.payment_attempts_intent_status_uidx;
+
+CREATE UNIQUE INDEX IF NOT EXISTS payment_attempts_event_uidx
+  ON public.payment_attempts (stripe_event_id)
+  WHERE stripe_event_id IS NOT NULL;
+
+-- L'indice non unico resta utile: «tutti i tentativi di questo pagamento» è
+-- la domanda che si fa davvero guardando un ordine che non è andato a buon fine.
+CREATE INDEX IF NOT EXISTS payment_attempts_intent_idx
+  ON public.payment_attempts (payment_intent_id, created_at DESC);
+
+COMMENT ON COLUMN public.payment_attempts.stripe_event_id IS
+  'L identificativo dell EVENTO Stripe, non del pagamento. E la chiave di '
+  'deduplicazione giusta: lo stesso pagamento puo avere piu rifiuti diversi, e '
+  'contarne uno solo falsava il tasso di autorizzazione verso l alto.';
+
+-- ── ⑭ La cassa contava due giorni diversi ─────────────────────────────────
+--
+-- Il fattorino quadra la sua giornata sul giorno di PIACENZA: quella riga era
+-- già stata sistemata (`giornoLocale`). Ma la conferma dell'amministratore,
+-- che è quella che sblocca il pagamento al negozio, lavorava ancora sul giorno
+-- di GREENWICH.
+--
+-- D'estate l'Italia è due ore avanti. Una consegna delle 23:30 del 15 luglio a
+-- Piacenza è l'1:30 del 16 a Greenwich: il fattorino la conta nel 15, la
+-- conferma la cerca nel 16, e non la trova. Quell'ordine resta appeso — il
+-- negozio non viene pagato — e nessuno dei due capisce perché, perché tutti e
+-- due stanno guardando il «15 luglio».
+--
+-- Succede solo nelle sere cariche, che sono quelle che contano.
+CREATE OR REPLACE FUNCTION public.confirm_cod_remittance(p_rider uuid, p_date date)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE v_released integer; v_saltati integer;
+BEGIN
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'forbidden' USING errcode = '42501';
+  END IF;
+
+  PERFORM set_config('mycity.allow_order_write', '1', true);
+
+  SELECT count(*) INTO v_saltati
+    FROM public.orders
+   WHERE rider_id = p_rider
+     AND payment_method = 'cod'
+     AND delivery_status = 'DELIVERED'
+     AND payout_status = 'AWAITING_REMITTANCE'
+     AND (delivered_at AT TIME ZONE 'Europe/Rome')::date = p_date
+     AND cash_confirmed_at IS NULL;
+
+  UPDATE public.orders
+    SET payout_status = 'HELD'
+  WHERE rider_id = p_rider
+    AND payment_method = 'cod'
+    AND delivery_status = 'DELIVERED'
+    AND payout_status = 'AWAITING_REMITTANCE'
+    AND cash_confirmed_at IS NOT NULL
+    AND (delivered_at AT TIME ZONE 'Europe/Rome')::date = p_date;
+  GET DIAGNOSTICS v_released = ROW_COUNT;
+
+  INSERT INTO public.cod_reconciliations (rider_id, for_date, remitted_at, remitted_by)
+  VALUES (p_rider, p_date, now(), (SELECT auth.uid()))
+  ON CONFLICT (rider_id, for_date)
+  DO UPDATE SET remitted_at = now(), remitted_by = (SELECT auth.uid());
+
+  RETURN jsonb_build_object('rilasciati', v_released, 'saltati_senza_incasso', v_saltati);
+END;
+$function$;
