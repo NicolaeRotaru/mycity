@@ -53,3 +53,49 @@ describe('la lettura a blocchi', () => {
     expect(error?.message).toBe('URI too long');
   });
 });
+
+/**
+ * 22/8/2026 — LE LETTURE CHE SI FERMAVANO A MILLE RIGHE SENZA DIRLO.
+ *
+ * PostgREST risponde con al massimo mille righe, sempre, anche quando nessuno
+ * ha chiesto un limite. Nel codice non c'era nessun numero: sembrava una
+ * lettura completa e non lo era. I due cruscotti che ci sbattevano contro —
+ * il funnel degli iscritti e le visite del venditore — cominciavano a mostrare
+ * numeri piu' bassi del vero proprio quando i numeri iniziano a contare.
+ */
+describe('leggere tutte le righe, non le prime mille', () => {
+  it('con millecinquecento righe le riporta tutte, non mille', async () => {
+    const { leggiTutteLeRighe } = await import('@/lib/supabase/blocchi');
+    const TOTALE = 1500;
+    const chiamate: Array<[number, number]> = [];
+    const esito = await leggiTutteLeRighe<{ i: number }>((da, a) => {
+      chiamate.push([da, a]);
+      const righe = [];
+      for (let i = da; i <= Math.min(a, TOTALE - 1); i++) righe.push({ i });
+      return Promise.resolve({ data: righe, error: null });
+    });
+    expect(esito.data.length).toBe(TOTALE);
+    expect(esito.troncato).toBe(false);
+    // Due finestre: 0-999 e 1000-1999.
+    expect(chiamate.length).toBe(2);
+  });
+
+  it('con meno di mille righe fa una sola richiesta', async () => {
+    const { leggiTutteLeRighe } = await import('@/lib/supabase/blocchi');
+    let chiamate = 0;
+    const esito = await leggiTutteLeRighe<{ i: number }>(() => {
+      chiamate++;
+      return Promise.resolve({ data: [{ i: 1 }, { i: 2 }], error: null });
+    });
+    expect(esito.data.length).toBe(2);
+    expect(chiamate).toBe(1);
+  });
+
+  it('un errore a meta si riporta, non si nasconde', async () => {
+    const { leggiTutteLeRighe } = await import('@/lib/supabase/blocchi');
+    const esito = await leggiTutteLeRighe<{ i: number }>(() =>
+      Promise.resolve({ data: null, error: { message: 'niente rete' } }),
+    );
+    expect(esito.error?.message).toBe('niente rete');
+  });
+});

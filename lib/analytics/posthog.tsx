@@ -155,8 +155,13 @@ export default function PostHogProvider() {
             if (data.user?.id) ph.identify(data.user.id);
           } catch { /* niente identita': gli eventi restano anonimi */ }
         })();
-        const url = window.location.pathname + window.location.search;
-        ph.capture('$pageview', { $current_url: url });
+        // 22/8/2026 — `$current_url` E' UN CAMPO RISERVATO E VUOLE L'INDIRIZZO
+        // INTERO. Qui si passava solo il percorso («/product/123»), e PostHog
+        // ci costruisce sopra dominio, pagina di ingresso e pagina di uscita:
+        // su ogni singola visita quei campi erano monchi, e ogni analisi di
+        // percorso — da dove entrano, dove escono — leggeva un indirizzo che
+        // non esiste. Senza passarlo, la libreria lo compila da sola e giusto.
+        ph.capture('$pageview');
       });
     };
     window.addEventListener('mc:consent-change', onConsentChange);
@@ -165,9 +170,10 @@ export default function PostHogProvider() {
 
   useEffect(() => {
     if (!POSTHOG_KEY) return;
-    const url = pathname + (searchParams?.toString() ? `?${searchParams.toString()}` : '');
+    // Il percorso serve solo a far scattare l'effetto al cambio pagina: non si
+    // passa a mano, per la ragione scritta qui sopra.
     getPosthog().then((ph) => {
-      if (ph) ph.capture('$pageview', { $current_url: url });
+      if (ph) ph.capture('$pageview');
     });
   }, [pathname, searchParams]);
 

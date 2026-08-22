@@ -1,5 +1,6 @@
 'use client';
 
+import { leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { useEffect, useState } from 'react';
 import { metricheVenditore, ordineContaNelFatturato } from '@/lib/metriche-venditore';
 import { giornoPiacenza, oraPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
@@ -58,11 +59,18 @@ export default function SellerAnalyticsPage() {
       if (productIds.length === 0) return empty;
 
       const [viewsRes, ordersRes, reviewsRes] = await Promise.all([
-        supabase
-          .from('product_views')
-          .select('product_id, viewed_at')
-          .in('product_id', productIds)
-          .gte('viewed_at', since30),
+        // 22/8/2026 — Anche questa si fermava a mille righe senza dirlo: un
+        // negozio con piu' di mille visite in un mese vedeva un numero piu'
+        // basso del vero, e il tasso di conversione ne usciva gonfiato.
+        leggiTutteLeRighe<{ product_id: string; viewed_at: string }>((da, a) =>
+          supabase
+            .from('product_views')
+            .select('product_id, viewed_at')
+            .in('product_id', productIds)
+            .gte('viewed_at', since30)
+            .order('viewed_at', { ascending: true })
+            .range(da, a) as unknown as PromiseLike<{ data: { product_id: string; viewed_at: string }[] | null; error: { message?: string } | null }>,
+        ),
         supabase
           .from('orders')
           .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, created_at')
@@ -92,8 +100,26 @@ export default function SellerAnalyticsPage() {
       const oggi = giornoPiacenza();
       const viewsToday = views.filter((v) => giornoPiacenza(v.viewed_at) === oggi).length;
 
-      const orders30 = orders.length;
-      const orders7 = orders.filter((o) => o.created_at >= since7).length;
+      /**
+       * 22/8/2026 — «I TUOI ORDINI» CONTAVA ANCHE QUELLI ANNULLATI E MAI PAGATI.
+       *
+       * Qui si contavano tutte le righe. Dentro ci sono gli ordini che il
+       * negozio ha rifiutato, quelli che il cliente ha annullato e quelli in
+       * cui il pagamento non e' mai riuscito: cose che al negozio non hanno
+       * portato un euro. Due righe piu' sotto l'incasso li escludeva
+       * (`metricheVenditore` applica la regola giusta), quindi la stessa
+       * schermata mostrava «40 ordini» e un incasso da 31: il negoziante
+       * calcolava uno scontrino medio piu' basso del vero e si convinceva di
+       * vendere male.
+       *
+       * `ordineContaNelFatturato` e' la definizione unica, la stessa che usa
+       * l'incasso: non annullato E pagato.
+       */
+      const ordiniValidi = (orders as never[]).filter(ordineContaNelFatturato);
+      const orders30 = ordiniValidi.length;
+      const orders7 = ordiniValidi.filter((o: { created_at: string }) => o.created_at >= since7).length;
+      /** Quanti ne sono arrivati in tutto, validi o no: e' un altro numero. */
+      const ordiniRicevuti30 = orders.length;
       // Una definizione sola, da lib/metriche-venditore: qui il numero mostrato
       // e' quello che resta AL NEGOZIO, senza spedizione, quota di consegna e
       // commissione. Prima era il totale degli ordini consegnati — soldi che in
@@ -101,6 +127,23 @@ export default function SellerAnalyticsPage() {
       const revenue30 = metricheVenditore(orders as never[]).tuoNettoCents / 100;
       const revenue7 = metricheVenditore(orders as never[], new Date(since7)).tuoNettoCents / 100;
 
+      /**
+       * 22/8/2026 — IL TASSO DI CONVERSIONE DIVIDEVA MELE PER PERE.
+       *
+       * Sopra: gli ordini di TUTTI. Sotto: le visite dei soli visitatori che
+       * hanno accettato i cookie — perche' `product_views` si riempie solo con
+       * il consenso. Due popolazioni diverse una sopra l'altra: piu' persone
+       * rifiutano i cookie, piu' il tasso sembra alto. Un negozio con metà dei
+       * visitatori che dicono no vede un tasso doppio del vero, e su quel
+       * numero decide se abbassare i prezzi.
+       *
+       * Il numeratore adesso e' almeno la popolazione giusta (ordini validi), e
+       * accanto al numero si dichiara quanto vale il campione: finche' le
+       * visite dipendono dal consenso, quel tasso e' un indizio, non una
+       * misura. Portare le visite a un conteggio aggregato senza identita' — che
+       * il consenso non lo richiede — e' il lavoro che chiude davvero il
+       * difetto, ed e' scritto nel referto.
+       */
       const conversionRate = views30 > 0 ? (orders30 / views30) * 100 : 0;
 
       const avgRating = reviews.length > 0
@@ -173,7 +216,7 @@ export default function SellerAnalyticsPage() {
         peakLabel = `${top.hour} e le ${top.hour + 1}`;
       }
 
-      return { views30, views7, viewsToday, orders30, orders7, revenue30, revenue7, conversionRate, avgRating, reviewCount: reviews.length, topProducts, slowProducts, revenueSeries, peakHours, peakLabel };
+      return { views30, views7, viewsToday, orders30, orders7, ordiniRicevuti30, revenue30, revenue7, conversionRate, avgRating, reviewCount: reviews.length, topProducts, slowProducts, revenueSeries, peakHours, peakLabel };
     },
   });
 
@@ -231,7 +274,15 @@ export default function SellerAnalyticsPage() {
       <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         <KpiCard icon={Eye} label="Visite (30gg)" value={analytics.views30.toString()} delta={`${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7gg`} color="primary" />
         <KpiCard icon={ShoppingCart} label="Ordini (30gg)" value={analytics.orders30.toString()} delta={`${analytics.orders7} ultimi 7gg`} color="olive" />
-        <KpiCard icon={TrendingUp} label="Conversion rate" value={`${analytics.conversionRate.toFixed(1)}%`} delta={analytics.conversionRate >= 2 ? 'Sopra la media' : analytics.conversionRate >= 1 ? 'Nella media' : 'Sotto la media'} color={analytics.conversionRate >= 2 ? 'olive' : analytics.conversionRate >= 1 ? 'accent' : 'secondary'} />
+        <KpiCard
+          icon={TrendingUp}
+          label="Conversion rate"
+          value={`${analytics.conversionRate.toFixed(1)}%`}
+          // Il campione, dichiarato: le visite si contano solo su chi accetta i
+          // cookie, quindi questo numero e' un indizio, non una misura.
+          delta={`su ${analytics.views30} visite misurate`}
+          color={analytics.conversionRate >= 2 ? 'olive' : analytics.conversionRate >= 1 ? 'accent' : 'secondary'}
+        />
         <KpiCard icon={Star} label="Rating medio" value={analytics.avgRating > 0 ? analytics.avgRating.toFixed(1) + ' ★' : '—'} delta={analytics.reviewCount > 0 ? `${analytics.reviewCount} recensioni` : 'Nessuna recensione'} color="accent" />
       </div>
 

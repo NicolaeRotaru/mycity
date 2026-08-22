@@ -1,12 +1,14 @@
 'use client';
 
+import { logger } from '@/lib/logger';
+import { ordineContaNelFatturato } from '@/lib/metriche-venditore';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { TrendingUp, Users, ShoppingCart, Package, UserX, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
-import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 
 /**
@@ -55,12 +57,23 @@ export default function AdminFunnelPage() {
       // #217 — L'errore non si butta piu': un cruscotto che dice zero perche'
       // la lettura e' fallita e' peggio di un cruscotto in errore, perche' chi
       // guarda ci crede e decide su quello.
-      const { data: signupsList, error: erroreIscritti } = await supabase
-        .from('profiles')
-        .select('id, created_at')
-        .eq('role', 'buyer')
-        .gte('created_at', daQuando);
+      // 22/8/2026 — Questa lettura si fermava a mille righe senza dirlo: dal
+      // millesimo iscritto in poi il funnel mostrava numeri piu' bassi del
+      // vero, in silenzio. Adesso si legge a finestre finche' finiscono.
+      const { data: signupsList, error: erroreIscritti, troncato: iscrittiTroncati } =
+        await leggiTutteLeRighe<{ id: string; created_at: string }>((da, a) =>
+          supabase
+            .from('profiles')
+            .select('id, created_at')
+            .eq('role', 'buyer')
+            .gte('created_at', daQuando)
+            .order('created_at', { ascending: true })
+            .range(da, a) as unknown as PromiseLike<{ data: { id: string; created_at: string }[] | null; error: { message?: string } | null }>,
+        );
       if (erroreIscritti) throw erroreIscritti;
+      if (iscrittiTroncati) {
+        logger.warn('[funnel] tetto duro raggiunto: il cruscotto mostra un campione, non il totale');
+      }
 
       type Signup = { id: string; created_at: string };
       const userIds = ((signupsList ?? []) as Signup[]).map((u) => u.id);
@@ -69,13 +82,30 @@ export default function AdminFunnelPage() {
       // #93 — gli identificativi degli iscritti passavano tutti nell'indirizzo
       // della richiesta: sopra i due-trecento la richiesta viene rifiutata e il
       // cruscotto mostrerebbe zero ordini. Blocchi da cento.
-      type RigaOrdine = { user_id: string; created_at: string; delivery_status: string };
-      const { data: orders, error: erroreOrdini } = await leggiInBlocchi<RigaOrdine>(userIds, (blocco) =>
+      /**
+       * 22/8/2026 — IL FUNNEL CONTAVA COME PRIMO ORDINE ANCHE UN PAGAMENTO MAI
+       * RIUSCITO.
+       *
+       * Qui si escludevano solo gli annullati. Ma un ordine con carta il cui
+       * pagamento non e' andato a buon fine resta «NEW» e non e' annullato:
+       * entrava nel conto come se quella persona avesse comprato. Il passo
+       * «iscritti che hanno fatto il primo ordine» — cioe' il numero su cui si
+       * giudica se il marketplace funziona — era piu' alto del vero.
+       *
+       * La definizione di «ordine che conta» esiste gia' e sta in un posto solo
+       * (`ordineContaNelFatturato`): non annullato E pagato. E' la stessa che
+       * usano la pagina Guadagni e i numeri del venditore. Tre pagine, un conto.
+       */
+      type RigaOrdine = { user_id: string; created_at: string; delivery_status: string; payment_status: string | null };
+      const { data: ordiniGrezzi, error: erroreOrdini } = await leggiInBlocchi<RigaOrdine>(userIds, (blocco) =>
         supabase
           .from('orders')
-          .select('user_id, created_at, delivery_status')
+          .select('user_id, created_at, delivery_status, payment_status')
           .in('user_id', blocco)
           .neq('delivery_status', 'CANCELED') as unknown as PromiseLike<{ data: RigaOrdine[] | null; error: { message?: string } | null }>,
+      );
+      const orders = (ordiniGrezzi ?? []).filter((o) =>
+        ordineContaNelFatturato(o as unknown as Parameters<typeof ordineContaNelFatturato>[0]),
       );
       if (erroreOrdini) throw erroreOrdini;
 

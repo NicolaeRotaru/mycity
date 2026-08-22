@@ -122,6 +122,12 @@ export const POST = withAuthRateLimit(
      * restituiscono gli ordini di allora invece di crearne altri.
      */
     const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    /**
+     * Cosa tiene insieme gli ordini nati dallo stesso carrello, nei conti.
+     * Se il browser manda la sua chiave si usa quella; altrimenti se ne fa una
+     * qui — l'importante e' che sia UNA per invio, non una per ordine.
+     */
+    const chiaveCarrello = chiaveTentativo || `cod-${crypto.randomUUID()}`;
     if (chiaveTentativo) {
       /**
        * 21/8/2026 — LA CHIAVE SI RIVENDICA PRIMA, NON DOPO.
@@ -756,7 +762,19 @@ export const POST = withAuthRateLimit(
           totalCents: c.totalCents,
           paymentMethod: 'cod',
           sellerId: c.sellerId,
-          checkoutId: chiaveTentativo ?? c.orderId,
+          // 22/8/2026 — LO STESSO CARRELLO PRENDEVA IDENTIFICATIVI DIVERSI.
+          //
+          // Senza la chiave del tentativo qui si ripiegava sull'id DELL'ORDINE:
+          // un carrello da due negozi genera due ordini, quindi due
+          // identificativi diversi per la stessa spesa. Nei conti quella
+          // diventava due persone che comprano una volta invece di una persona
+          // che compra da due negozi — e lo scontrino medio ne usciva
+          // dimezzato.
+          //
+          // `chiaveCarrello` e' una sola per richiesta: o quella mandata dal
+          // browser, o una generata qui. Tutti gli ordini nati da questo invio
+          // portano quella.
+          checkoutId: chiaveCarrello,
         }),
       ),
     ).catch(() => { /* già registrato dentro contaAcquisto */ });
