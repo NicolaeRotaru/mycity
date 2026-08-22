@@ -161,7 +161,7 @@ export default function QuickAiTools({
             onChange={(e) => setLang(e.target.value)}
             disabled={disabled || busy !== null}
             aria-label="Lingua di traduzione"
-            className="bg-transparent py-2 pr-1 text-sm text-ink-700 focus:outline-none"
+            className="bg-transparent py-2 pr-1 text-sm text-ink-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
           >
             {LANGS.map((l) => (
               <option key={l.code} value={l.code}>{l.label}</option>

@@ -148,38 +148,62 @@ RESET ROLE;
 -- =============================================================================
 -- 5. Cento chiamate non fanno cento visualizzazioni
 -- =============================================================================
+-- 22/8/2026 — QUESTI DUE CONTROLLI NON AVEVANO MAI MISURATO NIENTE.
+--
+-- Le cento chiamate si fanno come `anon`, ed e' giusto: e' cosi' che arrivano
+-- dal sito. Ma il contatore veniva LETTO nello stesso blocco, sempre come
+-- `anon` — e le regole per riga di `sponsored_listings` a un anonimo quella
+-- riga non la mostrano. Quindi `conteggio` era NULL, il confronto era NULL, e
+-- il verdetto scambiava il NULL per un verde.
+--
+-- Il tetto sui contatori non e' mai stato verificato da nessuno, pur avendo un
+-- controllo che diceva di verificarlo. Adesso si scrive come anonimo e si legge
+-- da fuori, che e' l'unico modo di vedere il risultato.
 SET LOCAL ROLE anon;
 DO $$
-DECLARE i int; conteggio int;
+DECLARE i int;
 BEGIN
   FOR i IN 1..100 LOOP
     PERFORM public.track_sponsored_impression('d0000000-0000-0000-0000-00000000000d');
   END LOOP;
+END $$;
+RESET ROLE;
+
+DO $$
+DECLARE conteggio int;
+BEGIN
   SELECT impressions INTO conteggio FROM public.sponsored_listings
    WHERE id = 'd0000000-0000-0000-0000-00000000000d';
   INSERT INTO esiti VALUES (
-    'i contatori degli sponsorizzati hanno un tetto', conteggio <= 60 AND conteggio > 0,
-    'dopo 100 chiamate il contatore segna: ' || conteggio || ' (prima ne segnava 100)');
+    'i contatori degli sponsorizzati hanno un tetto',
+    conteggio IS NOT NULL AND conteggio <= 60 AND conteggio > 0,
+    'dopo 100 chiamate il contatore segna: ' || coalesce(conteggio::text, 'NON LETTO')
+      || ' (prima ne segnava 100)');
 END $$;
-RESET ROLE;
 
 -- =============================================================================
 -- 6. Anche i clic hanno il loro tetto, piu' stretto
 -- =============================================================================
 SET LOCAL ROLE anon;
 DO $$
-DECLARE i int; conteggio int;
+DECLARE i int;
 BEGIN
   FOR i IN 1..50 LOOP
     PERFORM public.track_sponsored_click('d0000000-0000-0000-0000-00000000000d');
   END LOOP;
+END $$;
+RESET ROLE;
+
+DO $$
+DECLARE conteggio int;
+BEGIN
   SELECT clicks INTO conteggio FROM public.sponsored_listings
    WHERE id = 'd0000000-0000-0000-0000-00000000000d';
   INSERT INTO esiti VALUES (
-    'i clic degli sponsorizzati hanno un tetto piu'' stretto', conteggio <= 10 AND conteggio > 0,
-    'dopo 50 clic il contatore segna: ' || conteggio);
+    'i clic degli sponsorizzati hanno un tetto piu'' stretto',
+    conteggio IS NOT NULL AND conteggio <= 10 AND conteggio > 0,
+    'dopo 50 clic il contatore segna: ' || coalesce(conteggio::text, 'NON LETTO'));
 END $$;
-RESET ROLE;
 
 -- =============================================================================
 -- Verdetto
@@ -190,7 +214,7 @@ BEGIN
   FOR r IN SELECT * FROM esiti ORDER BY nome LOOP
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
-  SELECT count(*) INTO rossi FROM esiti WHERE NOT ok;
+  SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
   IF rossi > 0 THEN
     RAISE EXCEPTION '% controlli su % sono rossi', rossi, (SELECT count(*) FROM esiti);
   END IF;

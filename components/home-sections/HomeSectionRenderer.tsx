@@ -455,6 +455,7 @@ function HomeBlock({
           {c.heading && <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900 mb-4 text-center">{c.heading}</h2>}
           <div className="relative w-full aspect-video overflow-hidden rounded-2xl border border-cream-300 bg-black max-w-4xl mx-auto">
             {isFile ? (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
               <video
                 src={c.videoUrl}
                 controls
@@ -462,7 +463,16 @@ function HomeBlock({
                 preload="metadata"
                 className="absolute inset-0 w-full h-full object-contain"
               >
-                <track kind="captions" />
+                {/* 22/8/2026 — QUI C'ERA UNA TRACCIA SOTTOTITOLI VUOTA.
+                    Un `<track kind="captions" />` senza `src` non porta un solo
+                    sottotitolo: serviva solo a far tacere il controllo
+                    automatico dell'accessibilità. Il risultato è peggio del
+                    problema: il controllo diceva verde, chi ha bisogno dei
+                    sottotitoli non ne trovava, e nessuno sapeva che mancavano.
+                    Meglio un'assenza onesta — che si vede e si può decidere di
+                    colmare — di una conformità finta.
+                    Quando ci sarà un file vero di sottotitoli, la traccia torna
+                    con il suo `src` e la sua lingua. */}
               </video>
             ) : (
               <iframe

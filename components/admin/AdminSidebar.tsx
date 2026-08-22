@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 
 /** Chiave su cui agganciare un badge "live" (pallino) calcolato da un conteggio. */
 type BadgeKey = 'disputes' | 'sos';
@@ -218,6 +219,9 @@ export function AdminMobileTopbar() {
   const { name, initials, handleSignOut } = useAdminIdentity();
   const badges = useAdminBadgeCounts();
   const [open, setOpen] = useState(false);
+  const cassettoRef = useRef<HTMLDivElement>(null);
+  const pulsanteRef = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(open, cassettoRef, pulsanteRef, () => setOpen(false));
 
   // Chiudi il drawer ad ogni cambio rotta e blocca lo scroll del body quando aperto.
   useEffect(() => { setOpen(false); }, [pathname]);
@@ -233,6 +237,7 @@ export function AdminMobileTopbar() {
       <header className="sticky top-0 z-40 flex items-center justify-between bg-ink-900 px-4 py-3 text-white md:hidden">
         <Link href="/admin/today" aria-label="MyCity Admin"><AdminLogo /></Link>
         <button
+          ref={pulsanteRef}
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Apri menu"
@@ -250,7 +255,15 @@ export function AdminMobileTopbar() {
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <div className="absolute inset-y-0 left-0 flex w-[270px] max-w-[82%] flex-col bg-ink-900 text-white shadow-warm-lg">
+          {/* 22/8/2026 — si dichiarava `aria-modal` e non si comportava da
+              dialogo: niente uscita con Esc, il fuoco restava libero di
+              scappare dietro il velo, e chiudendo non tornava al pulsante che
+              l'aveva aperto. Da tastiera si finiva dietro il pannello senza
+              modo di uscire. L'aggancio esisteva già. */}
+          <div
+            ref={cassettoRef}
+            className="absolute inset-y-0 left-0 flex w-[270px] max-w-[82%] flex-col bg-ink-900 text-white shadow-warm-lg"
+          >
             <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 pb-3.5 pt-4">
               <AdminLogo />
               <button

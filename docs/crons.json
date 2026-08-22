@@ -30,6 +30,12 @@
       "description": "Controlla anomalie operative (ordini bloccati, payout fermi, ecc.)"
     },
     {
+      "id": "riquadra-casse",
+      "endpoint": "GET /api/cron/riquadra-casse",
+      "schedule": "15 1 * * *",
+      "description": "Rifa la quadratura di cassa di ieri e oggi per ogni fattorino che ha consegnato in contanti. Serve perche l'ultima consegna della giornata, chiusa dal browser dopo l'ultima conferma di incasso, non entrava mai nel conto."
+    },
+    {
       "id": "expire-checkouts",
       "endpoint": "GET /api/cron/expire-checkouts",
       "schedule": "*/30 * * * *",

@@ -132,7 +132,7 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
                   placeholder="es. 41.40"
-                  className="w-32 border border-cream-300 rounded-lg px-3 py-2 focus:outline-none focus:border-primary-400"
+                  className="w-32 border border-cream-300 rounded-lg px-3 py-2 focus:outline-none focus:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
                 />
               </label>
               <p className="text-xs text-ink-400 mb-2.5">
@@ -145,7 +145,7 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
               rows={2}
               maxLength={1000}
               placeholder="Nota per il cliente (opzionale)"
-              className="w-full border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400"
+              className="w-full border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
             />
             <div className="flex gap-2 flex-wrap">
               <button

@@ -24,8 +24,17 @@ const ToastProvider = () => {
         duration: 8000,
       });
     };
+    // 22/8/2026 — e il tetto dei 99 pezzi, che prima si scopriva alla cassa.
+    const tetto = (e: Event) => {
+      const motivo = (e as CustomEvent<{ motivo?: string }>).detail?.motivo;
+      toast.info(motivo ?? 'Hai raggiunto il massimo per questo articolo.', { duration: 7000 });
+    };
     window.addEventListener('cart:non-salvato', avvisa);
-    return () => window.removeEventListener('cart:non-salvato', avvisa);
+    window.addEventListener('cart:tetto-raggiunto', tetto);
+    return () => {
+      window.removeEventListener('cart:non-salvato', avvisa);
+      window.removeEventListener('cart:tetto-raggiunto', tetto);
+    };
   }, []);
 
   return <Toaster position="top-right" richColors />;

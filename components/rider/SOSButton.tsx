@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { AlertTriangle, Phone, MapPin, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -31,6 +32,9 @@ type Props = {
 
 export default function SOSButton({ orderId }: Props) {
   const [open, setOpen] = useState(false);
+  const pannelloRef = useRef<HTMLDivElement>(null);
+  const pulsanteRef = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(open, pannelloRef, pulsanteRef, () => setOpen(false));
   const [sending, setSending] = useState(false);
 
   const triggerSOS = async () => {
@@ -92,6 +96,7 @@ export default function SOSButton({ orderId }: Props) {
         resta sopra.
       */}
       <button
+        ref={pulsanteRef}
         onClick={() => setOpen(true)}
         aria-label="SOS emergenza"
         className="fixed bottom-44 right-4 z-emergenza bg-rose-600 hover:bg-rose-700 text-white rounded-full w-14 h-14 shadow-2xl flex items-center justify-center ring-4 ring-rose-200 animate-pulse-slow"
@@ -101,9 +106,21 @@ export default function SOSButton({ orderId }: Props) {
 
       {open && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-warm-lg">
+          {/* 22/8/2026 — QUESTO NON ERA UN DIALOGO, ERA UN PEZZO DI PAGINA.
+              Non si chiudeva con Esc, il fuoco non ci entrava e non ci restava,
+              e nessuno diceva a un lettore di schermo che il resto della pagina
+              era coperto. È il pannello che si apre quando un fattorino è in
+              difficoltà per strada: il momento peggiore per doversi arrangiare.
+              L'aggancio esisteva già, a un file di distanza. */}
+          <div
+            ref={pannelloRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sos-titolo"
+            className="bg-white rounded-2xl w-full max-w-sm shadow-warm-lg"
+          >
             <div className="bg-rose-600 text-white px-5 py-4 rounded-t-2xl flex items-center justify-between">
-              <h2 className="font-bold flex items-center gap-2">
+              <h2 id="sos-titolo" className="font-bold flex items-center gap-2">
                 <AlertTriangle size={20} strokeWidth={2.4} /> Emergenza SOS
               </h2>
               <button onClick={() => setOpen(false)} aria-label="Chiudi"><X size={20} /></button>

@@ -7,6 +7,7 @@ import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
+import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
 
 export const runtime = 'nodejs';
 
@@ -176,7 +177,7 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   }
 
   // Aggiorna riconciliazione giornaliera (include i COD consegnati ma NON confermati).
-  await upsertReconciliation(admin, user.id, today);
+  await aggiornaQuadratura(admin, user.id, today);
 
   // Mismatch → alert agli ADMIN (NON al rider, che è la parte da controllare).
   const delta = body.cashCollectedCents - expectedCents;
@@ -195,88 +196,3 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
 });
 
 type AdminSupabase = ReturnType<typeof import('@/lib/supabase/server').getAdminSupabase>;
-type ReconciliationRow = {
-  total_price: number | string | null;
-  cash_collected_cents: number | null;
-  rider_fee_cents: number | null;
-  shipping_cost: number | string | null;
-  pickup_in_store: boolean | null;
-};
-
-/**
- * Quanto il fattorino trattiene dal contante come proprio compenso (#155).
- *
- * Fonte unica: la usano sia la conferma dell'incasso sia la quadratura di fine
- * giornata, così l'atteso è lo stesso numero in tutti e due i posti. Il
- * ripiego su `shipping_cost` copre gli ordini nati prima della migrazione 111,
- * quando il compenso non aveva una colonna sua — è lo stesso ripiego che fa
- * `releaseRiderPayout`. Sul ritiro in negozio non c'è consegna, quindi non c'è
- * compenso.
- */
-
-/** Mezzanotte locale di quel giorno, espressa in UTC. */
-function inizioGiornoLocale(isoDate: string): Date {
-  // Si parte dalla mezzanotte UTC e si corregge con lo scarto vero del fuso in
-  // quella data: così l'ora legale è gestita dal calendario, non da una costante.
-  const mezzanotteUtc = new Date(`${isoDate}T00:00:00Z`);
-  const scartoMin = scartoFusoMinuti(mezzanotteUtc);
-  return new Date(mezzanotteUtc.getTime() - scartoMin * 60_000);
-}
-
-function scartoFusoMinuti(d: Date): number {
-  const f = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'Europe/Rome', hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
-  }).formatToParts(d);
-  const g = (t: string) => Number(f.find((p) => p.type === t)?.value ?? '0');
-  const locale = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour') % 24, g('minute'));
-  return Math.round((locale - d.getTime()) / 60_000);
-}
-
-async function upsertReconciliation(admin: AdminSupabase, riderId: string, isoDate: string) {
-  // 189 — Prima la finestra era `T00:00:00Z … T23:59:59Z`: sbagliato due volte.
-  // Il fuso (le consegne serali finivano nel giorno dopo) e l'ultimo secondo,
-  // che restava fuori — una consegna alle 23:59:59.400 non veniva contata.
-  // Ora: da mezzanotte locale INCLUSA a mezzanotte locale del giorno dopo ESCLUSA.
-  const start = inizioGiornoLocale(isoDate).toISOString();
-  const end = new Date(inizioGiornoLocale(isoDate).getTime() + 24 * 60 * 60_000).toISOString();
-
-  // 🟡-7: atteso E incassato sono ancorati allo STESSO insieme di ordini —
-  // quelli consegnati quel giorno (per delivered_at). Prima l'incassato usava
-  // cash_confirmed_at: un ordine consegnato a fine giornata e confermato dopo
-  // mezzanotte cadeva in atteso[X] ma incassato[X+1] → falso MISMATCH ricorrente.
-  // Includere i COD consegnati ANCHE se mai confermati (cash_collected_cents=0)
-  // fa emergere come ammanco un rider che non conferma, invece di farlo sparire.
-  const { data: deliveredRows } = await admin
-    .from('orders')
-    .select('total_price, cash_collected_cents, rider_fee_cents, shipping_cost, pickup_in_store')
-    .eq('rider_id', riderId)
-    .eq('payment_method', 'cod')
-    .eq('delivery_status', 'DELIVERED')
-    .gte('delivered_at', start)
-    .lt('delivered_at', end);
-  const rows = (deliveredRows ?? []) as ReconciliationRow[];
-  // 155 — L'atteso e' il contante MENO il compenso che il fattorino si tiene:
-  // e' quello che deve davvero riportare in cassa. Sommare i total_price
-  // interi faceva risultare un ammanco pari al compenso su ogni consegna.
-  const expected = rows.reduce(
-    (s, r) => s + contanteDaRimettereCents(r),
-    0,
-  );
-  const collected = rows.reduce((s, r) => s + Number(r.cash_collected_cents ?? 0), 0);
-
-  const status = Math.abs(expected - collected) <= 50 ? 'OK' : 'MISMATCH';
-
-  await admin
-    .from('cod_reconciliations')
-    .upsert(
-      {
-        rider_id: riderId,
-        for_date: isoDate,
-        expected_cents: expected,
-        collected_cents: collected,
-        status,
-      },
-      { onConflict: 'rider_id,for_date' },
-    );
-}

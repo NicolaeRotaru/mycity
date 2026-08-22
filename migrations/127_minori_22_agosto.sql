@@ -867,3 +867,102 @@ COMMENT ON FUNCTION public.prodotti_con_voto_almeno(numeric) IS
   'il filtro «voto minimo» al database invece che al browser.';
 
 GRANT EXECUTE ON FUNCTION public.prodotti_con_voto_almeno(numeric) TO anon, authenticated;
+
+-- ── ⑲ Il codice sconto a uso unico si bruciava anche senza ordine ─────────
+--
+-- Il coupon si rivendica al checkout, prima di creare l'ordine: è giusto, senza
+-- quella rivendicazione due persone userebbero lo stesso codice a uso unico
+-- nello stesso istante.
+--
+-- Ma quando l'ordine POI non si fa — il cliente annulla, il negozio rifiuta —
+-- il contatore non tornava indietro. Il codice restava consumato per sempre.
+--
+-- Per chi ha ricevuto un buono «una volta sola», questo vuol dire che il buono
+-- è finito senza aver comprato niente, e che se ne accorge premendo «Applica»
+-- e leggendo «codice già usato». La funzione per restituirlo esiste da tempo
+-- (`release_coupon`, che non va mai sotto zero) e non la chiamava nessuno dei
+-- due percorsi di annullamento.
+CREATE OR REPLACE FUNCTION public.cancel_order(p_order_id uuid)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE v_seller_id uuid; v_rider_id uuid; v_buyer_id uuid; current_status text; is_owner boolean;
+        v_wallet_cents int; v_coupon text;
+BEGIN
+  PERFORM set_config('mycity.allow_order_write', '1', true);
+  SELECT (user_id = (SELECT auth.uid())), seller_id, rider_id, user_id, delivery_status,
+         coalesce(wallet_applied_cents, 0), coupon_code
+  INTO is_owner, v_seller_id, v_rider_id, v_buyer_id, current_status, v_wallet_cents, v_coupon
+  FROM public.orders WHERE id = p_order_id;
+  IF v_seller_id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'ORDER_NOT_FOUND'); END IF;
+  IF NOT is_owner THEN RETURN jsonb_build_object('ok', false, 'reason', 'NOT_OWNER'); END IF;
+  IF current_status NOT IN ('NEW') THEN RETURN jsonb_build_object('ok', false, 'reason', 'TOO_LATE', 'status', current_status); END IF;
+  UPDATE public.orders SET delivery_status = 'CANCELED', canceled_at = now() WHERE id = p_order_id;
+  PERFORM public.restore_stock_for_order(p_order_id);
+
+  -- Il credito speso torna al cliente. La chiave rende innocuo un secondo giro.
+  IF v_wallet_cents > 0 THEN
+    PERFORM public.wallet_credit(v_buyer_id, v_wallet_cents, 'order_canceled', 'order_canceled_' || p_order_id::text);
+  END IF;
+
+  -- 22/8/2026 — e torna anche il codice sconto.
+  IF v_coupon IS NOT NULL AND btrim(v_coupon) <> '' THEN
+    PERFORM public.release_coupon(v_coupon);
+  END IF;
+
+  IF v_seller_id IS NOT NULL THEN
+    INSERT INTO public.notifications (user_id, title, body, link) VALUES
+      (v_seller_id, '❌ Ordine annullato dal cliente', 'Il cliente ha annullato l''ordine #' || substr(p_order_id::text, 1, 6) || ' prima della tua conferma.', '/seller/orders/' || p_order_id);
+  END IF;
+  IF v_rider_id IS NOT NULL THEN
+    INSERT INTO public.notifications (user_id, title, body, link) VALUES
+      (v_rider_id, '❌ Ordine annullato', 'L''ordine #' || substr(p_order_id::text, 1, 6) || ' e'' stato annullato.', '/rider');
+  END IF;
+  RETURN jsonb_build_object('ok', true, 'credito_restituito_cents', v_wallet_cents);
+END;
+$function$;
+
+-- Lo stesso per il rifiuto del negozio: è l'altra metà della stessa strada.
+CREATE OR REPLACE FUNCTION public.seller_reject_order(p_order_id uuid, p_reason text DEFAULT NULL::text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE v_buyer_id uuid; current_status text; is_seller boolean; v_wallet_cents int; v_coupon text;
+BEGIN
+  PERFORM set_config('mycity.allow_order_write', '1', true);
+  SELECT (seller_id = (SELECT auth.uid())), user_id, delivery_status,
+         coalesce(wallet_applied_cents, 0), coupon_code
+  INTO is_seller, v_buyer_id, current_status, v_wallet_cents, v_coupon
+  FROM public.orders WHERE id = p_order_id;
+  IF v_buyer_id IS NULL THEN RETURN jsonb_build_object('ok', false, 'reason', 'ORDER_NOT_FOUND'); END IF;
+  IF NOT is_seller THEN RETURN jsonb_build_object('ok', false, 'reason', 'NOT_SELLER'); END IF;
+  IF current_status NOT IN ('NEW', 'ACCEPTED') THEN RETURN jsonb_build_object('ok', false, 'reason', 'TOO_LATE', 'status', current_status); END IF;
+  UPDATE public.orders SET delivery_status = 'CANCELED', canceled_at = now() WHERE id = p_order_id;
+  PERFORM public.restore_stock_for_order(p_order_id);
+
+  IF v_wallet_cents > 0 THEN
+    PERFORM public.wallet_credit(v_buyer_id, v_wallet_cents, 'order_canceled', 'order_canceled_' || p_order_id::text);
+  END IF;
+
+  -- 22/8/2026 — il codice sconto torna a chi non ha comprato niente.
+  IF v_coupon IS NOT NULL AND btrim(v_coupon) <> '' THEN
+    PERFORM public.release_coupon(v_coupon);
+  END IF;
+
+  INSERT INTO public.notifications (user_id, title, body, link) VALUES
+    (v_buyer_id, '❌ Ordine rifiutato dal negozio',
+     COALESCE('Motivo: ' || p_reason, 'Il negozio non puo'' completare il tuo ordine. Niente addebiti.')
+       || CASE WHEN v_wallet_cents > 0
+               THEN ' Il credito MyCity che avevi usato (€' || to_char(v_wallet_cents / 100.0, 'FM999990.00') || ') e'' tornato sul tuo saldo.'
+               ELSE '' END
+       || CASE WHEN v_coupon IS NOT NULL AND btrim(v_coupon) <> ''
+               THEN ' Il codice sconto ' || v_coupon || ' torna utilizzabile.'
+               ELSE '' END,
+     '/orders/' || p_order_id);
+  RETURN jsonb_build_object('ok', true, 'credito_restituito_cents', v_wallet_cents);
+END;
+$function$;

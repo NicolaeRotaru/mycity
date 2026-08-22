@@ -84,7 +84,7 @@ DECLARE rossi int; elenco text;
 BEGIN
   SELECT count(*), coalesce(string_agg(format('%s → %s', e.nome, e.dettaglio), E'\n  '), '')
     INTO rossi, elenco
-  FROM esiti e WHERE NOT e.verde;
+  FROM esiti e WHERE e.verde IS NOT TRUE;
 
   IF rossi > 0 THEN
     RAISE EXCEPTION E'% controllo/i rosso/i:\n  %', rossi, elenco;

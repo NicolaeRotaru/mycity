@@ -145,7 +145,7 @@ BEGIN
   FOR r IN SELECT * FROM esiti ORDER BY nome LOOP
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
-  SELECT count(*) INTO rossi FROM esiti WHERE NOT ok;
+  SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
   IF rossi > 0 THEN
     RAISE EXCEPTION '% controlli rossi in questo file', rossi;
   END IF;

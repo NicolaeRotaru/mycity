@@ -55,7 +55,7 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
                       value={iv[0]}
                       onChange={(e) => setTime(d.key, idx, 0, e.target.value)}
                       aria-label={`${d.label} apertura`}
-                      className="text-sm bg-transparent focus:outline-none"
+                      className="text-sm bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
                     />
                     <span className="text-ink-400">–</span>
                     <input
@@ -63,7 +63,7 @@ export default function StoreHoursEditor({ value, onChange }: Props) {
                       value={iv[1]}
                       onChange={(e) => setTime(d.key, idx, 1, e.target.value)}
                       aria-label={`${d.label} chiusura`}
-                      className="text-sm bg-transparent focus:outline-none"
+                      className="text-sm bg-transparent focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 rounded"
                     />
                     <button
                       type="button"

@@ -18,6 +18,18 @@ const sameLine = (a: { id: string; variantId?: string }, b: { id: string; varian
   a.id === b.id && (a.variantId ?? null) === (b.variantId ?? null);
 
 const KEY = 'cart';
+
+/**
+ * 22/8/2026 — IL CARRELLO NON AVEVA UN TETTO, IL SERVER SÌ.
+ *
+ * Le rotte di ordine rifiutano le quantità sopra 99 (`z.number().max(99)`), e
+ * fanno bene. Ma il carrello lasciava salire quanto si voleva: si arrivava a
+ * cento pezzi, si compilava l'indirizzo, si premeva «Ordina» — e si leggeva un
+ * errore di validazione che non nomina nemmeno l'articolo.
+ *
+ * Il limite adesso sta dove si sceglie la quantità, ed è lo stesso numero.
+ */
+export const MAX_PEZZI_PER_ARTICOLO = 99;
 // Timestamp dell'ultima modifica LOCALE del carrello. Condiviso con
 // CartCrossDeviceSync: il merge cloud↔locale usa "il più recente vince", quindi
 // ogni mutazione locale (aggiunta/rimozione/svuota) deve avanzare questo orologio,
@@ -84,14 +96,29 @@ export const saveCart = (items: CartItem[]): EsitoSalvataggio => {
   return { salvato, motivo };
 };
 
+/** Dice che il tetto è scattato, con il nome dell'articolo. */
+function avvisaTetto(nome?: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('cart:tetto-raggiunto', {
+      detail: {
+        motivo: `Massimo ${MAX_PEZZI_PER_ARTICOLO} pezzi${nome ? ` di «${nome}»` : ''} per ordine. Per una quantità più grande scrivi direttamente al negozio: te la prepara.`,
+      },
+    }),
+  );
+}
+
 export const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
   const cart = getCart();
   const existing = cart.find((c) => sameLine(c, item));
   const qty = item.quantity ?? 1;
   if (existing) {
-    existing.quantity += qty;
+    const voluta = existing.quantity + qty;
+    existing.quantity = Math.min(voluta, MAX_PEZZI_PER_ARTICOLO);
+    if (voluta > MAX_PEZZI_PER_ARTICOLO) avvisaTetto(item.name);
   } else {
-    cart.push({ ...item, quantity: qty });
+    cart.push({ ...item, quantity: Math.min(qty, MAX_PEZZI_PER_ARTICOLO) });
+    if (qty > MAX_PEZZI_PER_ARTICOLO) avvisaTetto(item.name);
   }
   saveCart(cart);
   // Tracking unificato (PostHog + GA4) via façade lib/analytics/events.
@@ -129,6 +156,11 @@ export const updateQuantity = (id: string, quantity: number, variantId?: string)
   if (quantity < 1) return removeFromCart(id, variantId);
   const prima = getCart();
   const riga = prima.find((c) => sameLine(c, { id, variantId }));
+  // 22/8/2026 — il tetto vale anche qui: prima si poteva scrivere la quantità
+  // a mano e superarlo comunque.
+  const voluta = quantity;
+  quantity = Math.min(quantity, MAX_PEZZI_PER_ARTICOLO);
+  if (voluta > MAX_PEZZI_PER_ARTICOLO) avvisaTetto(riga?.name);
   const delta = quantity - (riga?.quantity ?? 0);
   saveCart(prima.map((c) => (sameLine(c, { id, variantId }) ? { ...c, quantity } : c)));
   // #226 — Il cambio di quantita' non si vedeva affatto: nei numeri un
