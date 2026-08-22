@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -24,10 +25,23 @@ type Category = { id: string; slug: string; name: string; parent_id: string | nu
 type SortMode = 'rating' | 'name' | 'most-products';
 
 const fetchStoresData = async () => {
-  const { data: storesRaw, error } = await supabase
-    .from('seller_public_profiles')
-    .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled')
-    .order('store_name');
+  // 22/8/2026 — vedi near/page: senza ripiego, su un database indietro di una
+  // migrazione l'elenco dei negozi esce vuoto invece che senza due bandierine.
+  const SELECT_STORES =
+    'id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
+  const conBandierine = () =>
+    supabase.from('seller_public_profiles').select(SELECT_STORES).order('store_name');
+  const { data: storesRaw, error } = await conRipiegoSchema(
+    'stores/page:seller_public_profiles',
+    conBandierine,
+    () =>
+      stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
+        supabase
+          .from('seller_public_profiles')
+          .select(senzaColonne(SELECT_STORES, COLONNE_124_VISTA))
+          .order('store_name'),
+      ),
+  );
   if (error) throw error;
 
   const stores = (storesRaw ?? []) as Store[];
@@ -36,27 +50,53 @@ const fetchStoresData = async () => {
     return { stores: [], productsByStore: {}, reviewsByStore: {}, countByStore: {}, categoriesByStore: {}, categories: [] };
   }
 
-  // 3 query parallele (era 4 — la query di conteggio era ridondante con
-  // products). Da products deriviamo display + count + categorie per store.
-  const [productsRes, reviewsRes, categoriesRes] = await Promise.all([
-    // #93 — blocchi da cento, altrimenti oltre i due-trecento negozi la
-    // richiesta sfonda l'indirizzo e la pagina si svuota in silenzio.
-    leggiInBlocchi<ProductLite>(storeIds, (blocco) =>
-      supabase
-        .from('products')
-        .select('id, name, price, images, seller_id, category_id')
-        .in('seller_id', blocco)
-        .eq('status', 'available')
-        .order('created_at', { ascending: false })
-        .limit(600) as unknown as PromiseLike<{ data: ProductLite[] | null; error: { message?: string } | null }>,
-    ),
+  /**
+   * 22/8/2026 — IL RIPIEGO GIRAVA SEMPRE, ANCHE QUANDO NON SERVIVA.
+   *
+   * Qui si scaricavano fino a seicento prodotti interi — nome, prezzo,
+   * immagini — e poi, poche righe più sotto, si chiamava `store_cards`, che
+   * dà la stessa cosa fatta meglio. Quando la seconda rispondeva, la prima
+   * veniva buttata via: il download c'era stato lo stesso, su ogni visita di
+   * ogni persona.
+   *
+   * Adesso si chiede prima quella buona. Il ripiego resta scritto — serve il
+   * giorno in cui la migrazione 122 non è applicata su un ambiente — ma gira
+   * solo quando serve davvero.
+   */
+  const [schedeRes, reviewsRes, categoriesRes, categoriePerNegozioRes] = await Promise.all([
+    supabase.rpc('store_cards', { p_per_store: 4, p_limit: 500 }),
     supabase.rpc('store_review_stats', { p_store_ids: storeIds }),
     supabase
       .from('categories')
       .select('id, slug, name, parent_id, icon')
       .is('parent_id', null)
       .order('name'),
+    // Le categorie di ogni negozio le dice il database. Prima si deducevano
+    // dal mucchio di prodotti scaricati, e siccome quel mucchio era capato a
+    // seicento IN TUTTO, i negozi che non pubblicavano da un po' sparivano dal
+    // filtro pur avendo il catalogo pieno.
+    supabase.rpc('categorie_per_negozio'),
   ]);
+
+  const schede = (schedeRes.data ?? []) as Array<{
+    seller_id: string;
+    prodotti: ProductLite[];
+    totale: number;
+  }>;
+
+  // Il ripiego: solo se la funzione non ha risposto.
+  const productsRes =
+    schede.length > 0
+      ? { data: [] as ProductLite[], error: null }
+      : await leggiInBlocchi<ProductLite>(storeIds, (blocco) =>
+          supabase
+            .from('products')
+            .select('id, name, price, images, seller_id, category_id')
+            .in('seller_id', blocco)
+            .eq('status', 'available')
+            .order('created_at', { ascending: false })
+            .limit(600) as unknown as PromiseLike<{ data: ProductLite[] | null; error: { message?: string } | null }>,
+        );
 
   // #89 — Il conteggio vero, negozio per negozio.
   //
@@ -70,10 +110,9 @@ const fetchStoresData = async () => {
   // `store_cards` (migrazione 122) prende i primi quattro prodotti DI OGNI
   // negozio piu' il conteggio vero. Se non e' ancora applicata, si continua col
   // giro di prima: meno preciso, ma niente si rompe.
-  const { data: schede } = await supabase.rpc('store_cards', { p_per_store: 4, p_limit: 500 });
   const contiVeri = new Map<string, number>();
   const prodottiPerNegozio = new Map<string, ProductLite[]>();
-  for (const riga of (schede ?? []) as Array<{ seller_id: string; prodotti: ProductLite[]; totale: number }>) {
+  for (const riga of schede) {
     contiVeri.set(riga.seller_id, riga.totale);
     prodottiPerNegozio.set(riga.seller_id, riga.prodotti ?? []);
   }
@@ -85,6 +124,14 @@ const fetchStoresData = async () => {
   const productsByStore: Record<string, ProductLite[]> = {};
   const countByStore: Record<string, number> = {};
   const categoriesByStore: Record<string, Set<string>> = {};
+  // Le categorie arrivano dal database, complete: non più dedotte da un
+  // campione di prodotti che tagliava fuori chi non pubblicava da un po'.
+  for (const riga of (categoriePerNegozioRes.data ?? []) as Array<{
+    seller_id: string;
+    categorie: string[] | null;
+  }>) {
+    if (riga.categorie?.length) categoriesByStore[riga.seller_id] = new Set(riga.categorie);
+  }
   for (const p of products) {
     (productsByStore[p.seller_id] ??= []).push(p);
     countByStore[p.seller_id] = (countByStore[p.seller_id] ?? 0) + 1;

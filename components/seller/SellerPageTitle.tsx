@@ -3,7 +3,7 @@ import { cn } from '@/lib/cn';
 /**
  * SellerPageTitle — header condiviso delle pagine venditore.
  *
- * Design language (design-system/ui_kits/seller/src/00-ui.txt → PageTitle):
+ * Design language (docs/mockup/ui_kits/seller/src/00-ui.txt → PageTitle):
  * eyebrow uppercase + barretta gradient verticale + titolo serif + sub
  * opzionale + slot azione opzionale allineato a destra. Brand token only.
  */

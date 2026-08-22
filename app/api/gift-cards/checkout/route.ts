@@ -47,6 +47,9 @@ export const POST = withAuthRateLimit(
     }
 
     const amountCents = body.amountEuro * 100;
+    // La chiave del tentativo, mandata dal browser: una per apertura del
+    // modulo, rigenerata dopo ogni esito.
+    const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
     const stripe = getStripe();
 
     try {
@@ -84,7 +87,21 @@ export const POST = withAuthRateLimit(
         // idempotenza. Due clic sul pulsante «Regala» aprivano due sessioni di
         // pagamento per la stessa carta. Ora la finestra è di dieci minuti: due
         // tentativi ravvicinati sono lo stesso tentativo, uno domani è un altro.
-        { idempotencyKey: `giftcard_${user.id}_${amountCents}_${body.recipientEmail}_${Math.floor(Date.now() / 600_000)}` },
+        // 22/8/2026 — LA FINESTRA DI DIECI MINUTI ERA UNA SCELTA SBAGLIATA IN
+        // TUTTE E DUE LE DIREZIONI.
+        //
+        // Due regali identici alla stessa persona nella stessa finestra — due
+        // fratelli, due colleghi che si fanno il regalo di gruppo — venivano
+        // fusi in uno: il secondo non nasceva mai, e nessuno lo diceva. E due
+        // clic a undici minuti di distanza aprivano due pagamenti veri.
+        //
+        // La chiave giusta la manda il browser: una per tentativo, rigenerata
+        // dopo ogni esito. È lo stesso meccanismo del percorso in contanti.
+        // Senza intestazione si ripiega sulla finestra di prima, che è meglio
+        // di niente.
+        { idempotencyKey: chiaveTentativo
+            ? `giftcard_${user.id}_${chiaveTentativo}`
+            : `giftcard_${user.id}_${amountCents}_${body.recipientEmail}_${Math.floor(Date.now() / 600_000)}` },
       );
 
       return NextResponse.json({ url: session.url }, { status: 200 });

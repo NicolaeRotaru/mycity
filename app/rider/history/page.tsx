@@ -16,7 +16,6 @@ type RiderOrderRow = {
   delivery_status: string;
   delivered_at: string | null;
   delivery_city: string | null;
-  delivery_address: string | null;
   payment_method: string | null;
 };
 
@@ -37,11 +36,22 @@ export default function RiderHistoryPage() {
     queryFn: async (): Promise<RiderOrderRow[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      /**
+       * 22/8/2026 — LO STORICO NON HA BISOGNO DEI RECAPITI.
+       *
+       * Questa pagina leggeva `orders` e si portava dietro nome e indirizzo di
+       * ogni cliente servito, per sempre. Il fattorino la apre per una domanda
+       * sola — quanto ho guadagnato — e per rispondere l'indirizzo di casa di
+       * chi ha ordinato a maggio non serve.
+       *
+       * `rider_consegne_storico` è la stessa cosa senza i recapiti. Così la
+       * regola su `orders` ha potuto stringersi a sette giorni dopo la
+       * consegna senza togliere niente a chi lavora.
+       */
       const { data, error } = await supabase
-        .from('orders')
-        .select('id, total_price, shipping_cost, delivery_status, delivered_at, delivery_city, delivery_address, payment_method')
+        .from('rider_consegne_storico')
+        .select('id, total_price, shipping_cost, delivery_status, delivered_at, delivery_city, payment_method')
         .eq('rider_id', user.id)
-        .eq('delivery_status', 'DELIVERED')
         .order('delivered_at', { ascending: false });
       if (error) throw error;
       return (data ?? []) as RiderOrderRow[];
@@ -99,7 +109,7 @@ export default function RiderHistoryPage() {
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-semibold text-ink-900">
-                        {o.delivery_address}{o.delivery_city ? `, ${o.delivery_city}` : ''}
+                        {o.delivery_city ?? 'Piacenza'}
                       </p>
                       <p className="text-[11px] text-ink-400">
                         #{o.id.slice(0, 6).toUpperCase()} · {o.payment_method === 'cod' ? 'Contanti' : 'Carta'}

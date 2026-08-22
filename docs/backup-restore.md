@@ -19,10 +19,17 @@
 > Settings → Billing e Database → Backups, e scrivere qui sotto cosa c'è
 > davvero, con la data.
 >
-> - Piano attivo: _da verificare_
-> - Ripristino al minuto (PITR): _da verificare_
-> - Copie giornaliere, quante conservate: _da verificare_
+> - Piano attivo: _da verificare — serve il pannello Billing, non si vede da qui_
+> - Ripristino al minuto (PITR): _da verificare — stesso posto_
+> - Copie giornaliere, quante conservate: _da verificare — stesso posto_
 > - Data del controllo: _mai fatto_
+>
+> **Controllato il 22/8/2026, e questo si vede:** il database di produzione
+> (progetto «Mycity», regione eu-west-3) gira **PostgreSQL 17**, stato
+> `ACTIVE_HEALTHY`. Non e' un dettaglio da nerd: la copia notturna installava
+> un client PostgreSQL 16, e un client 16 **si rifiuta** di copiare un server
+> 17. La copia notturna stava fallendo. Corretto lo stesso giorno agganciando
+> la versione del client a quella del server.
 >
 > **Quello che è certo, oggi:** la copia notturna di GitHub Actions
 > (`.github/workflows/backup-db.yml`) gira ogni notte alle 02:17 UTC, esce
@@ -58,7 +65,11 @@
 
 ### Free tier
 - Daily backup retained 7 giorni
-- PITR a granularità ~5 min
+- **Nessun ripristino al minuto (PITR).** Qui c'era scritto «PITR a granularità
+  ~5 min», che contraddiceva l'avviso in cima a questo stesso file. Due righe
+  che si escludono a vicenda, nello stesso documento, sul punto che conta di
+  più: qualcuno avrebbe usato quella sbagliata come piano, il giorno peggiore.
+  Tolta il 22/8/2026.
 - Restore: SOLO sull'istanza stessa (sovrascrive prod)
 
 ### Pro tier ($25/mese) — raccomandato dal primo €1k MRR

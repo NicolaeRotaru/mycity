@@ -7,13 +7,28 @@ import { ErrorState } from './ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Store = StoreCardData;
+import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
+
 type ProductLite = ProductPreview & { seller_id: string };
 
 const fetchShowcase = async () => {
-  const { data: storesRaw, error } = await supabase
-    .from('seller_public_profiles')
-    .select('id, store_name, store_address, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled')
-    .limit(6);
+  // 22/8/2026 — ripiego sulle due colonne che nascono con la migrazione 124:
+  // senza, la vetrina in home resta vuota su un database indietro.
+  const SELECT_SHOWCASE =
+    'id, store_name, store_address, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
+  const conBandierine = () =>
+    supabase.from('seller_public_profiles').select(SELECT_SHOWCASE).limit(6);
+  const { data: storesRaw, error } = await conRipiegoSchema(
+    'StoreShowcase:seller_public_profiles',
+    conBandierine,
+    () =>
+      stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
+        supabase
+          .from('seller_public_profiles')
+          .select(senzaColonne(SELECT_SHOWCASE, COLONNE_124_VISTA))
+          .limit(6),
+      ),
+  );
   if (error) throw error;
 
   const stores = (storesRaw ?? []) as Store[];

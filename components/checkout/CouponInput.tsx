@@ -14,6 +14,8 @@ type Props = {
   couponCode: string;
   appliedCoupon: { coupon: Coupon; discount: number; freeShipping: boolean } | null;
   couponError: string | null;
+  /** Vero mentre il codice si sta verificando: il pulsante si spegne. */
+  applying?: boolean;
   onCodeChange: (code: string) => void;
   onApply: () => void;
   onRemove: () => void;
@@ -23,6 +25,7 @@ export function CouponInput({
   couponCode,
   appliedCoupon,
   couponError,
+  applying = false,
   onCodeChange,
   onApply,
   onRemove,
@@ -59,7 +62,12 @@ export function CouponInput({
               aria-describedby={couponError ? 'codice-sconto-errore' : undefined}
               className="flex-1 border p-2 rounded text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700"
             />
-            <Button type="button" onClick={onApply} size="sm">Applica</Button>
+            {/* 22/8/2026 — il pulsante restava premibile durante la verifica:
+                chi non vedeva succedere niente premeva di nuovo, e partivano
+                due controlli in parallelo. */}
+            <Button type="button" onClick={onApply} size="sm" loading={applying} disabled={applying}>
+              {applying ? 'Verifico…' : 'Applica'}
+            </Button>
           </div>
           {couponError && (
             <p id="codice-sconto-errore" role="alert" className="text-xs text-rose-600">{couponError}</p>

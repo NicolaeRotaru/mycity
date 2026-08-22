@@ -3,6 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
+import { titolare } from '@/lib/legal/titolare';
 
 /**
  * Health-check REALE dei servizi, usato dalla pagina pubblica /status.
@@ -96,7 +97,14 @@ async function checkAuth(): Promise<ServiceHealth> {
     return svc('auth', 'Autenticazione', 'Accesso, registrazione, recupero password', 'unknown', null, 'Non configurato');
   }
   const r = await timed(async () => {
-    const res = await fetch(`${url}/auth/v1/health`, { headers: { apikey: key } });
+    // 22/8/2026 — `withTimeout` smette di ASPETTARE, non chiude la chiamata:
+    // la richiesta resta appesa a consumare una connessione, e su un servizio
+    // lento ne restano appese una per ogni giro del controllo di salute. Il
+    // segnale di annullamento la chiude per davvero.
+    const res = await fetch(`${url}/auth/v1/health`, {
+      headers: { apikey: key },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   });
   return svc(
@@ -129,7 +137,11 @@ async function checkEmail(): Promise<ServiceHealth> {
   }
   const r = await timed(async () => {
     // GET read-only: verifica la raggiungibilità dell'API, non invia email.
-    const res = await fetch('https://api.resend.com/domains', { headers: { Authorization: `Bearer ${key}` } });
+    // Vedi checkAuth: `withTimeout` non chiude la chiamata, questo sì.
+    const res = await fetch('https://api.resend.com/domains', {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
   });
   return svc(
@@ -151,6 +163,44 @@ function checkPush(): ServiceHealth {
 }
 
 /**
+ * 22/8/2026 — I DATI DEL TITOLARE NON ERANO DICHIARATI DA NESSUNA PARTE.
+ *
+ * L'informativa privacy, i termini e la pagina dei contatti leggono nove
+ * variabili con dentro nome, indirizzo, partita IVA, PEC e capitale sociale.
+ * Nessuna delle nove era dichiarata fra le variabili del progetto.
+ *
+ * E c'e' un dettaglio che rende il difetto peggiore di quanto sembri: quelle
+ * variabili finiscono dentro il pacchetto al momento in cui il sito viene
+ * COMPILATO. Se mancano in quel momento restano vuote per sempre nel sito
+ * pubblicato — metterle dopo non basta, serve ricompilare. Il codice ripiega su
+ * un generico «MyCity» e omette il resto, quindi la pagina esce senza errori e
+ * sembra a posto.
+ *
+ * Un'informativa privacy senza i dati del titolare non e' un'informativa: e'
+ * quello che un'ispezione guarda per primo.
+ *
+ * Qui non si puo' riempirle — sono decisioni e dati veri di Nicola — ma si puo'
+ * smettere di far finta che vada tutto bene. Se mancano, la salute dice
+ * «degradato» e la pagina lo mostra.
+ */
+function checkTitolare(): ServiceHealth {
+  const dati = titolare();
+  const mancanti: string[] = [];
+  if (!dati.indirizzo) mancanti.push('indirizzo');
+  if (!dati.partitaIva) mancanti.push('partita IVA');
+  if (!dati.pec) mancanti.push('PEC');
+  if (dati.denominazione === 'MyCity') mancanti.push('denominazione');
+  return svc(
+    'titolare', 'Dati del titolare', 'Informativa privacy e termini',
+    mancanti.length === 0 ? 'operational' : 'unknown',
+    null,
+    mancanti.length === 0
+      ? null
+      : `Mancano nelle variabili del progetto: ${mancanti.join(', ')}. Vanno messe PRIMA di ricompilare.`,
+  );
+}
+
+/**
  * Servizi senza i quali il marketplace non funziona: se sono «non configurati»
  * la pagina pubblica NON puo' dire «tutto operativo».
  *
@@ -159,7 +209,7 @@ function checkPush(): ServiceHealth {
  * operativo» — mentre nessun cliente poteva pagare e nessuna conferma d'ordine
  * partiva. Un cartello «funziona tutto» su un negozio con la serranda giu'.
  */
-const SERVIZI_INDISPENSABILI = ['db', 'auth', 'payments', 'email'] as const;
+const SERVIZI_INDISPENSABILI = ['db', 'auth', 'payments', 'email', 'titolare'] as const;
 
 function computeOverall(services: ServiceHealth[]): ServiceStatus {
   if (services.some((s) => s.status === 'outage')) return 'outage';
@@ -191,8 +241,9 @@ async function runServiceChecks(): Promise<SystemHealth> {
     db.status === 'outage' ? 'Piattaforma non raggiungibile' : null,
   );
   const push = checkPush();
+  const titolareOk = checkTitolare();
 
-  const services = [web, db, auth, payments, realtime, email, push];
+  const services = [web, db, auth, payments, realtime, email, push, titolareOk];
   return {
     checkedAt: new Date().toISOString(),
     overall: computeOverall(services),

@@ -26,7 +26,7 @@ type Order = {
   order_items: { id: string; quantity: number }[];
 };
 
-// Gruppi fedeli al mockup (design-system/ui_kits/seller/src/30-orders.txt → SC_GROUPS):
+// Gruppi fedeli al mockup (docs/mockup/ui_kits/seller/src/30-orders.txt → SC_GROUPS):
 // "Completati" include anche gli ordini annullati così la vista copre TUTTI gli stati.
 const STATUS_FILTERS: { label: string; statuses: OrderStatus[] }[] = [
   { label: 'Da fare',     statuses: ['NEW', 'ACCEPTED', 'READY'] },

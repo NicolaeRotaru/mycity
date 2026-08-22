@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { shippingForEuro, shippingCentsFor } from '@/lib/shipping';
 import { FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER } from '@/lib/constants';
-import { haversineKm, riderFee } from '@/lib/geo';
+import { haversineKm, prezzoSpedizioneEuro } from '@/lib/geo';
 
 /**
  * Unit test puri per lib/shipping — FONTE UNICA del costo di spedizione,
@@ -54,7 +54,7 @@ describe('shippingForEuro', () => {
   });
 
   it('usa la tariffa distanza-based quando le coordinate sono note', () => {
-    const expected = riderFee(haversineKm(PC.lat, PC.lng, FAR.lat, FAR.lng));
+    const expected = prezzoSpedizioneEuro(haversineKm(PC.lat, PC.lng, FAR.lat, FAR.lng));
     expect(
       shippingForEuro({
         subtotal: 10,

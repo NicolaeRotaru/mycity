@@ -7,7 +7,7 @@ import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
@@ -487,7 +487,9 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       .update({ stripe_session_id: session.id })
       .eq('id', pending.id);
 
-    return NextResponse.json({ id: session.id, url: session.url }, { status: 200 });
+    // 22/8/2026 — al contratto del progetto, `{ ok: true, data: { … } }`. Qui
+    // rispondeva un oggetto nudo, come la rotta dei contanti prima di ieri.
+    return apiSuccess({ id: session.id, url: session.url });
   } catch (e) {
     logger.error('[stripe] checkout creation failed', e);
     // Rilascia la riserva di stock e marca il pending come CANCELED (no orphan).

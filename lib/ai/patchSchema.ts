@@ -41,3 +41,22 @@ export const PRODUCT_PATCH_PROPERTIES: Record<string, unknown> = {
   },
   status: { type: 'string', enum: ['available', 'draft', 'sold'] },
 };
+
+/**
+ * 22/8/2026 — I CAMPI CHE «MIGLIORA TUTTO» NON DEVE TOCCARE.
+ *
+ * Disponibilita', disponibilita' illimitata e stato del prodotto non sono modi
+ * di raccontare il prodotto: sono decisioni del negoziante. La rotta che
+ * riscrive l'intera scheda aveva una sua copia dello schema, ricopiata a mano,
+ * che questi tre campi non li aveva — ma per dimenticanza, non per scelta: la
+ * copia era stata fatta prima che nascessero.
+ *
+ * Qui la scelta e' dichiarata, e la lista di partenza resta una sola.
+ */
+export const CAMPI_NON_EDITORIALI = ['stock', 'unlimited_stock', 'status'] as const;
+
+export const PROPRIETA_EDITORIALI: Record<string, unknown> = Object.fromEntries(
+  Object.entries(PRODUCT_PATCH_PROPERTIES).filter(
+    ([k]) => !(CAMPI_NON_EDITORIALI as readonly string[]).includes(k),
+  ),
+);

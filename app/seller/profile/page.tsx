@@ -10,6 +10,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import type { StoreHours } from '@/lib/store-hours';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
+import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
 
 /**
  * Profilo negozio = dati di CONTATTO + impostazioni operative/private.
@@ -126,6 +127,11 @@ export default function SellerProfilePage() {
           isLoading={updateContact.isPending}
         />
       </div>
+
+      {/* 22/8/2026 — la rotta che apre il portale Stripe esisteva da sempre e
+          non la chiamava nessuno: il negoziante non aveva alcun modo di
+          cambiare la carta o disdire. */}
+      <GestisciAbbonamento stato={profile?.subscription_status} />
 
       {/* Aspetto e dati della vetrina → si gestiscono nel site builder */}
       <div className="bg-white border border-cream-300 rounded-2xl shadow-warm p-6">

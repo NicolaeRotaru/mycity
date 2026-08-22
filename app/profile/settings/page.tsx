@@ -13,7 +13,9 @@ import {
   Download, FileText, Mail, Hourglass, Undo2, Trash2, Settings,
   type LucideIcon,
 } from 'lucide-react';
-import { friendlyError } from '@/lib/errors';
+// 22/8/2026 — `apiErrorMessage` c'era una copia locale, riga per riga
+// identica a questa. Una copia non resta uguale: quella è sparita.
+import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Field';
@@ -216,7 +218,7 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const corpo = await res.json().catch(() => null);
-        toast.error(extractError(corpo, 'Esportazione non riuscita. Riprova piu tardi.'));
+        toast.error(apiErrorMessage(corpo, 'Esportazione non riuscita. Riprova piu tardi.'));
         return;
       }
       const blob = await res.blob();
@@ -230,15 +232,6 @@ export default function SettingsPage() {
     } catch {
       toast.error('Esportazione non riuscita. Riprova piu tardi.');
     }
-  };
-
-  // Estrae il messaggio d'errore sia dal formato ApiErrors { error: { message } }
-  // sia dal formato legacy { error: string }.
-  const extractError = (body: unknown, fallback: string): string => {
-    const e = (body as { error?: unknown })?.error;
-    if (typeof e === 'string') return e;
-    if (e && typeof e === 'object' && 'message' in e) return String((e as { message: unknown }).message);
-    return fallback;
   };
 
   const handleDeleteAccount = async () => {
@@ -257,7 +250,7 @@ export default function SettingsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(extractError(body, 'Richiesta non riuscita'));
+      if (!res.ok) throw new Error(apiErrorMessage(body, 'Richiesta non riuscita'));
 
       // L'account NON viene eliminato subito: c'è un cooldown di 7 giorni
       // durante il quale l'utente può annullare. NON facciamo signOut così
@@ -286,7 +279,7 @@ export default function SettingsPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(extractError(body, 'Annullamento non riuscito'));
+      if (!res.ok) throw new Error(apiErrorMessage(body, 'Annullamento non riuscito'));
       setPendingDeletion(null);
       toast.success('Eliminazione annullata. Il tuo account resta attivo.');
     } catch (err) {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { shippingForEuro, shippingCentsFor } from '@/lib/shipping';
 import { FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
-import { haversineKm, riderFee } from '@/lib/geo';
+import { haversineKm, prezzoSpedizioneEuro } from '@/lib/geo';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -53,7 +53,7 @@ describe('la spedizione la calcola un posto solo', () => {
       deliveryLat: CASA.lat, deliveryLng: CASA.lng, pickupInStore: false,
     });
     // Il calcolo che stava scritto dentro la pagina del checkout.
-    const comeFacevaLaPagina = riderFee(haversineKm(NEGOZIO.lat, NEGOZIO.lng, CASA.lat, CASA.lng));
+    const comeFacevaLaPagina = prezzoSpedizioneEuro(haversineKm(NEGOZIO.lat, NEGOZIO.lng, CASA.lat, CASA.lng));
     expect(dallaFonteUnica).toBe(comeFacevaLaPagina);
   });
 

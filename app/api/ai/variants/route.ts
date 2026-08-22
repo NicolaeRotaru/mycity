@@ -73,16 +73,31 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!body?.product || typeof body.product !== 'object') {
     return ApiErrors.invalidRequest('Manca la scheda del prodotto.');
   }
-  const fields = (Array.isArray(body.variantableFields) ? body.variantableFields : []).filter(
-    (f): f is VariantField => !!f && typeof f.key === 'string',
-  );
+  // 22/8/2026 — L'ELENCO DEI CAMPI ARRIVAVA DAL BROWSER SENZA NESSUN TETTO.
+  //
+  // `buildProductContext` taglia gli elenchi che compone lui — gli attributi
+  // della categoria, le categorie di primo livello. Questo elenco pero' non
+  // passa di li': arriva gia' composto come testo, dentro la riga di apertura,
+  // e i tagli gli passano accanto. Chi manda la richiesta poteva metterci
+  // dentro mille campi con mille opzioni ciascuno e spingere fuori dalla
+  // finestra del modello tutto il resto della scheda.
+  //
+  // Venti campi variante e trenta opzioni per campo sono gia' piu' di quanti
+  // ne abbia qualunque categoria vera: stesse cifre che usa buildProductContext
+  // per gli elenchi equivalenti.
+  const MAX_CAMPI = 20;
+  const MAX_OPZIONI = 30;
+  const fields = (Array.isArray(body.variantableFields) ? body.variantableFields : [])
+    .filter((f): f is VariantField => !!f && typeof f.key === 'string')
+    .slice(0, MAX_CAMPI);
   if (fields.length === 0) {
     return ApiErrors.invalidRequest('Questa categoria non ha campi che diventano varianti.');
   }
 
   const fieldLines = fields
     .map((f) => {
-      const opts = f.options && f.options.length ? ` [opzioni: ${f.options.join(', ')}]` : ' [valori liberi]';
+      const opzioni = (f.options ?? []).slice(0, MAX_OPZIONI);
+      const opts = opzioni.length ? ` [opzioni: ${opzioni.join(', ')}]` : ' [valori liberi]';
       return `- ${f.key} (${f.label ?? f.key})${opts}`;
     })
     .join('\n');

@@ -11,6 +11,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { contanteDaRimettereCents } from '@/lib/shipping';
+import { giornoLocale } from '@/lib/tempo/giorno-locale';
 
 /**
  * Rimesse contanti COD (🔴-1 slice 2/UI). Elenca i gruppi rider·giorno con ordini
@@ -67,7 +68,11 @@ export default function AdminCodRemittancePage() {
     const map = new Map<string, Group>();
     for (const o of rows) {
       if (!o.delivered_at || !o.rider_id) continue;
-      const date = new Date(o.delivered_at).toISOString().slice(0, 10);
+      // 22/8/2026 — era `toISOString()`, cioè il giorno di Greenwich, mentre
+      // il fattorino quadra sul giorno di Piacenza. Nelle sere d'estate le
+      // consegne dopo le 22 finivano in due giorni diversi, e l'ordine restava
+      // appeso: il negozio non veniva pagato.
+      const date = giornoLocale(new Date(o.delivered_at));
       const key = `${o.rider_id}|${date}`;
       const cents = contanteDaRimettereCents(o);
       const g = map.get(key) ?? {

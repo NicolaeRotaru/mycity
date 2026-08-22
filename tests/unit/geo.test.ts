@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { haversineKm, riderFee, deliveryEtaMinutes, formatEtaWindow } from '@/lib/geo';
+import { haversineKm, prezzoSpedizioneEuro, deliveryEtaMinutes, formatEtaWindow } from '@/lib/geo';
 
 /**
  * Unit test puri per lib/geo — calcoli geografici, fee rider, ETA.
@@ -36,28 +36,28 @@ describe('haversineKm', () => {
   });
 });
 
-describe('riderFee', () => {
+describe('prezzoSpedizioneEuro', () => {
   it('base fee for 0 km', () => {
-    expect(riderFee(0)).toBe(2.5);
+    expect(prezzoSpedizioneEuro(0)).toBe(2.5);
   });
 
   it('base + per_km * distance', () => {
     // 2.5 + 1.2 * 5 = 8.5
-    expect(riderFee(5)).toBe(8.5);
+    expect(prezzoSpedizioneEuro(5)).toBe(8.5);
   });
 
   it('rounds to nearest 0.1', () => {
     // 2.5 + 1.2 * 1.23 = 3.976 → 4.0
-    expect(riderFee(1.23)).toBe(4);
+    expect(prezzoSpedizioneEuro(1.23)).toBe(4);
   });
 
   it('clamps negative distance to 0', () => {
-    expect(riderFee(-5)).toBe(2.5);
+    expect(prezzoSpedizioneEuro(-5)).toBe(2.5);
   });
 
   it('scales linearly', () => {
-    const fee10 = riderFee(10);
-    const fee20 = riderFee(20);
+    const fee10 = prezzoSpedizioneEuro(10);
+    const fee20 = prezzoSpedizioneEuro(20);
     expect(fee20 - fee10).toBeCloseTo(12, 1);
   });
 });

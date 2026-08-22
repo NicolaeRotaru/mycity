@@ -79,42 +79,71 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // #205 — E le foto devono stare sul nostro Storage.
   const scartati: Array<{ nome: string; motivo: string }> = [];
   const payloads: NonNullable<ReturnType<typeof buildDraftProductInsert>>[] = [];
+
+  const nomeDi = (item: (typeof parsed.data.items)[number]) =>
+    String(item.draft.name ?? 'senza nome');
+
+  // Prima passata, senza rete: chi non ha foto sul nostro Storage esce subito.
+  const daControllare: Array<{
+    item: (typeof parsed.data.items)[number];
+    imageUrls: string[];
+  }> = [];
   for (const item of parsed.data.items) {
     const imageUrls = item.imageUrls.filter((u) => fotoDaHostAmmesso(u));
     if (imageUrls.length === 0) {
-      scartati.push({ nome: String(item.draft.name ?? 'senza nome'), motivo: 'foto non caricate su MyCity' });
+      scartati.push({ nome: nomeDi(item), motivo: 'foto non caricate su MyCity' });
       continue;
     }
-    // 22/8/2026 — IL FILTRO CHE CADE NON DEVE FAR CADERE TUTTO IL LOTTO.
-    //
-    // Qui il filtro girava senza rete: se il modello non rispondeva — giu',
-    // chiave scaduta, rete lenta — l'eccezione usciva dal ciclo e faceva
-    // fallire l'INTERA richiesta. Il venditore che stava caricando venti
-    // prodotti li perdeva tutti per colpa del diciannovesimo.
-    //
-    // Adesso quel prodotto finisce fra gli scartati col motivo scritto, e gli
-    // altri diciannove entrano. Il prodotto non passa lo stesso: nel dubbio si
-    // nega, che e' quello che fa anche il filtro quando risponde.
-    let verdetto: Awaited<ReturnType<typeof classifyProductPolicy>>;
-    try {
-      verdetto = await classifyProductPolicy({
-        name: String(item.draft.name ?? ''),
-        description: String(item.draft.description ?? ''),
-        categorySlug: item.draft.category_slug ?? undefined,
-      }, 'catalog-create-bulk-policy');
-    } catch {
+    daControllare.push({ item, imageUrls });
+  }
+
+  // 22/8/2026 — I DODICI CONTROLLI PARTIVANO IN FILA INDIANA.
+  //
+  // Ogni prodotto passa dal filtro dei prodotti vietati prima di entrare nel
+  // catalogo, e ogni filtro e' un'andata e ritorno verso il modello. Erano in
+  // fila: il secondo partiva quando il primo era tornato. Con dodici prodotti
+  // — il massimo che la richiesta accetta — sono dodici attese sommate, e nel
+  // caso peggiore la richiesta scade prima di aver scritto qualsiasi cosa. Il
+  // venditore vede girare la rotellina e poi un errore.
+  //
+  // Adesso partono tutti insieme e si aspetta l'ultimo, non la somma. Dodici
+  // attese in parallelo sono una attesa sola.
+  //
+  // `allSettled` e non `all`: il filtro che cade su un prodotto non deve far
+  // cadere gli altri undici. Quel prodotto finisce fra gli scartati col motivo
+  // scritto, e non entra: nel dubbio si nega, come fa il filtro stesso quando
+  // risponde.
+  const verdetti = await Promise.allSettled(
+    daControllare.map(({ item }) =>
+      classifyProductPolicy(
+        {
+          name: String(item.draft.name ?? ''),
+          description: String(item.draft.description ?? ''),
+          categorySlug: item.draft.category_slug ?? undefined,
+        },
+        'catalog-create-bulk-policy',
+      ),
+    ),
+  );
+
+  // L'ordine di `verdetti` e' quello di `daControllare`: allSettled lo tiene.
+  daControllare.forEach(({ item, imageUrls }, i) => {
+    const esito = verdetti[i];
+    if (esito.status === 'rejected') {
       scartati.push({
-        nome: String(item.draft.name ?? 'senza nome'),
+        nome: nomeDi(item),
         motivo: 'controllo non disponibile in questo momento: riprova fra poco',
       });
-      continue;
+      return;
     }
-    if (!verdetto.allowed) {
-      scartati.push({ nome: String(item.draft.name ?? 'senza nome'), motivo: verdetto.reason });
-      continue;
+    if (!esito.value.allowed) {
+      scartati.push({ nome: nomeDi(item), motivo: esito.value.reason });
+      return;
     }
-    payloads.push(buildDraftProductInsert({ draft: item.draft, imageUrls, categories, sellerId: user.id }));
-  }
+    payloads.push(
+      buildDraftProductInsert({ draft: item.draft, imageUrls, categories, sellerId: user.id }),
+    );
+  });
 
   if (payloads.length === 0) {
     const motivi = scartati.map((s2) => `${s2.nome}: ${s2.motivo}`).join(' · ');

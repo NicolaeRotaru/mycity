@@ -4,6 +4,16 @@ export const NEW_PRODUCT_DAYS = 14;
 
 /** Spedizione flat di fallback quando le coordinate non sono note (€). */
 export const SHIPPING_PER_ORDER = 4.9;
+
+/**
+ * 22/8/2026 — Le due tariffe che compongono il prezzo della spedizione a
+ * distanza. Stavano scritte dentro il corpo di `prezzoSpedizioneEuro()` in lib/geo.ts,
+ * mentre ogni altra grandezza economica del sito vive qui: chi cercava «quanto
+ * costa la spedizione» non le trovava, e la pagina di amministrazione delle
+ * consegne non poteva mostrarle accanto alle altre.
+ */
+export const SPEDIZIONE_BASE_EUR = 2.5;
+export const SPEDIZIONE_PER_KM_EUR = 1.2;
 /**
  * Sconto percentuale per ritiro in negozio.
  *

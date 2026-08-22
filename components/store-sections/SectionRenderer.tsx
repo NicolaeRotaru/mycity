@@ -10,7 +10,25 @@ import ReviewsSection from './ReviewsSection';
 import FeaturedSection from './FeaturedSection';
 import PromotionsSection from './PromotionsSection';
 import ProductGridSection from './ProductGridSection';
-import RichTextSection from './RichTextSection';
+/**
+ * 22/8/2026 — LA LIBRERIA DI PULIZIA VIAGGIAVA SU OGNI VETRINA.
+ *
+ * `RichTextSection` importa `isomorphic-dompurify`, che è pesante. Essendo
+ * importata qui in modo diretto, finiva nel pacchetto di OGNI vetrina — anche
+ * di quelle che non hanno un solo blocco di testo ricco, cioè quasi tutte.
+ *
+ * NON ho tolto la pulizia al momento del disegno, che sarebbe stato il modo
+ * ovvio di alleggerire: significherebbe fidarsi di quello che è già salvato
+ * nel database, e il contenuto scritto PRIMA che la pulizia in scrittura
+ * esistesse resterebbe senza rete. Da qui non posso verificare che sia tutto
+ * pulito — non ho accesso al database vero — quindi la rete resta.
+ *
+ * Quello che si può fare senza rinunciare a niente è caricarla solo quando
+ * serve: chi apre una vetrina senza testo ricco non la scarica affatto.
+ */
+import dynamic from 'next/dynamic';
+
+const RichTextSection = dynamic(() => import('./RichTextSection'), { ssr: false });
 import BannerSection from './BannerSection';
 import CollectionSection from './CollectionSection';
 import GallerySection from './GallerySection';

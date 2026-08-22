@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -90,12 +90,22 @@ export default function GiftCardsPage() {
   });
 
   // Acquisto: paga con carta via Stripe, poi il webhook crea la carta e invia il codice.
+  // Una chiave per tentativo di acquisto, non una finestra temporale.
+  const chiaveTentativo = useRef<string>(crypto.randomUUID());
+
   const buy = useMutation({
     mutationFn: async () => {
       if (!recipientName.trim() || !recipientEmail.trim()) throw new Error('Compila nome e email destinatario');
       const res = await fetch('/api/gift-cards/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          // 22/8/2026 — una chiave per tentativo, rigenerata dopo ogni esito.
+          // Prima il server ne ricavava una da una finestra di dieci minuti:
+          // due regali identici alla stessa persona venivano fusi in uno, e
+          // due clic a undici minuti aprivano due pagamenti veri.
+          'Idempotency-Key': chiaveTentativo.current,
+        },
         body: JSON.stringify({
           amountEuro: amount,
           recipientName: recipientName.trim(),
@@ -107,7 +117,11 @@ export default function GiftCardsPage() {
       if (!res.ok || !json.url) throw new Error(apiErrorMessage(json, 'Errore nel pagamento'));
       window.location.href = json.url as string; // redirect a Stripe Checkout
     },
-    onError: (err: unknown) => toast.error(friendlyError(err)),
+    onError: (err: unknown) => {
+      // Un tentativo finito è finito: il prossimo è un altro regalo.
+      chiaveTentativo.current = crypto.randomUUID();
+      toast.error(friendlyError(err));
+    },
   });
 
   // Riscatto: il codice diventa credito MyCity spendibile.

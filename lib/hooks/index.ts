@@ -14,15 +14,30 @@ export function useLocalStorage<T>(
   key: string,
   initial: T,
 ): [T, (val: T | ((prev: T) => T)) => void] {
-  const [val, setVal] = useState<T>(() => {
-    if (typeof window === 'undefined') return initial;
+  /**
+   * 22/8/2026 — LEGGERE DAL BROWSER NELL'INIZIALIZZATORE ROMPE L'IDRATAZIONE.
+   *
+   * Il server disegna la pagina con `initial`, perché `window` non esiste. Il
+   * browser al primo render legge il valore salvato e disegna qualcos'altro.
+   * React trova due alberi diversi e, invece di aggiornare, ridisegna il ramo
+   * da zero: sulla pillola «Consegna a…» questo si vedeva come un lampo, e
+   * peggio ancora buttava via lo stato locale di chi stava scrivendo.
+   *
+   * Adesso il valore salvato entra DOPO il primo render, in un effetto: il
+   * primo disegno del browser combacia con quello del server, e il valore
+   * vero arriva un istante dopo senza rompere niente.
+   */
+  const [val, setVal] = useState<T>(initial);
+
+  useEffect(() => {
     try {
       const stored = window.localStorage.getItem(key);
-      return stored !== null ? (JSON.parse(stored) as T) : initial;
+      if (stored !== null) setVal(JSON.parse(stored) as T);
     } catch {
-      return initial;
+      /* niente da leggere: si resta sul valore di partenza */
     }
-  });
+    // La chiave non cambia nella vita del componente; se cambiasse, si rilegge.
+  }, [key]);
 
   const set = useCallback(
     (v: T | ((prev: T) => T)) => {

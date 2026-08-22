@@ -65,25 +65,60 @@ async function staleWhileRevalidate(req, cacheName, maxEntries) {
       trimCache(cacheName, maxEntries);
     }
     return res;
-  }).catch(() => cached); // se rete giu', restituisci la cached anche se vecchia
+  }).catch(() =>
+    // 22/8/2026 — QUI SI RESTITUIVA `undefined`, E `respondWith(undefined)` LANCIA.
+    //
+    // Con la rete assente e l'immagine non ancora in cache, `cached` e'
+    // `undefined`: il service worker sollevava un'eccezione invece di lasciar
+    // fallire la sola immagine, e in alcuni browser questo fa saltare la
+    // gestione dell'intera richiesta. Una foto mancante diventava un pezzo di
+    // pagina rotto.
+    //
+    // `Response.error()` e' la risposta giusta: dice «questa non c'e'», il
+    // browser mostra l'immagine rotta e basta, e il resto della pagina vive.
+    cached ?? Response.error(),
+  );
   return cached || fetchPromise;
+}
+
+/**
+ * 22/8/2026 — LE PAGINE PRIVATE FINIVANO IN CACHE.
+ *
+ * `networkFirstHtml` metteva in cache OGNI pagina servita con successo, comprese
+ * quelle dietro l'accesso: i propri ordini, il profilo, la dashboard del
+ * negozio, il pannello di amministrazione.
+ *
+ * Su un computer condiviso — o dopo un cambio di account sullo stesso browser —
+ * quelle pagine tornano fuori dalla cache a chi non le doveva vedere. Non e'
+ * una fuga verso internet: e' una fuga verso la persona seduta dopo di te.
+ */
+const PERCORSI_PRIVATI = ['/orders', '/profile', '/seller', '/rider', '/admin', '/checkout', '/cart'];
+
+function ePrivata(url) {
+  return PERCORSI_PRIVATI.some((p) => url.pathname === p || url.pathname.startsWith(p + '/'));
 }
 
 // Network-first per HTML: prova rete, fallback offline.
 async function networkFirstHtml(req) {
+  const url = new URL(req.url);
+  const privata = ePrivata(url);
   try {
     const res = await fetch(req);
-    if (res.ok && req.url.startsWith(self.location.origin)) {
+    if (res.ok && req.url.startsWith(self.location.origin) && !privata) {
       const cache = await caches.open(HTML_CACHE);
       cache.put(req, res.clone());
       trimCache(HTML_CACHE, MAX_HTML_ENTRIES);
     }
     return res;
   } catch {
-    // Offline: prova cache HTML, poi offline.html
-    const cache = await caches.open(HTML_CACHE);
-    const cached = await cache.match(req);
-    if (cached) return cached;
+    // Offline: prova cache HTML, poi offline.html. Sulle pagine private non si
+    // guarda nemmeno in cache: non ci deve essere niente, e se c'e' e' roba
+    // vecchia di un'altra sessione.
+    if (!privata) {
+      const cache = await caches.open(HTML_CACHE);
+      const cached = await cache.match(req);
+      if (cached) return cached;
+    }
     return caches.match(OFFLINE_URL);
   }
 }

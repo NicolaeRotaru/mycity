@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi, leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 
 /**
  * Admin: Funnel signup → first order + Cohort retention.
@@ -30,7 +31,20 @@ type FunnelData = {
   firstOrderWithin7d: number;
   firstOrderEver: number;
   multipleOrders: number;
-  cohortRetention: { month: string; cohortSize: number; m1: number; m2: number; m3: number }[];
+  /** Un ordine solo, e nessun ordine da 60 giorni. */
+  aRischioChurn: number;
+  /**
+   * `null` su un mese vuol dire «la finestra non e' ancora finita»: a schermo
+   * diventa «—», non «0%». Zero e uno-zero-che-non-si-sa-ancora sono due cose
+   * diverse, e su una tabella di ritenzione la differenza e' tutta.
+   */
+  cohortRetention: {
+    month: string;
+    cohortSize: number;
+    m1: number | null;
+    m2: number | null;
+    m3: number | null;
+  }[];
 };
 
 export default function AdminFunnelPage() {
@@ -136,24 +150,60 @@ export default function AdminFunnelPage() {
         if (userOrders.length > 1) multipleOrders++;
       }
 
-      // Cohort retention (semplice: 3 mesi)
+      // 22/8/2026 — TRE DIFETTI NELLA STESSA TABELLA DELLE COORTI.
+      //
+      // ① I confini dei mesi erano mezzanotte nel fuso di CHI GUARDA. Le date
+      //    di iscrizione, invece, sono a Greenwich. D'estate l'Italia e' due
+      //    ore avanti: chi si iscriveva alle 23 dell'ultimo giorno del mese
+      //    finiva nella coorte del mese dopo. Il resto del sito questo problema
+      //    l'aveva gia' risolto, questa pagina no.
+      //
+      // ② Per il mese in corso le finestre «M+1», «M+2», «M+3» sono nel
+      //    FUTURO. Il conto tornava zero, e a schermo compariva «0%» — che si
+      //    legge «nessuno e' tornato», mentre la verita' e' «non e' ancora
+      //    successo niente da misurare». Adesso quelle caselle dicono «—».
       const now = new Date();
-      const cohortMonths: { month: string; cohortSize: number; m1: number; m2: number; m3: number }[] = [];
+
+      // Il primo del mese, a Piacenza, i mesi fa.
+      const primoDelMeseIndietro = (mesiFa: number): Date => {
+        const [anno, mese] = giornoPiacenza(now).split('-').map(Number);
+        const totale = anno * 12 + (mese - 1) - mesiFa;
+        const a = Math.floor(totale / 12);
+        const m = (totale % 12) + 1;
+        return inizioGiornoPiacenza(`${a}-${String(m).padStart(2, '0')}-01`);
+      };
+
+      type RigaCoorte = {
+        month: string;
+        cohortSize: number;
+        m1: number | null;
+        m2: number | null;
+        m3: number | null;
+      };
+      const cohortMonths: RigaCoorte[] = [];
       for (let i = 3; i >= 0; i--) {
-        const cohortStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-        const cohortEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+        const cohortStart = primoDelMeseIndietro(i);
+        const cohortEnd = primoDelMeseIndietro(i - 1);
+        const etichetta = cohortStart.toLocaleDateString('it-IT', {
+          month: 'short',
+          year: '2-digit',
+          timeZone: 'Europe/Rome',
+        });
         const cohort = ((signupsList ?? []) as Signup[]).filter((u) => {
           const t = new Date(u.created_at);
           return t >= cohortStart && t < cohortEnd;
         });
         if (cohort.length === 0) {
-          cohortMonths.push({ month: cohortStart.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' }), cohortSize: 0, m1: 0, m2: 0, m3: 0 });
+          cohortMonths.push({ month: etichetta, cohortSize: 0, m1: null, m2: null, m3: null });
           continue;
         }
 
-        const activeIn = (offsetMonths: number) => {
-          const winStart = new Date(cohortStart.getFullYear(), cohortStart.getMonth() + offsetMonths, 1);
-          const winEnd = new Date(cohortStart.getFullYear(), cohortStart.getMonth() + offsetMonths + 1, 1);
+        const activeIn = (offsetMonths: number): number | null => {
+          const winStart = primoDelMeseIndietro(i - offsetMonths);
+          const winEnd = primoDelMeseIndietro(i - offsetMonths - 1);
+          // La finestra non e' ancora cominciata, o non e' ancora finita: non
+          // c'e' niente da misurare, e uno zero sarebbe una bugia.
+          if (winEnd > now) return null;
           let active = 0;
           for (const u of cohort) {
             const userOrders = orderMap.get(u.id) ?? [];
@@ -162,14 +212,25 @@ export default function AdminFunnelPage() {
           return active;
         };
 
-        const m1 = activeIn(1);
-        const m2 = activeIn(2);
-        const m3 = activeIn(3);
         cohortMonths.push({
-          month: cohortStart.toLocaleDateString('it-IT', { month: 'short', year: '2-digit' }),
+          month: etichetta,
           cohortSize: cohort.length,
-          m1, m2, m3,
+          m1: activeIn(1),
+          m2: activeIn(2),
+          m3: activeIn(3),
         });
+      }
+
+      // ③ «Acquisto singolo» e «A rischio churn» mostravano lo STESSO numero
+      //    sotto due etichette diverse. Chi legge crede di guardare due
+      //    misure e ne sta guardando una. «A rischio» adesso ha una
+      //    definizione sua: un ordine solo, e nessun ordine da 60 giorni.
+      const SESSANTA_GIORNI = 60 * 86_400_000;
+      let aRischioChurn = 0;
+      for (const u of iscrittiDelPeriodo) {
+        const userOrders = orderMap.get(u.id) ?? [];
+        if (userOrders.length !== 1) continue;
+        if (now.getTime() - userOrders[0].getTime() > SESSANTA_GIORNI) aRischioChurn++;
       }
 
       return {
@@ -177,6 +238,7 @@ export default function AdminFunnelPage() {
         firstOrderWithin7d,
         firstOrderEver,
         multipleOrders,
+        aRischioChurn,
         cohortRetention: cohortMonths,
       };
     },
@@ -191,13 +253,13 @@ export default function AdminFunnelPage() {
   // Segmenti derivati dal funnel già calcolato (nessuna API nuova).
   const newSignups = data.firstOrderWithin7d;          // attivati entro 7gg
   const active = data.multipleOrders;                  // buyer con >1 ordine
-  const oneTime = Math.max(0, data.firstOrderEver - data.multipleOrders); // 1 solo ordine → rischio churn
+  const oneTime = Math.max(0, data.firstOrderEver - data.multipleOrders); // un ordine solo
   const neverOrdered = Math.max(0, data.signups - data.firstOrderEver);   // mai ordinato → inattivi
   const segments: Array<[string, number, string]> = [
     ['Attivati (7gg)', newSignups, 'primary'],
     ['Ricorrenti', active, 'olive'],
     ['Acquisto singolo', oneTime, 'accent'],
-    ['A rischio churn', oneTime, 'secondary'],
+    ['A rischio churn', data.aRischioChurn, 'secondary'],
     ['Mai ordinato', neverOrdered, 'ink'],
   ];
   const chipTone: Record<string, string> = {
@@ -342,17 +404,30 @@ export default function AdminFunnelPage() {
           </thead>
           <tbody className="divide-y divide-cream-100">
             {data.cohortRetention.map((c) => {
-              const m1pct = c.cohortSize > 0 ? (c.m1 / c.cohortSize) * 100 : 0;
-              const m2pct = c.cohortSize > 0 ? (c.m2 / c.cohortSize) * 100 : 0;
-              const m3pct = c.cohortSize > 0 ? (c.m3 / c.cohortSize) * 100 : 0;
-              const color = (pct: number) => pct >= 40 ? 'bg-olive-100 text-olive-800' : pct >= 20 ? 'bg-accent-100 text-accent-800' : pct > 0 ? 'bg-secondary-100 text-secondary-700' : 'text-ink-400';
+              // null = la finestra non e' ancora finita: si scrive «—», mai 0%.
+              const pct = (n: number | null) =>
+                n === null || c.cohortSize === 0 ? null : (n / c.cohortSize) * 100;
+              const color = (p: number) => p >= 40 ? 'bg-olive-100 text-olive-800' : p >= 20 ? 'bg-accent-100 text-accent-800' : p > 0 ? 'bg-secondary-100 text-secondary-700' : 'text-ink-400';
+              const cella = (n: number | null) => {
+                const p = pct(n);
+                if (p === null) {
+                  return (
+                    <span className="text-ink-400" title="Il mese non è ancora finito: non c'è niente da misurare">
+                      —
+                    </span>
+                  );
+                }
+                return (
+                  <span className={`inline-block px-2 py-0.5 rounded ${color(p)}`}>{p.toFixed(0)}%</span>
+                );
+              };
               return (
                 <tr key={c.month}>
                   <td className="px-3 py-2 font-semibold capitalize">{c.month}</td>
                   <td className="px-3 py-2 text-right">{c.cohortSize}</td>
-                  <td className="px-3 py-2 text-right"><span className={`inline-block px-2 py-0.5 rounded ${color(m1pct)}`}>{m1pct.toFixed(0)}%</span></td>
-                  <td className="px-3 py-2 text-right"><span className={`inline-block px-2 py-0.5 rounded ${color(m2pct)}`}>{m2pct.toFixed(0)}%</span></td>
-                  <td className="px-3 py-2 text-right"><span className={`inline-block px-2 py-0.5 rounded ${color(m3pct)}`}>{m3pct.toFixed(0)}%</span></td>
+                  <td className="px-3 py-2 text-right">{cella(c.m1)}</td>
+                  <td className="px-3 py-2 text-right">{cella(c.m2)}</td>
+                  <td className="px-3 py-2 text-right">{cella(c.m3)}</td>
                 </tr>
               );
             })}

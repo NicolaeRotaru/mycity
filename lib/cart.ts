@@ -18,6 +18,18 @@ const sameLine = (a: { id: string; variantId?: string }, b: { id: string; varian
   a.id === b.id && (a.variantId ?? null) === (b.variantId ?? null);
 
 const KEY = 'cart';
+
+/**
+ * 22/8/2026 — IL CARRELLO NON AVEVA UN TETTO, IL SERVER SÌ.
+ *
+ * Le rotte di ordine rifiutano le quantità sopra 99 (`z.number().max(99)`), e
+ * fanno bene. Ma il carrello lasciava salire quanto si voleva: si arrivava a
+ * cento pezzi, si compilava l'indirizzo, si premeva «Ordina» — e si leggeva un
+ * errore di validazione che non nomina nemmeno l'articolo.
+ *
+ * Il limite adesso sta dove si sceglie la quantità, ed è lo stesso numero.
+ */
+export const MAX_PEZZI_PER_ARTICOLO = 99;
 // Timestamp dell'ultima modifica LOCALE del carrello. Condiviso con
 // CartCrossDeviceSync: il merge cloud↔locale usa "il più recente vince", quindi
 // ogni mutazione locale (aggiunta/rimozione/svuota) deve avanzare questo orologio,
@@ -32,28 +44,81 @@ const bumpUpdatedAt = () => {
 export const getCart = (): CartItem[] => {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? '[]');
+    const letto = JSON.parse(localStorage.getItem(KEY) ?? '[]');
+    // 22/8/2026 — se il valore salvato non è un elenco, il carrello viene
+    // restituito com'è e il primo `.map()` esplode in faccia alla persona. Può
+    // succedere per un salvataggio a metà, o per un'altra scheda che ha scritto
+    // sotto la stessa chiave.
+    return Array.isArray(letto) ? letto : [];
   } catch {
     return [];
   }
 };
 
-export const saveCart = (items: CartItem[]) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(KEY, JSON.stringify(items));
+/**
+ * 22/8/2026 — «AGGIUNGI AL CARRELLO» POTEVA NON FARE NIENTE, IN SILENZIO.
+ *
+ * `localStorage.setItem` non è una scrittura che riesce sempre: lancia se lo
+ * spazio del browser è pieno, e in navigazione privata su alcuni browser lancia
+ * comunque. Qui non era protetta, quindi l'eccezione risaliva fino a chi aveva
+ * premuto il pulsante: nessun prodotto aggiunto, nessun messaggio, niente.
+ *
+ * Il carrello resta comunque in memoria per questa visita — l'evento parte lo
+ * stesso — ma la persona deve sapere che al prossimo giro non lo ritrova.
+ */
+export type EsitoSalvataggio = { salvato: boolean; motivo?: string };
+
+let ultimoAvviso = 0;
+
+export const saveCart = (items: CartItem[]): EsitoSalvataggio => {
+  if (typeof window === 'undefined') return { salvato: false };
+
+  let salvato = true;
+  let motivo: string | undefined;
+  try {
+    localStorage.setItem(KEY, JSON.stringify(items));
+  } catch (e) {
+    salvato = false;
+    motivo =
+      'Il browser non riesce a salvare il carrello. Libera spazio, oppure esci dalla navigazione privata: adesso funziona, ma alla prossima visita non lo ritrovi.';
+    // Una volta ogni cinque minuti: chi aggiunge dieci prodotti non merita
+    // dieci avvisi identici.
+    const ora = Date.now();
+    if (ora - ultimoAvviso > 5 * 60_000) {
+      ultimoAvviso = ora;
+      window.dispatchEvent(new CustomEvent('cart:non-salvato', { detail: { motivo, errore: e } }));
+    }
+  }
+
   bumpUpdatedAt();
   window.dispatchEvent(new Event('cart:updated'));
   void syncAbandonedCart(items);
+  return { salvato, motivo };
 };
+
+/** Dice che il tetto è scattato, con il nome dell'articolo. */
+function avvisaTetto(nome?: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('cart:tetto-raggiunto', {
+      detail: {
+        motivo: `Massimo ${MAX_PEZZI_PER_ARTICOLO} pezzi${nome ? ` di «${nome}»` : ''} per ordine. Per una quantità più grande scrivi direttamente al negozio: te la prepara.`,
+      },
+    }),
+  );
+}
 
 export const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number }) => {
   const cart = getCart();
   const existing = cart.find((c) => sameLine(c, item));
   const qty = item.quantity ?? 1;
   if (existing) {
-    existing.quantity += qty;
+    const voluta = existing.quantity + qty;
+    existing.quantity = Math.min(voluta, MAX_PEZZI_PER_ARTICOLO);
+    if (voluta > MAX_PEZZI_PER_ARTICOLO) avvisaTetto(item.name);
   } else {
-    cart.push({ ...item, quantity: qty });
+    cart.push({ ...item, quantity: Math.min(qty, MAX_PEZZI_PER_ARTICOLO) });
+    if (qty > MAX_PEZZI_PER_ARTICOLO) avvisaTetto(item.name);
   }
   saveCart(cart);
   // Tracking unificato (PostHog + GA4) via façade lib/analytics/events.
@@ -91,6 +156,11 @@ export const updateQuantity = (id: string, quantity: number, variantId?: string)
   if (quantity < 1) return removeFromCart(id, variantId);
   const prima = getCart();
   const riga = prima.find((c) => sameLine(c, { id, variantId }));
+  // 22/8/2026 — il tetto vale anche qui: prima si poteva scrivere la quantità
+  // a mano e superarlo comunque.
+  const voluta = quantity;
+  quantity = Math.min(quantity, MAX_PEZZI_PER_ARTICOLO);
+  if (voluta > MAX_PEZZI_PER_ARTICOLO) avvisaTetto(riga?.name);
   const delta = quantity - (riga?.quantity ?? 0);
   saveCart(prima.map((c) => (sameLine(c, { id, variantId }) ? { ...c, quantity } : c)));
   // #226 — Il cambio di quantita' non si vedeva affatto: nei numeri un

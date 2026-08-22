@@ -148,6 +148,8 @@ export class AiCallError extends Error {
     readonly feature: string,
     readonly status: number | undefined,
     readonly cause?: unknown,
+    /** Secondi di attesa dichiarati da Anthropic, quando l'header c'è. */
+    readonly retryAfterSec?: number,
   ) {
     super(`AI call failed (${feature}, status=${status ?? 'n/a'})`);
     this.name = 'AiCallError';
@@ -160,12 +162,45 @@ function extractStatus(err: unknown): number | undefined {
     : undefined;
 }
 
+/**
+ * 22/8/2026 — QUANTO ASPETTARE, DETTO DA CHI CI STA LIMITANDO.
+ *
+ * Quando Anthropic ci limita rispondeva sempre «riprova fra un minuto», una
+ * costante scritta nel codice, senza nessun rapporto con la finestra vera. Se
+ * la finestra era di dieci secondi il venditore aspettava per niente; se era
+ * di cinque minuti riprovava quattro volte a vuoto.
+ *
+ * L'header `retry-after` di quella risposta lo dice. Qui lo si legge — dagli
+ * `Headers` del fetch o da un oggetto semplice, perché l'SDK usa entrambe le
+ * forme — e si accetta solo un numero di secondi sensato: sotto zero o sopra
+ * l'ora non è un'attesa, è un valore rotto.
+ */
+export function extractRetryAfter(err: unknown): number | undefined {
+  if (typeof err !== 'object' || err === null || !('headers' in err)) return undefined;
+  const headers = (err as { headers?: unknown }).headers;
+  let grezzo: unknown;
+  if (headers instanceof Headers) grezzo = headers.get('retry-after');
+  else if (typeof headers === 'object' && headers !== null) {
+    grezzo = (headers as Record<string, unknown>)['retry-after'];
+  }
+  const secondi = Number(grezzo);
+  if (!Number.isFinite(secondi) || secondi <= 0 || secondi > 3600) return undefined;
+  return Math.ceil(secondi);
+}
+
 /** Mappa errori SDK → ApiErrors. Non logga MAI l'errore raw. */
 export function mapAiError(err: unknown, feature: string): NextResponse {
   const status = err instanceof AiCallError ? err.status : extractStatus(err);
   logger.error('AI call failed', { feature, status }); // solo status, mai raw
   if (status === 401) return ApiErrors.unavailable('Servizio AI non disponibile.');
-  if (status === 429) return ApiErrors.rateLimited(60);
+  if (status === 429) {
+    // L'attesa la dichiara Anthropic; 60 secondi solo se non la dichiara.
+    // Il margine casuale evita che tutti i venditori fermati insieme
+    // ripartano nello stesso identico istante.
+    const dichiarata =
+      err instanceof AiCallError ? err.retryAfterSec : extractRetryAfter(err);
+    return ApiErrors.rateLimited((dichiarata ?? 60) + Math.floor(Math.random() * 5));
+  }
   if (status === 503) return ApiErrors.unavailable('Budget AI giornaliero esaurito. Riprova domani.');
   return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
 }
@@ -194,7 +229,7 @@ export async function runMessage<TInput = unknown>(
       ...(args.tool_choice ? { tool_choice: args.tool_choice } : {}),
     });
   } catch (err) {
-    throw new AiCallError(args.feature, extractStatus(err), err);
+    throw new AiCallError(args.feature, extractStatus(err), err, extractRetryAfter(err));
   }
 
   // Parsing union-safe dei content block.

@@ -81,11 +81,22 @@ export default function MessagesListPage() {
     if (!userId) return;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     try {
+      // 22/8/2026 — l'ascolto era senza filtro: arrivava un avviso per ogni
+      // cambiamento su `conversations`, comprese quelle fra sconosciuti. Il
+      // filtro Realtime accetta una colonna sola e qui l'appartenenza sta su
+      // due, quindi si aprono due ascolti sullo stesso canale.
       channel = supabase
         .channel(`conv-list-${userId}-${Date.now()}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
-          refetchRef.current();
-        })
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'conversations', filter: `buyer_id=eq.${userId}` },
+          () => { refetchRef.current(); },
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'conversations', filter: `seller_id=eq.${userId}` },
+          () => { refetchRef.current(); },
+        )
         .subscribe();
     } catch (err) {
       logger.warn('[messages-list] realtime subscribe failed', err);

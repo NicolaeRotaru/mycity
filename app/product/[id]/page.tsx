@@ -382,7 +382,20 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
     ? (selectedVariant ? selectedVariant.stock : undefined)
     : (product.stock ?? undefined);
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
-  const isOutOfStock = stock === 0;
+  /**
+   * 22/8/2026 — CON LE VARIANTI TUTTE ESAURITE LA BARRA DICEVA «DISPONIBILE».
+   *
+   * Finché nessuna variante è scelta, `stock` è `undefined`: non zero, non un
+   * numero. I due rami dell'etichetta guardavano solo «è zero?» e «è basso?»,
+   * quindi `undefined` cadeva nel ramo buono e usciva «Disponibile · pronto per
+   * la consegna» — su un prodotto di cui non c'era più una sola taglia.
+   *
+   * La persona sceglieva le opzioni una per una e le trovava tutte spente,
+   * dopo che le era stato detto che il prodotto c'era.
+   */
+  const tutteLeVariantiEsaurite =
+    hasVariants && variants.length > 0 && variants.every((v) => v.stock === 0);
+  const isOutOfStock = stock === 0 || tutteLeVariantiEsaurite;
   const canAdd = !isOutOfStock && !needsVariantChoice && mayPurchase;
 
   // Marchi di qualità (DOP/DOC/IGP/Bio/Vegano…) derivati da tag + attributi.
@@ -844,6 +857,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <p className="text-xs">
               {isOutOfStock ? (
                 <span className="text-secondary-700 font-bold">Esaurito</span>
+              ) : needsVariantChoice ? (
+                // Nessuna variante scelta: la disponibilità non si sa ancora, e
+                // dirla sarebbe inventarla.
+                <span className="text-ink-600 font-semibold">
+                  Scegli le opzioni per vedere la disponibilità
+                </span>
               ) : isLowStock ? (
                 <span className="text-secondary-700 font-bold inline-flex items-center gap-1"><Flame size={13} strokeWidth={2.4} aria-hidden /> {stock === 1 ? 'Ultimo pezzo' : `Solo ${stock} rimasti`}</span>
               ) : (

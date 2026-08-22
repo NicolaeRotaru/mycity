@@ -1506,6 +1506,7 @@ export interface Database {
           network_status: string | null;
           three_d_secure: string | null;
           created_at: string;
+          stripe_event_id: string | null;
         };
         Insert: {
           id?: string;
@@ -1519,6 +1520,7 @@ export interface Database {
           network_status?: string | null;
           three_d_secure?: string | null;
           created_at?: string;
+          stripe_event_id?: string | null;
         };
         Update: {
           id?: string;
@@ -1532,6 +1534,7 @@ export interface Database {
           network_status?: string | null;
           three_d_secure?: string | null;
           created_at?: string;
+          stripe_event_id?: string | null;
         };
         Relationships: [];
       };

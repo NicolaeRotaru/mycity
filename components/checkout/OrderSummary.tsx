@@ -124,9 +124,15 @@ export function OrderSummary({
             {paymentMethod === 'card'
               ? <Lock size={18} strokeWidth={2.4} aria-hidden />
               : <Check size={18} strokeWidth={2.4} aria-hidden />}
+            {/* 22/8/2026 — «Conferma ordine» non dice che stai prendendo un
+                impegno a pagare. Sul ramo contanti il pagamento avviene dopo,
+                alla consegna, ed è proprio per questo che il pulsante lo deve
+                dire: chi preme deve sapere che al fattorino dovrà dare dei
+                soldi. Il Codice del Consumo chiede che il pulsante finale
+                riporti una formula inequivocabile. */}
             {paymentMethod === 'card'
               ? `Paga con carta · ${formatPrice(total)}`
-              : `Conferma ordine · ${formatPrice(total)}`}
+              : `Ordina e paga alla consegna · ${formatPrice(total)}`}
           </span>
         )}
       </button>

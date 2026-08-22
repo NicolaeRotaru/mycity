@@ -38,6 +38,8 @@ export const queryKeys = {
     grid:    (filters: Record<string, unknown>) =>
                               [...queryKeys.products.all, filters] as const,
     ratings: (ids: string)   => ['products-ratings', ids] as const,
+    // 22/8/2026 — i prodotti col voto minimo: filtro chiesto al database.
+    conVotoAlmeno: (min: number) => ['products-voto-almeno', min] as const,
     detail:  (id: string)    => [...queryKeys.products.all, 'detail', id] as const,
     search:  (q: string, filters: Record<string, unknown> = {}) =>
                               [...queryKeys.products.all, 'search', q, filters] as const,
@@ -56,6 +58,9 @@ export const queryKeys = {
     nearby:  (lat: number, lng: number) =>
                               [...queryKeys.stores.all, 'nearby', lat, lng] as const,
     page:                    ['stores', 'page-v4'] as const,
+    // 22/8/2026 — i negozi aperti adesso, chiesti al database invece che
+    // dedotti nel browser da un campione di prodotti.
+    apertiOra:               ['stores', 'aperti-ora'] as const,
     showcase:                ['stores', 'showcase-v2'] as const,
     nearV2:                  ['near-stores-v2'] as const,
   },

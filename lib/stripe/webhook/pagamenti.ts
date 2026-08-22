@@ -18,19 +18,51 @@
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
+import { getStripe } from '@/lib/stripe/client';
 import { notifyAdmins } from './comune';
 
 /** payment_intent.payment_failed → pagamento non riuscito: log (l'ordine non viene creato). */
-export async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent) {
+export async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent, eventId?: string) {
   logger.warn('[stripe] payment_intent.payment_failed', {
     paymentIntent: pi.id,
     lastError: pi.last_payment_error?.message ?? null,
   });
-  await registraTentativoPagamento(pi, 'failed');
+  await registraTentativoPagamento(pi, 'failed', eventId);
 }
 
-export async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
-  await registraTentativoPagamento(pi, 'succeeded');
+export async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent, eventId?: string) {
+  await registraTentativoPagamento(pi, 'succeeded', eventId);
+}
+
+/**
+ * 22/8/2026 — LA CHARGE NON ARRIVA MAI ESPANSA, QUINDI IL 3D SECURE ERA SEMPRE VUOTO.
+ *
+ * `pi.latest_charge` in un webhook è un identificativo, non un oggetto: Stripe
+ * espande solo quello che qualcuno ha chiesto, e qui non lo chiedeva nessuno.
+ * Il codice se ne accorgeva («quando non c'è restano vuoti») e scriveva NULL —
+ * con la conseguenza che `three_d_secure` e `network_status` non sono MAI stati
+ * valorizzati, su nessuna riga.
+ *
+ * Sono le due colonne che servono a capire perché una carta viene rifiutata:
+ * senza, la tabella dice che il pagamento è fallito ma non dice di chi è la
+ * colpa — nostra, della banca, o del cliente che non ha completato la verifica.
+ *
+ * Qui la charge si chiede davvero. Resta best-effort: se la chiamata a Stripe
+ * fallisce si scrive lo stesso quello che si ha, perché un webhook che va in
+ * errore viene ritentato e ritentato.
+ */
+async function conLaChargeEspansa(pi: Stripe.PaymentIntent): Promise<Stripe.PaymentIntent> {
+  if (typeof pi.latest_charge === 'object' && pi.latest_charge !== null) return pi;
+  if (!pi.latest_charge) return pi;
+  try {
+    return await getStripe().paymentIntents.retrieve(pi.id, { expand: ['latest_charge'] });
+  } catch (e) {
+    logger.warn('[stripe] charge non recuperata: 3D Secure e esito di rete restano vuoti', {
+      paymentIntent: pi.id,
+      e,
+    });
+    return pi;
+  }
 }
 
 /**
@@ -48,20 +80,26 @@ export async function handlePaymentIntentSucceeded(pi: Stripe.PaymentIntent) {
 export async function registraTentativoPagamento(
   pi: Stripe.PaymentIntent,
   esito: 'succeeded' | 'failed',
+  eventId?: string,
 ): Promise<void> {
   try {
     const admin = getAdminSupabase();
-    const errore = pi.last_payment_error;
+    const pieno = await conLaChargeEspansa(pi);
+    const errore = pieno.last_payment_error;
     const pendingId = typeof pi.metadata?.pending_checkout_id === 'string'
       ? pi.metadata.pending_checkout_id
       : null;
     // La charge arriva espansa solo se qualcuno l'ha chiesto: quando c'e' si
     // legge l'esito di rete e quello del 3D Secure, quando non c'e' restano
     // vuoti. Meglio un campo vuoto che un campo riempito con la cosa sbagliata.
-    const charge = typeof pi.latest_charge === 'object' && pi.latest_charge !== null
-      ? (pi.latest_charge as Stripe.Charge)
+    const charge = typeof pieno.latest_charge === 'object' && pieno.latest_charge !== null
+      ? (pieno.latest_charge as Stripe.Charge)
       : null;
     const { error } = await admin.from('payment_attempts').insert({
+      // 22/8/2026 — la deduplicazione passa dall'EVENTO, non dal pagamento:
+      // lo stesso pagamento può avere più rifiuti diversi, e contarne uno solo
+      // falsava il tasso di autorizzazione verso l'alto.
+      stripe_event_id: eventId ?? null,
       payment_intent_id: pi.id,
       pending_checkout_id: pendingId,
       user_id: typeof pi.metadata?.buyer_user_id === 'string' ? pi.metadata.buyer_user_id : null,

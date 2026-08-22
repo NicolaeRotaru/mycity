@@ -25,6 +25,9 @@ vi.mock('@supabase/supabase-js', () => ({
 
 vi.mock('@/lib/supabase/server', () => ({
   getCurrentUser: vi.fn(),
+  // 22/8/2026 — chi entra col cookie adesso riceve anche il client che porta
+  // la sua sessione: senza, la query dopo arrivava al database da sconosciuta.
+  getServerSupabase: vi.fn(async () => ({ from: vi.fn() })),
   getAdminSupabase: vi.fn(() => ({
     from: vi.fn(() => ({
       select: vi.fn(() => ({

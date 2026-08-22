@@ -90,15 +90,25 @@ const StoreMediaCarousel = ({
       {media.length > 1 && (
         <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5 z-10">
           {media.map((_, i) => (
+            /* 22/8/2026 — il pallino era 8 pixel, e 8 pixel su un telefono non
+               si prendono: la soglia riconosciuta è 24, e sotto quella si
+               sbaglia bersaglio o si preme due volte. Il pallino resta piccolo
+               a vedersi; è l'area premibile che cresce, invisibile intorno. */
             <button
               key={i}
               type="button"
               onClick={(e) => { e.preventDefault(); scrollTo(i); }}
               aria-label={`Slide ${i + 1}`}
-              className={`w-2 h-2 rounded-full transition-all ${
-                i === active ? 'bg-white w-6' : 'bg-white/50 hover:bg-white/80'
-              }`}
-            />
+              aria-current={i === active ? 'true' : undefined}
+              className="w-6 h-6 flex items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <span
+                aria-hidden
+                className={`h-2 rounded-full transition-all ${
+                  i === active ? 'bg-white w-6' : 'bg-white/50 w-2 hover:bg-white/80'
+                }`}
+              />
+            </button>
           ))}
         </div>
       )}

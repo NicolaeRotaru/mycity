@@ -8,8 +8,10 @@ import {
   PICKUP_DISCOUNT_PERCENT,
   RITIRO_IN_NEGOZIO_ATTIVO,
   PLATFORM_DELIVERY_FEE_CENTS,
+  SPEDIZIONE_BASE_EUR,
+  SPEDIZIONE_PER_KM_EUR,
 } from '@/lib/constants';
-import { riderFee } from '@/lib/geo';
+import { prezzoSpedizioneEuro } from '@/lib/geo';
 import { formatPrice } from '@/lib/format';
 import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
 
@@ -25,13 +27,13 @@ import { AdminPageTitle, AdminStatCard } from '@/components/admin/AdminUI';
  * Differenza voluta dal mockup (60-content · DeliveryConfig): il mockup mostra
  * "zone per CAP" con tariffe €/km editabili. Nel prodotto reale non esistono
  * zone CAP: la tariffa di consegna è calcolata per DISTANZA (haversine →
- * riderFee) quando le coordinate sono note, con un flat di fallback. Mostriamo
+ * prezzoSpedizioneEuro) quando le coordinate sono note, con un flat di fallback. Mostriamo
  * la regola reale, non una UI inventata.
  */
 
-// Campioni di tariffa distanza calcolati con la funzione REALE riderFee(km):
+// Campioni di tariffa distanza calcolati con la funzione REALE prezzoSpedizioneEuro(km):
 // così la tabella riflette esattamente quanto addebitato al checkout.
-const DISTANCE_SAMPLES = [1, 2, 3, 5, 8].map((km) => ({ km, fee: riderFee(km) }));
+const DISTANCE_SAMPLES = [1, 2, 3, 5, 8].map((km) => ({ km, fee: prezzoSpedizioneEuro(km) }));
 
 export default function AdminDeliveryPage() {
   return (
@@ -55,6 +57,22 @@ export default function AdminDeliveryPage() {
           tone="primary"
           label="Flat di fallback"
           value={formatPrice(SHIPPING_PER_ORDER)}
+        />
+        {/* 22/8/2026 — le due tariffe che compongono il prezzo a distanza
+            stavano dentro il corpo della funzione, e qui non si vedevano: chi
+            apriva questa pagina per sapere «quanto costa la spedizione»
+            leggeva solo la soglia e il flat. */}
+        <AdminStatCard
+          icon={Truck}
+          tone="primary"
+          label="Base della tariffa a distanza"
+          value={formatPrice(SPEDIZIONE_BASE_EUR)}
+        />
+        <AdminStatCard
+          icon={Truck}
+          tone="primary"
+          label="Al chilometro"
+          value={formatPrice(SPEDIZIONE_PER_KM_EUR)}
         />
         <AdminStatCard
           icon={Banknote}

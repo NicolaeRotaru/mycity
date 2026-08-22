@@ -95,9 +95,46 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
    * `placeholderData` tiene a schermo quelli di prima mentre arrivano i nuovi:
    * la griglia non sparisce e la pagina non si muove.
    */
+  /**
+   * 22/8/2026 — LE TRE DOMANDE LE FA IL DATABASE, PRIMA.
+   *
+   * «Aperto adesso» e «voto minimo» si applicavano nel browser, sulle righe
+   * gia' arrivate. Siccome tagliare dopo avrebbe accorciato l'elenco, si
+   * chiedevano quattro volte le righe che servivano — fino a quattrocento
+   * prodotti interi, con le foto, per mostrarne novantasei. E con tre filtri
+   * stretti anche quattrocento potevano non bastare: l'elenco usciva corto
+   * senza che nessuno lo dicesse.
+   */
+  const { data: apertiOra } = useQuery<string[]>({
+    queryKey: queryKeys.stores.apertiOra,
+    enabled: !!onlyOpenStores,
+    // Un negozio apre e chiude a ore tonde: cinque minuti di memoria evitano
+    // una domanda a ogni scorrimento senza far sbagliare nessuno.
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const { data } = await supabase.rpc('negozi_aperti_adesso');
+      return ((data ?? []) as Array<{ seller_id: string }>).map((r) => r.seller_id);
+    },
+  });
+
+  const { data: idsColVoto } = useQuery<string[]>({
+    queryKey: queryKeys.products.conVotoAlmeno(minRating ?? 0),
+    enabled: minRating !== undefined && minRating > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data } = await supabase.rpc('prodotti_con_voto_almeno', { p_min: minRating });
+      return ((data ?? []) as Array<{ product_id: string }>).map((r) => r.product_id);
+    },
+  });
+
   const { data: products = [], isLoading, isError, refetch, isFetching } = useQuery({
     placeholderData: keepPreviousData,
     queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: (limit ?? 96) * pagine, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
+    // Senza gli insiemi la query non parte: partirebbe senza filtro, e
+    // mostrerebbe proprio i prodotti che il filtro doveva escludere.
+    enabled:
+      (!onlyOpenStores || apertiOra !== undefined) &&
+      (!(minRating !== undefined && minRating > 0) || idsColVoto !== undefined),
     queryFn: async () => {
       let q = supabase
         .from('products')
@@ -129,15 +166,30 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       // il tetto — cosi' l'elenco filtrato usciva corto.
       // Attenzione: `stock` a NULL vuol dire disponibilita' illimitata.
       if (onlyInStock) q = q.or('stock.is.null,stock.gt.0');
-      // #91 e #127 — I filtri che restano nel browser (negozio aperto adesso,
-      // valutazione minima, in promozione) tagliano DOPO. Se si chiedessero al
-      // database solo 96 righe, quei filtri lavorerebbero su un campione e
-      // l'elenco uscirebbe corto e sbagliato — non «pochi risultati», ma
-      // risultati mancanti senza che nessuno lo dica. Finche' quei tre filtri
-      // non vivono in una funzione SQL, si chiede un margine.
-      const filtriNelBrowser = onlyOpenStores || onlyPromo || (minRating !== undefined && minRating > 0);
+      // 22/8/2026 — i tre filtri adesso tagliano QUI, prima del tetto: non
+      // serve piu' chiedere quattro volte le righe che servono, e l'elenco non
+      // esce piu' corto in silenzio.
+      if (onlyOpenStores) {
+        if (!apertiOra || apertiOra.length === 0) return [];
+        q = q.in('seller_id', apertiOra);
+      }
+      if (minRating !== undefined && minRating > 0) {
+        if (!idsColVoto || idsColVoto.length === 0) return [];
+        q = q.in('id', idsColVoto);
+      }
+
+      // I negozi non approvati venivano scaricati e poi tolti nel browser:
+      // rubavano posto dentro il tetto, quindi l'elenco usciva corto. La vista
+      // filtra gia' da sola per approvato: qui si prendono da li' gli id.
+      const { data: approvati } = await supabase.from('seller_public_profiles').select('id');
+      const idsApprovati = ((approvati ?? []) as Array<{ id: string }>).map((r) => r.id);
+      if (idsApprovati.length === 0) return [];
+      q = q.in('seller_id', idsApprovati);
+
       const tetto = (limit ?? 96) * pagine;
-      q = q.limit(filtriNelBrowser ? Math.min(tetto * 4, 400) : tetto);
+      // «In promozione» resta l'unico con un margine: l'insieme delle promo si
+      // carica in parallelo e puo' non essere pronto al primo giro.
+      q = q.limit(onlyPromo ? Math.min(tetto * 2, 300) : tetto);
       const { data, error } = await q;
       if (error) throw error;
       const rows = data ?? [];
@@ -462,9 +514,10 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
    * Adesso guarda il tetto VERO. Quando quello si esaurisce il pulsante
    * sparisce, che e' la verita': altre righe non ne arriverebbero.
    */
-  const filtriChelavoranoQui = onlyOpenStores || onlyPromo || (minRating !== undefined && minRating > 0);
+  // 22/8/2026 — «aperto adesso» e «voto minimo» adesso tagliano nel database,
+  // quindi il margine serve solo per «in promozione», che resta qui.
   const tettoDellaFinestra = (limit ?? 96) * pagine;
-  const tettoVero = filtriChelavoranoQui ? Math.min(tettoDellaFinestra * 4, 400) : tettoDellaFinestra;
+  const tettoVero = onlyPromo ? Math.min(tettoDellaFinestra * 2, 300) : tettoDellaFinestra;
   const forseCeNeSonoAltri = prods.length >= tettoVero;
 
   return (

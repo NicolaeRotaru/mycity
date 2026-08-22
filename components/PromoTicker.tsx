@@ -42,9 +42,22 @@ export default function PromoTicker() {
 
   // Una singola "track": gli annunci + (eventuale) slot promo. Viene renderizzata
   // due volte fianco a fianco così il translateX(-50%) ripete il loop senza salti.
+  /**
+   * 22/8/2026 — LA COPIA ERA NASCOSTA AI LETTORI DI SCHERMO MA NON ALLA TASTIERA.
+   *
+   * La striscia si disegna due volte per far scorrere il testo senza salti. La
+   * seconda copia aveva `aria-hidden`, quindi un lettore di schermo non la
+   * leggeva — ma il link «Promozioni attive» dentro restava raggiungibile con
+   * Tab. Chi naviga da tastiera arrivava su un link annunciato come nulla: il
+   * fuoco spariva su un elemento che, per chi ascolta, non esiste.
+   *
+   * `inert` toglie la copia sia dalla lettura sia dalla tastiera, che è quello
+   * che si voleva fin dall'inizio.
+   */
   const Track = ({ ariaHidden = false }: { ariaHidden?: boolean }) => (
     <div
       aria-hidden={ariaHidden || undefined}
+      inert={ariaHidden || undefined}
       className="flex shrink-0 items-center gap-x-8 px-4 sm:gap-x-10"
     >
       {branding.announcement.items.map((it, i) => {

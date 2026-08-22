@@ -36,12 +36,33 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
   const candidates = (data ?? []) as Array<{ user_id: string; email: string; full_name: string | null; cart_data: unknown; cart_total: number }>;
   let sent = 0, errors = 0, skipped = 0;
 
+  /**
+   * 22/8/2026 — UNA DOMANDA AL DATABASE PER OGNI PERSONA, DENTRO IL CICLO.
+   *
+   * Il consenso si leggeva una riga alla volta: con duecento carrelli
+   * abbandonati erano duecento andate e ritorno, in fila una dopo l'altra,
+   * dentro un lavoro che ha un tempo massimo. Il giro non falliva: si fermava
+   * a metà quando scadeva il tempo, e i carrelli rimasti li riprovava il giro
+   * dopo, sempre fermandosi allo stesso punto.
+   *
+   * Qui la domanda si fa una volta sola, per tutti.
+   */
+  const consensoPerPersona = new Map<string, boolean>();
+  if (candidates.length > 0) {
+    const { data: profili } = await supa
+      .from('profiles')
+      .select('id, email_marketing')
+      .in('id', candidates.map((c) => c.user_id));
+    for (const p of (profili ?? []) as Array<{ id: string; email_marketing: boolean | null }>) {
+      consensoPerPersona.set(p.id, !!p.email_marketing);
+    }
+  }
+
   for (const c of candidates) {
     // Consenso: l'email di recupero carrello è marketing → inviala solo a chi
     // ha dato consenso (email_marketing). Senza consenso: marca come gestito
     // così il cron non riprova ad ogni giro.
-    const { data: prof } = await supa.from('profiles').select('email_marketing').eq('id', c.user_id).single();
-    if (!prof?.email_marketing) {
+    if (!consensoPerPersona.get(c.user_id)) {
       skipped++;
       const { error: errMarca } = await supa.rpc('mark_abandoned_cart_email_sent', { p_user: c.user_id });
       if (errMarca) logger.error('[abandoned-carts] marcatura fallita (senza consenso)', errMarca);

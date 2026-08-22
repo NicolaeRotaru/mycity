@@ -147,14 +147,49 @@ describe('GET /api/health', () => {
     }
   });
 
-  // 021 — il freno: la rotta interroga il database a ogni chiamata.
-  it('oltre le 60 chiamate al minuto dallo stesso indirizzo risponde 429', async () => {
+  /**
+   * 22/8/2026 — SU QUESTA ROTTA NON SI RISPONDE MAI 429.
+   *
+   * Il freno serve — la rotta interroga il database a ogni chiamata — ma chi
+   * sorveglia il sito guarda una cosa sola: la risposta è 2xx? Un 429 lo
+   * leggeva come «istanza morta», su un'istanza viva. E siccome `getClientIp`
+   * restituisce la stringa fissa `'unknown'` quando non trova le intestazioni
+   * del proxy, tutte le sonde interne finivano nello stesso contatore da
+   * sessanta: bastavano due monitor per far sembrare morto il sito.
+   *
+   * Adesso: soglia alta, sonde interne fuori dal freno, e sopra soglia un 200
+   * con corpo minimo — l'abuso non costa una query, ma non produce nemmeno un
+   * falso allarme.
+   */
+  it('anche sotto raffica risponde 200, mai 429', async () => {
     const stesso = () => new Request('https://mycity.test/api/health', {
       headers: { 'x-forwarded-for': '203.0.113.9' },
     });
     for (let i = 0; i < 60; i++) await GET(stesso());
     const res = await GET(stesso());
-    expect(res.status).toBe(429);
+    expect(res.status).toBe(200);
+  });
+
+  it('oltre la soglia smette di interrogare il database, ma resta 200', async () => {
+    const stesso = () => new Request('https://mycity.test/api/health', {
+      headers: { 'x-forwarded-for': '198.51.100.7' },
+    });
+    for (let i = 0; i < 600; i++) await GET(stesso());
+    const res = await GET(stesso());
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.throttled).toBe(true);
+  });
+
+  it('le sonde senza x-forwarded-for non passano dal freno', async () => {
+    // Sono le chiamate interne della piattaforma: non hanno le intestazioni del
+    // proxy, e prima finivano tutte nello stesso contatore chiamato 'unknown'.
+    const interna = () => new Request('https://mycity.test/api/health');
+    for (let i = 0; i < 700; i++) await GET(interna());
+    const res = await GET(interna());
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.throttled).toBeUndefined();
   });
 
   it('non trapela la chiave di servizio', async () => {

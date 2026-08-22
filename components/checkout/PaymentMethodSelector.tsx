@@ -46,7 +46,18 @@ export function PaymentMethodSelector({
   pickupDiscountPercent,
 }: Props) {
   return (
-    <div className="space-y-3">
+    /**
+     * 22/8/2026 — LE SCELTE DI PAGAMENTO NON ERANO UN GRUPPO.
+     *
+     * Erano due pulsanti radio sciolti dentro un contenitore qualsiasi. Chi
+     * naviga con un lettore di schermo sente «carta, pulsante di scelta» e
+     * «contanti, pulsante di scelta» senza che nessuno gli dica che sono
+     * alternative della stessa domanda, né quante sono. Il `fieldset` con la
+     * sua `legend` è il modo standard di dirlo, ed è già usato dieci righe più
+     * in là per le fasce di consegna.
+     */
+    <fieldset className="space-y-3">
+      <legend className="sr-only">Come vuoi pagare</legend>
       {stripeAvailable && (
         <label
           className={`flex items-start gap-3 rounded-xl border-2 p-4 cursor-pointer transition-colors ${
@@ -152,6 +163,6 @@ export function PaymentMethodSelector({
         </div>
       </label>
       )}
-    </div>
+    </fieldset>
   );
 }

@@ -373,7 +373,32 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     const { error: itemsErr } = await admin.from('order_items').insert(orderItemsRows);
     if (itemsErr) {
       logger.error(itemsErr, { context: 'stripe-order-items-insert', orderId: order.id });
-      await admin.from('orders').delete().eq('id', order.id);
+
+      /**
+       * 22/8/2026 — LA PULIZIA NON VENIVA VERIFICATA.
+       *
+       * Quando le righe dell'ordine non entrano, l'ordine appena creato va
+       * tolto: senza le sue righe è un ordine vuoto, che il cliente vede nella
+       * sua lista e il negozio nella sua, con zero prodotti dentro e un totale
+       * che non corrisponde a niente.
+       *
+       * Ma l'esito della cancellazione non si guardava. Se falliva anche
+       * quella — ed è probabile, perché se il database sta rifiutando le righe
+       * probabilmente rifiuta anche la cancellazione — restava un ordine
+       * fantasma per sempre, e nessuno lo sapeva.
+       *
+       * Adesso: se la pulizia fallisce, gli amministratori lo scoprono subito,
+       * con l'identificativo da cercare.
+       */
+      const { error: errPulizia } = await admin.from('orders').delete().eq('id', order.id);
+      if (errPulizia) {
+        logger.error(errPulizia, { context: 'stripe-order-rollback-failed', orderId: order.id });
+        await notifyAdmins(
+          '⚠️ Ordine fantasma da ripulire a mano',
+          `L'ordine ${order.id} è stato creato ma le sue righe non sono entrate, e nemmeno la cancellazione è riuscita. In lista compare un ordine senza prodotti: va tolto a mano.`,
+          `/admin/orders`,
+        );
+      }
       throw new Error(`stripe-order-items-insert failed for order ${order.id}`);
     }
 

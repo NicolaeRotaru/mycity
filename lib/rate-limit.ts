@@ -27,9 +27,19 @@
  *   const rl = await rateLimit({ key: `signin:${ip}`, max: 10, windowMs: 60_000 });
  *   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
  *
- * Backward-compat: la funzione e' rimasta sincrona (return RateLimitResult)
- * per non rompere i 25+ callsite. La versione async (Redis-backed) e'
- * disponibile come rateLimitAsync() per nuovi endpoint critical-path.
+ * 22/8/2026 — IL COMMENTO QUI SOPRA DICEVA UNA COSA FALSA.
+ *
+ * Diceva che la versione sincrona restava «per non rompere i 25+ callsite».
+ * Contati: i chiamanti della sincrona erano UNO (app/api/health/route.ts), e
+ * quelli della versione con Redis quarantadue. Il commento raccontava un
+ * mondo che non esisteva più, e chi lo leggeva ne concludeva che la sincrona
+ * fosse la strada normale — mentre la sincrona conta in memoria del singolo
+ * processo, quindi con più istanze ognuna ha il suo contatore e il freno di
+ * fatto non c'è.
+ *
+ * L'ultimo chiamante è passato a `rateLimitAsync`. La sincrona resta viva
+ * perché è il ripiego che `rateLimitAsync` usa quando Redis non risponde, ma
+ * non è più esportata: da fuori si passa solo dalla porta giusta.
  */
 
 type Bucket = { times: number[] };
@@ -77,8 +87,10 @@ export type RateLimitResult = {
   limit: number;
 };
 
-// In-memory (sliding window) — back-compat sync API
-export function rateLimit({ key, max, windowMs }: RateLimitOptions): RateLimitResult {
+// Contatore in memoria del singolo processo. NON esportato apposta: è il
+// ripiego interno di rateLimitAsync quando Redis non risponde, non una strada
+// che si sceglie da fuori.
+function rateLimit({ key, max, windowMs }: RateLimitOptions): RateLimitResult {
   const now = Date.now();
   const since = now - windowMs;
 

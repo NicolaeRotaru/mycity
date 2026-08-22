@@ -165,7 +165,7 @@ SELECT nome, CASE WHEN ok THEN 'ok' ELSE 'ROTTO' END AS esito, dettaglio FROM es
 DO $$
 DECLARE n int;
 BEGIN
-  SELECT count(*) INTO n FROM esiti WHERE NOT ok;
+  SELECT count(*) INTO n FROM esiti WHERE ok IS NOT TRUE;
   IF n > 0 THEN
     RAISE EXCEPTION '% controlli falliti sulla vetrina o sulla catena dell''ordine', n;
   END IF;

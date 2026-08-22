@@ -64,7 +64,14 @@ SELECT 'nessuna funzione potente nuova e'' aperta agli anonimi',
          'store_follower_count',        -- quanti seguono un negozio
          'track_sponsored_click',       -- tracciamento, scrive solo un contatore
          'track_sponsored_impression',  -- idem
-         'track_story_view'             -- idem
+         'track_story_view',            -- idem
+         -- 22/8/2026 — le tre domande che i filtri del catalogo facevano nel
+         -- browser. Servono al sito pubblico, senza account: chi cerca
+         -- «aperto adesso» spesso non ha ancora fatto l'accesso. Nessuna delle
+         -- tre espone un dato che non sia gia' in vetrina.
+         'negozi_aperti_adesso',        -- quali negozi sono aperti in questo momento
+         'prodotti_con_voto_almeno',    -- i prodotti col voto medio minimo
+         'categorie_per_negozio'        -- quali categorie tocca ogni negozio
        )
   ) fuori_lista;
 
@@ -138,7 +145,7 @@ BEGIN
   FOR r IN SELECT * FROM esiti ORDER BY nome LOOP
     RAISE INFO '%  %  — %', CASE WHEN r.ok THEN 'ok  ' ELSE 'ROTTO' END, r.nome, r.dettaglio;
   END LOOP;
-  SELECT count(*) INTO rossi FROM esiti WHERE NOT ok;
+  SELECT count(*) INTO rossi FROM esiti WHERE ok IS NOT TRUE;
   IF rossi > 0 THEN
     RAISE EXCEPTION '% controlli rossi in questo file', rossi;
   END IF;

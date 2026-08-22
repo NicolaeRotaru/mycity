@@ -86,11 +86,31 @@ export const useMessagesUnread = () => {
       const ascoltatori = new Set<typeof refetchRef>([refetchRef]);
       let canale: ReturnType<typeof supabase.channel> | null = null;
       try {
+        /**
+         * 22/8/2026 — OGNI PERSONA COLLEGATA ASCOLTAVA TUTTA LA TABELLA.
+         *
+         * L'ascolto era senza filtro: il server mandava a OGNI persona
+         * collegata un avviso per OGNI cambiamento su `conversations`, comprese
+         * le conversazioni fra sconosciuti. Con cento persone collegate e un
+         * messaggio scritto, sono cento avvisi spediti perché uno solo serva.
+         *
+         * Il filtro Realtime accetta una colonna sola, e l'appartenenza qui sta
+         * su due (`buyer_id`, `seller_id`): si aprono due ascolti sullo stesso
+         * canale, uno per colonna. Il conteggio si ricarica lo stesso, ma solo
+         * quando cambia qualcosa che riguarda davvero questa persona.
+         */
         canale = supabase
           .channel(`msg-unread-${userId}`)
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
-            for (const a of ascoltatori) a.current();
-          })
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'conversations', filter: `buyer_id=eq.${userId}` },
+            () => { for (const a of ascoltatori) a.current(); },
+          )
+          .on(
+            'postgres_changes',
+            { event: '*', schema: 'public', table: 'conversations', filter: `seller_id=eq.${userId}` },
+            () => { for (const a of ascoltatori) a.current(); },
+          )
           .subscribe();
       } catch (err) {
         logger.warn('[useMessagesUnread] realtime subscribe failed', err);

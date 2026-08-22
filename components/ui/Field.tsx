@@ -248,7 +248,12 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         {label && <span>{label}</span>}
       </label>
       {error && (
-        <p id={`${fieldId}-error`} className="text-xs font-medium text-secondary-600 mt-1">{error}</p>
+        // 22/8/2026 — mancava `role="alert"`, che venti righe sopra c'è.
+        // L'errore di ogni altro campo viene letto a voce; quello delle
+        // caselle di consenso restava muto — e sono proprio quelle su cui ci
+        // si blocca in registrazione, senza capire perché il pulsante non fa
+        // niente.
+        <p id={`${fieldId}-error`} role="alert" className="text-xs font-medium text-secondary-600 mt-1">{error}</p>
       )}
     </div>
   );

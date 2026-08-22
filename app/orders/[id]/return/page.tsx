@@ -107,6 +107,74 @@ export default function NewReturnPage() {
       </div>
     );
 
+  /**
+   * 22/8/2026 — LA PAGINA LEGGEVA STATO E DATA DI CONSEGNA E NON LI USAVA MAI.
+   *
+   * Chiunque poteva aprire il modulo di reso su un ordine non ancora
+   * consegnato, o consegnato quattro mesi fa: compilava tutto, caricava le
+   * foto, premeva invia, e il rifiuto arrivava dal server. Trenta secondi di
+   * lavoro buttati e nessuna spiegazione di cosa c'entra la data.
+   *
+   * I due campi erano già letti, riga 40. Bastava guardarli.
+   */
+  const consegnato = order.delivery_status === 'DELIVERED';
+  const giorniDallaConsegna = order.delivered_at
+    ? Math.floor((Date.now() - new Date(order.delivered_at).getTime()) / 86_400_000)
+    : null;
+  const fuoriTempo = giorniDallaConsegna !== null && giorniDallaConsegna > 14;
+
+  if (!consegnato || fuoriTempo) {
+    return (
+      <div className="container mx-auto max-w-xl px-4 py-8">
+        <Link href={`/orders/${params.id}`} className="text-sm text-primary-700 hover:underline">
+          ← Torna all&apos;ordine
+        </Link>
+        <div className="mt-4 rounded-2xl bg-white p-6 shadow ring-1 ring-cream-300">
+          <h1 className="text-2xl font-bold text-ink-900">Qui il reso non si può chiedere</h1>
+          {!consegnato ? (
+            <>
+              <p className="mt-3 text-ink-700">
+                Questo ordine non risulta ancora consegnato. Il diritto di reso
+                parte dal giorno in cui ricevi la merce: fino ad allora non c&apos;è
+                niente da restituire.
+              </p>
+              <p className="mt-2 text-ink-700">
+                Se l&apos;ordine è arrivato ma qui non risulta, oppure se vuoi
+                annullarlo prima che parta, scrivici: lo sistemiamo a mano.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 text-ink-700">
+                Sono passati <strong>{giorniDallaConsegna} giorni</strong> dalla
+                consegna, e i giorni per il recesso sono quattordici.
+              </p>
+              <p className="mt-2 text-ink-700">
+                Questo non chiude tutte le strade: se il prodotto è difettoso o
+                non è come descritto, la garanzia legale vale due anni ed è una
+                cosa diversa dal recesso. Scrivici e ne parliamo.
+              </p>
+            </>
+          )}
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link
+              href="/contact"
+              className="rounded-lg bg-primary-700 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-800"
+            >
+              Scrivici
+            </Link>
+            <Link
+              href={`/orders/${params.id}`}
+              className="rounded-lg border border-cream-300 px-4 py-2 text-sm font-semibold text-ink-800 hover:border-primary-300"
+            >
+              Torna all&apos;ordine
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto max-w-xl px-4 py-8">
       <Link href={`/orders/${params.id}`} className="text-sm text-primary-700 hover:underline">

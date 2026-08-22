@@ -11,6 +11,7 @@ import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -21,9 +22,25 @@ type Store = StoreCardData & {
 type ProductLite = ProductPreview & { seller_id: string };
 
 const fetchNearData = async () => {
-  const { data: storesRaw } = await supabase
-    .from('seller_public_profiles')
-    .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled');
+  // 22/8/2026 — le due bandierine Stripe arrivano sulla vista con la
+  // migrazione 124: su un database che non l'ha ancora, PostgREST rifiuta la
+  // select INTERA e la pagina «Vicino a te» resta senza un solo negozio.
+  // 22/8/2026 — `store_media` era qui e non si mostrava da nessuna parte.
+  // È la galleria fotografica del negozio: un campo JSON che può pesare
+  // decine di kilobyte per negozio, moltiplicato per ogni negozio, scaricato
+  // su ogni apertura di «Vicino a te» — dove non compare una sola di quelle
+  // foto. Resta su /stores, che invece la usa.
+  const SELECT_NEAR =
+    'id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
+  const conBandierine = () => supabase.from('seller_public_profiles').select(SELECT_NEAR);
+  const { data: storesRaw } = await conRipiegoSchema(
+    'near/page:seller_public_profiles',
+    conBandierine,
+    () =>
+      stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
+        supabase.from('seller_public_profiles').select(senzaColonne(SELECT_NEAR, COLONNE_124_VISTA)),
+      ),
+  );
 
   const stores = (storesRaw ?? []) as Store[];
   const storeIds = stores.map((s) => s.id);
@@ -32,16 +49,16 @@ const fetchNearData = async () => {
   // #93 — L'elenco dei negozi viaggia nell'indirizzo della richiesta, 37
   // caratteri l'uno: oltre i due-trecento negozi la richiesta viene rifiutata e
   // qui si legge «nessun prodotto». Si spezza in blocchi da cento.
-  const [productsRes, reviewsRes] = await Promise.all([
-    leggiInBlocchi<ProductLite>(storeIds, (blocco) =>
-      supabase
-        .from('products')
-        .select('id, name, price, images, seller_id')
-        .in('seller_id', blocco)
-        .eq('status', 'available')
-        .order('created_at', { ascending: false })
-        .limit(400) as unknown as PromiseLike<{ data: ProductLite[] | null; error: { message?: string } | null }>,
-    ),
+  /**
+   * 22/8/2026 — IL RIPIEGO GIRAVA SEMPRE, ANCHE QUANDO NON SERVIVA.
+   *
+   * Si scaricavano fino a quattrocento prodotti interi e poi si chiamava
+   * `store_cards`, che dà la stessa cosa fatta meglio: quando la seconda
+   * rispondeva — cioè quasi sempre — i quattrocento venivano buttati via, ma
+   * erano già arrivati fino al telefono di chi guardava.
+   */
+  const [schedeRes, reviewsRes] = await Promise.all([
+    supabase.rpc('store_cards', { p_per_store: 4, p_limit: 500 }),
     // 22/8/2026 — QUI SI SCARICAVA OGNI RECENSIONE DI OGNI NEGOZIO per farne
     // la media nel browser. Con cinquanta negozi e cinquanta recensioni l'uno
     // sono duemilacinquecento righe che viaggiano fino al telefono, per
@@ -55,14 +72,27 @@ const fetchNearData = async () => {
   // lasciava senza vetrina i negozi che non pubblicano da un po'. La funzione
   // della migrazione 122 prende i primi quattro DI OGNI negozio; se non e'
   // ancora applicata si resta al giro di prima.
-  const { data: schede } = await supabase.rpc('store_cards', { p_per_store: 4, p_limit: 500 });
+  const schede = (schedeRes.data ?? []) as Array<{ seller_id: string; prodotti: ProductLite[] }>;
   const productsByStore: Record<string, ProductLite[]> = {};
-  for (const riga of (schede ?? []) as Array<{ seller_id: string; prodotti: ProductLite[] }>) {
+  for (const riga of schede) {
     if (riga.prodotti && riga.prodotti.length > 0) productsByStore[riga.seller_id] = riga.prodotti;
   }
-  for (const p of (productsRes.data ?? []) as ProductLite[]) {
-    if (productsByStore[p.seller_id]?.length) continue;
-    (productsByStore[p.seller_id] ??= []).push(p);
+
+  // Il ripiego: solo se la funzione non ha risposto.
+  if (schede.length === 0) {
+    const productsRes = await leggiInBlocchi<ProductLite>(storeIds, (blocco) =>
+      supabase
+        .from('products')
+        .select('id, name, price, images, seller_id')
+        .in('seller_id', blocco)
+        .eq('status', 'available')
+        .order('created_at', { ascending: false })
+        .limit(400) as unknown as PromiseLike<{ data: ProductLite[] | null; error: { message?: string } | null }>,
+    );
+    for (const p of (productsRes.data ?? []) as ProductLite[]) {
+      if (productsByStore[p.seller_id]?.length) continue;
+      (productsByStore[p.seller_id] ??= []).push(p);
+    }
   }
 
   const reviewsByStore: Record<string, { avg: number; count: number }> = {};
