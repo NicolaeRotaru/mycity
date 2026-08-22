@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { rateLimit, rateLimitAsync, getClientIp, __resetRateLimitBuckets } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp, __resetRateLimitBuckets } from '@/lib/rate-limit';
+
+/**
+ * 22/8/2026 — `rateLimit` non è più esportata: da fuori si passa solo da
+ * `rateLimitAsync`, che senza Redis configurato usa esattamente lo stesso
+ * contatore in memoria. Le prove qui sotto misurano quel contatore attraverso
+ * la porta buona, così coprono la strada che il sito percorre davvero.
+ */
+const rateLimit = rateLimitAsync;
 
 /**
  * Unit test per lib/rate-limit (in-memory sliding window).
@@ -15,61 +23,61 @@ describe('rateLimit - basic allow/deny', () => {
     __resetRateLimitBuckets();
   });
 
-  it('allows requests under limit', () => {
+  it('allows requests under limit', async () => {
     const key = `test-allow-${Math.random()}`;
     for (let i = 0; i < 5; i++) {
-      const result = rateLimit({ key, max: 10, windowMs: 60_000 });
+      const result = await rateLimit({ key, max: 10, windowMs: 60_000 });
       expect(result.allowed).toBe(true);
     }
   });
 
-  it('denies when limit hit', () => {
+  it('denies when limit hit', async () => {
     const key = `test-deny-${Math.random()}`;
     for (let i = 0; i < 3; i++) {
-      rateLimit({ key, max: 3, windowMs: 60_000 });
+      await rateLimit({ key, max: 3, windowMs: 60_000 });
     }
-    const result = rateLimit({ key, max: 3, windowMs: 60_000 });
+    const result = await rateLimit({ key, max: 3, windowMs: 60_000 });
     expect(result.allowed).toBe(false);
     expect(result.remaining).toBe(0);
     expect(result.retryAfterSec).toBeGreaterThan(0);
   });
 
-  it('returns correct remaining count', () => {
+  it('returns correct remaining count', async () => {
     const key = `test-remaining-${Math.random()}`;
-    rateLimit({ key, max: 5, windowMs: 60_000 });
-    rateLimit({ key, max: 5, windowMs: 60_000 });
-    const result = rateLimit({ key, max: 5, windowMs: 60_000 });
+    await rateLimit({ key, max: 5, windowMs: 60_000 });
+    await rateLimit({ key, max: 5, windowMs: 60_000 });
+    const result = await rateLimit({ key, max: 5, windowMs: 60_000 });
     expect(result.remaining).toBe(2); // 5 - 3 = 2
   });
 
-  it('isolates buckets by key', () => {
+  it('isolates buckets by key', async () => {
     const key1 = `test-iso-1-${Math.random()}`;
     const key2 = `test-iso-2-${Math.random()}`;
 
     // Esaurisci key1
     for (let i = 0; i < 3; i++) {
-      rateLimit({ key: key1, max: 3, windowMs: 60_000 });
+      await rateLimit({ key: key1, max: 3, windowMs: 60_000 });
     }
-    expect(rateLimit({ key: key1, max: 3, windowMs: 60_000 }).allowed).toBe(false);
+    expect((await rateLimit({ key: key1, max: 3, windowMs: 60_000 })).allowed).toBe(false);
 
     // key2 deve essere indipendente
-    expect(rateLimit({ key: key2, max: 3, windowMs: 60_000 }).allowed).toBe(true);
+    expect((await rateLimit({ key: key2, max: 3, windowMs: 60_000 })).allowed).toBe(true);
   });
 
-  it('retryAfterSec is reasonable', () => {
+  it('retryAfterSec is reasonable', async () => {
     const key = `test-retry-${Math.random()}`;
     const window = 60_000;
     for (let i = 0; i < 5; i++) {
-      rateLimit({ key, max: 5, windowMs: window });
+      await rateLimit({ key, max: 5, windowMs: window });
     }
-    const denied = rateLimit({ key, max: 5, windowMs: window });
+    const denied = await rateLimit({ key, max: 5, windowMs: window });
     expect(denied.allowed).toBe(false);
     expect(denied.retryAfterSec).toBeLessThanOrEqual(60);
     expect(denied.retryAfterSec).toBeGreaterThan(0);
   });
 
-  it('limit field reflects max param', () => {
-    const result = rateLimit({ key: `test-limit-${Math.random()}`, max: 42, windowMs: 1000 });
+  it('limit field reflects max param', async () => {
+    const result = await rateLimit({ key: `test-limit-${Math.random()}`, max: 42, windowMs: 1000 });
     expect(result.limit).toBe(42);
   });
 });
@@ -93,8 +101,8 @@ describe('rateLimitAsync - distribuito con fallback in-memory', () => {
 
   it('condivide lo stato con il bucket in-memory sulla stessa chiave (fallback)', async () => {
     const key = `test-async-shared-${Math.random()}`;
-    rateLimit({ key, max: 2, windowMs: 60_000 });
-    rateLimit({ key, max: 2, windowMs: 60_000 });
+    await rateLimit({ key, max: 2, windowMs: 60_000 });
+    await rateLimit({ key, max: 2, windowMs: 60_000 });
     expect((await rateLimitAsync({ key, max: 2, windowMs: 60_000 })).allowed).toBe(false);
   });
 });
@@ -113,22 +121,22 @@ describe('getClientIp', () => {
     expect(getClientIp(req)).toBe('5.6.7.8');
   });
 
-  it('extracts single x-forwarded-for', () => {
+  it('extracts single x-forwarded-for', async () => {
     const req = mkReq({ 'x-forwarded-for': '1.2.3.4' });
     expect(getClientIp(req)).toBe('1.2.3.4');
   });
 
-  it('falls back to x-real-ip', () => {
+  it('falls back to x-real-ip', async () => {
     const req = mkReq({ 'x-real-ip': '9.9.9.9' });
     expect(getClientIp(req)).toBe('9.9.9.9');
   });
 
-  it('returns "unknown" when no header', () => {
+  it('returns "unknown" when no header', async () => {
     const req = mkReq({});
     expect(getClientIp(req)).toBe('unknown');
   });
 
-  it('trims whitespace', () => {
+  it('trims whitespace', async () => {
     const req = mkReq({ 'x-forwarded-for': '   1.2.3.4  , 5.6.7.8   ' });
     expect(getClientIp(req)).toBe('5.6.7.8');
   });
@@ -146,7 +154,7 @@ describe('getClientIp dietro un CDN', () => {
   const mkReq2 = (headers: Record<string, string>) =>
     new Request('http://localhost/prova', { headers });
 
-  it('prende l indirizzo vero da cf-connecting-ip, anche con due salti nella catena', () => {
+  it('prende l indirizzo vero da cf-connecting-ip, anche con due salti nella catena', async () => {
     const req = mkReq2({
       'cf-connecting-ip': '203.0.113.9',
       'x-forwarded-for': '203.0.113.9, 172.16.0.1, 10.0.0.5',
@@ -155,8 +163,30 @@ describe('getClientIp dietro un CDN', () => {
     expect(getClientIp(req)).toBe('203.0.113.9');
   });
 
-  it('senza CDN si comporta esattamente come prima', () => {
+  it('senza CDN si comporta esattamente come prima', async () => {
     const req = mkReq2({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' });
     expect(getClientIp(req)).toBe('5.6.7.8');
+  });
+});
+
+/**
+ * 22/8/2026 — LA PORTA SBAGLIATA VA CHIUSA, NON SEGNALATA.
+ *
+ * Il contatore sincrono vive nella memoria del singolo processo: con più
+ * istanze ognuna ha il suo, quindi il freno di fatto non c'è. Restava
+ * esportato «per non rompere i 25+ callsite» — che erano uno.
+ *
+ * Questa prova pretende che da fuori quella porta non esista più. Riesporta
+ * `rateLimit` e torna rossa.
+ */
+describe('la porta sincrona è chiusa', () => {
+  it('lib/rate-limit non esporta più rateLimit', async () => {
+    const modulo = await import('@/lib/rate-limit');
+    expect(Object.keys(modulo)).not.toContain('rateLimit');
+  });
+
+  it('la porta buona c\'è ed è quella con Redis', async () => {
+    const modulo = await import('@/lib/rate-limit');
+    expect(typeof modulo.rateLimitAsync).toBe('function');
   });
 });

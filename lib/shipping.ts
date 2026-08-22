@@ -1,5 +1,5 @@
 import { COMPENSO_RIDER_CENTS, FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER } from './constants';
-import { haversineKm, riderFee } from './geo';
+import { haversineKm, prezzoSpedizioneEuro } from './geo';
 
 /**
  * Calcolo spedizione per un gruppo (un venditore). FONTE UNICA condivisa tra
@@ -9,7 +9,7 @@ import { haversineKm, riderFee } from './geo';
  * Regole (identiche alla UI originale):
  *  - ritiro in negozio o coupon FREE_SHIPPING → 0
  *  - subtotale ≥ soglia spedizione gratuita → 0
- *  - coordinate negozio+consegna note → tariffa distanza (riderFee)
+ *  - coordinate negozio+consegna note → tariffa distanza (prezzoSpedizioneEuro)
  *  - altrimenti → tariffa flat di fallback
  *
  * SICUREZZA: il server passa SEMPRE il subtotale e le coordinate ricalcolati
@@ -28,7 +28,7 @@ export function shippingForEuro(opts: {
   if (pickupInStore || freeShipping) return 0;
   if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
   if (storeLat && storeLng && deliveryLat && deliveryLng) {
-    return riderFee(haversineKm(storeLat, storeLng, deliveryLat, deliveryLng));
+    return prezzoSpedizioneEuro(haversineKm(storeLat, storeLng, deliveryLat, deliveryLng));
   }
   return SHIPPING_PER_ORDER;
 }

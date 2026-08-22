@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 /**
  * Selettore della fascia di consegna ("Quando vuoi riceverlo", step 2).
  *
- * UI (vedi mockup design-system/ui_kits/buyer/src/35-checkout.txt):
+ * UI (vedi mockup docs/mockup/ui_kits/buyer/src/35-checkout.txt):
  *  - 3 day-tile: Adesso (express ~30–45 min) / Oggi (scegli l'ora) / Domani.
  *  - sotto, la lista delle fasce orarie selezionabili.
  *

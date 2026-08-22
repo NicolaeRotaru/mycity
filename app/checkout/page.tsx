@@ -572,7 +572,14 @@ export default function CheckoutPage() {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
-      const createdOrders: string[] = (body as { orderIds?: string[] }).orderIds ?? [];
+      // 22/8/2026 — la rotta adesso risponde al contratto del progetto,
+      // `{ ok: true, data: { … } }`. Si legge da `data`, con il vecchio posto
+      // come ripiego finché non è tutto pubblicato.
+      const corpoCod = body as {
+        data?: { orderIds?: string[] };
+        orderIds?: string[];
+      };
+      const createdOrders: string[] = corpoCod.data?.orderIds ?? corpoCod.orderIds ?? [];
       const ordiniVeri = (body as { ordini?: Array<{ id: string; sellerId: string; totalCents: number }> }).ordini ?? [];
       // #210 e #213 — Prima partiva UN evento solo, con due difetti dentro.
       //

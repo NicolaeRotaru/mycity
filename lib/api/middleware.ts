@@ -1,5 +1,7 @@
 import type { NextRequest, NextResponse } from 'next/server';
-import { createClient, type User } from '@supabase/supabase-js';
+import { type User } from '@supabase/supabase-js';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
+import { logger } from '@/lib/logger';
 import { timingSafeEqual } from 'node:crypto';
 import { ApiErrors } from './responses';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -28,13 +30,16 @@ type Profile = { id: string; role: string; is_approved: boolean };
 type Handler<T> = (ctx: { user: User; profile: Profile; req: NextRequest }) => Promise<NextResponse<T>>;
 type GenericHandler = (ctx: { user: User; profile: Profile; req: NextRequest }) => Promise<NextResponse>;
 
+// 22/8/2026 — una fabbrica sola, condivisa con lib/supabase/auth-server.ts.
+// Prima erano due copie con impostazioni diverse, e questa, quando le variabili
+// mancavano, restituiva `null` invece di dire quale mancava.
 function getSupabaseAuthClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  try {
+    return creaClientAnonimo();
+  } catch (e) {
+    logger.error('[auth] client anonimo non creabile: configurazione incompleta', e);
+    return null;
+  }
 }
 
 async function authenticate(req: NextRequest): Promise<
@@ -59,7 +64,17 @@ async function authenticate(req: NextRequest): Promise<
     try {
       const { getCurrentUser } = await import('@/lib/supabase/server');
       user = await getCurrentUser();
-    } catch { /* server module non disponibile in alcuni contesti */ }
+    } catch (e) {
+      // 22/8/2026 — questo catch inghiottiva tutto e faceva uscire 401 «devi
+      // accedere» anche quando il problema era nostro. Un guasto di
+      // configurazione non è una sessione mancante: chi legge 401 riprova ad
+      // accedere all'infinito, chi legge 503 sa che deve guardare il server.
+      if (e instanceof Error && e.name === 'AuthNonDisponibile') {
+        return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+      }
+      logger.error('[auth] modulo server non caricabile', e);
+      return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+    }
   }
 
   if (!user) return { ok: false, response: ApiErrors.unauthorized() };

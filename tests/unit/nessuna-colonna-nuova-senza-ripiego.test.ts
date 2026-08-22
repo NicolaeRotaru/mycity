@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { CAMPI_124, COLONNE_124 } from '@/lib/db/migrazione-124';
+import { CAMPI_124, COLONNE_124, COLONNE_124_VISTA, VISTA_124 } from '@/lib/db/migrazione-124';
 
 /**
  * IL FRENO: nessun campo nuovo di schema entra in un'istruzione senza ripiego.
@@ -22,7 +22,10 @@ import { CAMPI_124, COLONNE_124 } from '@/lib/db/migrazione-124';
  */
 
 const RADICE = join(__dirname, '..', '..');
-const CARTELLE = ['app', 'lib'];
+// 22/8/2026 — `components/` mancava, e non è una cartella qualsiasi: quattro
+// dei punti che leggono la vista ricreata dalla 124 vivono lì
+// (useStorePageData, StoreShowcase, SellerCard). Il guardiano guardava altrove.
+const CARTELLE = ['app', 'lib', 'components'];
 const RIPIEGO = '@/lib/db/migrazione-124';
 
 /** I file che il ripiego lo definiscono o lo provano: non devono importarlo. */
@@ -63,7 +66,11 @@ describe('nessuna colonna della migrazione 124 viaggia senza ripiego', () => {
         if (ESENTI.has(rel)) continue;
 
         const testo = readFileSync(file, 'utf8');
-        const nomina = nuove.some((c) => testo.includes(c));
+        // Le colonne dell'ordine valgono ovunque; le due della vista solo dove
+        // si interroga la vista — sulla tabella `profiles` esistono da prima.
+        const nomina =
+          nuove.some((c) => testo.includes(c)) ||
+          (testo.includes(VISTA_124) && COLONNE_124_VISTA.some((c) => testo.includes(c)));
         if (!nomina || !ISTRUZIONE.test(testo)) continue;
         if (testo.includes(RIPIEGO)) continue;
 

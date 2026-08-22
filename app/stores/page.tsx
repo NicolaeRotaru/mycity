@@ -10,6 +10,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -24,10 +25,23 @@ type Category = { id: string; slug: string; name: string; parent_id: string | nu
 type SortMode = 'rating' | 'name' | 'most-products';
 
 const fetchStoresData = async () => {
-  const { data: storesRaw, error } = await supabase
-    .from('seller_public_profiles')
-    .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled')
-    .order('store_name');
+  // 22/8/2026 — vedi near/page: senza ripiego, su un database indietro di una
+  // migrazione l'elenco dei negozi esce vuoto invece che senza due bandierine.
+  const SELECT_STORES =
+    'id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
+  const conBandierine = () =>
+    supabase.from('seller_public_profiles').select(SELECT_STORES).order('store_name');
+  const { data: storesRaw, error } = await conRipiegoSchema(
+    'stores/page:seller_public_profiles',
+    conBandierine,
+    () =>
+      stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
+        supabase
+          .from('seller_public_profiles')
+          .select(senzaColonne(SELECT_STORES, COLONNE_124_VISTA))
+          .order('store_name'),
+      ),
+  );
   if (error) throw error;
 
   const stores = (storesRaw ?? []) as Store[];

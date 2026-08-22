@@ -1,3 +1,4 @@
+import { SPEDIZIONE_BASE_EUR, SPEDIZIONE_PER_KM_EUR } from './constants';
 // Distanza haversine tra due coordinate (km)
 export function haversineKm(
   lat1: number, lng1: number,
@@ -17,19 +18,21 @@ export function haversineKm(
 /**
  * Prezzo della spedizione a distanza: base + €/km, arrotondato a 0,10.
  *
- * ATTENZIONE AL NOME, che e' rimasto quello di prima ed e' fuorviante: questo
- * NON e' piu' il compenso del fattorino. Il compenso e' fisso
- * (COMPENSO_RIDER_CENTS in lib/constants) e non dipende dalla distanza.
- * Qui si calcola solo quanto paga il CLIENTE per la spedizione, sotto la
- * soglia della spedizione gratuita.
+ * 22/8/2026 — SI CHIAMAVA `prezzoSpedizioneEuro`, ED È IL NOME CHE HA FATTO IL DANNO.
  *
- * Le due cose erano la stessa, ed e' li' che stava il guasto: sopra i 30 euro
- * la spedizione e' zero, quindi il fattorino consegnava e non veniva pagato.
+ * Questo non è mai stato il compenso del fattorino: è quanto paga il CLIENTE
+ * per la spedizione. Il compenso del fattorino è fisso
+ * (`COMPENSO_RIDER_CENTS`) e non dipende dalla distanza. Finché le due cose
+ * hanno avuto lo stesso nome sono state trattate come la stessa cosa, ed è
+ * così che sopra i trenta euro — dove la spedizione è gratis — il fattorino
+ * consegnava e non veniva pagato (la storia per esteso in lib/shipping.ts).
+ *
+ * Un commento che avverte «attenzione al nome» è una toppa: chi legge il nome
+ * in fondo a una riga altrove il commento non ce l'ha davanti. Adesso il nome
+ * dice quello che la funzione fa.
  */
-export function riderFee(distanceKm: number): number {
-  const BASE = 2.5;
-  const PER_KM = 1.2;
-  const fee = BASE + Math.max(0, distanceKm) * PER_KM;
+export function prezzoSpedizioneEuro(distanceKm: number): number {
+  const fee = SPEDIZIONE_BASE_EUR + Math.max(0, distanceKm) * SPEDIZIONE_PER_KM_EUR;
   return Math.round(fee * 10) / 10;
 }
 

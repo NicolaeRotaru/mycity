@@ -11,6 +11,7 @@ import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
 type Store = StoreCardData & {
   store_phone: string | null;
@@ -21,9 +22,20 @@ type Store = StoreCardData & {
 type ProductLite = ProductPreview & { seller_id: string };
 
 const fetchNearData = async () => {
-  const { data: storesRaw } = await supabase
-    .from('seller_public_profiles')
-    .select('id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled');
+  // 22/8/2026 — le due bandierine Stripe arrivano sulla vista con la
+  // migrazione 124: su un database che non l'ha ancora, PostgREST rifiuta la
+  // select INTERA e la pagina «Vicino a te» resta senza un solo negozio.
+  const SELECT_NEAR =
+    'id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
+  const conBandierine = () => supabase.from('seller_public_profiles').select(SELECT_NEAR);
+  const { data: storesRaw } = await conRipiegoSchema(
+    'near/page:seller_public_profiles',
+    conBandierine,
+    () =>
+      stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
+        supabase.from('seller_public_profiles').select(senzaColonne(SELECT_NEAR, COLONNE_124_VISTA)),
+      ),
+  );
 
   const stores = (storesRaw ?? []) as Store[];
   const storeIds = stores.map((s) => s.id);

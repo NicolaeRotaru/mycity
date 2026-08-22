@@ -10,6 +10,10 @@ import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { useFollowStore } from '@/components/hooks/useFollowStore';
 import { isVerifiedStore } from '@/lib/store-trust';
+import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
+
+const SELECT_SELLER_CARD =
+  'store_logo, created_at, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
 
 /**
  * Scheda venditore della PDP: avatar, nome, badge verificato, valutazione,
@@ -53,12 +57,27 @@ export function SellerCard({
   const { data } = useQuery({
     queryKey: queryKeys.stores.sellerCard(sellerId),
     queryFn: async (): Promise<SellerStats> => {
-      const [profileRes, reviewsRes, ordersRes] = await Promise.all([
+      const profiloConBandierine = () =>
         supabase
           .from('seller_public_profiles')
-          .select('store_logo, created_at, is_approved, stripe_charges_enabled, stripe_payouts_enabled')
+          .select(SELECT_SELLER_CARD)
           .eq('id', sellerId)
-          .maybeSingle(),
+          .maybeSingle();
+      const [profileRes, reviewsRes, ordersRes] = await Promise.all([
+        // 22/8/2026 — ripiego sulle due colonne della migrazione 124: senza,
+        // la scheda del venditore sotto il prodotto resta muta del tutto.
+        conRipiegoSchema(
+          'SellerCard:seller_public_profiles',
+          profiloConBandierine,
+          () =>
+            stessaFormaDi<Awaited<ReturnType<typeof profiloConBandierine>>>(
+              supabase
+                .from('seller_public_profiles')
+                .select(senzaColonne(SELECT_SELLER_CARD, COLONNE_124_VISTA))
+                .eq('id', sellerId)
+                .maybeSingle(),
+            ),
+        ),
         supabase.from('store_reviews').select('rating').eq('store_id', sellerId),
         // Ordini consegnati del negozio: bastano created_at + delivered_at per la
         // derivazione "in tempo" (entro 48h). Query leggera, capata a 200 righe.

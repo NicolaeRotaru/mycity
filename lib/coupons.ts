@@ -1,3 +1,7 @@
+// L'import resta, ma serve a UNA funzione sola: `validateCouponFromBrowser`,
+// che è la strada del browser e il singleton del browser lo vuole per davvero.
+// Quello che è sparito è il valore di ripiego su `validateCoupon`, dove il
+// singleton finiva dentro un processo server senza che nessuno lo chiedesse.
 import { supabase } from './supabase/client';
 
 /**
@@ -37,7 +41,20 @@ export async function validateCoupon(
   code: string,
   subtotal: number,
   userId: string | null,
-  client: CouponDbClient = supabase,
+  // 22/8/2026 — QUESTO PARAMETRO AVEVA UN VALORE DI RIPIEGO, ED ERA IL CLIENT
+  // DEL BROWSER.
+  //
+  // `import { supabase } from './supabase/client'` è il singleton di un modulo
+  // marcato `'use client'`: una variabile condivisa da tutte le richieste che
+  // arrivano allo stesso processo Node. Oggi tutte e due le rotte passano il
+  // loro client, quindi il ripiego non scattava mai — ma era un innesco armato
+  // su una strada dove passano i soldi: chiamare `validateCoupon(code, subtotal,
+  // userId)` con tre argomenti era una firma legittima che il compilatore
+  // accettava in silenzio, e sarebbe finita su un client anonimo senza sessione.
+  //
+  // Adesso il quarto argomento è obbligatorio: chi lo dimentica lo scopre dal
+  // controllo dei tipi, non da un buono applicato alla persona sbagliata.
+  client: CouponDbClient,
 ): Promise<CouponValidation> {
   const trimmed = code.trim().toUpperCase();
   if (!trimmed) return { ok: false, reason: 'Inserisci un codice' };

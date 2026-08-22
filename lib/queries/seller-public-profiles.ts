@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
 /** Colonne vetrina esposte da seller_public_profiles (migration 107). */
 export type SellerPublicProfile = {
@@ -34,10 +35,24 @@ export async function fetchSellerPublicMap(
   const map = new Map<string, SellerPublicProfile>();
   if (unique.length === 0) return map;
 
-  const { data, error } = await supabase
-    .from('seller_public_profiles')
-    .select(select)
-    .in('id', unique);
+  // 22/8/2026 — `stripe_charges_enabled` e `stripe_payouts_enabled` arrivano
+  // sulla vista con la migrazione 124. Prima di quella, PostgREST rifiuta la
+  // select intera: qui l'errore veniva rilanciato, quindi ogni pagina che
+  // passa da questo lettore — prodotti, ordini, vetrine — si fermava del tutto
+  // invece di mostrarsi senza due bandierine.
+  const conBandierine = () =>
+    supabase.from('seller_public_profiles').select(select).in('id', unique);
+  const { data, error } = await conRipiegoSchema(
+    'fetchSellerPublicMap',
+    conBandierine,
+    () =>
+      stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
+        supabase
+          .from('seller_public_profiles')
+          .select(senzaColonne(select, COLONNE_124_VISTA))
+          .in('id', unique),
+      ),
+  );
   if (error) throw error;
 
   const rows = (data ?? []) as unknown as SellerPublicProfile[];

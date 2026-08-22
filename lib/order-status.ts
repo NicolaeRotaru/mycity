@@ -41,7 +41,7 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 
 /**
  * Colori semantici dello stato ordine — sorgente unica dei token `--status-*`
- * definiti in app/globals.css (allineati a design-system OrderStatusBadge.jsx).
+ * definiti in app/globals.css (allineati a docs/mockup OrderStatusBadge.jsx).
  *
  * `color`: testo + icona + anello (via currentColor) → token `--status-*`.
  * `bg`:    tinta chiara di sfondo del pill.

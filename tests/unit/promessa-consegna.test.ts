@@ -23,7 +23,9 @@ import { join, resolve } from 'node:path';
 const RADICE = resolve(__dirname, '..', '..');
 
 /** Le cartelle che il cliente legge. Non i test, non le migrazioni, non i referti. */
-const GUARDATE = ['app', 'components', 'lib', 'design-system', 'public'];
+// 22/8/2026 — `design-system` è diventata `docs/mockup`: il nome prometteva
+// codice e conteneva copie ferme dei componenti veri.
+const GUARDATE = ['app', 'components', 'lib', 'docs/mockup', 'public'];
 
 /** Il vecchio modo di dire il tempo di consegna, in tutte le grafie viste nel repo. */
 const PROMESSA_VECCHIA = /24\s*[-–/]\s*48/;

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { releaseOrderPayout } from '@/lib/stripe/payout';
 import { withInternalAuth } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
@@ -33,10 +33,14 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   if (result.ok) {
     // 046 — Un ordine rimborsato per intero prima del pagamento non ha niente da
     // versare: è un esito buono, non un trasferimento.
+    // 22/8/2026 — la risposta di successo non rispettava il contratto che
+    // questo stesso file usa per gli errori: `{ ok: true, transferId }` invece
+    // di `{ ok: true, data: { … } }`. Due contratti dentro un file solo sono
+    // due contratti che qualcuno prima o poi confonde.
     if ('code' in result) {
-      return NextResponse.json({ ok: true, transferId: null, nota: result.reason }, { status: 200 });
+      return apiSuccess({ transferId: null, nota: result.reason });
     }
-    return NextResponse.json({ ok: true, transferId: result.transferId }, { status: 200 });
+    return apiSuccess({ transferId: result.transferId });
   }
 
   switch (result.code) {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { rateLimit, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 // Sempre fresh: i monitor esterni devono sapere lo stato reale, no cache.
@@ -67,12 +67,35 @@ export async function GET(request: Request) {
   const startedAt = Date.now();
   const checks: Record<string, { ok: boolean; latencyMs?: number; error?: string }> = {};
 
-  const freno = rateLimit({ key: `health:${getClientIp(request)}`, max: 60, windowMs: 60_000 });
-  if (!freno.allowed) {
-    return NextResponse.json(
-      { status: 'rate_limited', timestamp: new Date().toISOString() },
-      { status: 429, headers: { 'Retry-After': String(freno.retryAfterSec ?? 60), 'cache-control': 'no-store' } },
-    );
+  // 22/8/2026 — UN 429 SU QUESTA ROTTA VALE COME «ISTANZA MORTA».
+  //
+  // Chi sorveglia il sito chiama questo indirizzo e guarda una cosa sola: la
+  // risposta è 2xx? Qualunque altra cosa è un guasto. Qui sopra le sessanta
+  // chiamate al minuto rispondevamo 429, e il sorvegliante concludeva che
+  // l'istanza era caduta — su un'istanza perfettamente viva.
+  //
+  // Peggio: `getClientIp` restituisce la stringa fissa `'unknown'` quando non
+  // trova né `x-forwarded-for` né `x-real-ip`. Tutte le sonde interne, che
+  // quelle intestazioni non le mandano, finivano nello stesso contatore da
+  // sessanta: bastavano due monitor per far sembrare morto il sito.
+  //
+  // Adesso: le sonde senza `x-forwarded-for` non passano dal freno, la soglia
+  // è alta abbastanza che nessun monitor onesto la tocchi, e sopra soglia si
+  // risponde 200 con un corpo minimo — l'abuso non costa una query al
+  // database, ma non produce nemmeno un falso allarme.
+  const daFuori = !!request.headers.get('x-forwarded-for');
+  if (daFuori) {
+    const freno = await rateLimitAsync({
+      key: `health:${getClientIp(request)}`,
+      max: 600,
+      windowMs: 60_000,
+    });
+    if (!freno.allowed) {
+      return NextResponse.json(
+        { status: 'ok', throttled: true, timestamp: new Date().toISOString() },
+        { status: 200, headers: { 'cache-control': 'no-store' } },
+      );
+    }
   }
 
   // Check 1: Supabase DB raggiungibile, con un tetto di tempo.

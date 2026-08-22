@@ -31,11 +31,31 @@ export const CAMPI_124 = ['gross_total_cents'] as const;
 /** Le colonne che la 124 aggiunge e che una `select` non può chiedere prima. */
 export const COLONNE_124 = ['gross_total_cents', 'payout_tentativo', 'rider_payout_tentativo'] as const;
 
+/**
+ * 22/8/2026 — Le colonne che la 124 aggiunge alla VISTA `seller_public_profiles`.
+ *
+ * Stanno in un elenco a parte perché il loro «prima della 124» è diverso: sulla
+ * tabella `profiles` esistono da sempre, ed è lì che le legge la dashboard del
+ * venditore. È solo la vetrina pubblica, che passa dalla vista, a poterle
+ * chiedere a un database che non le ha ancora. Tenerle nell'elenco generale
+ * avrebbe costretto ad avvolgere sette file che non ne hanno bisogno — un
+ * guardiano che grida su tutto è un guardiano che si impara a ignorare.
+ */
+export const COLONNE_124_VISTA = ['stripe_charges_enabled', 'stripe_payouts_enabled'] as const;
+
+/** La vista su cui quelle due colonne possono ancora non esserci. */
+export const VISTA_124 = 'seller_public_profiles';
+
 /** Codici PostgreSQL che dicono «questo pezzo di schema non c'è ancora». */
 const SCHEMA_INDIETRO = new Set([
   '42703', // undefined_column
   '42883', // undefined_function
   '23514', // check_violation — uno stato nuovo rifiutato dal vincolo vecchio
+  // 22/8/2026 — mancava, ed è il codice della TABELLA che non c'è ancora
+  // (non della colonna). Senza, il ripiego non sarebbe scattato per
+  // `payment_attempts`, che è nata dopo: la strada si sarebbe fermata
+  // esattamente come prima di avere un ripiego.
+  '42P01', // undefined_table
 ]);
 
 export function eSchemaIndietro(errore: unknown): boolean {
@@ -78,4 +98,20 @@ export function senzaColonne(select: string, colonne: readonly string[]): string
     .map((c) => c.trim())
     .filter((c) => !da.has(c))
     .join(', ');
+}
+
+/**
+ * 22/8/2026 — IL RAMO DI RIPIEGO HA LA STESSA FORMA DI QUELLO PRINCIPALE.
+ *
+ * Il ripiego costruisce la lista delle colonne a runtime (`senzaColonne`), e
+ * PostgREST le colonne le deduce solo da una stringa scritta a mano: una
+ * costruita al volo gli risulta «stringa generica», e i due rami di
+ * `conRipiegoSchema` finiscono con due tipi diversi.
+ *
+ * Questa funzione dichiara quello che è vero: il ripiego restituisce le stesse
+ * righe, con una colonna in meno — che il codice a valle legge come
+ * `undefined`, ed è esattamente il comportamento voluto.
+ */
+export function stessaFormaDi<T>(ramoDiRipiego: PromiseLike<unknown>): PromiseLike<T> {
+  return ramoDiRipiego as PromiseLike<T>;
 }

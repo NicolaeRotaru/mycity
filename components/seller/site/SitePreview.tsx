@@ -16,7 +16,7 @@ import { enabledSections, type SitePage, type SiteSection, type ThemeKey } from 
  * reale (copertina con gradient accent, griglie prodotto, card recensione, ecc.),
  * tinti con l'accent del negozio. Si aggiorna in tempo reale dalla bozza locale
  * dell'editor, così il venditore vede l'effetto di ordine/visibilità/testi mentre
- * compone. Design: design-system/ui_kits/seller/src/85-extra.txt → Vetrina/VetBlock.
+ * compone. Design: docs/mockup/ui_kits/seller/src/85-extra.txt → Vetrina/VetBlock.
  *
  * Importante: legge SOLO la bozza (sezioni + tema + accent). Non duplica lo schema
  * né tocca il salvataggio; resta un puro renderer di presentazione.

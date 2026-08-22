@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 
 /**
  * Client Supabase per l'autenticazione dentro una rotta server, uno per
@@ -11,16 +11,7 @@ import { createClient } from '@supabase/supabase-js';
  * stesso oggetto, e la sessione di una può finire nelle mani dell'altra. Qui
  * ogni richiesta ha il suo, e non si salva niente in memoria fra una e l'altra.
  */
-function clientPerRichiesta() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) {
-    throw new Error('Variabili Supabase mancanti: NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  }
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-}
+const clientPerRichiesta = creaClientAnonimo;
 
 export const authServer = {
   async signIn(email: string, password: string, options?: { captchaToken?: string }) {

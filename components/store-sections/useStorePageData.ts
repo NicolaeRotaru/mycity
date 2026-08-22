@@ -6,6 +6,10 @@ import { queryKeys } from '@/lib/queries/keys';
 import { normalizeCustomization, accentHex, socialLinks } from '@/lib/store-customization';
 import { normalizeSite } from '@/lib/store-site';
 import type { SectionContext, SectionPromo, SectionReview, StoreContextRow } from './SectionContext';
+import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
+
+const SELECT_NEGOZIO =
+  'id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year';
 
 /**
  * Carica tutto ciò che serve a renderizzare una pagina vetrina (home o custom):
@@ -17,11 +21,22 @@ export function useStorePageData(id: string) {
   const storeQ = useQuery({
     queryKey: queryKeys.stores.detail(id),
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('seller_public_profiles')
-        .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year')
-        .eq('id', id)
-        .maybeSingle();
+      // 22/8/2026 — ripiego sulle due colonne della migrazione 124: senza,
+      // l'intera pagina del negozio non si apre su un database indietro.
+      const conBandierine = () =>
+        supabase.from('seller_public_profiles').select(SELECT_NEGOZIO).eq('id', id).maybeSingle();
+      const { data, error } = await conRipiegoSchema(
+        'useStorePageData:seller_public_profiles',
+        conBandierine,
+        () =>
+          stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
+            supabase
+              .from('seller_public_profiles')
+              .select(senzaColonne(SELECT_NEGOZIO, COLONNE_124_VISTA))
+              .eq('id', id)
+              .maybeSingle(),
+          ),
+      );
       if (error) throw error;
       // 22/8/2026 — un negozio che non esiste non e' un guasto di rete: senza
       // questo, la pagina offriva «Riprova» su un indirizzo che non porta da

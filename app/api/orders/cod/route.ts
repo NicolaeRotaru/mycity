@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
-import { ApiErrors } from '@/lib/api/responses';
+import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
@@ -803,6 +803,8 @@ export const POST = withAuthRateLimit(
       if (errChiave) logger.warn('[cod] tentativo non completato', { message: errChiave.message });
     }
 
-    return NextResponse.json({ orderIds: createdOrderIds, ordini: ordiniCreati }, { status: 200 });
+    // 22/8/2026 — al contratto: `{ ok: true, data: { … } }`, come ogni altra
+    // rotta. Qui rispondeva un oggetto nudo, senza `ok` e senza `data`.
+    return apiSuccess({ orderIds: createdOrderIds, ordini: ordiniCreati });
   },
 );

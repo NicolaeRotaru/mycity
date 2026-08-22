@@ -13,7 +13,7 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
  * Applica via /api/ai/catalog-apply (lo stesso apply validato), una per prodotto,
  * dopo conferma. Human-in-the-loop.
  *
- * Design: design-system/ui_kits/seller/src/80-ai.txt → AiCopilot (avatar gradient,
+ * Design: docs/mockup/ui_kits/seller/src/80-ai.txt → AiCopilot (avatar gradient,
  * stato "Online", bolle utente/assistente, puntini di digitazione, chip suggeriti,
  * anteprime ricche in-linea). Tutta la logica /api/ai/copilot + catalog-apply resta.
  */
