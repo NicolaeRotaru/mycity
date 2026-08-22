@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * Ordine e copertina foto: il modello valuta le foto del prodotto e propone la
@@ -67,7 +68,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

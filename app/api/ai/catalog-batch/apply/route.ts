@@ -9,6 +9,7 @@ import { resolveAiPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { CatalogJobResult, CatalogOperation } from '@/lib/ai/catalogBatch';
 import { senzaCampiEconomici } from '@/lib/ai/catalogBatch';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Applica i risultati di un job AI massivo, dopo che il venditore li ha rivisti.
@@ -36,7 +37,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

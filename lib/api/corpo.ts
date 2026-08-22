@@ -68,3 +68,55 @@ export async function richiestaConTetto(req: Request, maxBytes: number): Promise
     body: new Uint8Array(buf),
   });
 }
+
+
+/**
+ * 22/8/2026 — IL TETTO C'ERA, E QUASI NESSUNA ROTTA LO USAVA.
+ *
+ * Questo file esisteva dal 20 agosto, con un tetto vero che legge il corpo a
+ * pezzi. Poi cinquantatre rotte sotto `app/api` continuavano a chiamare
+ * `req.json()` nudo, che carica tutto in memoria prima di guardare quanto e'
+ * grande. Fra quelle: la cassa in contanti, il checkout con carta, le rotte che
+ * ricevono foto in base64. Un solo utente, con una richiesta da qualche
+ * centinaio di megabyte, faceva cadere l'istanza — e con lei il sito per tutti.
+ *
+ * Questa funzione e' la porta da cui deve passare ogni corpo JSON. Lancia
+ * invece di restituire, cosi' entra nel `try` che quasi tutte le rotte hanno
+ * gia' attorno alla lettura del corpo, senza riscriverle una per una.
+ *
+ * Il guardiano che impedisce alla cinquantaquattresima di nascere nuda sta in
+ * `tests/unit/nessun-corpo-senza-tetto.test.ts`: legge i file e diventa rosso.
+ */
+
+/** Un JSON normale: dati, non file. */
+export const TETTO_JSON = 1024 * 1024;          // 1 MB
+/** Le rotte che ricevono foto dentro il JSON (base64). */
+export const TETTO_JSON_CON_FOTO = 12 * 1024 * 1024;  // 12 MB
+
+export class CorpoTroppoGrande extends Error {
+  readonly status = 413;
+  constructor(maxBytes: number) {
+    super(`Corpo della richiesta troppo grande (oltre ${Math.round(maxBytes / 1024)} KB)`);
+    this.name = 'CorpoTroppoGrande';
+  }
+}
+
+/**
+ * Il JSON del corpo entro il tetto. Lancia `CorpoTroppoGrande` se sfora.
+ *
+ * Il tipo di ritorno e' `any` di proposito: e' lo stesso di `req.json()`, che
+ * questa funzione sostituisce ovunque. Restituire `unknown` avrebbe obbligato a
+ * riscrivere cinquantatre punti di lettura per una cosa che non cambia il
+ * comportamento — e ogni riscrittura in piu' e' un'occasione in piu' di
+ * sbagliare su rotte che toccano i soldi.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function jsonRichiesta(req: Request, maxBytes: number = TETTO_JSON): Promise<any> {
+  const dati = await jsonConTetto(req, maxBytes);
+  if (dati === undefined) throw new CorpoTroppoGrande(maxBytes);
+  // `req.json()` LANCIA su un JSON malformato, e le rotte contano su quello per
+  // rispondere «dati non validi». Restituire `null` avrebbe fatto proseguire la
+  // rotta con un corpo vuoto: si deve comportare come quello che sostituisce.
+  if (dati === null) throw new SyntaxError('Corpo della richiesta non è JSON valido');
+  return dati;
+}

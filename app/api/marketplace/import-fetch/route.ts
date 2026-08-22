@@ -8,6 +8,7 @@ import { env } from '@/lib/env';
 import { AiConfigError } from '@/lib/ai/client';
 import { AiCallError } from '@/lib/ai/run';
 import { fetchExternalSnapshot, resolveCategoryFromSlug } from '@/lib/products/externalSync';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * POST /api/marketplace/import-fetch
@@ -31,7 +32,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;
-  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido.'); }
+  try { json = await jsonRichiesta(req, TETTO_JSON_CON_FOTO); } catch { return ApiErrors.invalidRequest('Body JSON non valido.'); }
   const parsed = BodySchema.safeParse(json);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.issues[0]?.message ?? 'Dati non validi');
   const { query, marketplace } = parsed.data;

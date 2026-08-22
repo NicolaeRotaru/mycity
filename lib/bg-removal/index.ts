@@ -33,6 +33,23 @@ class MockBgRemovalProvider implements BgRemovalProvider {
  * direttamente l'immagine finale (niente compositing lato client). Richiesta
  * form-encoded con `image_file_b64`; risposta BINARIA (l'immagine), non JSON.
  */
+/**
+ * 22/8/2026 — UNA CHIAMATA SENZA SCADENZA E' UNA ROTTA CHE NON TORNA.
+ *
+ * Queste due chiamate non avevano nessun tetto di tempo. Un fornitore che si
+ * impianta — non che risponde male: che NON risponde — teneva la rotta
+ * occupata finche' non cadeva per conto suo, e il venditore restava a guardare
+ * il caricamento su una funzione che dovrebbe finire in due secondi.
+ *
+ * Trenta secondi sono generosi: il fornitore normale risponde in due-cinque.
+ * `AbortSignal.timeout` fa uscire la fetch dall'errore, dove c'e' gia' il
+ * `catch` che risponde «non raggiungibile» — cosi' il venditore riceve un
+ * messaggio invece di un'attesa. La costante sta qui accanto a quella dei
+ * documenti d'identita' (lib/kyc/providers.ts), perche' la regola sia evidente
+ * a chi aggiunge il terzo fornitore.
+ */
+const BG_FETCH_TIMEOUT_MS = 30_000;
+
 class RemoveBgProvider implements BgRemovalProvider {
   constructor(private apiKey: string) {}
 
@@ -48,9 +65,11 @@ class RemoveBgProvider implements BgRemovalProvider {
         method: 'POST',
         headers: { 'X-Api-Key': this.apiKey },
         body: form,
+        signal: AbortSignal.timeout(BG_FETCH_TIMEOUT_MS),
       });
     } catch {
       // Errore di rete: mai loggare la chiave o il body.
+      // Anche la scadenza passa di qui: per chi aspetta e' la stessa cosa.
       throw new BgRemovalUpstreamError('Servizio remove.bg non raggiungibile.');
     }
 
@@ -90,6 +109,7 @@ class PhotoroomProvider implements BgRemovalProvider {
         method: 'POST',
         headers: { 'x-api-key': this.apiKey },
         body: form,
+        signal: AbortSignal.timeout(BG_FETCH_TIMEOUT_MS),
       });
     } catch {
       throw new BgRemovalUpstreamError('Servizio Photoroom non raggiungibile.');

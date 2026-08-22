@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -26,7 +27,7 @@ const updateSchema = z.object({ id: z.string().uuid(), ...baseFields }).partial(
 
 export const POST = withAdminAuth(async ({ req }) => {
   let body: unknown;
-  try { body = await req.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
+  try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.issues[0]?.message ?? 'Dati non validi');
   const d = parsed.data;
@@ -49,7 +50,7 @@ export const POST = withAdminAuth(async ({ req }) => {
 
 export const PATCH = withAdminAuth(async ({ req }) => {
   let body: unknown;
-  try { body = await req.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
+  try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.issues[0]?.message ?? 'Dati non validi');
   const { id, ...rest } = parsed.data;
@@ -74,7 +75,7 @@ export const PATCH = withAdminAuth(async ({ req }) => {
 
 export const DELETE = withAdminAuth(async ({ req }) => {
   let body: unknown;
-  try { body = await req.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
+  try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
   const id = (body as { id?: string })?.id;
   if (!id || !z.string().uuid().safeParse(id).success) return ApiErrors.invalidRequest('ID non valido');
 

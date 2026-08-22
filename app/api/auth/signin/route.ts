@@ -3,6 +3,7 @@ import { authServer } from '@/lib/supabase/auth-server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { ApiErrors } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
 
   let body: { email?: unknown; password?: unknown; captchaToken?: unknown };
   try {
-    body = await request.json();
+    body = await jsonRichiesta(request, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('Body JSON non valido');
   }

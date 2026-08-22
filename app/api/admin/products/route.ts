@@ -6,6 +6,7 @@ import { writeAudit } from '@/lib/audit';
 import { saveProductVariantsServer } from '@/lib/products/persistVariantsServer';
 import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';
 import { type ProductVariant } from '@/lib/products/variants';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -95,7 +96,7 @@ function externalPatch(d: { external_source_url?: string | null; external_market
 
 export const POST = withAdminAuth(async ({ user, req }) => {
   let body: unknown;
-  try { body = await req.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
+  try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.issues[0]?.message ?? 'Dati non validi');
   const d = parsed.data;
@@ -148,7 +149,7 @@ export const POST = withAdminAuth(async ({ user, req }) => {
 
 export const PATCH = withAdminAuth(async ({ user, req }) => {
   let body: unknown;
-  try { body = await req.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
+  try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.issues[0]?.message ?? 'Dati non validi');
   const { id, variants, ...rest } = parsed.data;

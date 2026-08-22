@@ -4,6 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -29,7 +30,7 @@ export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;
-  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
+  try { json = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = SendSchema.safeParse(json);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');
   const { conversationId, body } = parsed.data;

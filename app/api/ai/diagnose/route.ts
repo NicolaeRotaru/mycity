@@ -9,6 +9,7 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext, type ProductContextInput } from '@/lib/ai/productContext';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { sellerEconomics } from '@/lib/products/economics';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * "Perché non vende?" — diagnostica un prodotto fermo e propone correzioni
@@ -94,7 +95,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

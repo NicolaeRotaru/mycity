@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { sellerEconomics } from '@/lib/products/economics';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * Motore "Migliora tutto" — una singola passata AI che ottimizza l'INTERA
@@ -229,7 +230,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: ImproveBody;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -23,7 +24,7 @@ const dropSchema = z.object({
 
 export const POST = withAdminAuth(async ({ req }) => {
   let body: unknown;
-  try { body = await req.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
+  try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
 
   const parsed = dropSchema.safeParse(body);
   if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.issues[0]?.message ?? 'Dati non validi');
@@ -47,7 +48,7 @@ export const POST = withAdminAuth(async ({ req }) => {
 
 export const DELETE = withAdminAuth(async ({ req }) => {
   let body: unknown;
-  try { body = await req.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
+  try { body = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
   const date = (body as { drop_date?: string })?.drop_date;
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return ApiErrors.invalidRequest('Data non valida');
 

@@ -1,3 +1,4 @@
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -53,7 +54,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let json: unknown;
   try {
-    json = await req.json();
+    json = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

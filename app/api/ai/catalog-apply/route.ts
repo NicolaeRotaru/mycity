@@ -12,6 +12,7 @@ import {
   type ProductRow,
 } from '@/lib/products/aiSnapshot';
 import { classifyProductPolicy } from '@/lib/ai/moderation';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Applica al prodotto un patch confermato dal venditore nella chat Assistenza.
@@ -33,7 +34,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: ApplyBody;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

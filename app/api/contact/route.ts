@@ -6,6 +6,7 @@ import { sendEmail } from '@/lib/email/client';
 import { verifyTurnstileToken } from '@/lib/captcha';
 import { logger } from '@/lib/logger';
 import { ApiErrors } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;
-  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body non valido'); }
+  try { json = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Body non valido'); }
   const parsed = Schema.safeParse(json);
   if (!parsed.success) {
     return ApiErrors.invalidRequest(parsed.error.errors[0]?.message ?? 'Input non valido');

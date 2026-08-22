@@ -8,6 +8,7 @@ import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { recinta, REGOLA_TESTO_DI_TERZI } from '@/lib/ai/recinto';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Riepilogo recensioni: sintetizza i feedback degli acquirenti (di un prodotto
@@ -61,7 +62,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

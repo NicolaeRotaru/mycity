@@ -17,6 +17,7 @@ import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -90,7 +91,7 @@ export const POST = withAuthRateLimit(
 
     let body: z.infer<typeof Body>;
     try {
-      body = Body.parse(await req.json());
+      body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
     } catch (e) {
       return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
     }

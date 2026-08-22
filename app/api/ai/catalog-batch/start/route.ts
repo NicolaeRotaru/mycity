@@ -15,6 +15,7 @@ import {
 } from '@/lib/ai/catalogBatch';
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { CategoryRow } from '@/lib/products/aiPatch';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * Avvia un job AI massivo sul catalogo (Batch API). Costruisce una richiesta per
@@ -37,7 +38,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

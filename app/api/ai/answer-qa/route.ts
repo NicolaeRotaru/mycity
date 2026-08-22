@@ -8,6 +8,7 @@ import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext, type ProductContextInput } from '@/lib/ai/productContext';
 import { recinta, REGOLA_TESTO_DI_TERZI } from '@/lib/ai/recinto';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Risposta assistita alle domande: dato un prodotto e la domanda di un
@@ -51,7 +52,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

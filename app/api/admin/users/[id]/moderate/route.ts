@@ -4,6 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit, type AuditAction } from '@/lib/audit';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -93,7 +94,7 @@ function buildModeration(action: Action, reason: string | undefined, adminId: st
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
   let body: z.infer<typeof Body>;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }

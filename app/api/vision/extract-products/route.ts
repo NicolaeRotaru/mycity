@@ -1,3 +1,4 @@
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
@@ -174,7 +175,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let json: unknown;
   try {
-    json = await req.json();
+    json = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('Body JSON non valido.');
   }

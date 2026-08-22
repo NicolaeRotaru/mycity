@@ -13,6 +13,7 @@ import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -92,7 +93,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   let body: z.infer<typeof Body>;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
     return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
   }

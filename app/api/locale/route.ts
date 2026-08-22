@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SUPPORTED_LOCALES } from '@/i18n';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -14,7 +15,7 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest): Promise<NextResponse> {
   let body: { locale?: unknown };
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }

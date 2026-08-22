@@ -10,6 +10,7 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { AiProductPatch, CategoryRow } from '@/lib/products/aiPatch';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Copilot del negozio — modifiche di massa in linguaggio naturale.
@@ -77,7 +78,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }
