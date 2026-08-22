@@ -88,3 +88,47 @@ export function compensoConsegnaEuro(o: {
 }): number {
   return o.rider_fee_cents != null ? o.rider_fee_cents / 100 : Number(o.shipping_cost || 0);
 }
+
+/**
+ * Quanto contante il fattorino si TIENE su una consegna pagata alla consegna,
+ * in centesimi — e quindi quanto NON deve rimettere.
+ *
+ * 22/8/2026 — PERCHE' QUESTA FUNZIONE HA CAMBIATO CASA.
+ *
+ * Lo stesso numero era calcolato in tre posti con tre regole diverse:
+ *   · il riquadro dell'incasso del fattorino pre-riempiva il TOTALE del cliente;
+ *   · la rotta che registra l'incasso si aspettava il totale MENO il compenso;
+ *   · la pagina delle rimesse toglieva la SPEDIZIONE pagata dal cliente, che
+ *     sopra i 30 euro e' zero.
+ *
+ * Il costo: su ogni consegna in contanti partiva l'allarme «l'incasso non
+ * quadra» — il 100% di quelle a domicilio, non un caso di bordo. L'allarme
+ * antifrode diventava rumore costante, la quadratura giornaliera nasceva rossa
+ * per costruzione, e l'amministratore che vedeva lo scarto esitava a confermare
+ * la rimessa: finche' non la conferma, il negozio non viene pagato.
+ *
+ * Adesso e' una definizione sola, in un posto solo. Il ripiego su
+ * `shipping_cost` copre le consegne fatte prima della migrazione 111, quando il
+ * compenso non aveva una colonna sua. Sul ritiro in negozio non c'e' consegna,
+ * quindi non c'e' compenso.
+ */
+export function compensoTrattenutoCents(o: {
+  rider_fee_cents?: number | null;
+  shipping_cost?: number | string | null;
+  pickup_in_store?: boolean | null;
+}): number {
+  if (o.pickup_in_store) return 0;
+  return o.rider_fee_cents != null
+    ? Math.max(0, o.rider_fee_cents)
+    : Math.max(0, Math.round(Number(o.shipping_cost ?? 0) * 100));
+}
+
+/** Quanto contante deve tornare indietro da una consegna pagata alla consegna. */
+export function contanteDaRimettereCents(o: {
+  total_price?: number | string | null;
+  rider_fee_cents?: number | null;
+  shipping_cost?: number | string | null;
+  pickup_in_store?: boolean | null;
+}): number {
+  return Math.max(0, Math.round(Number(o.total_price ?? 0) * 100) - compensoTrattenutoCents(o));
+}

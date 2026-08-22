@@ -9,7 +9,10 @@ import { Banknote, Camera } from 'lucide-react';
 
 type Props = {
   orderId: string;
+  /** Il contante da rimettere: il totale del cliente MENO il compenso trattenuto. */
   expectedCents: number;
+  /** Quanto il fattorino si e' gia' tenuto: serve a spiegare perche il numero e piu basso. */
+  compensoTenutoCents?: number;
   onConfirmed?: () => void;
 };
 
@@ -22,7 +25,7 @@ type Props = {
  * Alla conferma chiama /api/rider/cash-confirm che valida lato server
  * (rider proprietario, stato ordine, payment_method=cod, non duplicato).
  */
-export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed }: Props) {
+export default function CashConfirmDialog({ orderId, expectedCents, compensoTenutoCents = 0, onConfirmed }: Props) {
   const tStates = useTranslations('states');
   const tActions = useTranslations('actions');
   const [open, setOpen] = useState(false);
@@ -106,15 +109,23 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
           facoltative.
         </p>
 
-        <label className="mt-4 block text-sm font-medium text-ink-700">Importo incassato (€)</label>
+        <label className="mt-4 block text-sm font-medium text-ink-700" htmlFor="contante-da-rimettere">
+          Contante da rimettere (€)
+        </label>
         <input
+          id="contante-da-rimettere"
           type="number"
           step="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-lg font-mono"
         />
-        <p className="mt-1 text-xs text-ink-500">Importo previsto: €{(expectedCents / 100).toFixed(2)}</p>
+        <p className="mt-1 text-xs text-ink-500">
+          Previsto: €{(expectedCents / 100).toFixed(2)}
+          {compensoTenutoCents > 0 && (
+            <> — hai già trattenuto €{(compensoTenutoCents / 100).toFixed(2)} di compenso.</>
+          )}
+        </p>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <PhotoSlot

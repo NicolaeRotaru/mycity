@@ -18,6 +18,7 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useProfile } from '@/components/hooks/useProfile';
 import { trackRiderOrderAccepted } from '@/lib/analytics/events';
+import { compensoConsegnaEuro } from '@/lib/shipping';
 
 /**
  * Un ordine libero come lo vede il fattorino PRIMA di accettarlo: negozio,
@@ -44,6 +45,7 @@ type AvailableOrder = {
   id: string;
   total_price: number;
   shipping_cost: number;
+  rider_fee_cents: number | null;
   delivery_status: OrderStatus;
   delivery_city: string | null;
   delivery_address: string | null;
@@ -116,7 +118,7 @@ export default function RiderDashboardPage() {
         supabase
           .from('orders')
           .select(`
-            id, total_price, shipping_cost, delivery_status,
+            id, total_price, shipping_cost, rider_fee_cents, delivery_status,
             delivery_city, delivery_address, payment_method, user_id, rider_id,
             seller:profiles!orders_seller_id_fkey ( store_name, store_logo, store_address ),
             order_items ( id, quantity )
@@ -181,12 +183,17 @@ export default function RiderDashboardPage() {
       start.setHours(0, 0, 0, 0);
       const { data } = await supabase
         .from('orders')
-        .select('shipping_cost, delivered_at')
+        .select('shipping_cost, rider_fee_cents, delivered_at')
         .eq('rider_id', user.id)
         .eq('delivery_status', 'DELIVERED')
         .gte('delivered_at', start.toISOString());
-      const rows = (data ?? []) as { shipping_cost: number | null }[];
-      return { count: rows.length, earned: rows.reduce((s, o) => s + Number(o.shipping_cost || 0), 0) };
+      // 22/8/2026 — IL TOTALE DELLA GIORNATA SOMMAVA `shipping_cost`, cioe'
+      // quanto ha pagato il CLIENTE per la spedizione: sopra i 30 euro e' zero.
+      // Il fattorino chiudeva una giornata di consegne con un totale piu' basso
+      // del dovuto, sul numero in base al quale decide se continuare a lavorare
+      // con noi.
+      const rows = (data ?? []) as { shipping_cost: number | null; rider_fee_cents: number | null }[];
+      return { count: rows.length, earned: rows.reduce((s, o) => s + compensoConsegnaEuro(o), 0) };
     },
     staleTime: 30_000,
   });
@@ -367,7 +374,7 @@ export default function RiderDashboardPage() {
               cust={`${activeOne.delivery_address ?? ''}${activeOne.delivery_city ? ', ' + activeOne.delivery_city : ''}`}
             />
             <div className="mt-3 flex items-center justify-between border-t border-cream-200 pt-3">
-              <span className="text-sm font-bold text-olive-700">{formatPrice(activeOne.shipping_cost || 4.9)}</span>
+              <span className="text-sm font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(activeOne))}</span>
               <span className="inline-flex items-center gap-1.5 text-sm font-bold text-primary-700">
                 Continua <ArrowRight size={16} aria-hidden />
               </span>
@@ -382,7 +389,7 @@ export default function RiderDashboardPage() {
           {/* Giro intelligente: batch quando ci sono ≥2 ordini disponibili */}
           {available.length >= 2 && (() => {
             const batch = available.slice(0, 2);
-            const sum = batch.reduce((t, o) => t + Number(o.shipping_cost || 4.9), 0);
+            const sum = batch.reduce((t, o) => t + compensoConsegnaEuro(o), 0);
             return (
               <div className="mb-3.5 rounded-xl border border-primary-300 bg-gradient-to-br from-primary-50 to-cream-50 p-3.5">
                 <div className="mb-2 flex items-center gap-2">
@@ -435,7 +442,7 @@ export default function RiderDashboardPage() {
                   <div className="mt-3 flex items-center justify-between">
                     <div>
                       <p className="text-[11px] text-ink-400">Compenso</p>
-                      <p className="font-serif text-lg font-extrabold text-olive-700">{formatPrice(o.shipping_cost || 4.9)}</p>
+                      <p className="font-serif text-lg font-extrabold text-olive-700">{formatPrice(compensoConsegnaEuro(o))}</p>
                     </div>
                     <Button
                       variant="accent"
@@ -459,7 +466,7 @@ export default function RiderDashboardPage() {
                   <div key={o.id} className="rounded-xl border border-cream-300 bg-surface-0 p-3.5 opacity-75">
                     <div className="mb-2 flex items-center justify-between">
                       <Badge variant="local" icon={ChefHat}>In preparazione</Badge>
-                      <span className="font-bold text-olive-700">{formatPrice(o.shipping_cost || 4.9)}</span>
+                      <span className="font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(o))}</span>
                     </div>
                     <DeliveryRoute
                       store={o.store_name ?? 'Negozio'}

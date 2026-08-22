@@ -14,6 +14,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
+import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -105,6 +106,26 @@ export default function CheckoutPage() {
           pErr = ripiego.error;
         }
         if (pErr) throw pErr;
+
+        // 22/8/2026 — IL PREZZO IN PROMOZIONE SPARIVA ALLA CASSA.
+        //
+        // Qui si rileggeva la sola colonna `products.price`, cioe' il prezzo
+        // PIENO, e con quello si sovrascriveva il prezzo del carrello. Il
+        // cliente vedeva 7 euro nel carrello, apriva il checkout e trovava 10
+        // con l'avviso «il prezzo e' passato da 7,00 a 10,00»: il momento esatto
+        // in cui si abbandona. E le due rotte che creano l'ordine lo sconto lo
+        // applicano eccome, quindi il totale mostrato non era quello addebitato.
+        //
+        // Peggio ancora sulla soglia della spedizione gratuita e sul minimo dei
+        // codici sconto: la pagina li valutava sul subtotale pieno, il server su
+        // quello scontato. Carrello a 31 euro pieni / 28 scontati: la pagina
+        // prometteva la spedizione gratis, il server la addebitava.
+        //
+        // `fetchActiveDiscounts` e' la stessa funzione che usano le due rotte:
+        // una chiamata sola per tutto il carrello, con ripiego a zero sconto se
+        // qualcosa non risponde.
+        const sconti = await fetchActiveDiscounts(supabase, ids);
+
         for (const p of products ?? []) {
           validIds.add(p.id);
           if (p.seller_id) lookupMap.set(p.id, p.seller_id);
@@ -116,8 +137,11 @@ export default function CheckoutPage() {
           // pulsante, senza che il negoziante potesse capire perché.
           stockMap.set(p.id, p.stock == null ? Number.POSITIVE_INFINITY : p.stock);
           hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
-          const prezzoVero = Number((p as { price?: number | string | null }).price ?? NaN);
-          if (Number.isFinite(prezzoVero)) priceMap.set(p.id, prezzoVero);
+          const prezzoPieno = Number((p as { price?: number | string | null }).price ?? NaN);
+          if (Number.isFinite(prezzoPieno)) {
+            // Il prezzo che la pagina usa e' quello che il server fara' pagare.
+            priceMap.set(p.id, discountedUnitCents(prezzoPieno, sconti.get(p.id) ?? 0) / 100);
+          }
         }
       }
 

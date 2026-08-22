@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import { contanteDaRimettereCents } from '@/lib/shipping';
 
 /**
  * Rimesse contanti COD (🔴-1 slice 2/UI). Elenca i gruppi rider·giorno con ordini
@@ -24,6 +25,8 @@ type Row = {
   delivered_at: string;
   total_price: string | number;
   shipping_cost: string | number | null;
+  rider_fee_cents: number | null;
+  pickup_in_store: boolean | null;
   rider: { full_name: string | null } | null;
 };
 
@@ -32,7 +35,13 @@ type Group = {
   riderName: string;
   date: string; // YYYY-MM-DD (UTC) — coerente con confirm_cod_remittance
   orders: number;
-  toRemitCents: number; // Σ (totale − spedizione): il rider tiene la spedizione, rimette il resto
+  // Σ (totale − compenso trattenuto): il fattorino tiene il suo compenso fisso,
+  // rimette il resto. 22/8/2026 — qui si toglieva la SPEDIZIONE pagata dal
+  // cliente, che sopra i 30 euro e' zero: su ogni ordine sopra soglia la pagina
+  // chiedeva 3 euro in piu' del dovuto. L'amministratore contava i contanti,
+  // ne trovava meno di quelli scritti, e o accusava il fattorino o non
+  // confermava — e senza conferma il negozio non viene pagato.
+  toRemitCents: number;
 };
 
 export default function AdminCodRemittancePage() {
@@ -43,7 +52,7 @@ export default function AdminCodRemittancePage() {
     queryFn: async (): Promise<Row[]> => {
       const { data } = await supabase
         .from('orders')
-        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider:profiles!orders_rider_id_fkey(full_name)')
+        .select('id, rider_id, delivered_at, total_price, shipping_cost, rider_fee_cents, pickup_in_store, rider:profiles!orders_rider_id_fkey(full_name)')
         .eq('payment_method', 'cod')
         .eq('delivery_status', 'DELIVERED')
         .eq('payout_status', 'AWAITING_REMITTANCE')
@@ -60,7 +69,7 @@ export default function AdminCodRemittancePage() {
       if (!o.delivered_at || !o.rider_id) continue;
       const date = new Date(o.delivered_at).toISOString().slice(0, 10);
       const key = `${o.rider_id}|${date}`;
-      const cents = Math.round(Number(o.total_price) * 100) - Math.round(Number(o.shipping_cost ?? 0) * 100);
+      const cents = contanteDaRimettereCents(o);
       const g = map.get(key) ?? {
         riderId: o.rider_id,
         riderName: o.rider?.full_name ?? o.rider_id.slice(0, 8),
@@ -76,7 +85,7 @@ export default function AdminCodRemittancePage() {
   }, [rows]);
 
   const confirm = useMutation({
-    mutationFn: async ({ riderId, date }: { riderId: string; date: string }): Promise<number> => {
+    mutationFn: async ({ riderId, date }: { riderId: string; date: string }): Promise<{ rilasciati: number; saltati: number }> => {
       // Cookie-based (niente Bearer): l'RPC confirm_cod_remittance verifica
       // is_admin() leggendo l'auth.uid() dell'admin via getServerSupabase.
       const res = await fetch('/api/admin/cod-remittance', {
@@ -86,11 +95,21 @@ export default function AdminCodRemittancePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message ?? data?.error ?? 'Errore conferma rimessa');
-      return (data.released as number) ?? 0;
+      return {
+        rilasciati: (data.released as number) ?? 0,
+        saltati: (data.saltatiSenzaIncasso as number) ?? 0,
+      };
     },
-    onSuccess: (released) => {
+    onSuccess: ({ rilasciati, saltati }) => {
       qc.invalidateQueries({ queryKey: queryKeys.admin.codRemittances });
-      toast.success(`Rimessa confermata · ${released} ordini rilasciati al payout`);
+      toast.success(`Rimessa confermata · ${rilasciati} ordini rilasciati al payout`);
+      // Gli ordini senza incasso registrato non si pagano al buio: si dicono.
+      if (saltati > 0) {
+        toast.warning(
+          `${saltati} ordine/i consegnato/i senza incasso registrato: non sono stati rilasciati. Vanno chiesti al fattorino.`,
+          { duration: 10_000 },
+        );
+      }
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });

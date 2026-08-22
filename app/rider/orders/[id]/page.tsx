@@ -26,6 +26,7 @@ import {
 import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { trackRiderDeliveryCompleted } from '@/lib/analytics/events';
 import { queryKeys } from '@/lib/queries/keys';
+import { compensoConsegnaEuro, compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
 
 type OrderRow = {
   id: string;
@@ -83,7 +84,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id, user_id, seller_id, total_price, shipping_cost, delivery_status,
+          id, user_id, seller_id, total_price, shipping_cost, rider_fee_cents, pickup_in_store, delivery_status,
           created_at, accepted_at, ready_at, picked_up_at, delivered_at, canceled_at,
           payment_method, cash_confirmed_at,
           delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
@@ -416,8 +417,14 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
             <span className="font-semibold text-ink-900">{order.order_items.length} prodotti</span>
           </div>
           <div className="flex justify-between text-sm">
+            {/* 22/8/2026 — QUI C'ERA `shipping_cost`, CIOE' QUANTO PAGA IL CLIENTE
+                PER LA SPEDIZIONE. Sopra i 30 euro di spesa quella cifra e' zero,
+                e il fattorino leggeva «Il tuo compenso €0,00» su una consegna
+                che gli vale 3 euro. Il compenso ha una colonna sua da agosto:
+                `compensoConsegnaEuro` la legge, col ripiego per le consegne piu'
+                vecchie. */}
             <span className="text-ink-500">Il tuo compenso</span>
-            <span className="font-bold text-olive-700">{formatPrice(order.shipping_cost || 0)}</span>
+            <span className="font-bold text-olive-700">{formatPrice(compensoConsegnaEuro(order))}</span>
           </div>
           {order.payment_method === 'cod' && (
             <div className="mt-2.5 flex items-center gap-2 rounded-md bg-accent-100 px-3 py-2.5">
@@ -440,9 +447,16 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
                   Conferma l&apos;importo ricevuto in contanti per chiudere l&apos;ordine. La foto è facoltativa.
                 </p>
               </div>
+              {/* 22/8/2026 — IL CAMPO SI PRE-RIEMPIVA COL TOTALE DEL CLIENTE.
+                  Il server invece si aspetta il contante GIA' TOLTO il compenso
+                  che il fattorino si tiene: confermando il valore suggerito lo
+                  scarto era di 3 euro fissi, sopra la tolleranza, e su OGNI
+                  consegna a domicilio in contanti partiva l'allarme «l'incasso
+                  non quadra». Adesso i due numeri escono dalla stessa funzione. */}
               <CashConfirmDialog
                 orderId={order.id}
-                expectedCents={Math.round(Number(order.total_price) * 100)}
+                expectedCents={contanteDaRimettereCents(order)}
+                compensoTenutoCents={compensoTrattenutoCents(order)}
                 onConfirmed={() => qc.invalidateQueries({ queryKey: queryKeys.rider.order(id) })}
               />
             </div>
@@ -461,7 +475,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               <Check size={32} strokeWidth={3} className="text-olive-700" aria-hidden />
             </span>
             <p className="font-serif text-[22px] font-extrabold text-ink-900">Consegna completata!</p>
-            <p className="mt-1 text-sm text-ink-500">Hai guadagnato {formatPrice(order.shipping_cost || 0)}.</p>
+            <p className="mt-1 text-sm text-ink-500">Hai guadagnato {formatPrice(compensoConsegnaEuro(order))}.</p>
           </div>
         )}
 
