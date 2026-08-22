@@ -2,6 +2,7 @@ import { type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +18,7 @@ const MAX_LEN = 500;
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }) {
   let body: { reply?: unknown };
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('Corpo della richiesta non valido');
   }

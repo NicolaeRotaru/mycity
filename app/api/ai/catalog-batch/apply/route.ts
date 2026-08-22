@@ -9,6 +9,7 @@ import { resolveAiPatch, type CategoryRow } from '@/lib/products/aiPatch';
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { CatalogJobResult, CatalogOperation } from '@/lib/ai/catalogBatch';
 import { senzaCampiEconomici } from '@/lib/ai/catalogBatch';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Applica i risultati di un job AI massivo, dopo che il venditore li ha rivisti.
@@ -36,7 +37,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }
@@ -115,7 +116,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
           // domani un patch arriva da un'altra strada — un ritentativo, un
           // formato nuovo — il prezzo non passa lo stesso.
           patch: senzaCampiEconomici(r.patch),
-          current: { attributes: row.attributes ?? null, category_id: row.category_id, has_variants: row.has_variants },
+          // Il prezzo attuale serve al freno del 30%: senza, quel controllo
+          // dentro `resolveAiPatch` confronta con zero e non scatta mai. Qui i
+          // campi economici sono gia' tolti da `senzaCampiEconomici`, ma la
+          // difesa si tiene comunque: la prossima strada che arriva potrebbe
+          // non toglierli.
+          current: { attributes: row.attributes ?? null, category_id: row.category_id, has_variants: row.has_variants, price: row.price },
           categories,
         });
         if (Object.keys(update).length === 0) continue;

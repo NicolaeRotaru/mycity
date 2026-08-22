@@ -87,15 +87,35 @@ export function OrderSummary({
         </div>
       </div>
 
+      {/* 22/8/2026 — IL PULSANTE SPARIVA DALLA TASTIERA.
+          Quando c'era qualcosa da sistemare (merce finita, variante da
+          scegliere) il pulsante veniva `disabled`, e un elemento disabilitato
+          esce dal giro del tasto Tab: chi naviga da tastiera arrivava in fondo
+          e non trovava piu' niente, senza sapere che c'era un motivo. Adesso
+          resta raggiungibile e dichiara di essere bloccato con
+          `aria-disabled`: si puo' arrivarci, si sente perche' non parte, e
+          premendolo si va sul primo riquadro che spiega il blocco. */}
       <button
-        type="submit"
+        type={disabled && !isCheckingOut ? 'button' : 'submit'}
         form="checkout-form"
-        disabled={isCheckingOut || disabled}
+        disabled={isCheckingOut}
+        aria-disabled={disabled || isCheckingOut}
+        onClick={
+          disabled && !isCheckingOut
+            ? (e) => {
+                e.preventDefault();
+                const primoBlocco = document.querySelector<HTMLElement>('[role="alert"]');
+                primoBlocco?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                primoBlocco?.setAttribute('tabindex', '-1');
+                primoBlocco?.focus();
+              }
+            : undefined
+        }
         // 147 — L'`aria-label` sovrascriveva il testo visibile, che contiene
         // l'importo: chi usa un lettore di schermo sentiva «Conferma ordine» e
         // premeva senza sapere quanto stava pagando. Il testo visibile è già il
         // nome migliore.
-        className="w-full bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-4 font-extrabold text-base transition-colors shadow-warm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-inset"
+        className="w-full bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed py-4 font-extrabold text-base transition-colors shadow-warm-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-inset"
       >
         {isCheckingOut ? (
           paymentMethod === 'card' ? 'Apertura pagamento sicuro…' : 'Elaborazione…'

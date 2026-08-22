@@ -114,10 +114,16 @@ export default function TermsPage() {
           la <strong>verifica KYC</strong> (documento d&apos;identità, codice fiscale, P.IVA se
           applicabile, IBAN, assicurazione RC per i Rider).
         </p>
-        <p>
-          Devi avvisarci immediatamente di ogni uso non autorizzato del tuo account scrivendo a{' '}
-          <a href="mailto:security@mycity.it" className="text-primary-700 underline">security@mycity.it</a>.
-        </p>
+        {/* 22/8/2026 — Le caselle stavano scritte dentro il testo, su un
+            dominio che non e' quello di produzione: chi scriveva non riceveva
+            mai risposta. Adesso vengono dalla configurazione, e se non c'e' la
+            riga non si stampa. */}
+        {chiSiamo.emailSicurezza && (
+          <p>
+            Devi avvisarci immediatamente di ogni uso non autorizzato del tuo account scrivendo a{' '}
+            <a href={`mailto:${chiSiamo.emailSicurezza}`} className="text-primary-700 underline">{chiSiamo.emailSicurezza}</a>.
+          </p>
+        )}
       </LegalSection>
 
       <LegalSection id="ordini" heading="4. Ordini e formazione del contratto">
@@ -178,7 +184,9 @@ export default function TermsPage() {
         </p>
         <p>
           Per esercitare il recesso usa il flusso &quot;Richiedi reso&quot; nel dettaglio ordine
-          o scrivi a <a href="mailto:resi@mycity.it" className="text-primary-700 underline">resi@mycity.it</a>.
+          {chiSiamo.emailResi && (
+            <> o scrivi a <a href={`mailto:${chiSiamo.emailResi}`} className="text-primary-700 underline">{chiSiamo.emailResi}</a></>
+          )}.
           Le spese di restituzione sono a carico dell&apos;Acquirente salvo prodotto difettoso o
           errore del Venditore.
         </p>
@@ -290,8 +298,51 @@ export default function TermsPage() {
           <a href="https://ec.europa.eu/consumers/odr/" target="_blank" rel="noopener noreferrer" className="text-primary-700 underline">
             ec.europa.eu/consumers/odr
           </a>.
-          Inoltre, puoi contattare il nostro servizio clienti scrivendo a{' '}
-          <a href="mailto:reclami@mycity.it" className="text-primary-700 underline">reclami@mycity.it</a>.
+          {chiSiamo.emailReclami && (
+            <>
+              Inoltre, puoi contattare il nostro servizio clienti scrivendo a{' '}
+              <a href={`mailto:${chiSiamo.emailReclami}`} className="text-primary-700 underline">{chiSiamo.emailReclami}</a>.
+            </>
+          )}
+        </p>
+      </LegalSection>
+
+      <LegalSection id="segnalazioni" heading="16-bis. Contenuti illeciti, moderazione e riesame">
+        {/* 22/8/2026 — Questa sezione non c'era, e con lei non c'era nemmeno il
+            canale. Il regolamento europeo sui servizi digitali chiede tre cose
+            a chi ospita contenuti di terzi: un modo per segnalare, un punto di
+            contatto dichiarato, e criteri di moderazione con un percorso di
+            riesame per chi viene sospeso. Qui ci sono tutte e tre. */}
+        <p>
+          Su ogni scheda prodotto e su ogni pagina negozio trovi il comando{' '}
+          <strong>«Segnala questo contenuto»</strong>. Puoi usarlo anche senza avere un account.
+          Ogni segnalazione viene esaminata da una persona: se lasci un recapito ti scriviamo{' '}
+          <strong>com&apos;è andata e perché</strong>, anche quando decidiamo di non intervenire.
+        </p>
+        {chiSiamo.emailSegnalazioni && (
+          <p>
+            Punto di contatto per utenti e autorità:{' '}
+            <a href={`mailto:${chiSiamo.emailSegnalazioni}`} className="text-primary-700 underline">{chiSiamo.emailSegnalazioni}</a>.
+            La lingua di comunicazione è l&apos;italiano.
+          </p>
+        )}
+        <p>
+          <strong>Cosa rimuoviamo.</strong> Prodotti contraffatti o che violano un marchio, prodotti
+          vietati o pericolosi, descrizioni ingannevoli su prezzo, origine o disponibilità, contenuti
+          offensivi o molesti, recensioni non genuine.
+        </p>
+        <p>
+          <strong>Cosa succede al Venditore.</strong> Le misure sono graduali: avviso, rimozione della
+          singola scheda, sospensione della vendita, chiusura del negozio in caso di violazioni gravi o
+          ripetute. Ogni misura viene comunicata <strong>per iscritto e motivata</strong>, indicando il
+          contenuto e la ragione.
+        </p>
+        <p>
+          <strong>Riesame.</strong> Il Venditore può chiedere il riesame della misura entro{' '}
+          <strong>14 giorni</strong> dalla comunicazione, rispondendo alla stessa comunicazione o
+          scrivendo al punto di contatto qui sopra. Il riesame è svolto da una persona diversa da chi
+          ha deciso e ha esito entro <strong>14 giorni</strong>. Restano impregiudicate le vie
+          giudiziarie e la risoluzione stragiudiziale delle controversie.
         </p>
       </LegalSection>
 
@@ -306,9 +357,11 @@ export default function TermsPage() {
 
       <LegalSection id="contatti" heading="18. Contatti">
         <p>
-          Per domande sui Termini scrivi a{' '}
-          <a href="mailto:legal@mycity.it" className="text-primary-700 underline">legal@mycity.it</a>{' '}
-          oppure utilizza la <Link href="/contact" className="text-primary-700 underline">pagina contatti</Link>.
+          Per domande sui Termini
+          {chiSiamo.emailLegale && (
+            <> scrivi a <a href={`mailto:${chiSiamo.emailLegale}`} className="text-primary-700 underline">{chiSiamo.emailLegale}</a> oppure</>
+          )}{' '}
+          utilizza la <Link href="/contact" className="text-primary-700 underline">pagina contatti</Link>.
         </p>
       </LegalSection>
 

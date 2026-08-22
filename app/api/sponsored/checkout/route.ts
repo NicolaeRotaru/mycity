@@ -6,6 +6,7 @@ import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -32,7 +33,7 @@ export const POST = withAuthRateLimit(
 
     let body: z.infer<typeof Body>;
     try {
-      body = Body.parse(await req.json());
+      body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
     } catch (e) {
       return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
     }

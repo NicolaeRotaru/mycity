@@ -206,32 +206,81 @@ export async function handleRefundUpdated(refund: Stripe.Refund) {
   // rimborso rifiutato dalla banca non veniva registrato e nessuno avvisava
   // l'admin. I soldi restavano fermi in silenzio (lib/db/migrazione-124.ts).
   const COLONNE_RIMBORSO_FALLITO = 'id, refunded_amount_cents, gross_total_cents, total_price, payment_status';
-  const { data: order } = await conRipiegoSchema(
+
+  // 21/8/2026 — UN CARRELLO DA DUE NEGOZI E' DUE ORDINI CON LO STESSO PAGAMENTO.
+  //
+  // Qui si cercava l'ordine con `.maybeSingle()` sul payment_intent. Ma
+  // `handleCheckoutCompleted` crea un ordine per ogni negozio del carrello e
+  // scrive su tutti lo STESSO payment_intent: con due negozi la lettura
+  // rispondeva «piu' di una riga», il codice leggeva `null` e usciva scrivendo
+  // «nessun ordine trovato». Il rimborso che la banca rifiuta non tornava
+  // indietro da nessuna parte: i soldi rientravano a noi e il database
+  // continuava a dire «cliente rimborsato».
+  //
+  // Prima si guarda l'etichetta che `refundOrder` scrive sul rimborso
+  // (`metadata.order_id`): quella indica l'ordine esatto e chiude il caso senza
+  // ripartizioni. Se manca — rimborso creato a mano dal cruscotto Stripe — si
+  // leggono TUTTI gli ordini di quel pagamento e l'importo rientrato si divide
+  // fra loro in proporzione a quanto risultava rimborsato su ciascuno.
+  const idDaEtichetta = (refund.metadata?.order_id ?? '').trim();
+  const leggi = (colonne: string) =>
+    idDaEtichetta
+      ? admin.from('orders').select(colonne).eq('id', idDaEtichetta)
+      : admin.from('orders').select(colonne).eq('stripe_payment_intent', paymentIntent);
+
+  type OrdineRimborsoFallito = {
+    id: string;
+    refunded_amount_cents: number | null;
+    payment_status: string | null;
+  };
+  const { data: ordiniLetti } = await conRipiegoSchema(
     'orders.select (rimborso rifiutato)',
-    () => admin.from('orders').select(COLONNE_RIMBORSO_FALLITO).eq('stripe_payment_intent', paymentIntent).maybeSingle(),
-    () => admin.from('orders').select(senzaColonne(COLONNE_RIMBORSO_FALLITO, COLONNE_124)).eq('stripe_payment_intent', paymentIntent).maybeSingle(),
+    () => leggi(COLONNE_RIMBORSO_FALLITO),
+    () => leggi(senzaColonne(COLONNE_RIMBORSO_FALLITO, COLONNE_124)),
   );
-  if (!order) {
+  const ordini = (ordiniLetti ?? []) as unknown as OrdineRimborsoFallito[];
+  if (ordini.length === 0) {
     logger.warn('[stripe] rimborso fallito: nessun ordine trovato', { refundId: refund.id, paymentIntent });
     return;
   }
 
   const tornatoIndietro = refund.amount ?? 0;
-  const restante = Math.max(0, (order.refunded_amount_cents ?? 0) - tornatoIndietro);
-  const { error } = await admin
-    .from('orders')
-    .update({
-      refunded_amount_cents: restante,
-      payment_status: restante > 0 ? 'PARTIALLY_REFUNDED' : 'PAID',
-    })
-    .eq('id', order.id);
-  if (error) {
-    logger.error('[stripe] rimborso fallito non registrato', { orderId: order.id, message: error.message });
+  const rimborsatoInTutto = ordini.reduce((somma, o) => somma + (o.refunded_amount_cents ?? 0), 0);
+
+  // La ripartizione non deve perdere centesimi: l'ultimo ordine si prende il
+  // resto della divisione, cosi' la somma delle quote e' esattamente l'importo
+  // rientrato. Il tetto per riga e' quanto quella riga risultava rimborsata:
+  // non si puo' togliere piu' di quello che c'era scritto.
+  let giaAssegnato = 0;
+  const quote = ordini.map((o, i) => {
+    const suo = o.refunded_amount_cents ?? 0;
+    const quota =
+      i === ordini.length - 1
+        ? tornatoIndietro - giaAssegnato
+        : rimborsatoInTutto > 0
+          ? Math.round((tornatoIndietro * suo) / rimborsatoInTutto)
+          : Math.round(tornatoIndietro / ordini.length);
+    giaAssegnato += quota;
+    return { ordine: o, quota: Math.min(Math.max(quota, 0), suo) };
+  });
+
+  for (const { ordine, quota } of quote) {
+    const restante = Math.max(0, (ordine.refunded_amount_cents ?? 0) - quota);
+    const { error } = await admin
+      .from('orders')
+      .update({
+        refunded_amount_cents: restante,
+        payment_status: restante > 0 ? 'PARTIALLY_REFUNDED' : 'PAID',
+      })
+      .eq('id', ordine.id);
+    if (error) {
+      logger.error('[stripe] rimborso fallito non registrato', { orderId: ordine.id, message: error.message });
+    }
   }
 
   await notifyAdmins(
     '⚠️ Rimborso rifiutato dalla banca',
-    `Il rimborso di €${(tornatoIndietro / 100).toFixed(2)} sull'ordine ${order.id} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo.`,
+    `Il rimborso di €${(tornatoIndietro / 100).toFixed(2)} su ${ordini.length === 1 ? `l'ordine ${ordini[0].id}` : `${ordini.length} ordini dello stesso pagamento`} non e' arrivato al cliente (${refund.status}). I soldi sono rientrati: va rimborsato in un altro modo.`,
     '/admin/orders',
   );
 }

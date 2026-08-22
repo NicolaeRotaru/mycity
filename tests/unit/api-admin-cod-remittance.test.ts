@@ -16,13 +16,21 @@ const rpcMock = vi.fn(async () => ({ data: state.released, error: state.rpcError
 vi.mock('@/lib/api/middleware', () => ({
   withAdminAuth: (h: (ctx: { req: unknown }) => unknown) => (req: unknown) => h({ req }),
 }));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/supabase/server', () => ({
   getServerSupabase: async () => ({ rpc: rpcMock }),
 }));
 
 function reqWith(body: unknown) {
-  return { json: async () => body } as unknown as Request;
+  // 22/8/2026 — QUI C'ERA UNA RICHIESTA FINTA CON DENTRO SOLO `json()`.
+  // Adesso il corpo lo legge un lettore col tetto, che ha bisogno di una
+  // richiesta vera: la finta non aveva ne' `body` ne' `arrayBuffer`, quindi
+  // provava una cosa che in produzione non succede mai.
+  return new Request('http://localhost/prova', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  }) as unknown as Request;
 }
 async function run(body: unknown) {
   const { POST } = await import('@/app/api/admin/cod-remittance/route');

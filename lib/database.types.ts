@@ -1146,6 +1146,7 @@ export interface Database {
           is_read: boolean | null;
           created_at: string | null;
           pushed_at: string | null;
+          category: string;
         };
         Insert: {
           id?: string;
@@ -1156,6 +1157,7 @@ export interface Database {
           is_read?: boolean | null;
           created_at?: string | null;
           pushed_at?: string | null;
+          category?: string;
         };
         Update: {
           id?: string;
@@ -1166,6 +1168,7 @@ export interface Database {
           is_read?: boolean | null;
           created_at?: string | null;
           pushed_at?: string | null;
+          category?: string;
         };
         Relationships: [];
       };
@@ -1337,6 +1340,10 @@ export interface Database {
           gross_total_cents: number | null;
           payout_tentativo: number;
           rider_payout_tentativo: number;
+          dispute_seller_reversed_cents: number;
+          dispute_rider_reversed_cents: number;
+          payout_claimed_at: string | null;
+          rider_payout_claimed_at: string | null;
         };
         Insert: {
           id?: string;
@@ -1406,6 +1413,10 @@ export interface Database {
           gross_total_cents?: number | null;
           payout_tentativo?: number;
           rider_payout_tentativo?: number;
+          dispute_seller_reversed_cents?: number;
+          dispute_rider_reversed_cents?: number;
+          payout_claimed_at?: string | null;
+          rider_payout_claimed_at?: string | null;
         };
         Update: {
           id?: string;
@@ -1475,6 +1486,10 @@ export interface Database {
           gross_total_cents?: number | null;
           payout_tentativo?: number;
           rider_payout_tentativo?: number;
+          dispute_seller_reversed_cents?: number;
+          dispute_rider_reversed_cents?: number;
+          payout_claimed_at?: string | null;
+          rider_payout_claimed_at?: string | null;
         };
         Relationships: [];
       };
@@ -1752,6 +1767,7 @@ export interface Database {
           category_id: string | null;
           stock: number | null;
           attributes: Json | null;
+          search_tsv: Json | null;
           unit: string | null;
           compare_at_price: number | null;
           condition: string | null;
@@ -1776,6 +1792,7 @@ export interface Database {
           category_id?: string | null;
           stock?: number | null;
           attributes?: Json | null;
+          search_tsv?: Json | null;
           unit?: string | null;
           compare_at_price?: number | null;
           condition?: string | null;
@@ -1800,6 +1817,7 @@ export interface Database {
           category_id?: string | null;
           stock?: number | null;
           attributes?: Json | null;
+          search_tsv?: Json | null;
           unit?: string | null;
           compare_at_price?: number | null;
           condition?: string | null;
@@ -2336,6 +2354,51 @@ export interface Database {
           resolved_at?: string | null;
           resolution_note?: string | null;
           handled_by?: string | null;
+        };
+        Relationships: [];
+      };
+      segnalazioni: {
+        Row: {
+          id: string;
+          tipo: string;
+          oggetto_id: string;
+          motivo: string;
+          dettaglio: string | null;
+          segnalante_id: string | null;
+          email_contatto: string | null;
+          stato: string;
+          esito_motivato: string | null;
+          deciso_da: string | null;
+          deciso_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          tipo: string;
+          oggetto_id: string;
+          motivo: string;
+          dettaglio?: string | null;
+          segnalante_id?: string | null;
+          email_contatto?: string | null;
+          stato?: string;
+          esito_motivato?: string | null;
+          deciso_da?: string | null;
+          deciso_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          tipo?: string;
+          oggetto_id?: string;
+          motivo?: string;
+          dettaglio?: string | null;
+          segnalante_id?: string | null;
+          email_contatto?: string | null;
+          stato?: string;
+          esito_motivato?: string | null;
+          deciso_da?: string | null;
+          deciso_at?: string | null;
+          created_at?: string;
         };
         Relationships: [];
       };

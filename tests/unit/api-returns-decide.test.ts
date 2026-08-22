@@ -18,7 +18,7 @@ vi.mock('@/lib/api/middleware', () => ({
     (req: Request) =>
       handler({ user: FAKE_SELLER }),
 }));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));
 vi.mock('@/lib/stripe/payout', () => ({ refundOrder: vi.fn(async () => ({ refundId: 'rf_1' })) }));
 

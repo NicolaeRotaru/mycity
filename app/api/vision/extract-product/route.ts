@@ -11,6 +11,7 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError } from '@/lib/ai/run';
 import { CATEGORY_ATTRIBUTES } from '@/lib/category-attributes';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * Estrazione prodotto da foto (vision).
@@ -217,7 +218,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Parsing + validazione body
   let json: unknown;
   try {
-    json = await req.json();
+    json = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('Body JSON non valido.');
   }

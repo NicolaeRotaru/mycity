@@ -1,3 +1,4 @@
+import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
@@ -11,8 +12,10 @@ import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
+import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -92,7 +95,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   let body: z.infer<typeof Body>;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
     return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
   }
@@ -302,37 +305,46 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     zip: body.delivery.zip,
   });
 
-  const shippingPerGroupCents = stripeGroups.map((g, i) => {
-    const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
-    return shippingCentsFor({
-      subtotal: subtotalPerGroupCents[i] / 100,
-      storeLat: coord.lat,
-      storeLng: coord.lng,
-      deliveryLat: coordConsegna?.lat ?? null,
-      deliveryLng: coordConsegna?.lng ?? null,
-      pickupInStore: body.pickupInStore,
-      freeShipping: couponFreeShipping,
-    });
+  const coordPerLaMappa =
+    coordConsegna ?? (await coordinateDiUnIndirizzo({
+      address: body.delivery.address,
+      city: body.delivery.city,
+      zip: body.delivery.zip,
+    }));
+
+  /**
+   * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DEI CONTANTI.
+   *
+   * Queste duecento righe di aritmetica esistevano anche nell'altra rotta,
+   * uguali. Ogni riparazione andava fatta due volte, e almeno tre volte e'
+   * stata fatta una volta sola: il cliente pagava un importo diverso a seconda
+   * di come sceglieva di pagare.
+   */
+  const prezzi = prezziDelCarrello({
+    gruppi: stripeGroups.map((g, i) => ({
+      sellerId: g.sellerId,
+      subtotalCents: subtotalPerGroupCents[i],
+    })),
+    coordinateNegozio: (sellerId) => sellerCoordMap.get(sellerId) ?? { lat: null, lng: null },
+    consegnaLat: coordConsegna?.lat ?? null,
+    consegnaLng: coordConsegna?.lng ?? null,
+    pickupInStore: body.pickupInStore,
+    couponSpedizioneGratis: couponFreeShipping,
+    couponScontoCents: couponDiscountCents,
   });
-  const grandShippingCents = shippingPerGroupCents.reduce((s, x) => s + x, 0);
+  const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
+  const grandShippingCents = prezzi.grandShippingCents;
 
   // 4c. Sconto ritiro in negozio: PICKUP_DISCOUNT_PERCENT sul subtotale carrello.
-  const pickupDiscountCents = body.pickupInStore
-    ? Math.round(grandSubtotalCents * (PICKUP_DISCOUNT_PERCENT / 100))
-    : 0;
+  const pickupDiscountCents = prezzi.pickupDiscountCents;
 
   // 4c-bis. Fee di consegna piattaforma: PLATFORM_DELIVERY_FEE_CENTS per ogni
   // gruppo (= una consegna fisica per venditore). Zero per il ritiro in negozio.
   // La incassa MyCity: viene scalata dal payout del venditore nel webhook.
-  const deliveryFeePerGroupCents = stripeGroups.map(() =>
-    body.pickupInStore ? 0 : PLATFORM_DELIVERY_FEE_CENTS,
-  );
+  const deliveryFeePerGroupCents = prezzi.gruppi.map((g) => g.deliveryFeeCents);
 
   // Clamp difensivo finale: lo sconto totale non può superare (subtotale+spedizione-1c).
-  const totalDiscountCents = Math.min(
-    couponDiscountCents + pickupDiscountCents,
-    Math.max(0, grandSubtotalCents + grandShippingCents - 1),
-  );
+  const totalDiscountCents = prezzi.scontoApplicatoCents;
 
   // Le quote per negozio si calcolano dallo sconto GIÀ limitato, non da quello
   // richiesto: è lo sconto limitato che finisce sulla carta del cliente. E si
@@ -340,9 +352,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // torna al centesimo con l'importo addebitato. Prima si usavano i valori non
   // limitati, arrotondati uno per uno: i totali per negozio e l'addebito
   // divergevano.
-  const scontiLimitati = riduciAlTetto(couponDiscountCents, pickupDiscountCents, totalDiscountCents);
-  const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotalPerGroupCents);
-  const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotalPerGroupCents);
+  const quoteCoupon = prezzi.gruppi.map((g) => g.couponPortionCents);
+  const quoteRitiro = prezzi.gruppi.map((g) => g.pickupPortionCents);
 
   const groupPersisted = stripeGroups.map((g, i) => {
     const subtotal = subtotalPerGroupCents[i];
@@ -350,10 +361,7 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     const deliveryFeeCents = deliveryFeePerGroupCents[i];
     const couponPortionCents = quoteCoupon[i];
     const pickupPortionCents = quoteRitiro[i];
-    const totalCents = Math.max(
-      0,
-      subtotal + shipping + deliveryFeeCents - couponPortionCents - pickupPortionCents,
-    );
+    const totalCents = prezzi.gruppi[i].totalCents;
     const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
     return {
       sellerId: g.sellerId,
@@ -427,8 +435,16 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         // sulla mappa ne indica un'altra, e il fattorino va dove dice il
         // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
         // coordinata che contraddice l'indirizzo scritto.
-        lat: coordConsegna?.lat ?? null,
-        lng: coordConsegna?.lng ?? null,
+        //
+        // 22/8/2026 — «SI GEOCODIFICA DOPO» NON SUCCEDEVA. Quel «dopo» non
+        // esisteva da nessuna parte: l'ordine con carta nasceva senza
+        // destinazione esattamente come quello in contanti, e la mappa della
+        // consegna restava vuota. Adesso, quando l'indirizzo non e' fra quelli
+        // salvati, la destinazione se la calcola il server. NON entra nel
+        // prezzo: quello e' gia' stato deciso qui sopra, sulle coordinate
+        // salvate o sulla tariffa fissa.
+        lat: coordPerLaMappa?.lat ?? null,
+        lng: coordPerLaMappa?.lng ?? null,
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
         // scrive su orders.delivery_slot. null per ritiro / non scelta.
         slot: body.pickupInStore ? null : (body.deliverySlot ?? null),

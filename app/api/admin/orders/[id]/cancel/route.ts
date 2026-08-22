@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -24,7 +25,7 @@ const Body = z.object({
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
   let body;
   try {
-    body = Body.parse(await req.json().catch(() => ({})));
+    body = Body.parse(await jsonRichiesta(req, TETTO_JSON).catch(() => ({})));
   } catch (e) {
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }

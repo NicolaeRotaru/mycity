@@ -33,6 +33,77 @@ import { logger } from '@/lib/logger';
 const CHIAVE = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 
+/**
+ * 22/8/2026 — GOOGLE ANALYTICS NON HA MAI RICEVUTO LA RIPARAZIONE FATTA PER
+ * POSTHOG.
+ *
+ * Ad agosto l'acquisto e' stato spostato sul server, perche' dal browser si
+ * perdeva ogni volta che il cliente chiudeva la scheda dopo aver pagato.
+ * Quella riparazione ha riguardato un raccoglitore solo. Su Google Analytics
+ * l'acquisto continua a partire dal browser, e continua a perdersi negli
+ * stessi casi: il fatturato li' e' piu' basso del vero di una quantita' che
+ * nessuno conosce.
+ *
+ * Non e' un dettaglio di simmetria: e' il cruscotto su cui si guarda il
+ * ritorno delle campagne. Decidere il budget su un numero sotto-contato vuol
+ * dire spegnere una campagna che funziona.
+ *
+ * Il Measurement Protocol di GA4 accetta l'acquisto dal server, e usa
+ * `transaction_id` per non contare due volte lo stesso ordine: quindi la
+ * versione del browser e questa non si sommano. Serve un segreto d'API che
+ * oggi puo' non esserci: senza, questa strada resta spenta e nel referto sta
+ * scritto che il fatturato su GA4 e' una sotto-stima.
+ */
+const GA_MISURA = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+const GA_SEGRETO = process.env.GA_API_SECRET;
+
+/** Google Analytics puo' ricevere l'acquisto dal server? */
+export function misuraGoogleAttiva(): boolean {
+  return !!GA_MISURA && !!GA_SEGRETO;
+}
+
+async function contaAcquistoSuGoogle(a: AcquistoDaContare): Promise<void> {
+  if (!misuraGoogleAttiva()) return;
+  try {
+    const risposta = await fetch(
+      `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(GA_MISURA as string)}&api_secret=${encodeURIComponent(GA_SEGRETO as string)}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          // Senza il cookie del browser l'unico identificativo stabile che
+          // abbiamo e' la persona. GA4 accetta `user_id` da solo.
+          client_id: a.buyerId,
+          user_id: a.buyerId,
+          non_personalized_ads: true,
+          events: [
+            {
+              name: 'purchase',
+              params: {
+                // GA4 usa questo per NON contare due volte lo stesso acquisto:
+                // e' quello che rende innocua la versione del browser.
+                transaction_id: a.orderId,
+                currency: 'EUR',
+                value: a.totalCents / 100,
+                payment_type: a.paymentMethod,
+                origine: 'server',
+              },
+            },
+          ],
+        }),
+        signal: AbortSignal.timeout(3000),
+      },
+    );
+    if (!risposta.ok) {
+      logger.warn('[analytics] acquisto non registrato su Google', {
+        orderId: a.orderId, stato: risposta.status,
+      });
+    }
+  } catch (e) {
+    logger.warn('[analytics] acquisto non registrato su Google', { orderId: a.orderId, e });
+  }
+}
+
 export type AcquistoDaContare = {
   orderId: string;
   buyerId: string;
@@ -95,10 +166,16 @@ export async function analyticsConsentita(
 }
 
 export async function contaAcquisto(a: AcquistoDaContare): Promise<void> {
-  if (!CHIAVE) return;
   // Il cancello sta qui, non nei chiamanti: un chiamante nuovo che se lo
   // dimentica non deve poter far partire il dato lo stesso.
   if (a.consensoAnalytics !== true) return;
+
+  // I due raccoglitori sono due strade diverse: se una non e' configurata,
+  // l'altra deve partire lo stesso. Prima il `return` in cima le spegneva
+  // tutte e due.
+  await contaAcquistoSuGoogle(a);
+
+  if (!CHIAVE) return;
   try {
     const risposta = await fetch(`${HOST.replace(/\/$/, '')}/capture/`, {
       method: 'POST',

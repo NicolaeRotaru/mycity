@@ -19,6 +19,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 
 /**
  * AuthShell — guscio split-screen condiviso dalle schermate buyer auth
@@ -105,13 +106,35 @@ export function AuthShell({
  */
 export function AuthAlternatives() {
   const [googleLoading, setGoogleLoading] = useState(false);
+  /**
+   * 22/8/2026 — CHI ENTRAVA CON GOOGLE NON ACCETTAVA MAI NIENTE.
+   *
+   * Il modulo con email e password ha la spunta obbligatoria su Termini e
+   * Informativa, e la versione dei testi viaggia con la registrazione fino al
+   * verbale. Il pulsante Google, subito sotto, non aveva niente: un clic e si
+   * era dentro, operativi, senza nessuna riga in `consent_log` e senza che
+   * nessuno sapesse quale versione dei testi quella persona avesse davanti.
+   *
+   * Il giorno in cui qualcuno contesta una condizione — un reso, una
+   * commissione — su quell'utente non c'e' niente da mostrare.
+   *
+   * Adesso la spunta c'e' anche qui, e la versione dei testi viaggia
+   * nell'indirizzo di ritorno: la callback la trova e la mette a verbale.
+   */
+  const [condizioniAccettate, setCondizioniAccettate] = useState(false);
 
   const handleGoogle = async () => {
+    if (!condizioniAccettate) {
+      toast.error('Per continuare devi accettare Termini e Informativa privacy.');
+      return;
+    }
     setGoogleLoading(true);
     try {
+      const ritorno = new URL('/auth/callback', window.location.origin);
+      ritorno.searchParams.set('versione', VERSIONE_TESTI_LEGALI);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: { redirectTo: ritorno.toString() },
       });
       if (error) throw error;
       // In caso di successo il browser viene rediretto a Google: non resettiamo.
@@ -128,6 +151,19 @@ export function AuthAlternatives() {
         <span className="text-xs text-ink-400">oppure</span>
         <span className="h-px flex-1 bg-cream-300" />
       </div>
+      <label className="mb-3 flex items-start gap-2.5 text-[13px] leading-relaxed text-ink-700">
+        <input
+          type="checkbox"
+          checked={condizioniAccettate}
+          onChange={(e) => setCondizioniAccettate(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border-cream-400 text-primary-700"
+        />
+        <span>
+          Ho letto e accetto i{' '}
+          <Link href="/terms" className="font-semibold text-primary-700 underline">Termini</Link> e l&apos;
+          <Link href="/privacy" className="font-semibold text-primary-700 underline">Informativa privacy</Link>.
+        </span>
+      </label>
       <div className="flex gap-2.5">
         <Button variant="secondary" icon={Smartphone} fullWidth disabled title="SPID — presto disponibile">
           SPID
@@ -137,7 +173,7 @@ export function AuthAlternatives() {
           icon={Chrome}
           fullWidth
           onClick={handleGoogle}
-          disabled={googleLoading}
+          disabled={googleLoading || !condizioniAccettate}
         >
           {googleLoading ? 'Apertura…' : 'Google'}
         </Button>

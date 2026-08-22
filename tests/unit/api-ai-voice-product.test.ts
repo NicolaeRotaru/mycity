@@ -5,6 +5,21 @@ vi.mock('@/lib/api/middleware', () => ({
   withSellerAuth: (h: (ctx: { user: typeof FAKE_USER; req: Request }) => unknown) => (req: Request) => h({ user: FAKE_USER, req }),
 }));
 const runMessageMock = vi.fn();
+/**
+ * 22/8/2026 — IL FILTRO ANTI-CONTENUTI ADESSO PASSA ANCHE DA QUI.
+ *
+ * Il testo libero scritto dal venditore arrivava al modello senza passare dal
+ * filtro: su questa rotta non c'era, mentre su altre si'. Qui il filtro e'
+ * finto (chiama il modello come le altre cose, e in una prova il modello non
+ * c'e'), ma si controlla che venga CHIAMATO: se domani qualcuno lo stacca,
+ * questo file diventa rosso.
+ */
+const filtroChiamato = vi.fn(async () => undefined);
+vi.mock('@/lib/ai/moderation', async (importActual) => {
+  const actual = await importActual<typeof import('@/lib/ai/moderation')>();
+  return { ...actual, assertSafeText: (...a: unknown[]) => filtroChiamato(...(a as [])) };
+});
+
 vi.mock('@/lib/ai/run', async (importActual) => {
   const actual = await importActual<typeof import('@/lib/ai/run')>();
   return { ...actual, runMessage: (...a: unknown[]) => runMessageMock(...a) };
@@ -47,5 +62,13 @@ describe('POST /api/ai/voice-product', () => {
     expect(arg.model).toBe(MODELS.fast);
     expect(arg.tool_choice).toMatchObject({ type: 'tool', name: 'voice_fill' });
     expect(JSON.stringify(arg.messages)).toContain('tre magliette rosse');
+  });
+});
+
+describe('il filtro anti-contenuti sul dettato', () => {
+  it('il testo dettato ci passa', async () => {
+    filtroChiamato.mockClear();
+    await POST(makeReq({ transcript: 'Pane di segale, tre euro e cinquanta' }));
+    expect(filtroChiamato, 'il testo e arrivato al modello senza passare dal filtro').toHaveBeenCalled();
   });
 });

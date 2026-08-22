@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getServerSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -16,7 +17,7 @@ const Schema = z.object({ conversationId: z.string().uuid() });
 // Rate limit alto (operazione frequente in UI chat): 300 / 5 min
 export const POST = withAuthRateLimit({ name: 'chat-mark-read', max: 300, windowMs: 5 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
   let json: unknown;
-  try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
+  try { json = await jsonRichiesta(req, TETTO_JSON); } catch { return ApiErrors.invalidRequest('Body JSON non valido'); }
   const parsed = Schema.safeParse(json);
   if (!parsed.success) return ApiErrors.invalidRequest('Input non valido');
 

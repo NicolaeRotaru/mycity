@@ -1,3 +1,4 @@
+import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -7,6 +8,7 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * Voce → prodotto: il venditore detta a parole un prodotto ("ho tre magliette
@@ -56,11 +58,35 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }
   const transcript = typeof body.transcript === 'string' ? body.transcript.trim().slice(0, 2000) : '';
+  /**
+   * 22/8/2026 — TESTO LIBERO CHE ARRIVAVA AL MODELLO SENZA PASSARE DAL FILTRO.
+   *
+   * Il filtro anti-contenuti (`assertSafeText`) e' una chiamata al modello come
+   * le altre, e la sua intestazione dice che ogni testo scritto da una persona
+   * ci deve passare. Su questa rotta non ci passava: il testo andava dritto al
+   * modello. Il difetto non e' teorico — e' il pezzo di sistema che ci difende
+   * dal far generare, col nostro nome e il nostro conto, cose che non vogliamo
+   * generare.
+   *
+   * Se il filtro stesso non risponde, la risposta e' la stessa che darebbe la
+   * generazione: un messaggio leggibile, non un 500 muto.
+   */
+  try {
+    await assertSafeText(transcript, 'ai-voice-product-policy');
+  } catch (err) {
+    if (err instanceof UnsafeContentError) {
+      return ApiErrors.invalidRequest(`Questo testo non si puo' usare: ${err.verdict.reason}`);
+    }
+    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiCallError) return mapAiError(err, 'ai-voice-product-policy');
+    return ApiErrors.internal('Errore AI.');
+  }
+
   if (transcript.length < 3) return ApiErrors.invalidRequest('Dimmi qualcosa sul prodotto.');
 
   const attributeSchema = Array.isArray(body.attributeSchema) ? body.attributeSchema : [];

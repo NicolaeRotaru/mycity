@@ -1,13 +1,13 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { useRef, Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Mail, ArrowRight } from 'lucide-react';
-import { auth, supabase } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { toast } from 'sonner';
-import Turnstile from '@/components/Turnstile';
+import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, PasswordInput } from '@/components/ui/Field';
@@ -20,6 +20,11 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 // Tutto ciò che non matcha cade nel fallback generico.
 function translateAuthError(msg: string): string {
   const m = msg.toLowerCase();
+  // 22/8/2026 — Il gettone anti-bot vale una volta sola: dopo un tentativo
+  // andato male il server lo rifiuta, e il messaggio grezzo parla di captcha su
+  // una schermata dove non c'e' niente da premere. Adesso si dice cosa fare.
+  if (m.includes('captcha') || m.includes('turnstile'))
+    return 'Il controllo anti-bot e scaduto: e stato rigenerato, premi di nuovo Accedi.';
   if (m.includes('invalid login credentials')) return 'Email o password non corrette';
   if (m.includes('email not confirmed'))       return 'Email non confermata. Controlla la posta e clicca sul link che ti abbiamo inviato.';
   if (m.includes('user not found'))            return 'Nessun account con questa email';
@@ -36,6 +41,21 @@ const SignInForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
   const [captchaToken, setCaptchaToken] = useState('');
+  /**
+   * 22/8/2026 — IL GETTONE ANTI-BOT SI CONSUMA AL PRIMO TENTATIVO.
+   *
+   * Cloudflare lo da' valido una volta sola. Se qualcosa va storto — la
+   * password sbagliata, l'email gia' presa — quel gettone e' gia' stato speso:
+   * al secondo tentativo il server lo rifiuta, e il messaggio parla di anti-bot
+   * su una schermata dove non c'e' niente da ripremere. La persona resta fuori
+   * dal proprio account per un errore di battitura. Qui se ne chiede uno nuovo.
+   */
+  const antiBot = useRef<ManopolaAntiBot>(null);
+  const rigeneraGettone = () => {
+    setCaptchaToken('');
+    antiBot.current?.reset();
+  };
+
   // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
   // estensione che lo taglia, guasto loro), il modulo non resta bloccato per
   // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'
@@ -69,8 +89,50 @@ const SignInForm = () => {
     }
     setIsLoading(true);
     try {
-      const { data, error } = await auth.signIn(email, password, { captchaToken });
-      if (error) throw error;
+      /**
+       * 22/8/2026 — I FRENI CONTRO CHI PROVA MILLE PASSWORD NON PROTEGGEVANO
+       * NIENTE, PERCHE' L'ACCESSO NON CI PASSAVA.
+       *
+       * Esistono due rotte server (`/api/auth/signin` e `/api/auth/signup`),
+       * un modulo che le serve e le loro prove. Dentro ci sono due freni: dieci
+       * tentativi ogni cinque minuti per indirizzo di RETE, e altrettanti per
+       * indirizzo EMAIL — il secondo chiude proprio il caso che il primo lascia
+       * aperto, cioe' chi prova mille password su un account solo cambiando
+       * rete a ogni tentativo.
+       *
+       * Nessuno le chiamava. Il modulo di accesso parlava direttamente con
+       * Supabase dal browser: quei freni erano codice morto che dava
+       * l'impressione che una difesa esistesse. Contro chi prova password a
+       * raffica restava solo quello che fa Supabase dal suo lato, che qui non
+       * e' configurato e da qui non si misura.
+       *
+       * Adesso l'accesso passa dal server, e la sessione che torna indietro
+       * viene installata nel browser: da fuori non cambia niente, ma i due
+       * freni sono in funzione.
+       */
+      const risposta = await fetch('/api/auth/signin', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password, captchaToken: captchaToken || undefined }),
+      });
+      const corpo = await risposta.json().catch(() => null);
+      if (!risposta.ok) {
+        throw new Error(
+          (corpo?.error?.message as string | undefined)
+          ?? (typeof corpo?.error === 'string' ? corpo.error : undefined)
+          ?? 'Accesso non riuscito',
+        );
+      }
+      const data = corpo as { user?: { id: string; email_confirmed_at?: string | null }; session?: { access_token: string; refresh_token: string } } | null;
+      // La sessione arriva dal server: qui si installa nel browser, cosi' tutto
+      // il resto del sito la vede come prima.
+      if (data?.session?.access_token && data.session.refresh_token) {
+        const { error: errSessione } = await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+        if (errSessione) throw errSessione;
+      }
 
       // Gate verifica email anche client-side (difesa in profondità)
       if (data?.user && !data.user.email_confirmed_at) {
@@ -98,6 +160,7 @@ const SignInForm = () => {
       router.push(dest);
       router.refresh();
     } catch (error) {
+      rigeneraGettone();
       toast.error(translateAuthError(error instanceof Error ? error.message : ''));
     } finally {
       setIsLoading(false);
@@ -173,6 +236,7 @@ const SignInForm = () => {
         {TURNSTILE_SITE_KEY && (
           <div className="flex justify-center">
             <Turnstile
+              ref={antiBot}
               siteKey={TURNSTILE_SITE_KEY}
               onVerify={(t) => { setCaptchaToken(t); setCaptchaRotto(null); }}
               onExpire={() => setCaptchaToken('')}

@@ -144,7 +144,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   }
 
   if (canceled > 0 || failed > 0) {
-    logger.info(`[cron] expire-stale-orders: ${canceled} annullati (${refunded} rimborsati), ${failed} falliti`);
+    logger.spesa(`[cron] expire-stale-orders: ${canceled} annullati (${refunded} rimborsati), ${failed} falliti`);
   }
 
   return NextResponse.json({ ok: true, canceled, refunded, failed }, { status: 200 });

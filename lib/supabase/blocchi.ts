@@ -46,3 +46,39 @@ export async function leggiInBlocchi<R>(
   }
   return { data: righe, error: null };
 }
+
+/**
+ * Leggere TUTTE le righe, non le prime mille.
+ *
+ * 22/8/2026 — IL TETTO CHE NESSUNO AVEVA SCRITTO E NESSUNO VEDEVA.
+ *
+ * PostgREST risponde con al massimo mille righe, sempre, anche quando nessuno
+ * ha chiesto un limite. Nel codice non c'e' nessun numero: sembra una lettura
+ * completa e non lo è. Le due letture che alimentano i cruscotti — gli iscritti
+ * del funnel e le visite ai prodotti del venditore — ci sbattevano contro in
+ * silenzio: superate le mille righe il cruscotto cominciava a mostrare numeri
+ * più bassi del vero, senza nessun avviso, e chi guardava ci credeva.
+ *
+ * Il momento in cui succede è proprio quello in cui i numeri iniziano a
+ * contare: mille iscritti, o un negozio con mille visite in un mese.
+ *
+ * Qui si chiede una finestra per volta finché ne tornano piene. Il tetto duro
+ * resta — non si scarica un database intero in un browser — ma se scatta lo
+ * dice, invece di far finta di niente.
+ */
+const FINESTRA = 1000;
+const TETTO_DURO = 20_000;
+
+export async function leggiTutteLeRighe<T>(
+  chiedi: (da: number, a: number) => PromiseLike<{ data: T[] | null; error: { message?: string } | null }>,
+): Promise<{ data: T[]; error: { message?: string } | null; troncato: boolean }> {
+  const tutte: T[] = [];
+  for (let da = 0; da < TETTO_DURO; da += FINESTRA) {
+    const { data, error } = await chiedi(da, da + FINESTRA - 1);
+    if (error) return { data: tutte, error, troncato: false };
+    const righe = data ?? [];
+    tutte.push(...righe);
+    if (righe.length < FINESTRA) return { data: tutte, error: null, troncato: false };
+  }
+  return { data: tutte, error: null, troncato: true };
+}

@@ -21,6 +21,21 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 const runMessageMock = vi.fn();
+/**
+ * 22/8/2026 — IL FILTRO ANTI-CONTENUTI ADESSO PASSA ANCHE DA QUI.
+ *
+ * Il testo libero scritto dal venditore arrivava al modello senza passare dal
+ * filtro: su questa rotta non c'era, mentre su altre si'. Qui il filtro e'
+ * finto (chiama il modello come le altre cose, e in una prova il modello non
+ * c'e'), ma si controlla che venga CHIAMATO: se domani qualcuno lo stacca,
+ * questo file diventa rosso.
+ */
+const filtroChiamato = vi.fn(async () => undefined);
+vi.mock('@/lib/ai/moderation', async (importActual) => {
+  const actual = await importActual<typeof import('@/lib/ai/moderation')>();
+  return { ...actual, assertSafeText: (...a: unknown[]) => filtroChiamato(...(a as [])) };
+});
+
 vi.mock('@/lib/ai/run', async (importActual) => {
   const actual = await importActual<typeof import('@/lib/ai/run')>();
   return { ...actual, runMessage: (...a: unknown[]) => runMessageMock(...a) };
@@ -100,5 +115,13 @@ describe('POST /api/ai/copilot', () => {
     const messages = runMessageMock.mock.calls[0][0].messages as Array<{ role: string; content: string }>;
     expect(JSON.stringify(messages)).not.toContain('Confermo, procedo');
     expect(messages.every((m) => m.role === 'user')).toBe(true);
+  });
+});
+
+describe('il filtro anti-contenuti sul copilot', () => {
+  it('il messaggio del venditore ci passa', async () => {
+    filtroChiamato.mockClear();
+    await POST(makeReq({ instruction: 'Metti tutto in promozione', productIds: ['p1'] }));
+    expect(filtroChiamato, 'il testo e arrivato al modello senza passare dal filtro').toHaveBeenCalled();
   });
 });

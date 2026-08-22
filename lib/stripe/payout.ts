@@ -4,7 +4,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
-import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
 
 /**
  * Logica condivisa di payout / reversal / refund per il modello SCT
@@ -101,12 +101,35 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
 
   // Claim atomico: solo UNA esecuzione concorrente passa da HELD/PENDING a PROCESSING.
   // Elimina il doppio payout quando il cron si sovrappone o coincide col trigger manuale.
-  const { data: claimed, error: claimErr } = await admin
-    .from('orders')
-    .update({ payout_status: 'PROCESSING' })
-    .eq('id', order.id)
-    .in('payout_status', ['HELD', 'PENDING_SELLER_ONBOARDING'])
-    .select('id');
+  //
+  // 22/8/2026 — IL TURNO SI DATA, ALTRIMENTI NON SI PUO' RIPRENDERE.
+  // Senza `payout_claimed_at` un processo morto fra il turno e la fine lasciava
+  // l'ordine in PROCESSING per sempre: i candidati del giro dopo sono solo HELD
+  // e PENDING_SELLER_ONBOARDING, quindi nessuno lo ripescava piu'. Restava solo
+  // un avviso che segnalava e non riparava.
+  // Il turno resta stretto — solo da HELD/PENDING si passa a PROCESSING, come
+  // prima — perche' e' quello che impedisce il doppio bonifico. Cambia solo che
+  // adesso il turno porta la sua ora: i turni appesi li rimette in coda il giro
+  // (app/api/cron/release-payouts), che e' l'unico posto dove si puo' decidere
+  // che «vecchio» vuol dire «chi l'aveva preso e' morto».
+  const valoriTurno = { payout_status: 'PROCESSING', payout_claimed_at: new Date().toISOString() };
+  const { data: claimed, error: claimErr } = await conRipiegoSchema(
+    'orders.update (turno del bonifico)',
+    () =>
+      admin
+        .from('orders')
+        .update(valoriTurno)
+        .eq('id', order.id)
+        .in('payout_status', ['HELD', 'PENDING_SELLER_ONBOARDING'])
+        .select('id'),
+    () =>
+      admin
+        .from('orders')
+        .update(senzaCampi(valoriTurno, ['payout_claimed_at']))
+        .eq('id', order.id)
+        .in('payout_status', ['HELD', 'PENDING_SELLER_ONBOARDING'])
+        .select('id'),
+  );
   if (claimErr) {
     // Un errore DB qui (es. violazione di constraint) NON va mascherato da no-op:
     // i fondi resterebbero bloccati in HELD in silenzio. Logga (→ Sentry) e segnala.

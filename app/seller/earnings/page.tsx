@@ -9,7 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
-import { riepilogoNegozio } from '@/lib/guadagni/negozio';
+import { riepilogoNegozio, riepilogoContanti } from '@/lib/guadagni/negozio';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
 import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
 
@@ -43,7 +43,28 @@ const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('it-IT', { day
 
 /** Badge stato payout reale (da orders.payout_status). */
 function payoutBadge(o: OrderRow): { label: string; cls: string } {
-  if (o.payment_method === 'cod') return { label: 'Contanti', cls: 'bg-cream-200 text-ink-700' };
+  // 22/8/2026 — «Contanti» era la targhetta di TUTTI gli ordini in
+  // contrassegno, qualunque cosa fosse successo ai soldi: in attesa della
+  // cassa del fattorino, in liquidazione, gia' pagato o stornato erano
+  // indistinguibili. Il negoziante non aveva modo di sapere se un pagamento
+  // era partito. Ora ogni stato ha il suo nome.
+  if (o.payment_method === 'cod') {
+    switch (o.payout_status) {
+      case 'TRANSFERRED':
+        return { label: o.payout_at ? `Pagato ${fmtDate(o.payout_at)}` : 'Pagato', cls: 'bg-olive-100 text-olive-800' };
+      case 'AWAITING_REMITTANCE':
+        return { label: 'Attesa cassa fattorino', cls: 'bg-accent-100 text-accent-800' };
+      case 'HELD':
+      case 'PROCESSING':
+        return { label: 'In liquidazione', cls: 'bg-accent-100 text-accent-800' };
+      case 'REVERSED':
+        return { label: 'Stornato', cls: 'bg-secondary-100 text-secondary-700' };
+      case 'REFUNDED':
+        return { label: 'Rimborsato', cls: 'bg-secondary-100 text-secondary-700' };
+      default:
+        return { label: 'Contanti', cls: 'bg-cream-200 text-ink-700' };
+    }
+  }
   switch (o.payout_status) {
     case 'TRANSFERRED':
       return { label: o.payout_at ? `Pagato ${fmtDate(o.payout_at)}` : 'Pagato', cls: 'bg-olive-100 text-olive-800' };
@@ -120,11 +141,16 @@ export default function SellerEarningsPage() {
   const paidCents = riepilogo.versatiCents;
   const stornatiCents = riepilogo.stornatiCents;
 
-  // Contanti (COD): ordini pagati alla consegna e consegnati nel periodo (dato reale).
-  const codCollected = useMemo(
-    () => filtered
-      .filter((o) => o.payment_method === 'cod' && o.delivery_status === 'DELIVERED')
-      .reduce((s, o) => s + Number(o.total_price || 0), 0),
+  // Contanti (COD): ordini pagati alla consegna e consegnati nel periodo.
+  //
+  // 22/8/2026 — QUI SI MOSTRAVA IL TOTALE DEL CLIENTE COL NOME DEL NETTO.
+  // La somma era `total_price`, cioe' il contante che il cliente mette in mano
+  // al fattorino: dentro ci sono i 3 euro di consegna, la spedizione e la
+  // commissione del 10%. Il negoziante leggeva una cifra piu' alta di quella
+  // che gli sarebbe arrivata, e non c'era scritto da nessuna parte che fossero
+  // due numeri diversi.
+  const contanti = useMemo(
+    () => riepilogoContanti(filtered, (o) => (o as OrderRow).delivery_status === 'DELIVERED'),
     [filtered],
   );
 
@@ -214,10 +240,21 @@ export default function SellerEarningsPage() {
             <Banknote size={19} className="text-olive-700" aria-hidden /> Contanti (COD)
           </h2>
           <p className="mb-3 mt-1 text-[13px] leading-relaxed text-olive-800">
-            Gli ordini pagati alla consegna li incassa il rider e ti vengono accreditati a fine giornata.
+            Gli ordini pagati alla consegna li incassa il fattorino. Il bonifico parte dopo la verifica
+            della sua cassa: non è a fine giornata, è quando la cassa torna e viene controllata.
           </p>
-          <p className="font-serif text-3xl font-extrabold text-olive-900">{formatPrice(codCollected)}</p>
-          <p className="mt-0.5 text-xs text-olive-700">incassati in contanti questo periodo</p>
+          <p className="font-serif text-3xl font-extrabold text-olive-900">
+            {formatPrice(contanti.nettoAlNegozioCents / 100)}
+          </p>
+          <p className="mt-0.5 text-xs text-olive-700">
+            è quello che arriva a te (già tolte consegna e commissione)
+          </p>
+          <p className="mt-2 text-xs text-olive-700">
+            Contante raccolto dal fattorino: <strong>{formatPrice(contanti.incassatoDalFattorinoCents / 100)}</strong>
+            {contanti.giaVersatoCents > 0 && (
+              <> · già versato: <strong>{formatPrice(contanti.giaVersatoCents / 100)}</strong></>
+            )}
+          </p>
         </Card>
       </div>
 

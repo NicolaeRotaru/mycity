@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowRight, RotateCcw, SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -84,7 +84,19 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   const [pagine, setPagine] = useState(1);
   useEffect(() => { setPagine(1); }, [categoryId, sellerId, search, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort]);
 
-  const { data: products = [], isLoading, isError, refetch } = useQuery({
+  /**
+   * 22/8/2026 — «CARICA ALTRI» FACEVA SPARIRE LA GRIGLIA.
+   *
+   * La finestra si allarga cambiando la chiave della cache, e con una chiave
+   * nuova React Query non ha niente da mostrare: la griglia si svuotava, la
+   * pagina si accorciava di colpo e lo scorrimento saltava in cima. Chi voleva
+   * vedere il novantasettesimo prodotto si ritrovava all'inizio, sul primo.
+   *
+   * `placeholderData` tiene a schermo quelli di prima mentre arrivano i nuovi:
+   * la griglia non sparisce e la pagina non si muove.
+   */
+  const { data: products = [], isLoading, isError, refetch, isFetching } = useQuery({
+    placeholderData: keepPreviousData,
     queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: (limit ?? 96) * pagine, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
     queryFn: async () => {
       let q = supabase
@@ -437,7 +449,23 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // Se sono tornate esattamente tante righe quante ne abbiamo chieste, quasi
   // certamente ce ne sono altre: si offre di caricarle invece di far finire il
   // catalogo li' in silenzio (#127).
-  const forseCeNeSonoAltri = prods.length >= (limit ?? 96) * pagine;
+  /**
+   * 22/8/2026 — COI FILTRI ATTIVI IL PULSANTE NON CARICAVA NIENTE E NON
+   * SPARIVA MAI.
+   *
+   * Quando sono accesi i filtri che lavorano nel browser (negozio aperto
+   * adesso, in promozione, valutazione minima) la lettura chiede un margine:
+   * quattro volte la finestra, ma non oltre quattrocento righe. Il pulsante
+   * invece si guardava la finestra semplice: a quattrocento righe restava
+   * acceso per sempre e ogni pressione riscaricava le stesse identiche righe.
+   *
+   * Adesso guarda il tetto VERO. Quando quello si esaurisce il pulsante
+   * sparisce, che e' la verita': altre righe non ne arriverebbero.
+   */
+  const filtriChelavoranoQui = onlyOpenStores || onlyPromo || (minRating !== undefined && minRating > 0);
+  const tettoDellaFinestra = (limit ?? 96) * pagine;
+  const tettoVero = filtriChelavoranoQui ? Math.min(tettoDellaFinestra * 4, 400) : tettoDellaFinestra;
+  const forseCeNeSonoAltri = prods.length >= tettoVero;
 
   return (
     <>
@@ -451,9 +479,10 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
           <button
             type="button"
             onClick={() => setPagine((n) => n + 1)}
-            className="rounded-full border border-cream-300 bg-white px-6 py-2.5 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700"
+            disabled={isFetching}
+            className="rounded-full border border-cream-300 bg-white px-6 py-2.5 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700 disabled:opacity-50"
           >
-            Carica altri prodotti
+            {isFetching ? 'Carico…' : 'Carica altri prodotti'}
           </button>
         </div>
       )}

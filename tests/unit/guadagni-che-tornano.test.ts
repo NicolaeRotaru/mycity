@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { riepilogoFattorino, type ConsegnaPagata } from '@/lib/guadagni/fattorino';
-import { riepilogoNegozio, type OrdineNegozio } from '@/lib/guadagni/negozio';
+import { riepilogoContanti, riepilogoNegozio, type OrdineNegozio } from '@/lib/guadagni/negozio';
 import { COMPENSO_RIDER_CENTS } from '@/lib/constants';
 
 /**
@@ -98,5 +98,49 @@ describe('i guadagni del negoziante', () => {
   it('uno storno più grande del netto non produce un incassato negativo', () => {
     const r = riepilogoNegozio([ordine({ seller_payout_reversed_cents: 99999 })]);
     expect(r.versatiCents).toBe(0);
+  });
+});
+
+/**
+ * 22/8/2026 — IL CONTRASSEGNO NELLA PAGINA «GUADAGNI».
+ *
+ * Due bugie diverse, sullo stesso riquadro.
+ *
+ * ① I bonifici del contrassegno non comparivano da nessuna parte. Gli ordini
+ * in contanti venivano scartati alla prima riga, tutti — ma quando il fattorino
+ * porta la cassa e viene confermata, parte un bonifico vero, con lo stesso
+ * stato degli altri. Il negoziante lo riceveva sull'IBAN senza trovarlo scritto.
+ *
+ * ② Il numero grande era il totale del cliente, chiamato col nome del netto.
+ * Dentro il contante che il cliente mette in mano al fattorino ci sono la
+ * consegna, la spedizione e la commissione: soldi che al negozio non arrivano.
+ */
+describe('i contanti del negoziante', () => {
+  it('conta fra i versati un ordine in contanti il cui bonifico e gia partito', () => {
+    const r = riepilogoNegozio([
+      ordine({ payment_method: 'cod', payout_status: 'TRANSFERRED', seller_payout_cents: 4500 }),
+    ]);
+    // Col codice vecchio qui c'era 0: il bonifico era partito e non si vedeva.
+    expect(r.versatiCents).toBe(4500);
+  });
+
+  it('conta fra quelli in arrivo un contrassegno in liquidazione', () => {
+    const r = riepilogoNegozio([ordine({ payment_method: 'cod', payout_status: 'HELD' })]);
+    expect(r.inArrivoCents).toBe(4500);
+  });
+
+  it('tiene separato il contante raccolto dal netto che arriva al negozio', () => {
+    // Ordine da 50 euro: il cliente ne da 50 al fattorino, al negozio ne restano 45.
+    const c = riepilogoContanti(
+      [ordine({ payment_method: 'cod', total_price: 50, seller_payout_cents: 4500 })],
+      () => true,
+    );
+    expect(c.incassatoDalFattorinoCents).toBe(5000);
+    expect(c.nettoAlNegozioCents).toBe(4500);
+  });
+
+  it('un ordine non ancora consegnato non entra nei contanti', () => {
+    const c = riepilogoContanti([ordine({ payment_method: 'cod' })], () => false);
+    expect(c.incassatoDalFattorinoCents).toBe(0);
   });
 });

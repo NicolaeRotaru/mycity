@@ -1,5 +1,6 @@
 'use client';
 
+import { titolare } from '@/lib/legal/titolare';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -182,27 +183,53 @@ export default function SettingsPage() {
     }
   };
 
+  /**
+   * 22/8/2026 — IL PULSANTE SCARICAVA UN FILE SENZA GLI ORDINI, E DICEVA CHE
+   * ERA ANDATO TUTTO BENE.
+   *
+   * Qui si leggeva `orders` filtrando su `buyer_id`, una colonna che sulla
+   * tabella degli ordini NON ESISTE (si chiama `user_id`; `buyer_id` sta su
+   * altre tabelle, ed e' da li' che era stata copiata). PostgREST rifiuta
+   * l'intera lettura, il codice scartava l'errore, `orders` restava vuoto e
+   * partiva comunque il messaggio «Esportazione dati scaricata».
+   *
+   * Chi esercita il diritto di portabilita' scaricava un file in cui la
+   * cronologia degli acquisti — il dato che conta di piu' — non c'era, e il
+   * sito gli confermava che era tutto a posto.
+   *
+   * L'esportazione giusta esiste gia' ed e' completa: `/api/account/export`
+   * porta ordini come cliente, come negozio e come fattorino, con un freno a
+   * tre richieste al giorno. Non la chiamava nessuno. Adesso il pulsante passa
+   * di li': una strada sola, quella gia' scritta e gia' coperta dalle prove.
+   */
   const handleDownloadData = async () => {
     if (!userId) return;
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
-    const { data: orders } = await supabase.from('orders').select('*').eq('buyer_id', userId);
-    const { data: addresses } = await supabase.from('user_addresses').select('*').eq('user_id', userId);
-    const payload = {
-      exported_at: new Date().toISOString(),
-      account: { email, user_id: userId },
-      profile,
-      orders,
-      addresses,
-      preferences: prefs,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `mycity-export-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success('Esportazione dati scaricata');
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        toast.error('Sessione scaduta: rientra e riprova.');
+        return;
+      }
+      const res = await fetch('/api/account/export', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null);
+        toast.error(extractError(corpo, 'Esportazione non riuscita. Riprova piu tardi.'));
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mycity-export-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Esportazione dati scaricata');
+    } catch {
+      toast.error('Esportazione non riuscita. Riprova piu tardi.');
+    }
   };
 
   // Estrae il messaggio d'errore sia dal formato ApiErrors { error: { message } }
@@ -517,7 +544,16 @@ export default function SettingsPage() {
                 <p className="text-sm text-ink-600">
                   Per esercitare i tuoi diritti GDPR (accesso, rettifica, opposizione, cancellazione):
                 </p>
-                <a href="mailto:privacy@mycity.it" className="text-primary-700 hover:underline text-sm">privacy@mycity.it</a>
+                {/* 22/8/2026 — L'indirizzo era scritto a mano, su un dominio
+                    che non e' quello di produzione: chi esercitava i suoi
+                    diritti scriveva a una casella che non riceve. Adesso viene
+                    dalla configurazione, come gli altri dati del titolare. */}
+                <a
+                  href={`mailto:${titolare().emailPrivacy}`}
+                  className="text-primary-700 hover:underline text-sm"
+                >
+                  {titolare().emailPrivacy}
+                </a>
               </div>
             </section>
           )}

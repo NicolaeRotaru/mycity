@@ -1,3 +1,6 @@
+import { AiConfigError } from '@/lib/ai/client';
+import { AiCallError, mapAiError } from '@/lib/ai/run';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -53,7 +56,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let json: unknown;
   try {
-    json = await req.json();
+    json = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }
@@ -71,13 +74,25 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // entra nel catalogo. Chi chiamava questa rotta direttamente saltava il
   // filtro: un controllo che si puo' aggirare non e' un controllo. Rifarlo qui
   // costa una chiamata da 128 token, e nega in caso di dubbio.
-  const verdetto = await classifyProductPolicy({
-    name: String(draft.name ?? ''),
-    description: String(draft.description ?? ''),
-    categorySlug: draft.category_slug ?? undefined,
-  }, 'catalog-create-policy');
-  if (!verdetto.allowed) {
-    return ApiErrors.invalidRequest(`Questo prodotto non si puo' pubblicare: ${verdetto.reason}`);
+  try {
+    const verdetto = await classifyProductPolicy({
+      name: String(draft.name ?? ''),
+      description: String(draft.description ?? ''),
+      categorySlug: draft.category_slug ?? undefined,
+    }, 'catalog-create-policy');
+    if (!verdetto.allowed) {
+      return ApiErrors.invalidRequest(`Questo prodotto non si puo' pubblicare: ${verdetto.reason}`);
+    }
+  } catch (err) {
+    // 22/8/2026 — IL FILTRO E' UNA CHIAMATA AL MODELLO COME LE ALTRE.
+    // Se quella cade — modello giu', chiave scaduta, rete — qui non c'era
+    // nessuna rete di protezione: l'eccezione usciva grezza e al venditore
+    // arrivava un 500 muto mentre stava applicando una modifica. Adesso riceve
+    // lo stesso messaggio leggibile che riceverebbe se fosse caduta la
+    // generazione.
+    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiCallError) return mapAiError(err, 'ai-catalog-create-policy');
+    return ApiErrors.internal('Errore AI.');
   }
 
   const admin = getAdminSupabase();

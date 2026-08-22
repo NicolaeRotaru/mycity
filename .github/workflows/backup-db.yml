@@ -17,6 +17,7 @@ name: Backup database
 on:
   schedule:
     - cron: "17 2 * * *" # ogni notte alle 02:17 UTC
+    - cron: "41 3 1 * *" # il primo del mese: la prova di ripristino
   workflow_dispatch: {} # avviabile anche a mano
 
 
@@ -74,3 +75,93 @@ jobs:
           path: backup/
           retention-days: 30
           if-no-files-found: error
+
+  prova-di-ripristino:
+    name: La copia si riapre davvero (mensile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Gira il primo del mese, e a mano quando serve. Non ogni notte: e' una
+    # verifica, non una copia.
+    if: github.event.schedule == '41 3 1 * *' || github.event_name == 'workflow_dispatch'
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      # 22/8/2026 — UNA COPIA MAI RIPROVATA NON E' UNA COPIA.
+      #
+      # La copia notturna gira dal 20 agosto e nessuno l'ha mai riaperta. Il
+      # runbook dichiarava «~30 minuti dal guasto al ripristino»: un numero
+      # scritto a tavolino, mai cronometrato. Non sapevamo nemmeno se quel file
+      # si riapre.
+      #
+      # Qui la prova gira da sola, una volta al mese, su un Postgres vuoto che
+      # vive quanto il lavoro: se il ripristino non riesce, questo lavoro
+      # diventa rosso e lo si scopre in un giorno qualunque invece che in
+      # emergenza. Non serve nessuna chiave in piu' di quelle che la copia usa
+      # gia'.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installa il client Postgres
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Verifica di avere i segreti
+        env:
+          DB: ${{ secrets.SUPABASE_DB_URL }}
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          if [ -z "$DB" ] || [ -z "$PASS" ]; then
+            echo "::error::Senza SUPABASE_DB_URL e BACKUP_PASSPHRASE la prova di ripristino non si puo' fare."
+            exit 1
+          fi
+
+      - name: Fai una copia fresca
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          BACKUP_DIR: ${{ github.workspace }}/backup
+        run: |
+          mkdir -p "$BACKUP_DIR"
+          bash scripts/backup-db.sh
+
+      - name: Riaprila su un database vuoto, e cronometra
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          set -euo pipefail
+          file="$(ls -t "${{ github.workspace }}"/backup/*.gpg | head -1)"
+          echo "▶ ripristino da $(basename "$file")"
+          gpg --batch --yes --decrypt --passphrase "$BACKUP_PASSPHRASE" \
+            --output /tmp/copia.dump "$file"
+
+          psql -q -d postgres -c "CREATE DATABASE prova_ripristino;"
+          inizio=$(date +%s)
+          # I ruoli e gli schemi di sistema del fornitore qui non esistono: gli
+          # errori su quelli non sono il fallimento che stiamo cercando.
+          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia.dump || true
+          fine=$(date +%s)
+          echo "⏱  ripristino in $((fine - inizio)) secondi"
+
+          # La prova vera: le tabelle che contano ci sono e si leggono.
+          for tabella in profiles products orders order_items; do
+            n=$(psql -tA -d prova_ripristino -c "SELECT count(*) FROM public.$tabella;")
+            echo "   $tabella: $n righe"
+          done
+
+          echo "### Prova di ripristino" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "La copia si riapre: **sì**, in **$((fine - inizio)) secondi**." >> "$GITHUB_STEP_SUMMARY"

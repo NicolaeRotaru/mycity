@@ -2,6 +2,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { brandingSchema, normalizeBranding } from '@/lib/site-branding';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -22,7 +23,7 @@ export const GET = withAdminAuth(async () => {
 export const PUT = withAdminAuth(async ({ user, req }) => {
   let raw: unknown;
   try {
-    const body = await req.json();
+    const body = await jsonRichiesta(req, TETTO_JSON);
     raw = (body as { branding?: unknown })?.branding ?? body;
   } catch {
     return ApiErrors.invalidRequest('Corpo della richiesta non valido');

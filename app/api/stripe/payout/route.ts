@@ -4,6 +4,7 @@ import { isStripeConfigured } from '@/lib/stripe/client';
 import { releaseOrderPayout } from '@/lib/stripe/payout';
 import { withInternalAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -23,7 +24,7 @@ export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
 
   let body;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
     return ApiErrors.invalidRequest('Bad request', e instanceof Error ? e.message : undefined);
   }

@@ -4,6 +4,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -24,7 +25,7 @@ const Body = z.object({
 export const POST = withAdminAuth(async ({ req }): Promise<NextResponse> => {
   let body;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
@@ -39,5 +40,12 @@ export const POST = withAdminAuth(async ({ req }): Promise<NextResponse> => {
     return ApiErrors.internal('Conferma rimessa fallita');
   }
 
-  return NextResponse.json({ ok: true, released: data ?? 0 }, { status: 200 });
+  // 22/8/2026 — la funzione risponde con due numeri invece di uno: quelli
+  // rilasciati e quelli SALTATI perche' l'incasso non era stato registrato. I
+  // saltati vanno visti: sono contante di cui non esiste traccia.
+  const esito = (data ?? {}) as { rilasciati?: number; saltati_senza_incasso?: number } | number;
+  const rilasciati = typeof esito === 'number' ? esito : esito.rilasciati ?? 0;
+  const saltati = typeof esito === 'number' ? 0 : esito.saltati_senza_incasso ?? 0;
+
+  return NextResponse.json({ ok: true, released: rilasciati, saltatiSenzaIncasso: saltati }, { status: 200 });
 });

@@ -65,7 +65,12 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
     });
   }, [params.id, router]);
 
-  const { data: conversation } = useQuery({
+  const {
+    data: conversation,
+    isLoading: conversazioneInArrivo,
+    isError: conversazioneNonLetta,
+    refetch: rileggiConversazione,
+  } = useQuery({
     queryKey: queryKeys.messages.conversationByParam(params.id),
     enabled: !!userId,
     queryFn: async (): Promise<Conversation | null> => {
@@ -170,6 +175,37 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
   };
 
   if (!userId) return <LoadingState />;
+
+  /**
+   * 22/8/2026 — «CONVERSAZIONE NON TROVATA» PRIMA CHE ARRIVASSE.
+   *
+   * Il controllo era `if (!conversation)`, e `conversation` e' vuoto anche
+   * mentre la richiesta e' in corso: per qualche decimo di secondo — su rete
+   * lenta di piu' — chi apriva un messaggio leggeva che quella conversazione
+   * non esiste, con un link per tornare indietro. Un cliente che scrive al
+   * negozio e si vede dire «non trovata» non riprova: pensa che il messaggio
+   * sia sparito.
+   *
+   * Tre stati diversi, tre messaggi diversi: sto arrivando, non riesco a
+   * leggerla (con il ritentativo), non c'e'.
+   */
+  if (conversazioneInArrivo) return <LoadingState />;
+  if (conversazioneNonLetta) {
+    return (
+      <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">
+        <MessageCircle size={40} className="mx-auto text-ink-500 mb-3" aria-hidden />
+        <h1 className="text-xl font-bold mb-2">Non riesco a caricare la conversazione</h1>
+        <p className="text-sm text-ink-600">Sembra un problema di collegamento.</p>
+        <button
+          type="button"
+          onClick={() => { void rileggiConversazione(); }}
+          className="mt-4 rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700"
+        >
+          Riprova
+        </button>
+      </div>
+    );
+  }
   if (!conversation) {
     return (
       <div className="container mx-auto p-8 max-w-md text-center mt-8 bg-white rounded-2xl border">

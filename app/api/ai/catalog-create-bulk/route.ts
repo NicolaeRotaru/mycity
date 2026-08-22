@@ -1,3 +1,4 @@
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -58,7 +59,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let json: unknown;
   try {
-    json = await req.json();
+    json = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }
@@ -84,11 +85,30 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
       scartati.push({ nome: String(item.draft.name ?? 'senza nome'), motivo: 'foto non caricate su MyCity' });
       continue;
     }
-    const verdetto = await classifyProductPolicy({
-      name: String(item.draft.name ?? ''),
-      description: String(item.draft.description ?? ''),
-      categorySlug: item.draft.category_slug ?? undefined,
-    }, 'catalog-create-bulk-policy');
+    // 22/8/2026 — IL FILTRO CHE CADE NON DEVE FAR CADERE TUTTO IL LOTTO.
+    //
+    // Qui il filtro girava senza rete: se il modello non rispondeva — giu',
+    // chiave scaduta, rete lenta — l'eccezione usciva dal ciclo e faceva
+    // fallire l'INTERA richiesta. Il venditore che stava caricando venti
+    // prodotti li perdeva tutti per colpa del diciannovesimo.
+    //
+    // Adesso quel prodotto finisce fra gli scartati col motivo scritto, e gli
+    // altri diciannove entrano. Il prodotto non passa lo stesso: nel dubbio si
+    // nega, che e' quello che fa anche il filtro quando risponde.
+    let verdetto: Awaited<ReturnType<typeof classifyProductPolicy>>;
+    try {
+      verdetto = await classifyProductPolicy({
+        name: String(item.draft.name ?? ''),
+        description: String(item.draft.description ?? ''),
+        categorySlug: item.draft.category_slug ?? undefined,
+      }, 'catalog-create-bulk-policy');
+    } catch {
+      scartati.push({
+        nome: String(item.draft.name ?? 'senza nome'),
+        motivo: 'controllo non disponibile in questo momento: riprova fra poco',
+      });
+      continue;
+    }
     if (!verdetto.allowed) {
       scartati.push({ nome: String(item.draft.name ?? 'senza nome'), motivo: verdetto.reason });
       continue;

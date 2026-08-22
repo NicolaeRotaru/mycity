@@ -213,6 +213,23 @@ const PROXY_FIDATI = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? '1') |
  * scritto dalla nostra infrastruttura, che il chiamante non può falsificare.
  */
 export function getClientIp(req: Request): string {
+  /**
+   * 22/8/2026 — DIETRO CLOUDFLARE SI LEGGEVA L'INDIRIZZO SBAGLIATO.
+   *
+   * Con un CDN davanti, la catena `x-forwarded-for` ha due salti invece di uno,
+   * e questo conto — che ne scarta uno solo — restituiva l'indirizzo del CDN.
+   * Tutti i visitatori diventavano lo stesso indirizzo: il freno anti-abuso
+   * scattava su tutti insieme dopo poche richieste, e le visite venivano
+   * buttate come se fossero un attacco.
+   *
+   * Cloudflare scrive l'indirizzo vero in un'intestazione sua,
+   * `cf-connecting-ip`, che aggiunge lui e che il chiamante non puo'
+   * falsificare: quando c'e', e' la risposta piu' affidabile che abbiamo. Se
+   * non c'e', resta il conto di prima, che e' quello giusto senza CDN.
+   */
+  const cloudflare = req.headers.get('cf-connecting-ip');
+  if (cloudflare) return cloudflare.trim();
+
   const xff = req.headers.get('x-forwarded-for');
   if (xff) {
     const catena = xff.split(',').map((p) => p.trim()).filter(Boolean);

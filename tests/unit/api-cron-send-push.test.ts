@@ -37,6 +37,16 @@ vi.mock('@supabase/supabase-js', () => ({
         order: () => b,
         limit: () => Promise.resolve({ data: pending, error: null }),
         update: () => ((b._update = true), b),
+        // 22/8/2026 — il giro segna le notifiche gestite con UNA scrittura
+        // sola invece di una per notifica: il finto deve saper rispondere
+        // anche a quella.
+        in: (_c: string, valori: string[]) => {
+          if (b._update) {
+            for (const v of valori) marked.push(v);
+            return Promise.resolve({ error: null });
+          }
+          return b;
+        },
         eq: (_c: string, v: string) => {
           if (b._update) {
             marked.push(v);

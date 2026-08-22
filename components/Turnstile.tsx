@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useEffect, useRef } from 'react';
 
 declare global {
   interface Window {
@@ -35,7 +35,24 @@ type Props = {
  * e renderizza un challenge invisibile/managed. Se la sitekey non è
  * configurata (lato server) il componente non viene montato dal parent.
  */
-export default function Turnstile({ siteKey, onVerify, onExpire, onError, theme = 'auto' }: Props) {
+/**
+ * 22/8/2026 — IL GETTONE SI CONSUMA AL PRIMO TENTATIVO, E NON SI RIGENERAVA.
+ *
+ * Cloudflare da' un gettone valido UNA volta. Se chi entra sbaglia la password,
+ * il gettone e' gia' stato speso: al secondo tentativo il server lo rifiuta, e
+ * il messaggio che arriva parla di anti-bot su una schermata dove non c'e'
+ * niente da ripremere. La persona resta fuori dal proprio account per un errore
+ * di battitura.
+ *
+ * `reset()` chiede a Cloudflare un gettone nuovo. Il riquadro lo espone verso
+ * l'alto, e le pagine lo chiamano in ogni ramo di errore.
+ */
+export type ManopolaAntiBot = { reset: () => void };
+
+function TurnstileConReset(
+  { siteKey, onVerify, onExpire, onError, theme = 'auto' }: Props,
+  manopola: React.Ref<ManopolaAntiBot>,
+) {
   const ref = useRef<HTMLDivElement>(null);
   const widgetId = useRef<string | null>(null);
   // #115 — Le funzioni di richiamo cambiano identita' a ogni disegno: se
@@ -109,5 +126,17 @@ export default function Turnstile({ siteKey, onVerify, onExpire, onError, theme 
     };
   }, [siteKey, theme]);
 
+  useImperativeHandle(manopola, () => ({
+    reset: () => {
+      if (widgetId.current && window.turnstile) {
+        try { window.turnstile.reset(widgetId.current); } catch { /* noop */ }
+      }
+    },
+  }), []);
+
   return <div ref={ref} className="cf-turnstile" />;
 }
+
+const Turnstile = forwardRef<ManopolaAntiBot, Props>(TurnstileConReset);
+Turnstile.displayName = 'Turnstile';
+export default Turnstile;

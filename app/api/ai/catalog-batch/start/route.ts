@@ -1,3 +1,4 @@
+import { controllaTettoSpesaAi } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -15,6 +16,7 @@ import {
 } from '@/lib/ai/catalogBatch';
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { CategoryRow } from '@/lib/products/aiPatch';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * Avvia un job AI massivo sul catalogo (Batch API). Costruisce una richiesta per
@@ -37,7 +39,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }
@@ -94,6 +96,18 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   }
 
   try {
+    /**
+     * 22/8/2026 — IL TETTO DI SPESA NON GUARDAVA QUI, ED E' IL POSTO DOVE SI
+     * SPENDE DI PIU' IN UN COLPO SOLO.
+     *
+     * Ogni chiamata singola al modello passa da `runMessage`, che prima
+     * controlla il tetto giornaliero e dopo registra quanto ha speso. Il lotto
+     * no: manda decine di richieste insieme e non passava da nessuno dei due
+     * ganci. Poteva partire col tetto gia' superato — cioe' proprio quando il
+     * freno doveva fermarlo — e la sua spesa non veniva contata, quindi il
+     * tetto restava fermo mentre i soldi uscivano.
+     */
+    controllaTettoSpesaAi('ai-catalog-batch-start');
     const handle = await submitBatch(requests);
     const { error: errUpd } = await admin
       .from('catalog_ai_jobs')

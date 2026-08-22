@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -31,7 +32,7 @@ const Body = z.object({
 async function handler(req: NextRequest, user: { id: string }, params: { id: string }): Promise<NextResponse> {
   let body;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
@@ -50,6 +51,46 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   let refundId: string | null = null;
 
+  /**
+   * 21/8/2026 — PRIMA SI PRENDE IL TURNO, POI ESCONO I SOLDI.
+   *
+   * La guardia di stato stava DOPO il rimborso, e il commento diceva che tanto
+   * c'era la chiave di idempotenza di Stripe. Quella protegge il denaro, non i
+   * conti: `accumula_rimborso` e' un incremento senza chiave, quindi due
+   * risoluzioni partite insieme sullo stesso reclamo alzavano DUE VOLTE
+   * `refunded_amount_cents` mentre Stripe rimborsava una volta sola.
+   *
+   * Ora si rivendica prima. Se il rimborso poi fallisce, il reclamo torna
+   * aperto: e' l'unico modo perche' resti risolvibile.
+   */
+  const statiRisolvibili = ['open', 'under_review'];
+  const { data: rivendicato, error: errRivendica } = await admin
+    .from('disputes')
+    .update({
+      status: body.status,
+      resolution_notes: body.notes,
+      resolved_by: user.id,
+      resolved_at: new Date().toISOString(),
+      refund_cents: body.refundCents ?? null,
+    })
+    .eq('id', params.id)
+    .in('status', statiRisolvibili)
+    .select('id');
+
+  if (errRivendica) return ApiErrors.internal('Update fallito');
+  if (!rivendicato || rivendicato.length === 0) {
+    return ApiErrors.conflict("Reclamo già risolto da un'altra sessione");
+  }
+
+  /** Riapre il reclamo: si usa solo quando i soldi NON sono usciti. */
+  const riapri = async () => {
+    await admin
+      .from('disputes')
+      .update({ status: dispute.status, resolved_by: null, resolved_at: null, refund_cents: null })
+      .eq('id', params.id)
+      .eq('status', body.status);
+  };
+
   // Rimborso reale solo se risolto a favore del buyer con un importo.
   if (body.status === 'resolved_buyer' && body.refundCents) {
     // refundOrder gestisce sia il refund Stripe (carta + claw-back) sia
@@ -61,7 +102,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       .eq('id', dispute.order_id)
       .single();
     const isCard = !!ord?.stripe_payment_intent;
-    if (isCard && !isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');
+    if (isCard && !isStripeConfigured()) {
+      await riapri();
+      return ApiErrors.unavailable('Stripe non configurato');
+    }
     try {
       const res = await refundOrder({
         orderId: dispute.order_id,
@@ -74,27 +118,10 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       refundId = res.refundId;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
+      await riapri();
       return ApiErrors.badGateway('Rimborso fallito: ' + (err instanceof Error ? err.message : 'unknown'));
     }
   }
-
-  // Guard di stato atomico: solo UNA risoluzione passa (anti doppio-click);
-  // l'eventuale refund è già protetto dall'idempotencyKey lato Stripe.
-  const { data: updated, error: updErr } = await admin
-    .from('disputes')
-    .update({
-      status: body.status,
-      resolution_notes: body.notes,
-      resolved_by: user.id,
-      resolved_at: new Date().toISOString(),
-      refund_cents: body.refundCents ?? null,
-    })
-    .eq('id', params.id)
-    .in('status', ['open', 'under_review'])
-    .select('id');
-
-  if (updErr) return ApiErrors.internal('Update fallito');
-  if (!updated || updated.length === 0) return ApiErrors.conflict("Reclamo già risolto da un'altra sessione");
 
   // Sbloccare il payout del venditore.
   //

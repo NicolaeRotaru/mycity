@@ -62,7 +62,14 @@ export async function POST(req: NextRequest) {
   // se un tentativo precedente è fallito (processed=false), il retry di Stripe deve
   // riprocessare — prima rispondeva 200 "duplicated" e l'evento andava perso (es.
   // "pagato ma nessun ordine creato").
-  const seen = await admin.from('stripe_event_log').insert({ event_id: event.id, type: event.type });
+  // 21/8/2026 — LA RIVENDICAZIONE NASCEVA VUOTA, E LA PRIMA CONSEGNA NON ERA
+  // PROTETTA. La riga entrava con `claimed_at` a NULL, e la rivendicazione qui
+  // sotto accetta chi trova `claimed_at IS NULL`: mentre la prima consegna
+  // lavorava, la seconda passava lo stesso. Il turno si prende adesso, con la
+  // riga: la seconda trova un turno gia' preso e se ne va.
+  const seen = await admin
+    .from('stripe_event_log')
+    .insert({ event_id: event.id, type: event.type, claimed_at: new Date().toISOString() });
   if (seen.error) {
     if (seen.error.code === '23505') {
       // 062 — Prima bastava leggere `processed`: due consegne concorrenti dello

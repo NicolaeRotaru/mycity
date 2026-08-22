@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
+import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/errors';
@@ -9,7 +10,10 @@ import { Banknote, Camera } from 'lucide-react';
 
 type Props = {
   orderId: string;
+  /** Il contante da rimettere: il totale del cliente MENO il compenso trattenuto. */
   expectedCents: number;
+  /** Quanto il fattorino si e' gia' tenuto: serve a spiegare perche il numero e piu basso. */
+  compensoTenutoCents?: number;
   onConfirmed?: () => void;
 };
 
@@ -22,7 +26,7 @@ type Props = {
  * Alla conferma chiama /api/rider/cash-confirm che valida lato server
  * (rider proprietario, stato ordine, payment_method=cod, non duplicato).
  */
-export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed }: Props) {
+export default function CashConfirmDialog({ orderId, expectedCents, compensoTenutoCents = 0, onConfirmed }: Props) {
   const tStates = useTranslations('states');
   const tActions = useTranslations('actions');
   const [open, setOpen] = useState(false);
@@ -31,6 +35,9 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
   const [deliveryPhoto, setDeliveryPhoto] = useState<string | null>(null);
   const [uploading, setUploading] = useState<'cash' | 'delivery' | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const pannelloRef = useRef<HTMLDivElement>(null);
+  const bottoneApri = useRef<HTMLButtonElement>(null);
+  useBottomSheetA11y(open, pannelloRef, bottoneApri, () => setOpen(false));
 
   // Le prove d'incasso vanno nel secchio privato `cod-proof`, nella cartella del
   // fattorino che le carica. Prima finivano nel secchio pubblico `products` sotto
@@ -89,6 +96,7 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
     return (
       <button
         type="button"
+        ref={bottoneApri}
         onClick={() => setOpen(true)}
         className="w-full rounded-lg bg-accent-500 px-4 py-3 text-sm font-semibold text-ink-900 hover:bg-accent-600 flex items-center justify-center gap-1.5"
       >
@@ -99,22 +107,44 @@ export default function CashConfirmDialog({ orderId, expectedCents, onConfirmed 
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-3">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <h2 className="text-lg font-semibold text-ink-900">Conferma incasso contanti</h2>
+      {/* 22/8/2026 — QUESTO PANNELLO NON DICEVA DI ESSERE UN PANNELLO.
+          Copre lo schermo, ma per uno screen reader era un pezzo di pagina come
+          un altro: nessun annuncio all'apertura, nessuna uscita con Esc, e da
+          tastiera si finiva dietro il velo senza modo di tornare indietro. E'
+          la schermata in cui il fattorino dichiara quanti contanti ha in mano:
+          bloccarcelo dentro e' il modo piu' veloce per far sbagliare la cassa.
+          `useBottomSheetA11y` fa le tre cose (fuoco dentro, Esc, ritorno al
+          pulsante) ed esisteva gia' da un file di distanza. */}
+      <div
+        ref={pannelloRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titolo-conferma-contanti"
+        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+      >
+        <h2 id="titolo-conferma-contanti" className="text-lg font-semibold text-ink-900">Conferma incasso contanti</h2>
         <p className="mt-1 text-xs text-ink-500">
           Inserisci l&apos;importo ricevuto. Le foto (contanti/scontrino e consegna) sono
           facoltative.
         </p>
 
-        <label className="mt-4 block text-sm font-medium text-ink-700">Importo incassato (€)</label>
+        <label className="mt-4 block text-sm font-medium text-ink-700" htmlFor="contante-da-rimettere">
+          Contante da rimettere (€)
+        </label>
         <input
+          id="contante-da-rimettere"
           type="number"
           step="0.01"
           value={amount}
           onChange={(e) => setAmount(e.target.value)}
           className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-lg font-mono"
         />
-        <p className="mt-1 text-xs text-ink-500">Importo previsto: €{(expectedCents / 100).toFixed(2)}</p>
+        <p className="mt-1 text-xs text-ink-500">
+          Previsto: €{(expectedCents / 100).toFixed(2)}
+          {compensoTenutoCents > 0 && (
+            <> — hai già trattenuto €{(compensoTenutoCents / 100).toFixed(2)} di compenso.</>
+          )}
+        </p>
 
         <div className="mt-4 grid grid-cols-2 gap-3">
           <PhotoSlot

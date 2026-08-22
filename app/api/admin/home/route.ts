@@ -5,6 +5,7 @@ import {
   homeSiteSchema, normalizeHomeSite, siteByteSize, MAX_SITE_BYTES, type HomeSite,
 } from '@/lib/home-site';
 import { sanitizeRichText } from '@/lib/sanitize-html';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -47,7 +48,7 @@ export const GET = withAdminAuth(async () => {
 export const PUT = withAdminAuth(async ({ user, req }) => {
   let raw: unknown;
   try {
-    const body = await req.json();
+    const body = await jsonRichiesta(req, TETTO_JSON);
     raw = (body as { site?: unknown })?.site ?? body;
   } catch {
     return ApiErrors.invalidRequest('Corpo della richiesta non valido');

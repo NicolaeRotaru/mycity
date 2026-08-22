@@ -1,3 +1,4 @@
+import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
@@ -8,6 +9,7 @@ import { validateCoupon } from '@/lib/coupons';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
+import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
@@ -17,6 +19,7 @@ import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -90,7 +93,7 @@ export const POST = withAuthRateLimit(
 
     let body: z.infer<typeof Body>;
     try {
-      body = Body.parse(await req.json());
+      body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
     } catch (e) {
       return ApiErrors.invalidRequest('Dati ordine non validi', e instanceof Error ? e.message : undefined);
     }
@@ -120,6 +123,12 @@ export const POST = withAuthRateLimit(
      * restituiscono gli ordini di allora invece di crearne altri.
      */
     const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    /**
+     * Cosa tiene insieme gli ordini nati dallo stesso carrello, nei conti.
+     * Se il browser manda la sua chiave si usa quella; altrimenti se ne fa una
+     * qui — l'importante e' che sia UNA per invio, non una per ordine.
+     */
+    const chiaveCarrello = chiaveTentativo || `cod-${crypto.randomUUID()}`;
     if (chiaveTentativo) {
       /**
        * 21/8/2026 — LA CHIAVE SI RIVENDICA PRIMA, NON DOPO.
@@ -351,21 +360,55 @@ export const POST = withAuthRateLimit(
       zip: body.delivery.zip,
     });
 
-    const shippingPerGroupCents = body.groups.map((g, i) => {
-      const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
-      return shippingCentsFor({
-        subtotal: subtotalPerGroupCents[i] / 100,
-        storeLat: coord.lat,
-        storeLng: coord.lng,
-        deliveryLat: coordConsegna?.lat ?? null,
-        deliveryLng: coordConsegna?.lng ?? null,
-        pickupInStore: body.pickupInStore,
-        freeShipping: couponFreeShipping,
-      });
+    /**
+     * 22/8/2026 — L'ORDINE NASCEVA SENZA DESTINAZIONE.
+     *
+     * Se l'indirizzo non e' fra quelli salvati dalla persona — cioe' la prima
+     * volta che qualcuno ordina, che e' il caso piu' importante — qui non
+     * c'erano coordinate, e l'ordine finiva nel database con
+     * `delivery_lat/lng` a vuoto. Effetto: la mappa della consegna senza
+     * destinazione, nessuna stima di quanto manca, e il fattorino che va a
+     * naso su un indirizzo che il sistema conosce solo come testo.
+     *
+     * Il browser le calcolava e le mandava, ma il server le buttava — ed era
+     * giusto: il prezzo dipende dalla distanza, e un numero che arriva dal
+     * browser si puo' cambiare. Adesso se le calcola lui.
+     *
+     * ATTENZIONE, e' il punto: queste coordinate NON entrano nel prezzo. La
+     * spedizione resta calcolata come oggi, sulle coordinate degli indirizzi
+     * salvati o sulla tariffa fissa. Servono a far vedere dove va la spesa.
+     */
+    const coordPerLaMappa =
+      coordConsegna ?? (await coordinateDiUnIndirizzo({
+        address: body.delivery.address,
+        city: body.delivery.city,
+        zip: body.delivery.zip,
+      }));
+
+    /**
+     * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DELLA CARTA.
+     *
+     * Qui sotto c'erano duecento righe di aritmetica identiche a quelle della
+     * rotta con carta: spedizione per negozio, sconto del ritiro, fee di
+     * consegna, tetto sugli sconti, ripartizione col resto piu' grande. La
+     * storia scritta nei commenti dice che almeno tre volte una riparazione e'
+     * stata fatta da una parte sola — e ogni volta il cliente pagava un
+     * importo diverso a seconda di come sceglieva di pagare.
+     */
+    const prezzi = prezziDelCarrello({
+      gruppi: body.groups.map((g, i) => ({
+        sellerId: g.sellerId,
+        subtotalCents: subtotalPerGroupCents[i],
+      })),
+      coordinateNegozio: (sellerId) => sellerCoordMap.get(sellerId) ?? { lat: null, lng: null },
+      consegnaLat: coordConsegna?.lat ?? null,
+      consegnaLng: coordConsegna?.lng ?? null,
+      pickupInStore: body.pickupInStore,
+      couponSpedizioneGratis: couponFreeShipping,
+      couponScontoCents: couponDiscountCents,
     });
-    const pickupDiscountCents = body.pickupInStore
-      ? Math.round(grandSubtotalCents * (PICKUP_DISCOUNT_PERCENT / 100))
-      : 0;
+    const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
+    const pickupDiscountCents = prezzi.pickupDiscountCents;
 
     // 058 / 165 — LA STESSA MATEMATICA DELLA CARTA, NON UNA SUA IMITAZIONE.
     //
@@ -378,11 +421,9 @@ export const POST = withAuthRateLimit(
     //    con totale negativo, cioe' un negozio che paga il cliente.
     // La rotta della carta ha gia' risolto tutte e due le cose con due funzioni
     // scritte e provate. Non serviva una seconda versione: serviva usarle.
-    const grandShippingCents = shippingPerGroupCents.reduce((s, x) => s + x, 0);
-    const tettoScontoCents = Math.max(0, grandSubtotalCents + grandShippingCents - 1);
-    const scontiLimitati = riduciAlTetto(couponDiscountCents, pickupDiscountCents, tettoScontoCents);
-    const quoteCoupon = ripartisciCentesimi(scontiLimitati.codice, subtotalPerGroupCents);
-    const quoteRitiro = ripartisciCentesimi(scontiLimitati.ritiro, subtotalPerGroupCents);
+    const grandShippingCents = prezzi.grandShippingCents;
+    const quoteCoupon = prezzi.gruppi.map((g) => g.couponPortionCents);
+    const quoteRitiro = prezzi.gruppi.map((g) => g.pickupPortionCents);
 
     // --- 5. Inserisci N ordini (uno per gruppo) con il client admin.
     const createdOrderIds: string[] = [];
@@ -438,8 +479,8 @@ export const POST = withAuthRateLimit(
       const discountCents = couponPortionCents + pickupPortionCents;
       // Fee di consegna piattaforma (€3): solo per consegna a domicilio, mai per
       // ritiro in negozio. Il cliente la paga in contanti insieme all'ordine.
-      const deliveryFeeCents = body.pickupInStore ? 0 : PLATFORM_DELIVERY_FEE_CENTS;
-      const grossTotalCents = Math.max(0, subtotal + shipping + deliveryFeeCents - discountCents);
+      const deliveryFeeCents = prezzi.gruppi[i].deliveryFeeCents;
+      const grossTotalCents = prezzi.gruppi[i].totalCents;
 
       // RISERVA ATOMICA DELLO STOCK del gruppo PRIMA di creare l'ordine (P0-4).
       // Con variante, la riserva scala lo stock della variante.
@@ -544,8 +585,8 @@ export const POST = withAuthRateLimit(
         // sulla mappa ne indica un'altra, e il fattorino va dove dice il
         // punto. Meglio nessuna coordinata — si geocodifica dopo — che una
         // coordinata che contraddice l'indirizzo scritto.
-        delivery_lat: coordConsegna?.lat ?? null,
-        delivery_lng: coordConsegna?.lng ?? null,
+        delivery_lat: coordPerLaMappa?.lat ?? null,
+        delivery_lng: coordPerLaMappa?.lng ?? null,
       };
 
       const { data: order, error: orderErr } = await conRipiegoSchema(
@@ -626,18 +667,54 @@ export const POST = withAuthRateLimit(
     }
 
     // --- 6. Adesso che TUTTI gli ordini esistono, si avvisa. (#159)
-    for (const c of comunicazioni) {
-      // Notifica in-app al venditore — nuovo ordine COD ricevuto
-      await admin.from('notifications').insert({
-        // #33 — la categoria decide se la persona vuole ancora ricevere
-        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
+    /**
+     * 22/8/2026 — IL CLIENTE ASPETTAVA CHE PARTISSE TUTTA LA POSTA.
+     *
+     * Questo blocco stava DENTRO la risposta: per ogni negozio del carrello due
+     * campanelle, due letture e due email, tutte in fila e tutte attese. Con
+     * due negozi sono una decina di viaggi verso il servizio di posta prima che
+     * la persona veda «Ordine effettuato» — su una rete lenta, secondi di
+     * schermata ferma dopo che l'ordine c'e' gia'.
+     *
+     * La strada della carta lo fa gia' bene: prepara e lascia andare. Qui si
+     * copia quello schema. Le campanelle diventano una scrittura sola per
+     * tutte, e le email partono senza essere aspettate: se una fallisce si
+     * annota, non blocca nessuno.
+     *
+     * NOTA onesta sull'ambiente: questo funziona perche' il processo resta vivo
+     * dopo la risposta. In un ambiente che spegne il processo appena risponde
+     * servirebbe una coda — la stessa che gia' esiste per le email di ciclo di
+     * vita.
+     */
+    const campanelle = comunicazioni.flatMap((c) => [
+      {
         category: 'order',
         user_id: c.sellerId,
         title: '🎉 Nuovo ordine!',
         body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · €${(c.totalCents / 100).toFixed(2)} · pagamento alla consegna`,
         link: `/seller/orders/${c.orderId}`,
-      });
+      },
+      {
+        category: 'order',
+        user_id: user.id,
+        title: '✅ Ordine ricevuto',
+        body: `Il tuo ordine #${c.orderId.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,
+        link: `/orders/${c.orderId}`,
+      },
+    ]);
+    if (campanelle.length > 0) {
+      const { error: errCampanelle } = await admin.from('notifications').insert(campanelle);
+      if (errCampanelle) {
+        logger.warn('[cod] campanelle non scritte', { message: errCampanelle.message });
+      }
+    }
 
+    // Le email: preparate qui, spedite senza far aspettare chi ha ordinato.
+    // L'indirizzo si prende ADESSO: dentro la funzione che parte per conto suo
+    // TypeScript non sa piu' che era stato controllato.
+    const emailCliente = user.email;
+    void (async () => {
+      for (const c of comunicazioni) {
       // Email al venditore (oltre alla notifica) — per la carta parte dal webhook,
       // per il COD va inviata qui. Best-effort.
       try {
@@ -656,16 +733,8 @@ export const POST = withAuthRateLimit(
         logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
       }
 
-      // Conferma al BUYER — notifica in-app + email (best-effort: un errore qui
-      // non deve far fallire la creazione dell'ordine). Per gli ordini con carta
-      // la conferma parte dal webhook Stripe; per il COD va inviata qui.
-      await admin.from('notifications').insert({
-        category: 'order',
-        user_id: user.id,
-        title: '✅ Ordine ricevuto',
-        body: `Il tuo ordine #${c.orderId.slice(0, 6).toUpperCase()} è stato inviato al negozio. Ti avviseremo quando viene accettato.`,
-        link: `/orders/${c.orderId}`,
-      });
+      // Conferma al cliente. Per gli ordini con carta parte dal webhook Stripe;
+      // per il contrassegno va inviata qui.
       try {
         const { data: sellerProfile } = await admin
           .from('profiles')
@@ -678,11 +747,14 @@ export const POST = withAuthRateLimit(
           total: c.totalCents / 100,
           storeName: sellerProfile?.store_name ?? 'il negozio',
         });
-        await sendEmail({ to: user.email, subject: t.subject, html: t.html, text: t.text });
+        if (emailCliente) {
+          await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text });
+        }
       } catch (e) {
         logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
       }
-    }
+      }
+    })().catch((e) => logger.warn('[cod] invio delle comunicazioni interrotto', { e }));
 
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
     // solo dal browser: chi chiudeva la scheda spariva dai conti, e il
@@ -698,7 +770,19 @@ export const POST = withAuthRateLimit(
           totalCents: c.totalCents,
           paymentMethod: 'cod',
           sellerId: c.sellerId,
-          checkoutId: chiaveTentativo ?? c.orderId,
+          // 22/8/2026 — LO STESSO CARRELLO PRENDEVA IDENTIFICATIVI DIVERSI.
+          //
+          // Senza la chiave del tentativo qui si ripiegava sull'id DELL'ORDINE:
+          // un carrello da due negozi genera due ordini, quindi due
+          // identificativi diversi per la stessa spesa. Nei conti quella
+          // diventava due persone che comprano una volta invece di una persona
+          // che compra da due negozi — e lo scontrino medio ne usciva
+          // dimezzato.
+          //
+          // `chiaveCarrello` e' una sola per richiesta: o quella mandata dal
+          // browser, o una generata qui. Tutti gli ordini nati da questo invio
+          // portano quella.
+          checkoutId: chiaveCarrello,
         }),
       ),
     ).catch(() => { /* già registrato dentro contaAcquisto */ });

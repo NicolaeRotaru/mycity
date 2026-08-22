@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
 
 vi.mock('@/lib/logger', () => ({
-  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+  logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() },
 }));
 
 // Stripe client: constructEvent lancia => firma non valida.

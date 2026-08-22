@@ -98,10 +98,31 @@ export async function GET(request: Request) {
   checks.env = { ok: mancantiVitali.length === 0, error: mancantiVitali.join(',') || undefined };
   checks.envOpzionali = { ok: mancantiImportanti.length === 0, error: mancantiImportanti.join(',') || undefined };
 
-  const fatale = !checks.db.ok || !checks.env.ok;
-  const degradato = !fatale && !checks.envOpzionali.ok;
-  const status = fatale ? 'unhealthy' : degradato ? 'degraded' : 'ok';
-  const httpStatus = fatale ? 503 : 200;
+  /**
+   * 22/8/2026 — UN DATABASE LENTO FACEVA RIAVVIARE UN'ISTANZA SANA.
+   *
+   * Questa rotta e' quella che l'hosting interroga per decidere se il processo
+   * e' vivo: se risponde 503 lo ammazza e lo riavvia. Ma qui bastava che il
+   * database non rispondesse entro tre secondi per far uscire un 503 — e un
+   * database lento e' esattamente il momento in cui NON si vuole riavviare
+   * niente: si perdono le richieste in corso, il processo riparte, ritrova lo
+   * stesso database lento, e riparte di nuovo. Un rallentamento diventa un
+   * blackout, per mano nostra.
+   *
+   * I due significati adesso sono separati. Qui si risponde alla domanda «e'
+   * vivo questo processo?», che dipende solo dalle variabili vitali: se
+   * mancano quelle, il processo non puo' funzionare e riavviarlo ha senso.
+   * Il database lento diventa `degraded` con 200: il corpo lo dice, i
+   * cruscotti lo vedono, e nessuno riavvia niente.
+   *
+   * La domanda «e' pronto a servire?» — quella che include il database — vive
+   * su /api/health/ready, che il monitor esterno interroga per avvisare senza
+   * avere il potere di riavviare.
+   */
+  const processoMorto = !checks.env.ok;
+  const degradato = !processoMorto && (!checks.db.ok || !checks.envOpzionali.ok);
+  const status = processoMorto ? 'unhealthy' : degradato ? 'degraded' : 'ok';
+  const httpStatus = processoMorto ? 503 : 200;
 
   // Il dettaglio lo vede chi ha il segreto dei lavori periodici, non il mondo.
   const segreto = process.env.CRON_SECRET;

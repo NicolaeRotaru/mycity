@@ -21,9 +21,12 @@ export function useStorePageData(id: string) {
         .from('seller_public_profiles')
         .select('id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year')
         .eq('id', id)
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data;
+      // 22/8/2026 — un negozio che non esiste non e' un guasto di rete: senza
+      // questo, la pagina offriva «Riprova» su un indirizzo che non porta da
+      // nessuna parte.
+      return data ?? null;
     },
   });
 

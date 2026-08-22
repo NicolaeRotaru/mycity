@@ -108,6 +108,26 @@ function _resetAiBudgetIfNeeded(): void {
   }
 }
 
+/**
+ * 22/8/2026 — IL TETTO DI SPESA NON VEDEVA IL CANALE CHE SPENDE DI PIU'.
+ *
+ * Questi due ganci erano privati di questo file, e li chiamava solo
+ * `runMessage`. Ma il canale che spende di piu' in un colpo solo non passa di
+ * li': e' il LOTTO (`submitBatch`), che manda decine di richieste insieme.
+ * Quello poteva partire col tetto gia' superato, e la spesa che faceva non
+ * veniva contata da nessuna parte: il tetto restava fermo mentre i soldi
+ * uscivano.
+ *
+ * Adesso sono esportati, e le rotte del lotto li usano come tutti gli altri.
+ */
+export function controllaTettoSpesaAi(feature: string): void {
+  _checkAiBudget(feature);
+}
+
+export function registraSpesaAi(costEur: number): void {
+  _recordAiCost(costEur);
+}
+
 function _checkAiBudget(feature: string): void {
   _resetAiBudgetIfNeeded();
   const limitEur = Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);

@@ -4,6 +4,7 @@ import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { storeSiteSchema, siteByteSize, MAX_SITE_BYTES, type StoreSite } from '@/lib/store-site';
 import { sanitizeRichText } from '@/lib/sanitize-html';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -38,7 +39,7 @@ function sanitizeSite(site: StoreSite): StoreSite {
 export const PUT = withSellerAuth(async ({ user, req }) => {
   let raw: unknown;
   try {
-    const body = await req.json();
+    const body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
     raw = (body as { site?: unknown })?.site ?? body;
   } catch {
     return ApiErrors.invalidRequest('Corpo della richiesta non valido');

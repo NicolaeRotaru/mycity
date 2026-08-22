@@ -88,6 +88,51 @@ jobs:
         with:
           node-version: "24"
 
+      # 22/8/2026 — IL CODICE NUOVO ARRIVAVA SU UN DATABASE VECCHIO.
+      #
+      # Il rilascio pubblicava il codice e basta. Le migrazioni si applicavano a
+      # mano, in un momento qualsiasi: fra l'unione e la firma sul database c'e'
+      # sempre una finestra — minuti se qualcuno guarda, ore se non guarda
+      # nessuno — in cui gira codice che chiede colonne che non esistono. In
+      # PostgreSQL una colonna che non c'e' non viene ignorata: fa fallire
+      # l'istruzione intera. E' cosi' che il 21 agosto, per un po', non si
+      # poteva creare nessun ordine.
+      #
+      # Adesso le migrazioni si applicano PRIMA della pubblicazione, e se non si
+      # applicano il rilascio non parte. Serve il segreto SUPABASE_DB_URL (la
+      # stringa di connessione del database di produzione): senza, questo passo
+      # si limita a dirlo, come tutti gli altri di questo file.
+      - name: Applica le migrazioni al database, prima di pubblicare
+        id: migrazioni
+        if: steps.chiavi.outputs.pronto == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::warning::SUPABASE_DB_URL non configurato: le migrazioni NON vengono applicate da qui. Il codice puo' arrivare su un database piu' vecchio di lui."
+            echo "applicate=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "applicate=true" >> "$GITHUB_OUTPUT"
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+          # Ogni file, nell'ordine vero. Le migrazioni del progetto sono
+          # idempotenti: riapplicarle non fa danni.
+          for f in $(ls migrations/*.sql | sort -V); do
+            echo "▶ $f"
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+
+      # Il cancello: se dopo le migrazioni il database e' ancora diverso da
+      # quello che il codice si aspetta, non si pubblica.
+      - name: Il database e' allineato al codice
+        # `secrets` non si puo' leggere in una condizione di passo: si guarda
+        # l'esito del passo qui sopra, che dice se le migrazioni sono girate.
+        if: steps.migrazioni.outputs.applicate == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          SALTO_E_ERRORE: "1"
+        run: npm ci --legacy-peer-deps && npm run db:check-drift
+
       - name: Rilascia in produzione
         if: steps.chiavi.outputs.pronto == 'true'
         env:

@@ -43,7 +43,7 @@ function risolvibile(valore: unknown) {
   return b;
 }
 
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/api/middleware', () => ({
   // Il wrapper vero prende (opzioni, gestore) e passa al gestore
   // { user, profile, req }: qui si salta autenticazione e limite di richieste.
@@ -135,8 +135,12 @@ vi.mock('@/lib/supabase/server', () => {
     }
     if (table === 'notifications') {
       return {
-        insert: (valori: Record<string, unknown>) => {
-          campanelle.push(valori);
+        insert: (valori: Record<string, unknown> | Record<string, unknown>[]) => {
+          // 22/8/2026 — le campanelle adesso si scrivono TUTTE INSIEME, con una
+          // riga sola invece di una per volta: il finto deve saper accogliere
+          // anche l'elenco.
+          if (Array.isArray(valori)) campanelle.push(...valori);
+          else campanelle.push(valori);
           return Promise.resolve({ error: null });
         },
       };
@@ -288,6 +292,13 @@ describe('ordine in contanti da due negozi', () => {
   it('quando va tutto bene gli avvisi partono, uno per negozio', async () => {
     const res = await esegui();
     expect(res.status).toBe(200);
+
+    // 22/8/2026 — LE EMAIL NON SI ASPETTANO PIU' PRIMA DI RISPONDERE.
+    // Chi ordina vedeva la schermata ferma finche' non era partita tutta la
+    // posta: con due negozi una decina di viaggi verso il servizio di posta,
+    // dopo che l'ordine c'era gia'. Adesso partono per conto loro, quindi qui
+    // si lascia girare un momento prima di contarle.
+    await new Promise((r) => setTimeout(r, 0));
 
     // Due ordini: due campanelle al venditore + due al cliente.
     expect(campanelle.length).toBe(4);

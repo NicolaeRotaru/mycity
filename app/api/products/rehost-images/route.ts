@@ -5,6 +5,7 @@ import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { rehostImageUrls } from '@/lib/products/rehostImages';
 import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * POST /api/products/rehost-images
@@ -32,7 +33,7 @@ export const POST = withSellerAuthRateLimit(
   { name: 'rehost-images', max: 20, windowMs: 60_000 },
   async ({ user, profile, req }) => {
     let json: unknown;
-    try { json = await req.json(); } catch { return ApiErrors.invalidRequest('Body JSON non valido.'); }
+    try { json = await jsonRichiesta(req, TETTO_JSON_CON_FOTO); } catch { return ApiErrors.invalidRequest('Body JSON non valido.'); }
     const parsed = BodySchema.safeParse(json);
     if (!parsed.success) return ApiErrors.invalidRequest(parsed.error.issues[0]?.message ?? 'Dati non validi');
     const { image_urls, seller_id } = parsed.data;

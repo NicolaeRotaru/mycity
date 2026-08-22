@@ -54,13 +54,35 @@ describe('GET /api/health', () => {
     expect(json.checks.env.ok).toBe(true);
   });
 
-  it('risponde 503 quando il database non risponde: quello sì è fatale', async () => {
+  /**
+   * 22/8/2026 — UN DATABASE LENTO NON DEVE FAR RIAVVIARE UN'ISTANZA SANA.
+   *
+   * Questa prova certificava che il database irraggiungibile facesse
+   * rispondere 503. Ma 503 su QUESTA rotta vuol dire «ammazza il processo e
+   * riavvialo», ed e' la cosa peggiore da fare mentre il database e' in
+   * difficolta': si perdono le richieste in corso, il processo riparte,
+   * ritrova lo stesso database lento, riparte di nuovo. Il rallentamento
+   * diventa un blackout per mano nostra.
+   *
+   * Adesso il database in difficolta' e' `degraded` con 200 — visibile nel
+   * corpo, senza il potere di riavviare — e la domanda «e' pronto a servire?»
+   * vive su /api/health/ready, che guarda un monitor esterno.
+   */
+  it('un database che non risponde diventa «degraded», non un riavvio', async () => {
     limitMock.mockResolvedValueOnce({ error: { message: 'connection refused' } });
     const res = await GET(req());
-    expect(res.status).toBe(503);
+    expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.status).toBe('unhealthy');
+    expect(json.status).toBe('degraded');
     expect(json.checks.db.ok).toBe(false);
+  });
+
+  it('ma la rotta «pronto a servire» quello lo dice: 503, per il monitor', async () => {
+    limitMock.mockResolvedValueOnce({ error: { message: 'connection refused' } });
+    const { GET: PRONTO } = await import('@/app/api/health/ready/route');
+    const res = await (PRONTO as unknown as (r: unknown) => Promise<Response>)(req());
+    expect(res.status).toBe(503);
+    expect((await res.json()).status).toBe('not_ready');
   });
 
   it('risponde 503 se manca una variabile senza cui il sito non serve pagine', async () => {

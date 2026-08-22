@@ -1,3 +1,6 @@
+import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
+import { sanitizeImageUrls } from '@/lib/ai/productContext';
+import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -167,7 +170,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: CatalogChatBody;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }
@@ -189,9 +192,31 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.invalidRequest('Scrivi un messaggio per l\'assistente.');
   }
 
-  const userImages = (Array.isArray(body.imageUrls) ? body.imageUrls : [])
-    .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u))
-    .slice(0, MAX_IMAGES);
+  /**
+   * 22/8/2026 — IL MESSAGGIO DEL VENDITORE NON PASSAVA DAL FILTRO.
+   *
+   * La chat del prodotto ci passava, questa no: lo stesso testo, scritto dalla
+   * stessa persona, in una rotta era controllato e nell'altra no. Il filtro e'
+   * il pezzo che ci difende dal far generare — col nostro nome e il nostro
+   * conto — cose che non vogliamo generare: se vale, vale su tutte le porte.
+   */
+  try {
+    await assertSafeText(history[history.length - 1].content, 'ai-catalog-chat-policy');
+  } catch (err) {
+    if (err instanceof UnsafeContentError) {
+      return ApiErrors.invalidRequest(`Questo messaggio non si puo' usare: ${err.verdict.reason}`);
+    }
+    if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
+    if (err instanceof AiCallError) return mapAiError(err, 'ai-catalog-chat-policy');
+    return ApiErrors.internal('Errore AI.');
+  }
+
+  // 22/8/2026 — LE FOTO ARBITRARIE RIENTRAVANO DA QUI. Il filtro era «purche'
+  // cominci per http»: qualunque indirizzo passava, e diventava una richiesta
+  // che parte dai server del modello verso quel sito, col nostro conto a pagare
+  // i byte. `sanitizeImageUrls` ammette solo gli host dichiarati, ed e' quello
+  // che usa gia' il costruttore di contesto.
+  const userImages = sanitizeImageUrls(body.imageUrls, MAX_IMAGES);
 
   const admin = getAdminSupabase();
 
@@ -277,7 +302,11 @@ ${attrLines || '- (nessuno)'}`;
         type: 'text',
         text: `Catalogo · id=${snap.id} · ${snap.name} · ${snap.price != null ? `€${snap.price}` : 's.p.'} · ${snap.status} · ${snap.categoryName ?? '—'}`,
       });
-      blocks.push({ type: 'image', source: { type: 'url', url: p.images![0] as string } });
+      // Anche le foto che arrivano dal catalogo passano dal filtro: sono
+      // scritte dal venditore, e un indirizzo si puo' incollare da qualunque
+      // parte.
+      const fotoAmmessa = sanitizeImageUrls([p.images![0]], 1)[0];
+      if (fotoAmmessa) blocks.push({ type: 'image', source: { type: 'url', url: fotoAmmessa } });
     }
     const list = products
       .map((p) => {

@@ -4,6 +4,7 @@ import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
 
   let raw: unknown;
   try {
-    raw = await request.json();
+    raw = await jsonRichiesta(request, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('Body JSON non valido');
   }

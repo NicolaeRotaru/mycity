@@ -549,7 +549,33 @@ export default function ProductForm({
         document.getElementById('image-dropzone')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
         return;
       }
+      /**
+       * 22/8/2026 — UN ALIMENTARE NON SI PUBBLICA SENZA ALLERGENI.
+       *
+       * Si poteva pubblicare e vendere un prodotto alimentare senza dichiarare
+       * gli allergeni: la scheda restava vuota e nessuno lo impediva. Non e' un
+       * dettaglio di completezza — il regolamento 1169/2011 vuole
+       * quell'informazione PRIMA dell'acquisto anche nella vendita a distanza, e
+       * per chi e' allergico e' la differenza fra una spesa e un ricovero.
+       *
+       * La bozza resta libera: si blocca la PUBBLICAZIONE, cioe' il momento in
+       * cui il prodotto diventa comprabile.
+       */
       const finalStatus = mode === 'create' ? (intent === 'draft' ? 'draft' : 'available') : status;
+      if (finalStatus !== 'draft') {
+        const mancanti = attrFields
+          .filter((f) => f.required && !String(attributes[f.key] ?? '').trim())
+          .map((f) => f.label);
+        if (mancanti.length > 0) {
+          toast.error(
+            mancanti.length === 1
+              ? `Prima di pubblicare devi compilare «${mancanti[0]}».`
+              : `Prima di pubblicare devi compilare: ${mancanti.join(', ')}.`,
+          );
+          document.getElementById('attributi-categoria')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          return;
+        }
+      }
       const payload = buildProductPayload({
         values,
         imageUrls,
@@ -726,7 +752,7 @@ export default function ProductForm({
         </div>
 
         {/* Attributi per categoria (+ scan EAN se previsto) */}
-        <div className="border-t pt-4 space-y-3">
+        <div id="attributi-categoria" className="border-t pt-4 space-y-3">
           {hasEanField && (
             <button
               type="button"

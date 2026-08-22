@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
 
   let q = '';
   try {
-    const body = (await req.json()) as { q?: unknown };
+    const body = (await jsonRichiesta(req, TETTO_JSON)) as { q?: unknown };
     q = typeof body.q === 'string' ? body.q.trim().slice(0, 300) : '';
   } catch {
     return NextResponse.json({ lat: null, lng: null }, { status: 400 });

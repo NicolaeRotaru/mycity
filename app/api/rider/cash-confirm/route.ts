@@ -4,6 +4,8 @@ import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
+import { compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
 
@@ -54,7 +56,7 @@ const MISMATCH_TOLERANCE_CENTS = 50; // €0,50
 export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, windowMs: 60 * 60_000 }, async ({ user, req }): Promise<NextResponse> => {
   let body;
   try {
-    body = Body.parse(await req.json());
+    body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
@@ -91,8 +93,8 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // tiene dal contante che ha in mano, e rimette il resto. Nessun bonifico da
   // fare, nessun saldo piattaforma da anticipare. L'atteso scende di
   // conseguenza, qui e nella quadratura di fine giornata.
-  const compensoTrattenutoCents = compensoTrattenuto(order);
-  const expectedCents = Math.max(0, Math.round(Number(order.total_price) * 100) - compensoTrattenutoCents);
+  const compensoTenutoCents = compensoTrattenutoCents(order);
+  const expectedCents = contanteDaRimettereCents(order);
 
   // Cap difensivo: rifiuta importi palesemente fuori range (errore di battitura/abuso).
   if (body.cashCollectedCents > expectedCents * 2 + 1000) {
@@ -139,8 +141,8 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     // 155 — Il compenso e' stato pagato, in contanti, adesso. Prima questo
     // campo restava NULL per sempre e non c'era modo di distinguere «pagato
     // in contanti» da «mai pagato».
-    rider_payout_status: compensoTrattenutoCents > 0 ? 'CASH_WITHHELD' : null,
-    rider_payout_at: compensoTrattenutoCents > 0 ? now.toISOString() : null,
+    rider_payout_status: compensoTenutoCents > 0 ? 'CASH_WITHHELD' : null,
+    rider_payout_at: compensoTenutoCents > 0 ? now.toISOString() : null,
   };
 
   const conferma = (valori: Record<string, unknown>) =>
@@ -210,17 +212,6 @@ type ReconciliationRow = {
  * `releaseRiderPayout`. Sul ritiro in negozio non c'è consegna, quindi non c'è
  * compenso.
  */
-function compensoTrattenuto(o: {
-  rider_fee_cents?: number | null;
-  shipping_cost?: number | string | null;
-  pickup_in_store?: boolean | null;
-}): number {
-  if (o.pickup_in_store) return 0;
-  return o.rider_fee_cents != null
-    ? Math.max(0, o.rider_fee_cents)
-    : Math.max(0, Math.round(Number(o.shipping_cost ?? 0) * 100));
-}
-
 /** La data (AAAA-MM-GG) nel fuso di Piacenza, non in quello di Greenwich. */
 function giornoLocale(d: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -274,7 +265,7 @@ async function upsertReconciliation(admin: AdminSupabase, riderId: string, isoDa
   // e' quello che deve davvero riportare in cassa. Sommare i total_price
   // interi faceva risultare un ammanco pari al compenso su ogni consegna.
   const expected = rows.reduce(
-    (s, r) => s + Math.max(0, Math.round(Number(r.total_price) * 100) - compensoTrattenuto(r)),
+    (s, r) => s + contanteDaRimettereCents(r),
     0,
   );
   const collected = rows.reduce((s, r) => s + Number(r.cash_collected_cents ?? 0), 0);

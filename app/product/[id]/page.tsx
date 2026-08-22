@@ -34,6 +34,8 @@ import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
 import PhotoReviewUpload from '@/components/PhotoReviewUpload';
 import { SellerCard } from '@/components/products/SellerCard';
+import { VendutoDa } from '@/components/products/VendutoDa';
+import { Segnala } from '@/components/Segnala';
 import { AllergensAccordion } from '@/components/products/AllergensAccordion';
 import { FrequentlyBoughtTogether } from '@/components/products/FrequentlyBoughtTogether';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
@@ -123,7 +125,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
   const [reviewsOnlyPhoto, setReviewsOnlyPhoto] = useState(false);
 
-  const { data: product, isLoading, isError, refetch } = useQuery<SchedaProdotto>({
+  const { data: product, isLoading, isError, refetch } = useQuery<SchedaProdotto | null>({
     queryKey: queryKeys.products.detail(id),
     queryFn: async () => {
       // #97 — Le colonne per nome, non `*`.
@@ -139,8 +141,20 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
         external_source_url,
         categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express )
-      `).eq('id', id).single();
+      `).eq('id', id).maybeSingle();
+      // 22/8/2026 — «NON C'E'» E «NON RIESCO A LEGGERLO» SONO DUE COSE DIVERSE.
+      //
+      // Con `.single()` PostgREST tratta «nessuna riga» come un ERRORE
+      // (PGRST116), e qui l'errore veniva rilanciato: la pagina mostrava
+      // «problema di collegamento» con un pulsante «Riprova» che non potra' mai
+      // funzionare, perche' quella cosa non esiste. Chi arriva da un link
+      // vecchio o da un risultato di ricerca scaduto resta li' a premere.
+      //
+      // `.maybeSingle()` risponde `null` quando non c'e' niente, e lascia
+      // l'errore vero — la rete, il database lento — al ramo che offre il
+      // ritentativo. Cosi' i due messaggi dicono la verita' tutti e due.
       if (error) throw error;
+      if (!data) return null;
       // Il collegamento a categoria e negozio e' uno a uno: PostgREST lo
       // restituisce come oggetto, ma con le colonne elencate per nome i tipi
       // generati lo descrivono come elenco. Si dichiara la forma vera.
@@ -612,6 +626,22 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             <SellerCard
               sellerId={(sellerProfile?.id ?? product.seller_id) as string}
               storeName={product.profiles?.store_name ?? 'Negozio'}
+            />
+          )}
+
+          {/* Chi vende davvero: ragione sociale, sede, partita IVA. Prima non
+              c'era da nessuna parte, e il cliente non sapeva con chi stava
+              stipulando il contratto. */}
+          {/* Il canale per dirci che qualcosa non va: prima non esisteva
+              da nessuna parte sul sito. */}
+          <div className="pt-1">
+            <Segnala tipo="prodotto" oggettoId={product.id} />
+          </div>
+
+          {(sellerProfile?.id ?? product.seller_id) && (
+            <VendutoDa
+              sellerId={(sellerProfile?.id ?? product.seller_id) as string}
+              storeName={product.profiles?.store_name}
             />
           )}
 

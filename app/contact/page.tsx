@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import Honeypot from '@/components/Honeypot';
-import Turnstile from '@/components/Turnstile';
+import Turnstile, { type ManopolaAntiBot } from '@/components/Turnstile';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
@@ -20,6 +20,21 @@ export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: 'Domanda generale', message: '' });
   const [sending, setSending] = useState(false);
   const [captchaToken, setCaptchaToken] = useState(''); // 🟡-2
+  /**
+   * 22/8/2026 — IL GETTONE ANTI-BOT SI CONSUMA AL PRIMO TENTATIVO.
+   *
+   * Cloudflare lo da' valido una volta sola. Se qualcosa va storto — la
+   * password sbagliata, l'email gia' presa — quel gettone e' gia' stato speso:
+   * al secondo tentativo il server lo rifiuta, e il messaggio parla di anti-bot
+   * su una schermata dove non c'e' niente da ripremere. La persona resta fuori
+   * dal proprio account per un errore di battitura. Qui se ne chiede uno nuovo.
+   */
+  const antiBot = useRef<ManopolaAntiBot>(null);
+  const rigeneraGettone = () => {
+    setCaptchaToken('');
+    antiBot.current?.reset();
+  };
+
   // #115 — Se il controllo anti-bot non si carica (rete che blocca Cloudflare,
   // estensione che lo taglia, guasto loro), il modulo non resta bloccato per
   // sempre: si dice cosa e' successo e si lascia mandare. La verifica vera e'
@@ -54,6 +69,7 @@ export default function ContactPage() {
       toast.success('Messaggio inviato! Ti risponderemo entro 24h lavorative.');
       setForm({ name: '', email: '', subject: 'Domanda generale', message: '' });
     } catch (err) {
+      rigeneraGettone();
       toast.error(friendlyError(err));
     } finally {
       setSending(false);
@@ -138,6 +154,7 @@ export default function ContactPage() {
             {TURNSTILE_SITE_KEY && (
               <div className="flex justify-center">
                 <Turnstile
+                  ref={antiBot}
                   siteKey={TURNSTILE_SITE_KEY}
                   onVerify={(t) => { setCaptchaToken(t); setCaptchaRotto(null); }}
                   onExpire={() => setCaptchaToken('')}

@@ -133,3 +133,30 @@ describe('getClientIp', () => {
     expect(getClientIp(req)).toBe('5.6.7.8');
   });
 });
+
+/**
+ * 22/8/2026 — DIETRO CLOUDFLARE SI LEGGEVA L'INDIRIZZO SBAGLIATO.
+ *
+ * Con un CDN davanti la catena `x-forwarded-for` ha due salti, e il conto —
+ * che ne scartava uno solo — restituiva l'indirizzo del CDN. Tutti i
+ * visitatori diventavano lo stesso indirizzo: il freno anti-abuso scattava su
+ * tutti insieme e le visite venivano buttate come se fossero un attacco.
+ */
+describe('getClientIp dietro un CDN', () => {
+  const mkReq2 = (headers: Record<string, string>) =>
+    new Request('http://localhost/prova', { headers });
+
+  it('prende l indirizzo vero da cf-connecting-ip, anche con due salti nella catena', () => {
+    const req = mkReq2({
+      'cf-connecting-ip': '203.0.113.9',
+      'x-forwarded-for': '203.0.113.9, 172.16.0.1, 10.0.0.5',
+    });
+    // Col conto di prima qui usciva 10.0.0.5, cioe' un pezzo di infrastruttura.
+    expect(getClientIp(req)).toBe('203.0.113.9');
+  });
+
+  it('senza CDN si comporta esattamente come prima', () => {
+    const req = mkReq2({ 'x-forwarded-for': '1.2.3.4, 5.6.7.8' });
+    expect(getClientIp(req)).toBe('5.6.7.8');
+  });
+});

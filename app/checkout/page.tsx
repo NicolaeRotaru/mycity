@@ -14,6 +14,7 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
+import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -105,6 +106,26 @@ export default function CheckoutPage() {
           pErr = ripiego.error;
         }
         if (pErr) throw pErr;
+
+        // 22/8/2026 — IL PREZZO IN PROMOZIONE SPARIVA ALLA CASSA.
+        //
+        // Qui si rileggeva la sola colonna `products.price`, cioe' il prezzo
+        // PIENO, e con quello si sovrascriveva il prezzo del carrello. Il
+        // cliente vedeva 7 euro nel carrello, apriva il checkout e trovava 10
+        // con l'avviso «il prezzo e' passato da 7,00 a 10,00»: il momento esatto
+        // in cui si abbandona. E le due rotte che creano l'ordine lo sconto lo
+        // applicano eccome, quindi il totale mostrato non era quello addebitato.
+        //
+        // Peggio ancora sulla soglia della spedizione gratuita e sul minimo dei
+        // codici sconto: la pagina li valutava sul subtotale pieno, il server su
+        // quello scontato. Carrello a 31 euro pieni / 28 scontati: la pagina
+        // prometteva la spedizione gratis, il server la addebitava.
+        //
+        // `fetchActiveDiscounts` e' la stessa funzione che usano le due rotte:
+        // una chiamata sola per tutto il carrello, con ripiego a zero sconto se
+        // qualcosa non risponde.
+        const sconti = await fetchActiveDiscounts(supabase, ids);
+
         for (const p of products ?? []) {
           validIds.add(p.id);
           if (p.seller_id) lookupMap.set(p.id, p.seller_id);
@@ -116,8 +137,11 @@ export default function CheckoutPage() {
           // pulsante, senza che il negoziante potesse capire perché.
           stockMap.set(p.id, p.stock == null ? Number.POSITIVE_INFINITY : p.stock);
           hasVariantsMap.set(p.id, Boolean((p as { has_variants?: boolean }).has_variants));
-          const prezzoVero = Number((p as { price?: number | string | null }).price ?? NaN);
-          if (Number.isFinite(prezzoVero)) priceMap.set(p.id, prezzoVero);
+          const prezzoPieno = Number((p as { price?: number | string | null }).price ?? NaN);
+          if (Number.isFinite(prezzoPieno)) {
+            // Il prezzo che la pagina usa e' quello che il server fara' pagare.
+            priceMap.set(p.id, discountedUnitCents(prezzoPieno, sconti.get(p.id) ?? 0) / 100);
+          }
         }
       }
 
@@ -496,24 +520,23 @@ export default function CheckoutPage() {
       }
       if (groups.length === 0) throw new Error('Il carrello è vuoto');
 
-      // Coords delivery: usa quelle dell'indirizzo salvato; altrimenti geocoda
-      let deliveryLat: number | null = form.lat;
-      let deliveryLng: number | null = form.lng;
-      if (deliveryLat == null || deliveryLng == null) {
-        try {
-          // 🟠-15: geocoding via proxy server-side (UA corretto, rate-limit, timeout).
-          const res = await fetch('/api/geocode', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ q: `${form.address}, ${form.zip} ${form.city}, Italia` }),
-          });
-          const json = await res.json();
-          if (json && json.lat != null && json.lng != null) {
-            deliveryLat = json.lat;
-            deliveryLng = json.lng;
-          }
-        } catch {}
-      }
+      /**
+       * 22/8/2026 — QUESTA GEOLOCALIZZAZIONE ERA LAVORO BUTTATO.
+       *
+       * Qui il browser risolveva l'indirizzo scritto a mano e mandava le
+       * coordinate al server. Il server le buttava — giustamente: il prezzo
+       * della consegna dipende dalla distanza, e un numero che arriva dal
+       * browser si puo' cambiare. Quindi era una chiamata di rete in piu' su
+       * ogni checkout, proprio nel momento in cui la persona ha la carta in
+       * mano, per un risultato che nessuno usava.
+       *
+       * Adesso la destinazione se la calcola il server (lib/geocodifica.ts), e
+       * qui restano solo le coordinate dell'indirizzo GIA' SALVATO: sono le
+       * stesse su cui il server calcola il prezzo, quindi l'anteprima e
+       * l'addebito dicono la stessa cifra.
+       */
+      const deliveryLat: number | null = form.lat;
+      const deliveryLng: number | null = form.lng;
 
       // SICUREZZA: gli ordini COD vengono creati SERVER-SIDE (/api/orders/cod),
       // che ricalcola prezzi, spedizione e sconti dal DB. Il client invia solo
@@ -875,7 +898,7 @@ export default function CheckoutPage() {
           )}
 
           {orphans.length > 0 && (
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 space-y-3">
+            <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
                 <span><strong>{orphans.length} {orphans.length === 1 ? 'prodotto non è più disponibile' : 'prodotti non sono più disponibili'}</strong>: {orphans.map((o) => o.name).join(', ')}.</span>
@@ -894,8 +917,14 @@ export default function CheckoutPage() {
             </div>
           )}
 
+          {/* 22/8/2026 — QUESTI RIQUADRI NON VENIVANO MAI ANNUNCIATI.
+              Compaiono dopo che la pagina e' gia' a schermo, e senza
+              `role="alert"` uno screen reader non li legge: chi non vede sente
+              solo che il pulsante di conferma non risponde piu', senza sapere
+              perche'. `role="alert"` li fa leggere appena compaiono — e' la
+              stessa correzione gia' applicata ai campi del modulo. */}
           {stockIssues.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.</span>
             </div>
@@ -906,7 +935,7 @@ export default function CheckoutPage() {
               totale qui sotto e' gia' quello nuovo, cioe' quello che verra'
               addebitato davvero. */}
           {prezziCambiati.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 <strong>Il prezzo è cambiato</strong> da quando avevi messo nel carrello:{' '}
@@ -917,7 +946,7 @@ export default function CheckoutPage() {
           )}
 
           {variantIssues.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 <strong>Scegli le opzioni</strong> (taglia/colore) per: {variantIssues.map((v) => v.name).join(', ')}.{' '}
@@ -927,7 +956,7 @@ export default function CheckoutPage() {
           )}
 
           {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
-            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 flex items-start gap-2">
+            <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span><strong>Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.</span>
             </div>
@@ -979,7 +1008,16 @@ export default function CheckoutPage() {
           (form="checkout-form"): nessuna logica nuova, solo un secondo trigger.
           Nascosta su desktop (lì c'è la sidebar sticky). Non intrappola il focus:
           è un singolo bottone nel flusso tab naturale. */}
-      <div className="lg:hidden fixed inset-x-0 bottom-0 z-sticky bg-white border-t border-cream-300 shadow-warm-lg px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3">
+      {/* 22/8/2026 — IL BANNER DEI COOKIE COPRIVA «CONFERMA ORDINE».
+          Sul telefono questa barra sta incollata in fondo, e il banner dei
+          cookie pure: chi non ha ancora scelto se ne trova due sovrapposte, con
+          il banner sopra. Il pulsante che chiude l'ordine — l'ultimo tocco di
+          tutto il percorso — resta sotto e non si preme. La barra del prodotto
+          (StickyAddToCart) lo sapeva gia' e si alzava; questa no. */}
+      <div
+        className="lg:hidden fixed inset-x-0 bottom-0 z-sticky bg-white border-t border-cream-300 shadow-warm-lg px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--altezza-banner-cookie, 0px))' }}
+      >
         <div className="leading-tight">
           <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>

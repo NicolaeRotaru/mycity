@@ -42,12 +42,13 @@ const fetchNearData = async () => {
         .order('created_at', { ascending: false })
         .limit(400) as unknown as PromiseLike<{ data: ProductLite[] | null; error: { message?: string } | null }>,
     ),
-    leggiInBlocchi<{ store_id: string; rating: number }>(storeIds, (blocco) =>
-      supabase
-        .from('store_reviews')
-        .select('store_id, rating')
-        .in('store_id', blocco) as unknown as PromiseLike<{ data: { store_id: string; rating: number }[] | null; error: { message?: string } | null }>,
-    ),
+    // 22/8/2026 — QUI SI SCARICAVA OGNI RECENSIONE DI OGNI NEGOZIO per farne
+    // la media nel browser. Con cinquanta negozi e cinquanta recensioni l'uno
+    // sono duemilacinquecento righe che viaggiano fino al telefono, per
+    // produrre due numeri per negozio. La funzione che le somma nel database
+    // esiste da luglio (migrazione 052) ed e' gia' aperta a chi non ha
+    // l'account: la pagina gemella /stores la usa, questa no.
+    supabase.rpc('store_review_stats', { p_store_ids: storeIds }),
   ]);
 
   // #89 — Stessa cosa di /stores: il taglio globale (400 prodotti in tutto)
@@ -65,14 +66,8 @@ const fetchNearData = async () => {
   }
 
   const reviewsByStore: Record<string, { avg: number; count: number }> = {};
-  for (const r of (reviewsRes.data ?? []) as { store_id: string; rating: number }[]) {
-    const ex = reviewsByStore[r.store_id];
-    if (ex) {
-      ex.avg = (ex.avg * ex.count + r.rating) / (ex.count + 1);
-      ex.count += 1;
-    } else {
-      reviewsByStore[r.store_id] = { avg: r.rating, count: 1 };
-    }
+  for (const r of (reviewsRes.data ?? []) as { store_id: string; avg: number | string; count: number }[]) {
+    reviewsByStore[r.store_id] = { avg: Number(r.avg), count: Number(r.count) };
   }
 
   return { stores, productsByStore, reviewsByStore };

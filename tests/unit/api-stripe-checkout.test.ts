@@ -49,7 +49,7 @@ vi.mock('@/lib/api/middleware', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 
 vi.mock('@/lib/stripe/client', () => ({
   isStripeConfigured: () => state.stripeConfigured,

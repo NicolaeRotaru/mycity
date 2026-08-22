@@ -72,7 +72,20 @@ export async function GET(req: NextRequest) {
    * che dice di essere: si registra una volta sola, al primo accesso.
    */
   if (utente) {
-    const versione = (utente.user_metadata?.versione_testi_accettati as string | undefined) ?? null;
+    /**
+     * 22/8/2026 — LA VERSIONE ARRIVA ANCHE DALL'INDIRIZZO DI RITORNO.
+     *
+     * Chi si registra con email e password porta la versione dei testi dentro
+     * i propri dati. Chi entra con Google no: quel percorso non passava da
+     * nessuna spunta, e qui la versione era sempre vuota — quindi il verbale
+     * non si scriveva e la persona restava operativa senza aver accettato
+     * niente. Adesso il pulsante Google mette la versione nell'indirizzo di
+     * ritorno, e questa e' la riga che la raccoglie.
+     */
+    const versione =
+      (utente.user_metadata?.versione_testi_accettati as string | undefined) ??
+      req.nextUrl.searchParams.get('versione') ??
+      null;
     if (versione) {
       try {
         const admin = getAdminSupabase();
@@ -95,6 +108,31 @@ export async function GET(req: NextRequest) {
         }
       } catch (e) {
         logger.warn('[callback] accettazione dei testi non registrata', { e });
+      }
+    } else {
+      /**
+       * 22/8/2026 — SENZA VERSIONE NON SI TIRA DRITTO IN SILENZIO.
+       *
+       * Qui, quando la versione mancava, non succedeva niente: l'utente
+       * arrivava operativo senza aver accettato Termini e Informativa e senza
+       * una riga che lo dicesse. Adesso, se non risulta nemmeno un'accettazione
+       * precedente, si passa da una pagina che la chiede. Chi l'aveva gia'
+       * accettata non se ne accorge.
+       */
+      try {
+        const admin = getAdminSupabase();
+        const { data: profilo } = await admin
+          .from('profiles')
+          .select('tos_accepted_at')
+          .eq('id', utente.id)
+          .maybeSingle();
+        if (profilo && !profilo.tos_accepted_at) {
+          const chiedi = new URL('/accetta-condizioni', env.appUrl());
+          chiedi.searchParams.set('next', next);
+          return NextResponse.redirect(chiedi);
+        }
+      } catch (e) {
+        logger.warn('[callback] accettazione dei testi non verificabile', { e });
       }
     }
   }

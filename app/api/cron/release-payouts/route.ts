@@ -9,6 +9,10 @@ export const runtime = 'nodejs';
 
 const HOLD_HOURS = 1;
 const BATCH_LIMIT = 200;
+/** Oltre questo, un turno preso e non finito si considera abbandonato. */
+const MINUTI_TURNO_APPESO = 15;
+/** Il giro si ferma da solo prima che lo fermi il tetto di durata della richiesta. */
+const TETTO_DURATA_MS = 50_000;
 const OPEN_RETURN_STATUSES = ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'];
 const OPEN_DISPUTE_STATUSES = ['open', 'under_review'];
 /**
@@ -56,6 +60,44 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   const admin = getAdminSupabase();
   const cutoffIso = new Date(Date.now() - HOLD_HOURS * 3_600_000).toISOString();
 
+  /**
+   * 22/8/2026 — I TURNI RIMASTI APPESI TORNANO IN CODA.
+   *
+   * `releaseOrderPayout` prende il turno su un ordine scrivendo PROCESSING e
+   * poi chiama Stripe. Se il processo muore in mezzo — questo giro lavora fino
+   * a 200 ordini in fila, ognuno con una chiamata da dieci secondi di attesa,
+   * quindi un tetto di durata si raggiunge — quello stato resta scritto. E i
+   * candidati qui sotto sono solo HELD e PENDING_SELLER_ONBOARDING: quell'ordine
+   * non sarebbe ripescato mai piu'. Restava solo l'avviso PAYOUT_STUCK, che
+   * segnala e non ripara.
+   *
+   * Rimetterlo in coda e' sicuro perche' la chiave di idempotenza del bonifico
+   * dipende dal numero del tentativo, e QUI QUEL NUMERO NON SI TOCCA: se il
+   * trasferimento era davvero partito, Stripe restituisce quello e non ne crea
+   * un secondo.
+   */
+  const turnoScadutoIso = new Date(Date.now() - MINUTI_TURNO_APPESO * 60_000).toISOString();
+  let appesiRimessiInCoda = 0;
+  const { data: appesi, error: errAppesi } = await admin
+    .from('orders')
+    .update({ payout_status: 'HELD' })
+    .eq('payout_status', 'PROCESSING')
+    .lt('payout_claimed_at', turnoScadutoIso)
+    .select('id');
+  if (errAppesi) {
+    // Prima che la migrazione 126 sia applicata la colonna non c'e' e questa
+    // lettura fallisce: e' esattamente com'era ieri, non un peggioramento.
+    logger.warn('[cron] turni appesi non recuperati', { message: errAppesi.message });
+  } else {
+    appesiRimessiInCoda = appesi?.length ?? 0;
+    if (appesiRimessiInCoda > 0) {
+      // 22/8/2026 — `logger.info` in produzione non esce: LOG_LEVEL non e'
+      // 'info' e non lo e' mai stato. Un rendiconto sui soldi che nessuno puo'
+      // leggere e' come non scriverlo. `spesa` esce sempre, apposta.
+      logger.spesa('[cron] bonifici rimasti a meta rimessi in coda', { ordini: appesiRimessiInCoda });
+    }
+  }
+
   const { data: candidates, error } = await admin
     .from('orders')
     .select('id')
@@ -93,8 +135,22 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   let released = 0;
   let skipped = 0;
   let failed = 0;
+  let fermatoPerTempo = false;
+
+  // Il giro si ferma da solo prima che lo fermi il tetto di durata della
+  // richiesta. Fermarsi a comando lascia gli ordini rimasti in HELD, pronti per
+  // il giro dopo; farsi uccidere li lascia a meta', ed e' quello il difetto.
+  const inizio = Date.now();
+  const tempoFinito = () => Date.now() - inizio > TETTO_DURATA_MS;
 
   for (const id of ids) {
+    if (tempoFinito()) {
+      fermatoPerTempo = true;
+      logger.warn('[cron] release-payouts: tetto di tempo raggiunto, il resto al prossimo giro', {
+        fatti: released + skipped + failed, rimasti: ids.length - (released + skipped + failed),
+      });
+      break;
+    }
     if (blocked.has(id)) {
       skipped++;
       continue;
@@ -134,6 +190,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .limit(BATCH_LIMIT);
 
   for (const o of riderCands ?? []) {
+    if (tempoFinito()) {
+      fermatoPerTempo = true;
+      break;
+    }
     const id = o.id as string;
     try {
       const res = await releaseRiderPayout(id);
@@ -173,6 +233,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     for (const d of codDisputes.data ?? []) codBlocked.add(d.order_id as string);
 
     for (const id of codIds) {
+      if (tempoFinito()) {
+        fermatoPerTempo = true;
+        break;
+      }
       if (codBlocked.has(id)) {
         codSkipped++;
         continue;
@@ -190,13 +254,21 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   }
 
   if (released > 0 || failed > 0 || riderReleased > 0 || riderFailed > 0 || codReleased > 0 || codFailed > 0) {
-    logger.info(
+    // Il rendiconto dei pagamenti: esce sempre, non solo in sviluppo.
+    logger.spesa(
       `[cron] release-payouts: seller released=${released} skipped=${skipped} failed=${failed} · rider released=${riderReleased} skipped=${riderSkipped} failed=${riderFailed} · cod released=${codReleased} skipped=${codSkipped} failed=${codFailed}`,
     );
   }
 
   return NextResponse.json(
-    { ok: true, released, skipped, failed, riderReleased, riderSkipped, riderFailed, codReleased, codSkipped, codFailed },
+    {
+      ok: true,
+      released, skipped, failed,
+      riderReleased, riderSkipped, riderFailed,
+      codReleased, codSkipped, codFailed,
+      appesiRimessiInCoda,
+      fermatoPerTempo,
+    },
     { status: 200 },
   );
 });

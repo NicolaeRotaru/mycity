@@ -7,6 +7,7 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext } from '@/lib/ai/productContext';
+import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Generazione varianti: propone gli assi di variante (es. Taglia, Colore) con i
@@ -65,7 +66,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await req.json();
+    body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
     return ApiErrors.invalidRequest('JSON non valido');
   }

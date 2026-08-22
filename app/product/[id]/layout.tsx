@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { createClient } from '@supabase/supabase-js';
+import { sizedImage } from '@/lib/image-url';
 
 export const revalidate = 300; // 5 min ISR sui metadata
 
@@ -113,8 +114,37 @@ export default async function ProductLayout(
     },
   };
 
+  /**
+   * 22/8/2026 — IL PRELOAD DELLA PRIMA FOTO NON SERVIVA A NIENTE.
+   *
+   * Nella pagina la prima immagine ha `priority`, e quella marcatura serve a
+   * far scrivere a Next un preload nell'intestazione del documento. Ma la
+   * pagina e' un componente client: quando il documento parte, quell'immagine
+   * non esiste ancora — nasce dopo che il telefono ha scaricato il JavaScript,
+   * l'ha eseguito e ha fatto la sua chiamata. Il preload arrivava a cose fatte,
+   * cioe' non arrivava.
+   *
+   * Qui siamo nel guscio, che gira sul server: questa riga finisce nell'HTML
+   * subito. Il telefono comincia a scaricare la foto del prodotto MENTRE
+   * scarica il JavaScript, invece che dopo. E' la catena piu' lunga fra il
+   * tocco sul link e la foto a schermo, ed e' la voce che pesa di piu'
+   * sull'abbandono di un marketplace.
+   *
+   * L'indirizzo e' lo STESSO che chiedera' la pagina (`sizedImage(..., 'detail')`):
+   * un preload di un indirizzo diverso scaricherebbe un secondo file invece di
+   * anticipare il primo.
+   */
+  const primaFoto =
+    Array.isArray(product?.images) && product.images[0]
+      ? sizedImage(product.images[0], 'detail')
+      : null;
+
   return (
     <>
+      {primaFoto && (
+        // eslint-disable-next-line @next/next/no-head-element
+        <link rel="preload" as="image" href={primaFoto} fetchPriority="high" />
+      )}
       {schema && (
         <script
           type="application/ld+json"

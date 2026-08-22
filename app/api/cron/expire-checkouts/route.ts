@@ -94,17 +94,43 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   const daScadere = (candidati ?? []).filter((c) => !daSalvare.includes(c));
   const ids = daScadere.map((c) => c.id);
 
+  /**
+   * 22/8/2026 — SI RIPRISTINA SOLO CIO' CHE SI E' DAVVERO RIVENDICATO.
+   *
+   * Qui si scriveva EXPIRED senza nessuna condizione sullo stato e senza
+   * chiedere indietro le righe toccate, poi si ripristinava la merce per OGNI
+   * candidato letto. Due strade rotte, tutte e due vere:
+   *
+   * · questo giro e il webhook `checkout.session.expired` passano insieme: la
+   *   merce torna a scaffale due volte e il magazzino segna pezzi che non
+   *   esistono — si vende quello che non c'e' — e il codice sconto viene
+   *   restituito due volte;
+   * · un `checkout.session.completed` in ritardo scrive COMPLETED subito dopo
+   *   la lettura, questo giro lo ribalta a EXPIRED e rimette a scaffale merce
+   *   appena venduta davvero.
+   *
+   * Il gemello nel webhook fa gia' cosi', e il suo commento descrive parola per
+   * parola questo scenario. Qui mancava.
+   */
   let data: typeof daScadere = [];
   if (ids.length > 0) {
-    const { error } = await admin
+    const { data: rivendicati, error } = await admin
       .from('pending_checkouts')
       .update({ status: 'EXPIRED' })
-      .in('id', ids);
+      .in('id', ids)
+      .eq('status', 'PENDING')
+      .select('id');
     if (error) {
       logger.error('[cron] expire-checkouts failed', error);
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
     }
-    data = daScadere;
+    const presi = new Set((rivendicati ?? []).map((r) => r.id as string));
+    data = daScadere.filter((c) => presi.has(c.id as string));
+    if (data.length < ids.length) {
+      logger.info('[cron] expire-checkouts: qualcuno era gia stato preso', {
+        candidati: ids.length, rivendicati: data.length,
+      });
+    }
   }
 
   const count = data.length;
@@ -135,7 +161,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   }
 
   if (count > 0) {
-    logger.info(`[cron] expired ${count} pending checkouts`);
+    logger.spesa(`[cron] expired ${count} pending checkouts`);
   }
 
   return NextResponse.json({ ok: true, expired: count, saltati: daSalvare.length }, { status: 200 });
