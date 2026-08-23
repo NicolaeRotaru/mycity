@@ -19,6 +19,8 @@ import StoreAvatar from '@/components/StoreAvatar';
 import SellerHealthScore from '@/components/seller/SellerHealthScore';
 import SellerOnboardingChecklist from '@/components/seller/SellerOnboardingChecklist';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -57,7 +59,7 @@ export default function SellerDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data: stats, isLoading } = useQuery({
+  const queryStats = useQuery({
     queryKey: queryKeys.seller.stats,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -177,7 +179,23 @@ export default function SellerDashboard() {
     enabled: isSeller,
   });
 
-  if (isLoading || !stats) return <LoadingState />;
+  // Qui c'era `if (isLoading || !stats) return <LoadingState />`. Con la lettura fallita `isLoading`
+  // torna falso ma `stats` resta undefined, quindi `!stats` è vero: la prima schermata che il
+  // negoziante apre restava sullo scheletro PER SEMPRE, senza un modo di sapere che era fallito né
+  // di riprovare. Stessa radice del difetto dei Guadagni, sintomo opposto: là il sito diceva una
+  // cosa falsa, qui non diceva niente.
+  const vista = vistaDaQuery(queryStats);
+  if (vista.mostraScheletro) return <LoadingState />;
+  if (vista.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere i dati del tuo negozio"
+        description="La lettura non è riuscita. Non vuol dire che il negozio sia vuoto: riprova fra un momento."
+        onRetry={() => queryStats.refetch()}
+      />
+    );
+  }
+  const stats = vista.dati!;
 
   const storeName = profile?.store_name || 'il tuo negozio';
   const storeUrl = profile?.id ? `/store/${profile.id}` : null;

@@ -6,6 +6,8 @@ import { Star, Moon, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -30,7 +32,7 @@ export default function SellerCustomersPage() {
   const [filter, setFilter] = useState<typeof filters[number]['key']>('all');
   const [search, setSearch] = useState('');
 
-  const { data: customers = [], isLoading } = useQuery({
+  const queryCustomers = useQuery({
     queryKey: queryKeys.seller.customers,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -76,6 +78,7 @@ export default function SellerCustomersPage() {
       return Array.from(byUser.values()).sort((a, b) => b.totalSpent - a.totalSpent);
     },
   });
+  const customers = queryCustomers.data ?? [];
 
   const filtered = customers.filter((c) => {
     if (search) {
@@ -94,7 +97,17 @@ export default function SellerCustomersPage() {
     ? customers.reduce((s, c) => s + c.totalSpent / c.ordersCount, 0) / customers.length
     : 0;
 
-  if (isLoading) return <LoadingState />;
+  const vistaqueryCustomers = vistaDaQuery(queryCustomers);
+  if (vistaqueryCustomers.mostraScheletro) return <LoadingState />;
+  if (vistaqueryCustomers.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere i tuoi clienti"
+        description="La lettura non è riuscita, quindi non so quanti clienti hai. Non vuol dire che non ne hai: riprova fra un momento."
+        onRetry={() => queryCustomers.refetch()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

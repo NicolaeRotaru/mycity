@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -69,18 +71,24 @@ export default function SellerPromotionsPage() {
     });
   }, [router]);
 
-  const { data: promos = [] } = useQuery({
+  const queryPromos = useQuery({
     queryKey: queryKeys.seller.promotionsByUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<Promo[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('seller_promotions')
         .select('*')
         .eq('seller_id', userId!)
         .order('created_at', { ascending: false });
+      // L'errore non si ingoia: senza questa riga la lettura non FALLISCE mai — torna «riuscita»
+      // con la lista vuota, e nessun riquadro d'errore potrà mai comparire perché non c'è niente da
+      // mostrare. È la forma che «Vicino a te» aveva sul lato cliente: il freno a valle non serve a
+      // niente se il guasto non arriva mai fin lì.
+      if (error) throw error;
       return (data ?? []) as Promo[];
     },
   });
+  const promos = queryPromos.data ?? [];
 
   const create = useMutation({
     mutationFn: async () => {
@@ -113,7 +121,17 @@ export default function SellerPromotionsPage() {
     },
   });
 
-  if (!userId) return <LoadingState />;
+  const vista = vistaDaQuery(queryPromos);
+  if (!userId || vista.mostraScheletro) return <LoadingState />;
+  if (vista.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere le tue promozioni"
+        description="La lettura non è riuscita, quindi non so quali promozioni hai attive. Non vuol dire che non ne hai: riprova fra un momento."
+        onRetry={() => queryPromos.refetch()}
+      />
+    );
+  }
 
   const active = promos.filter((p) => p.status === 'active' && new Date(p.ends_at) > new Date());
   const past = promos.filter((p) => p.status !== 'active' || new Date(p.ends_at) <= new Date());

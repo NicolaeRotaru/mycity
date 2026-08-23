@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase/client';
 import { formatDate } from '@/lib/format';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { Button } from '@/components/ui/Button';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { RatingStars } from '@/components/ui/RatingStars';
@@ -28,7 +30,7 @@ const Stars = ({ rating }: { rating: number }) => <RatingStars rating={rating} s
 export default function SellerReviewsPage() {
   const [filter, setFilter] = useState<'all' | 5 | 4 | 3 | 2 | 1>('all');
 
-  const { data: reviews = [], isLoading } = useQuery<Review[]>({
+  const queryReviews = useQuery<Review[]>({
     queryKey: queryKeys.seller.reviews,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -46,6 +48,8 @@ export default function SellerReviewsPage() {
       return (data ?? []) as unknown as StoreReviewRow[];
     },
   });
+  const reviews = queryReviews.data ?? [];
+  const vista = vistaDaQuery(queryReviews);
 
   const stats = useMemo(() => {
     if (reviews.length === 0) {
@@ -73,8 +77,17 @@ export default function SellerReviewsPage() {
     <div className="space-y-6">
       <SellerPageTitle eyebrow="Reputazione" title="Recensioni" sub="Cosa pensano i clienti del tuo negozio" className="mb-0" />
 
-      {isLoading ? (
+      {/* Tre rami, non due: «sto leggendo» · «la lettura è fallita» · «ho letto e non c'è niente».
+          Prima l'errore finiva dentro «Nessuna recensione ancora», cioè il sito diceva al
+          negoziante che nessuno lo ha recensito quando in realtà non era riuscito a guardare. */}
+      {vista.mostraScheletro ? (
         <LoadingState />
+      ) : vista.mostraErrore ? (
+        <ErrorState
+          title="Non sono riuscito a leggere le recensioni"
+          description="La lettura non è riuscita, quindi non so cosa hanno scritto i clienti. Non vuol dire che non ci siano recensioni: riprova fra un momento."
+          onRetry={() => queryReviews.refetch()}
+        />
       ) : reviews.length === 0 ? (
         <div className="bg-white border border-cream-300 rounded-xl p-12 text-center">
           <FileText size={48} className="mx-auto mb-3 text-ink-300" aria-hidden />

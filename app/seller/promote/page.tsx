@@ -10,6 +10,8 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
@@ -52,32 +54,48 @@ export default function SellerPromotePage() {
     }
   }, []);
 
-  const { data: products = [], isLoading } = useQuery({
+  const queryProducts = useQuery({
     queryKey: ['seller', 'promote', 'products'],
     queryFn: async (): Promise<Product[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('products')
         .select('id, name, price, images, status')
         .eq('seller_id', user.id)
         .eq('status', 'available')
         .order('created_at', { ascending: false });
+      // L'errore non si ingoia: senza questa riga la lettura non FALLISCE mai — torna «riuscita»
+      // con la lista vuota, e nessun riquadro d'errore potrà mai comparire perché non c'è niente da
+      // mostrare. È la forma che «Vicino a te» aveva sul lato cliente: il freno a valle non serve a
+      // niente se il guasto non arriva mai fin lì.
+      if (error) throw error;
       return (data ?? []) as Product[];
     },
   });
+  const products = queryProducts.data ?? [];
 
-  const { data: campaigns = [] } = useQuery({
+  const queryCampagne = useQuery({
     queryKey: ['seller', 'promote', 'campaigns'],
     queryFn: async (): Promise<Campaign[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('sponsored_listings')
         .select('id, product_id, start_date, end_date, status, impressions, clicks, product:products!sponsored_listings_product_id_fkey(name)')
         .order('created_at', { ascending: false })
         .limit(20);
+      // L'errore non si ingoia: senza questa riga la lettura non FALLISCE mai — torna «riuscita»
+      // con la lista vuota, e nessun riquadro d'errore potrà mai comparire perché non c'è niente da
+      // mostrare. È la forma che «Vicino a te» aveva sul lato cliente: il freno a valle non serve a
+      // niente se il guasto non arriva mai fin lì.
+      if (error) throw error;
       return (data ?? []) as unknown as Campaign[];
     },
   });
+  // Se questa lettura fallisce, `campaigns.length > 0` è falso e la sezione «Le tue campagne»
+  // sparisce in silenzio: il negoziante legge «non ho campagne attive» su una cosa che nessuno è
+  // riuscito a guardare. Una sezione che scompare è un'affermazione, non una pagina più pulita.
+  const campaigns = queryCampagne.data ?? [];
+  const campagneNonLette = queryCampagne.isError;
 
   const price = weeks * PER_WEEK_EUR;
 
@@ -99,7 +117,17 @@ export default function SellerPromotePage() {
     }
   };
 
-  if (isLoading) return <LoadingState />;
+  const vistaqueryProducts = vistaDaQuery(queryProducts);
+  if (vistaqueryProducts.mostraScheletro) return <LoadingState />;
+  if (vistaqueryProducts.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere i tuoi prodotti"
+        description="La lettura non è riuscita, quindi non so cosa puoi promuovere. Riprova fra un momento."
+        onRetry={() => queryProducts.refetch()}
+      />
+    );
+  }
 
   const selectedProduct = products.find((p) => p.id === selected) ?? null;
 
@@ -193,6 +221,13 @@ export default function SellerPromotePage() {
       </div>
 
       {/* Campagne */}
+      {campagneNonLette && (
+        <Card variant="bordered" padding="lg" className="mt-5">
+          <p className="text-sm text-ink-600">
+            Non sono riuscito a leggere le tue campagne. Non vuol dire che non ne hai: riprova fra un momento.
+          </p>
+        </Card>
+      )}
       {campaigns.length > 0 && (
         <Card variant="elevated" padding="lg" className="mt-5">
           <h2 className="mb-3 flex items-center gap-2 font-serif text-lg font-bold text-ink-900">
