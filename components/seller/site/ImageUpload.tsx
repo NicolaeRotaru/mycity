@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 
 /**
  * Carica un'immagine nel bucket pubblico 'products' e ritorna l'URL pubblico https.
@@ -21,15 +22,13 @@ import { friendlyError } from '@/lib/errors';
 export async function uploadSiteImage(file: File): Promise<string> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Non autenticato');
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-  const path = `${user.id}/site/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const { error } = await supabase.storage.from('products').upload(path, file, {
+  const { publicUrl } = await caricaImmagine(supabase, {
+    file,
+    userId: user.id,
+    cartella: 'site',
     cacheControl: '3600',
-    upsert: false,
-    contentType: file.type,
   });
-  if (error) throw error;
-  return supabase.storage.from('products').getPublicUrl(path).data.publicUrl;
+  return publicUrl;
 }
 
 /** Upload di una singola immagine con anteprima (banner). */

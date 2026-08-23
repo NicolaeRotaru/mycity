@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/ui/Field';
 import { apiErrorMessage } from '@/lib/errors';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { useTranslations } from 'next-intl';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
 
@@ -48,18 +49,17 @@ export default function NewReturnPage() {
   async function uploadPhoto(file: File) {
     setUploading(true);
     try {
-      // Cartella = utente: la regola del secchio pubblico ora pretende che il
-      // primo livello sia l'identita' di chi carica, cosi' nessuno scrive
-      // dentro la cartella di un altro.
+      // Il percorso lo costruisce la porta unica: la regola del secchio pubblico pretende che il
+      // primo livello sia l'identita' di chi carica, e da qui quel livello non si vede piu'.
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Sessione scaduta');
-      const path = `${user.id}/returns/${params.id}/${Date.now()}-${file.name}`;
-      const { error: upErr } = await supabase.storage
-        .from('products')
-        .upload(path, file, { upsert: false });
-      if (upErr) throw upErr;
-      const { data: pub } = supabase.storage.from('products').getPublicUrl(path);
-      setPhotos((p) => [...p, pub.publicUrl]);
+      const { publicUrl } = await caricaImmagine(supabase, {
+        file,
+        userId: user.id,
+        cartella: `returns/${params.id}`,
+        etichetta: file.name,
+      });
+      setPhotos((p) => [...p, publicUrl]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Upload fallito');
     } finally {

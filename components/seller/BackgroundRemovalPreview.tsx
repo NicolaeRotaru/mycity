@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { resizeImageToBase64 } from '@/lib/image-resize';
 import { Modal } from '@/components/ui/Modal';
 
@@ -92,15 +93,14 @@ export default function BackgroundRemovalPreview({ open, url, onClose, onReplace
       const file = new File([bytes], `bg-white.${ext}`, { type: resultMime });
 
       // Stesso path pattern degli altri upload prodotto (cartella = user.id, richiesto da RLS).
-      const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-bg-white.${ext}`;
-      const { error } = await supabase.storage.from('products').upload(path, file, {
+      const { publicUrl } = await caricaImmagine(supabase, {
+        file,
+        userId: user.id,
+        etichetta: 'bg-white',
         cacheControl: '3600',
-        upsert: false,
         contentType: resultMime,
       });
-      if (error) throw error;
-      const { data } = supabase.storage.from('products').getPublicUrl(path);
-      onReplaced(data.publicUrl);
+      onReplaced(publicUrl);
       toast.success('Sfondo rimosso');
       onClose();
     } catch (err) {
