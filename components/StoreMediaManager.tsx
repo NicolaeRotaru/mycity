@@ -7,6 +7,7 @@ import { Image as ImageIcon, Video, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { useTranslations } from 'next-intl';
 
 interface Props {
@@ -50,18 +51,23 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
             continue;
           }
 
-          const ext = file.name.split('.').pop() ?? 'bin';
-          const path = `store-media/${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-          const { error } = await supabase.storage.from('products').upload(path, file, {
-            upsert: false,
-            contentType: file.type,
-          });
-          if (error) {
-            toast.error(friendlyError(error));
+          // Qui il percorso partiva con la parola fissa `store-media`, e il database rifiuta ogni
+          // percorso la cui prima cartella non sia l'identificativo di chi carica: nessun negoziante
+          // e' mai riuscito a mettere la copertina alla propria vetrina. Adesso il percorso non lo
+          // costruisce piu' questo file: lo fa l'unica porta, che riceve una cartella e non un
+          // percorso.
+          let publicUrl: string;
+          try {
+            ({ publicUrl } = await caricaImmagine(supabase, {
+              file,
+              userId: user.id,
+              cartella: 'store-media',
+            }));
+          } catch (e) {
+            toast.error(friendlyError(e));
             continue;
           }
-          const { data } = supabase.storage.from('products').getPublicUrl(path);
-          next.push({ type: isVideo ? 'video' : 'image', url: data.publicUrl });
+          next.push({ type: isVideo ? 'video' : 'image', url: publicUrl });
         }
         onChange(next);
         toast.success('Media caricato');

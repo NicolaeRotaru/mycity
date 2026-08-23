@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import { resizeImageToFile } from '@/lib/image-resize';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 
 /**
  * Upload condiviso delle immagini prodotto sul bucket pubblico `products`.
@@ -36,16 +37,13 @@ export async function uploadProductImages(files: File[]): Promise<string[]> {
     }
 
     const safeName = file.name.toLowerCase().replace(/[^a-z0-9.\-_]/g, '_').slice(-80);
-    const ext = file.type.split('/')[1];
-    const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safeName || `img.${ext}`}`;
-    const { error: upErr } = await supabase.storage.from('products').upload(path, file, {
+    const { publicUrl } = await caricaImmagine(supabase, {
+      file,
+      userId: user.id,
+      etichetta: safeName,
       cacheControl: '3600',
-      upsert: false,
-      contentType: file.type,
     });
-    if (upErr) throw upErr;
-    const { data } = supabase.storage.from('products').getPublicUrl(path);
-    uploaded.push(data.publicUrl);
+    uploaded.push(publicUrl);
   }
   return uploaded;
 }

@@ -7,6 +7,7 @@ import { Upload, X, Link as LinkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 
 /**
  * Campo immagine riutilizzabile: accetta SIA un URL incollato a mano SIA il
@@ -40,15 +41,18 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
       if (!file) return;
       setUploading(true);
       try {
-        const ext = file.name.split('.').pop()?.toLowerCase() ?? 'png';
-        const path = `${pathPrefix}/${Date.now()}.${ext}`;
-        const { error } = await supabase.storage.from(bucket).upload(path, file, {
+        // Il percorso partiva col solo `pathPrefix`, cioe' `events` o `shop`: due nomi che il
+        // database rifiuta, perche' accetta come prima cartella solo l'identificativo di chi carica
+        // o `home` per lo staff. Questo campo lo usano tre schermate, tutte di amministrazione,
+        // quindi la strada giusta e' l'eccezione dello staff.
+        const { publicUrl } = await caricaImmagine(supabase, {
+          file,
+          cartella: pathPrefix,
+          staff: true,
+          secchio: bucket,
           upsert: true,
-          contentType: file.type,
         });
-        if (error) throw error;
-        const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-        onChange(data.publicUrl);
+        onChange(publicUrl);
         toast.success('Immagine caricata');
       } catch (err) {
         toast.error(friendlyError(err));

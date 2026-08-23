@@ -13,6 +13,7 @@ import StoreMediaManager from './StoreMediaManager';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
 import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -161,15 +162,13 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         // Primo segmento = user.id: richiesto dalle RLS Storage del bucket `products`
         // (read/update/delete filtrano su (storage.foldername(name))[1] = auth.uid()).
         // upsert:false + path unico = nessun ON CONFLICT. Vedi seller/site/ImageUpload.tsx.
-        const path = `${user.id}/logos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { error } = await supabase.storage.from('products').upload(path, file, {
+        const { publicUrl } = await caricaImmagine(supabase, {
+          file,
+          userId: user.id,
+          cartella: 'logos',
           cacheControl: '3600',
-          upsert: false,
-          contentType: file.type,
         });
-        if (error) throw error;
-        const { data } = supabase.storage.from('products').getPublicUrl(path);
-        setLogoUrl(data.publicUrl);
+        setLogoUrl(publicUrl);
         toast.success('Logo caricato');
       } catch (err) {
       toast.error(friendlyError(err));

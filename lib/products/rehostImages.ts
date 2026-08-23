@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadImages';
 import { safeImageFetch } from '@/lib/net/ssrf-guard';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 
 /**
  * Ri-ospita su storage le immagini importate da un marketplace.
@@ -147,19 +148,23 @@ export async function rehostImageUrls(
         continue;
       }
 
+      // Qui il corpo e' un Buffer scaricato, non un File: il nome serve solo per l'estensione,
+      // quindi glielo diamo noi dal tipo dichiarato. La cartella la decide comunque la porta.
       const ext = EXT_BY_TYPE[contentType] ?? 'jpg';
-      const path = `${ownerId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error: upErr } = await storage.storage.from('products').upload(path, buffer, {
-        cacheControl: '3600',
-        upsert: false,
-        contentType,
-      });
-      if (upErr) {
-        failed.push({ url, reason: upErr.message });
+      const corpo = Object.assign(buffer, { name: `img.${ext}`, type: contentType });
+      let publicUrl: string;
+      try {
+        ({ publicUrl } = await caricaImmagine(storage, {
+          file: corpo,
+          userId: ownerId,
+          cacheControl: '3600',
+          contentType,
+        }));
+      } catch (e) {
+        failed.push({ url, reason: e instanceof Error ? e.message : 'Errore caricamento' });
         continue;
       }
-      const { data } = storage.storage.from('products').getPublicUrl(path);
-      urls.push(data.publicUrl);
+      urls.push(publicUrl);
     } catch (err) {
       failed.push({ url, reason: err instanceof Error ? err.message : 'Errore download' });
     }

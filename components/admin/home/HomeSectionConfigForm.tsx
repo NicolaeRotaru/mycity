@@ -8,6 +8,7 @@ import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { ImageUrlField } from '@/components/ImageUrlField';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { HomeSection } from '@/lib/home-site';
 
 /** Estrae provider + id da un URL YouTube/Vimeo (o da un id grezzo). */
@@ -52,11 +53,8 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
       setUploading(true);
       try {
         const ext = file.name.split('.').pop()?.toLowerCase() ?? 'mp4';
-        const path = `home/${Date.now()}.${ext}`;
-        const { error } = await supabase.storage.from('products').upload(path, file, { upsert: true, contentType: file.type });
-        if (error) throw error;
-        const { data } = supabase.storage.from('products').getPublicUrl(path);
-        onChange({ ...section, config: { ...c, provider: 'file', videoId: '', videoUrl: data.publicUrl } });
+        const { publicUrl } = await caricaImmagine(supabase, { file, staff: true, upsert: true });
+        onChange({ ...section, config: { ...c, provider: 'file', videoId: '', videoUrl: publicUrl } });
         toast.success('Video caricato');
       } catch (e) {
         toast.error(friendlyError(e));

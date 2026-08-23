@@ -16,6 +16,7 @@ import type { StoreMediaItem } from './StoreMediaCarousel';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Input, Textarea } from '@/components/ui/Field';
 import { friendlyError } from '@/lib/errors';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { StoreHours } from '@/lib/store-hours';
 import { storeCustomizationSchema, type StoreCustomization } from '@/lib/store-customization';
 import CustomizationSection from './seller/CustomizationSection';
@@ -118,15 +119,13 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
         // Primo segmento = user.id: richiesto dalle RLS Storage del bucket `products`
         // (read/update/delete filtrano su (storage.foldername(name))[1] = auth.uid()).
         // upsert:false + path unico = nessun ON CONFLICT. Vedi seller/site/ImageUpload.tsx.
-        const path = `${user.id}/logos/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const { error } = await supabase.storage.from('products').upload(path, file, {
+        const { publicUrl } = await caricaImmagine(supabase, {
+          file,
+          userId: user.id,
+          cartella: 'logos',
           cacheControl: '3600',
-          upsert: false,
-          contentType: file.type,
         });
-        if (error) throw error;
-        const { data } = supabase.storage.from('products').getPublicUrl(path);
-        setLogoUrl(data.publicUrl);
+        setLogoUrl(publicUrl);
         toast.success('Logo caricato');
       } catch (err) {
       toast.error(friendlyError(err));
