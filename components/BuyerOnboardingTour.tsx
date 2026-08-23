@@ -5,6 +5,8 @@ import { useRef, useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { X, MapPin, ShoppingCart, Gift, ArrowRight } from 'lucide-react';
+import { frasePagamento } from '@/lib/promesse-pubbliche';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { useProfile } from './hooks/useProfile';
 import { useLocalStorage } from '@/lib/hooks';
 import { Button } from '@/components/ui/Button';
@@ -39,7 +41,9 @@ const STEPS = [
   {
     icon: ShoppingCart,
     title: 'Ordina, paghi come vuoi',
-    body: 'Aggiungi al carrello e al checkout scegli come pagare: carta o contanti alla consegna, decidi tu. Consegna in 30-60 minuti.',
+    // «carta o contanti alla consegna» era falso sulla meta' carta: al checkout la carta si paga
+    // subito. La frase e i minuti vengono da dove sono decisi.
+    body: `Aggiungi al carrello e al checkout scegli come pagare. ${frasePagamento()}. Consegna in ${EXPRESS_ETA_LABEL}.`,
     cta: 'Inizia a esplorare',
     href: '/search',
   },

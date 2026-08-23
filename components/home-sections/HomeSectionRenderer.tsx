@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { frasePagamento } from '@/lib/promesse-pubbliche';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -52,7 +53,9 @@ const HERO_CHIPS = [
 ];
 
 const DEFAULT_TRUST_BULLETS = [
-  { Icon: Banknote,  color: 'olive',     t: 'Puoi pagare alla consegna', d: 'Carta o contanti, decidi tu: l’account serve solo per confermare l’ordine.' },
+  // «Carta o contanti, decidi tu» prometteva anche la carta al rider, che non esiste: al checkout
+  // la carta si paga subito su Stripe. La frase nasce dall'elenco dei metodi.
+  { Icon: Banknote,  color: 'olive',     t: 'Puoi pagare alla consegna', d: `${frasePagamento()}: l’account serve solo per confermare l’ordine.` },
   { Icon: HomeIcon,  color: 'primary',   t: '100% commercianti locali', d: 'Solo negozi verificati di Piacenza.' },
   { Icon: Truck,     color: 'accent',    t: 'Consegna in 30-60 min',    d: 'Rider del territorio, percorsi brevi.' },
   { Icon: RotateCcw, color: 'secondary', t: 'Reso entro 14 giorni',     d: 'Cambi idea? Ti rimborsiamo senza domande.' },

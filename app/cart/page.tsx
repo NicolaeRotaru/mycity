@@ -1,6 +1,7 @@
 'use client';
 
-import { shippingForEuro } from '@/lib/shipping';
+import { shippingForEuro, dettoDellaSpedizione } from '@/lib/shipping';
+import { RIQUADRO_LO_SAPEVI, frasePagamento } from '@/lib/promesse-pubbliche';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -115,6 +116,11 @@ export default function CartPage() {
 
   const total = cartTotal(items);
   const count = cartCount(items);
+  // La parola sulla spedizione NON si calcola piu' qui: la dava `total >= FREE_SHIPPING_THRESHOLD`,
+  // cioe' il totale di tutto il carrello, mentre il numero addebitato si calcola per negozio. Con
+  // 20 € dal fornaio e 15 € dal macellaio la riga diceva «Gratis*» e nel totale c'erano 9,80 €.
+  // Adesso la parola la deriva `dettoDellaSpedizione` dallo stesso numero — vedi piu' sotto, dove
+  // `shippingCost` esiste. Qui resta solo cio' che serve alla barra di avanzamento per negozio.
   const freeShipping = total >= FREE_SHIPPING_THRESHOLD;
 
   if (items.length === 0) {
@@ -183,6 +189,8 @@ export default function CartPage() {
     0,
   );
   const finalTotal = total + shippingCost + platformDeliveryFee;
+  // Una parola sola, e nasce dal numero che sta dentro `finalTotal`.
+  const detto = dettoDellaSpedizione({ costo: shippingCost, negozi: groups.length, formatta: formatPrice });
   const groupSubtotal = (g: { items: CartItem[] }) =>
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
 
@@ -373,14 +381,17 @@ export default function CartPage() {
                       calcolata per-negozio → nel multi-negozio "Gratis" non è
                       garantito. Onestà: etichetta come stima finché i due modelli
                       non sono allineati. */}
-                  {freeShipping && multiStore ? 'Spedizione stimata' : 'Spedizione'}
+                  {detto.gratis && multiStore ? 'Spedizione stimata' : 'Spedizione'}
                   {/* 107 — La nota compariva solo in certi casi. La spedizione
                       al checkout si calcola per negozio e sulla distanza: è una
                       stima SEMPRE, e dirlo sempre costa zero. */}
                   <span className="block text-2xs text-ink-500 font-normal">stima · potrebbe variare al checkout</span>
+                  {detto.nota && (
+                    <span className="block text-2xs text-ink-500 font-normal">{detto.nota}</span>
+                  )}
                 </span>
-                <span className={`font-semibold ${freeShipping ? 'text-olive-700' : 'text-ink-900'}`}>
-                  {freeShipping ? (multiStore ? 'Gratis*' : 'Gratis') : formatPrice(shippingCost)}
+                <span className={`font-semibold ${detto.gratis ? 'text-olive-700' : 'text-ink-900'}`}>
+                  {detto.etichetta}
                 </span>
               </div>
             </div>
@@ -425,7 +436,7 @@ export default function CartPage() {
             </div>
 
             <div className="space-y-2 pt-2 text-xs text-ink-500">
-              <p className="flex items-center gap-2"><Banknote size={14} className="text-olive-600 shrink-0" aria-hidden /> Carta o contanti alla consegna, decidi tu</p>
+              <p className="flex items-center gap-2"><Banknote size={14} className="text-olive-600 shrink-0" aria-hidden /> {frasePagamento()}</p>
               <p className="flex items-center gap-2"><ShieldCheck size={14} className="text-olive-600 shrink-0" aria-hidden /> I tuoi dati sono al sicuro</p>
               <p className="flex items-center gap-2"><RotateCcw size={14} className="text-olive-600 shrink-0" aria-hidden /> Reso facile entro 14 giorni</p>
               <p className="flex items-center gap-2"><Store size={14} className="text-olive-600 shrink-0" aria-hidden /> Supporti il commercio locale</p>
@@ -437,7 +448,7 @@ export default function CartPage() {
               <Lightbulb size={16} className="text-primary-700 shrink-0" aria-hidden /> Lo sapevi?
             </p>
             <p className="text-primary-800">
-              Acquistando qui sostieni direttamente i commercianti della tua città. Niente intermediari, niente commissioni nascoste.
+              {RIQUADRO_LO_SAPEVI}
             </p>
           </div>
         </div>

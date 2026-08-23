@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
+import { FRASE_RESO, frasePagamento } from '@/lib/promesse-pubbliche';
 import ProductGrid from '@/components/ProductGrid';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
@@ -736,11 +737,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               <DeliveryCutoff variant="inline" available={!isOutOfStock && expressEligible} externalDeliveryLabel={external?.delivery_label} />
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-                <span><strong>Puoi pagare alla consegna</strong> — carta o contanti, decidi tu.</span>
+                {/* La frase nasce dall'elenco dei metodi del checkout: la carta alla consegna
+                    non esiste, e chi si fidava proprio per non anticipare i soldi lo scopriva alla
+                    cassa, dopo l'indirizzo — dove abbandonare costa di piu'. */}
+                <span>{frasePagamento()}</span>
               </span>
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">
                 <RotateCcw size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
-                Reso gratuito entro 14 giorni
+                {/* «gratuito» valeva solo per il difetto, non per il ripensamento: la pagina
+                    resi dice che il cambio idea lo paga il cliente, e i freschi sono esclusi. */}
+                {FRASE_RESO}
               </span>
             </div>
 

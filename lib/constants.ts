@@ -1,3 +1,4 @@
+import { EXPRESS_ETA_LABEL } from './delivery';
 export const FREE_SHIPPING_THRESHOLD = 30;
 export const LOW_STOCK_THRESHOLD = 5;
 export const NEW_PRODUCT_DAYS = 14;
@@ -75,9 +76,12 @@ export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
 
 // Riferimenti per icone (nomi lucide-react). Componenti li importano e
 // renderizzano per evitare di sparare emoji nelle UI strutturali.
+// La soglia vale per NEGOZIO, non sul totale del carrello: dirlo qui costa tre parole e toglie il
+// caso in cui uno legge «gratuita sopra 30 €», ne spende 35 fra due negozi e paga la spedizione.
+// E i minuti vengono da lib/delivery, dove il numero e' deciso — non riscritti qui.
 export const VALUE_PROPS = [
-  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra €${FREE_SHIPPING_THRESHOLD}` },
+  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra €${FREE_SHIPPING_THRESHOLD} per negozio` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
-  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: 'in 30-60 minuti dalla conferma del negozio' },
+  { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} dalla conferma del negozio` },
 ] as const;
