@@ -3,6 +3,14 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ShoppingCart, Truck, CreditCard, Undo2, Settings, Store, Bike, Mail, type LucideIcon } from 'lucide-react';
+// Le promesse pubbliche nascono dagli stessi interruttori che le mantengono: il ritiro in negozio
+// e' spento nel checkout e nelle due rotte, ma questa pagina lo prometteva lo stesso, con tanto di
+// istruzione per selezionare un'opzione che non c'e'.
+import {
+  promesseRitiroInNegozio,
+  rispostaCostoSpedizione,
+  rispostaTempiDiConsegna,
+} from '@/lib/promesse-pubbliche';
 
 type QA = { q: string; a: React.ReactNode };
 type Section = { title: string; icon: LucideIcon; items: QA[] };
@@ -30,18 +38,9 @@ const SECTIONS: Section[] = [
     title: 'Spedizioni e consegne',
     icon: Truck,
     items: [
-      {
-        q: 'Quanto costa la spedizione?',
-        a: 'La spedizione è GRATUITA per ordini sopra €30 dallo stesso venditore. Sotto soglia il costo varia in base alla distanza dal negozio (in media €2,50–4,50). Vedi tutti i dettagli nella pagina Spedizioni.',
-      },
-      {
-        q: 'In quanto tempo arriva l\'ordine?',
-        a: 'In 30-60 minuti dalla conferma del negozio, nei comuni serviti e negli orari di apertura del negozio. Se il negozio \u00e8 chiuso te lo diciamo prima che tu paghi: l\u2019ordine parte alla riapertura.',
-      },
-      {
-        q: 'Posso ritirare in negozio?',
-        a: 'Sì, e ottieni il 10% di sconto. Seleziona "Ritiro in negozio" al checkout: ti avviseremo appena l\'ordine sarà pronto.',
-      },
+      rispostaCostoSpedizione(),
+      rispostaTempiDiConsegna(),
+      ...promesseRitiroInNegozio(),
       {
         q: 'Posso seguire la mia consegna?',
         a: 'Sì. Dalla sezione "I miei ordini" vedi lo stato in tempo reale: in preparazione, pronto, in consegna, consegnato.',

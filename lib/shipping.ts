@@ -132,3 +132,68 @@ export function contanteDaRimettereCents(o: {
 }): number {
   return Math.max(0, Math.round(Number(o.total_price ?? 0) * 100) - compensoTrattenutoCents(o));
 }
+
+/**
+ * COSA DICO AL CLIENTE DELLA SPEDIZIONE — la parola derivata dallo stesso numero che paga.
+ *
+ * ── Il difetto che ha prodotto questa funzione ───────────────────────────────────────────────
+ * Nel carrello la parola e il numero avevano due basi diverse. `freeShipping` guardava il totale di
+ * TUTTO il carrello (`total >= 30`); `shippingCost` sommava `shippingForEuro` per ogni gruppo-negozio,
+ * e quella azzera solo se il subtotale DEL SINGOLO negozio supera la soglia.
+ *
+ * Il caso, coi numeri veri: 20 € dal fornaio più 15 € dal macellaio fanno 35 €, quindi la riga
+ * stampava «Gratis*» — e dentro il totale c'erano 4,90 + 4,90 = **9,80 € di spedizione**, senza una
+ * riga che li spiegasse. Il cliente legge «gratis» e paga dieci euro.
+ *
+ * ── Perché una funzione e non due righe corrette nel carrello ───────────────────────────────
+ * Perché la stessa domanda la fanno il carrello, il checkout e la mail di conferma, e la risposta
+ * era scritta a mano in ognuno. La regola non è «controlla meglio»: è che la parola deve nascere dal
+ * numero, non accanto al numero. Qui non si può dire «gratis» avendo un costo in mano — la funzione
+ * riceve il costo e basta.
+ *
+ * 🟢 Pura: nessuna rete, nessun orologio. Una prova la ESEGUE.
+ */
+export interface DettoDellaSpedizione {
+  /** true SOLO se non si paga niente. Deriva dal costo, non da una soglia riletta a parte. */
+  gratis: boolean;
+  /** La parola da stampare: «Gratis» oppure l'importo. Mai «Gratis» con un costo in mano. */
+  etichetta: string;
+  /** La nota da mettere sotto, quando serve. Stringa vuota quando non serve. */
+  nota: string;
+  /** Il numero, per chi deve sommarlo: è lo stesso da cui viene l'etichetta. */
+  costo: number;
+}
+
+export function dettoDellaSpedizione(opts: {
+  /** Il costo totale della spedizione, già calcolato con `shippingForEuro` per ogni negozio. */
+  costo: number;
+  /** Quanti negozi ci sono nel carrello: cambia solo la nota, mai la parola. */
+  negozi?: number;
+  /** Come si scrive un importo. Iniettato così questa resta pura e la prova non dipende dal locale. */
+  formatta: (euro: number) => string;
+}): DettoDellaSpedizione {
+  const costo = Number.isFinite(opts.costo) ? Math.max(0, opts.costo) : 0;
+  const negozi = Math.max(1, Math.trunc(opts.negozi ?? 1));
+  const gratis = costo === 0;
+
+  if (gratis) {
+    return {
+      gratis: true,
+      etichetta: 'Gratis',
+      // L'asterisco orfano di prima non spiegava niente: la nota adesso dice la regola per esteso,
+      // e compare quando c'è più di un negozio, cioè quando la soglia si applica a ciascuno.
+      nota: negozi > 1 ? `Gratis sopra i ${FREE_SHIPPING_THRESHOLD} € di spesa nello stesso negozio` : '',
+      costo: 0,
+    };
+  }
+
+  return {
+    gratis: false,
+    etichetta: opts.formatta(costo),
+    nota:
+      negozi > 1
+        ? `${negozi} negozi: la soglia dei ${FREE_SHIPPING_THRESHOLD} € vale per ciascuno`
+        : `Gratis sopra i ${FREE_SHIPPING_THRESHOLD} € di spesa`,
+    costo,
+  };
+}

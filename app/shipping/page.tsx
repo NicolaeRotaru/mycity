@@ -1,5 +1,10 @@
 import Link from 'next/link';
 import { Truck, Gift, Zap, Store, Clock, ChefHat, Package, Bike, CheckCircle2 } from 'lucide-react';
+// Le promesse pubbliche nascono dagli interruttori che le mantengono, non da un testo scritto qui:
+// il ritiro in negozio e' spento nel checkout e nelle due rotte, e questa pagina lo prometteva col
+// 10% di sconto (che vale zero anche lui). E i «30-60 minuti» hanno gia' una casa in lib/delivery.
+import { NEGOZIO_CHIUSO_COSA_SUCCEDE, riquadroRitiroInNegozio } from '@/lib/promesse-pubbliche';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 
 export const metadata = {
   title: 'Spedizioni e consegne · MyCity',
@@ -31,25 +36,27 @@ export default function ShippingPage() {
         </div>
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Zap size={28} className="text-primary-600" aria-hidden /></div>
-          <div className="font-bold text-primary-900">Consegna in 30-60 min</div>
+          <div className="font-bold text-primary-900">Consegna in {EXPRESS_ETA_LABEL}</div>
           <div className="text-sm text-primary-800 mt-1">Nei comuni serviti, negli orari di apertura del negozio</div>
         </div>
-        <div className="bg-secondary-50 border border-secondary-200 rounded-xl p-5 text-center">
-          <div className="mb-2 flex justify-center"><Store size={28} className="text-secondary-600" aria-hidden /></div>
-          <div className="font-bold text-secondary-900">Ritiro in negozio</div>
-          <div className="text-sm text-secondary-700 mt-1">10% di sconto sull'ordine</div>
-        </div>
+        {riquadroRitiroInNegozio() && (
+          <div className="bg-secondary-50 border border-secondary-200 rounded-xl p-5 text-center">
+            <div className="mb-2 flex justify-center"><Store size={28} className="text-secondary-600" aria-hidden /></div>
+            <div className="font-bold text-secondary-900">{riquadroRitiroInNegozio()!.titolo}</div>
+            <div className="text-sm text-secondary-700 mt-1">{riquadroRitiroInNegozio()!.sottotitolo}</div>
+          </div>
+        )}
       </div>
 
       <section className="prose prose-gray max-w-none space-y-6 text-ink-700 leading-relaxed">
         <div>
           <h2 className="text-xl font-bold text-ink-900 mb-2">Tempi di consegna</h2>
-          <p>Consegniamo in <strong>30-60 minuti</strong> dalla conferma del venditore. È la nostra promessa:
+          <p>Consegniamo in <strong>{EXPRESS_ETA_LABEL}</strong> dalla conferma del venditore. È la nostra promessa:
           il negozio è nella tua città, il rider fa un percorso breve.</p>
           <ul className="list-disc pl-5">
             <li>Il tempo parte da quando il negozio conferma l’ordine, non da quando lo invii</li>
             <li>Vale negli orari di apertura del negozio che hai scelto</li>
-            <li>Se il negozio è chiuso, l’ordine parte alla riapertura e te lo diciamo prima che tu paghi</li>
+            <li>{NEGOZIO_CHIUSO_COSA_SUCCEDE}</li>
           </ul>
         </div>
 
@@ -92,11 +99,13 @@ export default function ShippingPage() {
           <p className="text-sm">Il costo esatto è sempre mostrato al checkout prima di confermare.</p>
         </div>
 
-        <div>
-          <h2 className="text-xl font-bold text-ink-900 mb-2">Ritiro in negozio</h2>
-          <p>Scegliendo il ritiro in negozio ottieni <strong>il 10% di sconto</strong> sull'intero ordine e non paghi
-          spese di spedizione. Riceverai una notifica appena l'ordine sarà pronto.</p>
-        </div>
+        {riquadroRitiroInNegozio() && (
+          <div>
+            <h2 className="text-xl font-bold text-ink-900 mb-2">Ritiro in negozio</h2>
+            <p>Scegliendo il ritiro in negozio non paghi spese di spedizione. Riceverai una notifica
+            appena l&apos;ordine sarà pronto.</p>
+          </div>
+        )}
 
         <div>
           <h2 className="text-xl font-bold text-ink-900 mb-2">Tracciamento</h2>

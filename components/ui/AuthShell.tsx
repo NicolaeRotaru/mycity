@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { FRASE_RESO, frasePagamento } from '@/lib/promesse-pubbliche';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -37,10 +39,12 @@ import { VERSIONE_TESTI_LEGALI } from '@/lib/legal/versione';
 type BackLink = { href: string; label: string };
 
 const BENEFITS: { Icon: LucideIcon; text: string }[] = [
-  { Icon: Banknote, text: 'Carta o contanti, decidi tu' },
-  { Icon: Truck, text: 'Consegna in 30-60 min dai negozi della tua via' },
+  // Le due frasi che promettevano quello che il sito non fa — la carta alla consegna e il reso
+  // gratuito su tutto — adesso nascono dalle promesse pubbliche, dove sono derivate dal codice.
+  { Icon: Banknote, text: frasePagamento() },
+  { Icon: Truck, text: `Consegna in ${EXPRESS_ETA_LABEL} dai negozi della tua via` },
   { Icon: BadgeCheck, text: '100% commercianti locali verificati' },
-  { Icon: RotateCcw, text: 'Reso gratuito entro 14 giorni' },
+  { Icon: RotateCcw, text: FRASE_RESO },
 ];
 
 export function AuthShell({

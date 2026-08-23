@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { frasePagamento } from '@/lib/promesse-pubbliche';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { headers } from 'next/headers';
 import ExperimentExposure from '@/components/home/ExperimentExposure';
 import HomeSectionRenderer, { type HeroDefaults } from '@/components/home-sections/HomeSectionRenderer';
@@ -41,8 +43,10 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
     ),
     subhead: (
       <>
-        Carta o contanti, decidi tu: scegli dai commercianti della tua città e
-        <strong className="text-ink-900"> puoi pagare alla consegna</strong>. A casa in 30-60 minuti.
+        {/* La carta alla consegna non esiste: al checkout la carta si paga subito, su Stripe.
+            La frase nasce dall'elenco dei metodi, e i minuti da lib/delivery. */}
+        Scegli dai commercianti della tua città e
+        <strong className="text-ink-900"> {frasePagamento().toLowerCase()}</strong>. A casa in {EXPRESS_ETA_LABEL}.
       </>
     ),
     ctaPrimary: 'Scopri cosa c’è oggi',

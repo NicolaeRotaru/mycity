@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { rispostaTempiDiConsegna } from '@/lib/promesse-pubbliche';
 
 /**
  * LA PROMESSA DI CONSEGNA È UNA SOLA, E NON PUÒ TORNARE INDIETRO DA SOLA.
@@ -62,10 +64,34 @@ describe('la promessa di consegna', () => {
     expect(colpevoli, 'la promessa vecchia è tornata in queste righe').toEqual([]);
   });
 
-  it('la promessa nuova c\'è davvero dove il cliente la cerca', () => {
+  /**
+   * 23/8/2026 — QUESTA PROVA CERCAVA LA STRINGA «30-60 minuti» DENTRO I FILE, e diventava rossa
+   * proprio nel momento in cui il difetto veniva curato.
+   *
+   * Il numero era scritto a mano in quattro punti mentre `EXPRESS_ETA_LABEL` esiste dal giorno in
+   * cui qualcuno l'ha deciso. Portando le pagine a leggerlo da lì, la stringa letterale è sparita
+   * dai file — e questa riga è diventata rossa su un lavoro giusto. Una prova che punisce chi cura
+   * è una prova che insegna a non curare.
+   *
+   * Adesso guarda la stessa cosa dal verso che regge: quello che ARRIVA al cliente. La risposta
+   * della FAQ e il riquadro della pagina Spedizioni devono contenere l'etichetta decisa, comunque
+   * ci arrivino — a mano o derivata. Se domani il numero cambia in `lib/delivery`, questa prova
+   * segue; se qualcuno riscrive un numero diverso a mano, diventa rossa.
+   */
+  it('la promessa nuova arriva davvero al cliente, comunque sia scritta', () => {
+    expect(rispostaTempiDiConsegna().a).toContain(EXPRESS_ETA_LABEL);
+    expect(EXPRESS_ETA_LABEL).toMatch(/30-60/);
+
     const spedizioni = readFileSync(join(RADICE, 'app/shipping/page.tsx'), 'utf8');
-    expect(spedizioni).toMatch(/30-60 min/);
+    expect(
+      spedizioni.includes('EXPRESS_ETA_LABEL') || /30-60 min/.test(spedizioni),
+      'la pagina Spedizioni deve dire il tempo: o lo legge da lib/delivery, o lo scrive',
+    ).toBe(true);
+
     const faq = readFileSync(join(RADICE, 'app/faq/page.tsx'), 'utf8');
-    expect(faq).toMatch(/30-60 minuti/);
+    expect(
+      faq.includes('rispostaTempiDiConsegna') || /30-60 min/.test(faq),
+      'la FAQ deve dire il tempo: o lo prende dalle promesse, o lo scrive',
+    ).toBe(true);
   });
 });
