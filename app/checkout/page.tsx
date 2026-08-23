@@ -9,6 +9,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
+import { statoDellaVista } from '@/lib/stato-vista';
 import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
@@ -44,9 +45,16 @@ type AddressForm = {
 export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
+  /**
+   * Come nel carrello: `useState([])` parte vuoto perché deve partire da qualcosa. Senza questa
+   * bandierina il primo controllo del render — che qui precedeva perfino `loadingGroups` — diceva
+   * «Il tuo carrello è vuoto» a chi stava per pagare.
+   */
+  const [carrelloLetto, setCarrelloLetto] = useState(false);
   useEffect(() => {
     const c = getCart();
     setCart(c);
+    setCarrelloLetto(true);
     if (c.length === 0) return;
     const totalCents = Math.round(c.reduce((s, i) => s + i.price * i.quantity, 0) * 100);
     // #225 — L'avvio del checkout si contava a ogni ingresso nella pagina,
@@ -806,17 +814,21 @@ export default function CheckoutPage() {
     }
   };
 
-  if (cart.length === 0) {
+  // I tre esiti, nell'ordine giusto: prima «non ho ancora guardato», poi «ho guardato e non c'è
+  // niente». Prima stavano al contrario, e il ramo del vuoto vinceva sempre.
+  const vistaCarrello = statoDellaVista({ letto: carrelloLetto, caricando: loadingGroups, quanti: cart.length });
+
+  if (vistaCarrello.mostraScheletro) {
+    return <LoadingState />;
+  }
+
+  if (vistaCarrello.mostraVuoto) {
     return (
       <div className="container mx-auto p-12 text-center space-y-4">
         <p className="text-ink-500 text-lg">Il tuo carrello è vuoto.</p>
         <Button href="/">Torna al negozio</Button>
       </div>
     );
-  }
-
-  if (loadingGroups) {
-    return <LoadingState />;
   }
 
   return (

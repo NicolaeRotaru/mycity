@@ -5,12 +5,14 @@ import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { MapPin, Star, Home as HomeIcon, Truck, Store as StoreIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { statoDellaVista } from '@/lib/stato-vista';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { DAY_KEYS, isOpenNow, streetFromAddress, type StoreHours } from '@/lib/store-hours';
 import { primoDelMesePiacenza } from '@/lib/tempo-piacenza';
+import { EXPRESS_ETA_LABEL, deliveryWindow } from '@/lib/delivery';
 import caricatoreFotoRemote from '@/lib/image-loader';
 
 type StoreMediaItem = { type: 'image' | 'video'; url: string };
@@ -40,7 +42,7 @@ function coverFromMedia(media: unknown): string | null {
  * placeholder statico, così l'hero non resta mai vuoto.
  */
 export default function HeroStoreCard() {
-  const { data } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['home', 'hero-store'],
     staleTime: 10 * 60 * 1000,
     queryFn: async (): Promise<{ store: Store; products: Prod[]; reviews: Reviews | null } | null> => {
@@ -59,17 +61,29 @@ export default function HeroStoreCard() {
       const { data: risposta, error } = await supabase.rpc('vetrina_home', {
         p_mese: primoDelMesePiacenza(),
       });
-      if (error) {
-        // Il riquadro non è mai vuoto: senza dati si mostra il segnaposto.
-        return null;
-      }
+      // L'errore veniva ingoiato con un `return null`, quindi `isError` non scattava mai e il
+      // riquadro cadeva sul segnaposto: cioè su un negozio inventato, mostrato come se fosse vero.
+      // Adesso l'errore esce, e chi disegna può distinguere «non lo so ancora» da «è rotto».
+      if (error) throw error;
       const v = risposta as { store: Store; products: Prod[] | null; reviews: Reviews | null } | null;
       if (!v?.store) return null;
       return { store: v.store, products: v.products ?? [], reviews: v.reviews };
     },
   });
 
-  if (!data?.store) return <HeroStorePlaceholder />;
+  // Tre esiti, non due. Il segnaposto di prima era un negozio inventato e credibile — «Salumeria
+  // del Borgo», «Via Calzolai», sei prodotti con prezzi scritti a mano, «Aperto ora», «Consegna
+  // oggi entro le 18:00» — mostrato sia mentre caricava sia quando negozio non ce n'era. Un numero
+  // senza fonte messo davanti a chi arriva sul sito per la prima volta.
+  const vista = statoDellaVista({
+    letto: !isLoading,
+    caricando: isLoading,
+    errore: isError || undefined,
+    quanti: data?.store ? 1 : 0,
+  });
+  if (vista.mostraScheletro) return <HeroStoreScheletro />;
+  if (vista.mostraErrore || vista.mostraVuoto) return <HeroStoreSenzaNegozio />;
+  if (!data?.store) return <HeroStoreSenzaNegozio />;
 
   const { store, products, reviews } = data;
 
@@ -82,6 +96,9 @@ export default function HeroStoreCard() {
   const hours = (store.store_hours ?? null) as StoreHours | null;
   const todayIntervals = hours && typeof hours === 'object' ? hours[todayKey] : undefined;
   const openNow = Array.isArray(todayIntervals) && isOpenNow(todayIntervals);
+  // La finestra di consegna la calcola la casa unica (lib/delivery), che sa qual è l'orario limite:
+  // dopo quello si consegna domani, e dirlo «oggi» e' una promessa che il server poi rifiuta.
+  const finestra = deliveryWindow(Date.now());
   const deliveryToday = openNow;
 
   const cover = coverFromMedia(store.store_media);
@@ -173,11 +190,19 @@ export default function HeroStoreCard() {
               </div>
             )}
 
-            {/* Riga secondaria: consegna stimata. */}
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
-              <span className="text-ink-500">Consegna stimata</span>
-              <span className="font-semibold text-ink-900">oggi, entro 18:00</span>
-            </div>
+            {/* Riga secondaria: consegna stimata.
+                «oggi, entro 18:00» era scritto a mano, e restava «oggi» anche alle 22 e anche col
+                negozio chiuso. Adesso viene da `deliveryWindow`, che l'orario limite lo conosce, e
+                si mostra solo se il negozio è aperto adesso: una stima su un negozio chiuso è una
+                promessa che nessuno può mantenere. */}
+            {openNow && (
+              <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
+                <span className="text-ink-500">Consegna stimata</span>
+                <span className="font-semibold text-ink-900">
+                  {finestra.day}, in {EXPRESS_ETA_LABEL}
+                </span>
+              </div>
+            )}
           </div>
         </Link>
         <div className="absolute -top-4 -right-4 bg-accent-500 text-ink-900 px-3 py-1.5 rounded-full font-bold text-xs shadow-warm-lg ring-2 ring-white">
@@ -188,16 +213,48 @@ export default function HeroStoreCard() {
   );
 }
 
-/** Placeholder statico (mostrato durante il caricamento o se non c'è alcun negozio). */
-function HeroStorePlaceholder() {
-  const demo = [
-    { name: 'Coppa DOP', price: '€9,50', grad: 'from-accent-100 to-primary-100' },
-    { name: 'Pancetta', price: '€7,80', grad: 'from-primary-100 to-secondary-100' },
-    { name: 'Salame', price: '€12,00', grad: 'from-secondary-100 to-accent-100' },
-    { name: 'Prosciutto crudo', price: '€15,00', grad: 'from-accent-100 to-cream-300' },
-    { name: 'Mortadella', price: '€6,40', grad: 'from-cream-300 to-primary-100' },
-    { name: 'Bresaola', price: '€18,00', grad: 'from-primary-100 to-accent-200' },
-  ];
+/**
+ * LO SCHELETRO — la stessa forma e la stessa altezza, senza un dato inventato.
+ *
+ * Qui prima c'era `HeroStorePlaceholder`: un negozio finto e credibile, con nome, via, sei prodotti
+ * e prezzi scritti a mano, il pallino verde «Aperto ora» e «Consegna oggi, entro 18:00». Serviva a
+ * non lasciare il riquadro vuoto mentre i dati arrivavano, e il costo era che il primo schermo del
+ * sito mostrava numeri che non vengono da nessuna parte. Uno scheletro fa lo stesso mestiere —
+ * tenere lo spazio — senza affermare niente.
+ */
+function HeroStoreScheletro() {
+  return (
+    <div className="hidden md:flex justify-center" aria-busy="true">
+      <div className="relative w-full max-w-sm">
+        <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg overflow-hidden">
+          <div className="h-44 w-full skeleton" />
+          <div className="p-5 space-y-3">
+            <div className="h-6 w-2/3 skeleton rounded" />
+            <div className="h-3 w-1/3 skeleton rounded" />
+            <div className="flex gap-2">
+              <div className="h-5 w-24 skeleton rounded-full" />
+              <div className="h-5 w-24 skeleton rounded-full" />
+            </div>
+            <div className="flex gap-2 overflow-hidden">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="shrink-0 w-24 space-y-1.5">
+                  <div className="aspect-square skeleton rounded" />
+                  <div className="h-2 w-full skeleton rounded" />
+                  <div className="h-2.5 w-2/3 skeleton rounded" />
+                </div>
+              ))}
+            </div>
+            <div className="h-3 w-full skeleton rounded mt-2" />
+          </div>
+        </div>
+      </div>
+      <span className="sr-only">Carico il negozio del mese…</span>
+    </div>
+  );
+}
+
+/** Nessun negozio del mese, o lettura fallita: si dice, invece di inventarne uno. */
+function HeroStoreSenzaNegozio() {
   return (
     <div className="hidden md:flex justify-center">
       <div className="relative w-full max-w-sm">
@@ -206,52 +263,22 @@ function HeroStorePlaceholder() {
             <span className="absolute inset-0 flex items-center justify-center text-white/40">
               <StoreIcon size={56} strokeWidth={1.4} aria-hidden />
             </span>
-            <span className="absolute top-3 left-3 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-ink-900/75 text-white backdrop-blur-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-olive-400 animate-pulse-soft" />
-              Aperto ora
-            </span>
           </div>
           <div className="p-5 space-y-3">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <h3 className="font-serif font-bold text-lg text-ink-900 truncate">Salumeria del Borgo</h3>
-            </div>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-500">
-              <span className="inline-flex items-center gap-1 truncate">
-                <MapPin size={12} strokeWidth={2} aria-hidden /> Via Calzolai
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary-50 text-primary-700 px-2 py-0.5 rounded-full ring-1 ring-primary-200">
-                <HomeIcon size={11} strokeWidth={2.4} aria-hidden /> Negozio locale
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-olive-50 text-olive-700 px-2 py-0.5 rounded-full ring-1 ring-olive-200">
-                <Truck size={11} strokeWidth={2.4} aria-hidden /> Consegna oggi
-              </span>
-            </div>
-            <div className="relative -mx-5 px-5">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-1">
-                {demo.map((p) => (
-                  <div key={p.name} className="bg-cream-100 rounded-lg p-2 shrink-0 w-24 snap-start">
-                    <div className={`aspect-square rounded bg-gradient-to-br ${p.grad} mb-1.5`} />
-                    <p className="text-[10px] text-ink-600 truncate">{p.name}</p>
-                    <p className="text-xs font-semibold text-ink-900">{p.price}</p>
-                  </div>
-                ))}
-                <div aria-hidden className="shrink-0 w-2" />
-              </div>
-              <div aria-hidden className="pointer-events-none absolute left-0 top-0 bottom-1 w-6 bg-gradient-to-r from-white to-transparent" />
-              <div aria-hidden className="pointer-events-none absolute right-0 top-0 bottom-1 w-6 bg-gradient-to-l from-white to-transparent" />
-            </div>
-            <div className="flex items-center justify-between text-xs pt-2 border-t border-cream-200">
-              <span className="text-ink-500">Consegna stimata</span>
-              <span className="font-semibold text-ink-900">oggi, entro 18:00</span>
-            </div>
+            <h3 className="font-serif font-bold text-lg text-ink-900">I negozi di Piacenza</h3>
+            <p className="text-sm text-ink-600">
+              Il negozio del mese arriva a giorni. Intanto puoi girare fra tutte le botteghe della città.
+            </p>
+            <a
+              href="/stores"
+              className="inline-flex items-center justify-center w-full bg-primary-700 hover:bg-primary-800 text-white py-2.5 rounded-lg font-bold text-sm transition-colors"
+            >
+              Vedi i negozi
+            </a>
           </div>
-        </div>
-        <div className="absolute -top-4 -right-4 bg-accent-500 text-ink-900 px-3 py-1.5 rounded-full font-bold text-xs shadow-warm-lg ring-2 ring-white">
-          100% locale
         </div>
       </div>
     </div>
   );
 }
+

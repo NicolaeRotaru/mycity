@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { List, Map as MapIcon, MapPin, RadioTower } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StoreListRow from '@/components/StoreListRow';
+import { ErrorState } from '@/components/ui/ErrorState';
 import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStoresMapLazy';
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
@@ -33,7 +34,7 @@ const fetchNearData = async () => {
   const SELECT_NEAR =
     'id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
   const conBandierine = () => supabase.from('seller_public_profiles').select(SELECT_NEAR);
-  const { data: storesRaw } = await conRipiegoSchema(
+  const { data: storesRaw, error: erroreNegozi } = await conRipiegoSchema(
     'near/page:seller_public_profiles',
     conBandierine,
     () =>
@@ -41,6 +42,11 @@ const fetchNearData = async () => {
         supabase.from('seller_public_profiles').select(senzaColonne(SELECT_NEAR, COLONNE_124_VISTA)),
       ),
   );
+  // L'errore veniva ingoiato: `conRipiegoSchema` non lancia — restituisce il risultato com'e' — e
+  // il campo `error` non lo leggeva nessuno. Quindi una lettura fallita non diventava mai un
+  // errore: la query andava a buon fine con `stores: []`, e a schermo usciva «0 negozi a Piacenza».
+  // Cioe' il sito rispondeva a una domanda che nessuno aveva potuto porre.
+  if (erroreNegozi) throw erroreNegozi;
 
   const stores = (storesRaw ?? []) as Store[];
   const storeIds = stores.map((s) => s.id);
@@ -121,7 +127,7 @@ export default function NearMePage() {
     );
   }, []);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.stores.nearV2,
     queryFn: fetchNearData,
   });
@@ -168,6 +174,20 @@ export default function NearMePage() {
         })),
     [filtered],
   );
+
+  // Una lettura fallita non e' un elenco vuoto. Prima usciva «0 negozi a Piacenza» — una frase che
+  // il sito non poteva sostenere, e che a un cliente dice «qui non c'e' niente per te».
+  if (isError) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <ErrorState
+          title="Non riusciamo a caricare i negozi"
+          description="Abbiamo provato a leggere le botteghe della tua zona e non ci siamo riusciti. Non vuol dire che non ce ne siano: riprova fra un attimo."
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
+  }
 
   // Attendi i dati e l'esito della geolocalizzazione (posizione o errore).
   if (isLoading || (!pos && !permError)) {
