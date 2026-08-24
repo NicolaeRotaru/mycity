@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { List, Map as MapIcon, MapPin, RadioTower } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -10,6 +10,7 @@ import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStores
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
+import { frasePosizione, motivoPosizione, siAspetta, type MotivoPosizione } from '@/lib/posizione';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
@@ -111,18 +112,40 @@ const fetchNearData = async () => {
 
 export default function NearMePage() {
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [permError, setPermError] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState<MotivoPosizione | null>(null);
+  const [cerco, setCerco] = useState(false);
   const [view, setView] = useState<'list' | 'map'>('list');
   const [radiusKm, setRadiusKm] = useState(5);
 
-  useEffect(() => {
+  /**
+   * 24/8/2026 — IL PERMESSO NON SI CHIEDE PIÙ A FREDDO, E LA PAGINA NON ASPETTA PIÙ.
+   *
+   * Prima questa richiesta partiva dentro un effetto al montaggio: il riquadro di sistema arrivava
+   * prima di qualsiasi contenuto e senza una riga che dicesse perché. Un permesso chiesto così
+   * viene negato molto più spesso — e su iPhone, una volta negato, non lo richiede più nessuno: si
+   * deve andare nelle impostazioni del telefono. Cioè un «no» dato in due secondi spegneva la
+   * funzione per sempre.
+   *
+   * Adesso parte da un gesto: si vede prima cosa c'è, poi si decide se dire dove si è. Il perché
+   * completo, e le altre due metà del difetto, stanno in lib/posizione.ts.
+   */
+  const chiediPosizione = useCallback(() => {
     if (!navigator.geolocation) {
-      setPermError('Geolocalizzazione non supportata dal browser');
+      setMotivo('non-disponibile');
       return;
     }
+    setCerco(true);
     navigator.geolocation.getCurrentPosition(
-      (p) => setPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      (err) => setPermError('Impossibile ottenere la posizione: ' + err.message),
+      (p) => {
+        setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+        setMotivo(null);
+        setCerco(false);
+      },
+      (err) => {
+        // Il testo NON è quello del browser: è in inglese e cambia da browser a browser.
+        setMotivo(motivoPosizione(err));
+        setCerco(false);
+      },
       { enableHighAccuracy: true, timeout: 10_000 },
     );
   }, []);
@@ -189,11 +212,13 @@ export default function NearMePage() {
     );
   }
 
-  // Attendi i dati e l'esito della geolocalizzazione (posizione o errore).
-  if (isLoading || (!pos && !permError)) {
+  // Si aspetta SOLO quello che serve davvero: i negozi. La posizione serve a ORDINARLI, e una lista
+  // non ordinata è meglio di una schermata d'attesa su una cosa che magari non arriverà mai — il
+  // riquadro di sistema può restare lì senza risposta, e prima la pagina restava bloccata con lui.
+  if (siAspetta({ negoziInArrivo: isLoading })) {
     return (
       <div className="container mx-auto p-8 text-center text-ink-500 flex items-center justify-center gap-2">
-        <RadioTower size={18} strokeWidth={2.2} aria-hidden /> Calcolo distanze…
+        <RadioTower size={18} strokeWidth={2.2} aria-hidden /> Carico i negozi…
       </div>
     );
   }
@@ -226,11 +251,37 @@ export default function NearMePage() {
         {pos ? ` entro ${radiusKm} km` : ' a Piacenza'}
       </p>
 
-      {permError && (
-        <div className="mb-4 flex gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-ink-700">
-          <MapPin size={18} strokeWidth={2.2} className="mt-0.5 shrink-0 text-accent-500" aria-hidden />
-          <span>{permError}. Mostriamo i negozi di Piacenza; abilita la geolocalizzazione per ordinarli per distanza e
-          filtrare per raggio.</span>
+      {/* L'invito, prima del permesso: si dice a cosa serve, e il riquadro di sistema arriva DOPO il
+          gesto. Chi non lo tocca vede comunque tutti i negozi. */}
+      {!pos && !motivo && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-cream-300 bg-surface-0 px-4 py-3 text-sm text-ink-700">
+          <MapPin size={18} strokeWidth={2.2} className="shrink-0 text-primary-700" aria-hidden />
+          <span className="min-w-0 flex-1">Per ordinarli dal più vicino serve sapere dove sei. Il telefono te lo chiederà.</span>
+          <button
+            type="button"
+            onClick={chiediPosizione}
+            disabled={cerco}
+            className="rounded-lg bg-primary-700 px-3.5 py-2 text-sm font-bold text-white hover:bg-primary-800 disabled:opacity-60"
+          >
+            {cerco ? 'Cerco…' : 'Ordina per vicinanza'}
+          </button>
+        </div>
+      )}
+
+      {motivo && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-ink-700">
+          <MapPin size={18} strokeWidth={2.2} className="shrink-0 text-accent-500" aria-hidden />
+          <span className="min-w-0 flex-1">{frasePosizione(motivo)}</span>
+          {motivo !== 'negato' && (
+            <button
+              type="button"
+              onClick={chiediPosizione}
+              disabled={cerco}
+              className="rounded-lg bg-cream-100 px-3.5 py-2 text-sm font-bold text-ink-900 hover:bg-cream-200 disabled:opacity-60"
+            >
+              {cerco ? 'Cerco…' : 'Riprova'}
+            </button>
+          )}
         </div>
       )}
 
