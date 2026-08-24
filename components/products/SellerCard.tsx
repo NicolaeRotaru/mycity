@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { useFollowStore } from '@/components/hooks/useFollowStore';
+import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interruttore';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
@@ -118,7 +119,11 @@ export function SellerCard({
     staleTime: 60_000,
   });
 
-  const { isFollowing, followerCount, toggle } = useFollowStore(sellerId);
+  const { isFollowing, followerCount, statoLetto, contoLetto, toggle } = useFollowStore(sellerId);
+  // Stessa regola del cuore dei preferiti: tre stati, e su «non lo so» il bottone non agisce.
+  const statoSegui = statoInterruttore({ letto: statoLetto, dentro: isFollowing });
+  const seguiPremibile = siPuoPremere(statoSegui);
+  const seguiAcceso = eAcceso(statoSegui);
 
   const memberSince = data?.created_at ? new Date(data.created_at).getFullYear() : null;
 
@@ -172,26 +177,33 @@ export function SellerCard({
               <strong className="text-ink-700">{data.onTimePct}%</strong> in tempo
             </span>
           )}
-          {followerCount > 0 && <span>· {followerCount} follower</span>}
+          {contoLetto && followerCount > 0 && <span>· {followerCount} follower</span>}
           {memberSince && <span>· dal {memberSince}</span>}
         </div>
       </div>
 
       <div className="flex shrink-0 flex-col items-stretch gap-1.5">
         {/* Toggle "Segui" — accanto al link "Vai al negozio" (che resta). */}
+        {/* Tre stati, non due. Se la lettura fallisce non si dice «non lo segui» a chi lo segue: il
+            bottone si spegne e lo dichiara. Premerlo su uno stato non letto tenterebbe un
+            inserimento doppio, che il database rifiuta — un bottone che non fa niente. */}
         <button
           type="button"
           onClick={handleFollow}
-          aria-pressed={isFollowing}
-          aria-label={isFollowing ? `Smetti di seguire ${storeName}` : `Segui ${storeName}`}
+          disabled={!seguiPremibile}
+          aria-pressed={seguiPremibile ? seguiAcceso : undefined}
+          aria-label={!seguiPremibile ? `Non sono riuscito a sapere se segui ${storeName}` : isFollowing ? `Smetti di seguire ${storeName}` : `Segui ${storeName}`}
+          title={!seguiPremibile ? 'Non sono riuscito a leggere questo dato: riprova fra un momento' : undefined}
           className={`inline-flex items-center justify-center gap-1 rounded-full px-3 py-1.5 text-[13px] font-bold transition-colors ${
-            isFollowing
-              ? 'border border-primary-600 bg-primary-50 text-primary-700 hover:bg-primary-100'
-              : 'border border-cream-300 bg-white text-ink-700 hover:border-primary-300 hover:bg-primary-50'
+            !seguiPremibile
+              ? 'cursor-not-allowed border border-cream-200 bg-white text-ink-300'
+              : seguiAcceso
+                ? 'border border-primary-600 bg-primary-50 text-primary-700 hover:bg-primary-100'
+                : 'border border-cream-300 bg-white text-ink-700 hover:border-primary-300 hover:bg-primary-50'
           }`}
         >
-          <Bell size={14} strokeWidth={2.4} fill={isFollowing ? 'currentColor' : 'none'} aria-hidden />
-          {isFollowing ? 'Segui già' : 'Segui'}
+          <Bell size={14} strokeWidth={2.4} fill={seguiAcceso ? 'currentColor' : 'none'} aria-hidden />
+          {!seguiPremibile ? 'Non lo so' : seguiAcceso ? 'Segui già' : 'Segui'}
         </button>
 
         <Link

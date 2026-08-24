@@ -23,6 +23,7 @@ import { isExpressEligible } from '@/lib/products/express';
 import { loadProductVariants } from '@/lib/products/persistVariants';
 import { deriveQualityMarks } from '@/lib/products/qualityMarks';
 import { useFavorites } from '@/components/hooks/useFavorites';
+import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interruttore';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from '@/components/hooks/useShoppingMode';
 import ContactSellerButton from '@/components/ContactSellerButton';
@@ -114,8 +115,13 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const { isAuthenticated, profile, isSeller, isAdmin } = useProfile();
   const shoppingMode = useShoppingMode(isSeller);
   const mayPurchase = useCanPurchase(isAdmin, isSeller, shoppingMode);
-  const { favorites, toggle: toggleFav } = useFavorites();
-  const isFav = favorites.has(id);
+  const { favorites, lettoDavvero: preferitiLetti, toggle: toggleFav } = useFavorites();
+  // Tre stati, non due — regola condivisa in `lib/stato-interruttore.ts`. Col terzo il cuore non
+  // puo' dire di no, e il bottone non puo' agire: `toggle` decide se aggiungere o togliere
+  // guardando la lista, e su una lista che non ha letto sceglierebbe a caso.
+  const statoCuore = statoInterruttore({ letto: preferitiLetti, dentro: favorites.has(id) });
+  const isFav = eAcceso(statoCuore);
+  const cuorePremibile = siPuoPremere(statoCuore);
 
   // Form recensione
   const [reviewRating, setReviewRating] = useState(5);
@@ -668,16 +674,25 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                   onError: (err: unknown) => {
                     if (err instanceof Error && err.message === 'AUTH_REQUIRED') {
                       toast.error('Accedi per salvare nei preferiti');
+                    } else {
+                      // Senza questo ramo un salvataggio fallito era muto: il cuore tornava com'era
+                      // e nessuno diceva perche'. Adesso la scrittura fallisce davvero, quindi il
+                      // messaggio deve esserci.
+                      toast.error('Non sono riuscito a salvare il preferito. Riprova fra un momento.');
                     }
                   },
                 });
               }}
-              aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
-              aria-pressed={isFav}
-              className={`shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 ${
-                isFav
-                  ? 'bg-rose-500 border-rose-500 text-white'
-                  : 'bg-white border-cream-300 text-ink-300 hover:text-rose-400 hover:border-rose-200'
+              disabled={!cuorePremibile}
+              aria-label={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti' : isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+              aria-pressed={cuorePremibile ? isFav : undefined}
+              title={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti: riprova fra un momento' : undefined}
+              className={`shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center transition-transform focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 ${
+                !cuorePremibile
+                  ? 'bg-white border-cream-200 text-ink-200 cursor-not-allowed'
+                  : isFav
+                    ? 'bg-rose-500 border-rose-500 text-white hover:scale-110'
+                    : 'bg-white border-cream-300 text-ink-300 hover:scale-110 hover:text-rose-400 hover:border-rose-200'
               }`}
             >
               <Heart size={20} strokeWidth={2.4} fill={isFav ? 'currentColor' : 'none'} aria-hidden />
