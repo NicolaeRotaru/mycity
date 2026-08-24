@@ -2,11 +2,19 @@
 
 import { useEffect } from 'react';
 
+import {
+  FASCE_DI_DOMANI,
+  SOTTOTITOLO_ADESSO,
+  expressSiPuo,
+  fasceAncoraPossibili,
+  type Giorno,
+} from '@/lib/quando-arriva';
+
 /**
  * Selettore della fascia di consegna ("Quando vuoi riceverlo", step 2).
  *
  * UI (vedi mockup docs/mockup/ui_kits/buyer/src/35-checkout.txt):
- *  - 3 day-tile: Adesso (express ~30–45 min) / Oggi (scegli l'ora) / Domani.
+ *  - 3 day-tile: Adesso (express) / Oggi (scegli l'ora) / Domani.
  *  - sotto, la lista delle fasce orarie selezionabili.
  *
  * IMPORTANTE — non mostriamo badge di "capacità" (Disponibile/Quasi pieno/Al
@@ -14,51 +22,17 @@ import { useEffect } from 'react';
  * dati reali di prenotazione. Mostriamo solo le fasce realmente proponibili,
  * filtrando per "Oggi" quelle già trascorse rispetto all'ora corrente.
  *
- * Lo slot scelto viene comunicato al parent come stringa leggibile (es.
- * "Oggi · 18:00–20:00") via onChange, oppure null quando non applicabile
- * (es. ritiro in negozio). Il parent lo invia poi agli endpoint d'ordine.
+ * ⚠️ QUI NON SI DECIDE PIÙ NIENTE. Quali fasce esistono, quali sono ancora
+ * possibili, da che giorno si parte e quanto dura l'express stanno tutti in
+ * lib/quando-arriva.ts, insieme alla decisione su cosa finisce sull'ordine.
+ * Prima erano scritti qui: due elenchi, due funzioni che leggevano l'orologio e
+ * un numero di minuti diverso da quello di tutto il resto del sito.
  */
-
-type DayKey = 'now' | 'today' | 'tomorrow';
-
-export type DeliverySlot = {
-  /** chiave del giorno scelto */
-  day: DayKey;
-  /** etichetta leggibile completa, persistita su orders.delivery_slot */
-  label: string;
-};
-
-// Fasce di "Oggi": ogni voce ha l'ora di FINE (24h) così possiamo escludere
-// quelle già trascorse rispetto all'ora corrente. Nessuna capacità finta.
-const TODAY_SLOTS: { label: string; endHour: number }[] = [
-  { label: 'In giornata · 15:00–18:00', endHour: 18 },
-  { label: 'Stasera · 18:00–20:00', endHour: 20 },
-];
-const TOMORROW_TIMES = [
-  'Domani · 9:00–12:00',
-  'Domani · 12:00–15:00',
-  'Domani · 15:00–18:30',
-  'Domani · 18:30–20:00',
-];
-
-const NOW_LABEL = 'Adesso · arrivo in ~30–45 min';
-
-/** Fasce di "Oggi" ancora future rispetto all'ora corrente. */
-function todayTimesAvailable(): string[] {
-  const nowHour = new Date().getHours();
-  return TODAY_SLOTS.filter((s) => s.endHour > nowHour).map((s) => s.label);
-}
-
-/** Express disponibile solo in finestra di servizio 8:00–21:00 (ora locale) — fix #23. */
-function isExpressAvailable(): boolean {
-  const h = new Date().getHours();
-  return h >= 8 && h < 21;
-}
 
 type Props = {
   /** giorno selezionato */
-  day: DayKey;
-  onDayChange: (day: DayKey) => void;
+  day: Giorno;
+  onDayChange: (day: Giorno) => void;
   /** fascia oraria selezionata per "oggi" */
   todayTime: string;
   onTodayTimeChange: (t: string) => void;
@@ -76,20 +50,27 @@ export function DeliverySlotPicker({
   onTomorrowTimeChange,
 }: Props) {
   // Calcolato a render: le fasce di "Oggi" già trascorse sono escluse.
-  const todayTimes = todayTimesAvailable();
-  const expressAvailable = isExpressAvailable();
-  const times = day === 'today' ? todayTimes : TOMORROW_TIMES;
+  const ora = new Date().getHours();
+  const todayTimes = fasceAncoraPossibili(ora);
+  const oggiPossibile = todayTimes.length > 0;
+  const expressAvailable = expressSiPuo(ora);
+  const times = day === 'today' ? todayTimes : FASCE_DI_DOMANI;
   const current = day === 'today' ? todayTime : tomorrowTime;
   const onTimeChange = day === 'today' ? onTodayTimeChange : onTomorrowTimeChange;
 
   // Se si è su "Oggi" e la fascia selezionata non è (più) tra quelle future,
   // scegli automaticamente la prima fascia futura disponibile.
+  //
+  // ⚠️ E se per oggi non ne resta NESSUNA si passa a domani. Prima qui c'era un
+  // `return` che usciva subito: il giorno restava "oggi", la mattonella restava
+  // premuta e la fascia restava quella di partenza — cioè un orario già passato,
+  // che finiva dritto su orders.delivery_slot.
   useEffect(() => {
     if (day !== 'today') return;
-    if (todayTimes.length === 0) return;
+    if (!oggiPossibile) { onDayChange('tomorrow'); return; }
     if (!todayTimes.includes(todayTime)) onTodayTimeChange(todayTimes[0]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day, todayTime, todayTimes.join('|')]);
+  }, [day, todayTime, oggiPossibile, todayTimes.join('|')]);
 
   return (
     <div className="space-y-3">
@@ -100,14 +81,15 @@ export function DeliverySlotPicker({
           onClick={() => expressAvailable && onDayChange('now')}
           disabled={!expressAvailable}
           title="Adesso"
-          subtitle={expressAvailable ? '~30–45 min' : 'Non disponibile'}
+          subtitle={expressAvailable ? SOTTOTITOLO_ADESSO : 'Non disponibile'}
           badge={{ text: 'Express', cls: 'text-accent-700 bg-accent-50' }}
         />
         <DayTile
           active={day === 'today'}
-          onClick={() => onDayChange('today')}
+          onClick={() => oggiPossibile && onDayChange('today')}
+          disabled={!oggiPossibile}
           title="Oggi"
-          subtitle="Scegli l'ora"
+          subtitle={oggiPossibile ? "Scegli l'ora" : 'Non più oggi'}
         />
         <DayTile
           active={day === 'tomorrow'}
@@ -205,34 +187,3 @@ function DayTile({
     </button>
   );
 }
-
-/**
- * Calcola la stringa leggibile dello slot dal day + le fasce selezionate.
- * Pickup in negozio ⇒ null (nessuna fascia di consegna richiesta).
- */
-export function resolveSlotLabel(
-  day: DayKey,
-  todayTime: string,
-  tomorrowTime: string,
-  pickupInStore: boolean,
-): string | null {
-  if (pickupInStore) return null;
-  if (day === 'now') return NOW_LABEL;
-  if (day === 'today') return todayTime;
-  return tomorrowTime;
-}
-
-// Default = prima fascia FUTURA di oggi (se ce ne sono ancora), altrimenti la
-// prima voce di "Oggi" come fallback neutro. L'effetto nel componente riallinea
-// comunque la selezione alle fasce realmente disponibili a runtime.
-function defaultTodayTime(): string {
-  const avail = todayTimesAvailable();
-  return avail[0] ?? TODAY_SLOTS[0].label;
-}
-
-export const SLOT_DEFAULTS = {
-  get todayTime() {
-    return defaultTodayTime();
-  },
-  tomorrowTime: TOMORROW_TIMES[2], // "Domani · 15:00–18:30"
-};

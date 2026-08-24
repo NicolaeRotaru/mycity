@@ -25,7 +25,16 @@ import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicat
 import { StepCard } from '@/components/checkout/StepCard';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
-import { DeliverySlotPicker, resolveSlotLabel, SLOT_DEFAULTS } from '@/components/checkout/DeliverySlotPicker';
+import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
+import {
+  FASCE_DI_DOMANI,
+  consegnaScelta,
+  etichettaPerLOrdine,
+  fasciaDiPartenzaOggi,
+  giornoDiPartenza,
+  rigaQuandoArriva,
+  siPuoConfermare,
+} from '@/lib/quando-arriva';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
@@ -414,11 +423,27 @@ export default function CheckoutPage() {
   // Fascia di consegna ("Quando vuoi riceverlo", step 2). Solo presentazione
   // lato client + una stringa leggibile persistita su orders.delivery_slot.
   // Nessun impatto su totali/spedizione: la matematica resta invariata.
-  const [slotDay, setSlotDay] = useState<'now' | 'today' | 'tomorrow'>('today');
-  const [slotTodayTime, setSlotTodayTime] = useState(SLOT_DEFAULTS.todayTime);
-  const [slotTomorrowTime, setSlotTomorrowTime] = useState(SLOT_DEFAULTS.tomorrowTime);
-  // null quando ritiro in negozio (nessuna consegna) o non applicabile.
-  const deliverySlot = resolveSlotLabel(slotDay, slotTodayTime, slotTomorrowTime, pickupInStore);
+  //
+  // ⚠️ SI PARTE DAL GIORNO CHE SI PUÒ DAVVERO SCEGLIERE. Prima si partiva sempre
+  // da 'today' e la fascia ripiegava sulla prima dell'elenco: dopo le 20:00
+  // quella è già passata, e finiva su orders.delivery_slot così com'era.
+  const oraDiApertura = new Date().getHours();
+  const [slotDay, setSlotDay] = useState(() => giornoDiPartenza(oraDiApertura));
+  const [slotTodayTime, setSlotTodayTime] = useState(
+    () => fasciaDiPartenzaOggi(oraDiApertura) ?? '',
+  );
+  const [slotTomorrowTime, setSlotTomorrowTime] = useState(FASCE_DI_DOMANI[2]);
+  // Tre risposte: non serve (ritiro) · questa fascia · non-valida (si frena).
+  const consegna = consegnaScelta({
+    giorno: slotDay,
+    ora: new Date().getHours(),
+    fasciaOggi: slotTodayTime,
+    fasciaDomani: slotTomorrowTime,
+    ritiroInNegozio: pickupInStore,
+  });
+  // null SOLO quando la fascia non serve: una fascia non valida ferma l'ordine.
+  const deliverySlot = etichettaPerLOrdine(consegna);
+  const consegnaConfermabile = siPuoConfermare(consegna);
 
   // Usa il credito MyCity (opt-in, default sì): applicato solo agli ordini COD.
   const [useCredit, setUseCredit] = useState(true);
@@ -799,6 +824,24 @@ export default function CheckoutPage() {
       toast.error('Scegli le opzioni (taglia/colore) per alcuni articoli prima di ordinare.');
       return;
     }
+    // La fascia si ricontrolla QUI, sull'ora di adesso.
+    //
+    // Il pulsante si spegne da solo quando la fascia scade, ma solo se la pagina
+    // ridisegna. Chi apre il checkout alle 19:55 e preme «Ordina» alle 20:05 non
+    // ha ridisegnato niente: senza questo controllo l'ordine partirebbe con una
+    // fascia finita cinque minuti prima. Un vincolo che dipende dall'orologio va
+    // riletto nel momento in cui conta, non solo quando si disegna.
+    const consegnaAdesso = consegnaScelta({
+      giorno: slotDay,
+      ora: new Date().getHours(),
+      fasciaOggi: slotTodayTime,
+      fasciaDomani: slotTomorrowTime,
+      ritiroInNegozio: pickupInStore,
+    });
+    if (!siPuoConfermare(consegnaAdesso)) {
+      toast.error(rigaQuandoArriva(consegnaAdesso));
+      return;
+    }
     trackCheckoutStep('address', { city: form.city });
     // Defer-the-wall: l'indirizzo si compila da ospiti; l'accesso è richiesto
     // solo qui, al commit, salvando la bozza per ripristinarla al ritorno.
@@ -892,7 +935,7 @@ export default function CheckoutPage() {
                 <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
                   <div>
                     <p className="font-bold text-ink-900">Consegna a domicilio</p>
-                    <p className="text-sm text-ink-600">In 30-60 minuti dalla conferma del negozio{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
+                    <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>
                   <span className="font-serif text-lg font-extrabold text-ink-900">
                     {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
@@ -1112,7 +1155,7 @@ export default function CheckoutPage() {
               total={finalTotal}
               isCheckingOut={isCheckingOut}
               paymentMethod={paymentMethod}
-              disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}
+              disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
             />
           </div>
         </div>
@@ -1139,7 +1182,7 @@ export default function CheckoutPage() {
         <button
           type="submit"
           form="checkout-form"
-          disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}
+          disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
           aria-label={
             paymentMethod === 'card'
               ? 'Paga con carta e conferma ordine'
