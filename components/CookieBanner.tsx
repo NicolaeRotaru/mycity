@@ -10,6 +10,11 @@ import {
   rejectAll,
   type ConsentState,
 } from '@/lib/consent';
+import {
+  osservatoreDelBrowser,
+  paddingDiScorrimento,
+  seguiAltezza,
+} from '@/lib/altezza-banner';
 
 /**
  * Banner cookie GDPR/ePrivacy conforme Garante (linee guida 2021):
@@ -65,17 +70,29 @@ export default function CookieBanner() {
   useEffect(() => {
     if (!show) return;
     titoloRef.current?.focus();
-    const altezza = contenitoreRef.current?.offsetHeight ?? 0;
     const precedente = document.documentElement.style.scrollPaddingBottom;
-    document.documentElement.style.scrollPaddingBottom = `${altezza + 16}px`;
-    // #124 — Sul telefono il banner copriva la barra «Aggiungi al carrello»
-    // della scheda prodotto: il pulsante che fa incassare restava sotto, e
-    // finche' non si rispondeva al banner non si poteva comprare. Ora il banner
-    // dichiara quanto e' alto e la barra si sposta sopra di lui.
-    document.documentElement.style.setProperty('--altezza-banner-cookie', `${altezza}px`);
+    document.documentElement.style.scrollPaddingBottom = paddingDiScorrimento(
+      contenitoreRef.current?.offsetHeight,
+    );
+    // #124 — Sul telefono il banner copriva la barra «Aggiungi al carrello» della scheda prodotto:
+    // il pulsante che fa incassare restava sotto, e finche' non si rispondeva al banner non si
+    // poteva comprare. Ora il banner dichiara quanto e' alto e la barra si sposta sopra di lui.
+    //
+    // ⚠️ E LA DICHIARA OGNI VOLTA CHE CAMBIA, non solo all'apertura. Prima la misura si prendeva
+    // una volta sola: poi la persona toccava «Personalizza», il banner cresceva di quattro righe, e
+    // il numero pubblicato restava quello di prima — la barra si spostava di meno di quanto serve e
+    // il pulsante tornava coperto. Aggiungere `mode` alle dipendenze curava oggi e non domani: un
+    // testo piu lungo, una riga che va a capo su uno schermo stretto o un carattere caricato in
+    // ritardo rifarebbero lo stesso danno. Qui l'altezza SEGUE l'elemento, e chi la pubblica non
+    // deve sapere perche e cambiata. Il perche completo sta in lib/altezza-banner.ts.
+    const smettiDiSeguire = seguiAltezza(
+      contenitoreRef.current,
+      document.documentElement,
+      osservatoreDelBrowser,
+    );
     return () => {
       document.documentElement.style.scrollPaddingBottom = precedente;
-      document.documentElement.style.setProperty('--altezza-banner-cookie', '0px');
+      smettiDiSeguire();
     };
   }, [show]);
 
