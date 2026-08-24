@@ -35,6 +35,13 @@ import {
   rigaQuandoArriva,
   siPuoConfermare,
 } from '@/lib/quando-arriva';
+import {
+  bozzaDaSalvare,
+  bozzaLetta,
+  fasciaDaRimettere,
+  giornoDaRimettere,
+  metodoDaRimettere,
+} from '@/lib/bozza-checkout';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
@@ -393,8 +400,24 @@ export default function CheckoutPage() {
       // comunque appena viene ripresa, come prima.
       const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
-      const draft = JSON.parse(raw) as Partial<typeof form>;
-      setForm((prev) => ({ ...prev, ...draft }));
+      const bozza = bozzaLetta(JSON.parse(raw));
+      if (!bozza) return;
+      setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
+
+      // Lo sconto: si rimette il CODICE, e la verifica che c'è già nella pagina lo ricontrolla sul
+      // carrello di adesso. Se nel frattempo il carrello è cambiato, lo dice invece di mostrarlo.
+      if (bozza.couponCode) setCouponCode(bozza.couponCode);
+
+      const ora = new Date().getHours();
+      const metodo = metodoDaRimettere(bozza.metodoPagamento, stripeAvailable);
+      if (metodo) setPaymentMethod(metodo);
+      const giorno = giornoDaRimettere(bozza.giorno, ora);
+      if (giorno) setSlotDay(giorno);
+      const oggi = fasciaDaRimettere('today', bozza.fasciaOggi, ora);
+      if (oggi) setSlotTodayTime(oggi);
+      const domani = fasciaDaRimettere('tomorrow', bozza.fasciaDomani, ora);
+      if (domani) setSlotTomorrowTime(domani);
+
       localStorage.removeItem('mc_checkout_draft');
       sessionStorage.removeItem('mc_checkout_draft');
     } catch { /* noop */ }
@@ -846,7 +869,19 @@ export default function CheckoutPage() {
     // Defer-the-wall: l'indirizzo si compila da ospiti; l'accesso è richiesto
     // solo qui, al commit, salvando la bozza per ripristinarla al ritorno.
     if (!authUser) {
-      try { localStorage.setItem('mc_checkout_draft', JSON.stringify(form)); } catch { /* noop */ }
+      // Non solo l'indirizzo: chi torna dall'accesso deve ritrovare il totale che aveva accettato.
+      // Dello sconto si salva il CODICE e mai la cifra — la bozza sta nel browser, e nel browser
+      // ci scrive chiunque. Al ritorno il codice passa dalla verifica come il primo giorno.
+      try {
+        localStorage.setItem('mc_checkout_draft', JSON.stringify(bozzaDaSalvare({
+          form,
+          couponCode: appliedCoupon?.coupon.code ?? couponCode,
+          metodoPagamento: paymentMethod,
+          giorno: slotDay,
+          fasciaOggi: slotTodayTime,
+          fasciaDomani: slotTomorrowTime,
+        })));
+      } catch { /* noop */ }
       router.push('/sign-in?returnTo=/checkout');
       return;
     }
