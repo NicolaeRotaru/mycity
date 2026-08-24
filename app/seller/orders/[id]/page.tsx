@@ -165,11 +165,14 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     queryKey: queryKeys.seller.pickupCode(id),
     enabled: !!order && ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status),
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('order_pickup_codes')
         .select('code, verified_at')
         .eq('order_id', id)
         .maybeSingle();
+      // Il codice di ritiro è quello che il negoziante legge al fattorino. Con l'errore ingoiato
+      // «non l'ho letto» diventa «non c'è nessun codice», e la consegna si ferma sul bancone.
+      if (error) throw error;
       return data;
     },
   });
@@ -178,13 +181,16 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   const { data: returnRow } = useQuery({
     queryKey: queryKeys.seller.returnForOrder(id),
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('returns')
         .select('id, status, reason, notes, photo_urls, refund_amount_cents, decision_notes, created_at')
         .eq('order_id', id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+      // Con l'errore ingoiato una richiesta di reso aperta sparisce dalla pagina dell'ordine: il
+      // negoziante non la vede, non risponde, e il cliente resta senza risposta.
+      if (error) throw error;
       return data;
     },
   });

@@ -37,14 +37,14 @@ type ChecklistItem = {
 export default function SellerOnboardingChecklist() {
   const { profile } = useProfile();
 
-  const { data: items = [] } = useQuery({
+  const { data: items, isError, refetch } = useQuery({
     queryKey: queryKeys.seller.onboardingChecklistV2(profile?.id ?? ''),
     enabled: !!profile?.id,
     queryFn: async (): Promise<ChecklistItem[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
 
-      const { data: p } = await supabase
+      const { data: p, error: erroreProfilo } = await supabase
         .from('profiles')
         .select(`
           store_name, store_logo, store_address, store_lat, store_lng,
@@ -52,12 +52,20 @@ export default function SellerOnboardingChecklist() {
         `)
         .eq('id', user.id)
         .single();
+      // Ogni «done» qui sotto si calcola da `p`. Con l'errore ingoiato `p` resta undefined, tutte e
+      // sei le spunte diventano false, e la bacheca dice a un negozio finito che non ha fatto
+      // niente — compreso «Attiva pagamenti» a chi li ha già attivi. È la prima schermata che il
+      // negoziante apre, ed è la sola che gli dice cosa gli manca.
+      if (erroreProfilo) throw erroreProfilo;
 
-      const { count: productCount } = await supabase
+      const { count: productCount, error: erroreProdotti } = await supabase
         .from('products')
         .select('id', { count: 'exact', head: true })
         .eq('seller_id', user.id)
         .eq('status', 'available');
+      // `(undefined ?? 0) >= 3` è false: senza questa riga un negozio con quaranta prodotti si
+      // sente dire «pubblica almeno 3 prodotti».
+      if (erroreProdotti) throw erroreProdotti;
 
       return [
         {
@@ -100,7 +108,26 @@ export default function SellerOnboardingChecklist() {
     },
   });
 
-  if (items.length === 0) return null;
+  // Tre esiti, non due. «Non ho letto» non è «non hai fatto niente»: sparire in silenzio
+  // sarebbe comunque una bugia per un negozio a metà, quindi lo scrive e offre di riprovare.
+  if (isError) {
+    return (
+      <div className="mb-6 rounded-2xl border-2 border-cream-300 bg-surface-0 p-5 sm:p-6">
+        <h2 className="font-serif text-xl font-bold text-ink-900">Non ho potuto leggere lo stato del tuo negozio</h2>
+        <p className="mt-1 text-sm text-ink-600">
+          Non vuol dire che manchi qualcosa: vuol dire che la lettura non è riuscita.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="mt-3 rounded-lg bg-primary-700 px-4 py-2 text-sm font-bold text-white hover:bg-primary-800"
+        >
+          Riprova
+        </button>
+      </div>
+    );
+  }
+  if (!items || items.length === 0) return null;   // ancora in lettura, o niente da mostrare
   const completed = items.filter((i) => i.done).length;
   const total = items.length;
   const pct = (completed / total) * 100;

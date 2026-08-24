@@ -29,11 +29,14 @@ export default function StripeDashboardButton() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, approval_status')
         .eq('id', user.id)
         .single();
+      // Con l'errore ingoiato il bottone per aprire la cassa di Stripe sparisce a chi i pagamenti
+      // li ha attivi: la lettura fallita si traveste da «non ancora attivati».
+      if (error) throw error;
       return data as {
         stripe_account_id: string | null;
         stripe_charges_enabled: boolean | null;

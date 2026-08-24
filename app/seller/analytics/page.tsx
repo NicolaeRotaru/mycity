@@ -40,10 +40,14 @@ export default function SellerAnalyticsPage() {
       const since7 = new Date(Date.now() - 7 * 86400000).toISOString();
 
       // Prodotti del seller
-      const { data: products } = await supabase
+      const { data: products, error: productsError } = await supabase
         .from('products')
         .select('id, name, price, images, status, stock, created_at')
         .eq('seller_id', userId!);
+      // Tutta la pagina Andamento si regge su questo elenco: senza il controllo, una lettura
+      // fallita diventa «zero prodotti», e da lì zero viste, zero ordini, zero fatturato — numeri
+      // che sembrano una brutta settimana e sono un guasto di rete.
+      if (productsError) throw productsError;
 
       const productIds = (products ?? []).map((p) => p.id);
       const empty = {

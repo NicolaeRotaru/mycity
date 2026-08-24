@@ -38,7 +38,7 @@ export default function SellerCustomersPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      const { data: orders } = await supabase
+      const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select(`
           id, user_id, total_price, created_at,
@@ -53,6 +53,10 @@ export default function SellerCustomersPage() {
         // silenzio e fa sembrare veri dei numeri che non lo sono.
         .order('created_at', { ascending: false })
           .limit(500);
+      // Con l'errore ingoiato la pagina Clienti dice «nessun cliente» a chi ne ha trecento: la
+      // lettura non fallisce mai, torna «riuscita» con la lista vuota, e React Query non riprova
+      // perché una lettura riuscita non si riprova.
+      if (ordersError) throw ordersError;
 
       const byUser = new Map<string, CustomerRow>();
       type OrderRow = { id: string; user_id: string | null; total_price: number; created_at: string; buyer: { full_name: string | null } | null };
