@@ -9,6 +9,7 @@ import ProductCard from '@/components/ProductCard';
 import ProductGrid, { type SortOption } from '@/components/ProductGrid';
 import CollectionHeader from '@/components/CollectionHeader';
 import { SkeletonGrid } from '@/components/SkeletonCard';
+import { classiGriglia } from '@/lib/griglia-prodotti';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Row = {
@@ -86,7 +87,7 @@ export default function PromozioniPage() {
       </CollectionHeader>
 
       {isLoading ? (
-        <SkeletonGrid count={12} />
+        <SkeletonGrid count={12} maxColumns={4} />
       ) : items.length === 0 ? (
         // Stato vuoto arricchito (serif) riutilizzato da ProductGrid: con onlyPromo
         // e nessuna promo attiva, ProductGrid rende il proprio blocco vuoto coerente.
@@ -97,7 +98,7 @@ export default function PromozioniPage() {
           emptyDescription="Torna a trovarci: i negozi lanciano sconti a tempo di continuo."
         />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div className={classiGriglia(4)}>
           {sorted.map((it, i) => (
             <ProductCard
               key={it.product_id}

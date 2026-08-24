@@ -9,6 +9,7 @@ import ProductCard from './ProductCard';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
+import { classiGriglia, type ColonneMassime } from '@/lib/griglia-prodotti';
 import { ErrorState } from './ui/ErrorState';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { attachSellerProfiles, fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
@@ -21,7 +22,9 @@ export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | '
  * della ricerca (fino a 6 col su xl); `4` cappa a 4 colonne — usato dalle pagine
  * collezione/categoria, che hanno meno densità della SRP. Opt-in via prop `maxColumns`.
  */
-export type GridMaxColumns = 'default' | 4;
+// Il tipo vive con le classi, in `lib/griglia-prodotti.ts`: chi sceglie le colonne e chi le
+// disegna devono guardare la stessa definizione.
+export type GridMaxColumns = ColonneMassime;
 
 interface Props {
   categoryId?: string;
@@ -393,7 +396,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         </section>
       );
     }
-    return <SkeletonGrid count={limit ?? 8} />;
+    return <SkeletonGrid count={limit ?? 8} maxColumns={maxColumns} />;
   }
 
   // Errore di rete/DB: le sezioni-rail si auto-nascondono (come quando sono vuote),
@@ -493,10 +496,11 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   // Pagine collezione/categoria (maxColumns=4): cap a 4 col, meno denso della SRP.
   // Default (SRP): scala storica fino a 6 col su xl.
-  const gridCols =
-    maxColumns === 4
-      ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4'
-      : 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6';
+  //
+  // Le classi arrivano da `lib/griglia-prodotti.ts` e non sono più scritte qui: lo scheletro del
+  // caricamento aveva il suo elenco, si fermava a quattro colonne, e appena arrivavano i prodotti
+  // la pagina si riorganizzava da quattro a sei sotto gli occhi di chi leggeva.
+  const classiDellaGriglia = classiGriglia(maxColumns);
 
   // Se sono tornate esattamente tante righe quante ne abbiamo chieste, quasi
   // certamente ce ne sono altre: si offre di caricarle invece di far finire il
@@ -522,7 +526,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   return (
     <>
-      <div className={`grid ${gridCols} gap-4`}>
+      <div className={classiDellaGriglia}>
         {filtered.map((p, i) => (
           <div key={p.id}>{renderCard(p, i)}</div>
         ))}
