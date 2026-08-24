@@ -93,6 +93,18 @@ describe("l'invariante di STRUTTURA sui file veri", () => {
     expect(riquadroFoto![1]).toBe(PROPORZIONE_FOTO);
   });
 
+  it('anche la fila «Potrebbe piacerti» ha uno scheletro della forma giusta', () => {
+    // Era un altro scheletro ancora, con un'altra forma: `aspect-[3/4]` senza righe di testo,
+    // contro una scheda quadrata con tre righe sotto. Stessa malattia, terzo posto.
+    const simili = senzaCommenti(readFileSync(join(RADICE, 'components/SimilarProducts.tsx'), 'utf8'));
+    expect(simili).not.toMatch(/aspect-\[3\/4\]/);
+    expect(simili).toContain('PROPORZIONE_FOTO');
+    // E le due griglie — quella dello scheletro e quella vera — sono la stessa costante.
+    const quante = (simili.match(/GRIGLIA_SIMILI/g) || []).length;
+    expect(quante, 'lo scheletro e le schede vere non usano la stessa griglia').toBeGreaterThanOrEqual(3);
+    expect(simili).not.toMatch(/className="grid grid-cols/);
+  });
+
   it('dove lo scheletro sta dentro una griglia a quattro colonne, lo sa', () => {
     // Senza passargli le colonne, lo scheletro tornerebbe alla scala piena mentre la pagina ne
     // apre quattro: la stessa divergenza, girata al contrario.
