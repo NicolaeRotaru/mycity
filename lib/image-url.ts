@@ -12,12 +12,64 @@
 
 export type ImageSize = 'thumb' | 'card' | 'detail' | 'hero';
 
+/**
+ * ⚠️ IL DIFETTO CHE QUESTI NOMI PORTAVANO DENTRO, misurato il 24/8.
+ *
+ * Un nome non dice quanto è grande il riquadro. Chi scriveva `sizedImage(foto, 'thumb')` intendeva
+ * «è una miniatura», e si ritrovava 100 pixel — anche quando il riquadro sullo schermo ne era largo
+ * 768. La foto veniva stirata di sette volte e mezzo: sgranata, ma «ottimizzata».
+ *
+ * Misurato sul sito vero: su 36 punti in cui si può confrontare la richiesta col riquadro
+ * dichiarato (`sizes="…px"`), **15 chiedevano una foto più piccola del riquadro**. Il peggiore era
+ * quel 7,7×; quattro erano oltre il doppio.
+ *
+ * Per questo `sizedImage` accetta anche un NUMERO — la larghezza vera del riquadro in pixel. Con un
+ * numero la richiesta non può essere più piccola del riquadro, perché è il riquadro. I quattro nomi
+ * restano per i punti in cui il riquadro non è dichiarato, e una prova di struttura tiene il conto
+ * di chi chiede meno di quanto mostra: `tests/unit/la-foto-chiesta-piu-piccola-del-riquadro.test.ts`.
+ */
 const SIZE_PX: Record<ImageSize, number> = {
   thumb:  100,
   card:   400,
   detail: 800,
   hero:   1200,
 };
+
+/** La larghezza più grande che ha senso chiedere: oltre, si scarica roba che nessuno vede. */
+export const LARGHEZZA_MASSIMA = 1600;
+
+/**
+ * Legge l'attributo `sizes` come lo leggerebbe un browser, e dice quanto è largo il riquadro.
+ *
+ * ⚠️ SBAGLIARE QUESTA LETTURA È FACILE, e l'ho sbagliata scrivendo questo stesso lavoro. `sizes` è
+ * un elenco di clausole «(condizione) valore»: in `(min-width: 768px) 160px, 50vw` il 768 è la
+ * SOGLIA dello schermo e il 160 è il riquadro. Prendendo il numero più grande — come avevo fatto —
+ * il riquadro risultava 768 invece di 160, e la cura avrebbe fatto scaricare foto quasi cinque
+ * volte più grandi del necessario: il difetto opposto a quello che stavo curando.
+ *
+ * @returns px = la larghezza fissa più grande dichiarata, o `null` se il riquadro è espresso solo in
+ *          percentuale di schermo (`vw`). `null` vuol dire «non lo so», e non si arrotonda a un
+ *          numero comodo: un riquadro in `vw` cresce con lo schermo e non ha una larghezza sola.
+ */
+export function riquadroDichiarato(sizes: string): { px: number | null; inVw: number } {
+  let px: number | null = null;
+  let inVw = 0;
+  for (const clausola of String(sizes).split(',')) {
+    // Il valore è quello che resta tolte le condizioni fra parentesi.
+    const valore = clausola.replace(/\([^)]*\)/g, '').trim();
+    const fisso = valore.match(/^(\d+(?:\.\d+)?)px$/);
+    if (fisso) px = Math.max(px ?? 0, Number(fisso[1]));
+    else if (/\d+(?:\.\d+)?vw$/.test(valore)) inVw += 1;
+  }
+  return { px, inVw };
+}
+
+/** I nomi che chiedono anche un ritaglio quadrato, per riempire i riquadri `aspect-square`. */
+const NOMI_QUADRATI: ImageSize[] = ['thumb', 'card'];
+
+export function pixelDellaTaglia(size: ImageSize): number {
+  return SIZE_PX[size];
+}
 
 const QUALITY = 75;
 
@@ -52,19 +104,35 @@ function buildSupabaseStorageUrl(url: URL, sizePx: number, square: boolean): str
 }
 
 /**
- * Restituisce un URL ottimizzato per la dimensione di display indicata.
- * Se l'URL non è riconosciuto o non parsabile, lo restituisce invariato.
+ * Restituisce un URL ottimizzato per il riquadro in cui la foto verrà mostrata.
+ *
+ * @param size  o uno dei quattro nomi, o la LARGHEZZA VERA del riquadro in pixel. Il numero è la
+ *              forma da preferire dove il riquadro si conosce: un numero non può mentire sulla
+ *              dimensione, un nome sì — ed è così che una foto da 100 pixel finiva dentro un
+ *              riquadro da 768.
+ * @param opzioni.quadrato  forza (o vieta) il ritaglio quadrato. Senza, lo decide il nome: `thumb` e
+ *              `card` ritagliano, `detail` e `hero` no. Con un numero il ritaglio è spento salvo
+ *              richiesta esplicita — perché la larghezza di un riquadro non dice niente sulla sua
+ *              forma, e un logo con la scritta ritagliato a quadrato diventa illeggibile.
  */
-export function sizedImage(src: string | undefined | null, size: ImageSize): string {
+export function sizedImage(
+  src: string | undefined | null,
+  size: ImageSize | number,
+  opzioni: { quadrato?: boolean } = {},
+): string {
   if (!src) return '';
   // Data URI / blob: già "locali"
   if (src.startsWith('data:') || src.startsWith('blob:')) return src;
 
-  const sizePx = SIZE_PX[size];
-  // Le miniature in griglia (catalogo, card negozio, righe-lista) vanno
-  // ritagliate quadrate per allinearsi al riquadro aspect-square; le viste
-  // grandi (detail/hero) preservano le proporzioni originali.
-  const square = size === 'thumb' || size === 'card';
+  const perNome = typeof size === 'string';
+  // Un riquadro largo mezzo pixel non esiste, e uno da diecimila non serve a nessuno: si arrotonda
+  // e si tiene dentro i limiti, senza mai scendere sotto quello che è stato chiesto.
+  const sizePx = perNome
+    ? SIZE_PX[size]
+    : Math.min(LARGHEZZA_MASSIMA, Math.max(1, Math.ceil(size)));
+  // Col nome il ritaglio resta com'era; col numero è spento salvo richiesta, perché la larghezza
+  // non dice niente sulla forma del riquadro.
+  const square = opzioni.quadrato ?? (perNome ? NOMI_QUADRATI.includes(size) : false);
 
   try {
     const url = new URL(src);

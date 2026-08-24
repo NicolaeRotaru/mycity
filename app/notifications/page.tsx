@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 
 type Notification = {
@@ -55,15 +58,20 @@ function toneFor(n: Notification): Tone {
   return TONES.default;
 }
 
+/** Il marcatore del non-autenticato: una costante, cosi' il confronto non e' su una frase libera. */
+const AUTH_RICHIESTA = 'AUTH_REQUIRED';
+
 export default function NotificationsPage() {
   const router = useRouter();
   const qc = useQueryClient();
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.notifications.list,
     queryFn: async (): Promise<Notification[]> => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
+      // Un marcatore riconoscibile, non una frase: a valle i due casi vanno distinti, e
+      // distinguerli su un testo libero e' come non distinguerli.
+      if (!user) throw new Error(AUTH_RICHIESTA);
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -94,14 +102,33 @@ export default function NotificationsPage() {
     },
   });
 
+  // Qui la query lanciava in due casi — «non sei collegato» e «la lettura e' fallita» — e il render
+  // li trattava uguali: qualunque errore buttava la persona sulla pagina di accesso. A un cliente
+  // regolarmente collegato bastava un timeout o una rete storta per essere sloggato a vista, senza
+  // che nessuno gli dicesse perche'.
+  const serveAccesso = error instanceof Error && error.message === AUTH_RICHIESTA;
+
+  // Il salto alla pagina di accesso sta in un effetto, non dentro il render: navigare mentre React
+  // sta disegnando e' un effetto collaterale nel posto sbagliato, e prima era scritto cosi'.
+  useEffect(() => {
+    if (serveAccesso) router.push('/sign-in');
+  }, [serveAccesso, router]);
+
   if (isLoading) {
     return <LoadingState />;
   }
 
-  if (error) {
-    if (typeof window !== 'undefined') router.push('/sign-in');
-    return null;
+  if (error && !serveAccesso) {
+    return (
+      <ErrorState
+        title="Non riusciamo a caricare le notifiche"
+        description="Abbiamo provato a leggerle e non ci siamo riusciti. Riprova fra un attimo."
+        onRetry={() => refetch()}
+      />
+    );
   }
+
+  if (serveAccesso) return null;
 
   const notifications = data ?? [];
   const hasUnread = notifications.some((n) => !n.is_read);

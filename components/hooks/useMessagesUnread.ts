@@ -47,9 +47,12 @@ export const useMessagesUnread = () => {
         .from('conversations')
         .select('buyer_id, seller_id, buyer_unread_count, seller_unread_count')
         .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`);
-      // Tabella conversations creata dalla migration 026. Se non applicata
-      // su Supabase, ritorniamo 0 silenziosamente invece di rompere la UI.
-      if (error) return 0;
+      // La tabella `conversations` nasce dalla migration 026, e la paura era giusta: se non e'
+      // applicata, questa lettura fallisce sempre. Ma `return 0` non proteggeva la UI — chi legge
+      // il numero ha gia' il suo valore di riserva (`= 0` qui sopra), quindi a schermo non cambiava
+      // niente. Cambiava che la query risultava RIUSCITA, e una query riuscita react-query non la
+      // riprova: un guasto di rete di un secondo spegneva il contatore fino al ricaricamento.
+      if (error) throw error;
       type ConvRow = { buyer_id: string; seller_id: string; buyer_unread_count: number | null; seller_unread_count: number | null };
       return (data ?? []).reduce((sum: number, c: ConvRow) => {
         if (c.buyer_id === userId) return sum + (c.buyer_unread_count ?? 0);

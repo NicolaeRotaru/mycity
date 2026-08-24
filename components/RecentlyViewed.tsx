@@ -78,7 +78,7 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
               <div className="relative w-full aspect-square bg-cream-100">
                 {img && (
                   <Image
-                    src={sizedImage(img, 'thumb')}
+                    src={sizedImage(img, 160, { quadrato: true })}
                     alt={p.name}
                     fill
                     sizes="160px"

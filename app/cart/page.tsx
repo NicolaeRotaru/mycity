@@ -2,6 +2,7 @@
 
 import { shippingForEuro, dettoDellaSpedizione } from '@/lib/shipping';
 import { RIQUADRO_LO_SAPEVI, frasePagamento } from '@/lib/promesse-pubbliche';
+import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -35,8 +36,18 @@ export default function CartPage() {
    */
   const [disponibilita, setDisponibilita] = useState<Record<string, number | null>>({});
 
+  /**
+   * Il carrello vero si legge QUI, dopo il primo disegno: `useState([])` parte vuoto perché deve
+   * partire da qualcosa, non perché il carrello sia vuoto. Senza questa bandierina il primo render
+   * — e l'HTML che parte dal server — diceva «Il tuo carrello è vuoto» a chi ce l'ha pieno.
+   */
+  const [letto, setLetto] = useState(false);
+
   useEffect(() => {
-    const refresh = () => setItems(getCart());
+    const refresh = () => {
+      setItems(getCart());
+      setLetto(true);
+    };
     refresh();
     window.addEventListener('cart:updated', refresh);
     return () => window.removeEventListener('cart:updated', refresh);
@@ -123,7 +134,28 @@ export default function CartPage() {
   // `shippingCost` esiste. Qui resta solo cio' che serve alla barra di avanzamento per negozio.
   const freeShipping = total >= FREE_SHIPPING_THRESHOLD;
 
-  if (items.length === 0) {
+  // «Vuoto» è un'affermazione sul mondo — ho guardato e non c'è niente — e non si può fare prima di
+  // aver guardato. Il verdetto lo dà `statoDellaVista`, che senza `letto` non torna mai «vuoto».
+  const vista = statoDellaVista({ letto, quanti: items.length });
+
+  if (vista.mostraScheletro) {
+    return (
+      <div className="container mx-auto px-4 sm:px-6 py-8" aria-busy="true">
+        <div className="h-8 w-48 skeleton rounded-lg mb-6" />
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-24 skeleton rounded-xl" />
+            ))}
+          </div>
+          <div className="h-64 skeleton rounded-xl" />
+        </div>
+        <span className="sr-only">Carico il carrello…</span>
+      </div>
+    );
+  }
+
+  if (vista.mostraVuoto) {
     return (
       <div className="container mx-auto py-12 max-w-2xl">
         <EmptyState

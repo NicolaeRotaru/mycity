@@ -12,6 +12,7 @@ import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { Badge } from './ui/Badge';
 import { useFavorites } from './hooks/useFavorites';
+import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interruttore';
 import { useProfile } from './hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import caricatoreFotoRemote from '@/lib/image-loader';
@@ -61,11 +62,17 @@ const ProductCard = ({
   const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
   const img = sizedImage(rawImg, 'card');
   const router = useRouter();
-  const { favorites, toggle } = useFavorites();
+  const { favorites, lettoDavvero: preferitiLetti, toggle } = useFavorites();
   const { isSeller, isAdmin } = useProfile();
   const shoppingMode = useShoppingMode(isSeller);
   const canPurchase = useCanPurchase(isAdmin, isSeller, shoppingMode);
-  const isFav = favorites.has(id);
+  // Tre stati, non due: la regola sta in `lib/stato-interruttore.ts` e la usano anche il bottone
+  // «Segui» e la scheda prodotto. Sul terzo il cuore non dice di no e il bottone non agisce —
+  // `toggle` sceglie fra aggiungere e togliere guardando la lista, e su una lista non letta
+  // sceglierebbe a caso.
+  const statoCuore = statoInterruttore({ letto: preferitiLetti, dentro: favorites.has(id) });
+  const isFav = eAcceso(statoCuore);
+  const cuorePremibile = siPuoPremere(statoCuore);
   const [heartBeat, setHeartBeat] = useState(false);
 
   const handleAdd = (e: React.MouseEvent) => {
@@ -101,7 +108,7 @@ const ProductCard = ({
     toggle.mutate(id, {
       onError: (err: unknown) => {
         if (err instanceof Error && err.message === 'AUTH_REQUIRED') toast.error('Accedi per salvare nei preferiti');
-        else toast.error('Errore');
+        else toast.error('Non sono riuscito a salvare il preferito. Riprova fra un momento.');
       },
     });
   };
@@ -164,8 +171,10 @@ const ProductCard = ({
         <button
           type="button"
           onClick={handleFav}
-          aria-label={isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
-          className="absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow transition-transform hover:scale-110 hover:bg-white"
+          disabled={!cuorePremibile}
+          aria-label={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti' : isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
+          title={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti: riprova fra un momento' : undefined}
+          className={`absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow transition-transform ${cuorePremibile ? 'hover:scale-110 hover:bg-white' : 'cursor-not-allowed opacity-60'}`}
         >
           <Heart
             size={16}

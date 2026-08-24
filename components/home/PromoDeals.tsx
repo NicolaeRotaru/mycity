@@ -15,6 +15,8 @@ type Row = {
   seller_id: string | null;
   store_name: string | null;
   discount_percent: number;
+  stock: number | null;
+  has_variants: boolean | null;
 };
 
 /**
@@ -62,6 +64,8 @@ export default function PromoDeals() {
             storeName={it.store_name ?? undefined}
             sellerId={it.seller_id ?? undefined}
             discountPercent={it.discount_percent}
+            stock={it.stock ?? undefined}
+            hasVariants={it.has_variants ?? undefined}
             priority={i < 4}
           />
         ))}

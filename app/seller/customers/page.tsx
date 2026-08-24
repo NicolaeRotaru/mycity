@@ -6,6 +6,8 @@ import { Star, Moon, Lightbulb } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 
@@ -30,13 +32,13 @@ export default function SellerCustomersPage() {
   const [filter, setFilter] = useState<typeof filters[number]['key']>('all');
   const [search, setSearch] = useState('');
 
-  const { data: customers = [], isLoading } = useQuery({
+  const queryCustomers = useQuery({
     queryKey: queryKeys.seller.customers,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      const { data: orders } = await supabase
+      const { data: orders, error: ordersError } = await supabase
         .from('orders')
         .select(`
           id, user_id, total_price, created_at,
@@ -51,6 +53,10 @@ export default function SellerCustomersPage() {
         // silenzio e fa sembrare veri dei numeri che non lo sono.
         .order('created_at', { ascending: false })
           .limit(500);
+      // Con l'errore ingoiato la pagina Clienti dice «nessun cliente» a chi ne ha trecento: la
+      // lettura non fallisce mai, torna «riuscita» con la lista vuota, e React Query non riprova
+      // perché una lettura riuscita non si riprova.
+      if (ordersError) throw ordersError;
 
       const byUser = new Map<string, CustomerRow>();
       type OrderRow = { id: string; user_id: string | null; total_price: number; created_at: string; buyer: { full_name: string | null } | null };
@@ -76,6 +82,7 @@ export default function SellerCustomersPage() {
       return Array.from(byUser.values()).sort((a, b) => b.totalSpent - a.totalSpent);
     },
   });
+  const customers = queryCustomers.data ?? [];
 
   const filtered = customers.filter((c) => {
     if (search) {
@@ -94,7 +101,17 @@ export default function SellerCustomersPage() {
     ? customers.reduce((s, c) => s + c.totalSpent / c.ordersCount, 0) / customers.length
     : 0;
 
-  if (isLoading) return <LoadingState />;
+  const vistaqueryCustomers = vistaDaQuery(queryCustomers);
+  if (vistaqueryCustomers.mostraScheletro) return <LoadingState />;
+  if (vistaqueryCustomers.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere i tuoi clienti"
+        description="La lettura non è riuscita, quindi non so quanti clienti hai. Non vuol dire che non ne hai: riprova fra un momento."
+        onRetry={() => queryCustomers.refetch()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

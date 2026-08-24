@@ -11,6 +11,8 @@ import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { useRouter } from 'next/navigation';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
@@ -30,7 +32,7 @@ export default function SellerAnalyticsPage() {
     });
   }, [router]);
 
-  const { data: analytics, isLoading } = useQuery({
+  const queryAnalytics = useQuery({
     queryKey: queryKeys.seller.analytics(userId ?? ''),
     enabled: !!userId,
     queryFn: async () => {
@@ -38,10 +40,14 @@ export default function SellerAnalyticsPage() {
       const since7 = new Date(Date.now() - 7 * 86400000).toISOString();
 
       // Prodotti del seller
-      const { data: products } = await supabase
+      const { data: products, error: productsError } = await supabase
         .from('products')
         .select('id, name, price, images, status, stock, created_at')
         .eq('seller_id', userId!);
+      // Tutta la pagina Andamento si regge su questo elenco: senza il controllo, una lettura
+      // fallita diventa «zero prodotti», e da lì zero viste, zero ordini, zero fatturato — numeri
+      // che sembrano una brutta settimana e sono un guasto di rete.
+      if (productsError) throw productsError;
 
       const productIds = (products ?? []).map((p) => p.id);
       const empty = {
@@ -220,7 +226,24 @@ export default function SellerAnalyticsPage() {
     },
   });
 
-  if (!userId || isLoading) return <LoadingState />;
+  // Qui c'era `if (!userId || isLoading) return <LoadingState />;` e alla riga dopo
+  // `analytics.topProducts[0]`. Con la lettura fallita `analytics` è undefined, quindi la pagina
+  // si schiantava e il confine d'errore dell'area raccoglieva il pezzo. Il risultato a schermo era
+  // quello giusto, ma per caso: bastava una riga difensiva aggiunta per fare pulizia e questa
+  // pagina avrebbe cominciato a mostrare zeri come i Guadagni — peggiorando in silenzio proprio
+  // mentre sembrava che la si stesse sistemando. Adesso l'errore si mostra perché è deciso.
+  const vista = vistaDaQuery(queryAnalytics);
+  if (!userId || vista.mostraScheletro) return <LoadingState />;
+  if (vista.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere l'andamento del negozio"
+        description="La lettura non è riuscita, quindi non so come sta andando. Non vuol dire che sia andato male: riprova fra un momento."
+        onRetry={() => queryAnalytics.refetch()}
+      />
+    );
+  }
+  const analytics = vista.dati!;
   if (!analytics) return null;
 
   // "Consigli per te" — prescrittivi, derivati dai dati reali (top/slow products).

@@ -31,12 +31,17 @@ export function useFollowStore(storeId: string) {
     queryFn: async (): Promise<boolean> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return false;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('follows')
         .select('store_id')
         .eq('user_id', user.id)
         .eq('store_id', storeId)
         .maybeSingle();
+      // Senza questa riga la lettura non falliva mai: tornava «riuscita» con `data` a null, cioe'
+      // «non lo segui». A chi il negozio lo segue gia' il bottone diceva «Segui»; premendolo si
+      // tenta un inserimento doppio, che il database rifiuta — e li' l'errore c'e', ma il messaggio
+      // esce solo per il caso «devi accedere». Il resto era un bottone che non fa niente.
+      if (error) throw error;
       return !!data;
     },
     staleTime: 30_000,
@@ -47,7 +52,10 @@ export function useFollowStore(storeId: string) {
     queryKey: followKeys.count(storeId),
     queryFn: async (): Promise<number> => {
       const { data, error } = await supabase.rpc('store_follower_count', { p_store_id: storeId });
-      if (error) return 0;
+      // `return 0` su un errore diceva «nessuno segue questo negozio» su un conto che nessuno era
+      // riuscito a fare — e, siccome la query risultava a buon fine, non veniva piu' riprovata.
+      // Un guasto di un secondo diventava uno zero permanente. Lanciando, react-query riprova.
+      if (error) throw error;
       return Number(data ?? 0);
     },
     staleTime: 30_000,
@@ -56,6 +64,11 @@ export function useFollowStore(storeId: string) {
 
   const isFollowing = stateQ.data ?? false;
   const followerCount = countQ.data ?? 0;
+  // «Ho in mano la risposta», non «la lettura e' finita»: con `isLoading` falso e `data` a
+  // `undefined` la seconda direbbe di si' su una lettura fallita, e `isFollowing` uscirebbe falso —
+  // cioe' «non lo segui» detto a chi lo segue.
+  const statoLetto = stateQ.data !== undefined;
+  const contoLetto = countQ.data !== undefined;
 
   const toggle = useMutation({
     mutationFn: async () => {
@@ -99,5 +112,5 @@ export function useFollowStore(storeId: string) {
     },
   });
 
-  return { isFollowing, followerCount, toggle, isLoading: stateQ.isLoading };
+  return { isFollowing, followerCount, statoLetto, contoLetto, toggle, isLoading: stateQ.isLoading };
 }

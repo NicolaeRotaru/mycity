@@ -34,7 +34,11 @@ export const useNotificationsCount = () => {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', userId)
         .eq('is_read', false);
-      if (error) return 0;
+      // Non `return 0`: quello marcava la lettura come riuscita con un numero falso, e react-query
+      // non riprova una query riuscita. Il pallino delle notifiche restava spento per sempre dopo
+      // un guasto di un secondo. Chi legge il numero ha gia' il suo valore di riserva (`= 0` qui
+      // sotto), quindi a schermo non cambia niente: cambia che adesso ci riprova.
+      if (error) throw error;
       return count ?? 0;
     },
   });

@@ -39,13 +39,20 @@ import {
 import { queryKeys } from '@/lib/queries/keys';
 // #92 — le miniature si chiedono gia' piccole al server
 import { sizedImage } from '@/lib/image-url';
+import { riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
 
 type OrderRow = {
   id: string;
   total_price: number;
   shipping_cost: number;
+  // Le quattro voci che compongono il totale e che il riepilogo non mostrava.
+  delivery_fee_cents: number | null;
+  discount_amount: number | null;
+  wallet_applied_cents: number | null;
+  pickup_in_store: boolean | null;
   delivery_status: OrderStatus;
   payment_status: string;
+  payment_method: string | null;
   created_at: string;
   accepted_at: string | null;
   ready_at: string | null;
@@ -86,7 +93,8 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
   const { data, error } = await supabase
     .from('orders')
     .select(`
-      id, total_price, shipping_cost, delivery_status, payment_status, created_at,
+      id, total_price, shipping_cost, delivery_fee_cents, discount_amount, wallet_applied_cents,
+      pickup_in_store, delivery_status, payment_status, payment_method, created_at,
       accepted_at, ready_at, picked_up_at, delivered_at,
       delivery_full_name, delivery_phone, delivery_address, delivery_city, delivery_zip, delivery_notes,
       delivery_lat, delivery_lng,
@@ -231,6 +239,11 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   }
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
+  // Il riepilogo mostrava tre righe e il totale non era la somma delle prime due: mancavano la
+  // consegna MyCity, lo sconto del codice e il credito usato. Adesso ci sono, e la funzione dice
+  // anche se tornano — perché delle righe che non fanno il totale sono peggio di poche righe.
+  const riepilogo = riepilogoOrdine(order, Math.round(subtotal * 100));
+  const pagamento = statoPagamento(order, riepilogo.totaleCentesimi);
   const isDelivered = status === 'DELIVERED';
   const isCancelled = status === 'CANCELED';
   const isCancellable = status === 'NEW';
@@ -593,15 +606,50 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
               })}
             </div>
             <div className="mt-3 space-y-1 border-t border-cream-200 pt-3 text-sm">
-              <div className="flex justify-between"><span className="text-ink-600">Subtotale</span><span>{formatPrice(subtotal)}</span></div>
-              <div className="flex justify-between"><span className="text-ink-600">Spedizione</span><span>{order.shipping_cost > 0 ? formatPrice(order.shipping_cost) : 'GRATUITA'}</span></div>
+              {riepilogo.voci.map((v) => (
+                <div key={v.etichetta} className="flex justify-between">
+                  <span className="text-ink-600">{v.etichetta}</span>
+                  <span>
+                    {v.etichetta === 'Spedizione' && v.centesimi === 0
+                      ? 'GRATUITA'
+                      : `${v.segno === 'meno' ? '−' : ''}${formatPrice(v.centesimi / 100)}`}
+                  </span>
+                </div>
+              ))}
               <div className="flex justify-between border-t border-cream-300 pt-1 text-base font-bold"><span>Totale</span><span className="text-primary-800">{formatPrice(order.total_price)}</span></div>
+              {/* Se le voci non fanno il totale non si fa finta di niente: una tabella che si
+                  contraddice da sola, sotto gli occhi di chi ha appena pagato, è peggio di una
+                  tabella incompleta. */}
+              {!riepilogo.torna && (
+                <p className="border-t border-cream-200 pt-1 text-[12px] text-ink-500">
+                  Le voci qui sopra non fanno esattamente il totale
+                  ({formatPrice(Math.abs(riepilogo.differenzaCentesimi) / 100)} di differenza).
+                  Il totale è quello scritto sull&apos;ordine, ed è la cifra che vale.
+                </p>
+              )}
             </div>
-            {/* COD callout — paga alla consegna in contanti */}
-            <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-[13px] font-medium text-olive-800">
-              <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
-              Paghi {formatPrice(order.total_price)} in contanti al rider alla consegna.
-            </div>
+            {/* Questo riquadro non aveva NESSUNA condizione: usciva anche su un ordine appena
+                pagato con la carta, e diceva a quella persona che avrebbe dovuto pagare di nuovo
+                in contanti. Adesso dipende da come è stato pagato davvero — e se non si sa, non
+                dice niente. */}
+            {pagamento.tipo === 'contanti-da-pagare' && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-[13px] font-medium text-olive-800">
+                <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
+                Paghi {formatPrice(pagamento.centesimi / 100)} in contanti al rider alla consegna.
+              </div>
+            )}
+            {pagamento.tipo === 'gia-pagato-con-carta' && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-olive-50 px-3 py-2.5 text-[13px] font-medium text-olive-800">
+                <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-olive-700" aria-hidden />
+                Già pagato con carta · {formatPrice(pagamento.centesimi / 100)}. Al rider non devi niente.
+              </div>
+            )}
+            {pagamento.tipo === 'rimborsato' && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-cream-100 px-3 py-2.5 text-[13px] font-medium text-ink-700">
+                <Banknote size={16} strokeWidth={2.2} className="shrink-0 text-ink-500" aria-hidden />
+                Ordine rimborsato.
+              </div>
+            )}
           </Card>
 
           {/* NEGOZIO + INDIRIZZO */}

@@ -7,8 +7,12 @@ import { Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import { PROPORZIONE_FOTO } from '@/lib/griglia-prodotti';
 import { queryKeys } from '@/lib/queries/keys';
 import caricatoreFotoRemote from '@/lib/image-loader';
+
+/** Le colonne di questa fila, in un posto solo: lo scheletro e le schede vere devono coincidere. */
+const GRIGLIA_SIMILI = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3';
 
 type Item = {
   id: string;
@@ -82,8 +86,19 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-        {[...Array(6)].map((_, i) => <div key={i} className="aspect-[3/4] rounded-xl skeleton" />)}
+      // Lo scheletro ha la forma della scheda vera qui sotto, non una sua: era `aspect-[3/4]` senza
+      // righe di testo contro una scheda quadrata con tre righe, e al caricamento la fila saltava.
+      <div className={GRIGLIA_SIMILI}>
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="overflow-hidden rounded-xl border border-cream-200 bg-white">
+            <div className={`w-full ${PROPORZIONE_FOTO} skeleton`} />
+            <div className="space-y-1 p-2">
+              <div className="h-3 w-1/2 rounded skeleton" />
+              <div className="h-4 min-h-[2.5rem] rounded skeleton" />
+              <div className="h-4 w-1/3 rounded skeleton" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
@@ -96,7 +111,7 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro
         <Sparkles size={20} className="text-accent-600" />
         Potrebbe piacerti
       </h2>
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+      <div className={GRIGLIA_SIMILI}>
         {items.map((p) => {
           const img = Array.isArray(p.images) && p.images[0] ? p.images[0] : null;
           return (
@@ -108,7 +123,7 @@ export default function SimilarProducts({ productId, categoryId, sellerId }: Pro
               <div className="relative w-full aspect-square bg-cream-100">
                 {img && (
                   <Image
-                    src={sizedImage(img, 'thumb')}
+                    src={sizedImage(img, 160, { quadrato: true })}
                     alt={p.name}
                     fill
                     sizes="(min-width: 768px) 160px, 50vw"

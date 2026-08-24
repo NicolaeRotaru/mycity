@@ -7,6 +7,7 @@ import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
+import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 
 const SOCIALS = [
   {
@@ -71,7 +72,9 @@ const SOCIALS = [
   },
   {
     name: 'WhatsApp',
-    href: 'https://wa.me/393000000000',
+    // Il numero arriva dalla variabile d'ambiente. Se non c'è, questa voce viene filtrata via
+    // e l'icona non si disegna: prima era scritto a mano 393000000000, un numero inesistente.
+    href: linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER),
     color: 'hover:bg-[#25D366]',
     svg: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
@@ -84,6 +87,7 @@ const SOCIALS = [
 const Footer = () => {
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
+  const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
 
   const pathname = usePathname();
   const { isSeller, isRider, isAuthenticated } = useProfile();
@@ -107,10 +111,10 @@ const Footer = () => {
           </p>
           {/* Social icons */}
           <div className="flex flex-wrap gap-2">
-            {SOCIALS.map((s) => (
+            {SOCIALS.filter((s) => s.href).map((s) => (
               <a
                 key={s.name}
-                href={s.href}
+                href={s.href as string}
                 target="_blank"
                 rel="noopener noreferrer"
                 title={s.name}
@@ -159,16 +163,23 @@ const Footer = () => {
             <li><Link href="/help" className="text-ink-600 hover:text-primary-700 transition-colors">Centro assistenza</Link></li>
             <li><Link href="/faq" className="text-ink-600 hover:text-primary-700 transition-colors">Domande frequenti</Link></li>
             <li><Link href="/contact" className="text-ink-600 hover:text-primary-700 transition-colors">Contattaci</Link></li>
-            <li>
-              <a
-                href={`https://wa.me/${(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? '393000000000').replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Ciao MyCity, ho una domanda')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-ink-600 hover:text-primary-700 transition-colors inline-flex items-center gap-1.5"
-              >
-                <MessageCircle size={14} strokeWidth={2} aria-hidden /> WhatsApp Business
-              </a>
-            </li>
+            {/*
+              Come per i dati legali qui sotto: un contatto che non esiste non si mostra.
+              Il ripiego era il segnaposto 393000000000, quindi senza la variabile configurata
+              questa voce portava su un numero inesistente — e chi la tocca cerca aiuto.
+            */}
+            {whatsapp && (
+              <li>
+                <a
+                  href={whatsapp}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-ink-600 hover:text-primary-700 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <MessageCircle size={14} strokeWidth={2} aria-hidden /> WhatsApp Business
+                </a>
+              </li>
+            )}
             <li><Link href="/shipping" className="text-ink-600 hover:text-primary-700 transition-colors">Spedizioni</Link></li>
             <li><Link href="/returns" className="text-ink-600 hover:text-primary-700 transition-colors">Resi e rimborsi</Link></li>
             <li><Link href="/status" className="text-ink-600 hover:text-primary-700 transition-colors">Stato servizi</Link></li>

@@ -51,11 +51,17 @@ export default function ThemePicker({
     mutationFn: async (hex: string) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { data: profile } = await supabase
+      const { data: profile, error: erroreLettura } = await supabase
         .from('profiles')
         .select('store_customization')
         .eq('id', user.id)
         .single();
+      // Questa è una lettura-modifica-scrittura, ed è il caso peggiore di tutta la cartella.
+      // Con l'errore ingoiato `profile` resta undefined, `normalizeCustomization` restituisce i
+      // valori di partenza, e la scrittura qui sotto RISCRIVE tutta la personalizzazione della
+      // vetrina con quei valori: copertina, sezioni, tema — persi, per cambiare un colore.
+      // Non è una schermata che mostra un numero sbagliato: è un dato del negoziante cancellato.
+      if (erroreLettura) throw erroreLettura;
       const current = normalizeCustomization(profile?.store_customization);
       const next = { ...current, theme: { ...current.theme, accent: hex } };
       const { error } = await supabase

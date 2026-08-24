@@ -15,6 +15,9 @@ import { friendlyError } from '@/lib/errors';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import EmptyState from '@/components/EmptyState';
 import { queryKeys } from '@/lib/queries/keys';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { vistaDaQuery } from '@/lib/vista-query';
 
 /**
  * Seller: gestione Storie (instagram-like, 24h).
@@ -47,20 +50,26 @@ export default function SellerStoriesPage() {
   const [linkUrl, setLinkUrl] = useState('');
   const [uploading, setUploading] = useState(false);
 
-  const { data: stories = [] } = useQuery({
+  const queryStories = useQuery({
     queryKey: queryKeys.seller.myStories,
     queryFn: async (): Promise<Story[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('seller_stories')
         .select('*')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20);
+      // L'errore non si ingoia: senza questa riga la lettura non FALLISCE mai — torna «riuscita»
+      // con la lista vuota, e nessun riquadro d'errore potrà mai comparire perché non c'è niente da
+      // mostrare. È la forma che «Vicino a te» aveva sul lato cliente: il freno a valle non serve a
+      // niente se il guasto non arriva mai fin lì.
+      if (error) throw error;
       return (data ?? []) as Story[];
     },
   });
+  const stories = queryStories.data ?? [];
 
   const create = useMutation({
     mutationFn: async () => {
@@ -119,6 +128,18 @@ export default function SellerStoriesPage() {
   function hoursLeft(expiresAt: string): number {
     const ms = new Date(expiresAt).getTime() - Date.now();
     return Math.max(0, Math.round(ms / 3600_000));
+  }
+
+  const vista = vistaDaQuery(queryStories);
+  if (vista.mostraScheletro) return <LoadingState />;
+  if (vista.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere le tue storie"
+        description="La lettura non è riuscita, quindi non so quali storie hai pubblicato. Non vuol dire che non ne hai: riprova fra un momento."
+        onRetry={() => queryStories.refetch()}
+      />
+    );
   }
 
   return (

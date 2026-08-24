@@ -308,3 +308,47 @@ h3 { font-size: var(--text-xl);  font-weight: var(--weight-bold); line-height: v
 [data-theme='editoriale'] h1,
 [data-theme='editoriale'] h2 { letter-spacing: -0.015em; }
 [data-theme='editoriale'] .store-richtext { font-size: 0.95rem; line-height: 1.75; }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * IL PAVIMENTO DEI CAMPI SUL TELEFONO — 16px, o Safari ingrandisce la pagina.
+ *
+ * Safari su iOS ingrandisce la pagina appena si mette a fuoco un campo il cui
+ * testo è sotto i 16px, e NON torna indietro da solo: la persona resta con la
+ * pagina zoomata e deve pizzicare per rimetterla a posto. Su un modulo di
+ * checkout, o sulla ricerca in cima a ogni pagina, è una frizione che si paga
+ * a ogni tocco.
+ *
+ * Misurato il 24/8/2026: 63 campi di testo su 97 stavano sotto i 16px. Il
+ * progetto la regola la conosceva già — components/ui/Field.tsx la dichiara in
+ * testa e la primitiva usa `text-base` — ma quei 63 non passano dalla primitiva.
+ *
+ * PERCHÉ QUI E NON IN 63 FILE. Un pavimento scritto una volta vale anche per il
+ * campo che qualcuno aggiungerà domani. Toccare 63 file cura oggi e non domani.
+ *
+ * PERCHÉ SOLO `text-xs` E `text-sm`, E NON TUTTI GLI `input`. Un pavimento su
+ * ogni campo abbasserebbe anche quelli scritti apposta più grandi (`text-lg`):
+ * un `font-size` fisso non sa dire «alza, non abbassare». Nominando le due
+ * classi piccole si alza solo ciò che è troppo piccolo, e i campi grandi
+ * restano come sono. La specificità è 0,1,1 — elemento più classe — quindi
+ * vince sulla utility di Tailwind (0,1,0) senza bisogno di `!important`.
+ *
+ * PERCHÉ `pointer: coarse` E NON UNA LARGHEZZA. Lo zoom dipende dal dispositivo,
+ * non da quanti punti è largo lo schermo: un telefono in orizzontale supera i
+ * 767px e zooma lo stesso.
+ *
+ * IL FRENO. `tests/unit/il-campo-che-fa-zoomare-il-telefono.test.ts` pretende
+ * che nessun campo di testo usi una classe piccola FUORI da quelle nominate
+ * qui: se domani qualcuno scrive `text-[13px]`, il pavimento non lo coprirebbe
+ * e la prova diventa rossa. Le due liste non possono divergere in silenzio,
+ * perché la prova legge QUESTO file invece di tenerne una copia.
+ * ───────────────────────────────────────────────────────────────────────────── */
+@media (pointer: coarse) {
+  input.text-xs,
+  input.text-sm,
+  textarea.text-xs,
+  textarea.text-sm,
+  select.text-xs,
+  select.text-sm {
+    font-size: var(--text-base);
+  }
+}

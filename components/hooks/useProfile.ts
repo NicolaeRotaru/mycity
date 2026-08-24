@@ -106,7 +106,11 @@ export const useProfile = () => {
         .select('id, role, is_approved, store_name, store_logo, full_name, subscription_status')
         .eq('id', userId)
         .single();
-      if (error) return null;
+      // `return null` diceva «questo utente non ha un profilo» su una lettura fallita, e siccome la
+      // query risultava riuscita non veniva riprovata: chi e' venditore si vedeva il sito da
+      // cliente finche' non ricaricava. Lanciando, react-query riprova e chi legge tiene il suo
+      // valore di riserva.
+      if (error) throw error;
       return { ...data, email: userEmail };
     },
     enabled: !!userId,

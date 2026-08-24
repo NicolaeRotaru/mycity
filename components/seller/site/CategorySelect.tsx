@@ -22,7 +22,10 @@ export default function CategorySelect({
   const { data: cats = [] } = useQuery({
     queryKey: queryKeys.categories.allList,
     queryFn: async (): Promise<Cat[]> => {
-      const { data } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
+      const { data, error } = await supabase.from('categories').select('id, name, slug, parent_id').order('name');
+      // Lettura fallita = elenco vuoto = «non esiste nessuna categoria»: il negoziante non capisce
+      // perché il menù è vuoto, e la colpa sembra sua.
+      if (error) throw error;
       return (data ?? []) as Cat[];
     },
   });

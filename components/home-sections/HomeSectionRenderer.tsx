@@ -176,18 +176,17 @@ function HomeBlock({
     /* ------------------------------------------------------------ CATEGORIE */
     case 'categories': {
       const c = section.config;
+      // Il titolo restava appeso su un vuoto: `CategoryShowcase` non leggeva `isError`, quindi su
+      // una lettura fallita la griglia era vuota per sempre e sopra restava «Cosa cerchi oggi?».
+      // `MaybeSection` nasconde la sezione intera quando il figlio non disegna niente — è lo stesso
+      // trattamento che ha già `dropOfDay`, e adesso il figlio sa restituire `null`.
       return (
-        <section className="container mx-auto px-4 sm:px-6 py-6">
-          <div className="text-center mb-5">
-            <h2 className="text-2xl md:text-3xl font-serif font-bold text-ink-900">
-              {c.heading || 'Cosa cerchi oggi?'}
-            </h2>
-            <p className="text-ink-500 text-sm mt-2">
-              {c.subheading || 'Tutte le categorie del mercato locale'}
-            </p>
-          </div>
-          <CategoryShowcase />
-        </section>
+        <MaybeSection className="container mx-auto px-4 sm:px-6 py-6">
+          <CategoryShowcase
+            titolo={c.heading || 'Cosa cerchi oggi?'}
+            sottotitolo={c.subheading || 'Tutte le categorie del mercato locale'}
+          />
+        </MaybeSection>
       );
     }
 

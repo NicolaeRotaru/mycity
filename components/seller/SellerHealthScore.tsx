@@ -27,11 +27,11 @@ export default function SellerHealthScore() {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
   }, []);
 
-  const { data: checks = [], isLoading } = useQuery({
+  const { data: checks, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.seller.healthV2(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<Check[]> => {
-      const { data: profile } = await supabase
+      const { data: profile, error: erroreProfilo } = await supabase
         .from('profiles')
         .select(`
           store_name, store_description, store_logo,
@@ -41,11 +41,17 @@ export default function SellerHealthScore() {
         `)
         .eq('id', userId!)
         .single();
+      // Senza questa riga la lettura non fallisce mai: `profile` resta undefined, ogni controllo
+      // qui sotto risulta non superato, e il punteggio esce 0 con l'etichetta peggiore in rosso.
+      // È il voto che il negoziante dà a sé stesso guardando la bacheca: un guasto di rete non
+      // deve poterglielo abbassare.
+      if (erroreProfilo) throw erroreProfilo;
 
-      const { data: products } = await supabase
+      const { data: products, error: erroreProdotti } = await supabase
         .from('products')
         .select('id, name, description, images, price')
         .eq('seller_id', userId!);
+      if (erroreProdotti) throw erroreProdotti;
 
       type ProductRow = { id: string; name: string; description: string | null; images: string[] | null; price: number };
       const productsTyped = (products ?? []) as ProductRow[];
@@ -126,6 +132,24 @@ export default function SellerHealthScore() {
 
   if (isLoading || !userId) {
     return <div className="h-64 rounded-2xl skeleton" aria-hidden />;
+  }
+
+  // Il terzo esito. Un punteggio calcolato su una lettura fallita non è un punteggio basso: è
+  // nessun punteggio, e mostrarlo come basso è la bugia peggiore di tutta questa schermata.
+  if (isError || !checks) {
+    return (
+      <div className="rounded-2xl border border-cream-300 bg-surface-0 p-6 shadow-warm">
+        <h2 className="font-serif text-lg font-bold text-ink-900">Non ho potuto calcolare la salute del negozio</h2>
+        <p className="mt-1 text-sm text-ink-600">La lettura non è riuscita. Il punteggio non è basso: non c'è.</p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="mt-3 rounded-lg bg-primary-700 px-4 py-2 text-sm font-bold text-white hover:bg-primary-800"
+        >
+          Riprova
+        </button>
+      </div>
+    );
   }
 
   const totalPoints = checks.reduce((s, c) => s + c.points, 0);

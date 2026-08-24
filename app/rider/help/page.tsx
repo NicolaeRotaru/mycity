@@ -12,6 +12,7 @@ import {
   Headphones,
   type LucideIcon,
 } from 'lucide-react';
+import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 
 export const metadata = {
   title: 'Centro rider · MyCity',
@@ -79,6 +80,7 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
 ];
 
 export default function RiderHelpPage() {
+  const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
   return (
     <div className="pb-5">
       {/* Header serif con back, in stile telefono rider */}
@@ -139,20 +141,22 @@ export default function RiderHelpPage() {
               <p className="text-xs text-ink-500">+39 0523 000000 · 24/7</p>
             </div>
           </a>
-          <a
-            href="https://wa.me/393000000000"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 hover:bg-cream-50"
-          >
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-olive-50">
-              <MessageCircle size={17} className="text-olive-700" aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-ink-900">WhatsApp rider</p>
-              <p className="text-xs text-ink-500">Lun-Dom 7-23</p>
-            </div>
-          </a>
+          {whatsapp && (
+            <a
+              href={whatsapp}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 hover:bg-cream-50"
+            >
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-olive-50">
+                <MessageCircle size={17} className="text-olive-700" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-ink-900">WhatsApp rider</p>
+                <p className="text-xs text-ink-500">Lun-Dom 7-23</p>
+              </div>
+            </a>
+          )}
           <Link
             href="/contact"
             className="flex items-center gap-3 rounded-lg border border-cream-300 bg-surface-0 px-3.5 py-3 hover:bg-cream-50"

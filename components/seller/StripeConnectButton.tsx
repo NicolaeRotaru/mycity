@@ -29,11 +29,14 @@ export default function StripeConnectButton() {
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
         .select('stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, approval_status')
         .eq('id', user.id)
         .single();
+      // «Non ho letto il profilo» diventerebbe «pagamenti non attivi»: il bottone inviterebbe a
+      // rifare l'iscrizione a Stripe a chi l'ha già fatta. Sono i soldi del negozio.
+      if (error) throw error;
       return data as {
         stripe_account_id: string | null;
         stripe_charges_enabled: boolean | null;

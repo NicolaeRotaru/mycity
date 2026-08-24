@@ -11,6 +11,8 @@ import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import EmptyState from '@/components/EmptyState';
@@ -40,7 +42,7 @@ export default function SellerProductsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('all');
 
-  const { data: products = [], isLoading } = useQuery({
+  const queryProducts = useQuery({
     queryKey: queryKeys.seller.products,
     queryFn: async (): Promise<SellerProductRow[]> => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -54,12 +56,13 @@ export default function SellerProductsPage() {
       return (data ?? []) as unknown as SellerProductRow[];
     },
   });
+  const products = queryProducts.data ?? [];
 
   // "Venduti" reale: SOMMA(order_items.quantity) per gli ordini CONSEGNATI del
   // venditore, raggruppata per prodotto. Stessa forma del calcolo "venduto" della
   // dashboard (order_items + products!inner(seller_id)), filtrata a delivery_status
   // = DELIVERED. Una sola query aggregata; la mappa risultante alimenta la colonna.
-  const { data: soldByProduct = {} } = useQuery({
+  const queryVenduti = useQuery({
     queryKey: [...queryKeys.seller.products, 'sold'],
     queryFn: async (): Promise<Record<string, number>> => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -79,6 +82,12 @@ export default function SellerProductsPage() {
       return map;
     },
   });
+  // Il ripiego resta, ma NON decide più da solo cosa si vede. Se questa lettura fallisce, ogni
+  // prodotto mostrerebbe «—», che a occhio si legge «mai venduto»: la stessa bugia della pagina
+  // Guadagni, su una colonna invece che su una torre di numeri. Quindi si tiene anche il fatto che
+  // il conto non lo sappiamo, e la colonna lo dice.
+  const soldByProduct = queryVenduti.data ?? {};
+  const vendutiIgnoti = queryVenduti.isError;
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
@@ -164,7 +173,17 @@ export default function SellerProductsPage() {
     return products.filter((p) => matcher.match(p.status));
   }, [products, tab]);
 
-  if (isLoading) return <LoadingState />;
+  const vistaqueryProducts = vistaDaQuery(queryProducts);
+  if (vistaqueryProducts.mostraScheletro) return <LoadingState />;
+  if (vistaqueryProducts.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere il tuo catalogo"
+        description="La lettura non è riuscita, quindi non so cosa hai in catalogo. Non vuol dire che sia vuoto: riprova fra un momento."
+        onRetry={() => queryProducts.refetch()}
+      />
+    );
+  }
 
   return (
     <div className={bulk ? 'pb-24' : undefined}>
@@ -308,7 +327,13 @@ export default function SellerProductsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-ink-700">
-                      {soldByProduct[p.id] ? soldByProduct[p.id] : <span className="font-normal text-ink-400">—</span>}
+                      {soldByProduct[p.id] ? (
+                        soldByProduct[p.id]
+                      ) : vendutiIgnoti ? (
+                        <span className="font-normal text-ink-400" title="Non sono riuscito a leggere i venduti">?</span>
+                      ) : (
+                        <span className="font-normal text-ink-400">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right"><StatusBadge status={p.status} /></td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
@@ -403,7 +428,9 @@ export default function SellerProductsPage() {
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <span className="font-bold text-ink-900">{formatPrice(Number(p.price))}</span>
                         <span className="text-xs text-ink-500">· {p.stock ?? 0} pz</span>
-                        {soldByProduct[p.id] ? (
+                        {vendutiIgnoti ? (
+                          <span className="text-xs text-ink-400">· venduti non letti</span>
+                        ) : soldByProduct[p.id] ? (
                           <span className="text-xs text-ink-500">· {soldByProduct[p.id]} venduti</span>
                         ) : null}
                       </div>

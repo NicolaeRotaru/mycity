@@ -152,6 +152,29 @@ export const removeFromCart = (id: string, variantId?: string) => {
     .catch(() => {});
 };
 
+/**
+ * Toglie SOLO la riga senza variante di un prodotto, lasciando intatte le sue righe con variante.
+ *
+ * ⚠️ PERCHÉ NON BASTA `removeFromCart(id)`. Quella, senza variante, toglie TUTTE le righe di quel
+ * prodotto. Serve qui perché il caso da riparare è una riga rotta — un articolo con varianti finito
+ * nel carrello senza sceglierne una, aggiunto dal «+» di una vetrina. Chi ha anche la riga giusta,
+ * con la taglia scelta, non deve perderla per riparare quella rotta.
+ *
+ * `undefined` e la stringa vuota sono la stessa cosa qui: «variante non scelta».
+ */
+export const rimuoviRigaSenzaVariante = (id: string) => {
+  const senzaVariante = (c: CartItem) => c.id === id && !c.variantId;
+  const prima = getCart();
+  const tolte = prima.filter(senzaVariante);
+  if (tolte.length === 0) return;
+  saveCart(prima.filter((c) => !senzaVariante(c)));
+  const qta = tolte.reduce((s, r) => s + r.quantity, 0);
+  const riga = tolte[0];
+  import('@/lib/analytics/events')
+    .then((m) => m.trackRemoveFromCart(id, qta, Math.round(riga.price * 100), { name: riga.name, storeName: riga.storeName }))
+    .catch(() => {});
+};
+
 export const updateQuantity = (id: string, quantity: number, variantId?: string) => {
   if (quantity < 1) return removeFromCart(id, variantId);
   const prima = getCart();

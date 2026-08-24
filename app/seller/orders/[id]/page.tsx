@@ -20,6 +20,7 @@ import { trackSellerOrderAccepted } from '@/lib/analytics/events';
 import EmptyState from '@/components/EmptyState';
 import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock, Banknote } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import { riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
 type OrderRow = {
@@ -30,6 +31,10 @@ type OrderRow = {
   delivery_status: OrderStatus;
   pickup_in_store?: boolean | null;
   payment_method?: string | null;
+  // Le tre voci che compongono il totale e che il riepilogo del negoziante non mostrava.
+  delivery_fee_cents?: number | null;
+  discount_amount?: number | null;
+  wallet_applied_cents?: number | null;
   created_at: string;
   accepted_at: string | null;
   ready_at: string | null;
@@ -138,9 +143,15 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             products ( name, images )
           )
         `;
-      // payment_method serve per la riga "Pagamento" + nota contanti. Se la colonna
-      // non è (ancora) presente in questo ambiente, ricadiamo sulla select senza romperci.
-      const withPay = await supabase.from('orders').select(sel(' payment_method,')).eq('id', id).single();
+      // payment_method serve per la riga "Pagamento" + nota contanti, e le tre voci di prezzo
+      // servono al riepilogo, che senza non torna. Se una di queste colonne non è (ancora)
+      // presente in questo ambiente, ricadiamo sulla select senza romperci — e in quel caso il
+      // riepilogo lo dichiara invece di mostrare voci che non fanno il totale.
+      const withPay = await supabase
+        .from('orders')
+        .select(sel(' payment_method, delivery_fee_cents, discount_amount, wallet_applied_cents,'))
+        .eq('id', id)
+        .single();
       if (!withPay.error) return withPay.data as unknown as OrderRow;
       const fallback = await supabase.from('orders').select(sel('')).eq('id', id).single();
       if (fallback.error) throw fallback.error;
@@ -154,11 +165,14 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     queryKey: queryKeys.seller.pickupCode(id),
     enabled: !!order && ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status),
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('order_pickup_codes')
         .select('code, verified_at')
         .eq('order_id', id)
         .maybeSingle();
+      // Il codice di ritiro è quello che il negoziante legge al fattorino. Con l'errore ingoiato
+      // «non l'ho letto» diventa «non c'è nessun codice», e la consegna si ferma sul bancone.
+      if (error) throw error;
       return data;
     },
   });
@@ -167,13 +181,16 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   const { data: returnRow } = useQuery({
     queryKey: queryKeys.seller.returnForOrder(id),
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('returns')
         .select('id, status, reason, notes, photo_urls, refund_amount_cents, decision_notes, created_at')
         .eq('order_id', id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+      // Con l'errore ingoiato una richiesta di reso aperta sparisce dalla pagina dell'ordine: il
+      // negoziante non la vede, non risponde, e il cliente resta senza risposta.
+      if (error) throw error;
       return data;
     },
   });
@@ -272,6 +289,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
   const cod = isCod(order.payment_method);
+  const riepilogo = riepilogoOrdine(order, Math.round(subtotal * 100));
 
   const showPickupCode = ['ACCEPTED', 'READY', 'ASSIGNED'].includes(order.delivery_status) && pickupCode?.code;
 
@@ -472,11 +490,29 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
             );
           })}
         </div>
+        {/* Il riepilogo del negoziante aveva lo stesso difetto di quello del cliente: Subtotale,
+            Spedizione, Totale — e il totale non era la somma. Mancavano la consegna MyCity, lo
+            sconto del codice e il credito usato. Stessa regola, stessa funzione. */}
         <div className="px-6 py-4 border-t border-cream-200 bg-cream-50 text-sm space-y-1">
-          <div className="flex justify-between"><span className="text-ink-600">Subtotale</span><span>{formatPrice(subtotal)}</span></div>
-          <div className="flex justify-between"><span className="text-ink-600">Spedizione</span><span>{order.shipping_cost > 0 ? formatPrice(order.shipping_cost) : 'GRATUITA'}</span></div>
+          {riepilogo.voci.map((v) => (
+            <div key={v.etichetta} className="flex justify-between">
+              <span className="text-ink-600">{v.etichetta}</span>
+              <span>
+                {v.etichetta === 'Spedizione' && v.centesimi === 0
+                  ? 'GRATUITA'
+                  : `${v.segno === 'meno' ? '−' : ''}${formatPrice(v.centesimi / 100)}`}
+              </span>
+            </div>
+          ))}
           <div className="flex justify-between"><span className="text-ink-600">Pagamento</span><span className="font-medium text-ink-800">{cod ? 'Contanti alla consegna' : 'Carta (online)'}</span></div>
           <div className="flex justify-between font-bold text-base pt-1 border-t border-cream-300"><span>Totale</span><span className="font-serif text-primary-800">{formatPrice(order.total_price)}</span></div>
+          {!riepilogo.torna && (
+            <p className="border-t border-cream-200 pt-1 text-[12px] text-ink-500">
+              Le voci qui sopra non fanno esattamente il totale
+              ({formatPrice(Math.abs(riepilogo.differenzaCentesimi) / 100)} di differenza).
+              Il totale è quello scritto sull&apos;ordine.
+            </p>
+          )}
         </div>
       </div>
 

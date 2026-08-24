@@ -15,6 +15,7 @@ type Row = {
   price: number | string;
   images: string[] | null;
   stock: number | null;
+  has_variants: boolean | null;
   created_at: string;
 };
 
@@ -35,7 +36,7 @@ function ManualCollection({
     queryFn: async (): Promise<Row[]> => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, images, stock, created_at')
+        .select('id, name, description, price, images, stock, created_at, has_variants')
         .eq('seller_id', ctx.storeId)
         .eq('status', 'available')
         .in('id', ids);
@@ -58,6 +59,7 @@ function ManualCollection({
       price={Number(p.price)}
       images={Array.isArray(p.images) ? p.images : []}
       stock={p.stock ?? undefined}
+      hasVariants={p.has_variants ?? undefined}
       createdAt={p.created_at}
       storeName={ctx.store.store_name ?? undefined}
       sellerId={ctx.storeId}

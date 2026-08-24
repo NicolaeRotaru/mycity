@@ -33,11 +33,14 @@ export default function BannerFields({ section, onChange }: { section: BannerSec
     queryFn: async (): Promise<{ id: string; name: string }[]> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return [];
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('products')
         .select('id, name')
         .eq('seller_id', user.id)
         .order('created_at', { ascending: false });
+      // Senza questa riga la lettura non FALLISCE mai: torna «riuscita» con la lista vuota, e chi
+      // sceglie il prodotto da mettere in banner vede «nessun prodotto» pur avendone quaranta.
+      if (error) throw error;
       return (data ?? []) as { id: string; name: string }[];
     },
   });

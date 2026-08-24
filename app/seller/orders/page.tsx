@@ -10,6 +10,8 @@ import {
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import EmptyState from '@/components/EmptyState';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { Banknote, ChevronRight, ClipboardList } from 'lucide-react';
@@ -59,7 +61,7 @@ export default function SellerOrdersPage() {
    */
   const [limite, setLimite] = useState(PAGINA);
 
-  const { data: orders = [], isLoading, isFetching } = useQuery({
+  const queryOrders = useQuery({
     queryKey: [...queryKeys.seller.orders, limite],
     placeholderData: (precedente) => precedente,
     queryFn: async () => {
@@ -90,8 +92,20 @@ export default function SellerOrdersPage() {
     },
     refetchInterval: 90_000,
   });
+  const orders = queryOrders.data ?? [];
 
-  if (isLoading) return <LoadingState />;
+  const isFetching = queryOrders.isFetching;
+  const vistaqueryOrders = vistaDaQuery(queryOrders);
+  if (vistaqueryOrders.mostraScheletro) return <LoadingState />;
+  if (vistaqueryOrders.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere i tuoi ordini"
+        description="La lettura non è riuscita, quindi non so quali ordini hai. Non vuol dire che non ne hai: riprova fra un momento."
+        onRetry={() => queryOrders.refetch()}
+      />
+    );
+  }
 
   const grouped = STATUS_FILTERS.map((f) => ({
     label: f.label,

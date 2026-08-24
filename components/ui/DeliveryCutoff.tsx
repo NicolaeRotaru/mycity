@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Bike } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { deliveryWindow, splitDuration, DEFAULT_CUTOFF_HOUR, EXPRESS_ETA_LABEL, STANDARD_ETA_LABEL } from '@/lib/delivery';
+import { promessaDiConsegna, rigaNegozioChiuso } from '@/lib/promessa-consegna';
 
 /**
  * useDeliveryCutoff — countdown SSR-safe verso l'orario limite consegna.
@@ -67,6 +68,7 @@ export function DeliveryCutoff({
   cutoffHour = DEFAULT_CUTOFF_HOUR,
   variant = 'inline',
   available = true,
+  storeHours,
   externalDeliveryLabel,
   className,
 }: {
@@ -74,6 +76,12 @@ export function DeliveryCutoff({
   variant?: 'inline' | 'banner';
   /** Prodotto a inventario e pronto (stock > 0). false → Standard 2-3 giorni. */
   available?: boolean;
+  /**
+   * Gli orari del negozio. Senza, ci si comporta come prima: un negozio di cui non sappiamo gli
+   * orari non è un negozio chiuso — è la stessa scelta che fa il server, che senza orari lascia
+   * passare l'ordine.
+   */
+  storeHours?: unknown;
   /** Prodotto importato da marketplace: mostra il tempo di consegna esterno. */
   externalDeliveryLabel?: string | null;
   className?: string;
@@ -85,9 +93,21 @@ export function DeliveryCutoff({
     ? <span className="font-mono font-bold tabular-nums">{pad(h)}:{pad(m)}:{pad(s)}</span>
     : null;
 
+  // Le risposte sono TRE: si può promettere oggi · si consegna in giornate · il negozio è chiuso.
+  // La terza mancava, e senza di lei il conto alla rovescia prometteva «arriva oggi» a negozio
+  // chiuso — con il rifiuto che arrivava dal server all'ultimo clic, dopo indirizzo e pagamento.
+  const promessa = promessaDiConsegna({
+    idoneoExpress: available,
+    disponibile: available,
+    orari: storeHours,
+    adesso: hydrated ? new Date() : undefined,
+  });
+
   // Prodotto importato: il tempo di consegna è quello indicato dal marketplace.
   const content = externalDeliveryLabel ? (
     <span>Consegna in <strong>{externalDeliveryLabel}</strong></span>
+  ) : promessa.tipo === 'chiuso' ? (
+    <span><strong>{rigaNegozioChiuso(promessa.riapre)}</strong></span>
   ) : !available ? (
     <span>Consegna in <strong>{STANDARD_ETA_LABEL}</strong></span>
   ) : day === 'oggi' && hydrated ? (

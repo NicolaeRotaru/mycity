@@ -6,6 +6,8 @@ import { Landmark, Info, Banknote } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice } from '@/lib/format';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
@@ -86,7 +88,12 @@ function payoutBadge(o: OrderRow): { label: string; cls: string } {
 export default function SellerEarningsPage() {
   const [period, setPeriod] = useState<PeriodKey>('30d');
 
-  const { data: orders = [], isLoading } = useQuery({
+  // Prima qui c'era `const { data: orders = [], isLoading }`. Quel `= []` è il difetto: quando la
+  // lettura fallisce React Query lascia `data` a undefined, il ripiego prende il suo posto e la
+  // pagina disegna la torre dei numeri a zero con la riga «Ancora nessun ordine pagato con carta» —
+  // a un negoziante che gli ordini li ha. La lettura adesso si tiene INTERA e il verdetto lo dà
+  // `vistaDaQuery`, che l'errore non lo può perdere per strada.
+  const query = useQuery({
     queryKey: queryKeys.seller.earnings,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -117,6 +124,9 @@ export default function SellerEarningsPage() {
       return (data ?? []) as unknown as OrderRow[];
     },
   });
+  // Per i calcoli serve una lista: qui il ripiego è innocuo, perché a decidere COSA disegnare non è
+  // più questa riga ma il verdetto qui sotto.
+  const orders = query.data ?? [];
 
   const filtered = useMemo(() => {
     const conf = PERIODS.find((p) => p.key === period)!;
@@ -171,7 +181,20 @@ export default function SellerEarningsPage() {
   }, [cardOrders]);
   const maxDaily = Math.max(...daily.map(([, v]) => v), 1);
 
-  if (isLoading) return <LoadingState />;
+  const vista = vistaDaQuery(query);
+  if (vista.mostraScheletro) return <LoadingState />;
+  if (vista.mostraErrore) {
+    return (
+      <div>
+        <SellerPageTitle eyebrow="Portafoglio" title="Guadagni" sub="Incassi reali dai tuoi ordini e stato dei bonifici" />
+        <ErrorState
+          title="Non sono riuscito a leggere i tuoi ordini"
+          description="La lettura non è riuscita, quindi non so quanto hai incassato. Non vuol dire che non hai incassato niente: riprova fra un momento."
+          onRetry={() => query.refetch()}
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

@@ -6,6 +6,8 @@ import { ExternalLink, Zap, Palette, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import type { StoreHours } from '@/lib/store-hours';
@@ -21,7 +23,7 @@ import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
 export default function SellerProfilePage() {
   const qc = useQueryClient();
 
-  const { data: profile, isLoading } = useQuery({
+  const queryProfile = useQuery({
     queryKey: queryKeys.seller.profile,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -81,7 +83,21 @@ export default function SellerProfilePage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading) return <LoadingState />;
+  const vistaqueryProfile = vistaDaQuery(queryProfile);
+  if (vistaqueryProfile.mostraScheletro) return <LoadingState />;
+  if (vistaqueryProfile.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non sono riuscito a leggere il profilo del negozio"
+        description="La lettura non è riuscita. Riprova fra un momento."
+        onRetry={() => queryProfile.refetch()}
+      />
+    );
+  }
+  // Dopo i due rami qui sopra il dato c'è: `mostraScheletro` è falso solo con un dato in mano.
+  // Resta tipato come «può mancare» perché la pagina lo legge già con `?.` in una ventina di punti,
+  // e cambiare quello sarebbe una riscrittura che non c'entra con questo difetto.
+  const profile = vistaqueryProfile.dati;
 
   return (
     <div className="max-w-3xl space-y-6">

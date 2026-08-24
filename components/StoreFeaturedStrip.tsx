@@ -19,6 +19,7 @@ type Row = {
   price: number | string;
   images: string[] | null;
   stock: number | null;
+  has_variants: boolean | null;
   created_at: string;
 };
 
@@ -36,7 +37,7 @@ export default function StoreFeaturedStrip({ sellerId, storeName, productIds, ac
     queryFn: async (): Promise<Row[]> => {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, description, price, images, stock, created_at')
+        .select('id, name, description, price, images, stock, created_at, has_variants')
         .eq('seller_id', sellerId)
         .eq('status', 'available')
         .in('id', ids);
@@ -70,6 +71,7 @@ export default function StoreFeaturedStrip({ sellerId, storeName, productIds, ac
             price={Number(p.price)}
             images={Array.isArray(p.images) ? p.images : []}
             stock={p.stock ?? undefined}
+            hasVariants={p.has_variants ?? undefined}
             createdAt={p.created_at}
             storeName={storeName ?? undefined}
             sellerId={sellerId}

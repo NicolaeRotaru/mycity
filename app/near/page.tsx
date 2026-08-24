@@ -1,14 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { List, Map as MapIcon, MapPin, RadioTower } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StoreListRow from '@/components/StoreListRow';
+import { ErrorState } from '@/components/ui/ErrorState';
 import NearbyStoresMapLazy, { type NearbyStore } from '@/components/NearbyStoresMapLazy';
 import { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
 import CollectionHeader from '@/components/CollectionHeader';
 import { haversineKm } from '@/lib/geo';
+import { frasePosizione, motivoPosizione, siAspetta, type MotivoPosizione } from '@/lib/posizione';
 import { queryKeys } from '@/lib/queries/keys';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
@@ -33,7 +35,7 @@ const fetchNearData = async () => {
   const SELECT_NEAR =
     'id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
   const conBandierine = () => supabase.from('seller_public_profiles').select(SELECT_NEAR);
-  const { data: storesRaw } = await conRipiegoSchema(
+  const { data: storesRaw, error: erroreNegozi } = await conRipiegoSchema(
     'near/page:seller_public_profiles',
     conBandierine,
     () =>
@@ -41,6 +43,11 @@ const fetchNearData = async () => {
         supabase.from('seller_public_profiles').select(senzaColonne(SELECT_NEAR, COLONNE_124_VISTA)),
       ),
   );
+  // L'errore veniva ingoiato: `conRipiegoSchema` non lancia — restituisce il risultato com'e' — e
+  // il campo `error` non lo leggeva nessuno. Quindi una lettura fallita non diventava mai un
+  // errore: la query andava a buon fine con `stores: []`, e a schermo usciva «0 negozi a Piacenza».
+  // Cioe' il sito rispondeva a una domanda che nessuno aveva potuto porre.
+  if (erroreNegozi) throw erroreNegozi;
 
   const stores = (storesRaw ?? []) as Store[];
   const storeIds = stores.map((s) => s.id);
@@ -105,23 +112,45 @@ const fetchNearData = async () => {
 
 export default function NearMePage() {
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
-  const [permError, setPermError] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState<MotivoPosizione | null>(null);
+  const [cerco, setCerco] = useState(false);
   const [view, setView] = useState<'list' | 'map'>('list');
   const [radiusKm, setRadiusKm] = useState(5);
 
-  useEffect(() => {
+  /**
+   * 24/8/2026 — IL PERMESSO NON SI CHIEDE PIÙ A FREDDO, E LA PAGINA NON ASPETTA PIÙ.
+   *
+   * Prima questa richiesta partiva dentro un effetto al montaggio: il riquadro di sistema arrivava
+   * prima di qualsiasi contenuto e senza una riga che dicesse perché. Un permesso chiesto così
+   * viene negato molto più spesso — e su iPhone, una volta negato, non lo richiede più nessuno: si
+   * deve andare nelle impostazioni del telefono. Cioè un «no» dato in due secondi spegneva la
+   * funzione per sempre.
+   *
+   * Adesso parte da un gesto: si vede prima cosa c'è, poi si decide se dire dove si è. Il perché
+   * completo, e le altre due metà del difetto, stanno in lib/posizione.ts.
+   */
+  const chiediPosizione = useCallback(() => {
     if (!navigator.geolocation) {
-      setPermError('Geolocalizzazione non supportata dal browser');
+      setMotivo('non-disponibile');
       return;
     }
+    setCerco(true);
     navigator.geolocation.getCurrentPosition(
-      (p) => setPos({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      (err) => setPermError('Impossibile ottenere la posizione: ' + err.message),
+      (p) => {
+        setPos({ lat: p.coords.latitude, lng: p.coords.longitude });
+        setMotivo(null);
+        setCerco(false);
+      },
+      (err) => {
+        // Il testo NON è quello del browser: è in inglese e cambia da browser a browser.
+        setMotivo(motivoPosizione(err));
+        setCerco(false);
+      },
       { enableHighAccuracy: true, timeout: 10_000 },
     );
   }, []);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.stores.nearV2,
     queryFn: fetchNearData,
   });
@@ -169,11 +198,27 @@ export default function NearMePage() {
     [filtered],
   );
 
-  // Attendi i dati e l'esito della geolocalizzazione (posizione o errore).
-  if (isLoading || (!pos && !permError)) {
+  // Una lettura fallita non e' un elenco vuoto. Prima usciva «0 negozi a Piacenza» — una frase che
+  // il sito non poteva sostenere, e che a un cliente dice «qui non c'e' niente per te».
+  if (isError) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <ErrorState
+          title="Non riusciamo a caricare i negozi"
+          description="Abbiamo provato a leggere le botteghe della tua zona e non ci siamo riusciti. Non vuol dire che non ce ne siano: riprova fra un attimo."
+          onRetry={() => refetch()}
+        />
+      </div>
+    );
+  }
+
+  // Si aspetta SOLO quello che serve davvero: i negozi. La posizione serve a ORDINARLI, e una lista
+  // non ordinata è meglio di una schermata d'attesa su una cosa che magari non arriverà mai — il
+  // riquadro di sistema può restare lì senza risposta, e prima la pagina restava bloccata con lui.
+  if (siAspetta({ negoziInArrivo: isLoading })) {
     return (
       <div className="container mx-auto p-8 text-center text-ink-500 flex items-center justify-center gap-2">
-        <RadioTower size={18} strokeWidth={2.2} aria-hidden /> Calcolo distanze…
+        <RadioTower size={18} strokeWidth={2.2} aria-hidden /> Carico i negozi…
       </div>
     );
   }
@@ -206,11 +251,37 @@ export default function NearMePage() {
         {pos ? ` entro ${radiusKm} km` : ' a Piacenza'}
       </p>
 
-      {permError && (
-        <div className="mb-4 flex gap-2 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-ink-700">
-          <MapPin size={18} strokeWidth={2.2} className="mt-0.5 shrink-0 text-accent-500" aria-hidden />
-          <span>{permError}. Mostriamo i negozi di Piacenza; abilita la geolocalizzazione per ordinarli per distanza e
-          filtrare per raggio.</span>
+      {/* L'invito, prima del permesso: si dice a cosa serve, e il riquadro di sistema arriva DOPO il
+          gesto. Chi non lo tocca vede comunque tutti i negozi. */}
+      {!pos && !motivo && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-cream-300 bg-surface-0 px-4 py-3 text-sm text-ink-700">
+          <MapPin size={18} strokeWidth={2.2} className="shrink-0 text-primary-700" aria-hidden />
+          <span className="min-w-0 flex-1">Per ordinarli dal più vicino serve sapere dove sei. Il telefono te lo chiederà.</span>
+          <button
+            type="button"
+            onClick={chiediPosizione}
+            disabled={cerco}
+            className="rounded-lg bg-primary-700 px-3.5 py-2 text-sm font-bold text-white hover:bg-primary-800 disabled:opacity-60"
+          >
+            {cerco ? 'Cerco…' : 'Ordina per vicinanza'}
+          </button>
+        </div>
+      )}
+
+      {motivo && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-accent-200 bg-accent-50 px-4 py-3 text-sm text-ink-700">
+          <MapPin size={18} strokeWidth={2.2} className="shrink-0 text-accent-500" aria-hidden />
+          <span className="min-w-0 flex-1">{frasePosizione(motivo)}</span>
+          {motivo !== 'negato' && (
+            <button
+              type="button"
+              onClick={chiediPosizione}
+              disabled={cerco}
+              className="rounded-lg bg-cream-100 px-3.5 py-2 text-sm font-bold text-ink-900 hover:bg-cream-200 disabled:opacity-60"
+            >
+              {cerco ? 'Cerco…' : 'Riprova'}
+            </button>
+          )}
         </div>
       )}
 

@@ -60,7 +60,10 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     queryFn: async (): Promise<boolean> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return false;
-      const { data } = await supabase.from('profiles').select('offers_express').eq('id', user.id).single();
+      const { data, error } = await supabase.from('profiles').select('offers_express').eq('id', user.id).single();
+      // «Non ho letto il profilo» non è «non offre la consegna espressa»: senza questa riga il
+      // negoziante che l'ha attivata non vede il campo per impostarla, e non capisce perché.
+      if (error) throw error;
       return Boolean((data as { offers_express?: boolean } | null)?.offers_express);
     },
   });

@@ -8,7 +8,8 @@ import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Wallet } from 'lucide-r
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
+import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante } from '@/lib/cart';
+import { statoDellaVista } from '@/lib/stato-vista';
 import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
@@ -24,7 +25,23 @@ import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicat
 import { StepCard } from '@/components/checkout/StepCard';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
-import { DeliverySlotPicker, resolveSlotLabel, SLOT_DEFAULTS } from '@/components/checkout/DeliverySlotPicker';
+import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
+import {
+  FASCE_DI_DOMANI,
+  consegnaScelta,
+  etichettaPerLOrdine,
+  fasciaDiPartenzaOggi,
+  giornoDiPartenza,
+  rigaQuandoArriva,
+  siPuoConfermare,
+} from '@/lib/quando-arriva';
+import {
+  bozzaDaSalvare,
+  bozzaLetta,
+  fasciaDaRimettere,
+  giornoDaRimettere,
+  metodoDaRimettere,
+} from '@/lib/bozza-checkout';
 import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
@@ -44,9 +61,16 @@ type AddressForm = {
 export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<CartItem[]>([]);
+  /**
+   * Come nel carrello: `useState([])` parte vuoto perché deve partire da qualcosa. Senza questa
+   * bandierina il primo controllo del render — che qui precedeva perfino `loadingGroups` — diceva
+   * «Il tuo carrello è vuoto» a chi stava per pagare.
+   */
+  const [carrelloLetto, setCarrelloLetto] = useState(false);
   useEffect(() => {
     const c = getCart();
     setCart(c);
+    setCarrelloLetto(true);
     if (c.length === 0) return;
     const totalCents = Math.round(c.reduce((s, i) => s + i.price * i.quantity, 0) * 100);
     // #225 — L'avvio del checkout si contava a ogni ingresso nella pagina,
@@ -376,8 +400,24 @@ export default function CheckoutPage() {
       // comunque appena viene ripresa, come prima.
       const raw = localStorage.getItem('mc_checkout_draft') ?? sessionStorage.getItem('mc_checkout_draft');
       if (!raw) return;
-      const draft = JSON.parse(raw) as Partial<typeof form>;
-      setForm((prev) => ({ ...prev, ...draft }));
+      const bozza = bozzaLetta(JSON.parse(raw));
+      if (!bozza) return;
+      setForm((prev) => ({ ...prev, ...(bozza.form as Partial<typeof form>) }));
+
+      // Lo sconto: si rimette il CODICE, e la verifica che c'è già nella pagina lo ricontrolla sul
+      // carrello di adesso. Se nel frattempo il carrello è cambiato, lo dice invece di mostrarlo.
+      if (bozza.couponCode) setCouponCode(bozza.couponCode);
+
+      const ora = new Date().getHours();
+      const metodo = metodoDaRimettere(bozza.metodoPagamento, stripeAvailable);
+      if (metodo) setPaymentMethod(metodo);
+      const giorno = giornoDaRimettere(bozza.giorno, ora);
+      if (giorno) setSlotDay(giorno);
+      const oggi = fasciaDaRimettere('today', bozza.fasciaOggi, ora);
+      if (oggi) setSlotTodayTime(oggi);
+      const domani = fasciaDaRimettere('tomorrow', bozza.fasciaDomani, ora);
+      if (domani) setSlotTomorrowTime(domani);
+
       localStorage.removeItem('mc_checkout_draft');
       sessionStorage.removeItem('mc_checkout_draft');
     } catch { /* noop */ }
@@ -406,11 +446,27 @@ export default function CheckoutPage() {
   // Fascia di consegna ("Quando vuoi riceverlo", step 2). Solo presentazione
   // lato client + una stringa leggibile persistita su orders.delivery_slot.
   // Nessun impatto su totali/spedizione: la matematica resta invariata.
-  const [slotDay, setSlotDay] = useState<'now' | 'today' | 'tomorrow'>('today');
-  const [slotTodayTime, setSlotTodayTime] = useState(SLOT_DEFAULTS.todayTime);
-  const [slotTomorrowTime, setSlotTomorrowTime] = useState(SLOT_DEFAULTS.tomorrowTime);
-  // null quando ritiro in negozio (nessuna consegna) o non applicabile.
-  const deliverySlot = resolveSlotLabel(slotDay, slotTodayTime, slotTomorrowTime, pickupInStore);
+  //
+  // ⚠️ SI PARTE DAL GIORNO CHE SI PUÒ DAVVERO SCEGLIERE. Prima si partiva sempre
+  // da 'today' e la fascia ripiegava sulla prima dell'elenco: dopo le 20:00
+  // quella è già passata, e finiva su orders.delivery_slot così com'era.
+  const oraDiApertura = new Date().getHours();
+  const [slotDay, setSlotDay] = useState(() => giornoDiPartenza(oraDiApertura));
+  const [slotTodayTime, setSlotTodayTime] = useState(
+    () => fasciaDiPartenzaOggi(oraDiApertura) ?? '',
+  );
+  const [slotTomorrowTime, setSlotTomorrowTime] = useState(FASCE_DI_DOMANI[2]);
+  // Tre risposte: non serve (ritiro) · questa fascia · non-valida (si frena).
+  const consegna = consegnaScelta({
+    giorno: slotDay,
+    ora: new Date().getHours(),
+    fasciaOggi: slotTodayTime,
+    fasciaDomani: slotTomorrowTime,
+    ritiroInNegozio: pickupInStore,
+  });
+  // null SOLO quando la fascia non serve: una fascia non valida ferma l'ordine.
+  const deliverySlot = etichettaPerLOrdine(consegna);
+  const consegnaConfermabile = siPuoConfermare(consegna);
 
   // Usa il credito MyCity (opt-in, default sì): applicato solo agli ordini COD.
   const [useCredit, setUseCredit] = useState(true);
@@ -791,11 +847,41 @@ export default function CheckoutPage() {
       toast.error('Scegli le opzioni (taglia/colore) per alcuni articoli prima di ordinare.');
       return;
     }
+    // La fascia si ricontrolla QUI, sull'ora di adesso.
+    //
+    // Il pulsante si spegne da solo quando la fascia scade, ma solo se la pagina
+    // ridisegna. Chi apre il checkout alle 19:55 e preme «Ordina» alle 20:05 non
+    // ha ridisegnato niente: senza questo controllo l'ordine partirebbe con una
+    // fascia finita cinque minuti prima. Un vincolo che dipende dall'orologio va
+    // riletto nel momento in cui conta, non solo quando si disegna.
+    const consegnaAdesso = consegnaScelta({
+      giorno: slotDay,
+      ora: new Date().getHours(),
+      fasciaOggi: slotTodayTime,
+      fasciaDomani: slotTomorrowTime,
+      ritiroInNegozio: pickupInStore,
+    });
+    if (!siPuoConfermare(consegnaAdesso)) {
+      toast.error(rigaQuandoArriva(consegnaAdesso));
+      return;
+    }
     trackCheckoutStep('address', { city: form.city });
     // Defer-the-wall: l'indirizzo si compila da ospiti; l'accesso è richiesto
     // solo qui, al commit, salvando la bozza per ripristinarla al ritorno.
     if (!authUser) {
-      try { localStorage.setItem('mc_checkout_draft', JSON.stringify(form)); } catch { /* noop */ }
+      // Non solo l'indirizzo: chi torna dall'accesso deve ritrovare il totale che aveva accettato.
+      // Dello sconto si salva il CODICE e mai la cifra — la bozza sta nel browser, e nel browser
+      // ci scrive chiunque. Al ritorno il codice passa dalla verifica come il primo giorno.
+      try {
+        localStorage.setItem('mc_checkout_draft', JSON.stringify(bozzaDaSalvare({
+          form,
+          couponCode: appliedCoupon?.coupon.code ?? couponCode,
+          metodoPagamento: paymentMethod,
+          giorno: slotDay,
+          fasciaOggi: slotTodayTime,
+          fasciaDomani: slotTomorrowTime,
+        })));
+      } catch { /* noop */ }
       router.push('/sign-in?returnTo=/checkout');
       return;
     }
@@ -806,17 +892,21 @@ export default function CheckoutPage() {
     }
   };
 
-  if (cart.length === 0) {
+  // I tre esiti, nell'ordine giusto: prima «non ho ancora guardato», poi «ho guardato e non c'è
+  // niente». Prima stavano al contrario, e il ramo del vuoto vinceva sempre.
+  const vistaCarrello = statoDellaVista({ letto: carrelloLetto, caricando: loadingGroups, quanti: cart.length });
+
+  if (vistaCarrello.mostraScheletro) {
+    return <LoadingState />;
+  }
+
+  if (vistaCarrello.mostraVuoto) {
     return (
       <div className="container mx-auto p-12 text-center space-y-4">
         <p className="text-ink-500 text-lg">Il tuo carrello è vuoto.</p>
         <Button href="/">Torna al negozio</Button>
       </div>
     );
-  }
-
-  if (loadingGroups) {
-    return <LoadingState />;
   }
 
   return (
@@ -880,7 +970,7 @@ export default function CheckoutPage() {
                 <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
                   <div>
                     <p className="font-bold text-ink-900">Consegna a domicilio</p>
-                    <p className="text-sm text-ink-600">In 30-60 minuti dalla conferma del negozio{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
+                    <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
                   </div>
                   <span className="font-serif text-lg font-extrabold text-ink-900">
                     {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
@@ -977,9 +1067,27 @@ export default function CheckoutPage() {
               perche'. `role="alert"` li fa leggere appena compaiono — e' la
               stessa correzione gia' applicata ai campi del modulo. */}
           {stockIssues.length > 0 && (
-            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
-              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
-              <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.</span>
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 space-y-3">
+              <p className="flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+                <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello, oppure togli l&apos;articolo da qui.</span>
+              </p>
+              {/* Il riquadro diceva solo «riduci le quantità nel carrello», cioè torna indietro e
+                  fallo a mano. Chi ha davanti un articolo finito — disponibili zero — non ha niente
+                  da ridurre: l'unica mossa è toglierlo, e non c'era. */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    stockIssues.forEach((s) => removeFromCart(s.id));
+                    setCart(getCart());
+                    toast.success(stockIssues.length === 1 ? 'Articolo rimosso' : 'Articoli rimossi');
+                  }}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+                >
+                  Togli dal carrello
+                </button>
+              </div>
             </div>
           )}
 
@@ -998,13 +1106,43 @@ export default function CheckoutPage() {
             </div>
           )}
 
+          {/* 24/8/2026 — LE ISTRUZIONI DI QUESTO RIQUADRO NON FUNZIONAVANO.
+              Diceva «apri il prodotto, seleziona la variante e aggiungilo di
+              nuovo al carrello». Chi lo faceva restava bloccato lo stesso: due
+              righe sono lo stesso articolo solo se coincidono prodotto E
+              variante, quindi quella nuova si aggiunge e la rotta resta. E qui
+              non c'era nessun modo di toglierla — il riquadro degli articoli
+              spariti ce l'ha da sempre.
+              Il pulsante toglie SOLO la riga senza variante: chi ha anche la
+              riga giusta, con la taglia scelta, non la perde. */}
           {variantIssues.length > 0 && (
-            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
-              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
-              <span>
-                <strong>Scegli le opzioni</strong> (taglia/colore) per: {variantIssues.map((v) => v.name).join(', ')}.{' '}
-                Apri il prodotto, seleziona la variante e aggiungilo di nuovo al carrello.
-              </span>
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 space-y-3">
+              <p className="flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+                <span>
+                  <strong>Scegli le opzioni</strong> (taglia/colore) per: {variantIssues.map((v) => v.name).join(', ')}.{' '}
+                  Aprilo, scegli la variante e aggiungilo di nuovo. Poi togli da qui la riga senza opzioni.
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/product/${variantIssues[0].id}`}
+                  className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+                >
+                  Apri {variantIssues.length === 1 ? 'il prodotto' : 'il primo'}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    variantIssues.forEach((v) => rimuoviRigaSenzaVariante(v.id));
+                    setCart(getCart());
+                    toast.success(variantIssues.length === 1 ? 'Riga senza opzioni rimossa' : 'Righe senza opzioni rimosse');
+                  }}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+                >
+                  Togli dal carrello
+                </button>
+              </div>
             </div>
           )}
 
@@ -1052,7 +1190,7 @@ export default function CheckoutPage() {
               total={finalTotal}
               isCheckingOut={isCheckingOut}
               paymentMethod={paymentMethod}
-              disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}
+              disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
             />
           </div>
         </div>
@@ -1079,7 +1217,7 @@ export default function CheckoutPage() {
         <button
           type="submit"
           form="checkout-form"
-          disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0}
+          disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
           aria-label={
             paymentMethod === 'card'
               ? 'Paga con carta e conferma ordine'
