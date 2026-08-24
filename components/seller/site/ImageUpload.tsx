@@ -55,7 +55,7 @@ export function SingleImageUpload({ value, onChange }: { value: string; onChange
     <div>
       {value && (
         <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2 border border-cream-200">
-          <Image src={sizedImage(value, 'card')} alt="" fill sizes="480px" className="object-cover" />
+          <Image src={sizedImage(value, 480, { quadrato: true })} alt="" fill sizes="480px" className="object-cover" />
           <button
             type="button"
             onClick={() => onChange('')}

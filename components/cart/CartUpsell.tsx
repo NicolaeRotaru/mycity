@@ -99,7 +99,7 @@ export function CartUpsell({ items }: Props) {
                 <div className="relative w-full h-20 bg-cream-100">
                   {img && (
                     <Image
-                      src={sizedImage(img, 'thumb')}
+                      src={sizedImage(img, 144, { quadrato: true })}
                       alt={p.name}
                       fill
                       sizes="144px"
