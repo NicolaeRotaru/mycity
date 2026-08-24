@@ -29,6 +29,7 @@ type SuggestItem = {
   images: string[] | null;
   seller_id: string | null;
   has_variants: boolean | null;
+  stock: number | null;
   profiles: { store_name: string | null; is_approved: boolean } | null;
 };
 
@@ -48,22 +49,32 @@ export function CartUpsell({ items }: Props) {
     queryKey: ['cart-upsell', sellerIds.join(','), excludeIds.join(',')],
     enabled: sellerIds.length > 0,
     queryFn: async (): Promise<SuggestItem[]> => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('products')
         .select(`
-          id, name, price, images, seller_id, has_variants,
+          id, name, price, images, seller_id, has_variants, stock,
           profiles!products_seller_id_fkey ( store_name, is_approved )
         `)
         .in('seller_id', sellerIds)
         .eq('status', 'available')
         .limit(24);
+      // L'errore non si ingoia: senza questa riga la lettura non FALLISCE mai — torna «riuscita»
+      // con la lista vuota, la striscia sparisce in silenzio e nessuno sa perché.
+      if (error) throw error;
       const rows = (data ?? []) as unknown as SuggestItem[];
       const inCart = new Set(excludeIds);
-      // Escludi i prodotti con varianti: l'upsell aggiunge l'articolo SENZA
-      // scegliere l'opzione → finirebbe bloccato al checkout. Per quelli serve
-      // passare dalla scheda prodotto.
+      // Qui si propone solo ciò che si può davvero comprare col «+».
+      //
+      // · con varianti → fuori: l'upsell aggiunge l'articolo SENZA scegliere l'opzione, e la riga
+      //   arriva rotta al checkout. Per quelli serve passare dalla scheda prodotto.
+      // · finiti → fuori, ed è il difetto che questa riga chiude. `status = 'available'` NON vuol
+      //   dire «ce n'è»: la giacenza è una colonna a parte, e nessun automatismo porta lo status a
+      //   'out_of_stock' quando arriva a zero. Un prodotto disponibile-ma-finito compariva senza
+      //   badge, col pulsante acceso, si aggiungeva al carrello, e il muro arrivava al checkout.
+      //   `stock === null` vuol dire «non tenuta»: quello resta, perché non è un prodotto finito.
       return rows
         .filter((p) => p.profiles?.is_approved && !inCart.has(p.id) && !p.has_variants)
+        .filter((p) => p.stock === null || p.stock === undefined || p.stock > 0)
         .slice(0, 8);
     },
   });

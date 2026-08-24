@@ -8,7 +8,7 @@ import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Wallet } from 'lucide-r
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { CartItem, getCart, clearCart, removeFromCart } from '@/lib/cart';
+import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante } from '@/lib/cart';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
 import { formatPrice } from '@/lib/format';
@@ -989,9 +989,27 @@ export default function CheckoutPage() {
               perche'. `role="alert"` li fa leggere appena compaiono — e' la
               stessa correzione gia' applicata ai campi del modulo. */}
           {stockIssues.length > 0 && (
-            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
-              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
-              <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello per procedere.</span>
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 space-y-3">
+              <p className="flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+                <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello, oppure togli l&apos;articolo da qui.</span>
+              </p>
+              {/* Il riquadro diceva solo «riduci le quantità nel carrello», cioè torna indietro e
+                  fallo a mano. Chi ha davanti un articolo finito — disponibili zero — non ha niente
+                  da ridurre: l'unica mossa è toglierlo, e non c'era. */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    stockIssues.forEach((s) => removeFromCart(s.id));
+                    setCart(getCart());
+                    toast.success(stockIssues.length === 1 ? 'Articolo rimosso' : 'Articoli rimossi');
+                  }}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+                >
+                  Togli dal carrello
+                </button>
+              </div>
             </div>
           )}
 
@@ -1010,13 +1028,43 @@ export default function CheckoutPage() {
             </div>
           )}
 
+          {/* 24/8/2026 — LE ISTRUZIONI DI QUESTO RIQUADRO NON FUNZIONAVANO.
+              Diceva «apri il prodotto, seleziona la variante e aggiungilo di
+              nuovo al carrello». Chi lo faceva restava bloccato lo stesso: due
+              righe sono lo stesso articolo solo se coincidono prodotto E
+              variante, quindi quella nuova si aggiunge e la rotta resta. E qui
+              non c'era nessun modo di toglierla — il riquadro degli articoli
+              spariti ce l'ha da sempre.
+              Il pulsante toglie SOLO la riga senza variante: chi ha anche la
+              riga giusta, con la taglia scelta, non la perde. */}
           {variantIssues.length > 0 && (
-            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
-              <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
-              <span>
-                <strong>Scegli le opzioni</strong> (taglia/colore) per: {variantIssues.map((v) => v.name).join(', ')}.{' '}
-                Apri il prodotto, seleziona la variante e aggiungilo di nuovo al carrello.
-              </span>
+            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 space-y-3">
+              <p className="flex items-start gap-2">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
+                <span>
+                  <strong>Scegli le opzioni</strong> (taglia/colore) per: {variantIssues.map((v) => v.name).join(', ')}.{' '}
+                  Aprilo, scegli la variante e aggiungilo di nuovo. Poi togli da qui la riga senza opzioni.
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href={`/product/${variantIssues[0].id}`}
+                  className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+                >
+                  Apri {variantIssues.length === 1 ? 'il prodotto' : 'il primo'}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => {
+                    variantIssues.forEach((v) => rimuoviRigaSenzaVariante(v.id));
+                    setCart(getCart());
+                    toast.success(variantIssues.length === 1 ? 'Riga senza opzioni rimossa' : 'Righe senza opzioni rimosse');
+                  }}
+                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+                >
+                  Togli dal carrello
+                </button>
+              </div>
             </div>
           )}
 

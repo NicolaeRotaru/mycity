@@ -21,7 +21,7 @@ export default function FavoritesPage() {
         .select(`
           product_id,
           products (
-            id, name, description, price, images, stock, created_at, seller_id, status,
+            id, name, description, price, images, stock, has_variants, created_at, seller_id, status,
             profiles!products_seller_id_fkey ( store_name, is_approved )
           )
         `)
@@ -32,7 +32,7 @@ export default function FavoritesPage() {
         product_id: string;
         products: {
           id: string; name: string; description: string | null;
-          price: string | number; images: string[] | null; stock: number | null;
+          price: string | number; images: string[] | null; stock: number | null; has_variants: boolean | null;
           created_at: string; seller_id: string; status: string;
           profiles: { store_name: string | null; is_approved: boolean } | null;
         } | null;
@@ -96,6 +96,7 @@ export default function FavoritesPage() {
             price={Number(p.price)}
             images={Array.isArray(p.images) ? p.images : []}
             stock={p.stock ?? undefined}
+            hasVariants={p.has_variants ?? undefined}
             createdAt={p.created_at}
             storeName={p.profiles?.store_name ?? undefined}
             sellerId={p.seller_id ?? undefined}
