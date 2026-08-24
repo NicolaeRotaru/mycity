@@ -78,7 +78,7 @@ type SchedaProdotto = {
   has_variants: boolean | null;
   external_source_url: string | null;
   categories: { slug: string | null; name: string | null } | null;
-  profiles: { id: string; store_name: string | null; is_approved: boolean | null; offers_express: boolean | null } | null;
+  profiles: { id: string; store_name: string | null; is_approved: boolean | null; offers_express: boolean | null; store_hours: unknown } | null;
 };
 
 export default function ProductPage(props: { params: Promise<{ id: string }> }) {
@@ -147,7 +147,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
         id, name, description, price, images, seller_id, status, created_at, category_id,
         stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
         external_source_url,
-        categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express )
+        categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express, store_hours )
       `).eq('id', id).maybeSingle();
       // 22/8/2026 — «NON C'E'» E «NON RIESCO A LEGGERLO» SONO DUE COSE DIVERSE.
       //
@@ -749,7 +749,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                 dinamiche restano tali (DeliveryCutoff conserva la sua logica). */}
             <div className="flex flex-col gap-2 rounded-lg bg-olive-50 border border-olive-200 px-3.5 py-3">
               {/* Consegna: marketplace esterno se importato, altrimenti Express/Standard */}
-              <DeliveryCutoff variant="inline" available={!isOutOfStock && expressEligible} externalDeliveryLabel={external?.delivery_label} />
+              <DeliveryCutoff
+                variant="inline"
+                available={!isOutOfStock && expressEligible}
+                storeHours={(sellerProfile as { store_hours?: unknown } | null)?.store_hours}
+                externalDeliveryLabel={external?.delivery_label}
+              />
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">
                 <Banknote size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
                 {/* La frase nasce dall'elenco dei metodi del checkout: la carta alla consegna
