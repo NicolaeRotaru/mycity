@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Package, ShoppingBag, Euro, Star, Rocket, Lightbulb, Mail, MessageCircle, BookOpen, type LucideIcon } from 'lucide-react';
+import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 
 export const metadata = {
   title: 'Centro venditori · MyCity',
@@ -69,6 +70,7 @@ const TOPICS: { icon: LucideIcon; title: string; items: { q: string; a: string }
 ];
 
 export default function SellerHelpPage() {
+  const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
   return (
     <div className="space-y-6">
       <div>
@@ -87,11 +89,13 @@ export default function SellerHelpPage() {
           <p className="font-bold text-ink-900">Email dedicata</p>
           <p className="text-xs text-ink-500 mt-1">venditori@mycity.it</p>
         </a>
-        <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
-          <div className="mb-2"><MessageCircle size={24} className="text-olive-600" aria-hidden /></div>
-          <p className="font-bold text-ink-900">WhatsApp</p>
-          <p className="text-xs text-ink-500 mt-1">Lun-Ven 9-18</p>
-        </a>
+        {whatsapp && (
+          <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="bg-white border rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
+            <div className="mb-2"><MessageCircle size={24} className="text-olive-600" aria-hidden /></div>
+            <p className="font-bold text-ink-900">WhatsApp</p>
+            <p className="text-xs text-ink-500 mt-1">Lun-Ven 9-18</p>
+          </a>
+        )}
       </div>
 
       <div className="space-y-6">

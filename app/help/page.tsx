@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ShoppingCart, Truck, Undo2, Settings, Store, Bike, Search, Mail, MessageCircle, FileText } from 'lucide-react';
+import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 
 export const metadata = {
   title: 'Centro assistenza · MyCity',
@@ -55,6 +56,7 @@ const TOPICS = [
 ];
 
 export default function HelpPage() {
+  const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
   return (
     <div className="container mx-auto px-6 py-10 max-w-5xl">
       <div className="text-center mb-10">
@@ -103,13 +105,15 @@ export default function HelpPage() {
               <div className="text-xs text-ink-500">info@mycity.it</div>
             </div>
           </a>
-          <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-olive-300 transition-colors">
-            <MessageCircle size={24} className="text-olive-600 shrink-0" aria-hidden />
-            <div>
-              <div className="font-semibold text-sm">WhatsApp</div>
-              <div className="text-xs text-ink-500">Lun-Ven 9-18</div>
-            </div>
-          </a>
+          {whatsapp && (
+            <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-olive-300 transition-colors">
+              <MessageCircle size={24} className="text-olive-600 shrink-0" aria-hidden />
+              <div>
+                <div className="font-semibold text-sm">WhatsApp</div>
+                <div className="text-xs text-ink-500">Lun-Ven 9-18</div>
+              </div>
+            </a>
+          )}
           <Link href="/contact" className="flex items-center gap-3 bg-white border rounded-lg p-3 hover:border-primary-300 transition-colors">
             <FileText size={24} className="text-primary-600 shrink-0" aria-hidden />
             <div>

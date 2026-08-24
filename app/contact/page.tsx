@@ -10,10 +10,12 @@ import { Button } from '@/components/ui/Button';
 import { Input, Textarea, Select } from '@/components/ui/Field';
 import { Mail, MessageCircle, Phone, MapPin, Clock, Lightbulb } from 'lucide-react';
 import { rigaIdentita, titolare } from '@/lib/legal/titolare';
+import { linkWhatsApp } from '@/lib/contatto-whatsapp';
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
 export default function ContactPage() {
+  const whatsapp = linkWhatsApp(process.env.NEXT_PUBLIC_WHATSAPP_NUMBER, 'Ciao MyCity, ho una domanda');
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
 
@@ -90,12 +92,18 @@ export default function ContactPage() {
           <div className="text-sm text-ink-600">info@mycity.it</div>
           <div className="text-xs text-ink-500 mt-1">Risposta entro 24h</div>
         </a>
-        <a href="https://wa.me/393000000000" target="_blank" rel="noopener noreferrer" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
-          <div className="mb-2"><MessageCircle size={28} className="text-olive-600" aria-hidden /></div>
-          <div className="font-bold">WhatsApp</div>
-          <div className="text-sm text-ink-600">+39 300 000 0000</div>
-          <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
-        </a>
+        {/*
+          Qui c'era un numero finto stampato come se fosse vero — «+39 300 000 0000» — e il link
+          portava su un contatto inesistente. Su una pagina che si chiama «Contattaci». Adesso la
+          carta compare solo se il numero c'è davvero, come i dati legali nel piè di pagina.
+        */}
+        {whatsapp && (
+          <a href={whatsapp} target="_blank" rel="noopener noreferrer" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-green-300 transition-all">
+            <div className="mb-2"><MessageCircle size={28} className="text-olive-600" aria-hidden /></div>
+            <div className="font-bold">WhatsApp</div>
+            <div className="text-xs text-ink-500 mt-1">Lun-Ven 9–18</div>
+          </a>
+        )}
         <a href="tel:+390523000000" className="bg-white border border-cream-300 rounded-xl p-5 hover:shadow-md hover:border-primary-300 transition-all">
           <div className="mb-2"><Phone size={28} className="text-primary-600" aria-hidden /></div>
           <div className="font-bold">Telefono</div>
