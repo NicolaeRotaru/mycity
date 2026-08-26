@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { useRouter } from 'next/navigation';
 import { Headset, X, Send, Sparkles, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
@@ -66,15 +67,20 @@ export default function SupportChatModal({ open, onClose, role = 'default' }: Pr
         body: JSON.stringify({ firstMessage: body }),
       });
       if (!res.ok) {
+        // `error` nel corpo di ApiErrors e' un OGGETTO `{ code, message }`, non una stringa:
+        // `j.error ?? …` lo trovava pieno e ne faceva «[object Object]». E la riga qui sotto
+        // lo mostrava tale e quale, senza passare da friendlyError. Succedeva sul limite di
+        // richieste e su ogni errore interno della rotta — cioe' chi stava scrivendo
+        // all'assistenza, gia' con un problema, si vedeva rispondere «[object Object]».
         const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? j.message ?? 'Impossibile aprire la chat');
+        throw new Error(apiErrorMessage(j, 'Impossibile aprire la chat'));
       }
       const { conversationId } = await res.json();
       onClose();
       setText('');
       router.push(`/messages/${conversationId}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Errore');
+      toast.error(friendlyError(e));
     } finally {
       setSending(false);
     }

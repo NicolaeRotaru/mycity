@@ -68,15 +68,30 @@ export default function SOSButton({ orderId }: Props) {
       captureError(e, { context: 'SOSButton' });
     }
 
-    // 3. Avvia chiamata 112
+    // 3. APRE IL TASTIERINO COL 112 GIA' COMPOSTO — non chiama.
+    //
+    // `tel:` apre il compositore del telefono col numero scritto. La chiamata parte SOLO se
+    // il fattorino preme il tasto verde. I due messaggi qui sotto dicevano «Stiamo chiamando
+    // il 112» e «Chiamata al 112 in corso», tutti e due al presente, come se stesse gia'
+    // squillando. Un fattorino che ha appena premuto SOS puo' restare ad aspettare una
+    // chiamata che nessuno ha fatto partire, nel momento in cui conta di piu'.
+    //
+    // Venti righe piu' in basso il dialogo di conferma lo diceva gia' giusto: «Verra' avviata
+    // la chiamata al 112». Il testo esatto era li' dentro, e questi due non l'avevano preso.
     window.location.href = 'tel:112';
     setSending(false);
     setOpen(false);
     if (alertSent) {
-      toast.success('SOS inviato. Stiamo chiamando il 112 e abbiamo allertato MyCity.');
+      toast.success('MyCity è stata avvisata. Ora premi CHIAMA sul telefono: il 112 è già composto.', {
+        duration: 12_000,
+      });
     } else {
-      // Fallback esplicito: il rider NON deve credere che l'alert sia partito.
-      toast.error('Chiamata al 112 in corso. Se non parte, chiama subito il 112 dal telefono.', { duration: 10_000 });
+      // Qui l'avviso a MyCity NON e' partito, e il fattorino deve saperlo: e' solo davanti a
+      // un tastierino aperto. Prima diceva «Chiamata al 112 in corso», che era la cosa meno
+      // vera possibile proprio nel ramo peggiore.
+      toast.error('MyCity NON è stata avvisata. Premi subito CHIAMA sul telefono per parlare col 112.', {
+        duration: 15_000,
+      });
     }
   };
 
