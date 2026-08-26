@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useEffect, useState } from 'react';
+import { classiCuore } from '@/lib/design/cuore-preferito';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -179,7 +180,7 @@ const ProductCard = ({
           <Heart
             size={16}
             strokeWidth={2}
-            className={`${isFav ? 'fill-secondary-500 text-secondary-500' : 'text-ink-400'} ${heartBeat ? 'animate-heart-beat' : ''}`}
+            className={`${classiCuore(isFav)} ${heartBeat ? 'animate-heart-beat' : ''}`}
           />
         </button>
       </div>
