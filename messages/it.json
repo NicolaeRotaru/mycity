@@ -158,7 +158,7 @@
     "blurb": "Cosa c'è nel piatto a Piacenza — ricetta + storia di un negoziante + 3 offerte. Ogni venerdì.",
     "placeholder": "la-tua@email.it",
     "subscribe": "Iscriviti",
-    "subscribed": "Iscritto! Riceverai la newsletter ogni venerdì.",
-    "subscribedBox": "Sei iscritto. Riceverai presto le ricette di Piacenza nella tua mail."
+    "subscribed": "Ti abbiamo scritto: apri l'email e clicca il link per confermare l'iscrizione.",
+    "subscribedBox": "Controlla la posta: l'iscrizione si attiva col link che ti abbiamo mandato. Se non lo trovi, guarda nello spam."
   }
 }
