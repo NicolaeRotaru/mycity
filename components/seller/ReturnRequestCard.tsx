@@ -8,6 +8,7 @@ import { RotateCcw, Check, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
+import { apiErrorMessage } from '@/lib/errors';
 
 export type ReturnRow = {
   id: string;
@@ -74,8 +75,9 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
         body: JSON.stringify(body),
       });
       if (!res.ok) {
+        // Stesso schema della pagina ordine: `error` e' un oggetto, non una stringa.
         const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? j.message ?? 'Operazione non riuscita');
+        throw new Error(apiErrorMessage(j, 'Operazione non riuscita'));
       }
       return res.json();
     },

@@ -27,7 +27,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ContactSheet, type ContactTarget } from '@/components/orders/ContactSheet';
-import { friendlyError } from '@/lib/errors';
+import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import EmptyState from '@/components/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { trackOrderCanceled } from '@/lib/analytics/events';
@@ -199,8 +199,14 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         headers: session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {},
       });
       if (!res.ok) {
-        const corpo = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(corpo.error || 'Impossibile annullare');
+        // Il corpo di ApiErrors e' `{ ok:false, error:{ code, message } }` — `error` e' un OGGETTO,
+        // non una stringa. `corpo.error || …` lo trovava truthy e ne faceva «[object Object]», che
+        // poi `friendlyError` scarta (comincia per parentesi quadra) sostituendolo col generico.
+        // Risultato: il cliente riprovava all'infinito una cosa che non poteva funzionare, e chi
+        // aveva pagato in contanti non veniva mai mandato all'assistenza. `apiErrorMessage` sa
+        // leggere tutte e due le forme.
+        const corpo = await res.json().catch(() => ({}));
+        throw new Error(apiErrorMessage(corpo, 'Impossibile annullare'));
       }
     },
     onSuccess: () => {
