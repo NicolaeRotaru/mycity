@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, Suspense, useEffect, useState } from 'react';
+import { traduciErroreAuth } from '@/lib/errors';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Mail, ArrowRight } from 'lucide-react';
@@ -18,20 +19,25 @@ const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
 
 // Traduzioni dei messaggi più comuni che Supabase restituisce in inglese.
 // Tutto ciò che non matcha cade nel fallback generico.
+/**
+ * Il ripiego di QUESTA schermata, dopo la traduzione condivisa.
+ *
+ * Il corpo di questa funzione viveva solo qui e nessun altro poteva usarlo: registrazione
+ * e cambio password chiamavano `friendlyError`, che di errori Auth non sapeva niente, e
+ * si vedevano uscire l'inglese. Adesso la traduzione sta in `lib/errors.ts`, condivisa.
+ *
+ * Qui restano le due reti larghe — «contiene password», «contiene email» — perche' qui
+ * sono giuste: su una schermata di accesso ogni errore parla di accesso. Nella funzione
+ * condivisa sarebbero sbagliate, perche' lei vede ogni errore dell'applicazione.
+ */
 function translateAuthError(msg: string): string {
-  const m = msg.toLowerCase();
-  // 22/8/2026 — Il gettone anti-bot vale una volta sola: dopo un tentativo
-  // andato male il server lo rifiuta, e il messaggio grezzo parla di captcha su
-  // una schermata dove non c'e' niente da premere. Adesso si dice cosa fare.
-  if (m.includes('captcha') || m.includes('turnstile'))
-    return 'Il controllo anti-bot e scaduto: e stato rigenerato, premi di nuovo Accedi.';
-  if (m.includes('invalid login credentials')) return 'Email o password non corrette';
-  if (m.includes('email not confirmed'))       return 'Email non confermata. Controlla la posta e clicca sul link che ti abbiamo inviato.';
-  if (m.includes('user not found'))            return 'Nessun account con questa email';
+  const condivisa = traduciErroreAuth(msg);
+  if (condivisa) return condivisa;
+  const m = String(msg || '').toLowerCase();
   if (m.includes('rate limit') || m.includes('too many'))
-                                               return 'Troppi tentativi. Riprova fra qualche minuto.';
-  if (m.includes('password'))                  return 'Password non valida';
-  if (m.includes('email'))                     return 'Email non valida';
+    return 'Troppi tentativi. Riprova fra qualche minuto.';
+  if (m.includes('password')) return 'Password non valida';
+  if (m.includes('email')) return 'Email non valida';
   return 'Accesso non riuscito. Riprova.';
 }
 
