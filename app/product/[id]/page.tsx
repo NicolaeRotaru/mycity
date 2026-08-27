@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, use, useRef, useEffect } from 'react';
+import { ANELLO, classiBottoneCuore } from '@/lib/design/cuore-preferito';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -687,12 +688,10 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               aria-label={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti' : isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
               aria-pressed={cuorePremibile ? isFav : undefined}
               title={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti: riprova fra un momento' : undefined}
-              className={`shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center transition-transform focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2 ${
+              className={`shrink-0 w-11 h-11 rounded-full border-2 flex items-center justify-center transition-transform focus-visible:ring-2 ${ANELLO} focus-visible:ring-offset-2 ${
                 !cuorePremibile
                   ? 'bg-white border-cream-200 text-ink-200 cursor-not-allowed'
-                  : isFav
-                    ? 'bg-rose-500 border-rose-500 text-white hover:scale-110'
-                    : 'bg-white border-cream-300 text-ink-300 hover:scale-110 hover:text-rose-400 hover:border-rose-200'
+                  : classiBottoneCuore(isFav)
               }`}
             >
               <Heart size={20} strokeWidth={2.4} fill={isFav ? 'currentColor' : 'none'} aria-hidden />

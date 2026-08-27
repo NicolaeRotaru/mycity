@@ -24,6 +24,69 @@ const SUPABASE_CODE_MAP: Record<string, string> = {
 const GENERIC_FALLBACK = 'Qualcosa non ha funzionato. Riprova fra un momento.';
 
 /**
+ * GLI ERRORI DI SUPABASE AUTH, IN ITALIANO — o `null` se non lo riconosco.
+ *
+ * PERCHÉ ESISTE QUI. Una funzione con lo stesso mestiere viveva dentro
+ * `app/sign-in/page.tsx`, non esportata: la usava solo quella pagina. Registrazione,
+ * cambio password e cambio email chiamavano `friendlyError`, che di errori Auth non
+ * sapeva niente — ha le mappe dei codici Postgres e dei guasti di rete, e nient'altro.
+ * Il messaggio grezzo passava i filtri finali (meno di 200 caratteri, una riga sola,
+ * comincia per lettera) e usciva tale e quale. L'errore più comune della
+ * registrazione, «User already registered», arrivava così al cliente piacentino.
+ *
+ * PERCHÉ TORNA `null` INVECE DI UNA FRASE DI RIPIEGO. Il ripiego giusto dipende da
+ * dove sei: «Accesso non riuscito» sull'accesso, «Registrazione non riuscita» sulla
+ * registrazione. Una funzione condivisa che sceglie da sé ne sbaglierebbe due su tre.
+ * Qui si traduce solo ciò che si riconosce; il ripiego lo mette chi chiama.
+ *
+ * PERCHÉ SOLO FRASI SPECIFICHE. La versione dentro sign-in finiva con due reti larghe
+ * — `includes('password')`, `includes('email')` — che su quella schermata vanno bene
+ * perché lì gli errori possibili sono solo di accesso. Dentro `friendlyError`, che
+ * vede ogni errore dell'applicazione, quelle due reti tradurrebbero in «Password non
+ * valida» un guasto che con l'accesso non c'entra niente. Qui restano fuori: sono la
+ * coda di sign-in, non una regola generale.
+ */
+export function traduciErroreAuth(msg: string): string | null {
+  const m = String(msg || '').toLowerCase();
+  if (!m) return null;
+
+  // Il gettone anti-bot vale una volta sola: dopo un tentativo andato male il server
+  // lo rifiuta, e il messaggio grezzo parla di captcha su una schermata dove non c'e'
+  // niente da premere.
+  if (m.includes('captcha') || m.includes('turnstile'))
+    return 'Il controllo anti-bot è scaduto: è stato rigenerato, premi di nuovo.';
+  if (m.includes('invalid login credentials')) return 'Email o password non corrette';
+  if (m.includes('email not confirmed'))
+    return 'Email non confermata. Controlla la posta e clicca sul link che ti abbiamo inviato.';
+  if (m.includes('user not found')) return 'Nessun account con questa email';
+
+  // I quattro della registrazione e del cambio password, che prima uscivano in inglese.
+  if (m.includes('user already registered') || m.includes('already been registered'))
+    return 'Esiste già un account con questa email. Prova ad accedere.';
+  if (m.includes('password should be at least')) {
+    const n = m.match(/at least (\d+)/)?.[1];
+    return n ? `La password deve essere di almeno ${n} caratteri` : 'La password è troppo corta';
+  }
+  if (m.includes('unable to validate email address') || m.includes('invalid email'))
+    return 'Questa email non sembra valida. Controlla come l’hai scritta.';
+  if (m.includes('email rate limit exceeded'))
+    return 'Abbiamo già inviato troppe email a questo indirizzo. Riprova fra qualche minuto.';
+  if (m.includes('new password should be different'))
+    return 'La password nuova deve essere diversa da quella attuale';
+  if (m.includes('same password'))
+    return 'La password nuova deve essere diversa da quella attuale';
+
+  // `rate limit` generico NON sta qui, ed e' una correzione che mi ha fatto la suite:
+  // spostandolo dentro la funzione condivisa rubavo il caso a `friendlyError`, che lo
+  // trattava gia' e con parole sue («Troppe richieste in poco tempo»). Una rete larga
+  // messa in una funzione che vede TUTTI gli errori si prende anche quelli di altri.
+  // Resta qui solo `email rate limit exceeded`, che e' di Auth e sta piu' sopra.
+  // La rete larga vive nel ripiego di sign-in, dov'era prima.
+
+  return null;
+}
+
+/**
  * Trasforma errori Supabase/Stripe/fetch in messaggi user-friendly italiani.
  * Logga il messaggio originale per debugging via PostHog.
  */
@@ -38,6 +101,14 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       return SUPABASE_CODE_MAP[e.code];
     }
     if (e.message) {
+      // Gli errori di Supabase Auth prima non li conosceva nessuno qui dentro, e uscivano
+      // in inglese sulla registrazione e sul cambio password. `traduciErroreAuth` torna
+      // `null` su tutto ciò che non riconosce, quindi non ruba niente ai rami sotto.
+      const inItaliano = traduciErroreAuth(e.message);
+      if (inItaliano) {
+        trackErrorShown(e.code ?? 'auth', e.message, context?.page);
+        return inItaliano;
+      }
       // Fix #17: trackErrorShown in ogni ramo (era tracciato solo per i codici Supabase mappati).
       if (/duplicate key value/i.test(e.message)) {
         trackErrorShown('duplicate_key', e.message, context?.page);

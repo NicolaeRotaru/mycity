@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Headset } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { useProfile } from './hooks/useProfile';
+import { pulsanteAssistenzaVisibile, ruoloAssistenza } from '@/lib/assistenza/porta';
 
 // 100 — L'import statico portava nel pacchetto iniziale il modale e con lui
 // l'assistente prodotto (oltre seicento righe), per OGNI visitatore — compresi
@@ -13,29 +14,22 @@ import { useProfile } from './hooks/useProfile';
 const SupportChatModal = dynamic(() => import('./SupportChatModal'), { ssr: false });
 
 /**
- * Pulsante "Assistenza" flottante. Disponibile a seller e rider loggati.
- * Per il buyer l'assistenza vive ora nella barra in basso (MobileTabBar), e per
- * l'admin non è prevista: in entrambi i casi il pulsante flottante è nascosto.
- * Apre lo stesso SupportChatModal usato dalla barra.
+ * Pulsante "Assistenza" flottante. Disponibile a chi ha fatto l'accesso — compratori compresi.
+ *
+ * Qui c'era scritto che «per il buyer l'assistenza vive ora nella barra in basso (MobileTabBar)»:
+ * non era vero. Quella scheda non è mai esistita — `isSupport` è disegnato nella barra e nessun
+ * elenco di schede lo imposta — quindi chi comprava non aveva NESSUNA porta per scrivere.
+ * Chi decide chi la vede è `lib/assistenza/porta.ts`, dove una prova può eseguirlo.
  */
 export default function SupportChatButton() {
   const pathname = usePathname() ?? '';
   const { isAuthenticated, isSeller, isRider, isAdmin, isBuyer } = useProfile();
   const [open, setOpen] = useState(false);
 
-  // Niente pulsante in auth flow, dentro un thread chat, per admin/buyer.
-  const hidden =
-    !isAuthenticated ||
-    isAdmin ||
-    isBuyer ||
-    pathname.startsWith('/sign-in') ||
-    pathname.startsWith('/sign-up') ||
-    pathname.startsWith('/reset-password') ||
-    pathname.startsWith('/auth/') ||
-    /^\/messages\/[^/]+/.test(pathname);
-  if (hidden) return null;
+  const chi = { isAuthenticated, isAdmin, isSeller, isRider, isBuyer };
+  if (!pulsanteAssistenzaVisibile(chi, pathname)) return null;
 
-  const role = isSeller ? 'seller' : isRider ? 'rider' : 'buyer';
+  const role = ruoloAssistenza(chi);
 
   return (
     <>

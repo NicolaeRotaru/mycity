@@ -158,7 +158,7 @@
     "blurb": "What's on the plate in Piacenza — recipe + a shopkeeper's story + 3 deals. Every Friday.",
     "placeholder": "your@email.com",
     "subscribe": "Subscribe",
-    "subscribed": "Subscribed! You'll get the newsletter every Friday.",
-    "subscribedBox": "You're subscribed. You'll soon receive Piacenza's recipes in your inbox."
+    "subscribed": "Check your inbox: open the email and click the link to confirm your subscription.",
+    "subscribedBox": "Check your inbox: the subscription activates with the link we sent you. Can't find it? Look in your spam folder."
   }
 }

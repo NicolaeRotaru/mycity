@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante } from '@/lib/cart';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
+import { checkoutChiuso } from '@/lib/ordini/partenza';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
@@ -478,6 +479,22 @@ export default function CheckoutPage() {
   const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '';
   const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>(stripeAvailable ? 'card' : 'cod');
+
+  // #NNN — L'ORDINE PARTITO NON TORNA INDIETRO: si puo' ordinare due volte.
+  //
+  // Il blocco del pulsante era `placeOrders.isPending || payWithStripe.isPending`, e in React Query 5
+  // lo stato «in corso» si spegne DOPO `onSuccess`. Quindi nella finestra fra la fine di `onSuccess`
+  // e il cambio pagina il pulsante si riaccendeva:
+  //   · contanti — `chiudiIlTentativo()` butta la chiave anti-doppione, `clearCart()` svuota il
+  //     carrello ma questa pagina non ascolta `cart:updated`, quindi `groups` resta pieno e il
+  //     pulsante ridiventa premibile mentre `router.push` sta ancora navigando;
+  //   · carta — dopo `window.location.assign(url)` il browser ci mette un attimo a lasciare la
+  //     pagina, e in quell'attimo il pulsante e' di nuovo vivo.
+  // Un secondo tocco crea un SECONDO ORDINE VERO, con una chiave nuova: il cliente paga due volte.
+  //
+  // `inPartenza` non si rimette mai a false, ed e' voluto: da qui in poi questa pagina sta solo
+  // aspettando di sparire. Se l'utente torna indietro, il componente si rimonta e riparte da zero.
+  const [inPartenza, setInPartenza] = useState(false);
   /**
    * #3 — La spedizione la calcola la fonte unica, non questa pagina.
    *
@@ -701,6 +718,7 @@ export default function CheckoutPage() {
       return createdOrders;
     },
     onSuccess: (orderIds) => {
+      setInPartenza(true);
       // Il tentativo e' andato a buon fine: la sua chiave ha finito il lavoro.
       // Se restasse, il prossimo ordine identico si vedrebbe restituire questo.
       chiudiIlTentativo();
@@ -780,6 +798,7 @@ export default function CheckoutPage() {
       return indirizzo;
     },
     onSuccess: (url) => {
+      setInPartenza(true);
       // Stash del valore d'acquisto per emettere `purchase` (GA4) + `order_placed`
       // al rientro su /orders?stripe=success: lì gli ordini sono già creati dal
       // webhook ma il client non ne conosce i totali, quindi li portiamo da qui.
@@ -802,7 +821,10 @@ export default function CheckoutPage() {
     },
   });
 
-  const isCheckingOut = placeOrders.isPending || payWithStripe.isPending;
+  // La decisione sta in `lib/ordini/partenza.ts` e non qui: dentro un componente da 1.200 righe
+  // nessuna prova puo' ESEGUIRLA, puo' solo rileggerla — e la finestra che rompeva e' larga un
+  // fotogramma, cioe' esattamente il genere di cosa che rileggendo non si vede.
+  const isCheckingOut = checkoutChiuso(inPartenza, placeOrders, payWithStripe);
 
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};
@@ -819,6 +841,10 @@ export default function CheckoutPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Il pulsante disabilitato e' una difesa a video, e a video si puo' arrivare in altri modi —
+    // Invio da tastiera, un doppio tocco che parte prima del render, un `form.submit()`. La guardia
+    // sta qui perche' qui passa OGNI invio, comunque sia stato scatenato.
+    if (isCheckingOut) return;
     const fieldErrors = validateAddress();
     setErrors(fieldErrors);
     const firstInvalid = (['fullName', 'address', 'city', 'zip', 'phone'] as const).find((k) => fieldErrors[k]);

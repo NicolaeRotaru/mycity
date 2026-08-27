@@ -16,6 +16,7 @@ import {
 // 22/8/2026 — `apiErrorMessage` c'era una copia locale, riga per riga
 // identica a questa. Una copia non resta uguale: quella è sparita.
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
+import { perchePasswordNonCambiabile, puoiProvareACambiare } from '@/lib/account/cambio-password';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Field';
@@ -135,15 +136,30 @@ export default function SettingsPage() {
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword.length < 8) {
-      toast.error('La password deve essere di almeno 8 caratteri');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('Le password non coincidono');
+    const motivo = perchePasswordNonCambiabile({ currentPassword, newPassword, confirmPassword });
+    if (motivo) {
+      toast.error(motivo);
       return;
     }
     setChangingPwd(true);
+    // LA PASSWORD ATTUALE SI CONTROLLA DAVVERO.
+    //
+    // Prima veniva chiesta e mai letta: `currentPassword` compariva solo nella
+    // dichiarazione dello stato e nel binding del campo. Chi si trovasse fra le mani una
+    // sessione aperta — un telefono lasciato sbloccato, un computer condiviso — poteva
+    // cambiare la password senza conoscere quella vecchia, cioe' prendersi l'account.
+    //
+    // `signInWithPassword` sullo stesso utente e' la verifica: se la password attuale e'
+    // sbagliata fallisce, e non si arriva a `updateUser`.
+    const { error: erroreVerifica } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (erroreVerifica) {
+      setChangingPwd(false);
+      toast.error('Password attuale non corretta');
+      return;
+    }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setChangingPwd(false);
     if (error) {
@@ -418,7 +434,7 @@ export default function SettingsPage() {
                 <Button
                   type="submit"
                   loading={changingPwd}
-                  disabled={!newPassword || !confirmPassword}
+                  disabled={!puoiProvareACambiare({ currentPassword, newPassword, confirmPassword })}
                 >Aggiorna password</Button>
               </form>
             </section>
