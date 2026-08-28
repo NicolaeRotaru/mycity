@@ -195,15 +195,22 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
     },
   });
 
+  // 28/8/2026 — IL RIFIUTO PASSA DAL SERVER, PERCHE' DEVE RESTITUIRE I SOLDI.
+  //
+  // Prima questo pulsante chiamava `seller_reject_order` del database: ordine
+  // annullato, merce a magazzino, e l'addebito sulla carta del cliente lasciato
+  // dov'era. Il rimborso e' una chiamata a Stripe e le chiavi stanno sul
+  // server, quindi dal database non si poteva fare. Ora la rotta fa la stessa
+  // cosa dell'annullamento del cliente: rimborsa, poi annulla.
   const reject = useMutation({
     mutationFn: async (reason?: string) => {
-      const { data, error } = await supabase.rpc('seller_reject_order', {
-        p_order_id: id,
-        p_reason: reason ?? null,
+      const res = await fetch(`/api/seller/orders/${id}/reject`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: reason ?? null }),
       });
-      if (error) throw error;
-      const r = data as { ok: boolean; reason?: string };
-      if (!r.ok) throw new Error(r.reason ?? 'Impossibile rifiutare');
+      const r = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: { message?: string } };
+      if (!res.ok || !r.ok) throw new Error(r.error?.message ?? 'Impossibile rifiutare');
     },
     onSuccess: () => {
       setRejectOpen(false);

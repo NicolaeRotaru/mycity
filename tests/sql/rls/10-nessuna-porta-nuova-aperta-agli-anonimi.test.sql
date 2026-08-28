@@ -71,7 +71,16 @@ SELECT 'nessuna funzione potente nuova e'' aperta agli anonimi',
          -- tre espone un dato che non sia gia' in vetrina.
          'negozi_aperti_adesso',        -- quali negozi sono aperti in questo momento
          'prodotti_con_voto_almeno',    -- i prodotti col voto medio minimo
-         'categorie_per_negozio'        -- quali categorie tocca ogni negozio
+         'categorie_per_negozio',       -- quali categorie tocca ogni negozio
+         -- 28/8/2026 — le tre della riparazione del catalogo (migrazione 129).
+         -- Il catalogo era invisibile a chi non ha l'account perche' le regole
+         -- di lettura chiedevano «il negozio e' approvato?» dentro `profiles`,
+         -- che a un estraneo e' chiusa. Le prime due rispondono si'/no su un id
+         -- che il chiamante ha gia' in mano: nessuna riga esce. La terza
+         -- restituisce solo id e conteggio delle visite, mai chi ha guardato.
+         'negozio_approvato',           -- il negozio e' approvato? si'/no
+         'prodotto_in_vetrina',         -- il prodotto e' in vetrina? si'/no
+         'trending_product_ids_24h'     -- i piu' visti: solo id e conteggio
        )
   ) fuori_lista;
 

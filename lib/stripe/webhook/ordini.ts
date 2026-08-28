@@ -25,6 +25,7 @@ import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { notifyAdmins, sessionePagata } from './comune';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
+import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 
 export type PendingGroup = {
   sellerId: string;
@@ -444,73 +445,97 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
    * carrello da tre negozi e Resend lento si arrivava tranquillamente oltre il
    * limite. E il lavoro che conta — l'ordine — era gia' fatto.
    *
-   * Gli ordini sono creati e registrati sopra: da qui in giu' e' tutto
-   * best-effort, e parte senza far aspettare nessuno. Se un'email fallisce si
-   * vede nel log, non nel fatto che Stripe smette di parlarci.
+   * 28/8/2026 — MA «NON ASPETTARE» NON VUOL DIRE «LANCIARE NEL VUOTO».
+   *
+   * Radiografia del 27/8, terzo bloccante. Il blocco partiva come promessa non
+   * attesa (`const avvisi = (async () => {...})()` + `void avvisi.catch`). Su
+   * un server che si spegne appena risposto — cioe' il nostro, Vercel — quel
+   * lavoro puo' non arrivare mai in fondo. Dentro non c'erano solo le email:
+   * c'era anche la campanella del venditore, che e' la riga da cui parte pure
+   * la notifica push (app/api/cron/send-push la legge da `notifications`).
+   * Risultato possibile: ordine pagato, soldi incassati, cliente che aspetta, e
+   * in negozio non squilla niente.
+   *
+   * Adesso in due tempi, come fa gia' la rotta contanti:
+   *   ① la campanella si scrive PRIMA di rispondere. E' una insert sola, non
+   *      chiama nessun servizio esterno, e senza di lei il negoziante non sa di
+   *      avere un ordine.
+   *   ② le email e le misure restano best-effort, ma dentro `after()`: la
+   *      piattaforma tiene viva la funzione finche' non finiscono, invece di
+   *      spegnerla a meta'.
    */
-  // #208 — L'acquisto si conta qui, dove il fatto è certo: gli ordini sono
-  // appena stati scritti. Prima partiva solo dal browser, al rientro sulla
-  // pagina ordini: chi chiudeva la scheda dopo aver pagato spariva dai conti.
-  const consensoAnalyticsPromise = analyticsConsentita(admin, buyerId);
-  const misure = consensoAnalyticsPromise.then((consensoAnalytics) => Promise.all(
-    createdOrderIds.filter((c) => c.nuovo).map((c) =>
-      contaAcquisto({
-        consensoAnalytics,
-        orderId: c.orderId,
-        buyerId,
-        totalCents: c.totalCents,
-        paymentMethod: 'card',
-        sellerId: c.sellerId,
-        checkoutId: pendingCheckoutId,
-      }),
-    ),
-  ));
+  const nuovi = createdOrderIds.filter((c) => c.nuovo);
 
-  const avvisi = (async () => {
-  for (const created of createdOrderIds) {
-    // 164 — Solo gli ordini nati adesso. Gli altri le comunicazioni le hanno
-    // gia' avute nel tentativo precedente.
-    if (!created.nuovo) continue;
-    const groupForOrder = groups.find((x) => x.sellerId === created.sellerId);
-    const storeName = groupForOrder?.storeName ?? 'venditore';
-
-    if (buyerEmail) {
-      const t = orderConfirmedBuyerTemplate({
-        name: buyerName,
-        orderId: created.orderId,
-        total: created.totalCents / 100,
-        storeName,
-      });
-      await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
-    }
-
-    const { data: sellerAuth } = await admin.auth.admin.getUserById(created.sellerId);
-    const sellerEmail = sellerAuth?.user?.email;
-    if (sellerEmail) {
-      const t = newOrderSellerTemplate({
-        sellerName: null,
-        orderId: created.orderId,
-        total: created.totalCents / 100,
-        itemsCount: created.itemsCount,
-      });
-      await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
-    }
-
-    // Notifica in-app al venditore (campanella) — nuovo ordine ricevuto
-    await admin.from('notifications').insert({
+  if (nuovi.length > 0) {
+    const { error: errCampanelle } = await admin.from('notifications').insert(
+      nuovi.map((created) => ({
         // #33 — la categoria decide se la persona vuole ancora ricevere
         // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
         category: 'order',
-      user_id: created.sellerId,
-      title: '📦 Nuovo ordine ricevuto',
-      body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
-      link: `/seller/orders/${created.orderId}`,
-    });
+        user_id: created.sellerId,
+        title: '📦 Nuovo ordine ricevuto',
+        body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
+        link: `/seller/orders/${created.orderId}`,
+      })),
+    );
+    // Non si lancia: l'ordine c'e' ed e' pagato, e far ritentare Stripe
+    // ricreerebbe il giro intero. Ma un negozio che non riceve la campanella e'
+    // un ordine che nessuno prepara: deve restare scritto dove si guarda.
+    if (errCampanelle) {
+      logger.error('[stripe] campanella al venditore non scritta: ordine pagato e nessuno avvisato', {
+        pendingCheckoutId, ordini: nuovi.map((c) => c.orderId), message: errCampanelle.message,
+      });
+    }
   }
-  })();
-  // Non si aspetta: si registra soltanto se qualcosa va storto.
-  void avvisi.catch((e) => logger.warn('[webhook] avvisi post-ordine falliti', { message: e instanceof Error ? e.message : 'errore' }));
-  void misure.catch((e) => logger.warn('[webhook] misura acquisto fallita', { message: e instanceof Error ? e.message : 'errore' }));
+
+  // #208 — L'acquisto si conta qui, dove il fatto è certo: gli ordini sono
+  // appena stati scritti. Prima partiva solo dal browser, al rientro sulla
+  // pagina ordini: chi chiudeva la scheda dopo aver pagato spariva dai conti.
+  dopoLaRisposta(async () => {
+    const consensoAnalytics = await analyticsConsentita(admin, buyerId);
+    await Promise.all(
+      nuovi.map((c) =>
+        contaAcquisto({
+          consensoAnalytics,
+          orderId: c.orderId,
+          buyerId,
+          totalCents: c.totalCents,
+          paymentMethod: 'card',
+          sellerId: c.sellerId,
+          checkoutId: pendingCheckoutId,
+        }),
+      ),
+    );
+  }, 'misura acquisto');
+
+  dopoLaRisposta(async () => {
+    for (const created of nuovi) {
+      const groupForOrder = groups.find((x) => x.sellerId === created.sellerId);
+      const storeName = groupForOrder?.storeName ?? 'venditore';
+
+      if (buyerEmail) {
+        const t = orderConfirmedBuyerTemplate({
+          name: buyerName,
+          orderId: created.orderId,
+          total: created.totalCents / 100,
+          storeName,
+        });
+        await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
+      }
+
+      const { data: sellerAuth } = await admin.auth.admin.getUserById(created.sellerId);
+      const sellerEmail = sellerAuth?.user?.email;
+      if (sellerEmail) {
+        const t = newOrderSellerTemplate({
+          sellerName: null,
+          orderId: created.orderId,
+          total: created.totalCents / 100,
+          itemsCount: created.itemsCount,
+        });
+        await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+      }
+    }
+  }, 'avvisi post-ordine');
 }
 
 /**

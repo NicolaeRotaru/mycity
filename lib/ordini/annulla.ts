@@ -63,6 +63,26 @@ export async function annullaERimborsa(
     !!order.stripe_payment_intent &&
     (order.payment_status === 'PAID' || order.payment_status === 'PARTIALLY_REFUNDED');
 
+  // Il credito MyCity speso sull'ordine torna al cliente: senza, l'annullamento
+  // gli costa comunque quei soldi. Vale su entrambi i rami, carta compresa.
+  // Non lancia mai: sul ramo carta viene chiamata a rimborso gia' emesso, e un
+  // errore qui non deve far raccontare al chiamante che il rimborso e' fallito.
+  async function restituisciCredito(): Promise<void> {
+    const walletCents = Number(order.wallet_applied_cents ?? 0);
+    if (walletCents <= 0) return;
+    try {
+      const { error: wErr } = await admin.rpc('wallet_credit', {
+        p_user: order.user_id,
+        p_cents: walletCents,
+        p_reason: opts.motivoCredito ?? 'order_canceled',
+        p_ref: order.id,
+      });
+      if (wErr) logger.warn('[annullaERimborsa] storno credito fallito', { orderId: order.id, err: wErr.message });
+    } catch (err) {
+      logger.warn('[annullaERimborsa] storno credito fallito', { orderId: order.id, err });
+    }
+  }
+
   // Contanti già incassati dal fattorino: la restituzione è un fatto fisico e la
   // decide una persona. Annullare in silenzio lascerebbe il cliente senza merce
   // e senza soldi.
@@ -84,6 +104,15 @@ export async function annullaERimborsa(
         notifyBuyer: true,
       });
       // refundOrder ha già impostato CANCELED + canceled_at + payment_status.
+      //
+      // 28/8/2026 — IL CREDITO TORNA ANCHE QUI. Il rimborso sulla carta copre
+      // `total_price`, che è il totale DOPO lo scomputo del credito MyCity: il
+      // credito speso sull'ordine è un'altra somma, e su questo ramo non lo
+      // restituiva nessuno. Un ordine da 30 € pagato con 20 € di credito e 10 €
+      // di carta si annullava restituendo 10 €. La funzione del database che
+      // faceva il rifiuto del negozio lo restituiva già: senza questa riga,
+      // farlo passare di qui sarebbe un passo indietro per chi compra.
+      await restituisciCredito();
       return { ok: true, refundId: res.refundId };
     } catch (err) {
       logger.error('[annullaERimborsa] rimborso fallito', { orderId: order.id, err });
@@ -103,18 +132,7 @@ export async function annullaERimborsa(
 
   await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
 
-  // Il credito MyCity speso sull'ordine torna al cliente: senza, l'annullamento
-  // gli costa comunque quei soldi.
-  const walletCents = Number(order.wallet_applied_cents ?? 0);
-  if (walletCents > 0) {
-    const { error: wErr } = await admin.rpc('wallet_credit', {
-      p_user: order.user_id,
-      p_cents: walletCents,
-      p_reason: opts.motivoCredito ?? 'order_canceled',
-      p_ref: order.id,
-    });
-    if (wErr) logger.warn('[annullaERimborsa] storno credito fallito', { orderId: order.id, err: wErr.message });
-  }
+  await restituisciCredito();
 
   return { ok: true, refundId: null };
 }

@@ -63,7 +63,28 @@ jobs:
           PROGETTO: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           if [ -z "$TOKEN" ] || [ -z "$ORG" ] || [ -z "$PROGETTO" ]; then
+            # 28/8/2026 — L'AVVISO STAVA DOVE NON GUARDA NESSUNO.
+            #
+            # Radiografia del 27/8, quarto bloccante: questo lavoro si dichiara
+            # «non pronto», salta tutti i passi e resta VERDE. Fuori si vede una
+            # spunta identica a quella di un rilascio controllato, mentre in
+            # realta' Vercel sta pubblicando da solo a ogni unione, senza
+            # aspettare la CI. Adesso sta scritto in cima al riepilogo, che e'
+            # la prima cosa che si vede aprendo il lavoro.
             echo "::warning::VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID non configurati: nessun rilascio da qui. Oggi Vercel pubblica da solo a ogni unione su main, SENZA aspettare la CI."
+            {
+              echo "## ⚠️ Il cancello del rilascio e' SPENTO"
+              echo ""
+              echo "Mancano \`VERCEL_TOKEN\`, \`VERCEL_ORG_ID\` o \`VERCEL_PROJECT_ID\` fra i segreti del repository."
+              echo ""
+              echo "**Cosa vuol dire adesso:** Vercel pubblica in produzione da solo a ogni unione su \`main\`, in parallelo ai controlli."
+              echo "Un difetto che la CI avrebbe intercettato arriva ai clienti prima del referto. Il verde qui sopra non dice che il rilascio e' controllato: dice che questo lavoro non ha fatto niente."
+              echo ""
+              echo "**Come si accende**, in quest'ordine (al contrario il sito smette di aggiornarsi):"
+              echo "1. i tre segreti in Settings → Secrets and variables → Actions;"
+              echo "2. una prova di rilascio da qui su un cambio innocuo;"
+              echo "3. solo dopo, in vercel.json: la voce deploymentEnabled per main passa da true a false."
+            } >> "$GITHUB_STEP_SUMMARY"
             echo "pronto=false" >> "$GITHUB_OUTPUT"
           else
             echo "pronto=true" >> "$GITHUB_OUTPUT"
@@ -115,12 +136,18 @@ jobs:
           fi
           echo "applicate=true" >> "$GITHUB_OUTPUT"
           sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
-          # Ogni file, nell'ordine vero. Le migrazioni del progetto sono
-          # idempotenti: riapplicarle non fa danni.
-          for f in $(ls migrations/*.sql | sort -V); do
-            echo "▶ $f"
-            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
-          done
+          # 28/8/2026 — QUI C'ERA UN CICLO SU TUTTI I FILE, E NON POTEVA FUNZIONARE.
+          #
+          # Il commento diceva «le migrazioni del progetto sono idempotenti»: non
+          # e' vero. La 001 crea `profiles` e la 002 `categories` senza
+          # `IF NOT EXISTS`, quindi su un database che quelle tabelle le ha gia'
+          # — cioe' la produzione — psql muore sul PRIMO file. E il ciclo non
+          # registrava niente nel registro delle migrazioni, che e' proprio la
+          # tabella che il cancello del passo dopo va a leggere.
+          #
+          # Adesso si applica e si registra solo cio' che manca. Lo stesso
+          # script gira due volte di fila nella CI: l'idempotenza si prova.
+          bash scripts/applica-migrazioni-mancanti.sh
 
       # Il cancello: se dopo le migrazioni il database e' ancora diverso da
       # quello che il codice si aspetta, non si pubblica.

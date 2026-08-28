@@ -17,6 +17,7 @@ import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
+import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -713,7 +714,11 @@ export const POST = withAuthRateLimit(
     // L'indirizzo si prende ADESSO: dentro la funzione che parte per conto suo
     // TypeScript non sa piu' che era stato controllato.
     const emailCliente = user.email;
-    void (async () => {
+    // 28/8/2026 — Radiografia del 27/8, terzo bloccante: qui il lavoro partiva
+    // «per conto suo» e su Vercel poteva non arrivare mai in fondo, perche' la
+    // funzione si spegne appena ha risposto. `dopoLaRisposta` risponde subito e
+    // tiene viva l'esecuzione finche' le email non sono partite.
+    dopoLaRisposta(async () => {
       for (const c of comunicazioni) {
       // Email al venditore (oltre alla notifica) — per la carta parte dal webhook,
       // per il COD va inviata qui. Best-effort.
@@ -754,14 +759,14 @@ export const POST = withAuthRateLimit(
         logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
       }
       }
-    })().catch((e) => logger.warn('[cod] invio delle comunicazioni interrotto', { e }));
+    }, 'email del nuovo ordine in contanti');
 
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
     // solo dal browser: chi chiudeva la scheda spariva dai conti, e il
     // fatturato in PostHog non riconciliava con la tabella degli ordini.
     // Il consenso si legge UNA volta, non una per ordine: e' la stessa persona.
     const consensoAnalytics = await analyticsConsentita(admin, user.id);
-    void Promise.all(
+    const misure = Promise.all(
       comunicazioni.map((c) =>
         contaAcquisto({
           consensoAnalytics,
@@ -785,7 +790,8 @@ export const POST = withAuthRateLimit(
           checkoutId: chiaveCarrello,
         }),
       ),
-    ).catch(() => { /* già registrato dentro contaAcquisto */ });
+    ).then(() => undefined);
+    dopoLaRisposta(() => misure, 'misura acquisto in contanti');
 
     // NB: il coupon è già stato claimato atomicamente sopra (claim_coupon, fix #36).
     // Non chiamiamo più increment_coupon_usage qui.

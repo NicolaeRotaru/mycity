@@ -247,6 +247,27 @@ jobs:
       - name: L'ultima migrazione regge un database con dentro degli ordini
         run: bash tests/sql/harness/migrazione-su-database-pieno.sh mycity_pieno_ci
 
+      # 28/8/2026 — L'IDEMPOTENZA DEL RILASCIO SI PROVA, NON SI DICHIARA.
+      #
+      # Il passo del rilascio applicava TUTTI i file a ogni pubblicazione, con
+      # un commento che diceva «le migrazioni del progetto sono idempotenti».
+      # Non lo sono: la 001 e la 002 creano tabelle senza `IF NOT EXISTS`, e su
+      # un database che le ha gia' — la produzione — psql muore sul primo file.
+      # Nessuno se ne era accorto perche' quel lavoro non gira (mancano i
+      # segreti): sarebbe esploso il giorno in cui li si configura, cioe'
+      # proprio mentre si spegne il rilascio automatico.
+      #
+      # Qui lo script del rilascio gira DUE VOLTE sullo stesso database: la
+      # seconda deve applicare zero file e uscire verde.
+      - name: Il rilascio riapplicato due volte non si rompe
+        env:
+          SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/mycity_ci
+        run: |
+          bash scripts/applica-migrazioni-mancanti.sh | tee /tmp/giro1.txt
+          bash scripts/applica-migrazioni-mancanti.sh | tee /tmp/giro2.txt
+          grep -q "applicate 0 " /tmp/giro2.txt \
+            || { echo "::error::il secondo giro ha riapplicato delle migrazioni: il rilascio non e' ripetibile"; exit 1; }
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
