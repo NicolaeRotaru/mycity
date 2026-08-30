@@ -11,13 +11,15 @@
  */
 
 import * as Sentry from '@sentry/nextjs';
+import { ambienteSentry } from '@/lib/analytics/ambiente';
 
 const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN || process.env.SENTRY_DSN;
 
 if (DSN) {
   Sentry.init({
     dsn: DSN,
-    environment: process.env.NODE_ENV,
+    // R187 — `NODE_ENV` su Vercel dice `production` anche per le anteprime.
+    environment: ambienteSentry(),
     // Tracing campiona il 10% delle transazioni: bilancia visibilita' vs costo.
     tracesSampleRate: 0.1,
     // Server-side non ha sessioni utente: replay disabilitato.

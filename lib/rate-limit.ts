@@ -139,6 +139,46 @@ export function __resetRateLimitBuckets(): void {
 const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
+import { logger } from '@/lib/logger';
+
+/**
+ * QUANDO IL FRENO SI ALLARGA, ADESSO LO DICE.
+ *
+ * Radiografia del 27/8/2026 (R190). Se Upstash non rispondeva, questa funzione
+ * restituiva `null` e il freno anti-abuso ripiegava sul contatore in memoria.
+ * Il ripiego e' la scelta giusta — meglio un freno largo che nessun freno — ma
+ * avveniva in perfetto silenzio: su Vercel «in memoria» vuol dire un contatore
+ * per ogni copia, cioe' il limite scritto nel codice moltiplicato per quante
+ * copie sono accese. Nessuno poteva sapere che stava succedendo, ne' per
+ * quanto tempo era durato.
+ *
+ * Non si registra ogni singolo ripiego: quando Upstash cade, cade per tutte le
+ * richieste, e una riga a testa riempirebbe i registri proprio nel momento in
+ * cui servono leggibili. Si registra la prima, e poi una ogni cento.
+ */
+let ripieghiInMemoria = 0;
+
+/** Quante volte si e' ripiegato sul contatore locale da quando gira il processo. */
+export function ripieghiDelFrenoDiRete(): number {
+  return ripieghiInMemoria;
+}
+
+/** Solo per le prove: rimette il conto a zero. */
+export function __azzeraRipieghiFreno(): void {
+  ripieghiInMemoria = 0;
+}
+
+function segnalaRipiego(motivo: string): null {
+  ripieghiInMemoria++;
+  if (ripieghiInMemoria === 1 || ripieghiInMemoria % 100 === 0) {
+    logger.warn('[freno] Upstash non risponde: conto le richieste in memoria, il limite reale e piu largo', {
+      motivo,
+      ripieghi: ripieghiInMemoria,
+    });
+  }
+  return null;
+}
+
 async function upstashIncr(key: string, ttlSec: number): Promise<number | null> {
   if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
   try {
@@ -156,12 +196,13 @@ async function upstashIncr(key: string, ttlSec: number): Promise<number | null> 
       // Timeout breve: rate limit deve essere fast-path
       signal: AbortSignal.timeout(500),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return segnalaRipiego(`Upstash ha risposto HTTP ${res.status}`);
     const data: Array<{ result: number | string }> = await res.json();
     const count = Number(data[0]?.result);
-    return Number.isFinite(count) ? count : null;
-  } catch {
-    return null; // network error → fallback in-memory
+    if (Number.isFinite(count)) return count;
+    return segnalaRipiego('Upstash ha risposto qualcosa che non e un numero');
+  } catch (e) {
+    return segnalaRipiego(e instanceof Error ? e.message : 'errore di rete');
   }
 }
 

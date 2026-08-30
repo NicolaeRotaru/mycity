@@ -295,8 +295,14 @@ async function recordCronHeartbeat(req: NextRequest): Promise<void> {
     await getAdminSupabase()
       .from('cron_heartbeats')
       .upsert({ name, last_run_at: new Date().toISOString() }, { onConflict: 'name' });
-  } catch {
-    /* best-effort: il heartbeat non deve mai bloccare o far fallire il cron. */
+  } catch (e) {
+    // Il battito non deve MAI far fallire il lavoro: il lavoro e' andato, e
+    // questa e' solo la sua ricevuta. Ma non deve nemmeno sparire in silenzio —
+    // un sensore che muore muto e' peggio di un sensore che non c'e', perche'
+    // il sorvegliante annuncera' che il lavoro e' fermo mentre gira benissimo.
+    logger.warn('[cron] battito non registrato: il sorvegliante lo vedra come fermo', {
+      message: e instanceof Error ? e.message : 'errore',
+    });
   }
 }
 
@@ -322,7 +328,19 @@ export function withCronAuth(handler: (req: NextRequest) => Promise<NextResponse
     // era l'unico che non li vedeva.
     const risposta = await handler(req);
     if (risposta.status < 400) {
-      void recordCronHeartbeat(req); // dead-man's switch (🟠-25), best-effort
+      // 27/8/2026 (R181) — IL BATTITO SI ASPETTA, NON SI SPARA.
+      //
+      // Qui c'era `void recordCronHeartbeat(req)`: lanciato e non atteso. Su
+      // Vercel la funzione puo' essere spenta appena ha risposto, quindi quella
+      // scrittura poteva morire a meta' o non partire affatto. E il modo in cui
+      // falliva era il peggiore per un sensore: il lavoro girava benissimo, il
+      // battito non arrivava, e il sorvegliante annunciava che il lavoro era
+      // fermo. Allarmi falsi, finche' nessuno li guarda piu'.
+      //
+      // Aspettarlo costa pochi millisecondi, su un lavoro periodico dove il
+      // tempo di risposta non lo guarda nessuno. Gli errori restano innocui:
+      // `recordCronHeartbeat` non rilancia, si limita a lamentarsi.
+      await recordCronHeartbeat(req); // dead-man's switch (🟠-25)
     }
     return risposta;
   };

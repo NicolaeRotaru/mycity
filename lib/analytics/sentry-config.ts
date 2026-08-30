@@ -13,6 +13,7 @@
  */
 
 import { hasConsent } from '@/lib/consent';
+import { ambienteSentry } from './ambiente';
 
 export const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -26,7 +27,8 @@ export function opzioniSentry() {
     tracesSampleRate: 0.1,
     replaysSessionSampleRate: analyticsOk ? 0.05 : 0,
     replaysOnErrorSampleRate: analyticsOk ? 1.0 : 0,
-    environment: process.env.NODE_ENV,
+    // R187 — `NODE_ENV` su Vercel dice `production` anche per le anteprime.
+    environment: ambienteSentry(),
     // 🟡-11: non inviare PII di default (IP/cookie/header). Esplicito anche se è
     // il default dell'SDK, così non regredisce se cambia in futuro.
     sendDefaultPii: false,
