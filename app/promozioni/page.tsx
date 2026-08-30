@@ -11,18 +11,27 @@ import CollectionHeader from '@/components/CollectionHeader';
 import { SkeletonGrid } from '@/components/SkeletonCard';
 import { classiGriglia } from '@/lib/griglia-prodotti';
 import { queryKeys } from '@/lib/queries/keys';
+import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
 
-type Row = {
-  product_id: string;
-  name: string;
-  price: number | string;
-  images: string[] | null;
-  seller_id: string | null;
-  store_name: string | null;
-  discount_percent: number;
-  stock: number | null;
-  has_variants: boolean | null;
-};
+/**
+ * 30/8/2026 (R004) — Anche qui i nomi delle colonne li controlla il compilatore.
+ *
+ * Le righe arrivano dalla funzione `active_promo_products`, non da una tabella:
+ * `product_id` e `discount_percent` li costruisce lei e restano dichiarati qui.
+ * Tutto il resto pero' esce tale e quale dalle due tabelle sotto — prodotti e
+ * profili — e quindi lo si prende da li': se domani `has_variants` sparisse dai
+ * prodotti, la funzione smetterebbe di restituirlo e questa pagina mostrerebbe
+ * schede rotte. Meglio accorgersene a compilazione.
+ */
+type Row = ColonneSalvo<
+  'products',
+  'name' | 'price' | 'images' | 'seller_id' | 'stock' | 'has_variants',
+  { price: number | string; images: string[] | null; has_variants: boolean | null }
+> &
+  Colonne<'profiles', 'store_name'> & {
+    product_id: string;
+    discount_percent: number;
+  };
 
 /** Opzioni di ordinamento della toolbar collezione (allineate a search/category). */
 const COLLECTION_SORTS: SortOption[] = ['relevance', 'price_asc', 'price_desc', 'discount_desc'];

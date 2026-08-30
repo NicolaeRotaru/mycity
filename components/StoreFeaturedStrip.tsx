@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from './ProductCard';
 import { queryKeys } from '@/lib/queries/keys';
+import type { ColonneSalvo } from '@/lib/db-rows';
 
 interface Props {
   sellerId: string;
@@ -12,16 +13,21 @@ interface Props {
   accent?: string;
 }
 
-type Row = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number | string;
-  images: string[] | null;
-  stock: number | null;
-  has_variants: boolean | null;
-  created_at: string;
-};
+/**
+ * 30/8/2026 (R004) — Le colonne di questa vetrina vengono dallo schema.
+ *
+ * Prima erano riscritte a mano: una colonna rinominata avrebbe fatto tornare
+ * `null` alla lettura e la striscia «In evidenza» sarebbe semplicemente
+ * sparita dalla pagina del negozio, senza un errore da nessuna parte. Le
+ * ri-dichiarazioni sono quelle di sempre: le foto nello schema sono un campo
+ * libero, il prezzo arriva come stringa quando PostgREST serializza i
+ * `numeric`, e la data di creazione sulle righe lette c'e' sempre.
+ */
+type Row = ColonneSalvo<
+  'products',
+  'id' | 'name' | 'description' | 'price' | 'images' | 'stock' | 'has_variants' | 'created_at',
+  { price: number | string; images: string[] | null; has_variants: boolean | null; created_at: string }
+>;
 
 /**
  * Striscia "In evidenza": mostra i prodotti scelti dal venditore, nell'ordine

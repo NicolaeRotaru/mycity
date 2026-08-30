@@ -15,16 +15,28 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { queryKeys } from '@/lib/queries/keys';
+import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
 
-type Row = {
-  id: string;
-  total_price: number;
-  delivery_status: OrderStatus;
-  created_at: string;
-  delivery_full_name: string | null;
-  delivery_city: string | null;
-  seller: { store_name: string | null } | null;
-  rider: { full_name: string | null } | null;
+/**
+ * 30/8/2026 (R004) — LA FORMA DELLA RIGA NON SE LA INVENTA PIU' QUESTA PAGINA.
+ *
+ * Prima era un `type Row = { … }` battuto a mano: i nomi delle colonne non li
+ * controllava nessuno, e una colonna rinominata o sparita si sarebbe vista solo
+ * in produzione, con la tabella degli ordini vuota davanti a un amministratore.
+ * Adesso vengono dai tipi generati dallo schema (`lib/db-rows`): se una di
+ * queste colonne non esiste piu', `npm run typecheck` diventa rosso.
+ *
+ * Le due ri-dichiarazioni: lo stato della consegna e' un elenco chiuso (lo
+ * schema dice solo «testo»), e `created_at` qui non e' mai nullo perche' la
+ * query ordina proprio su quella colonna.
+ */
+type Row = ColonneSalvo<
+  'orders',
+  'id' | 'total_price' | 'delivery_status' | 'created_at' | 'delivery_full_name' | 'delivery_city',
+  { delivery_status: OrderStatus; created_at: string }
+> & {
+  seller: Colonne<'profiles', 'store_name'> | null;
+  rider: Colonne<'profiles', 'full_name'> | null;
 };
 
 const FILTERS = ['all', 'NEW', 'ACCEPTED', 'READY', 'ASSIGNED', 'PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELED'] as const;

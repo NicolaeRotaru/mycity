@@ -12,6 +12,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
 import { contanteDaRimettereCents } from '@/lib/shipping';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
+import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
 
 /**
  * Rimesse contanti COD (🔴-1 slice 2/UI). Elenca i gruppi rider·giorno con ordini
@@ -20,15 +21,29 @@ import { giornoLocale } from '@/lib/tempo/giorno-locale';
  * 'HELD' e il cron release-payouts paga i venditori.
  */
 
-type Row = {
-  id: string;
-  rider_id: string;
-  delivered_at: string;
-  total_price: string | number;
-  shipping_cost: string | number | null;
-  rider_fee_cents: number | null;
-  pickup_in_store: boolean | null;
-  rider: { full_name: string | null } | null;
+/**
+ * 30/8/2026 (R004) — La forma della riga viene dallo schema, non da qui.
+ *
+ * Questa pagina dice a un amministratore quanti contanti farsi rimettere da
+ * ogni fattorino: se una colonna cambia nome, la lettura torna vuota e i
+ * negozi non vengono pagati finche' qualcuno non se ne accorge. Ora una
+ * colonna che sparisce fa diventare rosso `npm run typecheck`.
+ *
+ * Le ri-dichiarazioni: gli importi arrivano come stringa quando PostgREST
+ * serializza i `numeric`; fattorino e data di consegna non sono mai nulli
+ * perche' la query filtra proprio su quelli.
+ */
+type Row = ColonneSalvo<
+  'orders',
+  'id' | 'rider_id' | 'delivered_at' | 'total_price' | 'shipping_cost' | 'rider_fee_cents' | 'pickup_in_store',
+  {
+    rider_id: string;
+    delivered_at: string;
+    total_price: string | number;
+    shipping_cost: string | number | null;
+  }
+> & {
+  rider: Colonne<'profiles', 'full_name'> | null;
 };
 
 type Group = {
