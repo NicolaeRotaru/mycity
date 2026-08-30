@@ -217,24 +217,72 @@ jobs:
           PGPASSWORD: postgres
         run: |
           set -euo pipefail
-          file="$(ls -t "${{ github.workspace }}"/backup/*.gpg | head -1)"
-          echo "▶ ripristino da $(basename "$file")"
+
+          # 27/8/2026 (R179) — QUI SI RIAPRIVA IL FILE SBAGLIATO.
+          #
+          # Il backup notturno scrive DUE file nello stesso secondo: il database
+          # (`mycity_<data>.dump.gpg`) e la sola tabella degli utenti
+          # (`..._utenti.dump.gpg`). La scelta era `ls -t | head -1`, cioe' «il
+          # piu' recente» — e fra due file nati a meno di un secondo di distanza
+          # quale sia il piu' recente non lo decide nessuno. La prova che deve
+          # dirci «la copia si riapre» poteva riaprire trecento righe di utenti e
+          # dichiararsi soddisfatta senza aver mai toccato il database.
+          #
+          # Adesso la scelta si fa per nome, con scripts/copie-di-backup.mjs, che
+          # ha le sue prove in
+          # tests/unit/la-prova-di-ripristino-riapre-il-database-vero.test.ts.
+          cartella="${{ github.workspace }}/backup"
+          principale="$(ls "$cartella" | node scripts/copie-di-backup.mjs principale)"
+          utenti="$(ls "$cartella" | node scripts/copie-di-backup.mjs utenti)"
+          echo "▶ ripristino da $principale (utenti: $utenti)"
+
           gpg --batch --yes --decrypt --passphrase "$BACKUP_PASSPHRASE" \
-            --output /tmp/copia.dump "$file"
+            --output /tmp/copia.dump "$cartella/$principale"
+          gpg --batch --yes --decrypt --passphrase "$BACKUP_PASSPHRASE" \
+            --output /tmp/copia_utenti.dump "$cartella/$utenti"
 
           psql -q -d postgres -c "CREATE DATABASE prova_ripristino;"
           inizio=$(date +%s)
           # I ruoli e gli schemi di sistema del fornitore qui non esistono: gli
-          # errori su quelli non sono il fallimento che stiamo cercando.
+          # errori su quelli non sono il fallimento che stiamo cercando. Il `||
+          # true` resta solo su questa riga, e non copre piu' niente: le
+          # asserzioni qui sotto sono la vera sentenza.
           pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia.dump || true
+          # #234 — Gli utenti stanno in un dump a parte: senza, il database
+          # ripristinato non ha nessuno a cui appartengano gli ordini.
+          psql -q -d prova_ripristino -c "CREATE SCHEMA IF NOT EXISTS auth;"
+          pg_restore --no-owner --no-acl --dbname=prova_ripristino /tmp/copia_utenti.dump || true
           fine=$(date +%s)
           echo "⏱  ripristino in $((fine - inizio)) secondi"
 
-          # La prova vera: le tabelle che contano ci sono e si leggono.
+          # LA PROVA VERA. Prima qui si contava e si stampava, e basta: un
+          # conteggio a zero passava identico a uno pieno. Un ripristino che
+          # restituisce quattro tabelle vuote non e' un ripristino riuscito, e
+          # una copia di sicurezza che nessuno ha mai riaperto davvero non e'
+          # una copia di sicurezza: e' una speranza.
+          vuote=""
           for tabella in profiles products orders order_items; do
             n=$(psql -tA -d prova_ripristino -c "SELECT count(*) FROM public.$tabella;")
             echo "   $tabella: $n righe"
+            if [ "$n" -eq 0 ]; then vuote="$vuote $tabella"; fi
           done
+          # `profiles` e `products` non possono essere vuote su un marketplace
+          # vivo: se lo sono, la copia non contiene quello che credevamo.
+          for attesa in profiles products; do
+            n=$(psql -tA -d prova_ripristino -c "SELECT count(*) FROM public.$attesa;")
+            if [ "$n" -eq 0 ]; then
+              echo "::error::La copia si e' riaperta ma $attesa e' vuota: questo backup non salverebbe niente."
+              exit 1
+            fi
+          done
+          # Gli utenti: la ragione per cui esiste il secondo file.
+          nu=$(psql -tA -d prova_ripristino -c "SELECT count(*) FROM auth.users;")
+          echo "   auth.users: $nu righe"
+          if [ "$nu" -eq 0 ]; then
+            echo "::error::Nessun utente ripristinato: gli ordini tornerebbero senza proprietario."
+            exit 1
+          fi
+          if [ -n "$vuote" ]; then echo "::warning::Tabelle vuote dopo il ripristino:$vuote"; fi
 
           echo "### Prova di ripristino" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
