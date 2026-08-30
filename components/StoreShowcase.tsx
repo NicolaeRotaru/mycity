@@ -5,59 +5,16 @@ import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from './StorePreviewCard';
 import { ErrorState } from './ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
+import { leggiVetrinaNegozi } from '@/lib/queries/vetrina-negozi';
 
 type Store = StoreCardData;
-import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
-type ProductLite = ProductPreview & { seller_id: string };
-
-const fetchShowcase = async () => {
-  // 22/8/2026 — ripiego sulle due colonne che nascono con la migrazione 124:
-  // senza, la vetrina in home resta vuota su un database indietro.
-  const SELECT_SHOWCASE =
-    'id, store_name, store_address, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
-  const conBandierine = () =>
-    supabase.from('seller_public_profiles').select(SELECT_SHOWCASE).limit(6);
-  const { data: storesRaw, error } = await conRipiegoSchema(
-    'StoreShowcase:seller_public_profiles',
-    conBandierine,
-    () =>
-      stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
-        supabase
-          .from('seller_public_profiles')
-          .select(senzaColonne(SELECT_SHOWCASE, COLONNE_124_VISTA))
-          .limit(6),
-      ),
-  );
-  if (error) throw error;
-
-  const stores = (storesRaw ?? []) as Store[];
-  const storeIds = stores.map((s) => s.id);
-  if (storeIds.length === 0) return { stores: [], productsByStore: {}, reviewsByStore: {} };
-
-  const [productsRes, reviewsRes] = await Promise.all([
-    supabase
-      .from('products')
-      .select('id, name, price, images, seller_id')
-      .in('seller_id', storeIds)
-      .eq('status', 'available')
-      .order('created_at', { ascending: false })
-      .limit(200),
-    supabase.rpc('store_review_stats', { p_store_ids: storeIds }),
-  ]);
-
-  const productsByStore: Record<string, ProductLite[]> = {};
-  for (const p of (productsRes.data ?? []) as ProductLite[]) {
-    (productsByStore[p.seller_id] ??= []).push(p);
-  }
-
-  const reviewsByStore: Record<string, { avg: number; count: number }> = {};
-  for (const r of (reviewsRes.data ?? []) as { store_id: string; avg: number | string; count: number }[]) {
-    reviewsByStore[r.store_id] = { avg: Number(r.avg), count: Number(r.count) };
-  }
-
-  return { stores, productsByStore, reviewsByStore };
-};
+/**
+ * 27/8/2026 (R079) — la lettura sta in `lib/queries/vetrina-negozi.ts`, dove una prova la esegue:
+ * qui dentro nessuno poteva accorgersi né dei duecento prodotti scaricati per mostrarne diciotto,
+ * né dei sei negozi scelti senza un ordine.
+ */
+const fetchShowcase = () => leggiVetrinaNegozi<Store>(supabase);
 
 const StoreShowcase = () => {
   const { data, isLoading, isError, refetch } = useQuery({

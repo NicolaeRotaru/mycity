@@ -253,7 +253,7 @@ const SignInForm = () => {
         {captchaRotto && (
           <p className="text-center text-sm text-ink-600">
             {captchaRotto} Puoi provare lo stesso ad accedere: se non funziona,
-            ricarica la pagina o scrivici da <a className="underline" href="/contact">Contatti</a>.
+            ricarica la pagina o scrivici da <Link className="underline" href="/contact">Contatti</Link>.
           </p>
         )}
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>

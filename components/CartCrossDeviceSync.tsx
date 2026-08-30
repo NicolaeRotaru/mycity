@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import { getCart, saveCart, clearCart, CART_UPDATED_AT_KEY, type CartItem } from '@/lib/cart';
+import { getCart, saveCart, clearCart, fondiCarrelli, CART_UPDATED_AT_KEY, type CartItem } from '@/lib/cart';
 import { idUtenteInMemoria } from '@/components/hooks/useUtente';
 
 /**
@@ -66,9 +66,19 @@ export default function CartCrossDeviceSync() {
         return;
       }
       if (cloudUpdated > localUpdated && cloudItems.length > 0) {
-        // Cloud più fresco → adotta cloud
-        saveCart(cloudItems);
-        setLocalUpdatedAt(cloudUpdated);
+        // 27/8/2026 (R092) — QUI IL CLOUD SOSTITUIVA IL LOCALE, E LA SPESA DELL'ALTRO
+        // DISPOSITIVO SPARIVA SENZA UN AVVISO. Adesso si fondono: tutte e due le liste, e per la
+        // stessa riga la quantità più alta.
+        const fuso = fondiCarrelli(localItems, cloudItems);
+        saveCart(fuso);
+        // Se dalla fusione è uscito qualcosa che il cloud non aveva, il cloud adesso è quello
+        // vecchio: si rimanda su, altrimenti al prossimo accesso da un altro dispositivo la roba
+        // sparirebbe di nuovo.
+        const cloudEraGiaCosi =
+          fuso.length === cloudItems.length &&
+          fuso.every((r, i) => r.id === cloudItems[i].id && r.quantity === cloudItems[i].quantity);
+        if (cloudEraGiaCosi) setLocalUpdatedAt(cloudUpdated);
+        else await syncUp(uid, fuso);
       }
     };
 

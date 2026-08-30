@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 
 export const revalidate = 600;
 
@@ -16,24 +16,9 @@ const CATEGORY_LONG_DESC: Record<string, string> = {
 
 type CategoryMeta = { slug: string; name: string };
 
-async function fetchCategory(slug: string): Promise<CategoryMeta | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  try {
-    const supabase = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data } = await supabase
-      .from('categories')
-      .select('slug, name')
-      .eq('slug', slug)
-      .single();
-    return (data as CategoryMeta) ?? null;
-  } catch {
-    return null;
-  }
-}
+// 27/8/2026 (R010) — vedi `lib/supabase/lettura-per-metadati.ts`.
+const fetchCategory = (slug: string) =>
+  leggiPerMetadati<CategoryMeta>('categories', 'slug, name', { slug });
 
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const params = await props.params;

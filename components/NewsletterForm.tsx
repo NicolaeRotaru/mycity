@@ -1,12 +1,23 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { CheckCircle2, Inbox } from 'lucide-react';
-import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Honeypot from './Honeypot';
+import Turnstile, { type ManopolaAntiBot } from './Turnstile';
 import { friendlyError } from '@/lib/errors';
+
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? '';
+
+/**
+ * La versione del testo che sta scritto qui sotto, accanto alla casella del consenso. Va spedita
+ * insieme all'email: è la prova di CHE COSA ha letto la persona quando ha detto di sì. Prima non
+ * partiva, e la rotta registrava sempre la costante di ripiego — cioè una prova che non provava
+ * niente. Quando il testo qui sotto cambia, questa sale di un numero.
+ */
+const VERSIONE_TESTO_CONSENSO = 'newsletter-v1';
 
 type Props = {
   /** "dark" per il Footer su sfondo scuro; "light" per la sezione newsletter homepage. */
@@ -20,6 +31,8 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
   const [subscribed, setSubscribed] = useState(false);
   const honeypotRef = useRef('');
   const startedAtRef = useRef(Date.now());
+  const [captchaToken, setCaptchaToken] = useState('');
+  const antiBot = useRef<ManopolaAntiBot>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,9 +47,19 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
       const res = await fetch('/api/newsletter', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          consentTextVersion: VERSIONE_TESTO_CONSENSO,
+          captchaToken: captchaToken || undefined,
+        }),
       });
-      if (!res.ok) throw new Error('Iscrizione non riuscita');
+      if (!res.ok) {
+        // Il gettone anti-bot si spende al primo tentativo: se si riprova senza rigenerarlo, il
+        // server lo rifiuta e la persona resta fuori senza capire perché.
+        setCaptchaToken('');
+        antiBot.current?.reset();
+        throw new Error('Iscrizione non riuscita');
+      }
       setSubscribed(true);
       toast.success(t('subscribed'));
     } catch (err) {
@@ -93,12 +116,26 @@ const NewsletterForm = ({ variant = 'dark' }: Props) => {
           {loading ? '…' : t('subscribe')}
         </button>
       </div>
+      {/* Il controllo anti-bot si monta solo quando qualcuno comincia davvero a scrivere: questo
+          modulo sta nel piè di pagina di OGNI pagina del sito, e caricare Cloudflare ovunque
+          costerebbe a tutti per servire i pochi che si iscrivono. */}
+      {TURNSTILE_SITE_KEY && email.trim().length > 0 && (
+        <div className="flex justify-center">
+          <Turnstile
+            ref={antiBot}
+            siteKey={TURNSTILE_SITE_KEY}
+            onVerify={(gettone) => setCaptchaToken(gettone)}
+            onExpire={() => setCaptchaToken('')}
+            theme={isLight ? 'light' : 'dark'}
+          />
+        </div>
+      )}
       {/* Consenso esplicito GDPR — richiesto prima dell'iscrizione (art. 7 GDPR). */}
       <label className={`flex items-start gap-2 cursor-pointer text-xs ${isLight ? 'text-ink-500' : 'text-ink-400'}`}>
         <input type="checkbox" required className="mt-0.5 shrink-0 accent-primary-600" />
         <span>
           Acconsento a ricevere comunicazioni commerciali da MyCity e confermo di aver letto la{' '}
-          <a href="/privacy" className="underline hover:text-primary-600">Privacy Policy</a>.
+          <Link href="/privacy" className="underline hover:text-primary-600">Privacy Policy</Link>.
           Potrò disiscrivermi in qualsiasi momento.
         </span>
       </label>

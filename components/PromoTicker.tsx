@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { useBranding } from './hooks/useBranding';
 import { wedgeIcon } from '@/lib/site-branding';
+import { ciSonoPromoAttive } from '@/lib/queries/promo-attive';
 
 /**
  * Striscia in cima: la promessa di MyCity (il "wedge"), gestita dall'admin via
@@ -26,16 +27,9 @@ export default function PromoTicker() {
   const { data: hasPromo = false } = useQuery({
     queryKey: ['promotions', 'active-any'],
     staleTime: 5 * 60_000,
-    queryFn: async (): Promise<boolean> => {
-      const nowIso = new Date().toISOString();
-      const { count } = await supabase
-        .from('seller_promotions')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'active')
-        .lte('starts_at', nowIso)
-        .gte('ends_at', nowIso);
-      return (count ?? 0) > 0;
-    },
+    // 27/8/2026 (R084) — la domanda è da sì/no, e si chiedeva col conteggio esatto di TUTTE le
+    // promozioni, su ogni pagina del sito. Ora si chiede una riga sola: `lib/queries/promo-attive.ts`.
+    queryFn: () => ciSonoPromoAttive(supabase),
   });
 
   const showPromo = hasPromo && branding.announcement.promoLinkEnabled;

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { sizedImage } from '@/lib/image-url';
 
 export const revalidate = 300; // 5 min ISR sui metadata
@@ -15,27 +15,14 @@ type ProductMeta = {
   profiles: { store_name: string | null; is_approved: boolean } | null;
 };
 
-async function fetchProduct(id: string): Promise<ProductMeta | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  try {
-    const supabase = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data } = await supabase
-      .from('products')
-      .select(`
-        id, name, description, price, images, status, stock,
-        profiles!products_seller_id_fkey ( store_name, is_approved )
-      `)
-      .eq('id', id)
-      .single();
-    return (data as unknown as ProductMeta) ?? null;
-  } catch {
-    return null;
-  }
-}
+// 27/8/2026 (R010) — vedi `lib/supabase/lettura-per-metadati.ts`: prima, con le variabili
+// mancanti, questa pagina rispondeva «prodotto non trovato» senza dire niente a nessuno.
+const fetchProduct = (id: string) =>
+  leggiPerMetadati<ProductMeta>(
+    'products',
+    'id, name, description, price, images, status, stock, profiles!products_seller_id_fkey ( store_name, is_approved )',
+    { id },
+  );
 
 export async function generateMetadata(props: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const params = await props.params;

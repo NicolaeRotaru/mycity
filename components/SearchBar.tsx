@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Search, X, Store, Tag } from 'lucide-react';
@@ -10,6 +11,7 @@ import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { formatPrice } from '@/lib/format';
 import { queryKeys } from '@/lib/queries/keys';
+import { riquadroSuggerimenti } from '@/lib/ricerca/riquadro-suggerimenti';
 
 type Suggestion =
   | { kind: 'product'; id: string; name: string; price: number; image: string | null; store: string | null }
@@ -45,7 +47,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
     return () => clearTimeout(id);
   }, [q]);
 
-  const { data: suggestions = [], isFetching: suggerimentiInArrivo } = useQuery({
+  const { data: suggestions = [], isFetching: suggerimentiInArrivo, isError: ricercaRotta, refetch: riprovaLaRicerca } = useQuery({
     queryKey: queryKeys.search.suggest(debounced),
     enabled: debounced.length >= 2,
     queryFn: async (): Promise<Suggestion[]> => {
@@ -141,6 +143,18 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
     return () => document.removeEventListener('mousedown', onClick);
   }, [open]);
 
+  /**
+   * 27/8/2026 (R089) — cosa dice il riquadro lo decide `lib/ricerca/riquadro-suggerimenti.ts`, dove
+   * una prova puo' eseguirlo. Prima lo decideva questo componente, e conosceva due stati soli:
+   * su una ricerca fallita diceva al cliente che il prodotto non esiste.
+   */
+  const verdetto = riquadroSuggerimenti({
+    termine: debounced,
+    caricando: suggerimentiInArrivo,
+    errore: ricercaRotta || undefined,
+    quanti: suggestions.length,
+  });
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!q.trim()) return;
@@ -191,11 +205,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
           «sei suggerimenti», e chi non vede lo schermo aveva gia' cambiato
           idea. */}
       <p className="sr-only" role="status" aria-live="polite">
-        {open && debounced.length >= 2 && !suggerimentiInArrivo
-          ? (suggestions.length === 0
-              ? `Nessun suggerimento per ${debounced}`
-              : `${suggestions.length} suggeriment${suggestions.length === 1 ? 'o' : 'i'} disponibil${suggestions.length === 1 ? 'e' : 'i'}`)
-          : ''}
+        {open && debounced.length >= 2 ? verdetto.annuncio : ''}
       </p>
 
       {open && debounced.length >= 2 && (
@@ -207,7 +217,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
               lenta chi legge in fretta chiude e se ne va convinto che il
               prodotto non ci sia. Adesso, finche' arrivano, si vedono tre righe
               in attesa. */}
-          {suggerimentiInArrivo && suggestions.length === 0 ? (
+          {verdetto.mostra === 'attesa' ? (
             <ul className="divide-y divide-ink-50" aria-hidden>
               {[0, 1, 2].map((i) => (
                 <li key={i} className="flex items-center gap-3 p-3">
@@ -216,7 +226,19 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
                 </li>
               ))}
             </ul>
-          ) : suggestions.length === 0 ? (
+          ) : verdetto.mostra === 'errore' ? (
+            /* La ricerca e' rotta, non e' vuota: si dice quello, e si offre di riprovare. */
+            <div className="p-6 text-center text-sm text-ink-500">
+              Non riesco a cercare adesso. Controlla la connessione.
+              <button
+                type="button"
+                onClick={() => { void riprovaLaRicerca(); }}
+                className="mt-2 block w-full text-primary-600 font-semibold hover:underline"
+              >
+                Riprova
+              </button>
+            </div>
+          ) : verdetto.mostra === 'vuoto' ? (
             <div className="p-6 text-center text-sm text-ink-500">
               Nessun risultato per &laquo;{debounced}&raquo;.
               <Link href={`/search?q=${encodeURIComponent(debounced)}`} className="block mt-2 text-primary-600 font-semibold hover:underline">
@@ -236,7 +258,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
                       >
                         <div className="relative w-12 h-12 rounded-lg bg-cream-200 overflow-hidden shrink-0">
                           {s.image && (
-                            <Image src={sizedImage(s.image, 'thumb')} alt="" fill sizes="48px" unoptimized className="object-cover" />
+                            <Image src={sizedImage(s.image, 'thumb')} alt="" fill sizes="48px" loader={caricatoreFotoRemote} className="object-cover" />
                           )}
                         </div>
                         <div className="flex-1 min-w-0">

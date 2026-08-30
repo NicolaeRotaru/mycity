@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { normalizeSite, pageBySlug } from '@/lib/store-site';
 
 export const revalidate = 300;
@@ -14,24 +14,14 @@ type StoreMeta = {
   store_site: unknown;
 };
 
-async function fetchStore(id: string): Promise<StoreMeta | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  try {
-    const supabase = createClient(url, key, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data } = await supabase
-      .from('seller_public_profiles')
-      .select('id, store_name, store_description, store_logo, is_approved, role, store_site')
-      .eq('id', id)
-      .single();
-    return (data as unknown as StoreMeta) ?? null;
-  } catch {
-    return null;
-  }
-}
+// 27/8/2026 (R010) — vedi `lib/supabase/lettura-per-metadati.ts`: le variabili mancanti non
+// diventano più un «non trovato» silenzioso.
+const fetchStore = (id: string) =>
+  leggiPerMetadati<StoreMeta>(
+    'seller_public_profiles',
+    'id, store_name, store_description, store_logo, is_approved, role, store_site',
+    { id },
+  );
 
 export async function generateMetadata(props: { params: Promise<{ id: string; slug: string }> }): Promise<Metadata> {
   const { id, slug } = await props.params;

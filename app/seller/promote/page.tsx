@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { Megaphone, Sparkles, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
@@ -165,7 +166,7 @@ export default function SellerPromotePage() {
                     }`}
                   >
                     <div className="relative aspect-square bg-cream-100">
-                      {img && <Image src={sizedImage(img, 144, { quadrato: true })} alt={p.name} fill sizes="144px" unoptimized className="object-cover" />}
+                      {img && <Image src={sizedImage(img, 144, { quadrato: true })} alt={p.name} fill sizes="144px" loader={caricatoreFotoRemote} className="object-cover" />}
                       {active && <span className="absolute right-1 top-1 rounded-full bg-primary-600 p-1 text-white"><Sparkles size={12} aria-hidden /></span>}
                     </div>
                     <div className="p-2">

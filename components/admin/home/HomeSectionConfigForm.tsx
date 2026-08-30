@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import type { HomeSection } from '@/lib/home-site';
+import { chiaveDiRiga, conChiaveEreditata } from '@/lib/liste/chiave-di-riga';
 
 /** Estrae provider + id da un URL YouTube/Vimeo (o da un id grezzo). */
 function parseVideo(input: string): { provider: 'youtube' | 'vimeo'; id: string } | null {
@@ -161,14 +162,16 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const c = section.config;
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       const bullets = c.bullets ?? [];
+      // 27/8/2026 (R101) — la riga modificata diventa un oggetto nuovo: la sua identità va
+      // portata dietro, altrimenti a ogni lettera battuta il campo verrebbe rimontato.
       const setBullet = (i: number, patch: Partial<(typeof bullets)[number]>) =>
-        set({ bullets: bullets.map((b, k) => (k === i ? { ...b, ...patch } : b)) });
+        set({ bullets: bullets.map((b, k) => (k === i ? conChiaveEreditata(b, { ...b, ...patch }) : b)) });
       return (
         <div className="space-y-3">
           <Input label="Titolo box vantaggi" value={c.trustTitle ?? ''} maxLength={120} onChange={(e) => set({ trustTitle: e.target.value })} placeholder="Perché scegliere MyCity" />
           <p className="text-xs text-ink-500">Vantaggi: lascia vuoto per usare i 4 di default.</p>
           {bullets.map((b, i) => (
-            <div key={i} className="rounded-lg border border-cream-200 p-3 space-y-2">
+            <div key={chiaveDiRiga(b)} className="rounded-lg border border-cream-200 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-ink-500">Vantaggio {i + 1}</span>
                 <button type="button" onClick={() => set({ bullets: bullets.filter((_, k) => k !== i) })} aria-label="Rimuovi vantaggio" className="text-ink-400 hover:text-secondary-600">
@@ -262,12 +265,12 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       const set = (patch: Partial<typeof c>) => onChange({ ...section, config: { ...c, ...patch } });
       const items = c.items ?? [];
       const setItem = (i: number, patch: Partial<(typeof items)[number]>) =>
-        set({ items: items.map((it, k) => (k === i ? { ...it, ...patch } : it)) });
+        set({ items: items.map((it, k) => (k === i ? conChiaveEreditata(it, { ...it, ...patch }) : it)) });
       return (
         <div className="space-y-3">
           <Input label="Titolo (opzionale)" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
           {items.map((it, i) => (
-            <div key={i} className="rounded-lg border border-cream-200 p-3 space-y-2">
+            <div key={chiaveDiRiga(it)} className="rounded-lg border border-cream-200 p-3 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-ink-500">Immagine {i + 1}</span>
                 <button type="button" onClick={() => set({ items: items.filter((_, k) => k !== i) })} aria-label="Rimuovi immagine" className="text-ink-400 hover:text-secondary-600">

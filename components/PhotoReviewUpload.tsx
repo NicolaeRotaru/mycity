@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { Camera, X, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -87,7 +88,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
       <div className="flex items-center gap-2 flex-wrap">
         {files.map((f, i) => (
           <div key={f.path} className="relative w-20 h-20 rounded-lg overflow-hidden border-2 border-cream-300">
-            <Image src={f.url} alt="" fill sizes="80px" unoptimized className="object-cover" />
+            <Image src={f.url} alt="" fill sizes="80px" loader={caricatoreFotoRemote} className="object-cover" />
             <button
               type="button"
               onClick={() => remove(i)}

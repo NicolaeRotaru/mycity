@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -82,7 +83,7 @@ export default function RecentlyViewed({ excludeId, className = '' }: Props) {
                     alt={p.name}
                     fill
                     sizes="160px"
-                    unoptimized
+                    loader={caricatoreFotoRemote}
                     className="object-cover"
                   />
                 )}

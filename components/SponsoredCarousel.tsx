@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -144,7 +145,7 @@ export default function SponsoredCarousel({ placement, categorySlug }: Props) {
               className="shrink-0 w-32 sm:w-36 snap-start bg-white border border-cream-200 rounded-xl overflow-hidden card-hover"
             >
               <div className="relative aspect-square bg-cream-100">
-                {img && <Image src={sizedImage(img, 144, { quadrato: true })} alt={p.name} fill sizes="144px" unoptimized className="object-cover" />}
+                {img && <Image src={sizedImage(img, 144, { quadrato: true })} alt={p.name} fill sizes="144px" loader={caricatoreFotoRemote} className="object-cover" />}
               </div>
               <div className="p-2">
                 <p className="text-xs text-ink-500 truncate">{p.profiles?.store_name}</p>

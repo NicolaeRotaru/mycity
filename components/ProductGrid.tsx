@@ -12,10 +12,14 @@ import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
 import { classiGriglia, type ColonneMassime } from '@/lib/griglia-prodotti';
 import { ErrorState } from './ui/ErrorState';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
-import { attachSellerProfiles, fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
+import { leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
 import { trackSearchPerformed } from '@/lib/analytics/events';
 
-export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating' | 'discount_desc';
+/**
+ * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
+ * sceglie l'ordine e chi lo esegue devono guardare la stessa definizione.
+ */
+export type SortOption = OrdineGriglia;
 
 /**
  * Numero massimo di colonne della griglia. `'default'` mantiene la scala storica
@@ -139,69 +143,25 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       (!onlyOpenStores || apertiOra !== undefined) &&
       (!(minRating !== undefined && minRating > 0) || idsColVoto !== undefined),
     queryFn: async () => {
-      let q = supabase
-        .from('products')
-        .select(`
-          id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id
-        `)
-        .eq('status', 'available');
-
-      // Ordinamento dinamico (default: created_at desc)
-      switch (sort) {
-        case 'price_asc':  q = q.order('price', { ascending: true }); break;
-        case 'price_desc': q = q.order('price', { ascending: false }); break;
-        case 'newest':     q = q.order('created_at', { ascending: false }); break;
-        default:           q = q.order('created_at', { ascending: false });
-      }
-
-      if (categoryIds && categoryIds.length > 0) q = q.in('category_id', categoryIds);
-      else if (categoryId) q = q.eq('category_id', categoryId);
-      if (sellerId)   q = q.eq('seller_id', sellerId);
-      if (search) {
-        const safe = search.replace(/[%_]/g, '\\$&').slice(0, 100);
-        q = q.ilike('name', `%${safe}%`);
-      }
-      if (maxPrice !== undefined) q = q.lte('price', maxPrice);
-      if (minPrice !== undefined) q = q.gte('price', minPrice);
-      // #91 — «Solo disponibili» lo decide il database. Prima si scaricavano
-      // anche gli esauriti e si buttavano via nel browser: righe pagate due
-      // volte (rete e memoria) e, soprattutto, righe che rubavano posto dentro
-      // il tetto — cosi' l'elenco filtrato usciva corto.
-      // Attenzione: `stock` a NULL vuol dire disponibilita' illimitata.
-      if (onlyInStock) q = q.or('stock.is.null,stock.gt.0');
-      // 22/8/2026 — i tre filtri adesso tagliano QUI, prima del tetto: non
-      // serve piu' chiedere quattro volte le righe che servono, e l'elenco non
-      // esce piu' corto in silenzio.
-      if (onlyOpenStores) {
-        if (!apertiOra || apertiOra.length === 0) return [];
-        q = q.in('seller_id', apertiOra);
-      }
-      if (minRating !== undefined && minRating > 0) {
-        if (!idsColVoto || idsColVoto.length === 0) return [];
-        q = q.in('id', idsColVoto);
-      }
-
-      // I negozi non approvati venivano scaricati e poi tolti nel browser:
-      // rubavano posto dentro il tetto, quindi l'elenco usciva corto. La vista
-      // filtra gia' da sola per approvato: qui si prendono da li' gli id.
-      const { data: approvati } = await supabase.from('seller_public_profiles').select('id');
-      const idsApprovati = ((approvati ?? []) as Array<{ id: string }>).map((r) => r.id);
-      if (idsApprovati.length === 0) return [];
-      q = q.in('seller_id', idsApprovati);
-
+      // 27/8/2026 (R069, R073) — la lettura vera sta in `lib/queries/griglia-prodotti.ts`, dove una
+      // prova la puo' eseguire: qui dentro nessuno poteva accorgersi ne' del viaggio in piu' ai
+      // negozi approvati ne' della «pertinenza» che ordinava per data.
       const tetto = (limit ?? 96) * pagine;
-      // «In promozione» resta l'unico con un margine: l'insieme delle promo si
-      // carica in parallelo e puo' non essere pronto al primo giro.
-      q = q.limit(onlyPromo ? Math.min(tetto * 2, 300) : tetto);
-      const { data, error } = await q;
-      if (error) throw error;
-      const rows = data ?? [];
-      const sellerMap = await fetchSellerPublicMap(
-        supabase,
-        rows.map((p) => p.seller_id as string),
-        'id, store_name, store_hours, is_approved',
-      );
-      return attachSellerProfiles(rows, sellerMap).filter((p) => p.profiles?.is_approved);
+      return leggiProdottiDellaGriglia(supabase, {
+        categoryId,
+        categoryIds,
+        sellerId,
+        search,
+        sort,
+        maxPrice,
+        minPrice,
+        onlyInStock,
+        apertiOra: onlyOpenStores ? apertiOra ?? [] : undefined,
+        idsColVoto: minRating !== undefined && minRating > 0 ? idsColVoto ?? [] : undefined,
+        // «In promozione» resta l'unico con un margine: l'insieme delle promo si carica in
+        // parallelo e puo' non essere pronto al primo giro.
+        tetto: onlyPromo ? Math.min(tetto * 2, 300) : tetto,
+      });
     },
   });
 

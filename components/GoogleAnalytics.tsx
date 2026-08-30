@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { readConsent } from '@/lib/consent';
+import { scriptDiAvvioGtag } from '@/lib/analytics/gtag-avvio';
+import { chiaveDellaPaginaVista } from '@/lib/analytics/tracciamento';
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? '';
 
@@ -40,14 +42,18 @@ export default function GoogleAnalytics() {
   }, []);
 
   // Page view tracking
+  //
+  // 27/8/2026 (R171) — l'indirizzo intero, filtri compresi, faceva contare una pagina vista a ogni
+  // tocco di filtro sulla pagina dei risultati. La chiave adesso tiene il percorso e la sola
+  // ricerca, ed è la stessa che usa il beacon di attività.
+  const paginaVista = chiaveDellaPaginaVista(pathname ?? '/', searchParams);
   useEffect(() => {
     if (!analyticsOn || !GA_ID || !window.gtag) return;
-    const url = pathname + (searchParams?.toString() ? `?${searchParams}` : '');
     window.gtag('event', 'page_view', {
-      page_path: url,
-      page_location: window.location.origin + url,
+      page_path: paginaVista,
+      page_location: window.location.origin + paginaVista,
     });
-  }, [pathname, searchParams, analyticsOn]);
+  }, [paginaVista, analyticsOn]);
 
   // Consent Mode update quando consenso cambia
   useEffect(() => {
@@ -64,41 +70,18 @@ export default function GoogleAnalytics() {
 
   return (
     <>
-      {/* Consent Mode v2: parte sempre in DENIED, poi update via gtag */}
+      {/* Consent Mode v2: parte sempre in DENIED, poi update via gtag. Qui dentro c'è anche la
+          configurazione della proprietà: deve stare in coda PRIMA di qualunque evento, altrimenti
+          la pagina d'ingresso si perde (vedi lib/analytics/gtag-avvio.ts). */}
       <Script id="ga-consent-default" strategy="beforeInteractive">
-        {`
-          window.dataLayer = window.dataLayer || [];
-          function gtag(){dataLayer.push(arguments);}
-          window.gtag = gtag;
-          gtag('consent', 'default', {
-            analytics_storage: 'denied',
-            ad_storage: 'denied',
-            ad_user_data: 'denied',
-            ad_personalization: 'denied',
-            wait_for_update: 500
-          });
-        `}
+        {scriptDiAvvioGtag(GA_ID)}
       </Script>
 
       {analyticsOn && (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
-            strategy="afterInteractive"
-          />
-          <Script id="ga-init" strategy="afterInteractive">
-            {`
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              window.gtag = gtag;
-              gtag('js', new Date());
-              gtag('config', '${GA_ID}', {
-                anonymize_ip: true,
-                send_page_view: false
-              });
-            `}
-          </Script>
-        </>
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`}
+          strategy="afterInteractive"
+        />
       )}
     </>
   );

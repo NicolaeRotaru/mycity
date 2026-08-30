@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { createClient } from '@supabase/supabase-js';
+import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 
 export const runtime = 'edge';
 export const alt = 'Negozio su MyCity';
@@ -8,23 +8,13 @@ export const contentType = 'image/png';
 
 type StoreOGData = { store_name: string | null; store_description: string | null; store_logo: string | null; city: string | null };
 
-async function fetchStore(id: string): Promise<StoreOGData | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  try {
-    const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data } = await supabase
-      .from('profiles')
-      .select('store_name, store_description, store_logo, city')
-      .eq('id', id)
-      .eq('role', 'seller')
-      .single();
-    return (data as unknown as StoreOGData) ?? null;
-  } catch {
-    return null;
-  }
-}
+// 27/8/2026 (R010) — una sola fabbrica del collegamento, e nessun silenzio sulle variabili.
+const fetchStore = (id: string) =>
+  leggiPerMetadati<StoreOGData>(
+    'profiles',
+    'store_name, store_description, store_logo, city',
+    { id, role: 'seller' },
+  );
 
 export default async function StoreOG({ params }: { params: { id: string } }) {
   const s = await fetchStore(params.id);

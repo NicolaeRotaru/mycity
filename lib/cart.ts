@@ -20,6 +20,35 @@ const sameLine = (a: { id: string; variantId?: string }, b: { id: string; varian
 const KEY = 'cart';
 
 /**
+ * FONDERE DUE CARRELLI, NON SOSTITUIRNE UNO.
+ *
+ * 27/8/2026 (R092) — al momento dell'accesso il carrello del cloud prendeva il posto di quello nel
+ * browser: `saveCart(cloudItems)`, sostituzione integrale, mentre in testa a
+ * `components/CartCrossDeviceSync.tsx` c'era scritto «Strategia merge». Chi aveva riempito il
+ * carrello sul telefono e poi accedeva dal computer perdeva la sua spesa in silenzio, e la perdita
+ * è definitiva: nessuno può accorgersene, perché nessuno ricorda cosa c'era dentro.
+ *
+ * La regola è una sola: si tengono tutte e due, e per la stessa riga — stesso prodotto E stessa
+ * variante, come dice `sameLine` — vale la quantità più alta, mai la somma (sommare farebbe
+ * comparire sei pezzi a chi ne aveva scelti tre di qua e tre di là). I dati descrittivi li porta il
+ * carrello passato per secondo, che è il più recente.
+ */
+export const fondiCarrelli = (locale: CartItem[], cloud: CartItem[]): CartItem[] => {
+  const fuso: CartItem[] = locale.map((r) => ({ ...r }));
+  for (const daCloud of cloud) {
+    const gia = fuso.find((r) => sameLine(r, daCloud));
+    if (gia) {
+      Object.assign(gia, daCloud, { quantity: Math.max(gia.quantity, daCloud.quantity) });
+    } else {
+      fuso.push({ ...daCloud });
+    }
+  }
+  for (const r of fuso) r.quantity = Math.min(Math.max(1, r.quantity), MAX_PEZZI_PER_ARTICOLO);
+  return fuso;
+};
+
+
+/**
  * 22/8/2026 — IL CARRELLO NON AVEVA UN TETTO, IL SERVER SÌ.
  *
  * Le rotte di ordine rifiutano le quantità sopra 99 (`z.number().max(99)`), e

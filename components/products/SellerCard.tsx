@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, BadgeCheck, Bell, Star, Store, Clock } from 'lucide-react';
 import { toast } from 'sonner';
@@ -150,7 +151,7 @@ export function SellerCard({
             alt={storeName}
             width={48}
             height={48}
-            unoptimized
+            loader={caricatoreFotoRemote}
             className="h-full w-full object-cover"
           />
         ) : (

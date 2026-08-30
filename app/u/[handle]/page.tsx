@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { notFound } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { Trophy, Sparkles, MapPin } from 'lucide-react';
 
 export const revalidate = 300;
@@ -14,12 +15,14 @@ type Profile = {
   full_name: string | null;
 };
 
+/**
+ * 27/8/2026 (R010) — le variabili di Supabase si leggevano qui a mano, e se mancavano si tornava
+ * `null` senza dirlo: il profilo pubblico di una persona vera spariva come se non esistesse.
+ * `creaClientAnonimo()` si ferma e dice quali variabili mancano.
+ */
 async function fetchProfileByHandle(handle: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
   try {
-    const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const supabase = creaClientAnonimo();
     const { data } = await supabase
       .from('profiles')
       .select('id, public_handle, public_bio, public_avatar_url, full_name')
@@ -33,11 +36,8 @@ async function fetchProfileByHandle(handle: string) {
 }
 
 async function fetchAchievements(userId: string) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return [];
   try {
-    const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+    const supabase = creaClientAnonimo();
     const { data } = await supabase
       .from('user_achievements')
       .select('achievement_id, unlocked_at, achievement:achievements!user_achievements_achievement_id_fkey ( title, icon, tier )')
@@ -83,7 +83,7 @@ export default async function PublicProfilePage(props: { params: Promise<{ handl
       <div className="bg-gradient-to-br from-primary-700 to-secondary-700 text-white rounded-2xl p-8 shadow-warm-lg text-center">
         <div className="w-24 h-24 mx-auto rounded-full bg-white/20 ring-4 ring-white/30 overflow-hidden flex items-center justify-center text-3xl font-serif font-bold mb-3">
           {profile.public_avatar_url ? (
-            <Image src={profile.public_avatar_url} alt={profile.public_handle ?? ''} width={96} height={96} unoptimized className="object-cover" />
+            <Image src={profile.public_avatar_url} alt={profile.public_handle ?? ''} width={96} height={96} loader={caricatoreFotoRemote} className="object-cover" />
           ) : (
             (profile.full_name ?? profile.public_handle ?? '?')[0]?.toUpperCase()
           )}
