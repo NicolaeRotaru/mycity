@@ -1,6 +1,6 @@
 import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 import { sanitizeImageUrls } from '@/lib/ai/productContext';
-import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
 import type Anthropic from '@anthropic-ai/sdk';
 import { rateLimitAsync } from '@/lib/rate-limit';
@@ -9,7 +9,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
-import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
+import { runMessage, AiCallError, mapAiError, conCacheDelContesto } from '@/lib/ai/run';
 import { getAttributesForCategory } from '@/lib/category-attributes';
 import type { AiProductPatch, CategoryRow } from '@/lib/products/aiPatch';
 import {
@@ -171,7 +171,18 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: CatalogChatBody;
   try {
     body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
-  } catch {
+  } catch (errore) {
+    /**
+     * 27/8/2026 (R153) — «JSON NON VALIDO» ANCHE QUANDO IL PROBLEMA ERA LA
+     * DIMENSIONE.
+     *
+     * Il catch era cieco: un corpo oltre il tetto e un corpo malformato
+     * finivano nella stessa risposta. Il venditore che carica troppe foto
+     * leggeva «JSON non valido» e non sapeva cosa cambiare, e nei nostri
+     * registri un limite superato non si distingueva da un errore del
+     * browser — quindi un abuso di dimensione non si distingueva da un bug.
+     */
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
 
@@ -263,9 +274,19 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
         return `- ${f.key} (${f.type})${opts}`;
       })
       .join('\n');
-    const productImages = (Array.isArray(focused.images) ? focused.images : [])
-      .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u))
-      .slice(0, MAX_IMAGES);
+    /**
+     * 27/8/2026 (R146) — QUI IL FILTRO ERA «PURCHE' COMINCI PER HTTP».
+     *
+     * A venti righe di distanza, nel ramo che identifica il prodotto, le
+     * miniature del catalogo passano da `sanitizeImageUrls`, che ammette solo
+     * gli host da cui ospitiamo le foto. Nel ramo col prodotto aperto no: un
+     * indirizzo qualunque passava, e diventava una richiesta che parte dai
+     * server del modello verso quel sito — i byte a nostro carico, il traffico
+     * visibile a chi ospita l'immagine, e il contenuto modificabile dopo. Le
+     * foto dei prodotti importati da altri marketplace nascono proprio come
+     * indirizzi esterni, quindi non serviva nemmeno malafede.
+     */
+    const productImages = sanitizeImageUrls(focused.images, MAX_IMAGES);
     const text = `Stiamo lavorando su QUESTO prodotto (id=${snap.id}).
 ${productImages.length ? 'Le immagini qui sopra sono le sue foto reali.\n' : ''}${userImages.length ? 'Ci sono anche foto inviate ora dal venditore.\n' : ''}
 Stato attuale del prodotto (JSON):
@@ -328,7 +349,9 @@ Identifica di quale prodotto parla il venditore e imposta "product_id". Se non s
   }
 
   const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: contextContent },
+    // (R156) Il contesto e' stabile per tutta la conversazione: e' il pezzo
+    // che la cache del prompt deve riusare, ed era l'unico che non copriva.
+    { role: 'user', content: conCacheDelContesto(contextContent) },
     {
       role: 'assistant',
       content: focused

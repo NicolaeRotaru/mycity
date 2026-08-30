@@ -7,7 +7,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { pollBatch, streamBatchResults } from '@/lib/ai/batch';
-import { parseCatalogBatchEntry, type CatalogJobResult, type CatalogOperation } from '@/lib/ai/catalogBatch';
+import { parseCatalogBatchEntry, stimaCostoLottoEur, type CatalogJobResult, type CatalogOperation } from '@/lib/ai/catalogBatch';
 
 /**
  * Stato di un job AI massivo. Se il batch è terminato, ne recupera i risultati
@@ -81,16 +81,32 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
       results.push(parseCatalogBatchEntry(job.operation, entry));
     }
     if (tokenIn > 0 || tokenOut > 0) {
-      // Stesso modello che il lotto usa alla partenza (MODELS.fast).
-      const costo = estimateCostEur(MODELS.fast, {
-        inputTokens: tokenIn,
-        outputTokens: tokenOut,
-        cacheWriteTokens: 0,
-        cacheReadTokens: 0,
-      });
-      registraSpesaAi(costo);
+      /**
+       * 27/8/2026 (R143 · R155) — QUI SI CONTAVA TUTTO, E A TARIFFA PIENA.
+       *
+       * Alla partenza il lotto impegna gia' una stima (start/route.ts): se qui
+       * si registrasse di nuovo il costo intero, la stessa spesa finirebbe nel
+       * conto due volte. Si aggiunge solo la DIFFERENZA fra quanto e' costato
+       * davvero e quanto era gia' stato impegnato — la stima si ricava dagli
+       * stessi due dati che l'hanno prodotta, l'operazione e il numero di
+       * prodotti, quindi non serve conservarla.
+       *
+       * E si conta a meta' tariffa, perche' cosi' si paga il lotto: prima il
+       * numero registrato era circa il doppio del vero.
+       */
+      const costo = estimateCostEur(
+        MODELS.fast,
+        { inputTokens: tokenIn, outputTokens: tokenOut, cacheWriteTokens: 0, cacheReadTokens: 0 },
+        { batch: true },
+      );
+      const giaImpegnato = stimaCostoLottoEur(job.operation, job.total);
+      const daAggiungere = Math.max(0, costo - giaImpegnato);
+      if (daAggiungere > 0) await registraSpesaAi(daAggiungere);
       logger.info('[ai] spesa del lotto registrata', {
-        jobId: job.id, tokenIn, tokenOut, costoEur: costo.toFixed(4),
+        jobId: job.id, tokenIn, tokenOut,
+        costoEur: costo.toFixed(4),
+        giaImpegnatoEur: giaImpegnato.toFixed(4),
+        aggiuntoEur: daAggiungere.toFixed(4),
       });
     }
     const { data: updated } = await admin

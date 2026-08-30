@@ -1,6 +1,6 @@
 import { AiConfigError } from '@/lib/ai/client';
 import { AiCallError, mapAiError } from '@/lib/ai/run';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withSellerAuth } from '@/lib/api/middleware';
@@ -57,7 +57,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let json: unknown;
   try {
     json = await jsonRichiesta(req, TETTO_JSON);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   const parsed = BodySchema.safeParse(json);

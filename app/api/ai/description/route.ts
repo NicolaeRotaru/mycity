@@ -7,7 +7,11 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+// 27/8/2026 (R150) — La riga che dice al modello che la descrizione da
+// migliorare e' un DATO e non un ordine: molte le hanno scritte altri
+// marketplace, non il venditore.
+import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 
 /**
  * AI Description Writer per seller.
@@ -32,7 +36,9 @@ Stile:
 - Ultima frase può menzionare provenienza locale o consigli d'uso.
 - NIENTE emoji, niente hashtag, niente prezzi.
 
-Rispondi SOLO con la descrizione, niente preambolo, niente virgolette.`;
+Rispondi SOLO con la descrizione, niente preambolo, niente virgolette.
+
+${REGOLA_TESTO_DI_TERZI}`;
 
 export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> => {
   if (!env.anthropicKey()) return ApiErrors.unavailable('Servizio AI non configurato.');
@@ -50,7 +56,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: { name?: string; current?: string; category?: string };
   try {
     body = await jsonRichiesta(req, TETTO_JSON);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   // 22/8/2026 — I TAGLI STAVANO IN UN PUNTO SOLO DEI DUE.
@@ -112,8 +121,8 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   // Dati utente come DATO (in messages), mai come istruzioni (system).
   const userBlock = `Negozio: ${storeName}
 Categoria: ${categoria || '—'}
-Nome prodotto: ${name}
-${attuale ? `Descrizione attuale (da migliorare): ${attuale}` : ''}`;
+Nome prodotto: ${recinta('nome', name, 200)}
+${attuale ? `Descrizione attuale (da migliorare): ${recinta('descrizione', attuale, 500)}` : ''}`;
 
   try {
     const { text } = await runMessage({

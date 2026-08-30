@@ -8,7 +8,8 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
-import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 
 /**
  * Voce → prodotto: il venditore detta a parole un prodotto ("ho tre magliette
@@ -25,7 +26,9 @@ const SYSTEM = `Sei l'assistente del marketplace "MyCity Piacenza". Il venditore
 - Ricava dai suoi dati: name (chiaro e specifico), description (1-3 frasi, onesta, basata su ciò che ha detto), price (in euro, se indicato — "15 euro l'una" → 15), stock (quantità se indicata — "tre magliette" → 3), category_slug (uno tra quelli forniti, in base al tipo di oggetto), subcategory_name se sensata, condition (nuovo/usato/ricondizionato se indicato), unit, attributes (SOLO chiavi valide per la categoria; per i campi a scelta usa esattamente uno dei valori ammessi — es. colore, taglia, materiale), tags (3-8 parole chiave minuscole).
 - NON inventare ciò che non è stato detto né chiaramente deducibile. Ometti i campi incerti.
 - Niente emoji. Prezzi in euro come numero.
-Rispondi sempre e solo chiamando lo strumento "voice_fill".`;
+Rispondi sempre e solo chiamando lo strumento "voice_fill".
+
+${REGOLA_TESTO_DI_TERZI}`;
 
 const TOOL: Anthropic.Tool = {
   name: 'voice_fill',
@@ -58,8 +61,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
-  } catch {
+    // 27/8/2026 (R149) — Qui non arrivano foto: il tetto da dodici megabyte
+    // era quello delle rotte che ricevono immagini dentro il JSON.
+    body = await jsonRichiesta(req, TETTO_JSON);
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   const transcript = typeof body.transcript === 'string' ? body.transcript.trim().slice(0, 2000) : '';
@@ -76,6 +84,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
    * Se il filtro stesso non risponde, la risposta e' la stessa che darebbe la
    * generazione: un messaggio leggibile, non un 500 muto.
    */
+  /**
+   * 27/8/2026 (R152) — SI PAGAVA UNA CHIAMATA AL MODELLO PER SCOPRIRE CHE NON
+   * C'ERA NIENTE DA DIRE.
+   *
+   * Il controllo sulla lunghezza minima stava DIECI RIGHE PIU' SOTTO del
+   * filtro, e `assertSafeText` e' a sua volta una chiamata a pagamento: su un
+   * dettato vuoto partiva comunque, per poi rifiutare subito dopo. Costo
+   * piccolo e continuo, e un modo gratuito per far partire chiamate a vuoto.
+   */
+  if (transcript.length < 3) return ApiErrors.invalidRequest('Dimmi qualcosa sul prodotto.');
+
   try {
     await assertSafeText(transcript, 'ai-voice-product-policy');
   } catch (err) {
@@ -87,10 +106,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.internal('Errore AI.');
   }
 
-  if (transcript.length < 3) return ApiErrors.invalidRequest('Dimmi qualcosa sul prodotto.');
-
-  const attributeSchema = Array.isArray(body.attributeSchema) ? body.attributeSchema : [];
-  const topCategories = Array.isArray(body.topCategories) ? body.topCategories : [];
+  // 27/8/2026 (R149) — Questi due elenchi arrivano dal browser e finivano
+  // interi dentro il prompt: gonfiati apposta, la differenza in token la
+  // paghiamo noi e il contenuto che conta viene spinto fuori dalla finestra.
+  // Stesse soglie di `buildProductContext`, che gli elenchi equivalenti li
+  // taglia da agosto.
+  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : []).slice(0, 40);
+  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : []).slice(0, 30);
   const attrLines = attributeSchema
     .map((f) => {
       const opts = f.options && f.options.length ? ` [opzioni: ${f.options.join(', ')}]` : '';
@@ -99,7 +121,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     .join('\n');
 
   const userText = `Il venditore ha detto:
-"${transcript}"
+${recinta('dettato', transcript, 2000)}
 
 Categorie di primo livello disponibili (slug):
 ${topCategories.map((c) => `- ${c.slug} (${c.name})`).join('\n') || '- (nessuna)'}

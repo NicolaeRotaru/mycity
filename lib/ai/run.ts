@@ -4,6 +4,7 @@ import type { NextResponse } from 'next/server';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { getAnthropic, estimateCostEur, type ModelId } from '@/lib/ai/client';
+import { aggiungiSpesaCents, euroInCents, spesaDiOggiCents } from '@/lib/ai/tettoSpesa';
 
 /**
  * Esecuzione centralizzata di `messages.create`.
@@ -94,52 +95,59 @@ function withToolCache(
 }
 
 /**
- * Circuit breaker globale per il costo AI giornaliero (in-memory).
- * Si azzera a ogni cold start / deploy — accettabile: il suo scopo è fermare
- * abusi o bug di loop nella stessa istanza. AI_GLOBAL_DAILY_BUDGET_EUR
- * controlla il tetto (0 = disabilitato).
+ * 27/8/2026 (R156) — IL PUNTO DI ROTTURA DELLA CACHE SUL PEZZO CHE PESA.
+ *
+ * `buildSystem` e `withToolCache` mettono la cache sulle istruzioni e sullo
+ * strumento: la parte piccola e stabile. Nelle due chat il pezzo grosso sta
+ * altrove — il primo messaggio utente, che porta il catalogo del venditore,
+ * fino a dieci miniature e le foto mandate ora, e viene ricostruito identico a
+ * ogni turno. Su una conversazione di dieci messaggi pagavamo dieci volte lo
+ * stesso catalogo e le stesse dieci immagini: la voce di costo piu' grossa
+ * delle chat era l'unica che la cache non toccava.
+ *
+ * Il punto di rottura va in FONDO al contesto, non dopo la conversazione:
+ * quello che viene dopo cambia a ogni turno, e un punto di rottura che si
+ * sposta non fa riusare niente. Anthropic ne ammette quattro; qui il terzo.
  */
-const _aiBudget = { spentEur: 0, resetAt: Date.now() };
-
-function _resetAiBudgetIfNeeded(): void {
-  if (Date.now() - _aiBudget.resetAt > 86_400_000) {
-    _aiBudget.spentEur = 0;
-    _aiBudget.resetAt = Date.now();
-  }
+export function conCacheDelContesto(
+  blocchi: Anthropic.ContentBlockParam[],
+): Anthropic.ContentBlockParam[] {
+  if (blocchi.length === 0) return blocchi;
+  return blocchi.map((b, i) =>
+    i === blocchi.length - 1 ? ({ ...b, cache_control: { type: 'ephemeral' } } as Anthropic.ContentBlockParam) : b,
+  );
 }
 
 /**
- * 22/8/2026 — IL TETTO DI SPESA NON VEDEVA IL CANALE CHE SPENDE DI PIU'.
+ * Il freno di spesa giornaliero verso Anthropic.
  *
- * Questi due ganci erano privati di questo file, e li chiamava solo
- * `runMessage`. Ma il canale che spende di piu' in un colpo solo non passa di
- * li': e' il LOTTO (`submitBatch`), che manda decine di richieste insieme.
- * Quello poteva partire col tetto gia' superato, e la spesa che faceva non
- * veniva contata da nessuna parte: il tetto restava fermo mentre i soldi
- * uscivano.
+ * 27/8/2026 (R135 · R142) — IL CONTATORE ERA IN MEMORIA DI UNA COPIA SOLA.
  *
- * Adesso sono esportati, e le rotte del lotto li usano come tutti gli altri.
+ * Qui c'era `const _aiBudget = { spentEur: 0, resetAt: Date.now() }`, con un
+ * commento che dichiarava la cosa «accettabile: si azzera a ogni cold start».
+ * Su Vercel non e' accettabile: ogni richiesta puo' finire su una copia diversa
+ * e ogni copia nasce col contatore vuoto, quindi «venti euro al giorno»
+ * diventava venti euro moltiplicati per il numero di copie accese. Il tetto
+ * c'era, ma non frenava: la prima notizia di un ciclo impazzito sarebbe
+ * arrivata con la fattura.
+ *
+ * Adesso il conto sta in un posto solo — `lib/ai/tettoSpesa.ts`, tabella
+ * `ai_spend_daily` — con la casella del giorno di calendario. Le firme dei due
+ * ganci sono le stesse di prima tranne che ora sono asincrone: leggere e
+ * scrivere un numero condiviso e' un giro di rete, non un'assegnazione.
  */
-export function controllaTettoSpesaAi(feature: string): void {
-  _checkAiBudget(feature);
-}
-
-export function registraSpesaAi(costEur: number): void {
-  _recordAiCost(costEur);
-}
-
-function _checkAiBudget(feature: string): void {
-  _resetAiBudgetIfNeeded();
+export async function controllaTettoSpesaAi(feature: string): Promise<void> {
   const limitEur = Number(process.env.AI_GLOBAL_DAILY_BUDGET_EUR ?? 0);
-  if (limitEur > 0 && _aiBudget.spentEur >= limitEur) {
-    logger.warn('ai_budget_exceeded', { feature, spentEur: _aiBudget.spentEur, limitEur });
+  if (!(limitEur > 0)) return; // nessun tetto configurato: niente giro di rete
+  const spesiCents = await spesaDiOggiCents();
+  if (spesiCents >= euroInCents(limitEur)) {
+    logger.warn('ai_budget_exceeded', { feature, spentEur: spesiCents / 100, limitEur });
     throw new AiCallError(feature, 503);
   }
 }
 
-function _recordAiCost(costEur: number): void {
-  _resetAiBudgetIfNeeded();
-  _aiBudget.spentEur += costEur;
+export async function registraSpesaAi(costEur: number): Promise<void> {
+  await aggiungiSpesaCents(euroInCents(costEur));
 }
 
 /** Errore lanciato quando l'SDK fallisce; porta lo status per il mapping. */
@@ -215,7 +223,7 @@ export async function runMessage<TInput = unknown>(
   args: RunMessageArgs,
 ): Promise<RunMessageResult<TInput>> {
   // Circuit breaker: blocca se si è già superato il budget giornaliero.
-  _checkAiBudget(args.feature);
+  await controllaTettoSpesaAi(args.feature);
   const client = getAnthropic(); // può lanciare AiConfigError (gestito a monte)
 
   let response: Anthropic.Message;
@@ -257,8 +265,8 @@ export async function runMessage<TInput = unknown>(
   };
   const estCostEur = estimateCostEur(args.model, usageTokens);
 
-  // Accumula il costo reale nel circuit breaker dopo la chiamata riuscita.
-  _recordAiCost(estCostEur);
+  // Accumula il costo reale nel conto condiviso dopo la chiamata riuscita.
+  await registraSpesaAi(estCostEur);
 
   // Telemetria aggregabile (feature, model, token, € stimati). Esce sempre:
   // #195 — con logger.info in produzione non usciva affatto.

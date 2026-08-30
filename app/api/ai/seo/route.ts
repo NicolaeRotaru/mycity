@@ -7,7 +7,13 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext, type ProductContextInput } from '@/lib/ai/productContext';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+// 27/8/2026 (R150) — La riga che dice al modello che la scheda e' un DATO e
+// non un ordine. La chat prodotto, la chat catalogo, il codice a barre e il
+// lavoro massivo ce l'hanno da agosto: qui mancava, e la descrizione importata
+// da un altro marketplace la scrive un estraneo.
+import { REGOLA_TESTO_DI_TERZI } from '@/lib/ai/recinto';
+import { filtroSullaScheda } from '@/lib/ai/schedaSicura';
 
 /**
  * SEO: ottimizza titolo e tag di un prodotto per la ricerca interna del
@@ -24,7 +30,9 @@ Regole:
 - "name": titolo chiaro e cercabile (marca + tipo prodotto + dettaglio distintivo, es. taglia/colore/materiale). 3-70 caratteri. Niente MAIUSCOLE urlate, niente keyword stuffing, niente simboli/emoji, niente ripetizioni.
 - "tags": 5-8 parole chiave minuscole con cui un cliente cercherebbe il prodotto (tipo oggetto, sinonimi, materiale, occasione d'uso, stanza/contesto). La prima è il tipo di oggetto. Lista COMPLETA desiderata. Niente duplicati del titolo parola per parola.
 - Non inventare caratteristiche non presenti nella scheda o nelle foto.
-- Tocca SOLO name e tags. Rispondi sempre e solo chiamando lo strumento "seo_optimize".`;
+- Tocca SOLO name e tags. Rispondi sempre e solo chiamando lo strumento "seo_optimize".
+
+${REGOLA_TESTO_DI_TERZI}`;
 
 const SEO_TOOL: Anthropic.Tool = {
   name: 'seo_optimize',
@@ -56,12 +64,21 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: Body;
   try {
     body = await jsonRichiesta(req, TETTO_JSON);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   if (!body?.product || typeof body.product !== 'object') {
     return ApiErrors.invalidRequest('Manca la scheda del prodotto.');
   }
+
+  // 27/8/2026 (R148) — La scheda passa dal filtro anti-contenuti-vietati come
+  // il testo libero delle altre rotte. Perche' qui e non altrove:
+  // lib/ai/schedaSicura.ts.
+  const nonAmmessa = await filtroSullaScheda(body.product, 'ai-seo-policy');
+  if (nonAmmessa) return nonAmmessa;
 
   const content = buildProductContext(body, {
     lead: 'Ottimizza titolo e tag di questo prodotto per la ricerca.',

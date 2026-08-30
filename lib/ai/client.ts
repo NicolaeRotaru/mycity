@@ -65,14 +65,37 @@ export type AiUsageTokens = {
 };
 
 /**
+ * 27/8/2026 (R155) — LO SCONTO DEL LOTTO ERA SCRITTO SOLO NEI COMMENTI.
+ *
+ * L'intestazione di `lib/ai/batch.ts` dice, da quando esiste, «Batch = -50%
+ * sul token». Il conto del costo non lo sapeva: applicava la tariffa piena, e
+ * il numero che finiva nel tetto giornaliero e nella telemetria era circa il
+ * doppio di quello che pagavamo davvero. Il tetto scattava prima del dovuto, e
+ * il giorno in cui si decide quale funzione conviene guardando quel numero, si
+ * decide su un dato gonfiato.
+ *
+ * Lo sconto vive qui, accanto alla tabella dei prezzi, cioè in un punto solo.
+ */
+export const SCONTO_LOTTO = 0.5;
+
+/**
  * Stima il costo (in EUR) di una chiamata dato il modello e i token usati.
  * I token "input" passati sono i soli token non-cache (uncached): l'SDK
  * riporta input base, cache-write e cache-read in campi separati, quindi non
  * c'è doppio conteggio.
+ *
+ * `batch: true` per le richieste mandate con la Message Batches API, che
+ * Anthropic fattura a metà tariffa. La ricerca sul web si paga a richiesta e
+ * non è scontata (e nel lotto non c'è).
  */
-export function estimateCostEur(model: ModelId, usage: AiUsageTokens): number {
+export function estimateCostEur(
+  model: ModelId,
+  usage: AiUsageTokens,
+  opts: { batch?: boolean } = {},
+): number {
   const price = PRICE_PER_MTOK[model];
-  const perToken = (usd: number) => usd / 1_000_000;
+  const sconto = opts.batch ? SCONTO_LOTTO : 1;
+  const perToken = (usd: number) => (usd * sconto) / 1_000_000;
   const usd =
     usage.inputTokens * perToken(price.input) +
     usage.outputTokens * perToken(price.output) +
