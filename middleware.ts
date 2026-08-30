@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { parseConsentCookie, CONSENT_COOKIE } from '@/lib/consent';
+import { logger } from '@/lib/logger';
 import {
   EXPERIMENT_LIST,
   assignVariant,
@@ -336,8 +337,23 @@ export async function middleware(req: NextRequest) {
   });
 
   // Refresh sessione (best-effort)
-  const { data: userResp } = await supabase.auth.getUser();
+  //
+  // 27/8/2026 (R185) — «NON E' ENTRATO NESSUNO» E «NON HO POTUTO CHIEDERE»
+  // NON SONO LA STESSA COSA.
+  //
+  // L'errore qui veniva buttato via, e i due casi finivano nello stesso ramo:
+  // un intoppo di Supabase buttava fuori una persona regolarmente entrata,
+  // spedendola al login senza un messaggio e senza lasciare una riga da
+  // nessuna parte. Il rimando resta — su una pagina protetta e' la scelta
+  // prudente — ma adesso si sa che e' successo, e si vede quante volte.
+  const { data: userResp, error: erroreUtente } = await supabase.auth.getUser();
   const user = userResp?.user ?? null;
+  if (erroreUtente && !user) {
+    logger.warn('[middleware] non ho potuto chiedere chi e: rimando al login chi forse era entrato', {
+      percorso: pathname,
+      message: erroreUtente instanceof Error ? erroreUtente.message : String((erroreUtente as { message?: string })?.message ?? 'errore'),
+    });
+  }
 
   // Helper: aggiunge CSP a una response redirect (mantiene protezione cross-cut).
   const withCsp = (r: NextResponse) => {
@@ -368,7 +384,7 @@ export async function middleware(req: NextRequest) {
   let profilo = roleRule ? null : await leggiRuoloDalCookie(req, user.id);
   let daSalvare = false;
   if (!profilo) {
-    const { data: profile } = await supabase
+    const { data: profile, error: erroreProfilo } = await supabase
       .from('profiles')
       .select('role, is_approved')
       .eq('id', user.id)
@@ -377,7 +393,23 @@ export async function middleware(req: NextRequest) {
       role: profile?.role as ProfileRole | undefined,
       approved: !!profile?.is_approved,
     };
-    daSalvare = true;
+    // 27/8/2026 (R185) — UN SECONDO STORTO DEL DATABASE DURAVA DIECI MINUTI.
+    //
+    // L'errore non veniva guardato. Se la lettura falliva, da `profile` vuoto
+    // usciva «ruolo: nessuno, approvato: no» — e quella risposta finiva nel
+    // cookie firmato, che vale dieci minuti. Un venditore approvato diventava
+    // uno sconosciuto fuori dal suo pannello per i dieci minuti successivi,
+    // anche dopo che il database era gia' tornato a posto.
+    //
+    // «Non ho potuto chiedere» non e' una risposta, e in cache non ci va: si
+    // riproverà alla pagina dopo, quando il database sara' tornato.
+    if (erroreProfilo) {
+      logger.warn('[middleware] profilo non letto: non lo metto in cache o durerebbe dieci minuti', {
+        percorso: pathname,
+        message: (erroreProfilo as { message?: string })?.message ?? 'errore',
+      });
+    }
+    daSalvare = !erroreProfilo;
   }
   const role = profilo.role as ProfileRole | undefined;
   const approved = profilo.approved;
