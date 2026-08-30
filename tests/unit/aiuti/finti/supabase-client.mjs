@@ -2,20 +2,35 @@
  * Il client Supabase in finto: qui non si legge nessun database, ma il modulo
  * vero va in errore senza le chiavi d'ambiente e porterebbe giù il montaggio.
  */
-const catena = () => {
+/**
+ * 30/8/2026 (R088) — la risposta di una lettura la può decidere la prova.
+ *
+ * Prima da qui usciva sempre `{ data: [], error: null }`: nessuna prova poteva montare una pagina
+ * con dei prodotti veri in mano, né con la lettura caduta. Con `globalThis.__RISPOSTA_SUPABASE__`
+ * — un oggetto, o una funzione che riceve `{ tavola, colonne }` — la prova dice cosa risponde il
+ * database. Chi non lo imposta non si accorge di niente: si torna alla lista vuota di prima.
+ */
+const catena = (tavola) => {
   const c = {};
+  let colonne = '';
   const passa = () => c;
-  for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'or', 'ilike', 'gte', 'lte', 'order', 'limit', 'range', 'is', 'not', 'contains', 'overlaps', 'filter', 'match']) {
+  for (const m of ['insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'or', 'ilike', 'gte', 'lte', 'order', 'limit', 'range', 'is', 'not', 'contains', 'overlaps', 'filter', 'match']) {
     c[m] = passa;
   }
-  c.single = async () => ({ data: null, error: null });
-  c.maybeSingle = async () => ({ data: null, error: null });
-  c.then = (risolvi) => Promise.resolve({ data: [], error: null }).then(risolvi);
+  c.select = (cols) => { colonne = cols ?? ''; return c; };
+  const risposta = () => {
+    const detta = globalThis.__RISPOSTA_SUPABASE__;
+    const esito = typeof detta === 'function' ? detta({ tavola, colonne }) : detta;
+    return esito ?? { data: [], error: null };
+  };
+  c.single = async () => { const r = risposta(); return { data: Array.isArray(r.data) ? (r.data[0] ?? null) : r.data, error: r.error ?? null }; };
+  c.maybeSingle = c.single;
+  c.then = (risolvi) => Promise.resolve(risposta()).then(risolvi);
   return c;
 };
 
 export const supabase = {
-  from: () => catena(),
+  from: (tavola) => catena(tavola),
   rpc: async () => ({ data: null, error: null }),
   auth: {
     // Chi è collegato lo decide la prova, con `globalThis.__UTENTE__`.

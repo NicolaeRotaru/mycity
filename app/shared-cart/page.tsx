@@ -10,6 +10,7 @@ import { addToCart, type CartItem } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { toast } from 'sonner';
 
@@ -34,6 +35,15 @@ type Product = {
   images: string[] | null;
   status: string;
   stock: number | null;
+  /**
+   * 27/8/2026 (R088) — `seller_id` e `has_variants` non venivano nemmeno chiesti al database.
+   * Senza il primo il carrello non sa di che negozio è la merce e mette tutto in un mucchio solo:
+   * la consegna e la spedizione si pagano PER NEGOZIO, quindi il totale del carrello usciva più
+   * basso di quello della cassa, che il proprietario lo rilegge. Senza il secondo un capo con le
+   * taglie entrava nel carrello senza taglia e sbatteva contro «Scegli le opzioni» in cassa.
+   */
+  seller_id: string | null;
+  has_variants: boolean | null;
   profiles: { store_name: string | null } | null;
 };
 
@@ -65,6 +75,14 @@ function SharedCartInner() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [addedAll, setAddedAll] = useState(false);
+  /**
+   * 27/8/2026 (R088) — l'errore della lettura non veniva nemmeno raccolto (`const { data } =
+   * await supabase…`). Con la rete caduta la lista restava vuota e la pagina scriveva che TUTTI i
+   * prodotti scelti per te non sono disponibili: il regalo sembrava svanito, e non c'era modo di
+   * capire che bastava riprovare.
+   */
+  const [nonLetta, setNonLetta] = useState(false);
+  const [tentativo, setTentativo] = useState(0);
 
   const parsed = parseCartParam(cartParam);
 
@@ -73,23 +91,35 @@ function SharedCartInner() {
       setLoading(false);
       return;
     }
+    setLoading(true);
     (async () => {
       const ids = parsed.map((p) => p.id);
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('products')
         .select(`
-          id, name, price, images, status, stock,
+          id, name, price, images, status, stock, seller_id, has_variants,
           profiles!products_seller_id_fkey ( store_name )
         `)
         .in('id', ids);
-      setProducts((data ?? []) as unknown as Product[]);
+      setNonLetta(Boolean(error));
+      setProducts((error ? [] : (data ?? [])) as unknown as Product[]);
       setLoading(false);
     })();
     // parsed e' derivato da cartParam — re-parsing in deps userebbe nuovo ref ogni render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartParam]);
+  }, [cartParam, tentativo]);
 
   if (loading) return <LoadingState message="Carico la lista..." />;
+
+  if (nonLetta) {
+    return (
+      <ErrorState
+        title="Non riesco a leggere la lista"
+        description="La lettura non è riuscita, quindi non so ancora cosa ti è stato suggerito. I prodotti ci sono: riprova fra un momento."
+        onRetry={() => setTentativo((n) => n + 1)}
+      />
+    );
+  }
 
   if (parsed.length === 0) {
     return (
@@ -104,8 +134,15 @@ function SharedCartInner() {
     );
   }
 
-  const available = products.filter((p) => p.status === 'available');
-  const unavailable = parsed.filter((p) => !available.find((a) => a.id === p.id));
+  const inVendita = products.filter((p) => p.status === 'available');
+  /**
+   * R088 — un prodotto con le taglie NON si può mettere nel carrello da qui: la variante si sceglie
+   * sulla sua scheda, e senza variante la cassa lo blocca con «Scegli le opzioni». Non è nemmeno
+   * «non disponibile»: è disponibile eccome, va solo scelto. Perciò ha un riquadro suo, col link.
+   */
+  const daScegliere = inVendita.filter((p) => p.has_variants === true);
+  const available = inVendita.filter((p) => p.has_variants !== true);
+  const unavailable = parsed.filter((p) => !inVendita.find((a) => a.id === p.id));
 
   const addAll = () => {
     let count = 0;
@@ -121,11 +158,22 @@ function SharedCartInner() {
         price: Number(product.price),
         image: Array.isArray(product.images) ? product.images[0] : undefined,
         quantity: qty,
+        // R088 — il negozio viaggia con la riga: senza, il carrello raggruppa tutto sotto un
+        // «Negozio» solo e conta una consegna e una spedizione al posto di due.
+        sellerId: product.seller_id ?? undefined,
+        storeName: product.profiles?.store_name ?? undefined,
       });
       count += qty;
     }
+    // R088 — «0 articoli aggiunti al carrello», e un secondo e mezzo dopo il carrello vuoto.
+    // Succede quando la merce c'è ma è finita (`stock: 0`): il pulsante è acceso, il ciclo non
+    // aggiunge niente. Dirlo è meglio che portare la persona altrove senza spiegazioni.
+    if (count === 0) {
+      toast.error('Niente da aggiungere: questi prodotti sono finiti');
+      return;
+    }
     setAddedAll(true);
-    toast.success(`${count} articoli aggiunti al carrello`);
+    toast.success(`${count} ${count === 1 ? 'articolo aggiunto' : 'articoli aggiunti'} al carrello`);
     setTimeout(() => router.push('/cart'), 1500);
   };
 
@@ -183,6 +231,26 @@ function SharedCartInner() {
           );
         })}
       </ul>
+
+      {daScegliere.length > 0 && (
+        <div className="bg-cream-50 border border-cream-300 rounded-xl p-4 text-sm text-ink-700 mb-6">
+          <p className="font-semibold text-ink-900 mb-2">
+            {daScegliere.length === 1 ? 'Un prodotto va scelto sulla sua scheda' : 'Alcuni prodotti vanno scelti sulla loro scheda'}
+          </p>
+          <p className="text-ink-600 mb-3">
+            {daScegliere.length === 1 ? 'Ha' : 'Hanno'} taglie o colori da scegliere: apri la scheda, scegli, e finisce nel carrello.
+          </p>
+          <ul className="space-y-1.5">
+            {daScegliere.map((p) => (
+              <li key={p.id}>
+                <Link href={`/product/${p.id}`} className="font-semibold text-primary-700 hover:underline">
+                  {p.name} — scegli le opzioni
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {unavailable.length > 0 && (
         <div className="bg-cream-50 border border-cream-300 rounded-xl p-4 text-sm text-ink-600 mb-6 flex items-center gap-1.5">
