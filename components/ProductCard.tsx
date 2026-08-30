@@ -161,7 +161,12 @@ const ProductCard = ({
       <div className="relative aspect-square w-full overflow-hidden bg-white">
         <Image
           src={img}
-          alt={name}
+          /* 27/8/2026 (R117) — qui c'era `alt={name}`, e il nome del prodotto
+             finiva detto tre volte per ogni scheda: nel link che copre la card,
+             qui, e nel titolo qui sotto. Venti prodotti in griglia facevano
+             sessanta ripetizioni. La foto illustra una cosa già nominata a un
+             centimetro di distanza: resta muta. */
+          alt=""
           fill
           sizes="(min-width: 1024px) 220px, (min-width: 640px) 33vw, 45vw"
           priority={priority}

@@ -14,7 +14,17 @@ import SupportChatModal from './SupportChatModal';
 import type { MenuRole } from '@/lib/account-menu';
 import { useShoppingMode } from './hooks/useShoppingMode';
 
-type Tab = { href: string; icon: LucideIcon; label: string; badge?: number; isAccount?: boolean; isSupport?: boolean; exact?: boolean };
+type Tab = {
+  href: string;
+  icon: LucideIcon;
+  label: string;
+  badge?: number;
+  /** Di che cosa parla il numero della pallina: «non letti», «articoli». */
+  badgeUnita?: string;
+  isAccount?: boolean;
+  isSupport?: boolean;
+  exact?: boolean;
+};
 
 /**
  * Bottom tab bar mobile — feel "app nativa" (Glovo, Deliveroo, Just Eat).
@@ -96,7 +106,7 @@ export default function MobileTabBar() {
     tabs = [
       { href: '/',          icon: Home,         label: t('home') },
       { href: '/search',    icon: Search,       label: t('search') },
-      { href: '/cart',      icon: ShoppingCart, label: t('cart'), badge: cartCount },
+      { href: '/cart',      icon: ShoppingCart, label: t('cart'), badge: cartCount, badgeUnita: 'articoli' },
       { href: '/orders',    icon: Package,      label: t('orders') },
       { href: '/profile',   icon: User,         label: t('me'), isAccount: true },
     ];
@@ -105,7 +115,7 @@ export default function MobileTabBar() {
       { href: '/',         icon: Home,         label: t('home') },
       { href: '/search',   icon: Search,       label: t('search') },
       { href: '/stores',   icon: Package,      label: t('stores') },
-      { href: '/cart',     icon: ShoppingCart, label: t('cart'), badge: cartCount },
+      { href: '/cart',     icon: ShoppingCart, label: t('cart'), badge: cartCount, badgeUnita: 'articoli' },
       { href: '/sign-in',  icon: User,         label: t('signIn') },
     ];
   }
@@ -146,9 +156,12 @@ export default function MobileTabBar() {
     return (
       <>
         <div className="relative">
-          <Icon size={22} strokeWidth={active ? 2.4 : 2} />
+          <Icon size={22} strokeWidth={active ? 2.4 : 2} aria-hidden />
+          {/* 27/8/2026 (R109) — il numero c'era ma nudo, e prima dell'etichetta:
+              si sentiva «3 Carrello». Adesso la pallina è muta e accanto c'è il
+              pezzo che dice di cosa sono quei tre. */}
           {tab.badge && tab.badge > 0 ? (
-            <span className="absolute -top-1.5 -right-2 bg-primary-600 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] px-1 flex items-center justify-center">
+            <span aria-hidden className="absolute -top-1.5 -right-2 bg-primary-600 text-white text-[9px] font-bold rounded-full min-w-[16px] h-[16px] px-1 flex items-center justify-center">
               {tab.badge > 99 ? '99+' : tab.badge}
             </span>
           ) : null}
@@ -156,6 +169,9 @@ export default function MobileTabBar() {
         <span className={`text-[11px] font-medium ${active ? 'font-semibold' : ''}`}>
           {tab.label}
         </span>
+        {tab.badge && tab.badge > 0 ? (
+          <span className="sr-only">, {tab.badge} {tab.badgeUnita ?? 'non letti'}</span>
+        ) : null}
         {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-primary-600 rounded-b" />}
       </>
     );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -39,6 +39,10 @@ function formatDate(iso: string): string {
  *  - Le risposte sono pubbliche → contenuto SEO indicizzabile.
  */
 export default function ProductQA({ productId, sellerId }: Props) {
+  // 27/8/2026 (R115) — il campo della domanda e quello della risposta avevano
+  // per unica indicazione la scritta grigia dentro, che sparisce alla prima
+  // lettera scritta: chi torna indietro a correggere non sa più cosa ci va.
+  const idDomanda = useId();
   const router = useRouter();
   const qc = useQueryClient();
   const { isAuthenticated, profile } = useProfile();
@@ -153,7 +157,9 @@ export default function ProductQA({ productId, sellerId }: Props) {
             }}
             className="flex flex-col sm:flex-row gap-2"
           >
+            <label htmlFor={idDomanda} className="sr-only">La tua domanda al negozio</label>
             <input
+              id={idDomanda}
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -239,6 +245,7 @@ export default function ProductQA({ productId, sellerId }: Props) {
                     rows={2}
                     value={answerText[q.id] ?? ''}
                     onChange={(e) => setAnswerText((s) => ({ ...s, [q.id]: e.target.value }))}
+                    aria-label={`La tua risposta alla domanda: ${q.question}`}
                     placeholder="Scrivi la tua risposta…"
                     className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700 resize-none"
                   />

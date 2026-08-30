@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { MapPin, ChevronDown, X } from 'lucide-react';
 import { useLocalStorage } from '@/lib/hooks';
 
@@ -18,6 +18,31 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
   const [loc, setLoc] = useLocalStorage<Location>(STORAGE_KEY, DEFAULT_LOC);
   const [open, setOpen] = useState(false);
   const [zip, setZip] = useState(loc.zip);
+
+  // 27/8/2026 (R113) — la pillola apriva un pannello senza dirlo e senza uscita
+  // da tastiera: nel file non esisteva un solo gestore di tasti, e per chiudere
+  // bisognava cliccare fuori col mouse. Qui il pannello si presenta (è un
+  // dialogo, ha un nome), Esc lo chiude, e il fuoco entra e poi torna indietro.
+  const pillolaRef = useRef<HTMLButtonElement>(null);
+  const capRef = useRef<HTMLInputElement>(null);
+  const idTitolo = useId();
+
+  const chiudi = (tornaAllaPillola = true) => {
+    setOpen(false);
+    if (tornaAllaPillola) pillolaRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    capRef.current?.focus();
+    const suTasto = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      pillolaRef.current?.focus();
+    };
+    document.addEventListener('keydown', suTasto);
+    return () => document.removeEventListener('keydown', suTasto);
+  }, [open]);
 
   useEffect(() => {
     setZip(loc.zip);
@@ -60,8 +85,11 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
   return (
     <div className="relative">
       <button
+        ref={pillolaRef}
         type="button"
         onClick={() => { setOpen((v) => !v); dismissHint(); }}
+        aria-expanded={open}
+        aria-haspopup="dialog"
         className="inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white px-2.5 py-1.5 rounded-full text-xs font-medium ring-1 ring-white/15 transition-colors focus-visible:outline-white"
         title="Cambia indirizzo di consegna"
       >
@@ -80,7 +108,10 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
 
       {hint && !open && (
         <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl bg-white p-3 text-ink-900 shadow-warm-lg ring-1 ring-cream-300">
-          <button type="button" onClick={dismissHint} aria-label="Chiudi" className="absolute right-2 top-2 text-ink-300 hover:text-ink-600">
+          {/* 27/8/2026 (R110) — la «×» era `text-ink-300` su bianco: 2,52:1,
+              sotto il 3:1 che WCAG chiede alle parti grafiche di un comando, e
+              il bersaglio erano 14 pixel senza margine. */}
+          <button type="button" onClick={dismissHint} aria-label="Chiudi" className="absolute right-1 top-1 rounded-full p-1.5 text-ink-500 hover:text-ink-700">
             <X size={14} strokeWidth={2.4} />
           </button>
           <p className="pr-4 text-sm font-semibold inline-flex items-center gap-1.5"><MapPin size={16} strokeWidth={2.2} className="text-primary-600 shrink-0" aria-hidden /> Dove ti consegniamo?</p>
@@ -99,15 +130,20 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
         <>
           <div
             className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
+            onClick={() => chiudi(false)}
             aria-hidden
           />
-          <div className="absolute left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-warm-lg ring-1 ring-ink-100 p-4 z-50 text-ink-900">
-            <p className="text-sm font-semibold mb-1">Dove vuoi ricevere?</p>
+          <div
+            role="dialog"
+            aria-labelledby={idTitolo}
+            className="absolute left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-warm-lg ring-1 ring-ink-100 p-4 z-50 text-ink-900"
+          >
+            <p id={idTitolo} className="text-sm font-semibold mb-1">Dove vuoi ricevere?</p>
             <p className="text-xs text-ink-500 mb-3">
               Mostriamo i negozi che consegnano al tuo CAP.
             </p>
             <input
+              ref={capRef}
               type="text"
               value={zip}
               onChange={(e) => { setZip(e.target.value); setErroreCap(null); }}

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, Plus, Star } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,6 +36,13 @@ type List = {
 };
 
 export default function ListsPage() {
+  // 27/8/2026 (R115) — «Emoji», «Titolo» e «Descrizione» erano `<label>` senza
+  // `htmlFor`: etichette che si vedono e non sono collegate a niente. Per un
+  // lettore di schermo quei tre campi erano tre riquadri senza nome.
+  const idBase = useId();
+  const idEmoji = `${idBase}-emoji`;
+  const idTitolo = `${idBase}-titolo`;
+  const idDescrizione = `${idBase}-descrizione`;
   const qc = useQueryClient();
   const [showNew, setShowNew] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -225,8 +232,9 @@ export default function ListsPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-[80px_1fr] gap-3">
                 <div>
-                  <label className="block text-sm font-semibold mb-1">Emoji</label>
+                  <label htmlFor={idEmoji} className="block text-sm font-semibold mb-1">Emoji</label>
                   <input
+                    id={idEmoji}
                     value={newEmoji}
                     onChange={(e) => setNewEmoji(e.target.value)}
                     maxLength={4}
@@ -234,8 +242,9 @@ export default function ListsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold mb-1">Titolo</label>
+                  <label htmlFor={idTitolo} className="block text-sm font-semibold mb-1">Titolo</label>
                   <input
+                    id={idTitolo}
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
                     maxLength={60}
@@ -245,8 +254,9 @@ export default function ListsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-1">Descrizione (opz.)</label>
+                <label htmlFor={idDescrizione} className="block text-sm font-semibold mb-1">Descrizione (opz.)</label>
                 <textarea
+                  id={idDescrizione}
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
                   maxLength={200}

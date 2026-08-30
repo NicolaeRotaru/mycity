@@ -55,10 +55,13 @@ export default function RiderShell({
     <div className="min-h-screen w-full bg-cream-100">
       {/* Colonna phone-width centrata */}
       <div className="relative mx-auto flex min-h-screen w-full max-w-[480px] flex-col bg-surface-0 shadow-warm-sm sm:my-0">
-        {/* Contenuto scrollabile — padding in fondo per non finire sotto la tab bar */}
-        <main className={`flex-1 ${isActiveDelivery ? '' : 'pb-[calc(76px+env(safe-area-inset-bottom,0px))]'}`}>
+        {/* Contenuto scrollabile — padding in fondo per non finire sotto la tab bar.
+            27/8/2026 (R107) — qui c'era un secondo `<main>`: il guscio del sito
+            (app/layout.tsx) ne apre già uno, e un `<main>` dentro un `<main>`
+            non è HTML valido. Il punto di riferimento resta uno solo, fuori. */}
+        <div className={`flex-1 ${isActiveDelivery ? '' : 'pb-[calc(76px+env(safe-area-inset-bottom,0px))]'}`}>
           {children}
-        </main>
+        </div>
 
         {/* SOS sempre raggiungibile: flottante, sopra la tab bar (P0-7). */}
         {showSOS && <SOSButton />}

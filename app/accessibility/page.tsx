@@ -78,9 +78,10 @@ export default function AccessibilityStatementPage() {
         <ul className="list-disc list-inside space-y-1">
           <li>Skip-link per saltare la navigazione</li>
           <li>
-            Controllo automatico <code>axe-core</code> sulle pagine del percorso
-            d&apos;acquisto (home, catalogo, scheda prodotto, carrello): nessuna
-            violazione di livello A o AA. Gira nella suite di prova a ogni modifica.
+            Controllo automatico <code>axe-core</code> su quattro pagine
+            (home, ricerca, carrello, negozi): nessuna violazione grave. Gira
+            nella suite di prova a ogni modifica. La scheda prodotto e il
+            checkout <strong>non</strong> sono ancora coperti.
           </li>
           <li>Indicatori di focus visibili sugli elementi interattivi</li>
           <li>Etichette esplicite sui campi dei moduli, con messaggi di errore associati</li>
@@ -103,10 +104,13 @@ export default function AccessibilityStatementPage() {
           <li><strong>Contrasto del testo secondario</strong>: alcune scritte di
           servizio in grigio chiaro su sfondo panna non raggiungono il rapporto
           richiesto dal livello AA.</li>
-          <li><strong>Pagine fuori dal percorso d&apos;acquisto</strong>: il
-          controllo automatico copre oggi quattro pagine su decine. Sulle altre
-          non abbiamo ancora una verifica che possa fallire, quindi non
-          dichiariamo niente.</li>
+          <li><strong>Pagine fuori dal controllo automatico</strong>: il
+          controllo copre oggi quattro pagine su decine — la scheda prodotto e
+          il checkout non sono fra queste. Sulle altre non abbiamo ancora una
+          verifica che possa fallire, quindi non dichiariamo niente.</li>
+          <li><strong>Lettori di schermo</strong>: non abbiamo ancora provato il
+          sito con NVDA, JAWS, VoiceOver o TalkBack. Il codice è scritto per
+          funzionarci, ma finché non l&apos;abbiamo provato non lo dichiariamo.</li>
         </ul>
         <p className="text-sm text-ink-500">
           Ultima verifica: 20 agosto 2026. Le limitazioni qui sopra sono quelle
@@ -123,8 +127,10 @@ export default function AccessibilityStatementPage() {
           </li>
           <li>
             Controllo automatico con <code>axe-core</code> dentro la suite di
-            prova del sito, sulle pagine del percorso d&apos;acquisto: se compare
-            una violazione di livello A o AA, la modifica non passa.
+            prova del sito, su quattro pagine (home, ricerca, carrello, negozi):
+            se compare una violazione <strong>grave</strong>, la modifica non
+            passa. Le violazioni di gravità media non fermano la modifica, e
+            restano violazioni di livello A e AA: non promettiamo di non averne.
           </li>
           <li>
             Lettura del codice e prove da tastiera sui percorsi principali fatte
@@ -167,9 +173,12 @@ export default function AccessibilityStatementPage() {
       <LegalSection id="tecniche" heading="Informazioni tecniche sul sito">
         <ul className="list-disc list-inside space-y-1">
           <li><strong>Conformità a standard:</strong> WCAG 2.1 livello AA (in corso di completamento)</li>
-          <li><strong>Tecnologie utilizzate:</strong> HTML5, CSS3, JavaScript (React/Next.js 14), ARIA 1.2</li>
+          <li><strong>Tecnologie utilizzate:</strong> HTML5, CSS3, JavaScript (React/Next.js 15), ARIA 1.2</li>
           <li><strong>Compatibilità browser:</strong> Chrome 100+, Firefox 100+, Safari 15+, Edge 100+</li>
-          <li><strong>Compatibilità assistive technology:</strong> NVDA, JAWS, VoiceOver, TalkBack</li>
+          <li><strong>Compatibilità con le tecnologie assistive:</strong> non
+          ancora verificata. Il sito è costruito con HTML e ARIA standard, che
+          i lettori di schermo sanno leggere, ma finché non facciamo la prova
+          con lettori veri non promettiamo niente.</li>
         </ul>
       </LegalSection>
 

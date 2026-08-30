@@ -36,6 +36,9 @@ const ICON_MAP: Record<string, LucideIcon> = {
 };
 const iconFor = (slug: string): LucideIcon => ICON_MAP[slug] ?? Tag;
 
+/** Il pannello aperto dal pulsante «Tutte le categorie» (serve ad aria-controls). */
+const PANNELLO_ID = 'mega-menu-categorie';
+
 type Cat = { id: string; slug: string; name: string; parent_id: string | null; icon: string | null };
 
 /**
@@ -51,6 +54,9 @@ const CategoryBar = () => {
 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // 27/8/2026 (R106) — con Esc il pannello si chiudeva e il fuoco cadeva sul
+  // corpo della pagina: chi naviga da tastiera ripartiva dall'inizio del sito.
+  const pulsanteRef = useRef<HTMLButtonElement>(null);
 
   const { data: cats = [] } = useQuery({
     queryKey: ['categories', 'tree'],
@@ -70,7 +76,11 @@ const CategoryBar = () => {
     const onClick = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     };
-    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      pulsanteRef.current?.focus();
+    };
     document.addEventListener('mousedown', onClick);
     document.addEventListener('keydown', onEsc);
     return () => {
@@ -90,10 +100,19 @@ const CategoryBar = () => {
         <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide border-b border-white/10 text-sm">
           {/* Mega-menu trigger — stessa riga delle tab, attivo quando aperto */}
           <button
+            ref={pulsanteRef}
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            aria-haspopup="menu"
+            /* Solo da aperto: a pannello chiuso quell'id non esiste, e un
+               riferimento a un elemento che non c'è è a sua volta un difetto. */
+            aria-controls={open ? PANNELLO_ID : undefined}
+            /* 27/8/2026 (R106) — diceva `menu`, e allora un lettore di schermo
+               promette la navigazione con le frecce e, dentro un `role="menu"`,
+               può arrivare a nascondere tutto ciò che non è una voce di menu.
+               Qui dentro ci sono link normali: si dice che si apre qualcosa, e
+               basta. */
+            aria-haspopup="true"
             className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 font-semibold transition-colors focus-visible:outline-white ${
               open
                 ? 'border-accent-400 text-accent-200'
@@ -133,7 +152,7 @@ const CategoryBar = () => {
         <div className="pointer-events-none absolute left-0 right-0 top-full z-50">
           <div className="container mx-auto px-3 sm:px-4">
             <div
-              role="menu"
+              id={PANNELLO_ID}
               className="pointer-events-auto mt-1 w-full max-w-[900px] rounded-2xl bg-white p-5 text-ink-800 shadow-warm-lg ring-1 ring-cream-300"
             >
               <div className="mb-4 flex flex-wrap gap-2 border-b border-cream-200 pb-4">

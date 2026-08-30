@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Filter, RotateCcw, Star, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -20,6 +20,14 @@ type StoreCategory = { id: string; name: string };
  * filtri lato query (search, categoryId, prezzo, rating, ordinamento).
  */
 export default function StoreProductExplorer({ sellerId, onCount }: Props) {
+  // 27/8/2026 (R104) — le etichette «Ordina per», «Categoria», «Prezzo» e
+  // «Rating minimo» si vedevano ma non erano collegate a nessun campo: per un
+  // lettore di schermo quei due menu erano senza nome. Gli id nascono qui.
+  const idBase = useId();
+  const idOrdina = `${idBase}-ordina`;
+  const idCategoria = `${idBase}-categoria`;
+  const idRicerca = `${idBase}-ricerca`;
+
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortOption>('relevance');
   const [categoryId, setCategoryId] = useState('');
@@ -69,9 +77,11 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
         <div className="relative flex-1">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400" aria-hidden />
           <input
+            id={idRicerca}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca nei prodotti del negozio…"
+            aria-label="Cerca nei prodotti del negozio"
             className="w-full bg-white border border-cream-300 rounded-full pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
           {search && (
@@ -105,8 +115,9 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
         <div className="bg-white border border-cream-300 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Ordinamento */}
           <div>
-            <label className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Ordina per</label>
+            <label htmlFor={idOrdina} className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Ordina per</label>
             <select
+              id={idOrdina}
               value={sort}
               onChange={(e) => setSort(e.target.value as SortOption)}
               className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
@@ -122,8 +133,9 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
           {/* Categoria (solo quelle del negozio) */}
           {categories.length > 0 && (
             <div>
-              <label className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Categoria</label>
+              <label htmlFor={idCategoria} className="block text-xs font-semibold text-ink-700 mb-1.5 uppercase tracking-wider">Categoria</label>
               <select
+                id={idCategoria}
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
                 className="w-full bg-cream-50 border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
@@ -139,7 +151,7 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
           {/* Range prezzo */}
           <div>
             <div className="flex justify-between text-sm mb-2">
-              <label className="text-xs font-semibold text-ink-700 uppercase tracking-wider">Prezzo</label>
+              <span className="text-xs font-semibold text-ink-700 uppercase tracking-wider">Prezzo</span>
               <span className="font-bold text-primary-700 text-xs">€{minPrice} - €{maxPrice}{maxPrice >= 500 ? '+' : ''}</span>
             </div>
             <input
@@ -166,16 +178,17 @@ export default function StoreProductExplorer({ sellerId, onCount }: Props) {
 
           {/* Rating minimo */}
           <div>
-            <label className="block text-xs font-semibold text-ink-700 mb-2 uppercase tracking-wider flex items-center gap-1">
-              <Star size={11} strokeWidth={2.2} />
+            <span id={`${idBase}-voto`} className="block text-xs font-semibold text-ink-700 mb-2 uppercase tracking-wider flex items-center gap-1">
+              <Star size={11} strokeWidth={2.2} aria-hidden />
               Rating minimo
-            </label>
-            <div className="flex gap-1.5">
+            </span>
+            <div className="flex gap-1.5" role="group" aria-labelledby={`${idBase}-voto`}>
               {[0, 3, 4, 4.5].map((r) => (
                 <button
                   key={r}
                   type="button"
                   onClick={() => setMinRating(r)}
+                  aria-pressed={minRating === r}
                   className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${
                     minRating === r
                       ? 'bg-primary-600 text-white border-primary-600'

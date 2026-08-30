@@ -109,7 +109,10 @@ export default function Navbar() {
                     {/* Carrello raggiungibile anche dagli ospiti: il badge usa
                         useCartCount() (storage locale), funziona senza login. */}
                     <CartButton count={cartCount} />
-                    <Link href="/sign-in" className="px-3 py-2 hover:text-accent-300 font-medium focus-visible:outline-white">Accedi</Link>
+                    {/* 27/8/2026 (R110) — era `accent-300`: sul terracotta
+                        della barra stacca 3,87 volte, sotto il 4,5 richiesto a
+                        un testo. `accent-200` arriva a 4,87. */}
+                    <Link href="/sign-in" className="px-3 py-2 hover:text-accent-200 font-medium focus-visible:outline-white">Accedi</Link>
                     <Link href="/sign-up" className="bg-accent-500 hover:bg-accent-600 text-ink-900 px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
                       Registrati
                     </Link>
@@ -119,7 +122,7 @@ export default function Navbar() {
                 {isAuthenticated && (
                   <>
                     {(role === 'buyer' || (isSeller && shoppingMode)) && (
-                      <IconButton href="/favorites" label="Preferiti" badge={favCount}>
+                      <IconButton href="/favorites" label="Preferiti" badge={favCount} unita="salvati">
                         <Heart size={20} strokeWidth={2} />
                       </IconButton>
                     )}
@@ -198,7 +201,7 @@ export default function Navbar() {
                       </span>
                     </Link>
                   ) : (
-                    <Link href="/sign-in" className="shrink-0 text-sm font-medium hover:text-accent-300 focus-visible:outline-white">Accedi</Link>
+                    <Link href="/sign-in" className="shrink-0 text-sm font-medium hover:text-accent-200 focus-visible:outline-white">Accedi</Link>
                   )}
                 </>
               )}
@@ -222,18 +225,34 @@ export default function Navbar() {
 
 // ---------------------------------------------------------------------------
 
-const IconButton = ({ href, label, badge, children }: { href: string; label: string; badge?: number; children: React.ReactNode }) => (
+// 27/8/2026 (R109) — c'era `aria-label={label}` sul link, e un `aria-label`
+// non si somma al contenuto: lo sostituisce. La pallina col numero stava
+// dentro il link e non veniva pronunciata mai — cinque notifiche non lette e
+// il lettore diceva «Notifiche». È lo stesso difetto già corretto qui sotto
+// sul carrello (nota «#137»): il nome si compone dal contenuto.
+// Esportato perché una prova possa montarlo da solo.
+export const IconButton = ({ href, label, badge, unita = 'non letti', children }: {
+  href: string;
+  label: string;
+  badge?: number;
+  /** Di che cosa parla il numero: «non letti», «preferiti», «articoli». */
+  unita?: string;
+  children: React.ReactNode;
+}) => (
   <Link
     href={href}
     title={label}
-    aria-label={label}
     className="relative p-2 hover:bg-white/10 rounded-full transition-colors"
   >
-    {children}
+    <span aria-hidden>{children}</span>
+    <span className="sr-only">{label}</span>
     {badge && badge > 0 ? (
-      <span className="absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
-        {badge > 99 ? '99+' : badge}
-      </span>
+      <>
+        <span aria-hidden className="absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">
+          {badge > 99 ? '99+' : badge}
+        </span>
+        <span className="sr-only">, {badge} {unita}</span>
+      </>
     ) : null}
   </Link>
 );

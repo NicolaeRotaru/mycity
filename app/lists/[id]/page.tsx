@@ -203,15 +203,19 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
         <div className="flex-1 min-w-0">
           {editTitle && isOwner ? (
             <div className="space-y-2">
+              {/* 27/8/2026 (R115) — questo campo non aveva né etichetta né
+                  scritta-suggerimento: un riquadro bianco, e basta. */}
               <input
                 value={titleVal}
                 onChange={(e) => setTitleVal(e.target.value)}
+                aria-label="Titolo della lista"
                 className="w-full text-2xl font-serif font-bold bg-cream-50 border border-cream-300 rounded-lg px-3 py-1"
                 maxLength={60}
               />
               <textarea
                 value={descVal}
                 onChange={(e) => setDescVal(e.target.value)}
+                aria-label="Descrizione della lista (facoltativa)"
                 placeholder="Descrizione (opz.)"
                 rows={2}
                 maxLength={200}
