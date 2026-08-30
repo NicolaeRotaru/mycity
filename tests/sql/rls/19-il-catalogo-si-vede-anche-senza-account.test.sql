@@ -87,6 +87,34 @@ VALUES ('11111111-1111-1111-1111-111111111111', 'Saldi di fine estate', 20, 'sto
 INSERT INTO public.product_views (product_id, viewed_at)
 VALUES ('c0000000-0000-0000-0000-0000000000a1', now() - interval '1 hour');
 
+-- 27/8/2026 (R033) — La bottega che NON deve vedersi: negozio non ancora
+-- approvato, prodotto in bozza, e una variante con la giacenza vera dentro.
+INSERT INTO auth.users (id, email, raw_user_meta_data) VALUES
+  ('55555555-5555-5555-5555-555555555555', 'bottega@test.it', '{"role":"seller"}'),
+  ('66666666-6666-6666-6666-666666666666', 'staff@test.it',   '{"role":"buyer"}');
+
+UPDATE public.profiles SET role = 'admin' WHERE id = '66666666-6666-6666-6666-666666666666';
+
+UPDATE public.profiles
+   SET is_approved = false, approval_status = 'pending', store_name = 'Bottega Segreta'
+ WHERE id = '55555555-5555-5555-5555-555555555555';
+
+INSERT INTO public.products (id, name, description, price, seller_id, status, stock)
+VALUES ('d0000000-0000-0000-0000-0000000000a9', 'Panettone di prova',
+        'Ricetta che il negozio sta ancora mettendo a punto',
+        19.90, '55555555-5555-5555-5555-555555555555', 'draft', 7);
+
+INSERT INTO public.product_variants (id, product_id, options, label, stock)
+VALUES ('e0000000-0000-0000-0000-0000000000b1',
+        'd0000000-0000-0000-0000-0000000000a9',
+        '{"pezzatura":"Grande"}'::jsonb, 'Grande', 7);
+
+-- E la variante di un prodotto che invece e' in vetrina: quella si deve vedere.
+INSERT INTO public.product_variants (id, product_id, options, label, stock)
+VALUES ('e0000000-0000-0000-0000-0000000000b2',
+        'c0000000-0000-0000-0000-0000000000a1',
+        '{"pezzatura":"Teglia intera"}'::jsonb, 'Teglia intera', 3);
+
 RESET mycity.allow_order_write;
 RESET mycity.allow_profile_write;
 
@@ -158,6 +186,65 @@ SELECT 'le visite ai prodotti restano private riga per riga',
        count(*) = 0, 'righe di product_views lette da anon: ' || count(*)
   FROM public.product_views;
 
+-- ⑪ 27/8/2026 (R033) — LE VARIANTI SEGUONO IL PRODOTTO, NON VANNO PER CONTO LORO.
+--    La regola di lettura era `USING (true)` e il commento sopra diceva «tanto
+--    la visibilita' la fa gia' products». In PostgreSQL i permessi si applicano
+--    tabella per tabella: chi chiede `product_variants` di suo non passa mai da
+--    `products`. Misurato: prodotto visto 0, variante vista 1 — con l'etichetta
+--    «Grande» e la giacenza 7 di una bottega che non e' nemmeno approvata. Per
+--    il negoziante e' il contrario di quello che gli abbiamo promesso: un
+--    concorrente vedeva il suo magazzino e i prodotti non ancora pubblicati.
+INSERT INTO esiti
+SELECT 'le taglie e le giacenze di un prodotto in bozza restano invisibili',
+       count(*) = 0,
+       'varianti del prodotto in bozza lette da anon: ' || count(*)
+  FROM public.product_variants
+ WHERE product_id = 'd0000000-0000-0000-0000-0000000000a9';
+
+-- ⑫ E il contrario: la variante di un prodotto in vetrina si deve vedere,
+--    altrimenti chi compra non puo' scegliere la pezzatura.
+INSERT INTO esiti
+SELECT 'le taglie di un prodotto in vetrina si vedono senza account',
+       count(*) = 1,
+       'varianti del prodotto in vetrina lette da anon: ' || count(*)
+  FROM public.product_variants
+ WHERE product_id = 'c0000000-0000-0000-0000-0000000000a1';
+
+RESET ROLE;
+
+-- ⑬ Il negozio, pero', le sue varianti le deve vedere anche in bozza: la pagina
+--    «modifica prodotto» le carica da li'. Una riparazione che chiude la porta
+--    anche al proprietario non e' una riparazione.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"55555555-5555-5555-5555-555555555555","role":"authenticated"}';
+
+INSERT INTO esiti
+SELECT 'il negozio vede le varianti del suo prodotto in bozza',
+       count(*) = 1,
+       'varianti viste dal proprietario: ' || count(*)
+  FROM public.product_variants
+ WHERE product_id = 'd0000000-0000-0000-0000-0000000000a9';
+
+RESET request.jwt.claims;
+RESET ROLE;
+
+-- ⑭ 27/8/2026 (R033) — E ANCHE LO STAFF LE DEVE VEDERE, O LE CANCELLA.
+--    La pagina «modifica prodotto» dell'amministratore carica le varianti dal
+--    browser, con la sua sessione, non con la chiave di servizio. Se leggesse
+--    zero varianti su un prodotto in bozza, al salvataggio il confronto
+--    insert/update/delete leggerebbe quel vuoto come «le ha tolte lui» e le
+--    cancellerebbe davvero. E' il danno che questa riparazione stava per fare.
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claims = '{"sub":"66666666-6666-6666-6666-666666666666","role":"authenticated"}';
+
+INSERT INTO esiti
+SELECT 'lo staff vede le varianti di un prodotto in bozza di un altro',
+       count(*) = 1,
+       'varianti viste dall''amministratore: ' || count(*)
+  FROM public.product_variants
+ WHERE product_id = 'd0000000-0000-0000-0000-0000000000a9';
+
+RESET request.jwt.claims;
 RESET ROLE;
 
 -- ---------------------------------------------------------------------------

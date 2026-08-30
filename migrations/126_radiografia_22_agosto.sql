@@ -110,8 +110,15 @@ NOTIFY pgrst, 'reload schema';
 -- contanti riaccredita. Solo le due strade che usano davvero le persone — il
 -- cliente che annulla e il negozio che rifiuta — no.
 --
--- `wallet_credit` ha una chiave (`p_ref`): con `order_canceled_<id>` un secondo
--- annullo dello stesso ordine non accredita due volte.
+-- 27/8/2026 (R132) — QUI SOTTO C'ERA UNA PROMESSA CHE IL DATABASE NON MANTENEVA.
+-- Diceva: «`wallet_credit` ha una chiave (`p_ref`): con `order_canceled_<id>` un
+-- secondo annullo dello stesso ordine non accredita due volte». Era falso. La
+-- chiave non c'era: `_wallet_apply` sommava e basta, e l'unico indice unico
+-- copriva un motivo solo, il rimborso in contanti. Due chiamate raddoppiavano il
+-- saldo, e quel saldo si spende come denaro.
+-- La chiave adesso c'e' davvero: migrations/143_wallet_credit_idempotente.sql.
+-- Lasciata scritta la frase vecchia perche' il danno l'ha fatto lei: chi ha
+-- scritto il pezzo dopo si e' fidato e non ha messo la protezione.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 CREATE OR REPLACE FUNCTION public.cancel_order(p_order_id uuid)
@@ -131,7 +138,7 @@ BEGIN
   UPDATE public.orders SET delivery_status = 'CANCELED', canceled_at = now() WHERE id = p_order_id;
   PERFORM public.restore_stock_for_order(p_order_id);
 
-  -- Il credito speso torna al cliente. La chiave rende innocuo un secondo giro.
+  -- Il credito speso torna al cliente. Dal 143 la chiave rende innocuo un secondo giro.
   IF v_wallet_cents > 0 THEN
     PERFORM public.wallet_credit(v_buyer_id, v_wallet_cents, 'order_canceled', 'order_canceled_' || p_order_id::text);
   END IF;
