@@ -5,6 +5,9 @@ import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
+// R043 — l'avviso agli amministratori e' lo stesso che usa il webhook dei
+// rimborsi: una casa sola, cosi' i due percorsi non divergono.
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 
 /**
  * Logica condivisa di payout / reversal / refund per il modello SCT
@@ -12,7 +15,9 @@ import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/d
  *
  * Casa unica usata da:
  *  - app/api/stripe/payout/route.ts        → releaseOrderPayout (trigger manuale/admin)
- *  - app/api/cron/release-payouts/route.ts → releaseOrderPayout (batch +3gg)
+ *  - app/api/cron/release-payouts/route.ts → releaseOrderPayout (il giro che
+ *    paga un'ora dopo la consegna: le ore stanno in lib/stripe/tempi-bonifico.ts.
+ *    R051 — qui c'era scritto «+3gg», e non era vero)
  *  - app/api/returns/[id]/decide/route.ts  → refundOrder
  *  - app/api/admin/disputes/[id]/resolve   → refundOrder
  *  - app/api/stripe/webhook (charge.refunded / charge.dispute.*) → reverseOrderTransfer
@@ -159,6 +164,52 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
       return { ok: true, code: 'NOTHING_TO_PAY', reason: 'Rimborsato per intero prima del pagamento: niente da versare' };
     }
 
+    const tentativo = (order as { payout_tentativo?: number }).payout_tentativo ?? 0;
+
+    /**
+     * 27/8/2026 (R050) — SE LA CHIAVE CAMBIA, LA PROTEZIONE VA RIMESSA A MANO.
+     *
+     * Mettere l'importo nella chiave sblocca l'ordine che rimbalzava
+     * all'infinito, ma toglie anche la rete che Stripe tendeva da sola: con una
+     * chiave nuova, un bonifico che era PASSATO davvero e la cui risposta si e'
+     * persa per strada verrebbe rifatto. Sono soldi che escono due volte.
+     *
+     * L'importo puo' cambiare solo quando al negozio e' gia' stata addebitata
+     * una quota, quindi il controllo serve solo in quel caso: si guarda se per
+     * QUESTO tentativo un bonifico esiste gia' e, se c'e', lo si registra
+     * invece di farne un altro. Il numero del tentativo sta nell'etichetta del
+     * bonifico apposta: dopo una contestazione vinta quel numero sale, e il
+     * bonifico vecchio — che era stato stornato — non viene scambiato per
+     * quello nuovo.
+     */
+    if ((order.seller_payout_reversed_cents ?? 0) > 0) {
+      const gruppo = order.stripe_transfer_group ?? `order_${order.id}`;
+      try {
+        const esistenti = await stripe.transfers.list({ transfer_group: gruppo, limit: 100 });
+        const giaFatto = (esistenti.data ?? []).find(
+          (t) =>
+            t.metadata?.order_id === order.id &&
+            t.metadata?.kind !== 'rider_fee' &&
+            (t.metadata?.tentativo ?? '0') === String(tentativo),
+        );
+        if (giaFatto) {
+          logger.warn('[stripe] bonifico al negozio gia esistente: registrato invece di rifarlo', {
+            orderId: order.id, transferId: giaFatto.id,
+          });
+          const { error: errGia } = await admin
+            .from('orders')
+            .update({ stripe_transfer_id: giaFatto.id, payout_status: 'TRANSFERRED', payout_at: new Date().toISOString() })
+            .eq('id', order.id);
+          if (errGia) logger.error('[stripe] bonifico ritrovato ma stato non aggiornato', errGia);
+          return { ok: true, transferId: giaFatto.id };
+        }
+      } catch (e) {
+        // Se l'elenco non risponde si tira dritto: la chiave di idempotenza
+        // copre comunque il ritentativo con lo stesso importo.
+        logger.warn('[stripe] elenco bonifici non consultabile prima del versamento', { orderId: order.id, e });
+      }
+    }
+
     const transfer = await stripe.transfers.create(
       {
         amount: daVersare,
@@ -166,7 +217,9 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
         destination: seller.stripe_account_id,
         ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
         transfer_group: order.stripe_transfer_group ?? `order_${order.id}`,
-        metadata: { order_id: order.id, seller_id: order.seller_id },
+        // Il tentativo nell'etichetta: e' cosi' che il controllo qui sopra
+        // distingue un bonifico di adesso da uno vecchio gia' stornato.
+        metadata: { order_id: order.id, seller_id: order.seller_id, tentativo: String(tentativo) },
       },
       // Idempotency-Key: anche se DB/processo falliscono e si ritenta, Stripe
       // restituisce lo stesso transfer e NON ne crea un secondo.
@@ -175,7 +228,15 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
       // contestazione VINTA il bonifico non ripartiva: era gia' stato stornato
       // e Stripe, con la stessa chiave, restituiva quello vecchio. Il negozio
       // vinceva la causa e non veniva pagato lo stesso.
-      { idempotencyKey: `payout_seller_${order.id}_t${(order as { payout_tentativo?: number }).payout_tentativo ?? 0}` },
+      //
+      // R050 — E l'importo entra nella chiave insieme al tentativo. Il numero
+      // versato e' il RESIDUO del netto, e cala ogni volta che un rimborso
+      // parziale ne mette una parte a carico del negozio: con la chiave vecchia
+      // un ordine gia' fallito una volta ritentava con lo stesso nome e un
+      // importo diverso, Stripe rifiutava, il giro lo rimetteva in HELD e
+      // rimbalzava all'infinito. Il ritentativo con lo STESSO importo tiene la
+      // stessa chiave, quindi la protezione dal doppio bonifico resta intera.
+      { idempotencyKey: `payout_seller_${order.id}_t${tentativo}_c${daVersare}` },
     );
 
     const { error: errFine } = await admin
@@ -260,12 +321,32 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
   }
 
   // Claim atomico anche per il compenso rider (no doppio transfer da race).
-  const { data: claimed, error: claimErr } = await admin
-    .from('orders')
-    .update({ rider_payout_status: 'PROCESSING' })
-    .eq('id', order.id)
-    .or(FILTRO_RIDER_RITENTABILI)
-    .select('id');
+  //
+  // 27/8/2026 (R040) — E IL TURNO PORTA L'ORA, COME QUELLO DEL NEGOZIO.
+  // Senza, un processo morto fra il turno e la fine lasciava il compenso in
+  // PROCESSING per sempre: gli stati ritentabili sono HELD,
+  // PENDING_RIDER_ONBOARDING e FAILED, quindi nessun giro lo ripescava piu' e
+  // il fattorino restava senza il suo. La colonna esiste dalla migrazione 126;
+  // semplicemente non ci scriveva nessuno. Chi decide che «vecchio» vuol dire
+  // «chi l'aveva preso e' morto» resta il giro (app/api/cron/release-payouts).
+  const valoriTurnoRider = { rider_payout_status: 'PROCESSING', rider_payout_claimed_at: new Date().toISOString() };
+  const { data: claimed, error: claimErr } = await conRipiegoSchema(
+    'orders.update (turno del compenso fattorino)',
+    () =>
+      admin
+        .from('orders')
+        .update(valoriTurnoRider)
+        .eq('id', order.id)
+        .or(FILTRO_RIDER_RITENTABILI)
+        .select('id'),
+    () =>
+      admin
+        .from('orders')
+        .update(senzaCampi(valoriTurnoRider, ['rider_payout_claimed_at']))
+        .eq('id', order.id)
+        .or(FILTRO_RIDER_RITENTABILI)
+        .select('id'),
+  );
   if (claimErr) {
     // Vedi releaseOrderPayout: un errore DB non va mascherato da no-op silenzioso.
     logger.error('[stripe] payout rider: claim update fallito', claimErr);
@@ -287,7 +368,9 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
         metadata: { order_id: order.id, rider_id: order.rider_id, kind: 'rider_fee' },
       },
       // 158 — Come per il venditore: il numero del tentativo entra nella chiave.
-      { idempotencyKey: `payout_rider_${order.id}_t${(order as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0}` },
+      // R050 — E l'importo con lui: un compenso ricalcolato non deve trovare la
+      // porta chiusa dalla chiave del tentativo precedente.
+      { idempotencyKey: `payout_rider_${order.id}_t${(order as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0}_c${feeCents}` },
     );
 
     const { error: errFineRider } = await admin
@@ -745,7 +828,30 @@ export async function refundOrder(
   const sellerShare =
     grossCents > 0 ? Math.min(Math.round((safeAmountCents * sellerNet) / grossCents), sellerNet) : 0;
 
-  const { reversedCents: stornatoCarta } = await reverseOrderTransfer(order, sellerShare);
+  // 27/8/2026 (R043) — DOPO CHE I SOLDI SONO USCITI NON SI TORNA INDIETRO.
+  //
+  // Il rimborso al cliente e' gia' partito qui sopra. Il recupero della quota
+  // dal negozio e' un'ALTRA chiamata di rete, e stava fuori da qualsiasi
+  // protezione: se Stripe rispondeva male, la funzione moriva lasciando un
+  // ordine ancora «pagato», la merce non rimessa a scaffale, il reso aperto e
+  // l'importo gia' segnato come rimborsato — che al secondo tentativo fa
+  // scattare «importo rimborso non valido». Quel reso non si poteva piu'
+  // chiudere in nessun modo.
+  //
+  // Adesso e' trattato come il recupero del compenso del fattorino poche righe
+  // sotto: best-effort dopo il punto di non ritorno. Il rimborso va a termine,
+  // e i soldi rimasti al negozio diventano un lavoro dichiarato — sull'ordine e
+  // sulla scrivania degli amministratori — invece di una riga di log.
+  let stornatoCarta = 0;
+  let recuperoNonRiuscito: string | null = null;
+  try {
+    ({ reversedCents: stornatoCarta } = await reverseOrderTransfer(order, sellerShare));
+  } catch (err) {
+    recuperoNonRiuscito = err instanceof Error ? err.message : 'errore sconosciuto';
+    logger.error('[refundOrder] recupero della quota del negozio fallito dopo il rimborso', {
+      orderId: order.id, centesimi: sellerShare, err,
+    });
+  }
   // 21/8/2026 — QUESTA RIGA NON C'ERA, E LA DIFFERENZA LA METTEVA MYCITY.
   // Il ramo dei contanti addebitava la quota del negozio anche quando il
   // bonifico non era ancora partito; il ramo della carta no. E non e' il caso
@@ -786,6 +892,30 @@ export async function refundOrder(
         : {}),
     })
     .eq('id', order.id);
+
+  // R043 — Il recupero mancato si scrive DOPO l'aggiornamento buono, e in una
+  // riga sua: se il vincolo del database non conoscesse ancora questo stato
+  // (vedi migrazione 130), a cadere sarebbe solo il promemoria, non il rimborso.
+  if (recuperoNonRiuscito) {
+    const { error: errSegno } = await admin
+      .from('orders')
+      .update({ payout_status: 'REVERSAL_FAILED', reversal_error: recuperoNonRiuscito.slice(0, 500) })
+      .eq('id', order.id);
+    if (errSegno) {
+      logger.error('[refundOrder] recupero mancato non registrato sull ordine', {
+        orderId: order.id, message: errSegno.message,
+      });
+    }
+    try {
+      await notifyAdmins(
+        '⚠️ Storno al venditore non riuscito',
+        `Il rimborso sull'ordine ${order.id} è uscito, ma i ${(sellerShare / 100).toFixed(2)}€ di quota del negozio non sono rientrati (${recuperoNonRiuscito}). Vanno recuperati a mano.`,
+        '/admin/orders',
+      );
+    } catch (e) {
+      logger.error('[refundOrder] avviso agli admin non inviato', { orderId: order.id, e });
+    }
+  }
 
   // Rimborso pieno → ordine annullato → ripristina lo stock (P0-4).
   if (isFull) {

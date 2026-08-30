@@ -31,7 +31,9 @@ import { findOrdersForDispute, notifyAdmins } from './comune';
 export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   const orders = await findOrdersForDispute(
     dispute,
-    'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost',
+    // R052 — serve anche il lordo dell'ordine: la quota da riprendere al
+    // negozio si calcola in proporzione a quanto la banca ha contestato.
+    'id, payout_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, gross_total_cents, total_price, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost',
   );
   if (orders.length === 0) {
     logger.warn('[stripe] dispute.created: nessun ordine trovato', { disputeId: dispute.id });
@@ -39,6 +41,29 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
   }
 
   const admin = getAdminSupabase();
+
+  /**
+   * 27/8/2026 (R052) — QUANTO HA CONTESTATO DAVVERO LA BANCA.
+   *
+   * Un chargeback puo' riguardare una PARTE del pagamento. Qui il recupero dal
+   * negozio veniva chiesto senza importo, e senza importo quella funzione si
+   * prende tutto il residuo: su una contestazione da 20 euro di un ordine da 50
+   * al negozio ne toglievamo 45. Piu' di quanto era stato tolto a noi.
+   *
+   * `dispute.amount` c'era gia', ma finiva solo nel testo dell'avviso agli
+   * amministratori. Adesso entra nel conto: la parte contestata del pagamento
+   * (che puo' coprire piu' ordini dello stesso carrello) si applica al netto di
+   * ciascun negozio. Se il lordo non si sa — ordini nati prima della migrazione
+   * 124 — non si indovina: si ricade sul comportamento di prima.
+   */
+  const contestatoCents = dispute.amount ?? 0;
+  const lordoTotale = orders.reduce((somma, o) => {
+    const riga = o as { gross_total_cents?: number | null; total_price?: number | string | null };
+    return somma + (riga.gross_total_cents ?? Math.round(Number(riga.total_price ?? 0) * 100));
+  }, 0);
+  const fettaContestata = lordoTotale > 0 && contestatoCents > 0 ? contestatoCents / lordoTotale : 1;
+  const quotaDaRiprendere = (o: { seller_payout_cents: number | null }): number | undefined =>
+    fettaContestata >= 1 ? undefined : Math.round(fettaContestata * (o.seller_payout_cents ?? 0));
 
   for (const o of orders) {
     // 22/8/2026 — SI TIENE DA PARTE QUANTO TORNA INDIETRO PER **QUESTA**
@@ -49,7 +74,7 @@ export async function handleDisputeCreated(dispute: Stripe.Dispute) {
     let stornatoVenditore = 0;
     if (o.payout_status === 'TRANSFERRED') {
       try {
-        const esito = await reverseOrderTransfer(o);
+        const esito = await reverseOrderTransfer(o, quotaDaRiprendere(o));
         stornatoVenditore = esito.reversedCents;
       } catch (e) {
         logger.error('[stripe] reversal on dispute.created failed', { orderId: o.id, e });

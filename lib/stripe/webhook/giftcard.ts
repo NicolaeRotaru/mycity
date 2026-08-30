@@ -64,6 +64,17 @@ export async function handleGiftCardPurchase(session: Stripe.Checkout.Session) {
   const code = giftCardCodeForSession(session.id);
   const { error } = await admin.from('gift_cards').insert({
     code,
+    // 27/8/2026 (R045) — LA SESSIONE VA SCRITTA, ALTRIMENTI LA DIFESA E' SPENTA.
+    //
+    // Il codice qui sopra nasce dal segreto del webhook: se quel segreto viene
+    // cambiato e Stripe riconsegna lo stesso evento, il codice che esce e'
+    // diverso — e siccome l'unico antidoppione era il codice, nasceva una
+    // SECONDA carta sullo stesso incasso. Credito spendibile regalato, a
+    // carico nostro. La migrazione 119 aveva gia' messo la difesa giusta (un
+    // indice unico su questa colonna), ma nessuno ci scriveva dentro: l'indice
+    // non aveva niente da confrontare. Scritta la sessione, il secondo
+    // tentativo prende il 23505 gia' gestito qui sotto come no-op.
+    stripe_session_id: session.id,
     amount_cents: amountCents,
     balance_cents: amountCents,
     buyer_id: buyerId,
