@@ -794,69 +794,83 @@ function DetailPanel({
   onApprove: () => void;
   onReject: () => void;
 }) {
+  /**
+   * 27/8/2026 (R100) — QUESTO PANNELLO ERA UN VELO SCRITTO A MANO.
+   *
+   * `<div className="fixed inset-0 …" onClick={onClose}>` e basta: niente
+   * `role="dialog"`, niente `aria-modal`, niente Esc, niente trappola del
+   * fuoco, niente blocco dello scorrimento dietro, niente ritorno del fuoco al
+   * pulsante «Esamina». Da tastiera si usciva dal pannello con un Tab e si
+   * finiva a navigare la tabella dietro il velo, senza vederla e senza poter
+   * tornare indietro: l'unica uscita era ricaricare la pagina. Con un lettore
+   * di schermo non era nemmeno un dialogo, quindi tutto il sito sotto restava
+   * leggibile come se il pannello non ci fosse.
+   *
+   * Ed e' il pannello con cui si approva o si rifiuta un negozio di Piacenza.
+   *
+   * La correzione stava a diciassette righe di distanza: `components/ui/Modal`
+   * era gia' importato in questo file — e gia' usato per «Modifica utente» —
+   * con dentro tutte e cinque le cose che qui mancavano. La regola di casa e'
+   * scritta in `components/hooks/useBottomSheetA11y.ts`: nessun overlay del
+   * marketplace scritto a mano, o passa da `Modal`, o passa da quell'aggancio.
+   */
   return (
-    <div className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
-      <div
-        className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-3xl shadow-2xl max-h-[92vh] overflow-y-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="sticky top-0 bg-white border-b px-5 py-4 flex items-center justify-between z-10">
-          <div>
-            <h2 className="font-bold text-lg">Richiesta venditore</h2>
-            <p className="text-xs text-ink-500">
-              {profile.approval_requested_at && `Inviata il ${formatDate(profile.approval_requested_at)}`}
-            </p>
-          </div>
-          <button onClick={onClose} className="text-2xl text-ink-400 hover:text-ink-700 px-2">×</button>
-        </div>
-
-        <div className="p-5 space-y-5 text-sm">
-          <DetailGroup title="Vetrina" icon={Store}>
-            <DetailRow label="Nome negozio">{profile.store_name ?? '—'}</DetailRow>
-            <DetailRow label="Indirizzo negozio">{profile.store_address ?? '—'}</DetailRow>
-          </DetailGroup>
-
-          <DetailGroup title="Titolare" icon={User}>
-            <DetailRow label="Nome e cognome">
-              {profile.legal_first_name} {profile.legal_last_name}
-            </DetailRow>
-            <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
-            <DetailRow label="Codice fiscale">
-              <code>{datiIdentita?.legal_fiscal_code ?? '—'}</code>
-            </DetailRow>
-            <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
-            <DetailRow label="Ultimo accesso">
-              {profile.last_sign_in_at ? formatDate(profile.last_sign_in_at) : 'Mai'}
-            </DetailRow>
-          </DetailGroup>
-
-          <DetailGroup title="Azienda" icon={ReceiptText}>
-            <DetailRow label="Ragione sociale">{profile.business_legal_name ?? '—'}</DetailRow>
-            <DetailRow label="P.IVA"><code>{datiIdentita?.business_vat_number ?? '—'}</code></DetailRow>
-            <DetailRow label="Forma giuridica">{profile.business_form ?? '—'}</DetailRow>
-            <DetailRow label="Sede legale">
-              {profile.business_address} — {profile.business_city}
-            </DetailRow>
-            <DetailRow label="PEC">{profile.business_pec ?? '—'}</DetailRow>
-          </DetailGroup>
-        </div>
-
-        <div className="sticky bottom-0 bg-white border-t px-5 py-4 flex gap-3">
+    <Modal
+      open
+      onClose={onClose}
+      title="Richiesta venditore"
+      description={profile.approval_requested_at ? `Inviata il ${formatDate(profile.approval_requested_at)}` : undefined}
+      size="xl"
+      footer={
+        <div className="flex w-full gap-3">
           <button
+            type="button"
             onClick={onReject}
             className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg border-2 border-rose-200 text-rose-700 hover:bg-rose-50 font-semibold"
           >
             <X size={18} strokeWidth={2.2} aria-hidden /> Rifiuta
           </button>
           <button
+            type="button"
             onClick={onApprove}
             className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg bg-olive-600 hover:bg-olive-700 text-white font-bold shadow-md"
           >
             <CheckCircle2 size={18} strokeWidth={2.2} aria-hidden /> Approva
           </button>
         </div>
+      }
+    >
+      <div className="space-y-5 text-sm">
+        <DetailGroup title="Vetrina" icon={Store}>
+          <DetailRow label="Nome negozio">{profile.store_name ?? '—'}</DetailRow>
+          <DetailRow label="Indirizzo negozio">{profile.store_address ?? '—'}</DetailRow>
+        </DetailGroup>
+
+        <DetailGroup title="Titolare" icon={User}>
+          <DetailRow label="Nome e cognome">
+            {profile.legal_first_name} {profile.legal_last_name}
+          </DetailRow>
+          <DetailRow label="Email">{profile.email ?? '—'}</DetailRow>
+          <DetailRow label="Codice fiscale">
+            <code>{datiIdentita?.legal_fiscal_code ?? '—'}</code>
+          </DetailRow>
+          <DetailRow label="Telefono">{profile.phone ?? profile.auth_phone ?? '—'}</DetailRow>
+          <DetailRow label="Ultimo accesso">
+            {profile.last_sign_in_at ? formatDate(profile.last_sign_in_at) : 'Mai'}
+          </DetailRow>
+        </DetailGroup>
+
+        <DetailGroup title="Azienda" icon={ReceiptText}>
+          <DetailRow label="Ragione sociale">{profile.business_legal_name ?? '—'}</DetailRow>
+          <DetailRow label="P.IVA"><code>{datiIdentita?.business_vat_number ?? '—'}</code></DetailRow>
+          <DetailRow label="Forma giuridica">{profile.business_form ?? '—'}</DetailRow>
+          <DetailRow label="Sede legale">
+            {profile.business_address} — {profile.business_city}
+          </DetailRow>
+          <DetailRow label="PEC">{profile.business_pec ?? '—'}</DetailRow>
+        </DetailGroup>
       </div>
-    </div>
+    </Modal>
   );
 }
 
