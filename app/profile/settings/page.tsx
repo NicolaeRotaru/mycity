@@ -142,29 +142,41 @@ export default function SettingsPage() {
       return;
     }
     setChangingPwd(true);
-    // LA PASSWORD ATTUALE SI CONTROLLA DAVVERO.
-    //
-    // Prima veniva chiesta e mai letta: `currentPassword` compariva solo nella
-    // dichiarazione dello stato e nel binding del campo. Chi si trovasse fra le mani una
-    // sessione aperta — un telefono lasciato sbloccato, un computer condiviso — poteva
-    // cambiare la password senza conoscere quella vecchia, cioe' prendersi l'account.
-    //
-    // `signInWithPassword` sullo stesso utente e' la verifica: se la password attuale e'
-    // sbagliata fallisce, e non si arriva a `updateUser`.
-    const { error: erroreVerifica } = await supabase.auth.signInWithPassword({
-      email,
-      password: currentPassword,
-    });
-    if (erroreVerifica) {
+    /**
+     * LA PASSWORD ATTUALE SI CONTROLLA SUL SERVER.
+     *
+     * 27/8/2026 (R019) — Qui c'erano due chiamate indipendenti fatte dal
+     * browser: prima la verifica della password attuale con un accesso finto,
+     * poi la scrittura della nuova sull'account. Chi controlla questa
+     * pagina — la console degli strumenti per sviluppatori, un'estensione
+     * ostile, uno script iniettato — chiamava direttamente la SECONDA e
+     * saltava la prima. Il controllo c'era e non difendeva da niente: una
+     * sessione rubata diventava un account perso per sempre, perche' con la
+     * password cambiata il proprietario vero non rientra piu'.
+     *
+     * Adesso verifica e cambio sono una cosa sola, e stanno dietro
+     * /api/account/cambia-password, dove il browser non arriva.
+     */
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/account/cambia-password', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ passwordAttuale: currentPassword, nuovaPassword: newPassword }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        toast.error(apiErrorMessage(j, 'Password attuale non corretta'));
+        return;
+      }
+    } catch (err) {
+      toast.error(friendlyError(err));
+      return;
+    } finally {
       setChangingPwd(false);
-      toast.error('Password attuale non corretta');
-      return;
-    }
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setChangingPwd(false);
-    if (error) {
-      toast.error(friendlyError(error));
-      return;
     }
     toast.success('Password aggiornata con successo');
     setCurrentPassword('');

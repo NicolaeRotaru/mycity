@@ -13,6 +13,10 @@
       {
         "selector": "MemberExpression[object.object.name='process'][object.property.name='env'][property.name='NEXT_PUBLIC_SITE_URL']",
         "message": "NEXT_PUBLIC_SITE_URL non esiste in questo progetto: il punto unico per l'indirizzo del sito e env.appUrl() in lib/env.ts. Una seconda variabile per la stessa cosa e il difetto che faceva rispondere 500 alla disiscrizione."
+      },
+      {
+        "selector": "MemberExpression[object.object.name='process'][object.property.name='env'][property.name='SUPABASE_SERVICE_ROLE_KEY']",
+        "message": "27/8/2026 (R009) — La chiave di servizio si legge in un posto solo: lib/env.ts, e il client si prende con getAdminSupabase(). Cinque rotte se lo costruivano a mano, e la piu' distruttiva — la cancellazione di un account — leggeva la chiave grezza da process.env: cinque posti da ricordare il giorno in cui la chiave si ruota, e dimenticarne uno vuol dire una rotta che smette di funzionare in silenzio."
       }
     ],
     "jsx-a11y/label-has-associated-control": "warn",

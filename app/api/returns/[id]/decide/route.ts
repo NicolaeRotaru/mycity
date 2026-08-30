@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 
 export const runtime = 'nodejs';
 
@@ -59,6 +60,55 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
 
   const admin = getAdminSupabase();
 
+  /**
+   * 27/8/2026 (R138) — IL TETTO SULL'IMPORTO ARRIVAVA TROPPO TARDI, E IN FORMA
+   * DI GUASTO.
+   *
+   * Lo schema del corpo accettava qualunque importo positivo, e la
+   * rivendicazione scriveva su `returns.refund_amount_cents` l'importo CHIESTO,
+   * non quello uscito. Il tetto vero stava a valle, dentro `refundOrder`, che
+   * su un residuo a zero solleva un errore tecnico: quell'errore usciva come
+   * 502 con il messaggio interno in chiaro. Al venditore arrivava «Rimborso
+   * fallito: refundOrder: importo rimborso non valido» invece di «l'ordine e'
+   * gia' stato rimborsato per intero», e nel pannello restava un numero che non
+   * corrisponde a nessun movimento.
+   *
+   * Il controllo sta adesso PRIMA della rivendicazione: cosi' un importo
+   * impossibile non lascia nessuna traccia sul reso, e l'importo scritto e'
+   * quello che esce davvero (`refundOrder` non deve piu' tagliarlo).
+   */
+  const chiedeRimborso = body.decision === 'APPROVED' && !!body.refundAmountCents;
+  const COLONNE_ORDINE = 'stripe_payment_intent, payment_method, gross_total_cents, total_price, refunded_amount_cents';
+  type OrdineDelReso = {
+    stripe_payment_intent: string | null;
+    payment_method: string | null;
+    gross_total_cents?: number | null;
+    total_price: number | string | null;
+    refunded_amount_cents: number | null;
+  };
+  let ordine: OrdineDelReso | null = null;
+
+  if (chiedeRimborso) {
+    const { data } = await conRipiegoSchema(
+      'orders.select (decisione sul reso)',
+      () => admin.from('orders').select(COLONNE_ORDINE).eq('id', ret.order_id).single(),
+      () => admin.from('orders').select(senzaColonne(COLONNE_ORDINE, COLONNE_124)).eq('id', ret.order_id).single(),
+    );
+    ordine = (data ?? null) as OrdineDelReso | null;
+    if (!ordine) return ApiErrors.notFound('Ordine del reso non trovato');
+
+    const lordoCent = ordine.gross_total_cents ?? Math.round(Number(ordine.total_price ?? 0) * 100);
+    const residuoCent = Math.max(0, lordoCent - (ordine.refunded_amount_cents ?? 0));
+    if (residuoCent <= 0) {
+      return ApiErrors.conflict('Questo ordine è già stato rimborsato per intero: non resta niente da restituire.');
+    }
+    if (body.refundAmountCents! > residuoCent) {
+      return ApiErrors.invalidRequest(
+        `Il rimborso non può superare quello che resta dell ordine: al massimo ${(residuoCent / 100).toFixed(2)} €.`,
+      );
+    }
+  }
+
   let refundId: string | null = null;
   let refundedAt: string | null = null;
   let newStatus: string = body.decision;
@@ -108,15 +158,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       .eq('status', statoRivendicato);
   };
 
-  if (body.decision === 'APPROVED' && body.refundAmountCents) {
-    const { data: order } = await admin
-      .from('orders')
-      .select('stripe_payment_intent, payment_method')
-      .eq('id', ret.order_id)
-      .single();
-
-    const isCard = !!order?.stripe_payment_intent;
-    const isCod = !isCard && order?.payment_method === 'cod';
+  if (chiedeRimborso) {
+    const isCard = !!ordine?.stripe_payment_intent;
+    const isCod = !isCard && ordine?.payment_method === 'cod';
 
     // Carta ma Stripe non configurato → NON marcare come rimborsato in silenzio.
     if (isCard && !isStripeConfigured()) {
@@ -131,7 +175,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       try {
         const res = await refundOrder({
           orderId: ret.order_id,
-          amountCents: body.refundAmountCents,
+          amountCents: body.refundAmountCents!,
           reason: body.notes ?? 'requested_by_customer',
           metadata: { return_id: ret.id },
           idempotencyKey: `return_${ret.id}`,

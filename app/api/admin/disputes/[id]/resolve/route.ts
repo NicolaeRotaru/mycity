@@ -91,16 +91,27 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       .eq('status', body.status);
   };
 
+  // L'ordine si legge una volta sola: serve al ramo del rimborso (per sapere se
+  // e' una carta) e, sotto, per decidere se il rimborso copre tutto l'ordine.
+  type OrdineDelReclamo = { stripe_payment_intent: string | null; total_price: number | string | null };
+  let ord: OrdineDelReclamo | null = null;
+  if (dispute.order_id) {
+    const { data } = await admin
+      .from('orders')
+      .select('stripe_payment_intent, payment_method, total_price')
+      .eq('id', dispute.order_id)
+      .single();
+    ord = (data ?? null) as OrdineDelReclamo | null;
+  }
+
+  /** Vero solo se i soldi sono davvero usciti verso il cliente. */
+  let rimborsoEmesso = false;
+
   // Rimborso reale solo se risolto a favore del buyer con un importo.
   if (body.status === 'resolved_buyer' && body.refundCents) {
     // refundOrder gestisce sia il refund Stripe (carta + claw-back) sia
     // l'accredito sul wallet (COD, 🟠-18). Il blocco su Stripe-non-configurato
     // vale SOLO per gli ordini carta: un rimborso COD non usa Stripe.
-    const { data: ord } = await admin
-      .from('orders')
-      .select('stripe_payment_intent, payment_method')
-      .eq('id', dispute.order_id)
-      .single();
     const isCard = !!ord?.stripe_payment_intent;
     if (isCard && !isStripeConfigured()) {
       await riapri();
@@ -116,6 +127,7 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         notifyBuyer: true,
       });
       refundId = res.refundId;
+      rimborsoEmesso = true;
     } catch (err) {
       logger.error('[disputes] refund failed', err);
       await riapri();
@@ -131,7 +143,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   // sull'ordine restava 'OPEN' per sempre, e il venditore non veniva pagato mai
   // piu'. Non c'era nessun punto nel codice che lo riportasse indietro.
   if (dispute.order_id) {
-    const esitoAlCliente = body.status === 'resolved_buyer';
     // 050 / 173 — Questa rotta scriveva `orders.dispute_status`, che è la
     // colonna del CHARGEBACK BANCARIO e appartiene solo al webhook di Stripe.
     // Due conseguenze, tutte e due vere:
@@ -141,9 +152,26 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     //  · chiuderlo a favore del cliente scriveva 'LOST' anche senza nessun
     //    chargeback, e quel pagamento restava bloccato per sempre.
     // Il reclamo interno ora ha la sua colonna. La banca la sua.
+    //
+    // 27/8/2026 (R041 · R122) — «A FAVORE DEL CLIENTE» NON VUOL DIRE «IL
+    // NEGOZIO NON VA PAGATO». Qui si scriveva 'LOST' su qualunque esito a
+    // favore del cliente, senza guardare se un rimborso fosse davvero uscito e
+    // per quanto. Ma il campo importo e' facoltativo, e la risoluzione senza
+    // rimborso e' il caso normale quando il negozio rimedia in natura,
+    // riconsegna o sostituisce. Il giro dei bonifici accetta solo vuoto o
+    // 'RESOLVED', nessun percorso riporta mai indietro 'LOST' e il reclamo non
+    // si puo' riaprire: quel negozio non veniva pagato mai piu', in silenzio,
+    // e se ne accorgeva al controllo del mese.
+    //
+    // 'LOST' resta quindi solo per il caso che lo merita: il cliente e' stato
+    // rimborsato dell'INTERO ordine, quindi al negozio non spetta piu' niente.
+    // Su un rimborso parziale il residuo (gia' ridotto da
+    // `seller_payout_reversed_cents`) riparte al giro successivo.
+    const totaleCent = Math.round(Number(ord?.total_price ?? 0) * 100);
+    const rimborsoIntegrale = rimborsoEmesso && totaleCent > 0 && (body.refundCents ?? 0) >= totaleCent;
     const { error: errOrdine } = await admin
       .from('orders')
-      .update({ internal_dispute_status: esitoAlCliente ? 'LOST' : 'RESOLVED' })
+      .update({ internal_dispute_status: rimborsoIntegrale ? 'LOST' : 'RESOLVED' })
       .eq('id', dispute.order_id);
     if (errOrdine) {
       // Non blocca la risoluzione, ma deve essere visibile: il venditore resta

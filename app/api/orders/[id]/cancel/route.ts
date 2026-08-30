@@ -60,6 +60,9 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     if (esito.motivo === 'CONTANTI_INCASSATI') {
       return ApiErrors.conflict('Ordine già incassato in contanti: scrivi all assistenza per la restituzione.');
     }
+    // 27/8/2026 (R131) — Chi arriva secondo (doppio invio, ritentativo di rete)
+    // trova il turno gia' preso: si dice che e' fatto, non si accredita di nuovo.
+    if (esito.motivo === 'GIA_ANNULLATO') return ApiErrors.conflict('Ordine già annullato');
     if (esito.motivo === 'STRIPE_NON_CONFIGURATO') return ApiErrors.unavailable('Rimborsi non disponibili, riprova più tardi');
     if (esito.motivo === 'RIMBORSO_FALLITO') return ApiErrors.badGateway('Rimborso fallito: ' + (esito.dettaglio ?? 'riprova'));
     return ApiErrors.internal('Annullamento fallito');

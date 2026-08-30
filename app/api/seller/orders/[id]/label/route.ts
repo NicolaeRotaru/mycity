@@ -5,7 +5,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 // '@/lib/shipping'` prende il file, `'@/lib/shipping/label'` prende la
 // cartella, e chi legge non ha modo di accorgersi della differenza. Rinominata.
 import { buildShippingLabel } from '@/lib/shipping-etichetta/label';
-import { withSellerAuth } from '@/lib/api/middleware';
+import { withSellerAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -57,5 +57,11 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   });
 }
 
+// 27/8/2026 (R140) — ERA `withSellerAuth`, SENZA FRENO, sulla rotta piu' cara
+// del lotto: ogni chiamata compone un PDF. `withSellerAuthRateLimit` esisteva
+// gia' nello stesso file di involucri, e qui non era stato usato. Sessanta
+// etichette in dieci minuti sono piu' di quante un negozio ne stampi in un
+// giorno pieno.
 export const GET = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withSellerAuth(async ({ user }) => handler(req, user, await ctx.params))(req);
+  withSellerAuthRateLimit({ name: 'seller-label', max: 60, windowMs: 10 * 60_000 }, async ({ user }) =>
+    handler(req, user, await ctx.params))(req);

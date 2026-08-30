@@ -390,6 +390,37 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     });
   }
 
+  /**
+   * 10) Resi aperti da troppo tempo.
+   *
+   * 27/8/2026 (R042) — QUI NON C'ERA NESSUN CONTROLLO SUI RESI, e un reso
+   * aperto tiene fermo il bonifico dell'ordine: il giro dei bonifici esclude
+   * gli ordini con un reso in REQUESTED, APPROVED, SHIPPED_BACK o RECEIVED.
+   * Un cliente apre un reso, il negozio lo approva e aspetta la merce
+   * indietro: da quel momento quei soldi sono fermi, e se il reso poi non
+   * arriva o si chiude di persona non lo sposta piu' nessuno. Il negozio vede
+   * «in attesa» senza scadenza e telefona.
+   */
+  const setteGiorniFa = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data: resiFermi, error: err_resiFermi } = await admin
+    .from('returns')
+    .select('id, order_id, status, created_at')
+    .in('status', ['REQUESTED', 'APPROVED', 'SHIPPED_BACK', 'RECEIVED'])
+    .lt('created_at', setteGiorniFa)
+    .order('created_at', { ascending: true })
+    .limit(20);
+  if (err_resiFermi) controlliSaltati.push('resi aperti da troppo tempo');
+
+  for (const r of resiFermi ?? []) {
+    const giorni = Math.floor((Date.now() - new Date(r.created_at as string).getTime()) / 86_400_000);
+    alerts.push({
+      key: `RESO_FERMO|${r.id}`,
+      type: 'RESO_FERMO',
+      detail: `Reso #${String(r.id).slice(0, 8)} fermo in ${r.status} da ${giorni} giorni: il bonifico dell ordine #${String(r.order_id).slice(0, 8)} resta bloccato finche' non si chiude.`,
+      url: `/admin/orders/${r.order_id}`,
+    });
+  }
+
   if (controlliSaltati.length > 0) {
     logger.error('[cron] sorvegliante incompleto: NON dichiarare sano quello che non ha guardato', {
       saltati: controlliSaltati,
@@ -445,6 +476,29 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       { status: 500 },
     );
   }
+  /**
+   * 27/8/2026 (R183) — LE NOTIFICHE IN-APP SI CREANO PRIMA DELL'INVIO EMAIL.
+   *
+   * Stavano dopo, e se l'invio falliva la funzione usciva con 500 senza
+   * arrivarci: con Resend giu' non arrivava proprio niente, nemmeno nel
+   * pannello. Ed e' esattamente il caso che questo lavoro deve sorvegliare —
+   * l'allarme EMAIL_BACKLOG dice testualmente «send-emails fermo o Resend
+   * down?» — quindi il recapito che salta e' quello piu' probabile.
+   */
+  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
+  if (admins && admins.length > 0) {
+    const notifications = admins.map((a: { id: string }) => ({
+      user_id: a.id,
+      // #33 — categoria 'system': un allarme operativo non e' una promozione e
+      // non si spegne con gli interruttori del marketing.
+      category: 'system',
+      title: `⚠️ ${fresh.length} alert operativi`,
+      body: fresh.slice(0, 3).map((al) => al.detail).join('; '),
+      link: '/admin/today',
+    }));
+    await admin.from('notifications').insert(notifications);
+  }
+
   const body = `
     <h2>⚠️ Alert operational MyCity</h2>
     <p>Rilevate <strong>${fresh.length}</strong> nuove anomalie:</p>
@@ -470,21 +524,6 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         { status: 500 },
       );
     }
-  }
-
-  // Push notification in-app a tutti gli admin
-  const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin').limit(10);
-  if (admins && admins.length > 0) {
-    const notifications = admins.map((a: { id: string }) => ({
-      user_id: a.id,
-      // #33 — categoria 'system': un allarme operativo non e' una promozione e
-      // non si spegne con gli interruttori del marketing.
-      category: 'system',
-      title: `⚠️ ${fresh.length} alert operativi`,
-      body: fresh.slice(0, 3).map((al) => al.detail).join('; '),
-      link: '/admin/today',
-    }));
-    await admin.from('notifications').insert(notifications);
   }
 
   // Registra l'invio per il cooldown (upsert: aggiorna last_sent_at se esiste).

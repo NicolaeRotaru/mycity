@@ -58,6 +58,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         '(rimborso al cliente o nota di credito). Registra la scelta prima di annullare.',
       );
     }
+    // 27/8/2026 (R131) — Il secondo annullo sovrapposto non trova righe da
+    // prendere: e' gia' annullato, e i soldi non si toccano una seconda volta.
+    if (esito.motivo === 'GIA_ANNULLATO') return ApiErrors.conflict('Ordine già annullato');
     if (esito.motivo === 'STRIPE_NON_CONFIGURATO') return ApiErrors.unavailable('Stripe non configurato');
     if (esito.motivo === 'RIMBORSO_FALLITO') {
       return ApiErrors.badGateway('Rimborso Stripe fallito: ' + (esito.dettaglio ?? 'unknown'));

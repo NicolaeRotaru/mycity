@@ -11,6 +11,18 @@
 -- e leggendo «codice già usato».
 --
 -- Togli le due chiamate a release_coupon e questa prova torna rossa.
+--
+-- 27/8/2026 (R121) — QUESTA PROVA COPRE UNA STRADA CHE IL CLIENTE NON FA PIU'.
+-- Qui si esercitano le funzioni `cancel_order` / `seller_reject_order` del
+-- database. Ma dal 21/8 il pulsante «Annulla ordine» del cliente non passa piu'
+-- di li': passa da /api/orders/[id]/cancel, cioe' da `annullaERimborsa` in
+-- lib/ordini/annulla.ts — e li' il codice sconto non veniva nemmeno letto.
+-- Questa prova restava verde su un percorso morto mentre il difetto era vivo
+-- sul percorso vero. Il rifiuto del negozio passa ancora da `seller_reject_order`,
+-- quindi la prova serve ancora: resta com'e'. La strada del cliente e quella
+-- dell'amministrazione sono coperte da
+-- tests/unit/il-codice-sconto-torna-a-chi-annulla.test.ts, che esercita
+-- `annullaERimborsa` e diventa rosso se `release_coupon` non viene chiamata.
 -- =============================================================================
 
 BEGIN;

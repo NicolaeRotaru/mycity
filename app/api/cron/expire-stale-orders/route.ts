@@ -37,7 +37,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
 
   const { data: candidates, error } = await admin
     .from('orders')
-    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents')
+    // 27/8/2026 (R121) — `coupon_code` non veniva nemmeno letto, quindi il
+    // codice sconto di un ordine che il negozio non ha mai accettato restava
+    // bruciato: il cliente perdeva il buono senza aver comprato niente.
+    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code')
     .eq('delivery_status', 'NEW')
     .lt('created_at', cutoff)
     .limit(100);
@@ -120,6 +123,15 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
           p_ref: o.id,
         });
         if (wErr) logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id, message: wErr.message });
+      }
+
+      // 27/8/2026 (R121) — Il codice sconto torna disponibile. Il turno
+      // sull'ordine e' gia' stato preso qui sopra, quindi la restituzione
+      // avviene una volta sola; `release_coupon` non scende comunque sotto zero.
+      const codice = (o as { coupon_code?: string | null }).coupon_code?.trim();
+      if (codice) {
+        const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice });
+        if (cErr) logger.warn('[cron] expire-stale-orders: codice sconto non restituito', { id: o.id, message: cErr.message });
       }
 
       // Notifica in-app al buyer (best-effort: non deve far fallire l'annullo).

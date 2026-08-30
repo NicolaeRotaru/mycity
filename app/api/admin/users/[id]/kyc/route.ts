@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { getClientIp } from '@/lib/rate-limit';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
@@ -39,7 +40,10 @@ async function handler(req: NextRequest, admin_user: { id: string }, params: { i
     targetTable: 'profiles',
     targetId,
     metadata: { evento: 'lettura_dati_identita', campi: ['legal_fiscal_code', 'business_vat_number'] },
-    ip: req.headers.get('x-forwarded-for') ?? undefined,
+    // 27/8/2026 (R024) — Qui si salvava la catena `x-forwarded-for` INTERA,
+    // pezzi falsificabili compresi: un registro degli accessi ai dati di
+    // identita' che nessuno puo' usare come prova.
+    ip: getClientIp(req),
     userAgent: req.headers.get('user-agent') ?? undefined,
   });
 

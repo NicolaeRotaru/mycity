@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync } from '@/lib/rate-limit';
 import { withAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -24,8 +24,14 @@ const Schema = z.object({
  * (l'utente è buyer_id della conversazione).
  */
 export const POST = withAuth(async ({ user, req }): Promise<NextResponse> => {
-  const ip = getClientIp(req);
-  const rl = await rateLimitAsync({ key: `support:start:${ip}`, max: 20, windowMs: 60_000 });
+  // 27/8/2026 (R026) — LA CHIAVE È LA PERSONA, NON L'INDIRIZZO DI RETE. La
+  // rotta è dentro `withAuth`, quindi chi chiama è già identificato: frenare
+  // per indirizzo qui fa due danni opposti. Da rete mobile o aziendale venti
+  // persone condividono lo stesso contatore, e la chat con l'assistenza si
+  // chiude a chi non ha fatto niente; chi vuole davvero inondarla cambia rete e
+  // passa. La correzione era già stata fatta su /api/chat/conversations: qui
+  // non era arrivata.
+  const rl = await rateLimitAsync({ key: `support:start:${user.id}`, max: 20, windowMs: 60_000 });
   if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
 
   let json: unknown;

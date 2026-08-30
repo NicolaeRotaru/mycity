@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 
 export const runtime = 'nodejs';
 
@@ -15,7 +16,15 @@ const Body = z.object({
   orderItemId: z.string().uuid().optional(),
   reason: REASON,
   notes: z.string().max(2000).optional(),
-  photoUrls: z.array(z.string().url()).max(8).optional(),
+  // 27/8/2026 (R021) — Era `z.string().url()`, che con zod 3 accetta anche
+  // `javascript:` e `data:`. Quel valore finisce dentro un `<a href>` nella
+  // scheda che il negoziante apre per decidere il reso: un indirizzo scelto
+  // dall'utente dentro un collegamento, senza nessuna verifica. Le foto di un
+  // reso stanno nel nostro archivio, e solo li'.
+  photoUrls: z
+    .array(z.string().refine(fotoDiCasa, 'Le foto del reso devono stare nell archivio di MyCity'))
+    .max(8)
+    .optional(),
 });
 
 /**
@@ -39,7 +48,7 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   const supa = await getServerSupabase();
   const { data: order, error: oErr } = await supa
     .from('orders')
-    .select('id, user_id, seller_id, delivery_status, delivered_at, total_price')
+    .select('id, user_id, seller_id, delivery_status, delivered_at, total_price, created_at')
     .eq('id', body.orderId)
     .single();
 
@@ -47,10 +56,26 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   if (order.user_id !== user.id) return ApiErrors.forbidden();
   if (order.delivery_status !== 'DELIVERED') return ApiErrors.invalidRequest("L'ordine non risulta consegnato");
 
-  // Vincolo 14 giorni dal consegna (recesso)
-  if (order.delivered_at) {
-    const deliveredAt = new Date(order.delivered_at).getTime();
-    const days = (Date.now() - deliveredAt) / (1000 * 60 * 60 * 24);
+  /**
+   * Vincolo 14 giorni dalla consegna (recesso).
+   *
+   * 27/8/2026 (R128) — IL TERMINE SALTAVA DEL TUTTO SENZA LA DATA DI CONSEGNA.
+   * Il conto stava dentro `if (order.delivered_at)`: colonna vuota, blocco non
+   * eseguito, reso aperto senza nessun limite di tempo. Oggi il caso non si
+   * raggiunge perche' tutte le strade verso DELIVERED scrivono anche la data —
+   * ma e' una difesa che, quando si rompe, si rompe nel verso sbagliato: lascia
+   * passare invece di rifiutare. E il giorno in cui una strada nuova chiude un
+   * ordine senza scrivere la data si aprono due difetti insieme, perche' la
+   * stessa colonna governa l'ammissibilita' dei bonifici
+   * (`release-payouts` filtra su `delivered_at`).
+   *
+   * Senza la data di consegna si conta dalla data dell'ordine: e' sempre
+   * precedente alla consegna, quindi il cliente non perde mai giorni che gli
+   * spettano, e il termine non sparisce.
+   */
+  const baseRecesso = order.delivered_at ?? order.created_at;
+  if (baseRecesso) {
+    const days = (Date.now() - new Date(baseRecesso).getTime()) / (1000 * 60 * 60 * 24);
     if (days > 14) return ApiErrors.invalidRequest('Termine per il recesso scaduto (14 giorni dalla consegna).');
   }
 

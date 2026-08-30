@@ -34,11 +34,19 @@ describe('POST /api/locale', () => {
     expect(cookie).toContain('NEXT_LOCALE=it');
   });
 
+  // 27/8/2026 (R016) — QUESTE DUE VERIFICHE CERTIFICAVANO IL DIFETTO.
+  // La rotta rispondeva `{ error: 'stringa' }`, cioe' la forma che il progetto
+  // NON usa: il contratto dichiarato in lib/api/responses.ts e'
+  // `{ ok: false, error: { code, message } }`, «cosi' il frontend sa
+  // esattamente cosa aspettarsi». Chi scriveva una chiamata nuova la leggeva
+  // nel modo sbagliato e l'utente vedeva «Operazione non riuscita» senza il
+  // motivo. Il messaggio atteso resta identico: cambia solo dove sta scritto.
   it('rejects unsupported locale (de)', async () => {
     const res = await POST(makeReq({ locale: 'de' }) as never);
     expect(res.status).toBe(400);
     const json = await res.json();
-    expect(json.error).toMatch(/unsupported/i);
+    expect(json.ok).toBe(false);
+    expect(json.error.message).toMatch(/unsupported/i);
   });
 
   it('rejects empty body', async () => {
@@ -55,7 +63,9 @@ describe('POST /api/locale', () => {
     const res = await POST(makeReq('{not-json') as never);
     expect(res.status).toBe(400);
     const json = await res.json();
-    expect(json.error).toMatch(/invalid/i);
+    expect(json.ok).toBe(false);
+    expect(json.error.message).toMatch(/invalid/i);
+    expect(json.error.code, 'senza codice il frontend non puo distinguere gli errori').toBeTruthy();
   });
 
   it('cookie has 1-year maxAge', async () => {

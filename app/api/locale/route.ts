@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SUPPORTED_LOCALES } from '@/i18n';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
 
@@ -17,12 +18,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     body = await jsonRichiesta(req, TETTO_JSON);
   } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    // 27/8/2026 (R016) — DUE FORME DI ERRORE NELLO STESSO SITO. Il contratto e'
+    // dichiarato in lib/api/responses.ts — `{ ok: false, error: { code,
+    // message } }` — «cosi' il frontend sa esattamente cosa aspettarsi». Qui si
+    // rispondeva `{ error: 'stringa' }`, e chi scrive una chiamata nuova la
+    // legge nel modo sbagliato: l'errore vero non arriva a schermo e l'utente
+    // vede «Operazione non riuscita» senza sapere perche'.
+    return ApiErrors.invalidRequest('Invalid JSON');
   }
 
   const locale = typeof body.locale === 'string' ? body.locale : '';
   if (!(SUPPORTED_LOCALES as readonly string[]).includes(locale)) {
-    return NextResponse.json({ error: 'Unsupported locale' }, { status: 400 });
+    return ApiErrors.invalidRequest('Unsupported locale');
   }
 
   const res = NextResponse.json({ ok: true, locale });

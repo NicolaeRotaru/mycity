@@ -3,6 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { verificaDisiscrizione } from '@/lib/email/unsubscribe';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -30,6 +31,21 @@ export const runtime = 'nodejs';
 export async function GET(request: Request) {
   const token = new URL(request.url).searchParams.get('token') ?? '';
   const base = env.appUrl();
+
+  // 27/8/2026 (R140) — GET PUBBLICO NUDO CHE CHIAMA UNA FUNZIONE DEL DATABASE
+  // a ogni richiesta. La firma del gettone protegge il DATO, non la macchina:
+  // un client solo poteva far girare `disiscrivi` a raffica. La soglia e'
+  // larga: disiscriversi si fa una volta, e i client di posta che aprono il
+  // link in anticipo ne fanno pochissime.
+  const freno = await rateLimitAsync({
+    key: `disiscrizione:${getClientIp(request)}`,
+    max: 30,
+    windowMs: 10 * 60_000,
+  });
+  if (!freno.allowed) {
+    return NextResponse.redirect(`${base}/?disiscrizione=non-riuscita`);
+  }
+
   const dati = verificaDisiscrizione(token);
 
   if (!dati) {

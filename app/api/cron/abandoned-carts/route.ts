@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
-import { requireSupabaseService, env } from '@/lib/env';
+import { env } from '@/lib/env';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { escapeHtml } from '@/lib/html-escape';
@@ -26,9 +26,15 @@ import { logger } from '@/lib/logger';
 export const runtime = 'nodejs';
 
 const handler = withCronAuth(async (): Promise<NextResponse> => {
-  let supaCfg;
-  try { supaCfg = requireSupabaseService(); } catch (e) { return ApiErrors.unavailable(e instanceof Error ? e.message : 'service unavailable'); }
-  const supa = createClient(supaCfg.url, supaCfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
+  // 27/8/2026 (R009) — IL CLIENT AMMINISTRATIVO SI PRENDE DA UN POSTO SOLO.
+  // Qui se ne costruiva uno a mano: cinque copie in giro per il progetto, e
+  // ognuna e' un posto in piu' da ricordare il giorno in cui la chiave di
+  // servizio va ruotata o vanno cambiate le opzioni del client (per esempio per
+  // mettere un tetto di tempo). Dimenticarne una vuol dire una rotta che smette
+  // di funzionare in silenzio. `getAdminSupabase()` tiene da parte un client
+  // solo (#245: ogni client porta la sua coda di connessioni e i suoi timer).
+  let supa;
+  try { supa = getAdminSupabase(); } catch (e) { return ApiErrors.unavailable(e instanceof Error ? e.message : 'service unavailable'); }
 
   const { data, error } = await supa.rpc('list_abandoned_carts_to_recover', { min_hours: 4 });
   if (error) return ApiErrors.internal(error.message);
