@@ -11,11 +11,14 @@ import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante } from '@/lib/cart';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
+import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
 import { checkoutChiuso } from '@/lib/ordini/partenza';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS, PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
+import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
+import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
@@ -537,17 +540,51 @@ export default function CheckoutPage() {
   };
 
 
-  const grandSubtotal = groups.reduce((s, g) => s + groupSubtotal(g), 0);
-  const pickupDiscount = pickupInStore ? Math.round(grandSubtotal * (PICKUP_DISCOUNT_PERCENT / 100) * 100) / 100 : 0;
-  const grandShipping = appliedCoupon?.freeShipping ? 0 : groups.reduce((s, g) => s + shippingFor(g), 0);
-  const platformDeliveryFee = pickupInStore ? 0 : groups.length * (PLATFORM_DELIVERY_FEE_CENTS / 100);
-  const discount = appliedCoupon?.discount ?? 0;
-  const grandTotal = Math.max(0, grandSubtotal + grandShipping + platformDeliveryFee - discount - pickupDiscount);
+  /**
+   * 27/8/2026 (R001) — IL TOTALE LO FACEVA IL BROWSER, CON UNA FORMULA SUA.
+   *
+   * Qui c'era `Math.max(0, subtotale + spedizione + fee − sconto − ritiro)`,
+   * scritta a mano e senza il TETTO sugli sconti che il server applica sempre.
+   * Con un buono a importo fisso da 30 € su una spesa da 10 € la pagina
+   * scriveva «0,00 €» e il server ne addebitava 3,01: chi paga alla consegna
+   * lo scopriva dal fattorino sulla porta.
+   *
+   * Adesso il numero mostrato nasce da `prezziDelCarrello`, la stessa funzione
+   * che decide l'addebito nelle due rotte. `riepilogoDaMostrare` la legge in
+   * euro, che è come si stampa.
+   */
+  const riepilogo = riepilogoDaMostrare({
+    gruppi: groups.map((g) => ({
+      sellerId: g.sellerId,
+      // Il prezzo di riga è già quello di adesso e già scontato (#114): qui si
+      // passa solo dagli euro ai centesimi, come fa il server.
+      subtotalCents: g.items.reduce((s, it) => s + Math.round(it.price * 100) * it.quantity, 0),
+    })),
+    coordinateNegozio: (sellerId) => {
+      const g = groups.find((x) => x.sellerId === sellerId);
+      return { lat: g?.storeLat ?? null, lng: g?.storeLng ?? null };
+    },
+    consegnaLat: form.lat,
+    consegnaLng: form.lng,
+    pickupInStore,
+    couponSpedizioneGratis: !!appliedCoupon?.freeShipping,
+    couponScontoCents: Math.round((appliedCoupon?.discount ?? 0) * 100),
+    // Il credito si applica solo agli ordini COD in questo flusso (la carta
+    // passa da Stripe, dove il credito arriverà più avanti).
+    usaCredito: paymentMethod === 'cod' && useCredit,
+    creditoDisponibileCents: walletCents ?? 0,
+  });
+
   const walletEuro = (walletCents ?? 0) / 100;
-  // Il credito si applica solo agli ordini COD in questo flusso (la carta passa da
-  // Stripe, dove il credito arriverà più avanti). Mai più del totale dell'ordine.
-  const creditApplied = paymentMethod === 'cod' && useCredit ? Math.min(walletEuro, grandTotal) : 0;
-  const finalTotal = Math.max(0, grandTotal - creditApplied);
+  const grandSubtotal = riepilogo.subtotale;
+  const pickupDiscount = riepilogo.scontoRitiro;
+  const grandShipping = riepilogo.spedizione;
+  const platformDeliveryFee = riepilogo.feeConsegna;
+  // Lo sconto che si mostra è quello DAVVERO applicato, non quello richiesto:
+  // altrimenti le righe del riepilogo non fanno il totale.
+  const discount = riepilogo.scontoCodice;
+  const creditApplied = riepilogo.creditoUsato;
+  const finalTotal = riepilogo.totale;
 
   /**
    * 22/8/2026 — LO SCONTO RESTAVA QUELLO DI PRIMA SE IL CARRELLO CAMBIAVA.
@@ -686,7 +723,16 @@ export default function CheckoutPage() {
         }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
+      if (!res.ok) {
+        // 27/8/2026 (R133) — Un tentativo fallito non tiene occupata la chiave.
+        // Il server la libera su ogni uscita che non lascia ordini; qui si fa lo
+        // stesso, cosi' chi corregge il carrello e ripreme riparte pulito invece
+        // di leggere «Ordine gia in corso» per un minuto. L'unica eccezione e'
+        // proprio quel caso: se il gemello sta ancora lavorando la chiave e'
+        // sua, e buttarla creerebbe il doppione.
+        if (laChiaveVaButtata(body)) chiudiIlTentativo();
+        throw new Error(apiErrorMessage(body, 'Creazione ordine fallita'));
+      }
       // 22/8/2026 — la rotta adesso risponde al contratto del progetto,
       // `{ ok: true, data: { … } }`. Si legge da `data`, con il vecchio posto
       // come ripiego finché non è tutto pubblicato.
@@ -1233,8 +1279,11 @@ export default function CheckoutPage() {
           tutto il percorso — resta sotto e non si preme. La barra del prodotto
           (StickyAddToCart) lo sapeva gia' e si alzava; questa no. */}
       <div
-        className="lg:hidden fixed inset-x-0 bottom-0 z-sticky bg-white border-t border-cream-300 shadow-warm-lg px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3"
-        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + var(--altezza-banner-cookie, 0px))' }}
+        // 27/8/2026 (R096) — Il padding non conta piu' la safe-area: la conta
+        // gia' `bottom`. Sommate tutte e due, sull'iPhone con barra gestuale
+        // erano una trentina di pixel di vuoto sotto «Conferma ordine».
+        className="lg:hidden fixed inset-x-0 bottom-0 z-sticky bg-white border-t border-cream-300 shadow-warm-lg px-4 py-3 flex items-center gap-3"
+        style={{ bottom: fondoDellaBarra(['var(--altezza-banner-cookie, 0px)']) }}
       >
         <div className="leading-tight">
           <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>

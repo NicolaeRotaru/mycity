@@ -6,8 +6,7 @@ import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
-import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
-import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
@@ -15,8 +14,9 @@ import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
-import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
+import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
+import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
@@ -212,61 +212,106 @@ export const POST = withAuthRateLimit(
       }
     }
 
-    // --- 1. Carica i prodotti dal DB (mai trust client su prezzo/seller/stock).
+    // Gli ordini nati da questo invio. Sta qui in cima, e non piu' avanti,
+    // perche' `esciERilascia` deve poter dire «non e' nato niente».
+    const createdOrderIds: string[] = [];
+
+    /**
+     * 27/8/2026 (R133) — LA CHIAVE SI LIBERA SE L'ORDINE NON NASCE.
+     *
+     * La chiave si rivendica come prima cosa, ed e' giusto: e' quello che ferma
+     * il doppio clic vero. Ma nessuna delle uscite di errore la restituiva, e il
+     * browser la butta solo quando l'ordine riesce. Bastava un «negozio chiuso»
+     * o un «articolo esaurito» — errori normalissimi, di cui la persona non ha
+     * colpa — e il tentativo successivo si sentiva rispondere «Ordine gia in
+     * corso, attendi qualche secondo»: una frase falsa, davanti a chi sta
+     * comprando, che nessuna attesa sbloccava prima di un minuto pieno.
+     *
+     * Ogni uscita che non lascia in piedi nemmeno un ordine passa di qui.
+     */
+    const esciERilascia = async (risposta: NextResponse): Promise<NextResponse> => {
+      if (chiaveTentativo && createdOrderIds.length === 0) {
+        const { error: errLibera } = await admin
+          .from('cod_checkout_attempts')
+          .delete()
+          .eq('chiave', chiaveTentativo)
+          .eq('user_id', user.id);
+        if (errLibera) {
+          logger.warn('[cod] chiave del tentativo non liberata dopo un errore', {
+            chiave: chiaveTentativo, message: errLibera.message,
+          });
+        }
+      }
+      return risposta;
+    };
+
+    /**
+     * 27/8/2026 (R085) — QUATTRO VIAGGI IN FILA DOVE NE BASTA UNO SOLO.
+     *
+     * Prodotti, sconti attivi, varianti e negozi si leggevano uno dopo l'altro.
+     * Ma gli identificativi delle ultime tre arrivano dal corpo della
+     * richiesta, non dal risultato della prima: non c'era niente da aspettare.
+     * Due-tre giri di rete regalati mentre la persona guarda la rotellina.
+     *
+     * Partono insieme. L'ORDINE DEI CONTROLLI sotto resta identico.
+     */
     const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
     const uniqueProductIds = [...new Set(allProductIds)];
-    const { data: products, error: prodErr } = await supa
-      .from('products')
-      .select('id, name, price, seller_id, stock, status, has_variants')
-      .in('id', uniqueProductIds);
-
-    if (prodErr || !products || products.length === 0) {
-      return ApiErrors.notFound('Prodotti non trovati.');
-    }
-    if (products.length !== uniqueProductIds.length) {
-      return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
-    }
-
-    // Sconti promo attivi (per prodotto): il cliente paga il prezzo scontato che
-    // vede, non il prezzo pieno. Stessa fonte del badge "In promo -X%".
-    const discountMap = await fetchActiveDiscounts(supa, allProductIds);
-
-    // --- 1b. Carica le varianti richieste (stock/label/owner) per validarle.
     const allVariantIds = body.groups.flatMap((g) =>
       g.items.map((i) => i.variantId).filter(Boolean) as string[],
     );
-    const variantMap = new Map<string, { id: string; product_id: string; label: string; stock: number }>();
-    if (allVariantIds.length > 0) {
-      const { data: vrows } = await supa
-        .from('product_variants')
-        .select('id, product_id, label, stock')
-        .in('id', allVariantIds);
-      for (const v of vrows ?? []) {
-        variantMap.set(v.id as string, {
-          id: v.id as string,
-          product_id: v.product_id as string,
-          label: (v.label as string) ?? '',
-          stock: (v.stock as number) ?? 0,
-        });
-      }
+    const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
+
+    type RigaVariante = { id: string; product_id: string; label: string; stock: number };
+
+    const [prodottiLetti, discountMap, variantiLette, venditoriLetti] = await Promise.all([
+      supa
+        .from('products')
+        .select('id, name, price, seller_id, stock, status, has_variants')
+        .in('id', uniqueProductIds),
+      // Sconti promo attivi (per prodotto): il cliente paga il prezzo scontato che
+      // vede, non il prezzo pieno. Stessa fonte del badge "In promo -X%".
+      fetchActiveDiscounts(supa, allProductIds),
+      // Le varianti richieste (stock/label/owner) per validarle.
+      allVariantIds.length > 0
+        ? supa.from('product_variants').select('id, product_id, label, stock').in('id', allVariantIds)
+        : Promise.resolve({ data: [] as RigaVariante[], error: null }),
+      // #16 — Si legge dalla VETRINA PUBBLICA, non dalla tabella dei profili.
+      //
+      // Da quando la 110 ha tolto la regola «chiunque puo' vedere i negozi
+      // approvati», questa lettura fatta con la sessione del cliente tornava
+      // VUOTA — senza errore, semplicemente zero righe. Due conseguenze silenziose:
+      // il controllo «il negozio e' chiuso adesso» non scattava mai (si poteva
+      // ordinare alle tre di notte, e il fattorino andava a vuoto), e le coordinate
+      // del negozio mancavano, quindi la consegna veniva prezzata sempre a tariffa
+      // fissa invece che sulla distanza. `seller_public_profiles` espone
+      // esattamente queste colonne, ed e' leggibile da chi ha un account.
+      supa
+        .from('seller_public_profiles')
+        .select('id, store_name, store_lat, store_lng, store_hours')
+        .in('id', sellerIds),
+    ]);
+
+    const { data: products, error: prodErr } = prodottiLetti;
+
+    if (prodErr || !products || products.length === 0) {
+      return esciERilascia(ApiErrors.notFound('Prodotti non trovati.'));
+    }
+    if (products.length !== uniqueProductIds.length) {
+      return esciERilascia(ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.'));
     }
 
-    // --- 2. Coordinate negozio (per spedizione distanza-based).
-    const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
-    // #16 — Si legge dalla VETRINA PUBBLICA, non dalla tabella dei profili.
-    //
-    // Da quando la 110 ha tolto la regola «chiunque puo' vedere i negozi
-    // approvati», questa lettura fatta con la sessione del cliente tornava
-    // VUOTA — senza errore, semplicemente zero righe. Due conseguenze silenziose:
-    // il controllo «il negozio e' chiuso adesso» non scattava mai (si poteva
-    // ordinare alle tre di notte, e il fattorino andava a vuoto), e le coordinate
-    // del negozio mancavano, quindi la consegna veniva prezzata sempre a tariffa
-    // fissa invece che sulla distanza. `seller_public_profiles` espone
-    // esattamente queste colonne, ed e' leggibile da chi ha un account.
-    const { data: sellers } = await supa
-      .from('seller_public_profiles')
-      .select('id, store_name, store_lat, store_lng, store_hours')
-      .in('id', sellerIds);
+    const variantMap = new Map<string, RigaVariante>();
+    for (const v of (variantiLette.data ?? []) as RigaVariante[]) {
+      variantMap.set(v.id as string, {
+        id: v.id as string,
+        product_id: v.product_id as string,
+        label: (v.label as string) ?? '',
+        stock: (v.stock as number) ?? 0,
+      });
+    }
+
+    const sellers = venditoriLetti.data;
     const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
     for (const s of sellers ?? []) {
       sellerCoordMap.set(s.id, { lat: s.store_lat ?? null, lng: s.store_lng ?? null });
@@ -279,7 +324,7 @@ export const POST = withAuthRateLimit(
     if (!body.pickupInStore) {
       for (const s of sellers ?? []) {
         if (isStoreClosedForOrder(s.store_hours)) {
-          return ApiErrors.conflict(`${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`);
+          return esciERilascia(ApiErrors.conflict(`${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`));
         }
       }
     }
@@ -294,12 +339,12 @@ export const POST = withAuthRateLimit(
       const items: Array<CodItem> = [];
       for (const it of g.items) {
         const p = products.find((x) => x.id === it.productId);
-        if (!p) return ApiErrors.notFound(`Prodotto ${it.productId} non trovato`);
+        if (!p) return esciERilascia(ApiErrors.notFound(`Prodotto ${it.productId} non trovato`));
         if (p.seller_id !== g.sellerId) {
-          return ApiErrors.invalidRequest(`Prodotto ${p.name} non appartiene al venditore indicato.`);
+          return esciERilascia(ApiErrors.invalidRequest(`Prodotto ${p.name} non appartiene al venditore indicato.`));
         }
         if (p.status !== 'available') {
-          return ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`);
+          return esciERilascia(ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`));
         }
         // Varianti: prodotto con varianti richiede una variante valida; lo stock
         // controllato è quello della variante.
@@ -308,19 +353,19 @@ export const POST = withAuthRateLimit(
         let variantLabel: string | null = null;
         if (hasVariants) {
           if (!it.variantId) {
-            return ApiErrors.invalidRequest(`Scegli un'opzione (es. taglia/colore) per ${p.name}.`);
+            return esciERilascia(ApiErrors.invalidRequest(`Scegli un'opzione (es. taglia/colore) per ${p.name}.`));
           }
           const v = variantMap.get(it.variantId);
           if (!v || v.product_id !== p.id) {
-            return ApiErrors.invalidRequest(`Variante non valida per ${p.name}.`);
+            return esciERilascia(ApiErrors.invalidRequest(`Variante non valida per ${p.name}.`));
           }
           if (v.stock < it.quantity) {
-            return ApiErrors.conflict(`Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.`);
+            return esciERilascia(ApiErrors.conflict(`Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.`));
           }
           variantId = v.id;
           variantLabel = v.label;
         } else if (typeof p.stock === 'number' && p.stock < it.quantity) {
-          return ApiErrors.conflict(`Stock insufficiente per ${p.name} (${p.stock} disponibili).`);
+          return esciERilascia(ApiErrors.conflict(`Stock insufficiente per ${p.name} (${p.stock} disponibili).`));
         }
         const unitCents = discountedUnitCents(p.price, discountMap.get(p.id) ?? 0);
         items.push({ productId: p.id, quantity: it.quantity, unitCents, variantId, variantLabel });
@@ -331,7 +376,7 @@ export const POST = withAuthRateLimit(
     }
 
     const grandSubtotalCents = subtotalPerGroupCents.reduce((s, x) => s + x, 0);
-    if (grandSubtotalCents <= 0) return ApiErrors.invalidRequest('Importo non valido.');
+    if (grandSubtotalCents <= 0) return esciERilascia(ApiErrors.invalidRequest('Importo non valido.'));
 
     // --- 4. Coupon / spedizione / ritiro: ricalcolati server-side.
     let couponDiscountCents = 0;
@@ -339,7 +384,7 @@ export const POST = withAuthRateLimit(
     let validatedCouponCode: string | null = null;
     if (body.couponCode && body.couponCode.trim()) {
       const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
-      if (!couponRes.ok) return ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`);
+      if (!couponRes.ok) return esciERilascia(ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`));
       couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
       couponFreeShipping = couponRes.freeShipping;
       validatedCouponCode = couponRes.coupon.code;
@@ -347,7 +392,7 @@ export const POST = withAuthRateLimit(
       // Se due richieste parallele arrivano con lo stesso coupon, solo una ottiene il claim.
       const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
       if (claimErr || !claimed) {
-        return ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.');
+        return esciERilascia(ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.'));
       }
     }
 
@@ -409,7 +454,6 @@ export const POST = withAuthRateLimit(
       couponScontoCents: couponDiscountCents,
     });
     const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
-    const pickupDiscountCents = prezzi.pickupDiscountCents;
 
     // 058 / 165 — LA STESSA MATEMATICA DELLA CARTA, NON UNA SUA IMITAZIONE.
     //
@@ -422,12 +466,10 @@ export const POST = withAuthRateLimit(
     //    con totale negativo, cioe' un negozio che paga il cliente.
     // La rotta della carta ha gia' risolto tutte e due le cose con due funzioni
     // scritte e provate. Non serviva una seconda versione: serviva usarle.
-    const grandShippingCents = prezzi.grandShippingCents;
     const quoteCoupon = prezzi.gruppi.map((g) => g.couponPortionCents);
     const quoteRitiro = prezzi.gruppi.map((g) => g.pickupPortionCents);
 
     // --- 5. Inserisci N ordini (uno per gruppo) con il client admin.
-    const createdOrderIds: string[] = [];
     // #210 e #213 — Il browser non deve piu' indovinare quanto e' stato
     // ordinato. Qui c'e' l'importo che il cliente pagherà davvero, per ogni
     // ordine, col negozio vero: sono i numeri che tornano indietro e finiscono
@@ -473,7 +515,6 @@ export const POST = withAuthRateLimit(
 
     for (let i = 0; i < body.groups.length; i++) {
       const g = body.groups[i];
-      const subtotal = subtotalPerGroupCents[i];
       const shipping = shippingPerGroupCents[i];
       const couponPortionCents = quoteCoupon[i];
       const pickupPortionCents = quoteRitiro[i];
@@ -502,7 +543,7 @@ export const POST = withAuthRateLimit(
         // scalata. Le altre due uscite di errore, poche righe sotto, lo
         // facevano: mancava solo questa.
         await rollbackCreatedCodOrders();
-        return ApiErrors.conflict('Alcuni articoli non sono più disponibili nelle quantità richieste.');
+        return esciERilascia(ApiErrors.conflict('Alcuni articoli non sono più disponibili nelle quantità richieste.'));
       }
 
       // Credito MyCity (opt-in): addebito atomico fino a coprire il totale del
@@ -559,7 +600,12 @@ export const POST = withAuthRateLimit(
         // ricadeva sul prezzo di spedizione — che sopra i 30 euro e' zero:
         // il fattorino consegnava gratis. Ora e' una cifra fissa e la distanza
         // non c'entra piu': la fee di consegna la copre da sola.
-        rider_fee_cents: compensoRiderCents({ pickupInStore: body.pickupInStore }),
+        // 27/8/2026 (R008) — Si legge dal conto condiviso, non si rifa qui.
+        // Il campo c'era gia' (`prezzi.gruppi[i].riderFeeCents`) e non lo
+        // leggeva nessuna delle due rotte: un valore calcolato e mai usato fa
+        // credere che la regola sia governata in un posto solo mentre in
+        // realta' vive in tre.
+        rider_fee_cents: prezzi.gruppi[i].riderFeeCents,
         application_fee_cents: codFeeCents,
         seller_payout_cents: codSellerPayoutCents,
         // In attesa della rimessa contanti del rider (un admin la conferma →
@@ -608,7 +654,7 @@ export const POST = withAuthRateLimit(
           });
         }
         logger.error(orderErr ?? new Error('cod-order-insert-null'), { context: 'cod-order-insert', sellerId: g.sellerId });
-        return ApiErrors.internal('Errore nella creazione ordine.');
+        return esciERilascia(ApiErrors.internal('Errore nella creazione ordine.'));
       }
 
       reservedStockPerGroup.push(groupStockItems);
@@ -638,7 +684,7 @@ export const POST = withAuthRateLimit(
         reservedStockPerGroup.pop();
         walletAppliedPerGroup.pop();
         await rollbackCreatedCodOrders();
-        return ApiErrors.internal('Errore nella creazione ordine.');
+        return esciERilascia(ApiErrors.internal('Errore nella creazione ordine.'));
       }
 
       // 159 — GLI AVVISI PARTONO SOLO QUANDO L'ORDINE C'E' DAVVERO, TUTTO.
@@ -718,63 +764,105 @@ export const POST = withAuthRateLimit(
     // «per conto suo» e su Vercel poteva non arrivare mai in fondo, perche' la
     // funzione si spegne appena ha risposto. `dopoLaRisposta` risponde subito e
     // tiene viva l'esecuzione finche' le email non sono partite.
+    /**
+     * 27/8/2026 (R086) — LA POSTA PARTIVA UNA ALLA VOLTA, IN FILA.
+     *
+     * Per ogni negozio del carrello: una lettura del suo utente, un'email al
+     * negozio, una lettura del suo profilo, un'email al cliente — tutte in
+     * sequenza. Con quattro negozi sono quattro letture piu' otto invii uno
+     * dietro l'altro, e la funzione resta viva per tutto quel tempo.
+     *
+     * Adesso i nomi dei negozi si leggono in UNA volta sola per tutti (era un
+     * viaggio per ordine, sempre sulla stessa tabella), e i giri partono
+     * insieme con `allSettled`: se la posta verso un negozio fallisce, quella
+     * agli altri parte lo stesso — che e' esattamente il comportamento che
+     * serve quando il servizio di posta fa i capricci su un indirizzo.
+     */
     dopoLaRisposta(async () => {
-      for (const c of comunicazioni) {
-      // Email al venditore (oltre alla notifica) — per la carta parte dal webhook,
-      // per il COD va inviata qui. Best-effort.
+      const negoziCoinvolti = Array.from(new Set(comunicazioni.map((c) => c.sellerId)));
+      const nomiNegozio = new Map<string, string>();
       try {
-        const { data: sellerAuth } = await admin.auth.admin.getUserById(c.sellerId);
-        const sellerEmail = sellerAuth?.user?.email;
-        if (sellerEmail) {
-          const t = newOrderSellerTemplate({
-            sellerName: null,
-            orderId: c.orderId,
-            total: c.totalCents / 100,
-            itemsCount: c.itemsCount,
-          });
-          await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+        const { data: profiliNegozi } = await admin
+          .from('profiles')
+          .select('id, store_name')
+          .in('id', negoziCoinvolti);
+        for (const p of profiliNegozi ?? []) {
+          nomiNegozio.set(p.id as string, (p.store_name as string) ?? 'il negozio');
         }
       } catch (e) {
-        logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
+        logger.warn('[cod] nomi dei negozi non letti per la posta', { e });
       }
 
-      // Conferma al cliente. Per gli ordini con carta parte dal webhook Stripe;
-      // per il contrassegno va inviata qui.
-      try {
-        const { data: sellerProfile } = await admin
-          .from('profiles')
-          .select('store_name')
-          .eq('id', c.sellerId)
-          .single();
-        const t = orderConfirmedBuyerTemplate({
-          name: body.delivery.fullName,
-          orderId: c.orderId,
-          total: c.totalCents / 100,
-          storeName: sellerProfile?.store_name ?? 'il negozio',
-        });
-        if (emailCliente) {
-          await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text });
-        }
-      } catch (e) {
-        logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
-      }
-      }
+      await Promise.allSettled(comunicazioni.map(async (c) => {
+        // Email al venditore (oltre alla notifica) — per la carta parte dal webhook,
+        // per il COD va inviata qui. Best-effort.
+        const alVenditore = (async () => {
+          try {
+            const { data: sellerAuth } = await admin.auth.admin.getUserById(c.sellerId);
+            const sellerEmail = sellerAuth?.user?.email;
+            if (!sellerEmail) return;
+            const t = newOrderSellerTemplate({
+              sellerName: null,
+              orderId: c.orderId,
+              total: c.totalCents / 100,
+              itemsCount: c.itemsCount,
+            });
+            await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
+          } catch (e) {
+            logger.warn('[cod] email nuovo ordine al venditore fallita', { orderId: c.orderId, e });
+          }
+        })();
+
+        // Conferma al cliente. Per gli ordini con carta parte dal webhook Stripe;
+        // per il contrassegno va inviata qui.
+        const alCliente = (async () => {
+          try {
+            if (!emailCliente) return;
+            const t = orderConfirmedBuyerTemplate({
+              name: body.delivery.fullName,
+              orderId: c.orderId,
+              total: c.totalCents / 100,
+              storeName: nomiNegozio.get(c.sellerId) ?? 'il negozio',
+            });
+            await sendEmail({ to: emailCliente, subject: t.subject, html: t.html, text: t.text });
+          } catch (e) {
+            logger.warn('[cod] email conferma ordine al buyer fallita', { orderId: c.orderId, e });
+          }
+        })();
+
+        await Promise.all([alVenditore, alCliente]);
+      }));
     }, 'email del nuovo ordine in contanti');
 
     // #208 — L'acquisto si conta qui, dove il fatto è certo. Prima partiva
     // solo dal browser: chi chiudeva la scheda spariva dai conti, e il
     // fatturato in PostHog non riconciliava con la tabella degli ordini.
-    // Il consenso si legge UNA volta, non una per ordine: e' la stessa persona.
-    const consensoAnalytics = await analyticsConsentita(admin, user.id);
-    const misure = Promise.all(
-      comunicazioni.map((c) =>
-        contaAcquisto({
-          consensoAnalytics,
-          orderId: c.orderId,
-          buyerId: user.id,
-          totalCents: c.totalCents,
-          paymentMethod: 'cod',
-          sellerId: c.sellerId,
+    //
+    // 27/8/2026 (R159) — IL «SÌ» AI COOKIE DATO DA ANONIMO SI PERDEVA.
+    //
+    // Il consenso si cerca per persona, ma chi accetta il banner prima di
+    // registrarsi — cioe' quasi tutti — finisce nel registro con il solo
+    // identificativo del browser. Nessuno collegava i due, quindi l'acquisto
+    // non partiva quasi mai. I cookie di questo browser ci sono ADESSO, nella
+    // richiesta: si leggono qui e si ricuce prima di chiedere il consenso.
+    // (Il webhook della carta i cookie non li ha: quella strada la ricuce la
+    // rotta /api/stripe/checkout, che invece li riceve.)
+    const anonimiDelBrowser = identificativiAnonimi(req.headers.get('cookie'));
+    const variantiDelBrowser = variantiDaiCookie(req.headers.get('cookie'));
+    // Fuori dalla risposta: la persona non deve aspettare una misura.
+    const misure = (async () => {
+      await collegaConsensiAnonimi(admin, user.id, anonimiDelBrowser);
+      // Il consenso si legge UNA volta, non una per ordine: e' la stessa persona.
+      const consensoAnalytics = await analyticsConsentita(admin, user.id);
+      await Promise.all(
+        comunicazioni.map((c) =>
+          contaAcquisto({
+            consensoAnalytics,
+            orderId: c.orderId,
+            buyerId: user.id,
+            totalCents: c.totalCents,
+            paymentMethod: 'cod',
+            sellerId: c.sellerId,
           // 22/8/2026 — LO STESSO CARRELLO PRENDEVA IDENTIFICATIVI DIVERSI.
           //
           // Senza la chiave del tentativo qui si ripiegava sull'id DELL'ORDINE:
@@ -787,11 +875,17 @@ export const POST = withAuthRateLimit(
           // `chiaveCarrello` e' una sola per richiesta: o quella mandata dal
           // browser, o una generata qui. Tutti gli ordini nati da questo invio
           // portano quella.
-          checkoutId: chiaveCarrello,
-        }),
-      ),
-    ).then(() => undefined);
-    dopoLaRisposta(() => misure, 'misura acquisto in contanti');
+            checkoutId: chiaveCarrello,
+            // 27/8/2026 (R165) — Il gruppo dell'esperimento viaggia con
+            // l'acquisto. Prima viveva solo nel browser (super-property di
+            // PostHog) e l'evento che conta parte da qui: per sapere se la
+            // variante B vendeva di piu' bisognava ricucire le persone a mano.
+            varianti: variantiDelBrowser,
+          }),
+        ),
+      );
+    });
+    dopoLaRisposta(misure, 'misura acquisto in contanti');
 
     // NB: il coupon è già stato claimato atomicamente sopra (claim_coupon, fix #36).
     // Non chiamiamo più increment_coupon_usage qui.

@@ -44,6 +44,13 @@ export type PendingGroup = {
   deliveryFeeCents?: number;
   /** Compenso del fattorino, calcolato al checkout sulla distanza. */
   riderFeeCents?: number;
+  /**
+   * 27/8/2026 (R165) — Il gruppo del test A/B letto dai cookie al checkout
+   * (`{ home_hero: 'b' }`). Qui il webhook di cookie non ne riceve: se non
+   * viaggiasse con la riga di intento, l'acquisto con carta arriverebbe nei
+   * conti senza dire a quale variante appartiene.
+   */
+  esperimenti?: Record<string, string>;
   couponPortionCents: number;
   pickupPortionCents: number;
   totalCents: number;
@@ -503,6 +510,9 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           paymentMethod: 'card',
           sellerId: c.sellerId,
           checkoutId: pendingCheckoutId,
+          // La variante e' la stessa per tutto il carrello: si legge dal primo
+          // gruppo, dove il checkout l'ha scritta.
+          varianti: groups[0]?.esperimenti ?? {},
         }),
       ),
     );

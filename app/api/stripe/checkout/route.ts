@@ -2,20 +2,22 @@ import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
-import { createMultiSellerCheckoutSession, isStripeConfigured } from '@/lib/stripe/client';
-import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
+import { createMultiSellerCheckoutSession, getStripe, isStripeConfigured } from '@/lib/stripe/client';
+import { createHash } from 'node:crypto';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
-import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
-import { shippingCentsFor, compensoRiderCents } from '@/lib/shipping';
+import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { isStoreClosedForOrder } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
+import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
+import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -109,14 +111,134 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
 
   const supa = await getServerSupabase();
   const admin = getAdminSupabase();
+  const variantiDelBrowser = variantiDaiCookie(req.headers.get('cookie'));
 
-  // --- 1. Carica tutti i prodotti dal DB in un'unica query.
+  /**
+   * 27/8/2026 (R085) — QUATTRO VIAGGI IN FILA DOVE NE BASTA UNO SOLO.
+   *
+   * Prodotti, sconti attivi, varianti e negozi si leggevano uno dopo l'altro,
+   * ognuno aspettando il precedente. Ma gli identificativi delle ultime tre
+   * letture arrivano tutti dal corpo della richiesta, non dal risultato della
+   * prima: non c'era niente da aspettare. Erano due-tre giri di rete regalati
+   * nel momento esatto in cui la persona ha la carta in mano e guarda la
+   * rotellina — e sul checkout ogni frazione di secondo si legge nel tasso di
+   * abbandono.
+   *
+   * Partono insieme. L'ORDINE DEI CONTROLLI sotto resta identico: prima i
+   * prodotti, poi le varianti, poi il negozio chiuso.
+   */
   const allProductIds = body.groups.flatMap((g) => g.items.map((i) => i.productId));
   const uniqueProductIds = [...new Set(allProductIds)];
-  const { data: products, error: prodErr } = await supa
-    .from('products')
-    .select('id, name, price, images, seller_id, stock, status, has_variants')
-    .in('id', uniqueProductIds);
+  const allVariantIds = body.groups.flatMap((g) =>
+    g.items.map((i) => i.variantId).filter(Boolean) as string[],
+  );
+  const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
+
+  type RigaVariante = { id: string; product_id: string; label: string; stock: number };
+
+  /**
+   * 27/8/2026 (R049 / R125 / R136) — DUE INVII, DUE RISERVE, DUE CODICI BRUCIATI.
+   *
+   * Il percorso dei contanti ha una chiave per tentativo e la rivendica prima
+   * di toccare qualunque cosa. Questo no: ogni chiamata consumava di nuovo il
+   * codice sconto (`claim_coupon`), riservava di nuovo la merce
+   * (`reserve_stock`) e apriva una seconda sessione di pagamento. Chi torna
+   * indietro dalla pagina di Stripe e riprova si sentiva dire «Coupon non
+   * disponibile: potrebbe essere esaurito nel frattempo» — il suo, consumato
+   * dal suo tentativo di un minuto prima — e nel frattempo la stessa merce
+   * risultava impegnata due volte per DUE ORE (`pending_checkouts.expires_at`):
+   * un altro cliente legge «non disponibile» su un prodotto che c'è.
+   *
+   * Qui la difesa non è una chiave mandata dal browser ma L'IMPRONTA DEL
+   * CARRELLO: stesso cliente, stesso carrello, tentativo ancora aperto e non
+   * scaduto ⇒ si restituisce la sessione di pagamento già aperta invece di
+   * farne una seconda. Copre più casi della chiave (che vive in una scheda
+   * sola): il ritentativo della rete, il rinvio del modulo, la seconda scheda.
+   *
+   * Onesto sul limite: senza un vincolo unico sul database — cioè una
+   * migrazione — due richieste DAVVERO simultanee possono passare tutte e due.
+   * Quel caso lo ferma già il browser (`checkoutChiuso`, che chiude il pulsante
+   * su ogni invio); questo chiude tutti gli altri, che sono quelli veri.
+   */
+  const improntaCarrello = createHash('sha256')
+    .update(
+      JSON.stringify({
+        gruppi: body.groups.map((g) => ({
+          negozio: g.sellerId,
+          righe: g.items.map((it) => [it.productId, it.variantId ?? null, it.quantity]),
+        })),
+        coupon: body.couponCode?.trim().toUpperCase() ?? null,
+        ritiro: body.pickupInStore,
+        indirizzo: [body.delivery.address, body.delivery.city, body.delivery.zip].join('|'),
+        // Anche la fascia di consegna: chi torna indietro solo per cambiarla
+        // non deve ritrovarsi il pagamento di prima, con l'orario di prima.
+        fascia: body.pickupInStore ? null : (body.deliverySlot ?? null),
+      }),
+    )
+    .digest('hex');
+
+  const [prodottiLetti, discountMap, variantiLette, venditoriLetti, tentativoGiaAperto] = await Promise.all([
+    supa
+      .from('products')
+      .select('id, name, price, images, seller_id, stock, status, has_variants')
+      .in('id', uniqueProductIds),
+    // Sconti promo attivi (per prodotto): il cliente deve pagare il prezzo scontato
+    // mostrato dal badge "In promo -X%", non il prezzo pieno. Fonte autorevole DB.
+    fetchActiveDiscounts(supa, allProductIds),
+    // Varianti richieste: stock/label/owner per la validazione e lo snapshot.
+    allVariantIds.length > 0
+      ? supa.from('product_variants').select('id, product_id, label, stock').in('id', allVariantIds)
+      : Promise.resolve({ data: [] as RigaVariante[], error: null }),
+    // #16 — Si legge dalla VETRINA PUBBLICA, non dalla tabella dei profili.
+    //
+    // Da quando la 110 ha tolto la regola «chiunque puo' vedere i negozi
+    // approvati», questa lettura fatta con la sessione del cliente tornava
+    // VUOTA — senza errore, semplicemente zero righe. Due conseguenze silenziose:
+    // il controllo «il negozio e' chiuso adesso» non scattava mai (si poteva
+    // ordinare alle tre di notte, e il fattorino andava a vuoto), e le coordinate
+    // del negozio mancavano, quindi la consegna veniva prezzata sempre a tariffa
+    // fissa invece che sulla distanza. `seller_public_profiles` espone
+    // esattamente queste colonne, ed e' leggibile da chi ha un account.
+    supa
+      .from('seller_public_profiles')
+      .select('id, store_name, store_lat, store_lng, store_hours')
+      .in('id', sellerIds),
+    // Lo stesso carrello di questa persona ha gia' un pagamento aperto?
+    admin
+      .from('pending_checkouts')
+      .select('id, stripe_session_id')
+      .eq('buyer_id', user.id)
+      .eq('status', 'PENDING')
+      .gt('expires_at', new Date().toISOString())
+      .filter('delivery->>impronta_carrello', 'eq', improntaCarrello)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (tentativoGiaAperto.error) {
+    // Non si ferma il pagamento per questo: si va avanti come prima, ma resta
+    // scritto — senza questa lettura la difesa dal doppio invio non c'e' piu'.
+    logger.warn('[stripe] tentativo gia aperto non cercato', { message: tentativoGiaAperto.error.message });
+  }
+  const sessioneGiaAperta = (tentativoGiaAperto.data as { id: string; stripe_session_id: string | null } | null) ?? null;
+  if (sessioneGiaAperta?.stripe_session_id) {
+    try {
+      const sessione = await getStripe().checkout.sessions.retrieve(sessioneGiaAperta.stripe_session_id);
+      if (sessione.status === 'open' && sessione.url) {
+        logger.info('[stripe] stesso carrello, stessa sessione: non ne apro una seconda', {
+          pendingCheckoutId: sessioneGiaAperta.id,
+        });
+        return apiSuccess({ id: sessione.id, url: sessione.url });
+      }
+    } catch (e) {
+      // Se Stripe non risponde si tira dritto e se ne apre una nuova: meglio un
+      // doppione che una persona che non riesce a pagare.
+      logger.warn('[stripe] sessione precedente non rileggibile, ne apro una nuova', { e });
+    }
+  }
+
+  const { data: products, error: prodErr } = prodottiLetti;
 
   if (prodErr || !products || products.length === 0) {
     return ApiErrors.notFound('Prodotti non trovati.');
@@ -125,46 +247,17 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     return ApiErrors.invalidRequest('Alcuni prodotti del carrello non sono più disponibili.');
   }
 
-  // Sconti promo attivi (per prodotto): il cliente deve pagare il prezzo scontato
-  // mostrato dal badge "In promo -X%", non il prezzo pieno. Fonte autorevole DB.
-  const discountMap = await fetchActiveDiscounts(supa, allProductIds);
-
-  // Varianti richieste: stock/label/owner per la validazione e lo snapshot.
-  const allVariantIds = body.groups.flatMap((g) =>
-    g.items.map((i) => i.variantId).filter(Boolean) as string[],
-  );
-  const variantMap = new Map<string, { id: string; product_id: string; label: string; stock: number }>();
-  if (allVariantIds.length > 0) {
-    const { data: vrows } = await supa
-      .from('product_variants')
-      .select('id, product_id, label, stock')
-      .in('id', allVariantIds);
-    for (const v of vrows ?? []) {
-      variantMap.set(v.id as string, {
-        id: v.id as string,
-        product_id: v.product_id as string,
-        label: (v.label as string) ?? '',
-        stock: (v.stock as number) ?? 0,
-      });
-    }
+  const variantMap = new Map<string, RigaVariante>();
+  for (const v of (variantiLette.data ?? []) as RigaVariante[]) {
+    variantMap.set(v.id as string, {
+      id: v.id as string,
+      product_id: v.product_id as string,
+      label: (v.label as string) ?? '',
+      stock: (v.stock as number) ?? 0,
+    });
   }
 
-  // --- 2. Carica i seller (per storeName nei line_items Stripe).
-  const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
-  // #16 — Si legge dalla VETRINA PUBBLICA, non dalla tabella dei profili.
-  //
-  // Da quando la 110 ha tolto la regola «chiunque puo' vedere i negozi
-  // approvati», questa lettura fatta con la sessione del cliente tornava
-  // VUOTA — senza errore, semplicemente zero righe. Due conseguenze silenziose:
-  // il controllo «il negozio e' chiuso adesso» non scattava mai (si poteva
-  // ordinare alle tre di notte, e il fattorino andava a vuoto), e le coordinate
-  // del negozio mancavano, quindi la consegna veniva prezzata sempre a tariffa
-  // fissa invece che sulla distanza. `seller_public_profiles` espone
-  // esattamente queste colonne, ed e' leggibile da chi ha un account.
-  const { data: sellers } = await supa
-    .from('seller_public_profiles')
-    .select('id, store_name, store_lat, store_lng, store_hours')
-    .in('id', sellerIds);
+  const sellers = venditoriLetti.data;
 
   const sellerNameMap = new Map<string, string>();
   const sellerCoordMap = new Map<string, { lat: number | null; lng: number | null }>();
@@ -333,12 +426,8 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     couponScontoCents: couponDiscountCents,
   });
   const shippingPerGroupCents = prezzi.gruppi.map((g) => g.shippingCents);
-  const grandShippingCents = prezzi.grandShippingCents;
 
-  // 4c. Sconto ritiro in negozio: PICKUP_DISCOUNT_PERCENT sul subtotale carrello.
-  const pickupDiscountCents = prezzi.pickupDiscountCents;
-
-  // 4c-bis. Fee di consegna piattaforma: PLATFORM_DELIVERY_FEE_CENTS per ogni
+  // 4c. Fee di consegna piattaforma: PLATFORM_DELIVERY_FEE_CENTS per ogni
   // gruppo (= una consegna fisica per venditore). Zero per il ritiro in negozio.
   // La incassa MyCity: viene scalata dal payout del venditore nel webhook.
   const deliveryFeePerGroupCents = prezzi.gruppi.map((g) => g.deliveryFeeCents);
@@ -362,7 +451,6 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     const couponPortionCents = quoteCoupon[i];
     const pickupPortionCents = quoteRitiro[i];
     const totalCents = prezzi.gruppi[i].totalCents;
-    const coord = sellerCoordMap.get(g.sellerId) ?? { lat: null, lng: null };
     return {
       sellerId: g.sellerId,
       storeName: g.storeName,
@@ -376,7 +464,26 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       // Il compenso del fattorino viaggia col gruppo fino alla creazione
       // dell'ordine. E' una cifra fissa: non dipende ne' dalla distanza ne' da
       // quanto paga il cliente.
-      riderFeeCents: compensoRiderCents({ pickupInStore: body.pickupInStore }),
+      //
+      // 27/8/2026 (R008) — E si legge dal conto condiviso: prima ogni rotta se
+      // lo ricalcolava per conto suo, mentre il campo del conto condiviso non
+      // lo leggeva nessuno.
+      riderFeeCents: prezzi.gruppi[i].riderFeeCents,
+      /**
+       * 27/8/2026 (R165) — IL GRUPPO DELL'ESPERIMENTO, IN VIAGGIO VERSO IL
+       * WEBHOOK.
+       *
+       * L'acquisto con carta lo conta il webhook di Stripe, che non riceve
+       * cookie: la variante del test A/B — che vive in `mc_exp_<esperimento>` —
+       * lì non arriva. Senza, l'unico evento che dice se una variante fa
+       * vendere di più non porta il gruppo, e il test non si analizza.
+       *
+       * Onesto su dov'è: la casa giusta sarebbe una colonna di
+       * `pending_checkouts`, cioè una migrazione. Questa riga di intento è già
+       * un jsonb che viaggia intatto dal checkout al webhook, e il tipo
+       * `PendingGroup` lo dichiara: nessuno la trova per caso.
+       */
+      esperimenti: variantiDelBrowser,
     };
   });
 
@@ -448,6 +555,10 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
         // Fascia di consegna scelta dal buyer: il webhook la legge da qui e la
         // scrive su orders.delivery_slot. null per ritiro / non scelta.
         slot: body.pickupInStore ? null : (body.deliverySlot ?? null),
+        // R049/R125/R136 — L'impronta di QUESTO carrello: è quella che, al
+        // secondo invio, fa ritrovare il pagamento già aperto invece di
+        // aprirne un altro e riservare la merce due volte.
+        impronta_carrello: improntaCarrello,
       },
       pickup_in_store: body.pickupInStore,
       status: 'PENDING',
@@ -486,6 +597,24 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       .from('pending_checkouts')
       .update({ stripe_session_id: session.id })
       .eq('id', pending.id);
+
+    /**
+     * 27/8/2026 (R159) — QUI PASSANO I COOKIE, NEL WEBHOOK NO.
+     *
+     * L'acquisto con carta lo conta il webhook di Stripe, che di cookie non ne
+     * riceve: puo' solo cercare il consenso per persona. Ma chi accetta il
+     * banner prima di registrarsi — il percorso normale — nel registro sta con
+     * il solo identificativo del browser, e nessuno collegava i due: l'ordine
+     * finiva nel database e non nei conti.
+     *
+     * Questa richiesta i cookie ce li ha. Si ricuce adesso, fuori dalla
+     * risposta, cosi' quando il webhook arriva — secondi o minuti dopo — il
+     * consenso e' gia' intestato alla persona.
+     */
+    dopoLaRisposta(
+      () => collegaConsensiAnonimi(admin, user.id, identificativiAnonimi(req.headers.get('cookie'))),
+      'consensi anonimi da collegare alla persona',
+    );
 
     // 22/8/2026 — al contratto del progetto, `{ ok: true, data: { … } }`. Qui
     // rispondeva un oggetto nudo, come la rotta dei contanti prima di ieri.

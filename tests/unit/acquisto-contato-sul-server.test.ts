@@ -44,6 +44,10 @@ const acquisto = {
   sellerId: 'negozio-1',
   checkoutId: 'carrello-9',
   consensoAnalytics: true,
+  // 27/8/2026 (R165) — Il gruppo dell'esperimento e' obbligatorio nel tipo: la
+  // variante viveva solo nel browser e l'acquisto parte dal server, quindi
+  // l'unico evento che dice se un test fa vendere di piu' non la portava.
+  varianti: {} as Record<string, string>,
 };
 
 describe('l acquisto si conta dove il fatto è certo', () => {

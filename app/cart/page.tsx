@@ -9,7 +9,7 @@ import Image from 'next/image';
 import { CartItem, getCart, updateQuantity, removeFromCart, cartTotal, cartCount } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
@@ -131,8 +131,11 @@ export default function CartPage() {
   // cioe' il totale di tutto il carrello, mentre il numero addebitato si calcola per negozio. Con
   // 20 € dal fornaio e 15 € dal macellaio la riga diceva «Gratis*» e nel totale c'erano 9,80 €.
   // Adesso la parola la deriva `dettoDellaSpedizione` dallo stesso numero — vedi piu' sotto, dove
-  // `shippingCost` esiste. Qui resta solo cio' che serve alla barra di avanzamento per negozio.
-  const freeShipping = total >= FREE_SHIPPING_THRESHOLD;
+  // `shippingCost` esiste.
+  //
+  // 27/8/2026 (R013) — E qui restava `const freeShipping = total >= FREE_SHIPPING_THRESHOLD;`,
+  // che dopo quel cambio non leggeva piu' nessuno: proprio la riga che diceva «Gratis» sul totale
+  // sbagliato, rimasta li' a far credere che quella regola fosse ancora viva.
 
   // «Vuoto» è un'affermazione sul mondo — ho guardato e non c'è niente — e non si può fare prima di
   // aver guardato. Il verdetto lo dà `statoDellaVista`, che senza `letto` non torna mai «vuoto».

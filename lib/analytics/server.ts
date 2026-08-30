@@ -118,6 +118,15 @@ export type AcquistoDaContare = {
    * compilazione invece di un dato che parte in silenzio.
    */
   consensoAnalytics: boolean;
+  /**
+   * 27/8/2026 (R165) — In che gruppo dell'esperimento sta questa persona
+   * (`{ home_hero: 'b' }`). Obbligatorio per lo stesso motivo del consenso: la
+   * variante viveva solo nel browser, e l'acquisto parte dal server. Senza,
+   * l'unico evento che dice se un esperimento fa vendere di più non porta con
+   * sé il gruppo, e il test si può analizzare solo persona per persona.
+   * Vuoto `{}` è una risposta legittima: nessun esperimento in corso.
+   */
+  varianti: Record<string, string>;
 };
 
 /** L'evento è configurato? Serve a non riempire i log quando PostHog non c'è. */
@@ -202,6 +211,16 @@ export async function contaAcquisto(a: AcquistoDaContare): Promise<void> {
           $insert_id: `order_placed:${a.orderId}`,
           // Da dove arriva: serve a capire quanto pesava il buco del browser.
           origine: 'server',
+          // Il gruppo dell'esperimento, con lo stesso nome che il browser
+          // attacca a tutti gli altri eventi (`<esperimento>_variant`): così in
+          // PostHog l'acquisto si filtra come qualunque altro evento, invece di
+          // dover ricucire le persone a mano.
+          ...Object.fromEntries(
+            Object.entries(a.varianti ?? {}).map(([esperimento, variante]) => [
+              `${esperimento}_variant`,
+              variante,
+            ]),
+          ),
         },
       }),
       // La misura non tiene in ostaggio la risposta a Stripe: se PostHog è
