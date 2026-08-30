@@ -19,7 +19,6 @@ import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { getStripe } from '@/lib/stripe/client';
-import { notifyAdmins } from './comune';
 
 /** payment_intent.payment_failed → pagamento non riuscito: log (l'ordine non viene creato). */
 export async function handlePaymentIntentFailed(pi: Stripe.PaymentIntent, eventId?: string) {

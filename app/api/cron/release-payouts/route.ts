@@ -276,9 +276,32 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     .lte('delivered_at', cutoffIso)
     .limit(BATCH_LIMIT);
 
+  /**
+   * 30/8/2026 (R120) — E I COMPENSI IN CONTANTI RIMASTI SCOPERTI.
+   *
+   * Sul contrassegno il fattorino si tiene il compenso dal contante che ha in
+   * mano, quindi qui non c'era niente da cercare: la ricerca chiedeva
+   * `payment_method = 'card'` e basta. Ma il credito MyCity puo' portare il
+   * contante sotto il compenso — fino a zero — e allora una parte resta
+   * dovuta. La conferma dell'incasso la lascia in 'HELD'; questi sono gli
+   * ordini che la vengono a prendere. La ricerca e' esplicita su 'HELD' per
+   * non tirare dentro tutti i contrassegni ancora da confermare, che di
+   * compenso da versare non ne hanno.
+   */
+  const { data: riderCandsContanti } = await admin
+    .from('orders')
+    .select('id')
+    .eq('payment_method', 'cod')
+    .eq('delivery_status', 'DELIVERED')
+    .eq('rider_payout_status', 'HELD')
+    .not('rider_id', 'is', null)
+    .or(PAYOUT_DISPUTE_FILTER)
+    .lte('delivered_at', cutoffIso)
+    .limit(BATCH_LIMIT);
+
   // R141 — il passaggio dei fattorini ha il suo tempo, non gli avanzi del primo.
   const tempoFinitoRider = cronometroDelPasso();
-  for (const o of riderCands ?? []) {
+  for (const o of [...(riderCands ?? []), ...(riderCandsContanti ?? [])]) {
     if (tempoFinitoRider()) {
       fermatoPerTempo = true;
       break;

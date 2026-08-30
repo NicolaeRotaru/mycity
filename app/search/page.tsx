@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState, type RefObject } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Filter, RotateCcw, Truck, CircleDot, Star, ArrowDownWideNarrow, X, Tag, PackageCheck, Check, Search, ChevronRight } from 'lucide-react';

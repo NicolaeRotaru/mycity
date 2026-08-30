@@ -51,6 +51,11 @@ const TUTTE_LE_IMPORTANTI: Record<string, string> = {
   SUPPORT_EMAIL: 'aiuto@mycity.test',
   VAPID_PRIVATE_KEY: 'vapid_priv',
   NEXT_PUBLIC_VAPID_PUBLIC_KEY: 'vapid_pub',
+  // 30/8/2026 (R142) — la tredicesima. Senza questa variabile il tetto di spesa
+  // verso Anthropic vale zero, e zero nel codice vuol dire NESSUN tetto
+  // (`if (!(limitEur > 0)) return` in lib/ai/run.ts): il freno c'e' ed e'
+  // spento. La prima notizia di un ciclo impazzito sarebbe la fattura.
+  AI_GLOBAL_DAILY_BUDGET_EUR: '20',
 };
 
 let contatore = 0;

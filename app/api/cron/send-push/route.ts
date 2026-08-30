@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
-import { isPushConfigured, sendPushToUser } from '@/lib/push/send';
+import { isPushConfigured, iscrizioniPerUtenti, sendPushToUser } from '@/lib/push/send';
 
 /**
  * Cron: invia le web push per le notifiche non ancora inviate (pushed_at NULL)
@@ -77,12 +77,26 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     chiavi.set(`${n.user_id}|${categoria}`, { user: n.user_id, categoria });
   }
   const vuoleDavvero = new Map<string, boolean>();
-  await Promise.all(
-    [...chiavi.entries()].map(async ([chiave, v]) => {
-      const { data } = await supa.rpc('vuole_notifica', { p_user_id: v.user, p_category: v.categoria });
-      vuoleDavvero.set(chiave, data !== false);
-    }),
-  );
+  /**
+   * 30/8/2026 (R076) — QUESTE ANDAVANO A GRUPPI DI CENTO, CIOE' SENZA TETTO.
+   *
+   * Il `Promise.all` qui sopra apriva una domanda per ogni coppia
+   * persona+categoria tutte nello stesso istante: col batch pieno sono cento
+   * chiamate contemporanee al gestore di connessioni di Supabase. Il tetto a
+   * gruppi di dieci esisteva gia', ma solo piu' sotto, per gli invii. Il
+   * momento in cui il batch e' pieno e' il picco degli ordini — lo stesso in
+   * cui sul database ci sono i clienti veri che navigano.
+   */
+  const GRUPPO = 10;
+  const daChiedere = [...chiavi.entries()];
+  for (let i = 0; i < daChiedere.length; i += GRUPPO) {
+    await Promise.all(
+      daChiedere.slice(i, i + GRUPPO).map(async ([chiave, v]) => {
+        const { data } = await supa.rpc('vuole_notifica', { p_user_id: v.user, p_category: v.categoria });
+        vuoleDavvero.set(chiave, data !== false);
+      }),
+    );
+  }
 
   const daSegnare: string[] = [];
   const daMandare = notifiche.filter((n) => {
@@ -96,8 +110,17 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     return true;
   });
 
-  // ② Gli invii, a gruppi di dieci in parallelo invece che uno per volta.
-  const GRUPPO = 10;
+  /**
+   * ② Le iscrizioni push: UNA lettura per tutti, non una per notifica.
+   *
+   * 30/8/2026 (R076) — `sendPushToUser` se le rileggeva da sola ogni volta, e
+   * qui la si chiama una volta per notifica: col batch pieno erano cento
+   * letture della stessa tabella dove ne basta una. Il commento in cima
+   * dichiarava risolte le PREFERENZE, non le iscrizioni: quelle erano rimaste.
+   */
+  const iscrizioni = await iscrizioniPerUtenti(supa, [...new Set(daMandare.map((n) => n.user_id))]);
+
+  // ③ Gli invii, a gruppi di dieci in parallelo invece che uno per volta.
   for (let i = 0; i < daMandare.length; i += GRUPPO) {
     const gruppo = daMandare.slice(i, i + GRUPPO);
     const esiti = await Promise.allSettled(
@@ -107,7 +130,7 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
           body: n.body ?? undefined,
           url: n.link ?? '/',
           tag: n.id,
-        }),
+        }, iscrizioni.get(n.user_id) ?? []),
       ),
     );
     esiti.forEach((esito, k) => {
@@ -125,7 +148,7 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     });
   }
 
-  // ③ Una scrittura sola per tutte quelle gestite.
+  // ④ Una scrittura sola per tutte quelle gestite.
   if (daSegnare.length > 0) {
     const { error } = await supa
       .from('notifications')

@@ -97,7 +97,7 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
         });
         alerts += 1;
       }
-    } catch (err) {
+    } catch {
       errors += 1;
       logger.warn('external-price-alerts: check failed', { productId: r.id });
       // Marca come errore per non ritentare in loop stretto.

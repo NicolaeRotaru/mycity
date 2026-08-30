@@ -142,7 +142,6 @@ export default function SellerDashboard() {
       const startOf30d = new Date(Date.now() - 30 * 86400000);
 
       const inRange = (it: OrderItem, from: Date) => new Date(it.orders?.created_at ?? 0) >= from;
-      const sum = (arr: OrderItem[]) => arr.reduce((s, it) => s + Number(it.unit_price) * it.quantity, 0);
 
       const today = itemsArr.filter((it) => inRange(it, startOfToday));
       const last7 = itemsArr.filter((it) => inRange(it, startOf7d));

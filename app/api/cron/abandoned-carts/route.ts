@@ -6,6 +6,7 @@ import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { escapeHtml } from '@/lib/html-escape';
 import { logger } from '@/lib/logger';
+import { potaCarrelliRecuperati } from '@/lib/carrelli-abbandonati';
 
 /**
  * Cron endpoint per inviare email "Hai dimenticato qualcosa" agli utenti
@@ -107,7 +108,18 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     }
   }
 
-  return NextResponse.json({ ok: true, sent, skipped, errors, candidates: candidates.length });
+  /**
+   * 30/8/2026 (R164) — LA POTATURA DELLE RIGHE GIA' RECUPERATE.
+   *
+   * Da oggi la riga di un carrello che e' diventato ordine non si cancella
+   * piu': si marca, altrimenti la campagna non si puo' misurare. Ma «non si
+   * cancella piu'» senza un taglio vuol dire tenere per sempre la spesa di una
+   * persona, e non c'e' nessun motivo per farlo. Il tempo che si tiene sta in
+   * GIORNI_DI_MEMORIA_CARRELLI: dopo, la misura l'ha gia' letta chi doveva.
+   */
+  const potate = await potaCarrelliRecuperati(supa);
+
+  return NextResponse.json({ ok: true, sent, skipped, errors, potate, candidates: candidates.length });
 });
 
 export const POST = handler;

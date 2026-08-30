@@ -18,12 +18,13 @@
  */
 import type Stripe from 'stripe';
 import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
+import { marcaCarrelloRecuperato } from '@/lib/carrelli-abbandonati';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
-import { notifyAdmins, provaAMandare, sessionePagata } from './comune';
+import { notifyAdmins, provaAMandare, sessionePagata, suonaLaCampanellaAiNegozi } from './comune';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 
@@ -479,25 +480,11 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   const nuovi = createdOrderIds.filter((c) => c.nuovo);
 
   if (nuovi.length > 0) {
-    const { error: errCampanelle } = await admin.from('notifications').insert(
-      nuovi.map((created) => ({
-        // #33 — la categoria decide se la persona vuole ancora ricevere
-        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
-        category: 'order',
-        user_id: created.sellerId,
-        title: '📦 Nuovo ordine ricevuto',
-        body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
-        link: `/seller/orders/${created.orderId}`,
-      })),
-    );
-    // Non si lancia: l'ordine c'e' ed e' pagato, e far ritentare Stripe
-    // ricreerebbe il giro intero. Ma un negozio che non riceve la campanella e'
-    // un ordine che nessuno prepara: deve restare scritto dove si guarda.
-    if (errCampanelle) {
-      logger.error('[stripe] campanella al venditore non scritta: ordine pagato e nessuno avvisato', {
-        pendingCheckoutId, ordini: nuovi.map((c) => c.orderId), message: errCampanelle.message,
-      });
-    }
+    // 30/8/2026 (R164) — Il carrello di questa persona e' tornato: e' diventato
+    // un ordine. Lo marca anche il browser, ma il browser puo' chiudersi — chi
+    // paga e chiude la scheda non passa mai di li'. Qui il fatto e' certo.
+    await marcaCarrelloRecuperato(admin, buyerId);
+    await suonaLaCampanellaAiNegozi(admin, nuovi, pendingCheckoutId);
   }
 
   // #208 — L'acquisto si conta qui, dove il fatto è certo: gli ordini sono

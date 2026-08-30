@@ -51,6 +51,10 @@ describe('GET /api/health', () => {
     process.env.SUPPORT_EMAIL = 'aiuto@mycity.test';
     process.env.VAPID_PRIVATE_KEY = 'vapid_priv';
     process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'vapid_pub';
+    // 30/8/2026 (R142) — anche il tetto di spesa AI: senza, vale zero, e zero
+    // vuol dire nessun tetto. Chi conta le variabili «importanti» sta in
+    // il-semaforo-guarda-i-segreti-che-contano.test.ts.
+    process.env.AI_GLOBAL_DAILY_BUDGET_EUR = '20';
   });
 
   afterEach(() => {

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { RotateCcw, Check, X, Truck, PackageCheck, Undo2 } from 'lucide-react';

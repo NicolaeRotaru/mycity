@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ShoppingCart, ArrowRight, Check, Package, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
-import { addToCart, type CartItem } from '@/lib/cart';
+import { addToCart } from '@/lib/cart';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { LoadingState } from '@/components/ui/LoadingState';

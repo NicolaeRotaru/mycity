@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, X, Layers } from 'lucide-react';
+import { Plus, Layers } from 'lucide-react';
 import type { AttributeField } from '@/lib/category-attributes';
 
 interface Props {

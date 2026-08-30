@@ -1,5 +1,9 @@
 'use client';
 
+// 30/8/2026 (R164) — la copia sul server sta in un file suo: prima era privata
+// qui dentro e nessuna prova poteva guardarla lavorare.
+import { syncAbandonedCart } from '@/lib/cart-sync';
+
 export type CartItem = {
   id: string;
   name: string;
@@ -121,7 +125,7 @@ export const saveCart = (items: CartItem[]): EsitoSalvataggio => {
 
   bumpUpdatedAt();
   window.dispatchEvent(new Event('cart:updated'));
-  void syncAbandonedCart(items);
+  void syncAbandonedCart(items, { totale: cartTotal(items) });
   return { salvato, motivo };
 };
 
@@ -247,12 +251,21 @@ export const updateQuantity = (id: string, quantity: number, variantId?: string)
     .catch(() => {});
 };
 
-export const clearCart = () => {
+/**
+ * 30/8/2026 (R164) — SVUOTARE PERCHE HAI COMPRATO NON E SVUOTARE E BASTA.
+ *
+ * Qui si cancellava sempre la copia sul server, anche a ordine appena fatto: il
+ * carrello recuperato spariva nell'istante in cui diventava una notizia, e la
+ * colonna `recovered` di `abandoned_carts` non la scriveva nessuno. Chi chiude
+ * il carrello DOPO un ordine lo dica, cosi' la riga si marca invece di sparire
+ * e la campagna di recupero si puo' finalmente misurare.
+ */
+export const clearCart = (opzioni: { dopoUnOrdine?: boolean } = {}) => {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(KEY);
   bumpUpdatedAt();
   window.dispatchEvent(new Event('cart:updated'));
-  void syncAbandonedCart([]);
+  void syncAbandonedCart([], { totale: 0, dopoUnOrdine: opzioni.dopoUnOrdine });
 };
 
 export const cartTotal = (items?: CartItem[]) =>
@@ -261,34 +274,3 @@ export const cartTotal = (items?: CartItem[]) =>
 export const cartCount = (items?: CartItem[]) =>
   (items ?? getCart()).reduce((sum, item) => sum + item.quantity, 0);
 
-/**
- * Persistenza server-side del carrello, per abilitare il recupero ("hai
- * dimenticato qualcosa"). Salva una copia in `abandoned_carts` SOLO per gli
- * utenti loggati; su carrello vuoto (es. dopo l'ordine) rimuove la riga.
- * Best-effort / fire-and-forget: non blocca né rompe mai il carrello locale.
- * La RLS consente all'utente di scrivere solo il proprio record.
- */
-async function syncAbandonedCart(items: CartItem[]): Promise<void> {
-  if (typeof window === 'undefined') return;
-  try {
-    const { supabase } = await import('@/lib/supabase/client');
-    const { data } = await supabase.auth.getSession();
-    const userId = data.session?.user?.id;
-    if (!userId) return; // solo utenti autenticati
-    if (items.length === 0) {
-      await supabase.from('abandoned_carts').delete().eq('user_id', userId);
-      return;
-    }
-    await supabase.from('abandoned_carts').upsert(
-      {
-        user_id: userId,
-        cart_data: items,
-        cart_total: cartTotal(items),
-        last_activity: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' },
-    );
-  } catch {
-    /* best-effort: il recupero carrello non deve mai rompere il carrello locale */
-  }
-}

@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { sendEmail } from '@/lib/email/client';
 import { refundIssuedTemplate } from '@/lib/email/templates';
 import { COLONNE_124, conRipiegoSchema, senzaCampi, senzaColonne } from '@/lib/db/migrazione-124';
+import { compensoDalContante } from '@/lib/shipping';
 // R043 — l'avviso agli amministratori e' lo stesso che usa il webhook dei
 // rimborsi: una casa sola, cosi' i due percorsi non divergono.
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -284,7 +285,7 @@ export const FILTRO_RIDER_RITENTABILI =
 
 export async function releaseRiderPayout(orderId: string): Promise<PayoutResult> {
   const admin = getAdminSupabase();
-  const COLONNE_RIDER = 'id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, rider_payout_tentativo, stripe_charge_id, stripe_transfer_group';
+  const COLONNE_RIDER = 'id, rider_id, shipping_cost, rider_fee_cents, payment_method, delivery_status, rider_payout_status, rider_payout_tentativo, stripe_charge_id, stripe_transfer_group, total_price, pickup_in_store, cash_confirmed_at';
   const { data: order, error } = await conRipiegoSchema(
     'orders.select (compenso fattorino)',
     () => admin.from('orders').select(COLONNE_RIDER).eq('id', orderId).single(),
@@ -293,12 +294,6 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
 
   if (error || !order) return { ok: false, code: 'NOT_FOUND', reason: 'Ordine non trovato' };
   if (order.delivery_status !== 'DELIVERED') return { ok: false, code: 'NOT_DELIVERED', reason: 'Ordine non consegnato' };
-  // 155 — Sul contrassegno il compenso il fattorino se l'e' gia' tenuto dal
-  // contante al momento della conferma dell'incasso (app/api/rider/cash-confirm):
-  // l'atteso della rimessa e' il totale MENO il suo compenso. Non c'e' nessun
-  // bonifico da fare, ed e' scritto sull'ordine come 'CASH_WITHHELD' invece di
-  // restare NULL — che voleva dire «mai pagato» e nessuno sapeva distinguerlo.
-  if (order.payment_method !== 'card') return { ok: false, code: 'BAD_STATE', reason: 'COD: il compenso e gia trattenuto dal contante' };
   if (!order.rider_id) return { ok: false, code: 'BAD_STATE', reason: 'Nessun rider assegnato' };
   if (order.rider_payout_status === 'TRANSFERRED') return { ok: false, code: 'BAD_STATE', reason: 'Compenso rider già versato' };
 
@@ -308,6 +303,34 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
     ? order.rider_fee_cents
     : Math.round(Number(order.shipping_cost ?? 0) * 100);
   if (feeCents <= 0) return { ok: false, code: 'INVALID_AMOUNT', reason: 'Compenso di consegna nullo' };
+
+  /**
+   * 155 — Sul contrassegno il compenso il fattorino se l'e' tenuto dal contante
+   * al momento della conferma dell'incasso (app/api/rider/cash-confirm):
+   * l'atteso della rimessa e' il totale MENO il suo compenso. Quando il contante
+   * basta non c'e' nessun bonifico da fare, e qui si esce.
+   *
+   * 30/8/2026 (R120) — MA IL CONTANTE NON C'E' SEMPRE.
+   *
+   * Qui si usciva su OGNI ordine in contanti, senza guardare quanto contante
+   * avesse davvero in mano. `total_price` e' il totale dopo lo scomputo del
+   * credito MyCity: se il credito lo copre, il fattorino consegna, non incassa
+   * niente, e da qui non gli arrivava piu' nessun bonifico — mentre l'ordine
+   * risultava 'CASH_WITHHELD', cioe' pagato. Adesso si versa il residuo: il
+   * compenso meno quello che si e' potuto tenere.
+   *
+   * Prima pero' il contante va confermato: finche' non lo e', non si sa quanto
+   * ha in mano, e versare un residuo calcolato su un ordine mai chiuso vorrebbe
+   * dire pagarlo due volte.
+   */
+  const inContanti = order.payment_method !== 'card';
+  if (inContanti && !order.cash_confirmed_at) {
+    return { ok: false, code: 'BAD_STATE', reason: 'COD: incasso non ancora confermato dal fattorino' };
+  }
+  const daVersareCents = inContanti ? compensoDalContante(order).residuoDovutoCents : feeCents;
+  if (daVersareCents <= 0) {
+    return { ok: false, code: 'BAD_STATE', reason: 'COD: il compenso e gia trattenuto dal contante' };
+  }
 
   const { data: rider } = await admin
     .from('profiles')
@@ -360,7 +383,7 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
     const stripe = getStripe();
     const transfer = await stripe.transfers.create(
       {
-        amount: feeCents,
+        amount: daVersareCents,
         currency: 'eur',
         destination: rider.stripe_account_id,
         ...(order.stripe_charge_id ? { source_transaction: order.stripe_charge_id } : {}),
@@ -370,7 +393,7 @@ export async function releaseRiderPayout(orderId: string): Promise<PayoutResult>
       // 158 — Come per il venditore: il numero del tentativo entra nella chiave.
       // R050 — E l'importo con lui: un compenso ricalcolato non deve trovare la
       // porta chiusa dalla chiave del tentativo precedente.
-      { idempotencyKey: `payout_rider_${order.id}_t${(order as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0}_c${feeCents}` },
+      { idempotencyKey: `payout_rider_${order.id}_t${(order as { rider_payout_tentativo?: number }).rider_payout_tentativo ?? 0}_c${daVersareCents}` },
     );
 
     const { error: errFineRider } = await admin

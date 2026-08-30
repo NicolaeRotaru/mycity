@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import ProductForm, { type ProductInitialValues, type ProductPayload } from '@/components/seller/ProductForm';
 import ImportFromUrlBox, { type ImportResult } from '@/components/products/ImportFromUrlBox';
 import { Select } from '@/components/ui/Field';
-import { LoadingState } from '@/components/ui/LoadingState';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { MYCITY_SELLER_ID } from '@/lib/products/mycitySeller';

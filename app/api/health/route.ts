@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { segretiCombaciano, gettoneBearer } from '@/lib/api/segreti';
+import { lavoriFermi, SOGLIE_VISTE_DA_FUORI, type CronHeartbeat } from '@/lib/cron-health';
 
 export const runtime = 'nodejs';
 // Sempre fresh: i monitor esterni devono sapere lo stato reale, no cache.
@@ -89,6 +90,10 @@ const ENV_IMPORTANTI = [
   // Senza la coppia, niente notifiche push (lib/env.ts:68-69).
   'VAPID_PRIVATE_KEY',
   'NEXT_PUBLIC_VAPID_PUBLIC_KEY',
+  // 30/8/2026 (R142) — Senza, il tetto di spesa verso Anthropic vale zero, e
+  // zero qui vuol dire NESSUN tetto (lib/ai/run.ts: `if (!(limitEur > 0)) return`).
+  // Il freno c'e' ed e' spento, e la prima notizia sarebbe la fattura.
+  'AI_GLOBAL_DAILY_BUDGET_EUR',
 ];
 
 export async function GET(request: Request) {
@@ -144,6 +149,52 @@ export async function GET(request: Request) {
     checks.db = { ok: false, error: e instanceof Error ? e.message : 'unknown' };
   }
 
+  // Chi ha il segreto dei lavori periodici vede il dettaglio — e solo lui paga
+  // la lettura dei battiti qui sotto. Il calcolo sta qui e non piu' in fondo
+  // perche' adesso decide anche QUALI controlli fare.
+  const segreto = process.env.CRON_SECRET;
+  const autorizzato =
+    process.env.NODE_ENV !== 'production' ||
+    // 22/8/2026 — era `=== \`Bearer ${segreto}\``. Un confronto che esce al
+    // primo carattere diverso racconta, col tempo di risposta, quanti
+    // caratteri iniziali hai azzeccato: il segreto si ricostruisce da fuori un
+    // carattere alla volta. Il progetto aveva già lo strumento giusto, chiuso
+    // in un altro file.
+    (!!segreto && segretiCombaciano(gettoneBearer(request.headers.get('authorization')), segreto));
+
+  /**
+   * Check 2 (R183): I LAVORI PERIODICI BATTONO ANCORA?
+   *
+   * `operational-alerts` sorveglia tutti gli altri, ma nessuno sorvegliava lui:
+   * se moriva, smetteva di guardare ordini fermi, negozi non pagati e contanti
+   * che non quadrano — e il monitor esterno restava verde, perche' qui si
+   * guardavano solo database e variabili. `lib/cron-health.ts` dichiarava
+   * addirittura che il caso era «coperto dal monitor uptime esterno su
+   * /api/health»: non lo era.
+   *
+   * Un lavoro fermo e' `degraded`, non `unhealthy`: 503 qui vuol dire «ammazza
+   * il processo», e un cron indietro non si ripara riavviando il sito.
+   */
+  if (autorizzato) {
+    try {
+      const admin = getAdminSupabase();
+      const { data, error } = await admin.from('cron_heartbeats').select('name, last_run_at');
+      if (error) {
+        checks.cron = { ok: false, error: `battiti non leggibili: ${error.message}` };
+      } else {
+        const fermi = lavoriFermi((data ?? []) as CronHeartbeat[], Date.now(), SOGLIE_VISTE_DA_FUORI);
+        checks.cron = fermi.length === 0
+          ? { ok: true }
+          : {
+              ok: false,
+              error: fermi.map((c) => `${c.name} fermo da ${c.staleMin}min (soglia ${c.thresholdMin})`).join(', '),
+            };
+      }
+    } catch (e) {
+      checks.cron = { ok: false, error: e instanceof Error ? e.message : 'unknown' };
+    }
+  }
+
   const mancantiVitali = ENV_VITALI.filter((k) => !process.env[k]);
   const mancantiImportanti = ENV_IMPORTANTI.filter((k) => !process.env[k]);
   checks.env = { ok: mancantiVitali.length === 0, error: mancantiVitali.join(',') || undefined };
@@ -171,21 +222,11 @@ export async function GET(request: Request) {
    * avere il potere di riavviare.
    */
   const processoMorto = !checks.env.ok;
-  const degradato = !processoMorto && (!checks.db.ok || !checks.envOpzionali.ok);
+  const degradato = !processoMorto && (!checks.db.ok || !checks.envOpzionali.ok || checks.cron?.ok === false);
   const status = processoMorto ? 'unhealthy' : degradato ? 'degraded' : 'ok';
   const httpStatus = processoMorto ? 503 : 200;
 
   // Il dettaglio lo vede chi ha il segreto dei lavori periodici, non il mondo.
-  const segreto = process.env.CRON_SECRET;
-  const autorizzato =
-    process.env.NODE_ENV !== 'production' ||
-    // 22/8/2026 — era `=== \`Bearer ${segreto}\``. Un confronto che esce al
-    // primo carattere diverso racconta, col tempo di risposta, quanti
-    // caratteri iniziali hai azzeccato: il segreto si ricostruisce da fuori un
-    // carattere alla volta. Il progetto aveva già lo strumento giusto, chiuso
-    // in un altro file.
-    (!!segreto && segretiCombaciano(gettoneBearer(request.headers.get('authorization')), segreto));
-
   const corpo = autorizzato
     ? {
         status,

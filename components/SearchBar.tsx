@@ -247,7 +247,7 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
             </div>
           ) : (
             <ul className="divide-y divide-ink-50">
-              {suggestions.map((s, i) => {
+              {suggestions.map((s) => {
                 if (s.kind === 'product') {
                   return (
                     <li key={`p-${s.id}`}>

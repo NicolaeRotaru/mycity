@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { frasePagamento } from '@/lib/promesse-pubbliche';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { headers } from 'next/headers';

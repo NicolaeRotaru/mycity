@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
 import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Wallet } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
@@ -15,7 +14,6 @@ import { chiaveDelCheckout, chiudiChiaveDelCheckout } from '@/lib/analytics/chia
 import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
 import { checkoutChiuso } from '@/lib/ordini/partenza';
 import { formatPrice } from '@/lib/format';
-import { sizedImage } from '@/lib/image-url';
 import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
@@ -792,7 +790,10 @@ export default function CheckoutPage() {
       // sua chiave. Senza questa riga due spese di fila si sommerebbero sotto
       // lo stesso identificativo.
       chiudiChiaveDelCheckout(typeof window === 'undefined' ? null : window.sessionStorage);
-      clearCart();
+      // R164 — «dopo un ordine»: la copia sul server non si cancella, si marca
+      // come recuperata. Cancellarla vuol dire non sapere piu' se le email di
+      // recupero carrelli servono a qualcosa.
+      clearCart({ dopoUnOrdine: true });
       // Behavioral Scientist + CRO: gratifica immediata su purchase success.
       // Flag in sessionStorage → la order detail page mostra ConfettiBurst.
       try { sessionStorage.setItem('mc_just_ordered', '1'); } catch { /* noop */ }

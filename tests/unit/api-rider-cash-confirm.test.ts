@@ -268,6 +268,44 @@ describe('POST /api/rider/cash-confirm', () => {
     expect(aggiornamenti[0]?.rider_payout_at).toBeTruthy();
   });
 
+  /**
+   * 30/8/2026 (R120) — QUANDO IL CREDITO COPRIVA TUTTO, IL COMPENSO RISULTAVA
+   * PAGATO E NON LO ERA.
+   *
+   * `total_price` è il totale DOPO lo scomputo del credito MyCity, e in cassa
+   * la spunta «usa il credito» è accesa di default. Con 50 € di credito e un
+   * ordine da 22 € in contrassegno l'ordine nasce a zero: il fattorino
+   * consegna, non incassa niente, e non ha da cosa trattenersi i suoi 3 €.
+   *
+   * Qui si scriveva comunque 'CASH_WITHHELD' — lo stato che vuol dire «pagato,
+   * in contanti» — perché la condizione guardava il compenso DOVUTO e non
+   * quello davvero trattenibile. Da lì il giro dei bonifici usciva subito:
+   * quei soldi non sarebbero partiti mai, e nessuna quadratura se ne accorgeva
+   * (atteso 0, incassato 0, differenza 0).
+   */
+  it('col credito che copre tutto il compenso resta dovuto, non risulta pagato', async () => {
+    state.order = { ...(state.order as object), total_price: 0 };
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 0 });
+    expect(res.status).toBe(200);
+    expect(
+      aggiornamenti[0]?.rider_payout_status,
+      'il compenso di una consegna fatta davvero risulta gia incassato in contanti che non ha mai visto',
+    ).toBe('HELD');
+    expect(
+      aggiornamenti[0]?.rider_payout_at,
+      'segnato pagato con tanto di ora, mentre il fattorino non ha preso un euro',
+    ).toBeNull();
+  });
+
+  it('col credito che copre quasi tutto resta dovuta la differenza', async () => {
+    // Residuo da pagare in contanti: 2 €. Il compenso è 3: se ne può tenere
+    // solo 2, e uno resta scoperto.
+    state.order = { ...(state.order as object), total_price: 2 };
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 0 });
+    expect(res.status).toBe(200);
+    expect(aggiornamenti[0]?.rider_payout_status).toBe('HELD');
+  });
+
   it('sul ritiro in negozio non c\'è consegna, quindi non c\'è compenso da trattenere', async () => {
     state.order = { ...(state.order as object), pickup_in_store: true };
     const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 1000 });

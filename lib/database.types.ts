@@ -16,6 +16,11 @@ export interface Database {
           last_activity: string;
           recovery_email_sent_at: string | null;
           recovered: boolean;
+          // 30/8/2026 (R164) — quando il carrello e' tornato, cioe' e' diventato
+          // un ordine (migrazione 148). Senza il QUANDO, «recuperato» e' un
+          // si'/no senza tempo: non si puo' misurare a quanti giorni dall'email
+          // arriva l'acquisto, che e' la domanda che decide l'invio.
+          recovered_at: string | null;
         };
         Insert: {
           user_id: string;
@@ -24,6 +29,7 @@ export interface Database {
           last_activity?: string;
           recovery_email_sent_at?: string | null;
           recovered?: boolean;
+          recovered_at?: string | null;
         };
         Update: {
           user_id?: string;
@@ -32,6 +38,7 @@ export interface Database {
           last_activity?: string;
           recovery_email_sent_at?: string | null;
           recovered?: boolean;
+          recovered_at?: string | null;
         };
         Relationships: [];
       };

@@ -14,6 +14,7 @@ type OrderRow = {
   delivery_status: string;
   dispute_status?: string | null;
   payout_claimed_at?: string | null;
+  rider_payout_status?: string | null;
 };
 const state: { orders: OrderRow[] } = { orders: [] };
 const releaseOrderPayoutMock = vi.fn(async (_id: string) => ({ ok: true as const, transferId: 'tr_1' }));
@@ -72,6 +73,9 @@ function ordersBuilder(rows: OrderRow[]) {
           (f.payout_status === undefined || o.payout_status === f.payout_status) &&
           (f.delivery_status === undefined || o.delivery_status === f.delivery_status) &&
           (f['in:payout_status'] === undefined || (f['in:payout_status'] as string[]).includes(o.payout_status)) &&
+          // R120 — il passaggio dei fattorini cerca anche i contrassegni in
+          // 'HELD': senza questo filtro la finta tabella li dava a tutti.
+          (f.rider_payout_status === undefined || o.rider_payout_status === f.rider_payout_status) &&
           (f['lt:payout_claimed_at'] === undefined ||
             (o.payout_claimed_at != null && o.payout_claimed_at < (f['lt:payout_claimed_at'] as string))) &&
           disputeOk(o),
@@ -198,5 +202,51 @@ describe('release-payouts — i turni rimasti appesi', () => {
     const body = await res.json();
     expect(body.appesiRimessiInCoda).toBe(0);
     expect(state.orders[0].payout_status).toBe('PROCESSING');
+  });
+});
+
+/**
+ * 30/8/2026 (R120) — IL COMPENSO DEL FATTORINO RIMASTO SCOPERTO DAL CONTANTE.
+ *
+ * Sul contrassegno il fattorino si tiene il compenso dal contante che ha in
+ * mano, quindi il passaggio dei compensi cercava solo `payment_method='card'`.
+ * Ma il credito MyCity porta il totale — e quindi il contante — sotto il
+ * compenso, fino a zero: il fattorino consegna, non incassa niente, e una parte
+ * del suo compenso resta dovuta. La conferma dell'incasso adesso la lascia in
+ * 'HELD'; se il giro non la va a prendere, quei soldi restano lì per sempre.
+ */
+describe('release-payouts — il compenso in contanti rimasto scoperto', () => {
+  it('ripesca un contrassegno con il compenso ancora dovuto', async () => {
+    state.orders = [
+      {
+        id: 'codrider1',
+        payment_method: 'cod',
+        payout_status: 'AWAITING_REMITTANCE',
+        delivery_status: 'DELIVERED',
+        dispute_status: null,
+        rider_payout_status: 'HELD',
+      },
+    ];
+    await run();
+    expect(
+      releaseRiderPayoutMock,
+      'il giro guarda solo i pagamenti con carta: il compenso scoperto dal credito non lo cerca nessuno',
+    ).toHaveBeenCalledWith('codrider1');
+  });
+
+  it('lascia stare i contrassegni in cui il contante bastava', async () => {
+    state.orders = [
+      {
+        id: 'codrider2',
+        payment_method: 'cod',
+        payout_status: 'AWAITING_REMITTANCE',
+        delivery_status: 'DELIVERED',
+        dispute_status: null,
+        // Se l'e' gia' tenuto dal contante: non c'e' niente da versare.
+        rider_payout_status: 'CASH_WITHHELD',
+      },
+    ];
+    await run();
+    expect(releaseRiderPayoutMock).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
 import { requireSupabaseService } from '@/lib/env';
@@ -41,10 +41,6 @@ export const runtime = 'nodejs';
 // marketing — l'utente che si iscrive li attende. Gli altri sono marketing.
 const TRANSACTIONAL_TEMPLATES = new Set(['welcome', 'tutorial_day2']);
 
-function jsonError(status: number, message: string) {
-  return NextResponse.json({ error: message }, { status });
-}
-
 /**
  * Segna una riga come annullata e, se la scrittura non riesce, lo dice. Senza
  * questo, una riga che non si riesce ad annullare torna nel giro dopo e prova a
@@ -62,7 +58,7 @@ async function annullaRiga(supa: { from: (t: string) => any }, id: unknown): Pro
   }
 }
 
-const handler = withCronAuth(async (req): Promise<NextResponse> => {
+const handler = withCronAuth(async (_req): Promise<NextResponse> => {
   let supaCfg;
   try { supaCfg = requireSupabaseService(); } catch (e) {
     return ApiErrors.unavailable(e instanceof Error ? e.message : 'config error');

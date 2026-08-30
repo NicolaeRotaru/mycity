@@ -16,7 +16,6 @@ import { formatAttributeValue } from '@/lib/category-attributes';
  * gli allergeni sono comma-separated in una lista di pill.
  */
 
-const KEYS = ['allergeni', 'ingredienti', 'conservazione', 'valori_nutrizionali'] as const;
 
 function asText(value: unknown): string | null {
   if (value == null) return null;

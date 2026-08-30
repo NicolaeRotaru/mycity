@@ -111,7 +111,6 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     }
   }
 
-  const allIds = orders.map((o) => o.id);
   const idFalliti = stornoFallito.map((f) => f.id);
 
   /**

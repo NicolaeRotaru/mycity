@@ -117,7 +117,7 @@ export const GET = withSellerAuth(async ({ user, req }): Promise<NextResponse> =
       .select('id, seller_id, operation, status, batch_id, target_lang, total, results')
       .single();
     return NextResponse.json(serialize((updated as JobRow) ?? { ...job, status: 'ready', results }));
-  } catch (err) {
+  } catch {
     logger.error('catalog-batch status: fetch results failed', { jobId: job.id });
     return NextResponse.json(serialize(job));
   }

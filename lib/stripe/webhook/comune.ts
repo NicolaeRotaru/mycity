@@ -111,3 +111,42 @@ export async function provaAMandare(
     });
   }
 }
+
+/**
+ * LA CAMPANELLA AL NEGOZIO — la riga in `notifications` da cui parte anche la
+ * notifica push (app/api/cron/send-push la legge da lì).
+ *
+ * 30/8/2026 (R164) — Stava dentro `ordini.ts`, che aveva finito lo spazio: la
+ * prova `webhook-diviso-per-mestiere` tiene ogni file del webhook sotto le
+ * seicento righe, ed è il freno che impedisce di tornare al file unico da mille
+ * righe con dentro otto mestieri. Il posto giusto di un avviso al negozio, che
+ * per giunta serve identico a chi paga in contanti, è qui fra i pezzi
+ * condivisi. Nessuna logica è cambiata nello spostamento.
+ *
+ * Non lancia mai: l'ordine c'è ed è pagato, e far ritentare Stripe ricreerebbe
+ * il giro intero. Ma un negozio che non riceve la campanella è un ordine che
+ * nessuno prepara, quindi il guasto deve restare scritto dove si guarda.
+ */
+export async function suonaLaCampanellaAiNegozi(
+  admin: ReturnType<typeof getAdminSupabase>,
+  nuovi: { orderId: string; sellerId: string; totalCents: number; itemsCount: number }[],
+  pendingCheckoutId: string,
+): Promise<void> {
+  if (nuovi.length === 0) return;
+  const { error } = await admin.from('notifications').insert(
+    nuovi.map((created) => ({
+      // #33 — la categoria decide se la persona vuole ancora ricevere questo
+      // tipo di avviso: senza, gli interruttori non spegnevano niente.
+      category: 'order',
+      user_id: created.sellerId,
+      title: '📦 Nuovo ordine ricevuto',
+      body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
+      link: `/seller/orders/${created.orderId}`,
+    })),
+  );
+  if (error) {
+    logger.error('[stripe] campanella al venditore non scritta: ordine pagato e nessuno avvisato', {
+      pendingCheckoutId, ordini: nuovi.map((c) => c.orderId), message: error.message,
+    });
+  }
+}

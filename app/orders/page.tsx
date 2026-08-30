@@ -87,7 +87,10 @@ function StripeReturnHandler() {
       // Il carrello si svuota anche sul percorso con la carta. Prima lo faceva
       // solo il contrassegno: chi pagava con la carta tornava e ritrovava tutto
       // dentro, con lo stesso ordine pronto a essere rifatto per sbaglio.
-      clearCart();
+      // R164 — «dopo un ordine»: la riga di `abandoned_carts` si marca come
+      // recuperata invece di sparire, altrimenti la vittoria non la conta
+      // nessuno.
+      clearCart({ dopoUnOrdine: true });
       // R163 — e con lui la chiave del checkout: la spesa dopo e' un altro
       // checkout, e deve avere un identificativo suo nei conti.
       chiudiChiaveDelCheckout(typeof window === 'undefined' ? null : window.sessionStorage);

@@ -222,9 +222,9 @@ export async function createMultiSellerCheckoutSession(
 }
 
 /**
- * Crea un Connect Account "Express" per un seller e ritorna l'URL
- * di onboarding (KYC, IBAN, accordo TOS Stripe). Da chiamare quando
- * il seller completa il KYC su MyCity e prima del primo payout.
+ * Crea un Connect Account "Express" e ritorna l'URL di onboarding (KYC, IBAN,
+ * accordo TOS Stripe). La usano sia i negozi sia i fattorini: da chiamare
+ * quando la verifica su MyCity e' completa e prima del primo pagamento.
  */
 export async function createConnectOnboardingLink(args: {
   sellerEmail: string;
@@ -232,6 +232,18 @@ export async function createConnectOnboardingLink(args: {
   existingAccount?: string | null;
   returnUrl: string;
   refreshUrl: string;
+  /**
+   * 30/8/2026 (R048) — CHI E', PERCHE' CAMBIA COSA GLI CHIEDE STRIPE.
+   *
+   * Prima non c'era: la stessa richiesta partiva identica per il negozio e per
+   * il fattorino, e chiedeva a tutti e due anche `card_payments`, cioe' il
+   * permesso di incassare carte dai clienti. Il fattorino non incassera' mai
+   * niente da nessuno — nel modello scelto (Separate Charges & Transfers)
+   * l'incasso lo fa la piattaforma, a lui serve solo poter RICEVERE un
+   * bonifico — ma quella capacita' gli fa affrontare una verifica molto piu'
+   * pesante: piu' attrito, piu' abbandoni, compenso fermo.
+   */
+  ruolo: 'venditore' | 'fattorino';
 }): Promise<{ accountId: string; url: string }> {
   const stripe = getStripe();
 
@@ -242,15 +254,31 @@ export async function createConnectOnboardingLink(args: {
     // Stripe: nessuno lo cancella, e alla verifica antiriciclaggio quei conti
     // fantasma sono un problema di chi li ha creati. Con la chiave, riprovare
     // restituisce SEMPRE lo stesso conto.
+    /**
+     * 30/8/2026 (R048) — IL TIPO DI ATTIVITA' NON LO DECIDIAMO NOI.
+     *
+     * Qui c'era `business_type: 'individual'`, fisso, per tutti. Un negozio
+     * costituito in societa' — a Piacenza sono tanti: SRL, SNC — nasceva
+     * dichiarato come persona fisica, e nella verifica si trovava a dover
+     * dichiarare dati che non gli corrispondono. L'onboarding si arena, e
+     * finche' non e' completo l'ordine resta in PENDING_SELLER_ONBOARDING:
+     * il negozio ha consegnato e non viene pagato.
+     *
+     * Senza questo campo il tipo lo chiede Stripe durante la verifica, che e'
+     * l'unico momento in cui la persona giusta puo' rispondere.
+     */
     const account = await stripe.accounts.create({
       type: 'express',
       country: 'IT',
       email: args.sellerEmail,
       capabilities: {
-        card_payments: { requested: true },
+        // Al fattorino serve solo ricevere. Al negozio si tiene anche
+        // `card_payments`: cambiare quello a chi ha gia' un conto aperto
+        // vorrebbe dire rimettergli in mezzo una verifica, e non e' questo il
+        // difetto da riparare.
+        ...(args.ruolo === 'venditore' ? { card_payments: { requested: true } } : {}),
         transfers: { requested: true },
       },
-      business_type: 'individual',
       metadata: { seller_id: args.sellerId },
     }, { idempotencyKey: `connect_${args.sellerId}` });
     accountId = account.id;

@@ -15,6 +15,13 @@ vi.mock('@/lib/api/middleware', () => ({
 vi.mock('@/lib/push/send', () => ({
   isPushConfigured: () => true,
   sendPushToUser: () => sendPushToUserMock(),
+  // 30/8/2026 (R076) — il giro adesso legge le iscrizioni push UNA volta per
+  // tutti, invece di rileggerle dentro ogni invio (erano cento letture della
+  // stessa tabella col batch pieno). Qui l'esito dell'invio lo decide comunque
+  // `pushResult`, quindi cosa contiene la mappa non cambia niente: serve solo
+  // che la funzione esista. Chi prova la lettura unica sta in
+  // le-notifiche-non-chiedono-al-database-una-volta-per-notifica.test.ts.
+  iscrizioniPerUtenti: async () => new Map(),
 }));
 vi.mock('@/lib/env', () => ({
   requireSupabaseService: () => ({ url: 'https://x.supabase.co', key: 'svc' }),

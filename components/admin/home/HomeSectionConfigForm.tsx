@@ -53,7 +53,6 @@ function VideoField({ section, onChange }: { section: Extract<HomeSection, { typ
       if (!file) return;
       setUploading(true);
       try {
-        const ext = file.name.split('.').pop()?.toLowerCase() ?? 'mp4';
         const { publicUrl } = await caricaImmagine(supabase, { file, staff: true, upsert: true });
         onChange({ ...section, config: { ...c, provider: 'file', videoId: '', videoUrl: publicUrl } });
         toast.success('Video caricato');

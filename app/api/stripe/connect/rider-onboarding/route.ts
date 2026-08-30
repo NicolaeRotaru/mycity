@@ -38,6 +38,9 @@ export const POST = withAuthRateLimit(
         existingAccount: prof.stripe_account_id ?? null,
         returnUrl: `${env.appUrl()}/rider/earnings?stripe=connected`,
         refreshUrl: `${env.appUrl()}/rider/earnings?stripe=refresh`,
+        // R048 — al fattorino non si chiede di poter incassare carte: non lo
+        // fara' mai, e quella capacita' gli impone una verifica molto piu' pesante.
+        ruolo: 'fattorino',
       });
 
       if (accountId !== prof.stripe_account_id) {

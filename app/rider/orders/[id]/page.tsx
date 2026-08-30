@@ -10,7 +10,6 @@ import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
 import VerifyCodeDialog from '@/components/VerifyCodeDialog';
 import { formatPrice } from '@/lib/format';
 import {
-  ORDER_STATUS_LABEL,
   passaggioLecito,
   type OrderStatus,
 } from '@/lib/order-status';

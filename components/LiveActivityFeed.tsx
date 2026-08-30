@@ -45,7 +45,7 @@ const LiveActivityFeed = () => {
     return () => clearInterval(id);
   }, []);
 
-  const { data: activities = [], refetch } = useQuery({
+  const { data: activities = [] } = useQuery({
     queryKey: queryKeys.home.liveFeed,
     queryFn: async () => {
       const { data } = await supabase

@@ -39,6 +39,7 @@ export const POST = withSellerAuthRateLimit({ name: 'stripe-onboarding', max: 10
       existingAccount: profile.stripe_account_id ?? null,
       returnUrl: `${env.appUrl()}/seller/dashboard?stripe=connected`,
       refreshUrl: `${env.appUrl()}/seller/dashboard?stripe=refresh`,
+      ruolo: 'venditore',
     });
 
     if (accountId !== profile.stripe_account_id) {

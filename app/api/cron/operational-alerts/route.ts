@@ -3,7 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { withCronAuth } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { staleCrons, type CronHeartbeat } from '@/lib/cron-health';
+import { lavoriFermi, type CronHeartbeat } from '@/lib/cron-health';
 
 export const runtime = 'nodejs';
 
@@ -294,17 +294,13 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
    * quindi il sorvegliante lo guardava e taceva. Il pagamento ai negozi, le
    * email, la scadenza dei carrelli: fermi, e nessuno avvisato.
    *
-   * La data d'installazione e' il battito piu' vecchio che esiste: se il
-   * sistema scriveva battiti tre giorni fa, un lavoro senza nessun battito non
-   * e' «appena installato».
+   * 30/8/2026 (R183) — La regola sta adesso in `lavoriFermi`, che la condivide
+   * con /api/health: due posti che decidono «fermo o no» con due conti diversi
+   * si mettono d'accordo il giorno in cui uno dei due sbaglia.
    */
   const battiti = (heartbeats ?? []) as CronHeartbeat[];
-  const quandoBattiti = battiti
-    .map((h) => (h.last_run_at ? new Date(h.last_run_at).getTime() : NaN))
-    .filter((t) => Number.isFinite(t));
-  const installatoDaMs = quandoBattiti.length > 0 ? Math.min(...quandoBattiti) : undefined;
 
-  for (const c of staleCrons(battiti, Date.now(), undefined, installatoDaMs)) {
+  for (const c of lavoriFermi(battiti, Date.now())) {
     alerts.push({
       key: `CRON_STALE|${c.name}`,
       type: 'CRON_STALE',

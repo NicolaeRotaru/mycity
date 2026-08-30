@@ -53,15 +53,29 @@ const eur = (cents: number) => Number((cents / 100).toFixed(2));
  * ② `metodo` dice da quale porta e' entrata la persona (email, Google...).
  *    Prima non si vedeva, quindi non si poteva sapere quale porta funziona.
  */
+/**
+ * 30/8/2026 (R168) — «SCONOSCIUTO» ERA IL VALORE DI RIPIEGO, E BASTAVA
+ * DIMENTICARSI UN ARGOMENTO.
+ *
+ * `metodo` era facoltativo, con ripiego a 'sconosciuto'. Il percorso Google lo
+ * passava; il modulo email e password no — `trackSignedIn(data.user.id)`, senza
+ * secondo argomento. Risultato: uno dei due canali d'ingresso era etichettato
+ * «sconosciuto», e il confronto fra le due porte — che è tutto lo scopo della
+ * proprietà — non si poteva fare. Ce ne si accorge sei mesi dopo, guardando i
+ * numeri, quando i dati sono già stati raccolti così.
+ *
+ * Adesso `metodo` è OBBLIGATORIO: chi lo dimentica lo scopre in compilazione,
+ * non nei dati. `npm run typecheck` è il freno.
+ */
 export const trackSignupCompleted = (
   userId: string,
   role: 'buyer' | 'seller' | 'rider' | 'admin',
-  metodo?: string,
+  metodo: string,
 ) =>
-  track('signup_completed', { user_id: userId, role, metodo: metodo ?? 'sconosciuto', $insert_id: `signup:${userId}` });
+  track('signup_completed', { user_id: userId, role, metodo, $insert_id: `signup:${userId}` });
 
-export const trackSignedIn = (userId: string, metodo?: string) =>
-  track('signed_in', { user_id: userId, metodo: metodo ?? 'sconosciuto' });
+export const trackSignedIn = (userId: string, metodo: string) =>
+  track('signed_in', { user_id: userId, metodo });
 
 export const trackSignedOut = () =>
   track('signed_out');

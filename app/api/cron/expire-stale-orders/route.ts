@@ -89,7 +89,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
             notifyBuyer: true,
           });
           refunded++;
-        } catch (errRimborso) {
+        } catch {
           // Rimetti l'ordine in coda: il prossimo giro riprovera'. Senza questo
           // resterebbe annullato e non rimborsato per sempre.
           const { error: errRipristino } = await admin

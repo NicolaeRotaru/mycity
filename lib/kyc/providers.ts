@@ -39,7 +39,8 @@ class MockKycProvider implements KycProvider {
 class OnfidoProvider implements KycProvider {
   constructor(private apiKey: string) {}
 
-  async startCheck(subject: KycSubject, docs: KycDocs): Promise<KycCheckResult> {
+  // I documenti qui non si toccano: li carica l'SDK di Onfido lato browser.
+  async startCheck(subject: KycSubject, _docs: KycDocs): Promise<KycCheckResult> {
     try {
       const applicantRes = await fetch('https://api.eu.onfido.com/v3.6/applicants', {
         method: 'POST',

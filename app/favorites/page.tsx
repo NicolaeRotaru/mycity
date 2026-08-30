@@ -1,7 +1,6 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import ProductCard from '@/components/ProductCard';

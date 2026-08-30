@@ -20,6 +20,10 @@ import { perchePasswordNonCambiabile, puoiProvareACambiare } from '@/lib/account
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
 import { Input, Select } from '@/components/ui/Field';
+// 30/8/2026 (R105) — l'interruttore stava qui dentro, senza nome accessibile:
+// cinque comandi che si annunciavano tutti come «interruttore». Adesso ha una
+// casa sua, e il nome ce l'ha (components/ui/Toggle.tsx).
+import { Toggle } from '@/components/ui/Toggle';
 
 type Tab = 'account' | 'password' | 'notifications' | 'privacy' | 'danger';
 
@@ -196,21 +200,6 @@ export default function SettingsPage() {
     }
     toast.success('Ti abbiamo inviato un\'email per confermare il nuovo indirizzo');
     setNewEmail('');
-  };
-
-  const handleRequestPushPermission = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      toast.error('Il tuo browser non supporta le notifiche push');
-      return;
-    }
-    const result = await Notification.requestPermission();
-    if (result === 'granted') {
-      updatePref('push_enabled', true);
-      toast.success('Notifiche push attivate');
-    } else {
-      updatePref('push_enabled', false);
-      toast.error('Permesso negato. Attivale dalle impostazioni del browser.');
-    }
   };
 
   /**
@@ -662,32 +651,3 @@ export default function SettingsPage() {
   );
 }
 
-function Toggle({
-  label, desc, value, onChange,
-}: {
-  label: string; desc: string; value: boolean; onChange: (v: boolean) => void;
-}) {
-  return (
-    <label className="flex items-start justify-between gap-4 p-3 border rounded-lg hover:bg-cream-50 cursor-pointer">
-      <div>
-        <div className="font-semibold">{label}</div>
-        <div className="text-xs text-ink-500">{desc}</div>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={value}
-        onClick={() => onChange(!value)}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-          value ? 'bg-primary-700' : 'bg-cream-300'
-        }`}
-      >
-        <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
-            value ? 'translate-x-5' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
-    </label>
-  );
-}

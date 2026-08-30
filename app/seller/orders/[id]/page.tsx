@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
-  ORDER_STATUS_LABEL,
   COLONNA_ORARIO_DEL_PASSAGGIO,
   passaggioLecito,
   type OrderStatus,

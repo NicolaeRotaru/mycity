@@ -158,7 +158,6 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Non autenticato');
-        const ext = file.type.split('/')[1];
         // Primo segmento = user.id: richiesto dalle RLS Storage del bucket `products`
         // (read/update/delete filtrano su (storage.foldername(name))[1] = auth.uid()).
         // upsert:false + path unico = nessun ON CONFLICT. Vedi seller/site/ImageUpload.tsx.

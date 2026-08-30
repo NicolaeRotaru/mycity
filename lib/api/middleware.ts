@@ -51,7 +51,6 @@ type Contesto = {
   /** Il client che porta l'identità di chi ha chiamato: rispetta le regole per riga. */
   supaUtente: ClientDiChiChiama;
 };
-type Handler<T> = (ctx: Contesto) => Promise<NextResponse<T>>;
 type GenericHandler = (ctx: Contesto) => Promise<NextResponse>;
 
 // 22/8/2026 — una fabbrica sola, condivisa con lib/supabase/auth-server.ts.

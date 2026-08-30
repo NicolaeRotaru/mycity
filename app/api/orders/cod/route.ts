@@ -15,6 +15,7 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
+import { marcaCarrelloRecuperato } from '@/lib/carrelli-abbandonati';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
 import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
@@ -763,6 +764,12 @@ export const POST = withAuthRateLimit(
         logger.warn('[cod] campanelle non scritte', { message: errCampanelle.message });
       }
     }
+
+    // 30/8/2026 (R164) — Il carrello di questa persona e' tornato: e' diventato
+    // un ordine. Lo marca anche il browser, ma il browser puo' chiudersi. Qui il
+    // fatto e' certo, e senza questa riga la colonna `recovered` resta a zero
+    // per sempre: la campagna di recupero carrelli non si puo' misurare.
+    if (comunicazioni.length > 0) await marcaCarrelloRecuperato(admin, user.id);
 
     // Le email: preparate qui, spedite senza far aspettare chi ha ordinato.
     // L'indirizzo si prende ADESSO: dentro la funzione che parte per conto suo
