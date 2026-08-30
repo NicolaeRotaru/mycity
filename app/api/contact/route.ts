@@ -7,18 +7,14 @@ import { verifyTurnstileToken } from '@/lib/captcha';
 import { logger } from '@/lib/logger';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+// 27/8/2026 (R011) — Qui dentro c'era una copia identica del filtro dell'HTML,
+// e `lib/html-escape.ts` diceva nel proprio commento di essere quella
+// condivisa. Non lo era: la importava un file solo. Tre copie della stessa
+// regola sono tre regole, e il giorno in cui va aggiunto un carattere da
+// filtrare due restano indietro senza dirlo a nessuno.
+import { escapeHtml } from '@/lib/html-escape';
 
 export const runtime = 'nodejs';
-
-/** Escape dei caratteri HTML per impedire XSS stored nell'email admin. */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 const Schema = z.object({
   name: z.string().trim().min(2, 'Nome troppo corto').max(120),
@@ -75,6 +71,11 @@ export async function POST(req: Request) {
   }
   if (supporto) sendEmail({
     to: supporto,
+    // 27/8/2026 (R067) — Questo e' un avviso interno alla nostra assistenza,
+    // non una comunicazione commerciale: non deve portare il piede «annulla
+    // l'iscrizione». Quel link spegne le promozioni dell'indirizzo che lo
+    // preme, e qui l'indirizzo e' la nostra casella del supporto.
+    tipo: 'transazionale',
     subject: `[Contact] ${payload.subject} — ${payload.name}`,
     html: `<p><strong>Da:</strong> ${escapeHtml(payload.name)} &lt;${escapeHtml(payload.email)}&gt;</p>
            <p><strong>Soggetto:</strong> ${escapeHtml(payload.subject)}</p>

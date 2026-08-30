@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
-import { env, requireSupabaseService } from '@/lib/env';
+import { requireSupabaseService } from '@/lib/env';
+import { preparaEmailCicloDiVita } from '@/lib/email/templates';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -23,42 +24,18 @@ import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
-// URL assoluto del sito per i link nelle email (niente domini hardcoded).
-const APP_URL = env.appUrl().replace(/\/$/, '');
-
-type EmailTemplateData = { name?: string | null; total?: number; [k: string]: unknown };
-const TEMPLATES: Record<string, { subject: string; html: (data: EmailTemplateData) => string; text: (data: EmailTemplateData) => string }> = {
-  welcome: {
-    subject: 'Benvenuto su MyCity Piacenza 🎉',
-    html: (d) => `<p>Ciao ${d.name ?? ''},</p><p>Grazie per esserti iscritto a MyCity. Il marketplace dei negozi di Piacenza ti aspetta.</p><p><a href="${APP_URL}">Inizia ad esplorare →</a></p>`,
-    text: (d) => `Ciao ${d.name ?? ''}, grazie per esserti iscritto a MyCity Piacenza.`,
-  },
-  tutorial_day2: {
-    subject: '3 cose da sapere su MyCity',
-    html: () => `<p>Eccoti 3 trucchi:</p><ul><li>Paghi alla consegna (niente carta obbligatoria)</li><li>Spedizione gratis sopra €30</li><li>Invita un amico e prendi €5 entrambi</li></ul>`,
-    text: () => 'Tre cose da sapere: paghi alla consegna, spedizione gratis sopra €30, referral €5.',
-  },
-  first_order_promo: {
-    subject: 'Sblocca €5 al primo ordine',
-    html: () => `<p>Hai €5 di benvenuto pronti.</p><p>Usali al primo ordine: lo sconto si applica automaticamente.</p><p><a href="${APP_URL}/search">Vai allo shopping →</a></p>`,
-    text: () => 'Hai €5 di sconto al primo ordine. Usali su MyCity.',
-  },
-  reengagement_14d: {
-    subject: 'Cosa succede in città questa settimana',
-    html: () => `<p>Eventi, novità dai negozi, e gli sconti del momento. Dai un\'occhiata.</p><p><a href="${APP_URL}/events">Vedi gli eventi →</a></p>`,
-    text: () => 'Eventi della settimana su MyCity.',
-  },
-  winback_60d: {
-    subject: 'Ci manchi! Torna con uno sconto',
-    html: () => `<p>Non ti vediamo da un po\'.</p><p>Usa il codice <strong>RITORNO10</strong> per il -10% sul prossimo ordine.</p>`,
-    text: () => 'Codice RITORNO10 per -10% sul prossimo ordine.',
-  },
-  abandoned_cart_4h: {
-    subject: 'Hai dimenticato qualcosa nel carrello',
-    html: () => `<p>Il tuo carrello ti aspetta.</p><p><a href="${APP_URL}/cart">Vai al carrello →</a></p>`,
-    text: () => 'Il tuo carrello ti aspetta su MyCity.',
-  },
-};
+/**
+ * 27/8/2026 (R007) — I TEMPLATE NON VIVONO PIU' QUI DENTRO.
+ *
+ * Erano sei, scritti a mano in questo file: `<p>` nudi, senza intestazione col
+ * marchio e senza piede, e il benvenuto ci interpolava dentro il nome
+ * dell'utente senza nessun filtro. Erano un secondo elenco parallelo a
+ * `lib/email/templates.ts`, che invece aveva gia' impaginazione comune e
+ * filtro — e siccome e' questo giro a spedire il benvenuto, il messaggio che la
+ * gente riceveva davvero era quello scritto peggio.
+ *
+ * Adesso li prepara `preparaEmailCicloDiVita`, che sta con tutti gli altri.
+ */
 
 // Template relazionali/onboarding (welcome, tutorial): esenti dal consenso
 // marketing — l'utente che si iscrive li attende. Gli altri sono marketing.
@@ -154,13 +131,15 @@ async function processBatch(supa: any, batch: { id: string; user_id: string; tem
   }
 
   for (const row of batch) {
-    const tpl = TEMPLATES[row.template];
-    if (!tpl) {
+    const userProfile = profili.get(row.user_id) ?? null;
+    // Il nome di battesimo: lo scrive la persona nel proprio profilo, quindi e'
+    // testo di un altro, e il template lo filtra prima di metterlo nell'HTML.
+    const messaggio = preparaEmailCicloDiVita(row.template, { name: userProfile?.full_name?.split(' ')[0] });
+    if (!messaggio) {
       skipped++;
       await annullaRiga(supa, row.id);
       continue;
     }
-    const userProfile = profili.get(row.user_id) ?? null;
     // welcome/tutorial = onboarding relazionale → partono sempre. Gli altri
     // (promo / re-engagement / win-back) sono marketing → solo con consenso.
     const isMarketing = !TRANSACTIONAL_TEMPLATES.has(row.template);
@@ -176,12 +155,11 @@ async function processBatch(supa: any, batch: { id: string; user_id: string; tem
       await annullaRiga(supa, row.id);
       continue;
     }
-    const data = { name: userProfile?.full_name?.split(' ')[0] };
     const res = await sendEmail({
       to: email,
-      subject: tpl.subject,
-      html: tpl.html(data),
-      text: tpl.text(data),
+      subject: messaggio.subject,
+      html: messaggio.html,
+      text: messaggio.text,
       tags: [{ name: 'template', value: row.template }],
     });
     if ('ok' in res && res.ok) {

@@ -13,6 +13,16 @@ function getResend(): Resend | null {
   return _resend;
 }
 
+/**
+ * 27/8/2026 (R067) — A cosa serve il messaggio, in una parola.
+ *
+ * `transazionale` = qualcosa che la persona ha chiesto e sta aspettando:
+ * conferma d'ordine, rimborso, gift card comprata, avviso al negozio, avviso
+ * interno all'assistenza. Non porta il piede «annulla l'iscrizione».
+ * `marketing` = comunicazione commerciale: porta sempre il modo di smettere.
+ */
+export type TipoEmail = 'transazionale' | 'marketing';
+
 export type SendEmailInput = {
   to: string | string[];
   subject: string;
@@ -20,6 +30,13 @@ export type SendEmailInput = {
   text?: string;
   replyTo?: string;
   tags?: { name: string; value: string }[];
+  /**
+   * Ripiego prudente: `marketing`. Chi chiama e non dichiara niente continua ad
+   * avere il piede di disiscrizione, come e' sempre stato. Togliere il link a
+   * una email commerciale per una dimenticanza e' molto peggio che lasciarne
+   * uno di troppo in fondo a una ricevuta.
+   */
+  tipo?: TipoEmail;
 };
 
 export type SendEmailResult =
@@ -48,26 +65,58 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   // silenziati (vanno a Sentry via logger) e operational-alerts vigila il
   // backlog della coda lifecycle. (Outbox durevole per le email transazionali =
   // enhancement futuro: la coda attuale è template-based per user_id.)
-  // Link di disiscrizione su OGNI email, aggiunto qui e non nei singoli
-  // template: il footer di templates.ts non conosce il destinatario, e i
+  // Link di disiscrizione sulle email commerciali, aggiunto qui e non nei
+  // singoli template: il footer di templates.ts non conosce il destinatario, e i
   // messaggi costruiti altrove (carrelli abbandonati, ciclo di vita) non
   // passavano dal footer comune. Prima l'unico link era «Gestisci preferenze»,
   // che porta a una pagina con il login: inutile per chi vuole solo smettere.
+  //
+  // 27/8/2026 (R067) — ma NON su tutte. Il link disiscrive dall'ambito
+  // «marketing», e la funzione del database spegne promozioni e notifiche
+  // commerciali (migrazione 118). In fondo alla conferma di un ordine e' una
+  // trappola: chi lo preme crede di spegnere gli avvisi dell'ordine, e invece
+  // spegne le promozioni — poi gli avvisi arrivano lo stesso e ci segnala come
+  // spam. Sulle transazionali resta il «Gestisci preferenze» del piede comune.
+  const tipo: TipoEmail = input.tipo ?? 'marketing';
   const destinatario = Array.isArray(input.to) ? input.to[0] : input.to;
-  const linkStop = destinatario ? linkDisiscrizione(destinatario, 'marketing') : null;
+
+  // 27/8/2026 (R054) — Questa riga stava FUORI dal try, e la firma del link
+  // lancia in produzione quando UNSUBSCRIBE_SECRET non e' configurata: una
+  // variabile dimenticata su Vercel e non usciva piu' NIENTE, nemmeno le
+  // conferme d'ordine, mentre il sito continuava a incassare. Adesso il caso
+  // limite degrada invece di essere fatale, e in modo diverso nei due casi:
+  // l'ordine che una persona ha pagato le arriva comunque; una email
+  // commerciale senza il modo di smettere di riceverla non parte.
+  let linkStop: string | null = null;
+  if (destinatario) {
+    try {
+      linkStop = linkDisiscrizione(destinatario, 'marketing');
+    } catch (err) {
+      logger.error('[email] link di disiscrizione non firmabile: controllare UNSUBSCRIBE_SECRET', {
+        subject: input.subject,
+        tipo,
+        message: err instanceof Error ? err.message : 'unknown',
+      });
+      if (tipo === 'marketing') {
+        return { ok: false, skipped: true, reason: 'link di disiscrizione non firmabile: email di marketing non inviata' };
+      }
+    }
+  }
+
+  const piede = tipo === 'marketing' ? linkStop : null;
 
   const payload = {
     from: env.resendFrom(),
     to: input.to,
     subject: input.subject,
-    html: linkStop ? conPiedeDisiscrizione(input.html, linkStop) : input.html,
+    html: piede ? conPiedeDisiscrizione(input.html, piede) : input.html,
     text: input.text,
     reply_to: input.replyTo ?? env.resendReplyTo(),
     tags: input.tags,
     // Il pulsante «Annulla iscrizione» dei client di posta usa queste due.
-    headers: linkStop
+    headers: piede
       ? {
-          'List-Unsubscribe': `<${linkStop}>`,
+          'List-Unsubscribe': `<${piede}>`,
           'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
         }
       : undefined,

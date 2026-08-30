@@ -5,11 +5,21 @@
  * per massimizzare la deliverability. Lingua italiana hardcoded; in
  * fase i18n diventeranno funzioni che ricevono il locale.
  *
- * Tutti i template includono il link di unsubscribe (obbligatorio
- * GDPR per email marketing; per le transazionali e' best practice).
+ * Il link «annulla l'iscrizione» NON si scrive qui: lo attacca `sendEmail`, che
+ * e' l'unico punto che conosce il destinatario, e solo alle email di marketing
+ * (R067). Qui il piede porta «Gestisci preferenze» e i link legali.
+ *
+ * Questo file e' l'UNICA casa dei template: anche i sei del ciclo di vita, che
+ * prima vivevano dentro la rotta del cron, stanno qui in fondo (R007).
  */
 
 import { env } from '@/lib/env';
+// 27/8/2026 (R011) — Il filtro dell'HTML era riscritto qui dentro, uguale ma
+// scritto in un altro modo, mentre `lib/html-escape.ts` dichiarava nel proprio
+// commento di essere quella condivisa. Tre copie della stessa regola sono tre
+// regole: il giorno in cui va aggiunto un carattere da filtrare, due restano
+// indietro — e restano indietro senza dirlo a nessuno.
+import { escapeHtml } from '@/lib/html-escape';
 
 const BRAND = 'MyCity';
 const BRAND_COLOR = '#4f46e5';
@@ -52,29 +62,7 @@ function btn(href: string, label: string): string {
   return `<a href="${href}" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">${escapeHtml(label)}</a>`;
 }
 
-function escapeHtml(s: string): string {
-  const map: Record<string, string> = {
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-  };
-  return s.replace(/[&<>"']/g, (c) => map[c] ?? c);
-}
-
 // ---------- Template specifici ----------
-
-export function welcomeTemplate(args: { name?: string | null; confirmUrl: string }) {
-  const name = args.name?.trim() || 'ciao';
-  const body = `
-    <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:#0f172a">Benvenuto, ${escapeHtml(name)}!</h1>
-    <p style="margin:0 0 16px;line-height:1.6">Conferma la tua email per attivare l'account su <strong>${BRAND}</strong>:</p>
-    <p style="margin:24px 0">${btn(args.confirmUrl, 'Conferma email')}</p>
-    <p style="margin:0;font-size:13px;color:#64748b">Se non riconosci questa registrazione ignora pure questa email.</p>
-  `;
-  return {
-    subject: `Conferma la tua email su ${BRAND}`,
-    html: shell('Conferma email', body),
-    text: `Conferma la tua email cliccando: ${args.confirmUrl}`,
-  };
-}
 
 export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderId: string; total: number; storeName: string }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
@@ -204,4 +192,129 @@ export function giftCardBuyerTemplate(args: { code: string; amountEuro: number; 
     html: shell('Gift card acquistata', body),
     text: `Gift card da €${args.amountEuro.toFixed(2)} acquistata per ${to}. Codice: ${args.code}.`,
   };
+}
+
+// ---------- Ciclo di vita: i messaggi che spedisce il giro della coda ----------
+
+/**
+ * 27/8/2026 (R007) — I SEI TEMPLATE CHE VIVEVANO DENTRO UNA ROTTA.
+ *
+ * Stavano scritti a mano dentro `app/api/cron/send-emails/route.ts`: `<p>`
+ * nudi, senza intestazione col marchio, senza piede, e con il nome dell'utente
+ * interpolato grezzo dentro l'HTML. Erano un secondo elenco di template
+ * parallelo a questo, e siccome e' il giro della coda a spedire il benvenuto,
+ * il messaggio che la gente riceveva davvero era quello scritto peggio.
+ *
+ * Adesso stanno qui, e passano dalle stesse due cose di tutti gli altri:
+ * l'impaginazione comune (`shell`) e il filtro sui campi scritti da qualcuno
+ * (`escapeHtml`).
+ */
+
+export type DatiCicloDiVita = { name?: string | null };
+export type EmailPronta = { subject: string; html: string; text: string };
+
+const TEMPLATE_CICLO_DI_VITA = {
+  welcome: (d: DatiCicloDiVita): EmailPronta => {
+    // Il nome arriva da `profiles.full_name`: lo scrive la persona nel proprio
+    // profilo, quindi e' testo di un altro e va filtrato.
+    const nome = d.name?.trim();
+    const saluto = nome ? `Ciao ${escapeHtml(nome)}, grazie` : 'Grazie';
+    const body = `
+      <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:#0f172a">Benvenuto su ${BRAND}</h1>
+      <p style="margin:0 0 16px;line-height:1.6">${saluto} per esserti iscritto. Il marketplace dei negozi di Piacenza ti aspetta.</p>
+      <p style="margin:24px 0">${btn(appUrl(), 'Inizia a esplorare')}</p>
+    `;
+    return {
+      subject: `Benvenuto su ${BRAND} Piacenza 🎉`,
+      html: shell('Benvenuto', body),
+      text: nome
+        ? `Ciao ${nome}, grazie per esserti iscritto a ${BRAND} Piacenza.`
+        : `Grazie per esserti iscritto a ${BRAND} Piacenza.`,
+    };
+  },
+
+  tutorial_day2: (): EmailPronta => {
+    const body = `
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">3 cose da sapere</h1>
+      <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">
+        <li>Paghi alla consegna: la carta non e' obbligatoria</li>
+        <li>Spedizione gratis sopra €30</li>
+        <li>Invita un amico: €5 a testa</li>
+      </ul>
+      <p style="margin:24px 0">${btn(appUrl(), `Vai su ${BRAND}`)}</p>
+    `;
+    return {
+      subject: `3 cose da sapere su ${BRAND}`,
+      html: shell('3 cose da sapere', body),
+      text: 'Tre cose da sapere: paghi alla consegna, spedizione gratis sopra €30, referral €5.',
+    };
+  },
+
+  first_order_promo: (): EmailPronta => {
+    const body = `
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Hai €5 di benvenuto</h1>
+      <p style="margin:0 0 16px;line-height:1.6">Usali al primo ordine: lo sconto si applica da solo alla cassa.</p>
+      <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Vai allo shopping')}</p>
+    `;
+    return {
+      subject: 'Sblocca €5 al primo ordine',
+      html: shell('€5 al primo ordine', body),
+      text: `Hai €5 di sconto al primo ordine. Usali su ${BRAND}.`,
+    };
+  },
+
+  reengagement_14d: (): EmailPronta => {
+    const body = `
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Cosa succede in citta</h1>
+      <p style="margin:0 0 16px;line-height:1.6">Eventi, novita dai negozi e gli sconti del momento.</p>
+      <p style="margin:24px 0">${btn(`${appUrl()}/events`, 'Vedi gli eventi')}</p>
+    `;
+    return {
+      subject: 'Cosa succede in città questa settimana',
+      html: shell('Cosa succede in citta', body),
+      text: `Eventi della settimana su ${BRAND}.`,
+    };
+  },
+
+  winback_60d: (): EmailPronta => {
+    const body = `
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Ci manchi</h1>
+      <p style="margin:0 0 16px;line-height:1.6">Non ti vediamo da un po'. Usa il codice <strong>RITORNO10</strong> per il -10% sul prossimo ordine.</p>
+      <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Torna a fare la spesa')}</p>
+    `;
+    return {
+      subject: 'Ci manchi! Torna con uno sconto',
+      html: shell('Ci manchi', body),
+      text: 'Codice RITORNO10 per -10% sul prossimo ordine.',
+    };
+  },
+
+  abandoned_cart_4h: (): EmailPronta => {
+    const body = `
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Il tuo carrello ti aspetta</h1>
+      <p style="margin:0 0 16px;line-height:1.6">Hai lasciato qualcosa nel carrello: e' ancora li'.</p>
+      <p style="margin:24px 0">${btn(`${appUrl()}/cart`, 'Vai al carrello')}</p>
+    `;
+    return {
+      subject: 'Hai dimenticato qualcosa nel carrello',
+      html: shell('Il tuo carrello ti aspetta', body),
+      text: `Il tuo carrello ti aspetta su ${BRAND}.`,
+    };
+  },
+} satisfies Record<string, (d: DatiCicloDiVita) => EmailPronta>;
+
+export type NomeTemplateCicloDiVita = keyof typeof TEMPLATE_CICLO_DI_VITA;
+
+/**
+ * Prepara il messaggio del ciclo di vita che porta questo nome, o `null` se il
+ * nome non e' uno dei nostri.
+ *
+ * Il nome arriva da una riga della coda, cioe' da un dato: cercarlo con la
+ * parentesi quadra su un oggetto trovava anche `constructor` e `__proto__`, e
+ * lasciava passare per «template» una funzione qualsiasi. Il giro moriva alla
+ * riga dopo, portandosi dietro le email buone dello stesso lotto.
+ */
+export function preparaEmailCicloDiVita(nome: string, dati: DatiCicloDiVita): EmailPronta | null {
+  if (!Object.prototype.hasOwnProperty.call(TEMPLATE_CICLO_DI_VITA, nome)) return null;
+  return TEMPLATE_CICLO_DI_VITA[nome as NomeTemplateCicloDiVita](dati);
 }
