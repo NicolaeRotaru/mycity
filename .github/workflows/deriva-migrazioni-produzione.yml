@@ -40,7 +40,13 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          # 27/8/2026 (R191) — Qui c'era "20" mentre tutto il resto — la CI, il
+          # rilascio, il campo `engines` di package.json — dice 24. Il controllo
+          # notturno che deve accorgersi delle migrazioni dimenticate girava
+          # quindi su un motore diverso dalla produzione: quello che vede lui
+          # non e' quello che succede in produzione, ed e' il tipo di differenza
+          # che si scopre tardi e male.
+          node-version: "24"
           cache: "npm"
 
       - name: Install deps

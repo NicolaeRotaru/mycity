@@ -7,6 +7,16 @@ on:
     branches: [main]
 
 
+# 27/8/2026 (R188) — Sui rami di lavoro l'ultimo invio e' l'unico che interessa:
+# i controlli sui commit gia' superati bruciano minuti e basta. Su `main` vale
+# il contrario e la condizione lo dice: quelle esecuzioni NON si annullano mai,
+# perche' il rilascio in produzione parte proprio dal loro esito — annullarne
+# una vorrebbe dire fermare un rilascio a caso.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+
 # #244 — Il minimo indispensabile. Senza questo blocco ogni lavoro parte col
 # permesso predefinito del repository, che di norma è di SCRITTURA: uno script
 # di una dipendenza compromessa potrebbe scrivere sul codice o creare rilasci.

@@ -39,6 +39,18 @@ describe('GET /api/health', () => {
     process.env.RESEND_API_KEY = 're_test';
     process.env.CRON_SECRET = 'cron_test';
     process.env.UPSTASH_REDIS_REST_URL = 'https://upstash.test';
+    // 27/8/2026 (R184) — L'elenco delle variabili «importanti» e' passato da
+    // cinque a dodici: sette segreti che, mancando, spegnevano un pezzo di
+    // marketplace senza far cambiare colore al semaforo. Questo blocco dice
+    // «l'ambiente e' completo», quindi va tenuto completo: altrimenti la prova
+    // qui sotto misura un ambiente a meta' e chiama «ok» un `degraded`.
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'tok_test';
+    process.env.INTERNAL_API_SECRET = 'int_test';
+    process.env.UNSUBSCRIBE_SECRET = 'unsub_test';
+    process.env.MIDDLEWARE_CACHE_SECRET = 'mid_test';
+    process.env.SUPPORT_EMAIL = 'aiuto@mycity.test';
+    process.env.VAPID_PRIVATE_KEY = 'vapid_priv';
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'vapid_pub';
   });
 
   afterEach(() => {

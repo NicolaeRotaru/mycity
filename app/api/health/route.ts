@@ -56,12 +56,39 @@ const ENV_VITALI = [
 // dieci tentativi di accesso a testa diventano dieci per ogni copia. Senza
 // Upstash il freno non è rotto, è molto più largo di quanto dica il numero
 // scritto nel codice. Va visto, quindi va chiesto qui.
+//
+// Radiografia del 27/8/2026 (R184) — QUI SE NE GUARDAVANO CINQUE SU DODICI.
+//
+// Le altre sette, quando mancano, non fanno rumore: spengono un pezzo di
+// marketplace e lasciano il semaforo verde. La peggiore era mezza coppia
+// Upstash. `lib/rate-limit.ts:143` vuole URL **e** token; con uno solo dei due
+// ripiega in silenzio sul contatore in memoria — su Vercel, un contatore per
+// ogni copia. Qui si guardava solo l'URL: bastava perdere il token per avere il
+// freno anti-abuso largo dieci volte tanto e il cruscotto tutto verde. Mezza
+// coppia e' peggio di zero, perche' zero non mente.
+//
+// Il freno che tiene chiuso il buco sta in
+// tests/unit/il-semaforo-guarda-i-segreti-che-contano.test.ts: toglie una
+// variabile per volta, chiama questa rotta e pretende che se ne accorga.
 const ENV_IMPORTANTI = [
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'RESEND_API_KEY',
   'CRON_SECRET',
   'UPSTASH_REDIS_REST_URL',
+  // L'altra meta' della coppia: senza, il freno anti-abuso ripiega in silenzio.
+  'UPSTASH_REDIS_REST_TOKEN',
+  // Senza, le rotte interne rispondono 503 (lib/api/middleware.ts:348).
+  'INTERNAL_API_SECRET',
+  // Senza, i link di disiscrizione non si firmano (lib/email/unsubscribe.ts:33).
+  'UNSUBSCRIBE_SECRET',
+  // Senza, il cookie firmato del ruolo non si fa (middleware.ts:117).
+  'MIDDLEWARE_CACHE_SECRET',
+  // Senza, nessuno riceve gli allarmi operativi (operational-alerts:440).
+  'SUPPORT_EMAIL',
+  // Senza la coppia, niente notifiche push (lib/env.ts:68-69).
+  'VAPID_PRIVATE_KEY',
+  'NEXT_PUBLIC_VAPID_PUBLIC_KEY',
 ];
 
 export async function GET(request: Request) {

@@ -29,6 +29,14 @@ export const CRON_MAX_STALENESS_MIN: Record<string, number> = {
   // dall'elenco. Se si fermava, gli avvisi sui prezzi dei concorrenti
   // smettevano di arrivare e nessuno se ne accorgeva.
   'external-price-alerts': 180, // cadenza 1 h
+  // Radiografia 27/8/2026 (R182) — Era rimasta fuori la quadratura della cassa
+  // contanti: il controllo che i soldi incassati in mano dai fattorini tornino
+  // davvero. Poteva essere ferma da settimane senza che nessuno lo sapesse,
+  // perche' un lavoro non sorvegliato e uno sorvegliato che va bene fanno lo
+  // stesso identico silenzio. Adesso il buco non si puo' piu' riaprire da solo:
+  // lo tiene chiuso tests/unit/ogni-lavoro-periodico-e-sorvegliato.test.ts, che
+  // legge le cartelle vere di app/api/cron/ e pretende una soglia per ognuna.
+  'riquadra-casse': 1560, // cadenza 1×/giorno → 26 h
 };
 
 /**

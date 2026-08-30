@@ -21,6 +21,16 @@ on:
   workflow_dispatch: {} # avviabile anche a mano
 
 
+# 27/8/2026 (R188) — Il primo del mese le due cadenze cadono vicine, e chi lo
+# avvia a mano puo' sovrapporsi a entrambe. Due esecuzioni insieme vogliono dire
+# due copie che si scrivono addosso e, il primo del mese, due prove di ripristino
+# sullo stesso database di appoggio. Si aspetta, non si annulla: un ripristino
+# interrotto lascia un database a meta'.
+concurrency:
+  group: backup-database
+  cancel-in-progress: false
+
+
 # #244 — Il minimo indispensabile. Senza questo blocco ogni lavoro parte col
 # permesso predefinito del repository, che di norma è di SCRITTURA: uno script
 # di una dipendenza compromessa potrebbe scrivere sul codice o creare rilasci.

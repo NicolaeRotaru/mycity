@@ -39,6 +39,21 @@ on:
   workflow_dispatch: {}
 
 
+# 27/8/2026 (R188) — DUE RILASCI POTEVANO APPLICARE MIGRAZIONI INSIEME.
+#
+# Due unioni ravvicinate su `main` facevano partire due esecuzioni di questo
+# lavoro in parallelo, e tutte e due arrivavano ad applicare migrazioni sullo
+# STESSO database di produzione. Due `psql` che scrivono lo schema nello stesso
+# momento e' il modo piu' diretto per ritrovarsi con un database a meta'.
+#
+# `cancel-in-progress: false` e' voluto e va lasciato cosi': un rilascio fermato
+# a meta' migrazioni non «si annulla», lascia il database in uno stato che
+# nessuno ha previsto. Il secondo aspetta il suo turno.
+concurrency:
+  group: rilascio-produzione
+  cancel-in-progress: false
+
+
 # #244 — Il minimo indispensabile. Senza questo blocco ogni lavoro parte col
 # permesso predefinito del repository, che di norma è di SCRITTURA: uno script
 # di una dipendenza compromessa potrebbe scrivere sul codice o creare rilasci.
@@ -161,12 +176,62 @@ jobs:
         run: npm ci --legacy-peer-deps && npm run db:check-drift
 
       - name: Rilascia in produzione
+        id: rilascio
         if: steps.chiavi.outputs.pronto == 'true'
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        # 27/8/2026 (R189) — LA VERSIONE ERA «L'ULTIMA CHE C'E' ADESSO».
+        #
+        # `vercel@latest` vuol dire che lo strumento che pubblica in produzione
+        # cambia da solo, senza che nessuno l'abbia deciso ne' provato. Il
+        # giorno in cui una versione nuova cambia il comportamento, il rilascio
+        # si rompe — o peggio, pubblica qualcosa di diverso — e nel nostro
+        # deposito non c'e' nessuna riga modificata che lo spieghi. Bloccata:
+        # si aggiorna di proposito, con una richiesta di unione come qualunque
+        # altra dipendenza, e tornare indietro e' cambiare un numero.
         run: |
-          npx --yes vercel@latest pull --yes --environment=production --token="$TOKEN"
-          npx --yes vercel@latest build --prod --token="$TOKEN"
-          npx --yes vercel@latest deploy --prebuilt --prod --token="$TOKEN"
+          set -euo pipefail
+          VERCEL="vercel@59.10.0"
+          npx --yes "$VERCEL" pull --yes --environment=production --token="$TOKEN"
+          npx --yes "$VERCEL" build --prod --token="$TOKEN"
+          # L'indirizzo appena pubblicato serve al passo dopo per andarci a
+          # bussare. `deploy` lo stampa come ultima riga.
+          INDIRIZZO="$(npx --yes "$VERCEL" deploy --prebuilt --prod --token="$TOKEN" | tail -n 1 | tr -d '[:space:]')"
+          echo "Pubblicato su: $INDIRIZZO"
+          echo "indirizzo=$INDIRIZZO" >> "$GITHUB_OUTPUT"
+
+      # 27/8/2026 (R178) — SI PUBBLICAVA E NON GUARDAVA NESSUNO.
+      #
+      # Fino a qui il lavoro finiva verde subito dopo `deploy`. Se il sito
+      # rispondeva 500 a tutti, il verde restava verde e il primo a saperlo era
+      # un cliente. Adesso si va a bussare a tre porte — il processo e' vivo, e'
+      # pronto a servire, la home si disegna — e se non rispondono si torna
+      # indietro da soli, senza aspettare che qualcuno se ne accorga.
+      #
+      # La decisione la prende scripts/prova-di-fumo.mjs, che ha le sue prove in
+      # tests/unit/la-prova-di-fumo-boccia-un-sito-rotto.test.ts: un collaudo che
+      # dice sempre «va bene» sarebbe peggio di nessun collaudo.
+      - name: Prova di fumo sul sito appena pubblicato
+        id: fumo
+        if: steps.rilascio.outputs.indirizzo != ''
+        run: node scripts/prova-di-fumo.mjs "${{ steps.rilascio.outputs.indirizzo }}"
+
+      # Solo se la prova di fumo e' caduta: si rimette in piedi la versione di
+      # prima. `rollback` senza argomenti torna al rilascio precedente.
+      - name: Torna indietro, il sito appena pubblicato non risponde
+        if: failure() && steps.fumo.outcome == 'failure'
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          echo "::error::La prova di fumo e' fallita sul rilascio appena pubblicato: torno alla versione precedente."
+          npx --yes vercel@59.10.0 rollback --yes --token="$TOKEN"
+          {
+            echo "## ⛔ Rilascio annullato"
+            echo ""
+            echo "Il sito appena pubblicato non ha superato la prova di fumo: sono tornata alla versione precedente."
+            echo "Guarda il passo «Prova di fumo» qui sopra per sapere quale dei tre controlli e' caduto."
+          } >> "$GITHUB_STEP_SUMMARY"
