@@ -69,6 +69,25 @@ async function authenticate(req: NextRequest): Promise<
   | { ok: true; user: User; profile: Profile; supaUtente: ClientDiChiChiama }
   | { ok: false; response: NextResponse }
 > {
+  // 27/8/2026 (R003 e R020) — IL FRENO ERA SU TRE PORTE SU SEI.
+  //
+  // Il 22 agosto era stato messo un freno per indirizzo di rete PRIMA di
+  // autenticare, e la ragione sta scritta piu' sotto: chi bussa senza un
+  // gettone valido costa comunque due chiamate di rete a testa, e diecimila
+  // tentativi al minuto da un solo indirizzo sono ventimila chiamate pagate da
+  // noi per respingere sempre la stessa persona.
+  //
+  // Ma era finito solo nei tre involucri col rate limit, non nei tre semplici —
+  // che sono quelli usati dal doppio delle rotte (43 contro 22). Meta' delle
+  // porte aveva la serratura, e non c'era modo di accorgersene.
+  //
+  // Adesso il freno sta QUI, che e' il punto per cui passano tutti e sei: un
+  // involucro nuovo lo eredita senza che nessuno debba ricordarsene. La chiave
+  // e' il percorso della richiesta, cosi' una raffica su una rotta non spegne
+  // tutto il resto del sito.
+  const frenato = await frenoDiRete(req, chiaveDelFreno(percorsoDi(req)));
+  if (frenato) return { ok: false, response: frenato };
+
   // Tentativo 1: Bearer token nell'Authorization header (client fetch)
   const authHeader = req.headers.get('authorization');
   const bearer = authHeader?.toLowerCase().startsWith('bearer ')
@@ -198,6 +217,48 @@ export type AuthRateLimitOpts = {
 const TETTO_PER_RETE = 300;
 const FINESTRA_RETE_MS = 60_000;
 
+/**
+ * IL NOME DEL CONTATORE NON PUO' CONTENERE L'IDENTIFICATIVO DELLA RISORSA.
+ *
+ * Il freno per indirizzo usa come chiave il percorso della richiesta. Ma su una
+ * rotta dinamica il percorso cambia a ogni risorsa: `/api/orders/1`,
+ * `/api/orders/2`, `/api/orders/3`… sarebbero tre contatori diversi, ognuno con
+ * il suo budget pieno. Chi vuole bussare tanto non deve fare altro che cambiare
+ * il numero in fondo, e il freno non scatta mai.
+ *
+ * I pezzi che sono identificativi — numeri, UUID, stringhe esadecimali lunghe —
+ * diventano `:id`, cosi' la chiave e' la ROTTA e non la singola risorsa.
+ */
+/**
+ * Il percorso della richiesta, senza mai lanciare.
+ *
+ * Questo valore serve solo a dare un nome a un contatore: se non si riesce a
+ * ricavarlo, la risposta giusta e' un nome generico — non un'eccezione che fa
+ * cadere l'autenticazione di tutte le rotte. `new URL(undefined)` lancia, e
+ * `authenticate()` e' la strada per cui passano sessantacinque rotte.
+ */
+function percorsoDi(req: NextRequest): string {
+  try {
+    return req.nextUrl?.pathname || new URL(req.url).pathname;
+  } catch {
+    return '';
+  }
+}
+
+export function chiaveDelFreno(percorso: string): string {
+  if (!percorso) return 'sconosciuto';
+  return percorso
+    .split('/')
+    .map((pezzo) => {
+      if (!pezzo) return pezzo;
+      if (/^\d+$/.test(pezzo)) return ':id';
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pezzo)) return ':id';
+      if (/^[0-9a-f]{16,}$/i.test(pezzo)) return ':id';
+      return pezzo;
+    })
+    .join('/');
+}
+
 async function frenoDiRete(req: NextRequest, nome: string): Promise<NextResponse | null> {
   const rl = await rateLimitAsync({
     key: `rete:${nome}:${getClientIp(req)}`,
@@ -209,8 +270,10 @@ async function frenoDiRete(req: NextRequest, nome: string): Promise<NextResponse
 
 export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
   return async (req: NextRequest): Promise<NextResponse> => {
-    const frenato = await frenoDiRete(req, opts.name);
-    if (frenato) return frenato;
+    // Il freno per indirizzo adesso vive dentro `authenticate()`: valeva per
+    // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
+    // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
+    // stessa difesa.
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
@@ -239,8 +302,10 @@ export function withSellerAuth(handler: GenericHandler) {
  */
 export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
   return async (req: NextRequest): Promise<NextResponse> => {
-    const frenato = await frenoDiRete(req, opts.name);
-    if (frenato) return frenato;
+    // Il freno per indirizzo adesso vive dentro `authenticate()`: valeva per
+    // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
+    // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
+    // stessa difesa.
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     const { profile } = auth;
@@ -270,8 +335,10 @@ export function withAdminAuth(handler: GenericHandler) {
  */
 export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
   return async (req: NextRequest): Promise<NextResponse> => {
-    const frenato = await frenoDiRete(req, opts.name);
-    if (frenato) return frenato;
+    // Il freno per indirizzo adesso vive dentro `authenticate()`: valeva per
+    // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
+    // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
+    // stessa difesa.
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
