@@ -42,29 +42,49 @@ describe('parseConsentCookie', () => {
     expect(parseConsentCookie('')).toEqual({ functional: false, analytics: false, marketing: false });
   });
 
+  /**
+   * 27/8/2026 (R063) — QUESTI CASI SONO STATI RISCRITTI, E IL PERCHE' CONTA.
+   *
+   * Erano scritti nella vecchia forma del cookie, tre cifre e basta («111»), e
+   * certificavano proprio il difetto: un consenso senza versione veniva
+   * accettato dal server per sempre, anche dopo che l'informativa era cambiata
+   * e il banner — nel browser — lo considerava gia' scaduto.
+   *
+   * La copertura non e' stata tolta: gli stessi casi girano sulla forma nuova,
+   * con la versione davanti, e la vecchia forma ha adesso un caso suo che
+   * verifica che NON valga piu'.
+   */
+  const V = CONSENT_VERSION;
+
   it('parses "111" as all accepted', () => {
-    expect(parseConsentCookie('111')).toEqual({ functional: true, analytics: true, marketing: true });
+    expect(parseConsentCookie(`${V}:111`)).toEqual({ functional: true, analytics: true, marketing: true });
   });
 
   it('parses "000" as all rejected', () => {
-    expect(parseConsentCookie('000')).toEqual({ functional: false, analytics: false, marketing: false });
+    expect(parseConsentCookie(`${V}:000`)).toEqual({ functional: false, analytics: false, marketing: false });
   });
 
   it('parses "100" as only functional', () => {
-    expect(parseConsentCookie('100')).toEqual({ functional: true, analytics: false, marketing: false });
+    expect(parseConsentCookie(`${V}:100`)).toEqual({ functional: true, analytics: false, marketing: false });
   });
 
   it('parses "010" as only analytics', () => {
-    expect(parseConsentCookie('010')).toEqual({ functional: false, analytics: true, marketing: false });
+    expect(parseConsentCookie(`${V}:010`)).toEqual({ functional: false, analytics: true, marketing: false });
   });
 
   it('parses "001" as only marketing', () => {
-    expect(parseConsentCookie('001')).toEqual({ functional: false, analytics: false, marketing: true });
+    expect(parseConsentCookie(`${V}:001`)).toEqual({ functional: false, analytics: false, marketing: true });
   });
 
   it('decodes URI-encoded values', () => {
-    expect(parseConsentCookie(encodeURIComponent('111'))).toEqual({
+    expect(parseConsentCookie(encodeURIComponent(`${V}:111`))).toEqual({
       functional: true, analytics: true, marketing: true,
+    });
+  });
+
+  it('un cookie della vecchia forma, senza versione, non vale piu come consenso', () => {
+    expect(parseConsentCookie('111')).toEqual({
+      functional: false, analytics: false, marketing: false,
     });
   });
 });

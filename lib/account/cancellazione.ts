@@ -70,8 +70,18 @@ export const CAMPI_KYC_DA_AZZERARE = {
   rider_haccp_url: null,
 } as const;
 
-/** Secchi dello storage che possono contenere file personali. */
-export const SECCHI_CON_FILE_PERSONALI = ['kyc-docs', 'cod-proof'] as const;
+/**
+ * Secchi dello storage che possono contenere file personali.
+ *
+ * 27/8/2026 (R057) — «reviews» mancava, ed era il peggiore dei tre.
+ * Gli altri due sono secchi privati: il file resta lì ma nessuno lo raggiunge
+ * dal web. Quello delle recensioni è PUBBLICO (migrations/039), quindi la foto
+ * caricata insieme alla recensione è visibile a chiunque ne conosca
+ * l'indirizzo. Dopo «cancella account» il commento spariva e la fotografia
+ * restava online per sempre: l'unico dato ancora visibile dall'esterno era
+ * proprio quello che sopravviveva alla cancellazione.
+ */
+export const SECCHI_CON_FILE_PERSONALI = ['kyc-docs', 'cod-proof', 'reviews'] as const;
 
 /**
  * Cancella i file dell'utente dallo storage.
@@ -116,11 +126,84 @@ export async function cancellaFilePersonali(
   return { rimossi, errori };
 }
 
-/** Anonimizza il testo libero scritto dalla persona (recensioni, note, chat). */
+/**
+ * Toglie le prove di consegna degli ordini di questa persona.
+ *
+ * 27/8/2026 (R058) — LA FOTO DI CASA SUA STAVA NELLA CARTELLA DI UN ALTRO.
+ *
+ * Alla consegna in contanti il fattorino carica due fotografie — i contanti e
+ * «il pacco lasciato», cioe' quasi sempre l'ingresso dell'abitazione — piu' la
+ * firma per ricevuta. Vanno nel secchio `cod-proof`, nella cartella del
+ * FATTORINO: `<fattorino>/<ordine>/…`.
+ *
+ * `cancellaFilePersonali` elenca la cartella della persona che sta cancellando
+ * l'account, e in `cod-proof/<cliente>` non c'e' mai stato niente. Cosi' la
+ * fotografia della porta di casa di chi se n'e' andato restava li' per sempre,
+ * in una cartella intestata a qualcun altro: il posto dove nessuno l'avrebbe
+ * mai cercata.
+ *
+ * Qui si parte dai suoi ordini, che e' l'unico filo che porta a quei file.
+ * Prima si tolgono i file, poi si azzerano le colonne: al peggio resta una
+ * colonna che punta al vuoto, mai una riga che promette una prova sparita.
+ */
+export async function cancellaProveDiConsegna(
+  admin: Admin,
+  userId: string,
+): Promise<{ rimossi: number; errori: string[] }> {
+  const errori: string[] = [];
+  let rimossi = 0;
+  try {
+    const { data: ordini, error } = await admin
+      .from('orders')
+      .select('id, cash_photo_url, delivery_photo_url, cash_signature_url')
+      .eq('user_id', userId);
+    if (error) return { rimossi: 0, errori: [`orders: ${error.message}`] };
+
+    for (const ordine of (ordini ?? []) as Array<{
+      id: string;
+      cash_photo_url: string | null;
+      delivery_photo_url: string | null;
+      cash_signature_url: string | null;
+    }>) {
+      const percorsi = [ordine.cash_photo_url, ordine.delivery_photo_url, ordine.cash_signature_url]
+        .filter((p): p is string => typeof p === 'string' && p.length > 0);
+      if (percorsi.length === 0) continue;
+
+      const { error: errRimozione } = await admin.storage.from('cod-proof').remove(percorsi);
+      if (errRimozione) {
+        errori.push(`cod-proof: ${errRimozione.message}`);
+        continue;
+      }
+      rimossi += percorsi.length;
+      await admin
+        .from('orders')
+        .update({ cash_photo_url: null, delivery_photo_url: null, cash_signature_url: null })
+        .eq('id', ordine.id);
+    }
+  } catch (e) {
+    errori.push(`prove di consegna: ${e instanceof Error ? e.message : 'errore'}`);
+  }
+  return { rimossi, errori };
+}
+
+/**
+ * Anonimizza il testo libero scritto dalla persona (recensioni, note, chat).
+ *
+ * 27/8/2026 (R057) — le recensioni perdevano il commento e tenevano le foto.
+ * Azzerare `comment` e lasciare `photo_urls` vuol dire lasciare in vetrina
+ * l'unica parte della recensione che si vede anche senza account. Le foto si
+ * staccano qui e i file si cancellano in `cancellaFilePersonali`: la colonna
+ * senza il file è una riga che punta al vuoto, il file senza la colonna è una
+ * fotografia che nessuno sa più di avere.
+ *
+ * `rider_reviews` non ha la colonna delle foto (nasce in migrations/014 e
+ * nessuna migrazione gliela aggiunge): chiederne l'azzeramento farebbe
+ * respingere tutto l'aggiornamento e resterebbe anche il commento.
+ */
 export async function anonimizzaTestoLibero(admin: Admin, userId: string): Promise<void> {
   await Promise.all([
-    admin.from('reviews').update({ comment: null }).eq('user_id', userId),
-    admin.from('store_reviews').update({ comment: null }).eq('user_id', userId),
+    admin.from('reviews').update({ comment: null, photo_urls: [] }).eq('user_id', userId),
+    admin.from('store_reviews').update({ comment: null, photo_urls: [] }).eq('user_id', userId),
     admin.from('rider_reviews').update({ comment: null }).eq('user_id', userId),
     admin.from('returns').update({ notes: null }).eq('buyer_id', userId),
     admin.from('messages').update({ body: '[messaggio rimosso]' }).eq('sender_id', userId),
@@ -193,15 +276,26 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
     logger.warn('[cancellazione] file personali non tutti rimossi', { userId, errori: file.errori });
   }
 
+  // Le prove di consegna stanno nella cartella del fattorino: si arriva a
+  // quelle di questa persona solo passando dai suoi ordini (R058).
+  const prove = await cancellaProveDiConsegna(admin, userId);
+  if (prove.errori.length > 0) {
+    logger.warn('[cancellazione] prove di consegna non tutte rimosse', { userId, errori: prove.errori });
+  }
+
   const { error: errAuth } = await admin.auth.admin.deleteUser(userId);
   if (errAuth) {
     return {
       ok: false,
       errore: `Profilo anonimizzato ma cancellazione dell'account fallita: ${errAuth.message}`,
-      fileRimossi: file.rimossi,
-      erroriFile: file.errori,
+      fileRimossi: file.rimossi + prove.rimossi,
+      erroriFile: [...file.errori, ...prove.errori],
     };
   }
 
-  return { ok: true, fileRimossi: file.rimossi, erroriFile: file.errori };
+  return {
+    ok: true,
+    fileRimossi: file.rimossi + prove.rimossi,
+    erroriFile: [...file.errori, ...prove.errori],
+  };
 }

@@ -29,6 +29,20 @@ export type Titolare = {
   capitale: string | null;
   emailPrivacy: string;
   /**
+   * La casella della privacy e' quella VERA, o e' il ripiego scritto nel codice?
+   *
+   * 27/8/2026 (R053) — `emailPrivacy` e' l'unico campo che non passa dal filtro
+   * `soloSeVero`: se la variabile manca ripiega su `privacy@mycity.it`, che sta
+   * su un dominio che non e' quello di produzione. Da fuori le due cose sono
+   * identiche, e quell'indirizzo e' la porta dell'art. 15 e dell'art. 17 — dove
+   * si scrive per avere una copia dei propri dati o per farseli cancellare.
+   *
+   * Il ripiego resta perche' tre pagine lo stampano e un `null` sarebbe peggio;
+   * ma chi deve indirizzare una richiesta di diritti guarda QUESTO, e se e'
+   * falso manda al modulo dei contatti (vedi `recapitoPrivacy`).
+   */
+  emailPrivacyConfigurata?: boolean;
+  /**
    * Chi risponde delle domande sulla privacy, col suo nome.
    *
    * NON e' un DPO: quello e' una nomina formale che un'attivita' di questa
@@ -92,7 +106,8 @@ export function titolare(): Titolare {
     rea: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_REA),
     pec: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_PEC),
     capitale: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_CAPITALE),
-    emailPrivacy: process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY?.trim() || 'privacy@mycity.it',
+    emailPrivacy: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY) ?? 'privacy@mycity.it',
+    emailPrivacyConfigurata: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_PRIVACY) !== null,
     referentePrivacy: process.env.NEXT_PUBLIC_TITOLARE_REFERENTE_PRIVACY?.trim() || 'Nicolae Rotaru',
     emailDpo: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_DPO),
     emailResi: soloSeVero(process.env.NEXT_PUBLIC_TITOLARE_EMAIL_RESI),
@@ -123,6 +138,33 @@ export function rigaIdentita(t: Titolare = titolare()): string {
   if (t.capitale) pezzi.push(`Capitale sociale ${t.capitale}`);
   if (t.pec) pezzi.push(`PEC: ${t.pec}`);
   return pezzi.join(' · ');
+}
+
+/**
+ * Dove si scrive per esercitare i diritti sui propri dati.
+ *
+ * 27/8/2026 (R053) — L'INFORMATIVA MANDAVA A UNA CASELLA CHE NON RICEVE.
+ *
+ * Le tre volte in cui l'informativa dice «scrivi qui» — il contatto del
+ * titolare, l'esercizio dei diritti, la richiesta delle versioni precedenti —
+ * portavano tutte a `privacy@mycity.it`, che nasce come ripiego dentro il
+ * codice quando la variabile d'ambiente e' vuota. Una richiesta di accesso o di
+ * cancellazione che finisce li' non arriva a nessuno, e dopo un mese di
+ * silenzio la persona ha diritto di reclamare al Garante: la conseguenza non e'
+ * un link rotto, e' una mancata risposta.
+ *
+ * Finche' la casella vera non c'e', si manda al modulo dei contatti: scrive nel
+ * database, arriva a qualcuno, e non promette un indirizzo che non esiste.
+ */
+export function recapitoPrivacy(t: Titolare = titolare()): {
+  href: string;
+  testo: string;
+  eUnaCasella: boolean;
+} {
+  if (t.emailPrivacyConfigurata) {
+    return { href: `mailto:${t.emailPrivacy}`, testo: t.emailPrivacy, eUnaCasella: true };
+  }
+  return { href: '/contact', testo: 'il modulo dei contatti', eUnaCasella: false };
 }
 
 /**

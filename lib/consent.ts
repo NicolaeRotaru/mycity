@@ -68,10 +68,16 @@ export function writeConsent(partial: Partial<ConsentState>) {
   try {
     localStorage.setItem(CONSENT_STORAGE, JSON.stringify(next));
   } catch { /* storage pieno: noop */ }
-  // Cookie first-party leggibile lato server
+  // Cookie first-party leggibile lato server.
+  //
+  // 27/8/2026 (R063) — LA VERSIONE ADESSO VIAGGIA DENTRO IL COOKIE.
+  // Prima c'erano le sole tre cifre. Quando si alzava il numero di versione —
+  // cioe' quando l'informativa cambiava e il consenso andava richiesto — il
+  // banner ricompariva, ma chi legge il cookie dal server non aveva modo di
+  // accorgersene: continuava a raccogliere sulla base del si' di prima.
   const maxAge = CONSENT_MAX_AGE_DAYS * 24 * 60 * 60;
   const value = encodeURIComponent(
-    `${next.functional ? 1 : 0}${next.analytics ? 1 : 0}${next.marketing ? 1 : 0}`,
+    `${CONSENT_VERSION}:${next.functional ? 1 : 0}${next.analytics ? 1 : 0}${next.marketing ? 1 : 0}`,
   );
   // Secure: il cookie non deve viaggiare su una connessione non cifrata.
   // In sviluppo (http://localhost) il flag va omesso o il browser lo scarta.
@@ -119,19 +125,39 @@ export function hasConsent(category: ConsentCategory): boolean {
 
 /**
  * Parser server-side del cookie (per leggerlo in Server Components).
- * Restituisce uno stato minimale (no ts, no version), abbastanza per
- * decidere se caricare un widget analytics o pubblicitario.
+ * Restituisce uno stato minimale (no ts), abbastanza per decidere se caricare
+ * un widget analytics o pubblicitario.
+ *
+ * 27/8/2026 (R063) — QUI SI CONTROLLA LA VERSIONE, COME FA IL BROWSER.
+ *
+ * `readConsent()` scarta lo stato salvato quando la versione non e' quella
+ * corrente: e' il modo in cui il banner si ripropone dopo un aggiornamento
+ * dell'informativa. Questo lettore non poteva fare lo stesso, perche' nel
+ * cookie la versione non c'era: risultato, il browser considerava scaduto un
+ * consenso che il server continuava a onorare — la raccolta degli eventi e i
+ * cookie dei test partivano lo stesso, finche' la persona non rispondeva al
+ * banner nuovo.
+ *
+ * Un cookie senza versione — la vecchia forma a tre cifre — vale come un no.
+ * Non e' un dettaglio pignolo: e' che di quel si' non sappiamo a quale
+ * informativa si riferisse, e un consenso di cui non si sa il contenuto non e'
+ * un consenso. Chi ce l'ha se lo vedra' richiedere una volta.
  */
 export function parseConsentCookie(value: string | undefined): {
   functional: boolean;
   analytics: boolean;
   marketing: boolean;
 } {
-  if (!value) return { functional: false, analytics: false, marketing: false };
+  const nessunConsenso = { functional: false, analytics: false, marketing: false };
+  if (!value) return nessunConsenso;
   const decoded = decodeURIComponent(value);
+  const duePunti = decoded.indexOf(':');
+  if (duePunti < 0) return nessunConsenso;
+  if (decoded.slice(0, duePunti) !== String(CONSENT_VERSION)) return nessunConsenso;
+  const scelte = decoded.slice(duePunti + 1);
   return {
-    functional: decoded[0] === '1',
-    analytics: decoded[1] === '1',
-    marketing: decoded[2] === '1',
+    functional: scelte[0] === '1',
+    analytics: scelte[1] === '1',
+    marketing: scelte[2] === '1',
   };
 }

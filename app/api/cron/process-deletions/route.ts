@@ -31,6 +31,50 @@ export const runtime = 'nodejs';
 
 
 
+type Admin = ReturnType<typeof getAdminSupabase>;
+
+/**
+ * Fa scadere i file di un secchio, con la regola scritta nel database.
+ *
+ * Il database non puo' parlare con lo storage: sono due mondi separati. Quindi
+ * la funzione SQL azzera le colonne e restituisce i percorsi dei file, e qui si
+ * tolgono i file veri. Se si facesse il contrario — prima i file, poi le
+ * colonne — un guasto a meta' lascerebbe righe che puntano a fotografie che non
+ * esistono piu'; cosi' invece il caso peggiore e' un file orfano nello storage,
+ * che nessuna pagina sa piu' mostrare.
+ *
+ * Best-effort: un errore qui non deve far saltare il resto della notte.
+ */
+async function potaFileScaduti(
+  admin: Admin,
+  funzione: 'documenti_da_cancellare_respinti' | 'foto_consegna_da_cancellare',
+  secchio: 'kyc-docs' | 'cod-proof',
+  giorni = 90,
+): Promise<void> {
+  const { data, error } = await admin.rpc(funzione, { p_giorni: giorni });
+  if (error) {
+    logger.warn('[cron-deletions] potatura file scaduti fallita', { funzione, err: error.message });
+    return;
+  }
+  let tolti = 0;
+  for (const riga of (data ?? []) as Array<{ percorsi: string[] | null }>) {
+    const percorsi = (riga.percorsi ?? []).filter(Boolean);
+    if (percorsi.length === 0) continue;
+    const { error: errRimozione } = await admin.storage.from(secchio).remove(percorsi);
+    if (errRimozione) {
+      // I percorsi finiscono nel registro apposta: la colonna che li teneva e'
+      // gia' stata azzerata, quindi senza questa riga il file resterebbe nello
+      // storage e nessuno saprebbe piu' dove cercarlo.
+      logger.warn('[cron-deletions] file scaduti non rimossi', {
+        secchio, err: errRimozione.message, percorsi,
+      });
+      continue;
+    }
+    tolti += percorsi.length;
+  }
+  logger.info('[cron-deletions] file scaduti rimossi', { funzione, secchio, tolti });
+}
+
 export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
   const admin = getAdminSupabase();
 
@@ -40,29 +84,52 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
   // oltre quei periodi (l'azione/evento resta, la PII no). Best-effort, idempotente.
   try {
     const monthsAgo = (m: number) => new Date(Date.now() - m * 30 * 86_400_000).toISOString();
+    // 27/8/2026 (R059) — ERANO 14 MESI, E NE AVEVAMO DICHIARATI 12.
+    //
+    // Nella tabella della conservazione, sulla riga «Sicurezza, anti-frode»,
+    // c'e' scritto «12 mesi (log accessi)». Qui ne stavano quattordici. Un
+    // periodo piu' lungo di quello che abbiamo dichiarato noi stessi non e' una
+    // svista da poco: in un controllo e' una contestazione che ci siamo scritti
+    // da soli, sulla nostra pagina pubblica.
     await admin
       .from('activity_events')
       .update({ ip: null, user_agent: null })
-      .lt('created_at', monthsAgo(14))
+      .lt('created_at', monthsAgo(12))
       .not('ip', 'is', null);
     // 077 — `consent_log` era l'unica tabella con dati personali che nessuna
     // pulizia toccava: l'indirizzo di rete restava li' per sempre. La PROVA del
     // consenso va conservata (e' l'accountability dell'art. 7.1), l'indirizzo di
     // rete no: dopo 24 mesi — il ciclo di rinnovo semestrale piu' un margine di
     // contenzioso — non serve piu' a niente.
-    await admin
-      .from('consent_log')
-      .update({ ip: null, user_agent: null })
-      .lt('created_at', monthsAgo(24))
-      .not('ip', 'is', null);
+    //
+    // 27/8/2026 (R066) — IL NUMERO DI MESI VIVEVA IN DUE POSTI.
+    // Qui c'era un aggiornamento scritto a mano a 24 mesi, e nel database una
+    // funzione `pota_consent_log` che diceva 12 e che non chiamava nessuno. Due
+    // regole per la stessa cosa: alla prima modifica una delle due sarebbe
+    // rimasta indietro, e l'informativa avrebbe smesso di dire il vero. Adesso
+    // il numero sta solo dentro la funzione (migrations/135) e si chiama senza
+    // argomenti, cosi' non c'e' un secondo posto da ricordarsi di cambiare.
+    const { data: consensiPotati, error: errConsensi } = await admin.rpc('pota_consent_log');
+    if (errConsensi) {
+      logger.warn('[cron-deletions] potatura registro consensi fallita', { err: errConsensi.message });
+    } else {
+      logger.info('[cron-deletions] registro consensi potato', { consensiPotati });
+    }
 
     // Fix #33: la retention dichiarata (14 mesi) non annullava anon_id/path/city/referrer.
     // Oltre 14 mesi azzeriamo anche il profilo comportamentale pseudonimo (art. 5.1.e GDPR).
+    //
+    // 27/8/2026 (R059) — QUI C'ERA UN FILTRO CHE SALTAVA DELLE RIGHE.
+    // C'era anche `.not('anon_id','is',null)`, cioe' «ripulisci solo le righe
+    // che hanno gia' un identificativo anonimo». Le righe scritte dai trigger
+    // del database non ce l'hanno: pagina, referente, citta' e paese restavano
+    // li' per sempre proprio sulle righe che nessuno andava a guardare.
+    // L'aggiornamento e' idempotente: rifarlo su una riga gia' pulita non costa
+    // niente, mentre saltarla costa un dato personale conservato a vita.
     await admin
       .from('activity_events')
       .update({ anon_id: null, path: null, referrer: null, city: null, country: null })
-      .lt('created_at', monthsAgo(14))
-      .not('anon_id', 'is', null);
+      .lt('created_at', monthsAgo(14));
     await admin
       .from('audit_logs')
       .update({ ip: null, user_agent: null })
@@ -105,11 +172,43 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
       .eq('category', 'visitor')
       .lt('created_at', monthsAgo(14));
 
+    // 27/8/2026 (R059) — LE RIGHE DI ACCESSO NON SE NE ANDAVANO MAI.
+    //
+    // Qui si cancellava solo la categoria `visitor`, cioe' la navigazione. Gli
+    // eventi di accesso — entrata, uscita, registrazione, categoria `auth` —
+    // restavano per sempre: chi sei, da che apparecchio, con che programma, in
+    // che giorno e a che ora. Un archivio di accessi che cresce senza fine e'
+    // anche il bottino peggiore da lasciare in mano a un intruso.
+    //
+    // La finestra e' la stessa che dichiariamo per i log di accesso: 12 mesi.
+    await admin
+      .from('activity_events')
+      .delete()
+      .eq('category', 'auth')
+      .lt('created_at', monthsAgo(12));
+
     // I messaggi dal modulo contatti oltre due anni non servono piu' a nessuno.
     await admin
       .from('contact_messages')
       .delete()
       .lt('created_at', monthsAgo(24));
+
+    // 27/8/2026 (R056) — I DOCUMENTI DI CHI VIENE RESPINTO.
+    //
+    // La funzione esisteva dalla migrazione 119 col commento «il cron cancella
+    // i file dallo storage», e nessun cron la chiamava. Adesso la chiama questo,
+    // e la funzione (riscritta in migrations/135) azzera davvero le colonne e
+    // restituisce i percorsi: il database non parla con lo storage, i file li
+    // toglie chi puo' farlo.
+    await potaFileScaduti(admin, 'documenti_da_cancellare_respinti', 'kyc-docs');
+
+    // 27/8/2026 (R058) — LE FOTO DELLA CONSEGNA IN CONTANTI.
+    // I contanti, la firma e «il pacco lasciato» — cioe' quasi sempre la porta
+    // di casa del cliente. Stanno nella cartella del FATTORINO, quindi quando
+    // il cliente cancellava l'account non venivano nemmeno cercate. Novanta
+    // giorni dalla consegna: il tempo della quadratura di cassa e di un
+    // reclamo. Dopo, e' la fotografia di una casa e basta.
+    await potaFileScaduti(admin, 'foto_consegna_da_cancellare', 'cod-proof');
   } catch (e) {
     logger.warn('[cron-deletions] prune retention IP/UA parziale', { e });
   }
