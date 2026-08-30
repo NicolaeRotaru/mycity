@@ -86,9 +86,31 @@ describe('l indirizzo messo a verbale quando si accettano le condizioni', () => 
     expect(stato.consensi[0].ip).toBe('93.40.10.5');
   });
 
-  it('dietro Cloudflare vale l intestazione che aggiunge il CDN, non la catena', async () => {
-    await accetta({ 'x-forwarded-for': '1.2.3.4, 172.70.1.1', 'cf-connecting-ip': '93.40.10.5' });
+  /**
+   * 27/8/2026 (R018) — anche qui l'intenzione era giusta e la prova incompleta:
+   * dietro Cloudflare vale l'intestazione del CDN, ma bisogna prima sapere che
+   * a scriverla sia stato Cloudflare. Senza quel controllo, l'indirizzo nel
+   * verbale se lo sceglieva di nuovo l'utente — cioe' il difetto che questo
+   * stesso file esiste per impedire, rientrato da un'altra porta.
+   */
+  it('dietro Cloudflare, col segreto di bordo, vale l intestazione che aggiunge il CDN', async () => {
+    process.env.EDGE_TRUST_SECRET = 'segreto-di-bordo';
+    await accetta({
+      'x-forwarded-for': '1.2.3.4, 172.70.1.1',
+      'cf-connecting-ip': '93.40.10.5',
+      'x-edge-token': 'segreto-di-bordo',
+    });
     expect(stato.consensi[0].ip).toBe('93.40.10.5');
+    delete process.env.EDGE_TRUST_SECRET;
+  });
+
+  it('senza segreto di bordo, cf-connecting-ip nel verbale non vale', async () => {
+    delete process.env.EDGE_TRUST_SECRET;
+    await accetta({ 'x-forwarded-for': '93.40.10.5', 'cf-connecting-ip': '1.2.3.4' });
+    expect(
+      stato.consensi[0].ip,
+      'l utente si e riscritto l indirizzo del verbale da un altra intestazione',
+    ).toBe('93.40.10.5');
   });
 });
 

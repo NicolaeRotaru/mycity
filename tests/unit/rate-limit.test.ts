@@ -154,12 +154,36 @@ describe('getClientIp dietro un CDN', () => {
   const mkReq2 = (headers: Record<string, string>) =>
     new Request('http://localhost/prova', { headers });
 
-  it('prende l indirizzo vero da cf-connecting-ip, anche con due salti nella catena', async () => {
+  /**
+   * 27/8/2026 (R018) — QUESTA PROVA CERTIFICAVA IL DIFETTO.
+   *
+   * Diceva «dietro un CDN vale cf-connecting-ip», e fin qui e' giusto. Ma non
+   * chiedeva NIENTE che dimostrasse che dietro ci fosse davvero il CDN: chi
+   * arriva diritto all'origine Vercel quella riga se la scrive da solo, e
+   * cambiandola a ogni richiesta azzerava tutti i freni per indirizzo.
+   *
+   * L'intenzione resta la stessa — dietro Cloudflare vince l'intestazione del
+   * CDN — ma adesso va provato che a parlare sia Cloudflare: il segreto di
+   * bordo condiviso.
+   */
+  it('col segreto di bordo prende l indirizzo vero da cf-connecting-ip, anche con due salti', async () => {
+    process.env.EDGE_TRUST_SECRET = 'segreto-di-bordo';
     const req = mkReq2({
       'cf-connecting-ip': '203.0.113.9',
+      'x-edge-token': 'segreto-di-bordo',
       'x-forwarded-for': '203.0.113.9, 172.16.0.1, 10.0.0.5',
     });
     // Col conto di prima qui usciva 10.0.0.5, cioe' un pezzo di infrastruttura.
+    expect(getClientIp(req)).toBe('203.0.113.9');
+    delete process.env.EDGE_TRUST_SECRET;
+  });
+
+  it('senza il segreto di bordo quell intestazione non vale: se la scrive chiunque', async () => {
+    delete process.env.EDGE_TRUST_SECRET;
+    const req = mkReq2({
+      'cf-connecting-ip': '1.2.3.4',
+      'x-forwarded-for': '203.0.113.9',
+    });
     expect(getClientIp(req)).toBe('203.0.113.9');
   });
 

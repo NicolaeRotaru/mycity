@@ -140,6 +140,7 @@ const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
 const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 import { logger } from '@/lib/logger';
+import { segretiCombaciano } from '@/lib/api/segreti';
 
 /**
  * QUANDO IL FRENO SI ALLARGA, ADESSO LO DICE.
@@ -280,8 +281,34 @@ export function getClientIp(req: Request): string {
    * falsificare: quando c'e', e' la risposta piu' affidabile che abbiamo. Se
    * non c'e', resta il conto di prima, che e' quello giusto senza CDN.
    */
-  const cloudflare = req.headers.get('cf-connecting-ip');
-  if (cloudflare) return cloudflare.trim();
+  /**
+   * 27/8/2026 (R018) — QUELL'INTESTAZIONE ERA CREDUTA SULLA PAROLA.
+   *
+   * `cf-connecting-ip` e' affidabile SOLO se la richiesta e' passata davvero
+   * da Cloudflare. Ma l'origine Vercel e' raggiungibile diritta — non serve
+   * saperne l'indirizzo, basta il nome del sito — e chi arriva di li' quella
+   * riga se la scrive da solo. Cambiandola a ogni richiesta diventa un
+   * visitatore nuovo ogni volta, e nessun contatore arriva mai al suo tetto:
+   * diecimila tentativi di accesso al minuto contati come diecimila persone.
+   * Cioe' tutti i freni per indirizzo del sito, azzerati da una riga di
+   * intestazione.
+   *
+   * Ignorarla non costa niente, ed e' il punto: su Vercel `x-forwarded-for`
+   * la riscrive la piattaforma con l'indirizzo vero e butta via quello che il
+   * chiamante si e' messo (sta scritto nel commento di TRUSTED_PROXY_HOPS qui
+   * sopra). Il ripiego e' quindi la fonte piu' solida che abbiamo, non una
+   * seconda scelta.
+   *
+   * Per chi Cloudflare ce l'ha davvero davanti resta la strada onesta: una
+   * regola di bordo che aggiunge `x-edge-token` con un segreto condiviso.
+   * Quando combacia con `EDGE_TRUST_SECRET`, allora quella riga l'ha scritta
+   * Cloudflare e vale.
+   */
+  const segretoDiBordo = process.env.EDGE_TRUST_SECRET;
+  if (segretoDiBordo && segretiCombaciano(req.headers.get('x-edge-token'), segretoDiBordo)) {
+    const cloudflare = req.headers.get('cf-connecting-ip');
+    if (cloudflare) return cloudflare.trim();
+  }
 
   const xff = req.headers.get('x-forwarded-for');
   if (xff) {
