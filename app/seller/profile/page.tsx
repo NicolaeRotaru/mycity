@@ -9,7 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { friendlyError } from '@/lib/errors';
-import { queryKeys } from '@/lib/queries/keys';
+import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import type { StoreHours } from '@/lib/store-hours';
 import VendorForm, { type VendorFormData } from '@/components/VendorForm';
 import GestisciAbbonamento from '@/components/seller/GestisciAbbonamento';
@@ -63,7 +63,7 @@ export default function SellerProfilePage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.profile });
-      qc.invalidateQueries({ queryKey: queryKeys.profile.auth });
+      invalidaProfiloDiChiEntrato(qc);
       toast.success('Contatti e orari aggiornati!');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),

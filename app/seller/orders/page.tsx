@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import { formatPrice, formatDate } from '@/lib/format';
@@ -16,6 +15,7 @@ import EmptyState from '@/components/EmptyState';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { Banknote, ChevronRight, ClipboardList } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
+import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type Order = {
   id: string;
@@ -41,9 +41,6 @@ function isCod(method: string | null | undefined): boolean {
   return m === 'cod' || m === 'cash';
 }
 
-/** Quanti ordini si leggono per volta. Se ne servono altri, si chiedono. */
-const PAGINA = 100;
-
 export default function SellerOrdersPage() {
   /**
    * 22/8/2026 — QUESTA PAGINA RISCARICAVA TUTTA LA STORIA DEL NEGOZIO OGNI
@@ -59,21 +56,21 @@ export default function SellerOrdersPage() {
    * chi vuole gli altri li chiede. La ricarica automatica passa a novanta
    * secondi: gli ordini nuovi arrivano comunque con la notifica.
    */
-  const [limite, setLimite] = useState(PAGINA);
-
-  const queryOrders = useQuery({
-    queryKey: [...queryKeys.seller.orders, limite],
-    placeholderData: (precedente) => precedente,
-    queryFn: async () => {
+  const queryOrders = useInfiniteQuery({
+    queryKey: queryKeys.seller.orders,
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
+      const [da, a] = finestraDellaPagina(pageParam as number);
       const base = (cols: string) =>
         supabase
           .from('orders')
           .select(cols)
           .eq('seller_id', user.id)
           .order('created_at', { ascending: false })
-          .limit(limite);
+          .order('id', { ascending: false })
+          .range(da, a);
       // payment_method serve per il badge "Contanti". Se la colonna non è (ancora)
       // presente in questo ambiente, ricadiamo sulla select senza romperci.
       const withPay = await base(`
@@ -90,12 +87,12 @@ export default function SellerOrdersPage() {
       if (fallback.error) throw fallback.error;
       return (fallback.data ?? []) as unknown as Order[];
     },
+    getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length),
     refetchInterval: 90_000,
   });
-  const orders = queryOrders.data ?? [];
+  const orders = unisciPagine(queryOrders.data?.pages ?? []);
 
-  const isFetching = queryOrders.isFetching;
-  const vistaqueryOrders = vistaDaQuery(queryOrders);
+  const vistaqueryOrders = vistaDaQuery(queryOrders, { quanti: orders.length });
   if (vistaqueryOrders.mostraScheletro) return <LoadingState />;
   if (vistaqueryOrders.mostraErrore) {
     return (
@@ -185,17 +182,19 @@ export default function SellerOrdersPage() {
             ),
           )}
 
-          {/* Se sono arrivati esattamente quanti se ne erano chiesti, ce ne
-              sono altri: si chiedono, invece di tirarli giu' tutti ogni volta. */}
-          {orders.length >= limite && (
+          {/* 27/8/2026 (R080) — Prima ogni pressione rifaceva la stessa lettura
+              con un tetto piu' alto e buttava via il risultato di prima: alla
+              quarta si erano scaricati mille ordini per mostrarne quattrocento.
+              Adesso la finestra si sposta e ogni pressione chiede i suoi cento. */}
+          {queryOrders.hasNextPage && (
             <div className="pt-2 text-center">
               <button
                 type="button"
-                onClick={() => setLimite((n: number) => n + PAGINA)}
-                disabled={isFetching}
+                onClick={() => queryOrders.fetchNextPage()}
+                disabled={queryOrders.isFetchingNextPage}
                 className="rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700 disabled:opacity-50"
               >
-                {isFetching ? 'Carico…' : 'Carica altri ordini'}
+                {queryOrders.isFetchingNextPage ? 'Carico…' : `Carica altri ${RIGHE_PER_PAGINA} ordini`}
               </button>
             </div>
           )}

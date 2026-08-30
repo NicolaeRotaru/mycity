@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
-import { queryKeys } from '@/lib/queries/keys';
+import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import { normalizeCustomization } from '@/lib/store-customization';
 import type { StoreHours } from '@/lib/store-hours';
 import type { StoreMediaItem } from '@/components/StoreMediaCarousel';
@@ -51,7 +51,7 @@ export default function StoreDetailsEditor({ profile, onBack }: { profile: Profi
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.profile });
-      qc.invalidateQueries({ queryKey: queryKeys.profile.auth });
+      invalidaProfiloDiChiEntrato(qc);
       toast.success('Dettagli negozio aggiornati!');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),

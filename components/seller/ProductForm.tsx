@@ -26,6 +26,7 @@ import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
 import { uploadProductImages } from '@/lib/products/uploadImages';
+import { patchAiPerIlForm } from '@/lib/products/aiPatch';
 import { useFormAutosave } from '@/lib/hooks/useFormAutosave';
 import {
   createProductSchema,
@@ -78,6 +79,10 @@ interface ProductFormProps {
     ctx: { intent: 'publish' | 'draft' | 'save'; variants: ProductVariant[] },
   ) => void;
   onDelete?: () => void;
+  /** 27/8/2026 (R029) — nel pannello venditore il tasto NASCONDE, non cancella;
+   *  in quello dell'amministratore cancella davvero. L'etichetta deve dire
+   *  quello che succede, quindi la decide chi passa la funzione. */
+  deleteLabel?: string;
   deleting?: boolean;
   /** create: scarta la bozza in corso (svuota l'autosalvataggio e torna indietro). */
   onDiscard?: () => void;
@@ -94,6 +99,7 @@ export default function ProductForm({
   submitting = false,
   onSubmit,
   onDelete,
+  deleteLabel = 'Elimina prodotto',
   deleting = false,
   onDiscard,
   productId,
@@ -110,6 +116,7 @@ export default function ProductForm({
     handleSubmit,
     setValue,
     watch,
+    getValues,
     formState: { errors },
   } = useForm<ProductFormValues>({
     resolver: zodResolver(schema),
@@ -337,8 +344,20 @@ export default function ProductForm({
 
   // Applica un patch dell'AI allo stato del form. Ritorna le etichette dei
   // campi modificati (per il feedback in chat). Stesse regole di handleExtracted.
-  const applyPatch = (patch: ProductEditPatch): string[] => {
-    const changed: string[] = [];
+  const applyPatch = (proposta: ProductEditPatch): string[] => {
+    /**
+     * 27/8/2026 (R145) — IL PREZZO PASSA DALLA BANDA ANCHE QUI.
+     *
+     * Prima questa funzione scriveva nel campo prezzo qualunque numero
+     * arrivasse dal modello, mentre il gemello che gira sul server (
+     * `resolveAiPatch`) un freno ce l'aveva. I suggerimenti di «migliora
+     * tutto», della diagnosi e della chat tornano al browser e finiscono qui:
+     * uno zero perso — 20 € che diventano 2 € — entrava in vetrina al primo
+     * salvataggio. Adesso la banda e' la stessa funzione per tutti e due, e il
+     * prezzo scartato si dice invece di sparire.
+     */
+    const { patch, rifiutati } = patchAiPerIlForm(proposta, { prezzoAttuale: getValues('price') });
+    const changed: string[] = [...rifiutati];
 
     if (typeof patch.name === 'string' && patch.name.trim()) {
       setValue('name', patch.name.trim(), { shouldValidate: true });
@@ -982,7 +1001,7 @@ export default function ProductForm({
                   disabled={deleting}
                   className="sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold text-rose-700 bg-white border-2 border-rose-200 hover:bg-rose-50 disabled:opacity-50"
                 >
-                  <Trash2 size={16} aria-hidden /> Elimina prodotto
+                  <Trash2 size={16} aria-hidden /> {deleteLabel}
                 </button>
               )}
               <button

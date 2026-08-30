@@ -11,7 +11,7 @@ import SellerApplicationForm, { type SellerApplicationData } from '@/components/
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
-import { queryKeys } from '@/lib/queries/keys';
+import { queryKeys, invalidaProfiloDiChiEntrato } from '@/lib/queries/keys';
 import { X, Hourglass, Home, Mail } from 'lucide-react';
 
 const fetchProfile = async () => {
@@ -80,8 +80,7 @@ export default function SellPage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.profile.me });
-      qc.invalidateQueries({ queryKey: queryKeys.profile.auth });
+      invalidaProfiloDiChiEntrato(qc);
       toast.success('Richiesta inviata! Ti contatteremo entro 48h.');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),

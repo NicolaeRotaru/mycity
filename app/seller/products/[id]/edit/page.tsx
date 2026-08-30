@@ -14,7 +14,8 @@ import { queryKeys } from '@/lib/queries/keys';
 import { normalizeCondition, type ProductCondition, type ProductUnit } from '@/lib/products/schema';
 import { type ProductVariant } from '@/lib/products/variants';
 import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, EyeOff } from 'lucide-react';
+import { nascondiProdotto } from '@/lib/products/nascondi';
 
 type Category = { id: string; name: string; slug: string; parent_id: string | null };
 
@@ -88,16 +89,23 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  const removeProduct = useMutation({
+  /**
+   * 27/8/2026 (R029) — QUI SI NASCONDE, NON SI CANCELLA.
+   *
+   * Cancellare portava via anche le recensioni del prodotto (ON DELETE
+   * CASCADE) e il nome di quello che il cliente aveva comprato. Il prodotto va
+   * in bozza: sparisce dalla vetrina e resta nella storia degli ordini.
+   */
+  const nascondiIlProdotto = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { error } = await supabase.from('products').delete().eq('id', id).eq('seller_id', user.id);
-      if (error) throw error;
+      await nascondiProdotto(supabase, { id, sellerId: user.id });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
-      toast.success('Prodotto eliminato');
+      qc.invalidateQueries({ queryKey: queryKeys.seller.product(id) });
+      toast.success('Prodotto nascosto: lo trovi fra le bozze');
       router.push('/seller/products');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
@@ -159,19 +167,20 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
         categories={categories}
         initialValues={initialValues}
         submitting={update.isPending}
-        deleting={removeProduct.isPending}
+        deleteLabel="Nascondi prodotto"
+        deleting={nascondiIlProdotto.isPending}
         productId={id}
         sellerOffersExpress={offersExpress}
         onSubmit={(payload, ctx) => update.mutate({ payload, variants: ctx.variants })}
         onDelete={async () => {
           const ok = await confirmDialog({
-            title: 'Eliminare il prodotto?',
-            message: `"${product.name as string}" verrà rimosso dal tuo catalogo. L'azione è irreversibile.`,
-            confirmLabel: 'Sì, elimina',
+            title: 'Nascondere il prodotto?',
+            message: `"${product.name as string}" sparisce dalla vetrina e va fra le bozze. Resta negli ordini già fatti, con le sue recensioni: puoi rimetterlo in vendita quando vuoi.`,
+            confirmLabel: 'Sì, nascondi',
             danger: true,
-            icon: Trash2,
+            icon: EyeOff,
           });
-          if (ok) removeProduct.mutate();
+          if (ok) nascondiIlProdotto.mutate();
         }}
       />
     </div>

@@ -11,6 +11,7 @@ import VerifyCodeDialog from '@/components/VerifyCodeDialog';
 import { formatPrice } from '@/lib/format';
 import {
   ORDER_STATUS_LABEL,
+  passaggioLecito,
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
@@ -519,7 +520,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               Conferma ritiro al negozio
             </Button>
           )}
-          {order.delivery_status === 'PICKED_UP' && (
+          {/* 27/8/2026 (R014) — quali passaggi sono leciti lo dice la tabella
+              condivisa, la stessa che il database fa rispettare. */}
+          {passaggioLecito(order.delivery_status, 'OUT_FOR_DELIVERY', 'fattorino') && (
             <div className="flex flex-col gap-2">
               <Button
                 onClick={() => transition.mutate({ newStatus: 'OUT_FOR_DELIVERY' })}

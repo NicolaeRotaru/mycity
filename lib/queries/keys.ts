@@ -80,8 +80,16 @@ export const queryKeys = {
     me:                      ['profile', 'me'] as const,
     mine:                    ['profile', 'mine'] as const,
     byId:    (id: string)    => ['profile', 'detail', id] as const,
-    auth:                    ['profile', 'auth'] as const,
-    authByUser: (uid: string) => ['auth-profile', uid] as const,
+    /**
+     * 27/8/2026 (R002) — QUESTA CHIAVE VIVEVA FUORI DAL SUO RAMO.
+     *
+     * Era `['auth-profile', uid]`, cioe' un albero tutto suo, mentre le pagine
+     * che cambiano il profilo svuotavano `['profile','auth']`: due chiavi senza
+     * radice in comune, quindi quelle svuotate non arrivavano mai qui e la
+     * testata restava col nome e il logo vecchi. Ora sta sotto `['profile']`
+     * come tutto il resto, e `invalidaProfiloDiChiEntrato` la prende.
+     */
+    authByUser: (uid: string) => ['profile', 'auth', uid] as const,
   },
 
   notifications: {
@@ -310,3 +318,19 @@ export const queryKeys = {
     containing: (productId: string) => ['lists', 'containing', productId] as const,
   },
 } as const;
+
+/**
+ * Svuota TUTTO quello che riguarda il profilo di chi ha fatto accesso.
+ *
+ * 27/8/2026 (R002) — La chiamavano in quattro (la richiesta da venditore, i
+ * contatti del negozio, il profilo del fattorino, i dettagli del negozio) e
+ * ognuna scriveva a mano la chiave da svuotare. Una sola sbagliata bastava a
+ * lasciare in alto il nome vecchio, e non se ne accorgeva nessuno perché
+ * svuotare una casella vuota non da' nessun errore. Adesso il punto e' uno solo:
+ * se la chiave cambia, cambia qui, e cambia per tutti.
+ */
+export function invalidaProfiloDiChiEntrato(qc: {
+  invalidateQueries: (filtro: { queryKey: readonly unknown[] }) => unknown;
+}): void {
+  qc.invalidateQueries({ queryKey: queryKeys.profile.all });
+}

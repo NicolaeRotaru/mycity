@@ -90,3 +90,55 @@ export function isActiveStatus(current: OrderStatus, step: OrderStatus): boolean
   if (current === 'ASSIGNED' && step === 'READY') return true;
   return false;
 }
+
+/**
+ * 27/8/2026 (R014) — I PASSAGGI LECITI, SCRITTI DOVE LI LEGGONO I PULSANTI.
+ *
+ * Chi può portare l'ordine da uno stato all'altro era scritto in un posto solo:
+ * il guardiano `enforce_order_update_rules` della migrazione 114, dentro il
+ * database. Nel sito la stessa conoscenza era riscritta a mano, una condizione
+ * per pulsante, in due pagine diverse. Bastava che una condizione e il
+ * guardiano si allontanassero di un passo perché il negoziante vedesse un
+ * pulsante che al clic risponde «Non hai i permessi per questa azione»: un
+ * messaggio che non c'entra niente con quello che ha fatto.
+ *
+ * Qui c'è la copia leggibile dal sito. Che sia la stessa del database lo
+ * verifica `tests/unit/i-passaggi-di-stato-dell-ordine-hanno-una-casa-sola.test.ts`,
+ * che legge la migrazione 114 e confronta i due elenchi.
+ */
+export type ChiCambiaStato = 'negoziante' | 'fattorino';
+
+export const PASSAGGI_LECITI: { da: OrderStatus; a: OrderStatus; chi: ChiCambiaStato }[] = [
+  { da: 'NEW',       a: 'ACCEPTED',         chi: 'negoziante' },
+  { da: 'ACCEPTED',  a: 'READY',            chi: 'negoziante' },
+  { da: 'READY',     a: 'ASSIGNED',         chi: 'fattorino'  },
+  { da: 'PICKED_UP', a: 'OUT_FOR_DELIVERY', chi: 'fattorino'  },
+];
+
+/** Vero se quel passaggio lo può fare quella persona (le altre strade passano dalle RPC). */
+export function passaggioLecito(da: OrderStatus, a: OrderStatus, chi: ChiCambiaStato): boolean {
+  return PASSAGGI_LECITI.some((p) => p.da === da && p.a === a && p.chi === chi);
+}
+
+/** Gli stati d'arrivo possibili da qui: è l'elenco dei pulsanti da mostrare. */
+export function passaggiDa(da: OrderStatus, chi: ChiCambiaStato): OrderStatus[] {
+  return PASSAGGI_LECITI.filter((p) => p.da === da && p.chi === chi).map((p) => p.a);
+}
+
+/**
+ * L'orario da segnare quando si arriva in quello stato.
+ *
+ * 27/8/2026 (R015) — Il nome della colonna lo passava il browser, dal punto in
+ * cui si premeva il pulsante. La pagina gemella del fattorino era già stata
+ * riparata («lasciava scrivere al BROWSER il nome di una colonna e il suo
+ * valore»), quella del negoziante no: stessa forma già giudicata sbagliata, a
+ * venti righe di distanza. Oggi il database para il colpo — accetta solo le
+ * colonne del suo elenco — ma la colonna la decide lo stato d'arrivo, non chi
+ * clicca. Gli orari di ritiro e consegna non sono qui apposta: quelli li scrive
+ * il database dentro le sue funzioni, ed è giusto così — sono la prova di
+ * quando è successo, e la prova non la scrive chi ha interesse a spostarla.
+ */
+export const COLONNA_ORARIO_DEL_PASSAGGIO: Partial<Record<OrderStatus, 'accepted_at' | 'ready_at'>> = {
+  ACCEPTED: 'accepted_at',
+  READY:    'ready_at',
+};

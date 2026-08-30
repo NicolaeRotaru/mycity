@@ -1223,6 +1223,11 @@ export interface Database {
           unit_price: number;
           variant_id: string | null;
           variant_label: string | null;
+          // 27/8/2026 (R029) — la copia del nome e della foto del giorno
+          // dell'ordine (migrazione 140). La scrive il database: l'ordine deve
+          // restare leggibile anche se il prodotto cambia nome o sparisce.
+          product_name: string | null;
+          product_image: string | null;
         };
         Insert: {
           id?: string;
@@ -1232,6 +1237,8 @@ export interface Database {
           unit_price: number;
           variant_id?: string | null;
           variant_label?: string | null;
+          product_name?: string | null;
+          product_image?: string | null;
         };
         Update: {
           id?: string;
@@ -1241,6 +1248,8 @@ export interface Database {
           unit_price?: number;
           variant_id?: string | null;
           variant_label?: string | null;
+          product_name?: string | null;
+          product_image?: string | null;
         };
         Relationships: [];
       };
