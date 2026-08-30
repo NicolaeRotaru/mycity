@@ -159,7 +159,7 @@ export default function NearMePage() {
   }, []);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: queryKeys.stores.nearV2,
+    queryKey: queryKeys.stores.vicini,
     queryFn: fetchNearData,
   });
 

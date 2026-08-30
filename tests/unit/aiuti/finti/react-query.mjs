@@ -30,6 +30,25 @@ export function useQuery(opzioni) {
   return sopra ? { ...base, ...sopra } : base;
 }
 
+/**
+ * 30/8/2026 (R080) — La griglia dei prodotti adesso sfoglia a finestre
+ * (`useInfiniteQuery`): senza questo, montarla in una prova non compilava
+ * nemmeno. Il dato resta quello che mette la prova in `__DATI_QUERY__`, servito
+ * come pagina unica: le prove che montano una pagina guardano cosa esce a
+ * video, non come si sfoglia.
+ */
+export function useInfiniteQuery(opzioni) {
+  const base = useQuery(opzioni);
+  const pagina = Array.isArray(base.data) ? base.data : base.data == null ? [] : [base.data];
+  return {
+    ...base,
+    data: { pages: [pagina], pageParams: [opzioni?.initialPageParam ?? 0] },
+    fetchNextPage: () => Promise.resolve(),
+    hasNextPage: false,
+    isFetchingNextPage: false,
+  };
+}
+
 export const useQueries = (o) => (o?.queries ?? []).map((q) => useQuery(q));
 export const useMutation = () => ({
   mutate: () => {}, mutateAsync: async () => {}, isPending: false, isError: false, error: null,

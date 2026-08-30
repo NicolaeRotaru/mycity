@@ -1,48 +1,45 @@
 /**
- * Query keys factory — single source of truth per React Query cache keys.
- *
- * Esperti consultati:
- * - Staff Frontend Engineer: "Stringly-typed query keys = errori silenti.
- *   Factory pattern → TypeScript-safe, refactor-safe, autocomplete."
- * - Senior Code Reviewer: "Per invalidation, usa .all per blast intero domain
- *   (es. qc.invalidateQueries({ queryKey: queryKeys.orders.all }) invalida
- *   list + detail + byUser di un colpo)."
+ * Le chiavi della cache del browser, in un posto solo: chi legge un dato e chi
+ * lo fa rileggere devono guardare la stessa riga.
  *
  * Convenzione:
- *   - .all       → invalidation blast
- *   - .lists()   → tutte le list views
- *   - .list(filters) → specific list view
- *   - .details() → tutti i detail
- *   - .detail(id) → specific detail
+ *   - .all       → svuota un dominio intero (es. `queryKeys.orders.all`)
+ *   - .detail(id) → il singolo elemento
+ *
+ * 30/8/2026 (R012) — QUI DENTRO C'ERANO CINQUANTADUE CHIAVI CHE NON USAVA
+ * NESSUNO, E TRE COPPIE DI DOPPIONI.
+ *
+ * Il costo non era la memoria: era che chi apriva il file per capire quale
+ * chiave usare ne trovava due plausibili — `health` accanto a `healthV2`,
+ * `public` accanto a `publicV2` — e sceglieva a caso. E' esattamente cosi' che
+ * nasce l'aggiornamento della cache che sbaglia bersaglio: il negoziante
+ * modifica qualcosa, la pagina fa rileggere una chiave che non e' quella che
+ * sta guardando, e continua a vedere il dato vecchio senza che nessuno abbia
+ * sbagliato niente di visibile.
+ *
+ * Adesso ogni chiave definita qui e' usata da qualcuno, e una sola forma per
+ * ogni cosa. A tenerlo vero e' `tests/unit/le-chiavi-della-cache-si-usano-tutte`,
+ * che rilegge questo file e diventa rosso appena ne compare una che non serve a
+ * nessuno.
  */
 
 export const queryKeys = {
   orders: {
     all:                     ['orders'] as const,
-    lists:                   () => [...queryKeys.orders.all, 'list'] as const,
-    list:    (filters: { status?: string; sellerId?: string } = {}) =>
-                              [...queryKeys.orders.lists(), filters] as const,
     details:                 () => [...queryKeys.orders.all, 'detail'] as const,
     detail:  (id: string)    => [...queryKeys.orders.details(), id] as const,
-    sellerOrder: (id: string)=> [...queryKeys.orders.all, 'seller', id] as const,
-    riderOrder:  (id: string)=> [...queryKeys.orders.all, 'rider', id] as const,
     deliveryCode: (id: string) => ['delivery-code', id] as const,
     forReview: (id: string)  => ['order-for-review', id] as const,
   },
 
   products: {
     all:                     ['products'] as const,
-    lists:                   () => [...queryKeys.products.all, 'list'] as const,
-    list:    (filters: Record<string, unknown> = {}) =>
-                              [...queryKeys.products.lists(), filters] as const,
     grid:    (filters: Record<string, unknown>) =>
                               [...queryKeys.products.all, filters] as const,
     ratings: (ids: string)   => ['products-ratings', ids] as const,
     // 22/8/2026 — i prodotti col voto minimo: filtro chiesto al database.
     conVotoAlmeno: (min: number) => ['products-voto-almeno', min] as const,
     detail:  (id: string)    => [...queryKeys.products.all, 'detail', id] as const,
-    search:  (q: string, filters: Record<string, unknown> = {}) =>
-                              [...queryKeys.products.all, 'search', q, filters] as const,
     similar: (id: string, categoryId?: string | null, sellerId?: string | null) =>
                               [...queryKeys.products.all, 'similar', id, categoryId ?? null, sellerId ?? null] as const,
     boughtTogether: (id: string, sellerId?: string | null) =>
@@ -55,31 +52,24 @@ export const queryKeys = {
     all:                     ['stores'] as const,
     detail:  (id: string)    => [...queryKeys.stores.all, id] as const,
     sellerCard: (id: string) => [...queryKeys.stores.all, 'seller-card', id] as const,
-    nearby:  (lat: number, lng: number) =>
-                              [...queryKeys.stores.all, 'nearby', lat, lng] as const,
     page:                    ['stores', 'page-v4'] as const,
     // 22/8/2026 — i negozi aperti adesso, chiesti al database invece che
     // dedotti nel browser da un campione di prodotti.
     apertiOra:               ['stores', 'aperti-ora'] as const,
     showcase:                ['stores', 'showcase-v2'] as const,
-    nearV2:                  ['near-stores-v2'] as const,
-  },
-
-  cart: {
-    all:                     ['cart'] as const,
-    items:                   ['cart', 'items'] as const,
+    // Il nome della chiave dice cosa e'; il valore resta quello che gia' gira
+    // nei browser di chi ci usa, e non si tocca.
+    vicini:                  ['near-stores-v2'] as const,
   },
 
   favorites: {
     all:                     ['favorites'] as const,
-    set:                     ['favorites', 'set'] as const,
   },
 
   profile: {
     all:                     ['profile'] as const,
     me:                      ['profile', 'me'] as const,
     mine:                    ['profile', 'mine'] as const,
-    byId:    (id: string)    => ['profile', 'detail', id] as const,
     /**
      * 27/8/2026 (R002) — QUESTA CHIAVE VIVEVA FUORI DAL SUO RAMO.
      *
@@ -93,16 +83,12 @@ export const queryKeys = {
   },
 
   notifications: {
-    all:                     ['notifications'] as const,
     count:                   ['notifications', 'count'] as const,
     list:                    ['notifications', 'list'] as const,
   },
 
   messages: {
-    all:                     ['messages'] as const,
-    unread:                  ['messages', 'unread'] as const,
     unreadByUser: (uid: string) => ['messages-unread', uid] as const,
-    conversation: (id: string) => ['messages', 'conversation', id] as const,
     conversationByParam: (id: string) => ['conversation', id] as const,
     conversations:           ['conversations'] as const,
     conversationsByUser: (uid: string) => ['conversations', uid] as const,
@@ -110,9 +96,6 @@ export const queryKeys = {
   },
 
   loyalty: {
-    all:                     ['loyalty'] as const,
-    account:                 ['loyalty', 'account'] as const,
-    transactions:            ['loyalty', 'transactions'] as const,
     accountByUser: (uid: string) => ['loyalty', 'account', uid] as const,
     txsByUser:     (uid: string) => ['loyalty', 'txs', uid] as const,
   },
@@ -128,14 +111,12 @@ export const queryKeys = {
   },
 
   referrals: {
-    all:                     ['referrals'] as const,
     mine:                    ['my-referral'] as const,
     stats:   (code: string)  => ['referral-stats', code] as const,
     leaderboard:             ['referral-leaderboard'] as const,
   },
 
   admin: {
-    all:                     ['admin'] as const,
     home:                    ['admin', 'home'] as const,
     branding:                ['admin', 'branding'] as const,
     dailyDrops:              ['admin', 'daily-drops'] as const,
@@ -146,7 +127,7 @@ export const queryKeys = {
     users:   (filters: Record<string, unknown> = {}) =>
                               ['admin', 'users', filters] as const,
     sos:                     ['admin', 'sos'] as const,
-    disputes:                ['admin', 'disputes'] as const,
+
     audit:   (action?: string) => ['admin', 'audit', action ?? 'all'] as const,
     activity: (filters: Record<string, unknown> = {}) =>
                               ['admin', 'activity', filters] as const,
@@ -160,15 +141,13 @@ export const queryKeys = {
     shopOfMonth: (month: string) => ['admin', 'shop-of-month', month] as const,
     shopOfMonthLeaderboard:  ['admin', 'shop-of-month', 'leaderboard'] as const,
     approvedSellers:         ['admin', 'approved-sellers'] as const,
-    cashback:                ['admin', 'cashback'] as const,
     coupons:                 ['admin', 'coupons'] as const,
     orders:                  ['admin', 'orders'] as const,
-    disputes2: (filter?: string) => ['admin', 'disputes', filter ?? 'all'] as const,
+    disputes: (filter?: string) => ['admin', 'disputes', filter ?? 'all'] as const,
     codRemittances:          ['admin', 'cod-remittances'] as const,
   },
 
   seller: {
-    all:                     ['seller'] as const,
     stats:                   ['seller', 'stats'] as const,
     products:                ['seller', 'products'] as const,
     product: (id: string)    => ['seller', 'product', id] as const,
@@ -186,28 +165,21 @@ export const queryKeys = {
     myStories:               ['seller', 'my-stories'] as const,
     storiesActive:           ['seller', 'stories', 'active'] as const,
     onboardingChecklist: (uid: string) =>
-                              ['seller', 'onboarding', uid] as const,
-    onboardingChecklistV2: (uid: string) =>
                               ['seller-onboarding-checklist', uid] as const,
-    health:  (uid: string)   => ['seller', 'health', uid] as const,
-    healthV2: (uid: string)  => ['seller-health', uid] as const,
+    health:  (uid: string)   => ['seller-health', uid] as const,
     returnForOrder: (orderId: string) => ['seller', 'return', orderId] as const,
   },
 
   promotions: {
-    all:                     ['promotions'] as const,
     active:                  ['promotions', 'active'] as const,
     home:                    ['promotions', 'home'] as const,
     byStore: (id: string)    => ['promotions', 'store', id] as const,
   },
 
   rider: {
-    all:                     ['rider'] as const,
-    availability:            ['rider', 'availability'] as const,
     earnings:                ['rider', 'earnings'] as const,
     orders:                  ['rider', 'orders'] as const,
     pref:                    ['rider', 'pref'] as const,
-    activeOrder:             ['rider', 'active-order'] as const,
     order:   (id: string)    => ['rider', 'order', id] as const,
     profile:                 ['rider', 'profile'] as const,
     history:                 ['rider', 'history'] as const,
@@ -216,32 +188,20 @@ export const queryKeys = {
     todayStats:              ['rider', 'today-stats'] as const,
   },
 
-  groups: {
-    all:                     ['groups'] as const,
-    detail:  (id: string)    => ['groups', 'detail', id] as const,
-    participation: (id: string) => ['groups', 'participation', id] as const,
-    order:   (id: string)    => ['groups', 'order', id] as const,
-    orders:                  ['group-orders'] as const,
-  },
-
   qa: {
-    all:                     ['qa'] as const,
     product: (productId: string) => ['qa', productId] as const,
   },
 
   addresses: {
     all:                     ['addresses'] as const,
-    byUser:  (uid: string)   => ['addresses', uid] as const,
   },
 
   reviews: {
-    all:                     ['reviews'] as const,
     detail:  (id: string)    => ['reviews', id] as const,
     store:   (id: string)    => ['reviews', 'store', id] as const,
   },
 
   events: {
-    all:                     ['events'] as const,
     public:                  ['events', 'public'] as const,
     rsvpCounts:              ['events', 'rsvp-counts'] as const,
   },
@@ -258,13 +218,9 @@ export const queryKeys = {
 
   categories: {
     all:                     ['categories'] as const,
-    showcase:                ['categories'] as const,
     allList:                 ['all-categories'] as const,
-    top:                     ['categories', 'top'] as const,
-    sub:     (id: string)    => ['categories', 'sub', id] as const,
     form:                    ['categories', 'form'] as const,
     bySlug:  (slug: string)  => ['category', slug] as const,
-    avgPrice: (id: string)   => ['category-avg-price', id] as const,
   },
 
   search: {
@@ -283,34 +239,21 @@ export const queryKeys = {
   },
 
   achievements: {
-    all:                     ['achievements'] as const,
     allList:                 ['achievements-all'] as const,
-    mine:                    ['achievements', 'mine'] as const,
     byUser:  (uid: string)   => ['achievements', uid] as const,
   },
 
   home: {
-    all:                     ['home'] as const,
-    stories:                 ['home', 'stories'] as const,
-    shopOfMonth:             ['home', 'shop-of-month'] as const,
-    drop:                    ['home', 'drop'] as const,
-    storyOfDay: (date: string)=> ['home', 'story-of-day', date] as const,
-    dailyStory: (date: string) => ['daily-story', date] as const,
     dailyDrop:  (date: string) => ['daily-drop', date] as const,
     liveFeed:                ['live-feed'] as const,
     recentlyViewed: (uid: string) => ['recently-viewed', uid] as const,
-    trending:                ['home', 'trending'] as const,
     trendingNow:             ['home', 'trending-now'] as const,
-    sponsored: (placement: string, categorySlug?: string) =>
-                              ['home', 'sponsored', placement, categorySlug ?? null] as const,
   },
 
   lists: {
     all:                     ['lists'] as const,
-    public:                  ['lists', 'public'] as const,
-    publicV2:                ['lists-public'] as const,
-    featured:                ['lists', 'featured'] as const,
-    featuredV2:              ['lists-featured'] as const,
+    public:                  ['lists-public'] as const,
+    inVetrina:               ['lists-featured'] as const,
     mine:                    ['lists', 'mine'] as const,
     mineMin:                 ['lists', 'mine-min'] as const,
     detail:  (id: string)    => ['lists', 'detail', id] as const,

@@ -50,7 +50,7 @@ export default function ListsPage() {
   const [newDesc, setNewDesc] = useState('');
 
   const { data: featuredLists = [] } = useQuery({
-    queryKey: queryKeys.lists.featuredV2,
+    queryKey: queryKeys.lists.inVetrina,
     queryFn: async (): Promise<List[]> => {
       const { data } = await supabase
         .from('product_lists')
@@ -68,7 +68,7 @@ export default function ListsPage() {
   });
 
   const { data: publicLists = [] } = useQuery({
-    queryKey: queryKeys.lists.publicV2,
+    queryKey: queryKeys.lists.public,
     queryFn: async (): Promise<List[]> => {
       const { data } = await supabase
         .from('product_lists')

@@ -18,6 +18,7 @@
  */
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 
 export type DisputeOrderRow = {
@@ -82,4 +83,31 @@ export async function notifyAdmins(title: string, body: string, link: string) {
   const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
   if (!admins || admins.length === 0) return;
   await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link })));
+}
+
+/**
+ * 30/8/2026 (R005) — UN AVVISO CHE NON PARTE NON NE PORTA VIA ALTRI.
+ *
+ * Gli avvisi dopo un ordine partivano dentro un ciclo protetto da un solo
+ * `.catch()` in fondo: la prima cosa che lanciava interrompeva il giro per
+ * tutti gli ordini successivi. Carrello da due o tre negozi pagato con carta,
+ * un intoppo sul primo invio, e il secondo e il terzo negoziante non sapevano
+ * di avere un ordine — mentre il cliente aveva pagato e aspettava.
+ *
+ * Ogni invio nel suo riparo, come fa da sempre la strada dei contanti: quello
+ * che salta e' solo quello che e' saltato, e resta scritto dove si guarda.
+ */
+export async function provaAMandare(
+  cosa: string,
+  dati: Record<string, unknown>,
+  invio: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await invio();
+  } catch (e) {
+    logger.error(`[stripe] ${cosa} non partita: ordine pagato e destinatario non avvisato`, {
+      ...dati,
+      message: e instanceof Error ? e.message : 'errore',
+    });
+  }
 }

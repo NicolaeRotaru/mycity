@@ -131,11 +131,53 @@ async function firmaRuolo(dato: string, segreto: string): Promise<string> {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-type ProfiloInCache = { role: string | undefined; approved: boolean };
+type ProfiloInCache = { role: string | undefined; approved: boolean; emailConfermata: boolean };
 
+/**
+ * 30/8/2026 (R072) — L'IMPRONTA DELLA SESSIONE, PERCHE' IL COOKIE SI POSSA
+ * LEGGERE PRIMA DI SAPERE CHI E'.
+ *
+ * Il cookie del ruolo portava dentro l'id della persona e si confrontava con
+ * quello restituito da `getUser()`. Ma `getUser()` e' proprio la chiamata di
+ * rete che si vuole evitare sul catalogo: finche' il confronto dipende da lei,
+ * il cookie serve solo a risparmiare la SECONDA attesa, non la prima.
+ *
+ * Qui il legame diventa la sessione stessa: i cookie `sb-…-auth-token` SONO la
+ * credenziale, e un'impronta del loro contenuto cambia quando cambia la
+ * persona (o quando il gettone viene rinnovato). Il cookie del ruolo resta
+ * firmato da noi e httpOnly: l'impronta sta DENTRO il dato firmato, quindi non
+ * la si puo' rifare a mano. Se non combacia, il cookie non vale e si torna a
+ * chiedere — cioe' si perde una scorciatoia, mai un controllo.
+ *
+ * Non e' una funzione di sicurezza: e' un modo di dire «questo cookie parla di
+ * questa sessione». Un'impronta veloce basta e avanza.
+ */
+function improntaSessione(req: NextRequest): string {
+  const pezzi: string[] = [];
+  for (const c of req.cookies.getAll()) {
+    if (c.name.startsWith('sb-') && c.name.includes('-auth-token')) pezzi.push(`${c.name}=${c.value}`);
+  }
+  // Nessuna sessione: nessuna impronta. Vuoto e' «non lo so», e chi chiama
+  // ripiega — non su un valore uguale per tutti, che sarebbe peggio di niente.
+  if (pezzi.length === 0) return '';
+  pezzi.sort();
+  let h = 0x811c9dc5;
+  const testo = pezzi.join('&');
+  for (let i = 0; i < testo.length; i++) {
+    h ^= testo.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+
+/**
+ * Il profilo messo da parte, se il cookie e' nostro ED e' di questa sessione.
+ * Con `userId` si controlla anche che parli di quella persona: serve dopo
+ * `getUser()`, dove l'id vero c'e'.
+ */
 async function leggiRuoloDalCookie(
   req: NextRequest,
-  userId: string,
+  userId?: string,
 ): Promise<ProfiloInCache | null> {
   const segreto = segretoRuolo();
   if (!segreto) return null;
@@ -143,21 +185,30 @@ async function leggiRuoloDalCookie(
   if (!grezzo) return null;
   const [dato, firma] = grezzo.split('.');
   if (!dato || !firma) return null;
-  // Il dato porta dentro l'id della persona: un cookie di qualcun altro non vale.
-  const [id, ruolo, approvato] = dato.split('|');
-  if (id !== userId) return null;
+  const [id, ruolo, approvato, emailOk, impronta] = dato.split('|');
+  // I cookie scritti prima di questa versione non portano l'impronta: valgono
+  // come «non c'e' niente da riusare», e si rilegge il profilo vero.
+  if (!impronta || impronta !== improntaSessione(req)) return null;
+  if (userId !== undefined && id !== userId) return null;
   if ((await firmaRuolo(dato, segreto)) !== firma) return null;
-  return { role: ruolo || undefined, approved: approvato === '1' };
+  return { role: ruolo || undefined, approved: approvato === '1', emailConfermata: emailOk === '1' };
 }
 
 async function scriviRuoloNelCookie(
+  req: NextRequest,
   res: NextResponse,
   userId: string,
   profilo: ProfiloInCache,
 ): Promise<void> {
   const segreto = segretoRuolo();
   if (!segreto) return;
-  const dato = `${userId}|${profilo.role ?? ''}|${profilo.approved ? '1' : '0'}`;
+  const dato = [
+    userId,
+    profilo.role ?? '',
+    profilo.approved ? '1' : '0',
+    profilo.emailConfermata ? '1' : '0',
+    improntaSessione(req),
+  ].join('|');
   res.cookies.set({
     name: RUOLO_COOKIE,
     value: `${dato}.${await firmaRuolo(dato, segreto)}`,
@@ -245,12 +296,23 @@ export async function middleware(req: NextRequest) {
   // ma non si scrive niente sul dispositivo, e alla visita dopo si riparte.
   const consensoAnalitico = parseConsentCookie(req.cookies.get(CONSENT_COOKIE)?.value).analytics;
   const newAssignments: Array<{ cookie: string; variant: string }> = [];
+  /**
+   * 30/8/2026 (R173) — Il seme dell'assegnazione: qualcosa che c'e' gia' e che
+   * non cambia da una pagina all'altra. Prima la sessione (se c'e'), poi
+   * indirizzo di rete + browser. Non si scrive niente sul dispositivo e non si
+   * conserva niente: serve solo a far uscire lo stesso numero due volte di
+   * seguito, cosi' chi non ha accettato i cookie non vede la home cambiare
+   * faccia a ogni click.
+   */
+  const semeStabile =
+    improntaSessione(req) ||
+    `${req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? ''}|${req.headers.get('user-agent') ?? ''}`;
   for (const exp of EXPERIMENT_LIST) {
     const existing = req.cookies.get(expCookieName(exp.key))?.value;
     if (existing) {
       reqHeaders.set(expHeaderName(exp.key), resolveVariant(exp, existing));
     } else {
-      const variant = assignVariant(exp);
+      const variant = assignVariant(exp, semeStabile);
       reqHeaders.set(expHeaderName(exp.key), variant);
       if (exp.enabled && consensoAnalitico) newAssignments.push({ cookie: expCookieName(exp.key), variant });
     }
@@ -305,6 +367,26 @@ export async function middleware(req: NextRequest) {
     const r = NextResponse.redirect(url);
     r.headers.set('Content-Security-Policy', csp);
     return r;
+  }
+
+  /**
+   * 30/8/2026 (R072) — IL CATALOGO NON ASPETTA PIU' IL SERVIZIO DI ACCESSO.
+   *
+   * Su queste pagine — home, prodotto, negozio, carrello, cassa, ricerca — al
+   * middleware serve UNA cosa sola: sapere se chi guarda e' un venditore, per
+   * mandarlo al suo pannello invece che a fare la spesa. Quel dato sta nel
+   * cookie firmato, e si leggeva DOPO `getUser()`, cioe' dopo aver pagato un
+   * giro di rete fino a Supabase davanti al primo byte di ogni click.
+   *
+   * Adesso si guarda prima. Chi non e' venditore passa senza toccare la rete;
+   * il venditore, chi ha il cookie scaduto o di un'altra sessione, e chiunque
+   * si trovi su una pagina protetta, fanno la strada intera di sempre.
+   */
+  if (!needsAuth && needsSellerGate) {
+    const messoDaParte = await leggiRuoloDalCookie(req);
+    if (messoDaParte && messoDaParte.emailConfermata && messoDaParte.role !== 'seller') {
+      return res;
+    }
   }
 
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -392,6 +474,9 @@ export async function middleware(req: NextRequest) {
     profilo = {
       role: profile?.role as ProfileRole | undefined,
       approved: !!profile?.is_approved,
+      // Serve alla scorciatoia del catalogo: senza, un cookie scritto prima
+      // della conferma dell'email lascerebbe scavalcare quel cancello.
+      emailConfermata: true,
     };
     // 27/8/2026 (R185) — UN SECONDO STORTO DEL DATABASE DURAVA DIECI MINUTI.
     //
@@ -413,7 +498,7 @@ export async function middleware(req: NextRequest) {
   }
   const role = profilo.role as ProfileRole | undefined;
   const approved = profilo.approved;
-  if (daSalvare) await scriviRuoloNelCookie(res, user.id, profilo);
+  if (daSalvare) await scriviRuoloNelCookie(req, res, user.id, profilo);
 
   // Entrata modalità acquisto venditore (?shop=1 dal pulsante SellerShell).
   if (role === 'seller' && req.nextUrl.searchParams.get(SHOPPING_MODE_QUERY) === '1') {

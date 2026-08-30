@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante } from '@/lib/cart';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
+import { chiaveDelCheckout, chiudiChiaveDelCheckout } from '@/lib/analytics/chiave-checkout';
 import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
 import { checkoutChiuso } from '@/lib/ordini/partenza';
 import { formatPrice } from '@/lib/format';
@@ -71,6 +72,13 @@ export default function CheckoutPage() {
    * «Il tuo carrello è vuoto» a chi stava per pagare.
    */
   const [carrelloLetto, setCarrelloLetto] = useState(false);
+  /**
+   * La chiave di questo checkout nei conti. Nasce qui, all'ingresso in cassa, e
+   * accompagna sia l'evento d'avvio sia la richiesta d'ordine: e' quella che
+   * ricuce i due capi del funnel (R163). Non e' la chiave anti-doppione degli
+   * ordini — quella nasce all'invio e vive in `lib/ordini/tentativo.ts`.
+   */
+  const [idCheckout, setIdCheckout] = useState<string | null>(null);
   useEffect(() => {
     const c = getCart();
     setCart(c);
@@ -83,13 +91,22 @@ export default function CheckoutPage() {
     // «checkout iniziato» ad «acquisto» usciva piu' basso del vero, e nessuno
     // sapeva di quanto. La chiave e' legata al contenuto del carrello: un
     // carrello diverso e' un checkout diverso e va contato.
+    //
+    // 30/8/2026 (R163) — E adesso quella stessa chiave ha un nome e viaggia:
+    // l'anti-doppione dell'ingresso in pagina e l'identificativo del checkout
+    // sono la stessa cosa, e stanno in `lib/analytics/chiave-checkout.ts`.
     const impronta = `${c.map((i) => `${i.id}:${i.variantId ?? ''}:${i.quantity}`).join('|')}#${totalCents}`;
-    const chiave = `mc_checkout_started_${impronta}`;
-    try {
-      if (sessionStorage.getItem(chiave)) return;
-      sessionStorage.setItem(chiave, '1');
-    } catch { /* sessionStorage non disponibile: si conta comunque */ }
-    trackCheckoutStarted(totalCents, c.reduce((s, i) => s + i.quantity, 0));
+    const chiave = chiaveDelCheckout(
+      typeof window === 'undefined' ? null : window.sessionStorage,
+      impronta,
+      () =>
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+    );
+    setIdCheckout(chiave.id);
+    if (!chiave.primoIngresso) return;
+    trackCheckoutStarted(totalCents, c.reduce((s, i) => s + i.quantity, 0), chiave.id);
   }, []);
 
   // Raggruppa il carrello per seller. Usa il sellerId gia' presente nel CartItem
@@ -720,6 +737,9 @@ export default function CheckoutPage() {
           pickupInStore,
           useCredit,
           deliverySlot,
+          // R163 — la chiave del checkout: il server la riattacca a `order_placed`,
+          // cosi' l'avvio e gli acquisti che ne sono nati si ritrovano.
+          checkoutId: idCheckout,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -768,6 +788,10 @@ export default function CheckoutPage() {
       // Il tentativo e' andato a buon fine: la sua chiave ha finito il lavoro.
       // Se restasse, il prossimo ordine identico si vedrebbe restituire questo.
       chiudiIlTentativo();
+      // R163 — Il checkout e' finito: il prossimo e' un altro checkout, con la
+      // sua chiave. Senza questa riga due spese di fila si sommerebbero sotto
+      // lo stesso identificativo.
+      chiudiChiaveDelCheckout(typeof window === 'undefined' ? null : window.sessionStorage);
       clearCart();
       // Behavioral Scientist + CRO: gratifica immediata su purchase success.
       // Flag in sessionStorage → la order detail page mostra ConfettiBurst.
@@ -831,6 +855,9 @@ export default function CheckoutPage() {
           pickupDiscountCents,
           pickupInStore,
           deliverySlot,
+          // R163 — viaggia fino al webhook dentro la riga di intento: e' li' che
+          // nasce `order_placed` per la carta.
+          checkoutId: idCheckout,
         }),
       });
       const data = await res.json();

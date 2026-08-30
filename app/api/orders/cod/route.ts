@@ -17,6 +17,7 @@ import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
+import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
@@ -65,6 +66,13 @@ const Body = z.object({
   // persistita su orders.delivery_slot; null per ritiro o se non scelta. Non
   // influisce su prezzi/spedizione.
   deliverySlot: z.string().max(120).optional().nullable(),
+  /**
+   * 30/8/2026 (R163) — La chiave del checkout nata nel browser all'ingresso in
+   * cassa. Serve SOLO ai conti: e' l'etichetta che lega `checkout_started` agli
+   * `order_placed` che ne sono nati. Non decide niente sui soldi e non tocca
+   * l'anti-doppione, che resta l'intestazione `idempotency-key`.
+   */
+  checkoutId: z.string().max(80).optional().nullable(),
 });
 
 /**
@@ -849,6 +857,9 @@ export const POST = withAuthRateLimit(
     // rotta /api/stripe/checkout, che invece li riceve.)
     const anonimiDelBrowser = identificativiAnonimi(req.headers.get('cookie'));
     const variantiDelBrowser = variantiDaiCookie(req.headers.get('cookie'));
+    // R163 — la chiave del checkout arrivata dal browser, ripulita: e' un dato
+    // che viene da fuori e finisce come etichetta in un evento.
+    const chiaveDeiConti = chiaveCheckoutValida(body.checkoutId);
     // Fuori dalla risposta: la persona non deve aspettare una misura.
     const misure = (async () => {
       await collegaConsensiAnonimi(admin, user.id, anonimiDelBrowser);
@@ -875,7 +886,12 @@ export const POST = withAuthRateLimit(
           // `chiaveCarrello` e' una sola per richiesta: o quella mandata dal
           // browser, o una generata qui. Tutti gli ordini nati da questo invio
           // portano quella.
-            checkoutId: chiaveCarrello,
+          //
+          // 30/8/2026 (R163) — Se il browser manda la chiave del checkout, e'
+          // quella che vince: e' la stessa che ha viaggiato con
+          // `checkout_started`, e senza di lei i due capi del funnel non si
+          // ricuciono. `chiaveCarrello` resta il ripiego (client vecchi).
+            checkoutId: chiaveDeiConti ?? chiaveCarrello,
             // 27/8/2026 (R165) — Il gruppo dell'esperimento viaggia con
             // l'acquisto. Prima viveva solo nel browser (super-property di
             // PostHog) e l'evento che conta parte da qui: per sapere se la

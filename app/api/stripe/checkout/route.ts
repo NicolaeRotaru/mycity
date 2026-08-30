@@ -17,6 +17,7 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
+import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -68,6 +69,12 @@ const Body = z.object({
   // persistita nel pending_checkout (delivery.slot) e poi su orders.delivery_slot
   // dal webhook; null per ritiro o se non scelta. Non influisce su prezzi.
   deliverySlot: z.string().max(120).optional().nullable(),
+  /**
+   * 30/8/2026 (R163) — La chiave del checkout nata nel browser all'ingresso in
+   * cassa. Serve solo ai conti: viaggia dentro la riga di intento fino al
+   * webhook, che e' il posto dove nasce `order_placed` per la carta.
+   */
+  checkoutId: z.string().max(80).optional().nullable(),
 });
 
 /**
@@ -112,6 +119,9 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   const supa = await getServerSupabase();
   const admin = getAdminSupabase();
   const variantiDelBrowser = variantiDaiCookie(req.headers.get('cookie'));
+  // R163 — ripulita: e' un dato che arriva da fuori e finisce come etichetta
+  // in un evento dei conti.
+  const chiaveDeiConti = chiaveCheckoutValida(body.checkoutId);
 
   /**
    * 27/8/2026 (R085) — QUATTRO VIAGGI IN FILA DOVE NE BASTA UNO SOLO.
@@ -484,6 +494,18 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
        * `PendingGroup` lo dichiara: nessuno la trova per caso.
        */
       esperimenti: variantiDelBrowser,
+      /**
+       * 30/8/2026 (R163) — LA CHIAVE CHE RICUCE IL FUNNEL, IN VIAGGIO.
+       *
+       * `checkout_started` parte dal browser una volta per carrello;
+       * `order_placed` lo scrive il webhook, una volta per ordine. Senza una
+       * chiave in comune la conversione «arriva alla cassa → paga» poteva
+       * superare il 100% e non era ricomponibile. Come per `esperimenti`, la
+       * casa giusta sarebbe una colonna di `pending_checkouts`: questa riga di
+       * intento e' gia' un jsonb che viaggia intatto fino al webhook, e il tipo
+       * `PendingGroup` lo dichiara.
+       */
+      chiaveCheckout: chiaveDeiConti,
     };
   });
 

@@ -141,19 +141,38 @@ export const addToCart = (item: Omit<CartItem, 'quantity'> & { quantity?: number
   const cart = getCart();
   const existing = cart.find((c) => sameLine(c, item));
   const qty = item.quantity ?? 1;
+  /**
+   * 30/8/2026 (R167) — SI DICHIARAVA LA QUANTITA' CHIESTA, NON QUELLA ENTRATA.
+   *
+   * Quando scatta il tetto per articolo le due cose non coincidono: chi ne
+   * chiede venti con tetto a dieci ne mette dentro dieci, chi ne ha gia' otto e
+   * ne aggiunge cinque ne mette dentro due. L'evento partiva col numero
+   * CHIESTO, e su GA4 il valore e' prezzo x quantita': il valore del carrello
+   * risultava piu' alto del vero e l'imbuto «aggiunto al carrello → acquisto»
+   * sembrava peggiore di com'era. `updateQuantity`, venti righe piu' sotto,
+   * faceva gia' la cosa giusta mandando la differenza reale.
+   */
+  let entrati: number;
   if (existing) {
-    const voluta = existing.quantity + qty;
+    const prima = existing.quantity;
+    const voluta = prima + qty;
     existing.quantity = Math.min(voluta, MAX_PEZZI_PER_ARTICOLO);
+    entrati = existing.quantity - prima;
     if (voluta > MAX_PEZZI_PER_ARTICOLO) avvisaTetto(item.name);
   } else {
-    cart.push({ ...item, quantity: Math.min(qty, MAX_PEZZI_PER_ARTICOLO) });
+    const messi = Math.min(qty, MAX_PEZZI_PER_ARTICOLO);
+    cart.push({ ...item, quantity: messi });
+    entrati = messi;
     if (qty > MAX_PEZZI_PER_ARTICOLO) avvisaTetto(item.name);
   }
   saveCart(cart);
+  // Carrello gia' al tetto: non e' entrato niente, e un evento da zero pezzi
+  // direbbe solo il falso.
+  if (entrati <= 0) return;
   // Tracking unificato (PostHog + GA4) via façade lib/analytics/events.
   // Fire-and-forget; no-op senza consenso analytics.
   import('@/lib/analytics/events')
-    .then((m) => m.trackAddToCart(item.id, qty, Math.round(item.price * 100), { name: item.name, storeName: item.storeName }))
+    .then((m) => m.trackAddToCart(item.id, entrati, Math.round(item.price * 100), { name: item.name, storeName: item.storeName }))
     .catch(() => {});
 };
 

@@ -23,7 +23,7 @@ import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
-import { notifyAdmins, sessionePagata } from './comune';
+import { notifyAdmins, provaAMandare, sessionePagata } from './comune';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 
@@ -51,6 +51,11 @@ export type PendingGroup = {
    * conti senza dire a quale variante appartiene.
    */
   esperimenti?: Record<string, string>;
+  /**
+   * 30/8/2026 (R163) — La chiave del checkout nata nel browser: lega
+   * `checkout_started` (uno per carrello) agli `order_placed` (uno per ordine).
+   */
+  chiaveCheckout?: string | null;
   couponPortionCents: number;
   pickupPortionCents: number;
   totalCents: number;
@@ -509,7 +514,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           totalCents: c.totalCents,
           paymentMethod: 'card',
           sellerId: c.sellerId,
-          checkoutId: pendingCheckoutId,
+          // R163 — la chiave usata dal browser per `checkout_started`, se c'e'.
+          checkoutId: groups[0]?.chiaveCheckout ?? pendingCheckoutId,
           // La variante e' la stessa per tutto il carrello: si legge dal primo
           // gruppo, dove il checkout l'ha scritta.
           varianti: groups[0]?.esperimenti ?? {},
@@ -518,6 +524,8 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
     );
   }, 'misura acquisto');
 
+  // 30/8/2026 (R005) — Un intoppo sul primo negozio non zittisce gli altri: il
+  // ciclo stava sotto un solo `.catch()`. Il riparo per invio: `provaAMandare`.
   dopoLaRisposta(async () => {
     for (const created of nuovi) {
       const groupForOrder = groups.find((x) => x.sellerId === created.sellerId);
@@ -530,12 +538,17 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           total: created.totalCents / 100,
           storeName,
         });
-        await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
+        await provaAMandare('conferma al cliente', { orderId: created.orderId }, () =>
+          sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text }));
       }
 
-      const { data: sellerAuth } = await admin.auth.admin.getUserById(created.sellerId);
-      const sellerEmail = sellerAuth?.user?.email;
-      if (sellerEmail) {
+      // Anche la lettura dell'indirizzo del negozio sta nel riparo: e' una
+      // chiamata di rete, e se va storta prima portava via con se' gli ordini
+      // rimasti.
+      await provaAMandare('avviso al negozio', { orderId: created.orderId, sellerId: created.sellerId }, async () => {
+        const { data: sellerAuth } = await admin.auth.admin.getUserById(created.sellerId);
+        const sellerEmail = sellerAuth?.user?.email;
+        if (!sellerEmail) return;
         const t = newOrderSellerTemplate({
           sellerName: null,
           orderId: created.orderId,
@@ -543,7 +556,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           itemsCount: created.itemsCount,
         });
         await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
-      }
+      });
     }
   }, 'avvisi post-ordine');
 }

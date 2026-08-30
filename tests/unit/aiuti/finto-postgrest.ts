@@ -34,6 +34,8 @@ export interface Chiamata {
   conteggioEsatto: boolean;
   /** Il tetto di righe chiesto, se dichiarato. */
   tetto: number | null;
+  /** La finestra chiesta con `.range(da, a)`, se dichiarata (R080). */
+  finestra: [number, number] | null;
   /** Le colonne su cui è stato chiesto l'ordinamento: senza, l'ordine lo decide il database. */
   ordinamenti: string[];
 }
@@ -62,6 +64,8 @@ class FintaQuery {
   private filtri: Filtro[] = [];
   private ordinamenti: Array<{ colonna: string; crescente: boolean }> = [];
   private tetto: number | null = null;
+  /** La finestra chiesta con `.range(da, a)`, estremi inclusi come in PostgREST. */
+  private finestra: [number, number] | null = null;
   private colonne = '*';
   private conteggio: string | null = null;
 
@@ -88,6 +92,12 @@ class FintaQuery {
     return this;
   }
   limit(n: number) { this.tetto = n; return this; }
+  /**
+   * 30/8/2026 (R080) — La finestra che si sposta, non il tetto che si allarga.
+   * Serviva per provare «Carica altri»: senza, nessuna prova poteva accorgersi
+   * che ogni pressione riscaricava anche le righe gia' viste.
+   */
+  range(da: number, a: number) { this.finestra = [da, a]; return this; }
 
   /** L'indirizzo che PostgREST comporrebbe: è la sua lunghezza a decidere il 414. */
   private indirizzo(): string {
@@ -125,6 +135,7 @@ class FintaQuery {
         return o.crescente ? cmp : -cmp;
       });
     }
+    if (this.finestra) return righe.slice(this.finestra[0], this.finestra[1] + 1);
     return this.tetto == null ? righe : righe.slice(0, this.tetto);
   }
 
@@ -136,6 +147,7 @@ class FintaQuery {
       lunghezzaIndirizzo: indirizzo.length,
       conteggioEsatto: this.conteggio === 'exact',
       tetto: this.tetto,
+      finestra: this.finestra,
       ordinamenti: this.ordinamenti.map((o) => o.colonna),
     });
     if (indirizzo.length > LIMITE_INDIRIZZO) {

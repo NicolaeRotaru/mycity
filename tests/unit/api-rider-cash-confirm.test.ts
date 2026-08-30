@@ -21,11 +21,13 @@ const state: {
   order: Record<string, unknown> | null;
   claimed: Array<{ id: string }>;
   reconRows: Array<Record<string, unknown>>;
+  admins: Array<{ id: string }>;
 } = {
   user: { id: 'rider-1' },
   order: null,
   claimed: [],
   reconRows: [],
+  admins: [],
 };
 
 // Query-builder chainabile e "awaitable" che risolve sempre a `result`.
@@ -34,6 +36,8 @@ export const filtriVisti: { in: unknown[][] } = { in: [] };
 export const aggiornamenti: Array<Record<string, unknown>> = [];
 /** Cosa è finito nella quadratura giornaliera (#155). */
 export const quadrature: Array<Record<string, unknown>> = [];
+/** Gli avvisi scritti agli amministratori (R127). */
+export const avvisiAgliAdmin: Array<Record<string, unknown>> = [];
 
 function qb(result: unknown) {
   const chain = () => builder;
@@ -95,8 +99,15 @@ vi.mock('@/lib/supabase/server', () => ({
           },
         };
       }
-      if (table === 'profiles') return { select: () => qb({ data: [], error: null }) };
-      if (table === 'notifications') return { insert: () => Promise.resolve({ error: null }) };
+      if (table === 'profiles') return { select: () => qb({ data: state.admins, error: null }) };
+      if (table === 'notifications') {
+        return {
+          insert: (righe: Record<string, unknown>[]) => {
+            for (const r of righe) avvisiAgliAdmin.push(r);
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
       return { select: () => qb({ data: [], error: null }) };
     },
   }),
@@ -123,6 +134,8 @@ beforeEach(() => {
   filtriVisti.in.length = 0;
   aggiornamenti.length = 0;
   quadrature.length = 0;
+  avvisiAgliAdmin.length = 0;
+  state.admins = [{ id: 'admin-1' }];
   state.user = { id: 'rider-1' };
   // Ordine COD da €10 (sotto la soglia €50, niente prova obbligatoria).
   state.order = {
@@ -185,6 +198,43 @@ describe('POST /api/rider/cash-confirm', () => {
     );
     expect(filtroStato).toBeTruthy();
     expect(filtroStato?.[1]).toEqual(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED']);
+  });
+
+  /**
+   * 30/8/2026 (R127) — L'AVVISO SUI SOLDI CHE MANCANO EREDITAVA L'INTERRUTTORE
+   * PIU' OVVIO DA SPEGNERE.
+   *
+   * Quando il contante consegnato non quadra parte un avviso agli
+   * amministratori. L'inserimento non diceva la categoria, quindi il database
+   * ci metteva la sua predefinita, «order» — la stessa degli aggiornamenti
+   * d'ordine. E' la categoria che governa l'invio della notifica push
+   * (`vuole_notifica`, migrazione 115): un amministratore che spegne gli avvisi
+   * d'ordine — la cosa piu' normale del mondo, sono i piu' rumorosi — smetteva
+   * di ricevere sul telefono l'unico segnale automatico sul contante che manca
+   * all'appello, e quello restava solo in una lista che in tempo reale non
+   * guarda nessuno. Il contante e' la parte del giro dove e' piu' facile che
+   * sparisca qualcosa e piu' difficile accorgersene dopo.
+   *
+   * «system» e' la categoria degli avvisi di servizio: nel database cade nel
+   * ramo ELSE, cioe' non si puo' disattivare.
+   */
+  it('l\'avviso di ammanco di cassa non si puo spegnere per sbaglio', async () => {
+    // Attesi 700 centesimi (10 euro meno i 3 di compenso): ne consegna 200.
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 200 });
+    expect(res.status).toBe(200);
+
+    const ammanco = avvisiAgliAdmin.find((a) => String(a.title).includes('non quadra'));
+    expect(ammanco, 'nessun avviso agli amministratori per un ammanco di cinque euro').toBeTruthy();
+    expect(
+      ammanco?.category,
+      'l avviso sui soldi che mancano nasce fra gli aggiornamenti d ordine: chi spegne quelli non lo riceve piu sul telefono',
+    ).toBe('system');
+  });
+
+  it('quando la cassa quadra non si disturba nessuno', async () => {
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
+    expect(res.status).toBe(200);
+    expect(avvisiAgliAdmin).toHaveLength(0);
   });
 
   /**

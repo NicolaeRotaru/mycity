@@ -83,7 +83,7 @@ type Props = { titolo?: string; sottotitolo?: string };
 
 const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   const { data: categories = [], isLoading, isError } = useQuery({
-    queryKey: queryKeys.categories.showcase,
+    queryKey: queryKeys.categories.all,
     queryFn: async (): Promise<CategoryRow[]> => {
       // select('*') è resiliente alle colonne sort_order/featured (migration 076):
       // se non esistono ancora, l'ordinamento ricade sul nome (comportamento storico).

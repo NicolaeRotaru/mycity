@@ -54,6 +54,24 @@ export interface DomandaGriglia {
   idsColVoto?: string[];
   /** Quante righe chiedere al database. */
   tetto: number;
+  /**
+   * 30/8/2026 (R080) — LA FINESTRA CHE SI SPOSTA, INVECE DEL TETTO CHE SI
+   * ALLARGA.
+   *
+   * «Carica altri» rifaceva la stessa lettura con un tetto piu' alto: 96, poi
+   * 192, poi 288, poi 384 — e buttava via il risultato di prima. Alla quarta
+   * pressione erano state scaricate 960 righe, con le loro foto, per mostrarne
+   * 384: traffico e attesa crescono col QUADRATO delle pressioni, sulla
+   * connessione di chi guarda, e ogni pressione e' piu' lenta della precedente.
+   *
+   * Con la finestra ogni pressione chiede le sue righe e basta. Estremi
+   * inclusi, come `.range()` di PostgREST.
+   *
+   * Nota che non va saltata: una finestra con un ordinamento non deterministico
+   * puo' saltare o ripetere righe fra una pagina e l'altra — per questo
+   * l'identificativo e' sempre il secondo criterio d'ordine, qui sotto.
+   */
+  finestra?: readonly [number, number];
 }
 
 const COLONNE = 'id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id';
@@ -86,7 +104,10 @@ export async function leggiProdottiDellaGriglia(
   // intere (la funzione non restituisce giacenza, varianti e prezzo barrato, che servono alla scheda).
   let perPertinenza: string[] | null = null;
   if (termine && d.sort === 'relevance' && d.search) {
-    const ids = await idsPiuPertinenti(supabase, d.search.slice(0, 100), d.tetto);
+    // Con la finestra servono abbastanza identificativi da coprirla: chiederne
+    // quanti ne sta in una pagina sola lascerebbe vuota la seconda.
+    const quanti = d.finestra ? d.finestra[1] + 1 : d.tetto;
+    const ids = await idsPiuPertinenti(supabase, d.search.slice(0, 100), quanti);
     perPertinenza = ids.length > 0 ? ids : null;
   }
 
@@ -108,6 +129,12 @@ export async function leggiProdottiDellaGriglia(
       case 'price_desc': q = q.order('price', { ascending: false }); break;
       default:           q = q.order('created_at', { ascending: false });
     }
+    // 30/8/2026 (R080) — Il secondo criterio d'ordine non e' un dettaglio: con
+    // due prodotti allo stesso prezzo (o pubblicati nello stesso istante)
+    // l'ordine fra loro lo decide il database come gli pare, e puo' deciderlo
+    // in modo diverso a ogni lettura. Su una finestra che si sposta vuol dire
+    // una riga saltata o una riga vista due volte fra una pagina e l'altra.
+    q = q.order('id', { ascending: false });
 
     if (d.categoryIds && d.categoryIds.length > 0) q = q.in('category_id', d.categoryIds);
     else if (d.categoryId) q = q.eq('category_id', d.categoryId);
@@ -133,11 +160,18 @@ export async function leggiProdottiDellaGriglia(
     );
     if (error) throw error;
     const rango = new Map(perPertinenza.map((id, i) => [id, i]));
-    rows = data
-      .sort((a, b) => (rango.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rango.get(b.id) ?? Number.MAX_SAFE_INTEGER))
-      .slice(0, d.tetto);
+    const ordinati = data.sort(
+      (a, b) => (rango.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rango.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    );
+    // Sul ramo pertinenza l'ordine lo decide la funzione del database, quindi
+    // la finestra si taglia qui: e' lo stesso elenco, preso dal punto giusto.
+    rows = d.finestra
+      ? ordinati.slice(d.finestra[0], d.finestra[1] + 1)
+      : ordinati.slice(0, d.tetto);
   } else {
-    const { data, error } = await base().limit(d.tetto);
+    const { data, error } = d.finestra
+      ? await base().range(d.finestra[0], d.finestra[1])
+      : await base().limit(d.tetto);
     if (error) throw error;
     rows = (data ?? []) as unknown as RigaGriglia[];
   }

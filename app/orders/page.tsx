@@ -14,6 +14,7 @@ import EmptyState from '@/components/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { clearCart } from '@/lib/cart';
+import { chiudiChiaveDelCheckout } from '@/lib/analytics/chiave-checkout';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   type OrderStatus,
@@ -87,6 +88,9 @@ function StripeReturnHandler() {
       // solo il contrassegno: chi pagava con la carta tornava e ritrovava tutto
       // dentro, con lo stesso ordine pronto a essere rifatto per sbaglio.
       clearCart();
+      // R163 — e con lui la chiave del checkout: la spesa dopo e' un altro
+      // checkout, e deve avere un identificativo suo nei conti.
+      chiudiChiaveDelCheckout(typeof window === 'undefined' ? null : window.sessionStorage);
       // #116 — Il webhook Stripe crea l'ordine, e puo' metterci qualche
       // secondo. Prima si riprovava due volte (2 s e 5 s) e poi ci si arrendeva:
       // chi rientrava su una rete lenta, o quando Stripe rallentava, leggeva

@@ -136,7 +136,22 @@ describe('il middleware non fa attese di rete quando non servono', () => {
     expect(profiloLetto).toHaveBeenCalledTimes(1);
   });
 
-  it('il cookie di ruolo di un altro utente non vale', async () => {
+  /**
+   * 30/8/2026 (R072) — QUESTA PROVA E' CAMBIATA, ED E' GIUSTO DIRLO.
+   *
+   * Prima faceva entrare due persone diverse (`u-1` e `u-2`) con lo STESSO
+   * cookie di sessione, e chiedeva che il cookie del ruolo della prima non
+   * valesse per la seconda. Il legame era l'id della persona, letto da
+   * `getUser()` — cioe' dalla chiamata di rete che adesso, sul catalogo, non si
+   * fa piu' (R072): il cookie porta dentro l'impronta della SESSIONE, non l'id.
+   *
+   * La situazione di prima non esiste nel mondo vero: il cookie
+   * `sb-…-auth-token` E' l'identita', due persone diverse non possono averlo
+   * uguale. Qui la prova diventa quella vera — stesso browser, sessione nuova —
+   * e chiede la stessa identica cosa: il ruolo messo da parte prima non vale
+   * piu', si rilegge il profilo.
+   */
+  it('il cookie di ruolo di una sessione finita non vale per quella dopo', async () => {
     getUser.mockResolvedValue({
       data: { user: { id: 'u-1', email_confirmed_at: '2026-01-01T00:00:00Z' } },
     });
@@ -148,7 +163,7 @@ describe('il middleware non fa attese di rete quando non servono', () => {
       data: { user: { id: 'u-2', email_confirmed_at: '2026-01-01T00:00:00Z' } },
     });
     await middleware(richiesta('/product/abc', {
-      'sb-esempio-auth-token': 'x',
+      'sb-esempio-auth-token': 'gettone-di-un-altra-sessione',
       mc_ruolo: cookieRuolo,
     }));
     expect(profiloLetto).toHaveBeenCalledTimes(1);

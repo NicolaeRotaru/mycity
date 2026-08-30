@@ -133,6 +133,17 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   // Notifica seller (best-effort)
   await admin.from('notifications').insert({
     user_id: order.seller_id,
+    /**
+     * 30/8/2026 (R127) — La categoria, scritta invece che ereditata.
+     *
+     * Il valore e' lo stesso che il database metteva da solo, e resta giusto:
+     * un reso e' l'aggiornamento di un ordine, e un negoziante che spegne gli
+     * avvisi d'ordine sta spegnendo anche questo di sua volonta'. Scriverlo
+     * serve a far vedere che e' una scelta: l'avviso di ammanco di cassa,
+     * qualche riga piu' in la' nella stessa radiografia, ereditava questa
+     * stessa predefinita e li' era sbagliata.
+     */
+    category: 'order',
     title: '↩️ Nuova richiesta di reso',
     body: `Il cliente ha richiesto il reso per l'ordine #${order.id.slice(0, 8)}`,
     link: `/seller/orders/${order.id}`,

@@ -38,7 +38,7 @@ export default function SellerOnboardingChecklist() {
   const { profile } = useProfile();
 
   const { data: items, isError, refetch } = useQuery({
-    queryKey: queryKeys.seller.onboardingChecklistV2(profile?.id ?? ''),
+    queryKey: queryKeys.seller.onboardingChecklist(profile?.id ?? ''),
     enabled: !!profile?.id,
     queryFn: async (): Promise<ChecklistItem[]> => {
       const { data: { user } } = await supabase.auth.getUser();

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Home, Search, MessageCircle, ShoppingCart, User, Package, Bike, Shield, Plus, Eye, type LucideIcon } from 'lucide-react';
+import { User } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useCartCount } from './hooks/useCartCount';
@@ -13,18 +13,15 @@ import MobileAccountSheet from './MobileAccountSheet';
 import SupportChatModal from './SupportChatModal';
 import type { MenuRole } from '@/lib/account-menu';
 import { useShoppingMode } from './hooks/useShoppingMode';
+import { schedeInFondo, serveIlPulsanteAccount, type Scheda } from '@/lib/ui/schede-in-fondo';
 
-type Tab = {
-  href: string;
-  icon: LucideIcon;
-  label: string;
-  badge?: number;
-  /** Di che cosa parla il numero della pallina: «non letti», «articoli». */
-  badgeUnita?: string;
-  isAccount?: boolean;
-  isSupport?: boolean;
-  exact?: boolean;
-};
+/**
+ * L'elenco delle schede e la decisione sul pulsante «Tu» vivono in
+ * `lib/ui/schede-in-fondo.ts`: qui dentro nessuna prova poteva accorgersi che
+ * al venditore in modalità acquisto comparivano due porte per lo stesso
+ * pannello (R097).
+ */
+type Tab = Scheda;
 
 /**
  * Bottom tab bar mobile — feel "app nativa" (Glovo, Deliveroo, Just Eat).
@@ -76,49 +73,11 @@ export default function MobileTabBar() {
 
   if (nascosta) return null;
 
-  let tabs: Tab[];
-
-  if (isAdmin) {
-    tabs = [
-      { href: '/admin',          icon: Shield,        label: t('admin'), exact: true },
-      { href: '/admin/users',    icon: User,          label: t('users') },
-      { href: '/admin/orders',   icon: Package,       label: t('orders') },
-      { href: '/messages',       icon: MessageCircle, label: t('messages'), badge: msgUnread },
-      { href: '/admin/activity', icon: Eye,           label: t('surveillance') },
-    ];
-  } else if (isSeller && !sellerShopping) {
-    tabs = [
-      { href: '/seller/dashboard',    icon: Home,          label: t('home'), exact: true },
-      { href: '/seller/products',     icon: Package,       label: t('products') },
-      { href: '/seller/products/new', icon: Plus,          label: t('addProduct') },
-      { href: '/messages',            icon: MessageCircle, label: t('messages'), badge: msgUnread },
-      { href: '/seller/orders',       icon: ShoppingCart,  label: t('orders') },
-    ];
-  } else if (isRider) {
-    tabs = [
-      { href: '/rider',              icon: ShoppingCart,  label: t('orders'), exact: true },
-      { href: '/rider/history',      icon: Package,       label: t('history') },
-      { href: '/rider/availability', icon: Bike,          label: t('availability') },
-      { href: '/messages',           icon: MessageCircle, label: t('messages'), badge: msgUnread },
-      { href: '/rider/profile',      icon: User,          label: t('me'), isAccount: true },
-    ];
-  } else if (isAuthenticated) {
-    tabs = [
-      { href: '/',          icon: Home,         label: t('home') },
-      { href: '/search',    icon: Search,       label: t('search') },
-      { href: '/cart',      icon: ShoppingCart, label: t('cart'), badge: cartCount, badgeUnita: 'articoli' },
-      { href: '/orders',    icon: Package,      label: t('orders') },
-      { href: '/profile',   icon: User,         label: t('me'), isAccount: true },
-    ];
-  } else {
-    tabs = [
-      { href: '/',         icon: Home,         label: t('home') },
-      { href: '/search',   icon: Search,       label: t('search') },
-      { href: '/stores',   icon: Package,      label: t('stores') },
-      { href: '/cart',     icon: ShoppingCart, label: t('cart'), badge: cartCount, badgeUnita: 'articoli' },
-      { href: '/sign-in',  icon: User,         label: t('signIn') },
-    ];
-  }
+  const tabs: Tab[] = schedeInFondo(
+    { isAuthenticated, isSeller, isRider, isAdmin, sellerShopping },
+    t,
+    { carrello: cartCount, messaggi: msgUnread },
+  );
 
   const isActive = (href: string, exact?: boolean) =>
     href === '/' || exact ? pathname === href : pathname === href || pathname.startsWith(href + '/');
@@ -228,8 +187,12 @@ export default function MobileTabBar() {
         </ul>
       </nav>
 
-      {/* "Tu" flottante per seller/admin (la tab è stata sostituita da una funzione). */}
-      {(isSeller || isAdmin) && (
+      {/* "Tu" flottante: solo dove la barra non ha già la sua porta all'account.
+          30/8/2026 (R097) — prima la condizione era «venditore o amministratore»,
+          e al venditore in modalità acquisto — che è un cliente a tutti gli
+          effetti, con la sua scheda «Io» — compariva un secondo pulsante tondo
+          sospeso sopra la griglia dei prodotti. */}
+      {serveIlPulsanteAccount(tabs) && (
         <button
           type="button"
           onClick={() => setSheetOpen(true)}

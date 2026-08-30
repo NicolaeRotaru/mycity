@@ -160,8 +160,23 @@ export const trackRemoveFromCart = (
   });
 };
 
-export const trackCheckoutStarted = (totalCents: number, itemCount: number) => {
-  track('checkout_started', { total_cents: totalCents, item_count: itemCount });
+/**
+ * 30/8/2026 (R163) — L'AVVIO DEL CHECKOUT PORTA LA SUA CHIAVE.
+ *
+ * Partiva senza nessun identificativo, mentre `order_placed` porta
+ * `checkout_id` ed esce una volta per ORDINE (un carrello da due negozi fa due
+ * ordini). Un avvio, due acquisti, niente in comune: la conversione «arriva
+ * alla cassa → paga» poteva superare il 100% e non si poteva ricucire.
+ *
+ * La chiave nasce in `lib/analytics/chiave-checkout.ts` quando si entra in
+ * cassa, e la stessa arriva al server con l'ordine.
+ */
+export const trackCheckoutStarted = (totalCents: number, itemCount: number, checkoutId?: string | null) => {
+  track('checkout_started', {
+    total_cents: totalCents,
+    item_count: itemCount,
+    ...(checkoutId ? { checkout_id: checkoutId } : {}),
+  });
   ga('begin_checkout', { currency: 'EUR', value: eur(totalCents) });
 };
 

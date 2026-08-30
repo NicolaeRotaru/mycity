@@ -185,6 +185,17 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
     const rows = (admins ?? []).map((a) => ({
       user_id: a.id,
+      /**
+       * 30/8/2026 (R127) — «system», non la predefinita del database.
+       *
+       * Senza questo campo la riga nasceva nella categoria 'order' (migrazione
+       * 115), cioe' insieme agli aggiornamenti d'ordine — i piu' rumorosi, e
+       * quindi i primi che un amministratore spegne. `vuole_notifica` governa
+       * l'invio della push: spegnendo quelli si smetteva di ricevere sul
+       * telefono l'unico segnale automatico sul contante che manca all'appello.
+       * 'system' e' la categoria degli avvisi di servizio: non si disattiva.
+       */
+      category: 'system',
       title: '⚠️ Incasso COD non quadra',
       body: `Rider ${user.id.slice(0, 8)} · ordine ${body.orderId.slice(0, 8)}: incassati €${(body.cashCollectedCents / 100).toFixed(2)}, attesi €${(expectedCents / 100).toFixed(2)} (Δ €${(delta / 100).toFixed(2)}).`,
       link: '/admin/orders',
