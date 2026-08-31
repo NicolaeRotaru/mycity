@@ -47,3 +47,8 @@ storybook-static/
 # chiunque lo lanci in locale se li ritrova fra le modifiche da committare.
 /test-results/
 /playwright-report/
+
+# 31/8/2026 — Le cartelle di lavoro isolate che la macchina crea quando fa
+# girare piu' collaudatori in parallelo. Sono usa-e-getta: ne nasce una per
+# ogni giro, e non e' roba del progetto. (`.claude/skills/` invece e' tracciato.)
+/.claude/worktrees/
