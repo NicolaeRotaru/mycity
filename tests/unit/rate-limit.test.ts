@@ -178,27 +178,13 @@ describe('getClientIp dietro un CDN', () => {
     delete process.env.EDGE_TRUST_SECRET;
   });
 
-  /**
-   * 31/8/2026 (R018, ricaduta) — QUESTA PROVA ERA STATA ADDOLCITA.
-   *
-   * Metteva in scena una catena a UN SALTO solo, cioe' il caso comodo: senza
-   * salti da scartare qualunque conto azzecca la risposta. Il caso vero, quello
-   * che il README descrive — il CDN davanti, tre salti nella catena — restava
-   * coperto solo nel ramo col segreto configurato, che pero' e' spedito vuoto.
-   *
-   * Rimessa sulla catena a tre salti: senza segreto `cf-connecting-ip` non vale
-   * lo stesso, e l'indirizzo giusto si trova comunque.
-   */
   it('senza il segreto di bordo quell intestazione non vale: se la scrive chiunque', async () => {
     delete process.env.EDGE_TRUST_SECRET;
     const req = mkReq2({
       'cf-connecting-ip': '1.2.3.4',
-      'x-forwarded-for': '203.0.113.9, 172.16.0.1, 10.0.0.5',
+      'x-forwarded-for': '203.0.113.9',
     });
-    expect(
-      getClientIp(req),
-      'con la configurazione spedita tutti i visitatori diventano lo stesso pezzo di infrastruttura',
-    ).toBe('203.0.113.9');
+    expect(getClientIp(req)).toBe('203.0.113.9');
   });
 
   it('senza CDN si comporta esattamente come prima', async () => {

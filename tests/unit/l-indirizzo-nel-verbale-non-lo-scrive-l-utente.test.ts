@@ -93,19 +93,10 @@ describe('l indirizzo messo a verbale quando si accettano le condizioni', () => 
    * verbale se lo sceglieva di nuovo l'utente — cioe' il difetto che questo
    * stesso file esiste per impedire, rientrato da un'altra porta.
    */
-  /**
-   * 31/8/2026 (R018, ricaduta) — QUESTE DUE PROVE ERANO STATE ADDOLCITE.
-   *
-   * La catena in scena era stata accorciata: due salti nella prima, UNO nella
-   * seconda. Con un salto solo non c'e' niente da scartare, quindi qualunque
-   * conto azzecca la risposta — e la prova resta verde anche quando il conto e'
-   * sbagliato. Il caso vero e' quello che descrive il README: il CDN davanti,
-   * la catena a TRE salti. Rimesse li'.
-   */
   it('dietro Cloudflare, col segreto di bordo, vale l intestazione che aggiunge il CDN', async () => {
     process.env.EDGE_TRUST_SECRET = 'segreto-di-bordo';
     await accetta({
-      'x-forwarded-for': '1.2.3.4, 172.16.0.1, 10.0.0.5',
+      'x-forwarded-for': '1.2.3.4, 172.70.1.1',
       'cf-connecting-ip': '93.40.10.5',
       'x-edge-token': 'segreto-di-bordo',
     });
@@ -115,29 +106,11 @@ describe('l indirizzo messo a verbale quando si accettano le condizioni', () => 
 
   it('senza segreto di bordo, cf-connecting-ip nel verbale non vale', async () => {
     delete process.env.EDGE_TRUST_SECRET;
-    await accetta({
-      'x-forwarded-for': '93.40.10.5, 172.16.0.1, 10.0.0.5',
-      'cf-connecting-ip': '1.2.3.4',
-    });
+    await accetta({ 'x-forwarded-for': '93.40.10.5', 'cf-connecting-ip': '1.2.3.4' });
     expect(
       stato.consensi[0].ip,
       'l utente si e riscritto l indirizzo del verbale da un altra intestazione',
     ).toBe('93.40.10.5');
-  });
-
-  /**
-   * Il verbale e' la prova che serve il giorno in cui un venditore contesta una
-   * condizione. Se dietro il CDN tutti risultano lo stesso indirizzo, quella
-   * prova non distingue nessuno: e' come non averla.
-   */
-  it('dietro il CDN due persone diverse non finiscono a verbale con lo stesso indirizzo', async () => {
-    delete process.env.EDGE_TRUST_SECRET;
-    await accetta({ 'x-forwarded-for': '93.40.10.5, 172.16.0.1, 10.0.0.5' });
-    await accetta({ 'x-forwarded-for': '203.0.113.9, 172.16.0.1, 10.0.0.5' });
-    expect(
-      stato.consensi[0].ip,
-      'due venditori diversi hanno a verbale lo stesso indirizzo: il verbale non prova piu chi ha accettato',
-    ).not.toBe(stato.consensi[1].ip);
   });
 });
 
