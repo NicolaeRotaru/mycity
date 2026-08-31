@@ -75,12 +75,18 @@ vi.mock('@/lib/stripe/webhook/comune', () => ({
     state.notifiche.push({ title });
   },
 }));
-vi.mock('@/lib/stripe/payout', () => ({
-  releaseOrderPayout: (id: string) => releaseOrderPayoutMock(id),
-  releaseRiderPayout: (id: string) => releaseRiderPayoutMock(id),
-  FILTRO_RIDER_RITENTABILI:
-    'rider_payout_status.is.null,rider_payout_status.in.(HELD,PENDING_RIDER_ONBOARDING,FAILED)',
-}));
+// 31/8/2026 (R120) — il filtro degli stati ritentabili era ricopiato qui a
+// mano: una copia che il giorno in cui l'originale cambia resta verde
+// raccontando il mondo di ieri. Si sostituiscono solo le due funzioni che
+// chiamano Stripe; gli elenchi di stati restano quelli veri.
+vi.mock('@/lib/stripe/payout', async (originale) => {
+  const vero = await originale<typeof import('@/lib/stripe/payout')>();
+  return {
+    ...vero,
+    releaseOrderPayout: (id: string) => releaseOrderPayoutMock(id),
+    releaseRiderPayout: (id: string) => releaseRiderPayoutMock(id),
+  };
+});
 
 /**
  * Finta tabella `orders` che rispetta davvero i filtri, comprese le condizioni

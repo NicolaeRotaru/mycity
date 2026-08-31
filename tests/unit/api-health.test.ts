@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readdirSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 // Mock supabase admin — factory self-contained
 const limitMock = vi.fn<() => Promise<{ error: null | { message: string } }>>(
@@ -6,12 +8,39 @@ const limitMock = vi.fn<() => Promise<{ error: null | { message: string } }>>(
 );
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: vi.fn(() => ({
-    from: vi.fn(() => ({ select: vi.fn(() => ({ limit: limitMock })) })),
+    from: vi.fn((tabella: string) =>
+      // 31/8/2026 (R183, secondo giro) — QUESTO FINTO DATABASE NON SAPEVA DIRE
+      // SE I LAVORI PERIODICI GIRAVANO.
+      //
+      // Prima rispondeva la stessa cosa a qualunque tabella, quindi la rotta
+      // leggeva zero battiti — e passava per «tutto a posto» solo perche' un
+      // controllo che non aveva guardato niente usciva verde lo stesso. Adesso
+      // zero esaminati vale giallo, e questo blocco deve dire cosa succede ai
+      // battiti: qui si misurano database e variabili d'ambiente, non i cron,
+      // quindi i lavori battono tutti regolarmente. Chi collauda i battiti sta
+      // in il-semaforo-parla-anche-al-monitor-senza-segreto.test.ts.
+      tabella === 'cron_heartbeats'
+        ? { select: () => Promise.resolve({ data: lavoriCheBattono(), error: null }) }
+        : { select: vi.fn(() => ({ limit: limitMock })) },
+    ),
   })),
 }));
 
 import { GET } from '@/app/api/health/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+
+/**
+ * I lavori periodici che esistono sul disco, tutti con un battito appena dato.
+ * L'elenco si legge dalle cartelle vere e non dalle soglie del codice: cosi' un
+ * lavoro nuovo entra da solo nel finto database, invece di far diventare gialli
+ * dei casi che parlano d'altro.
+ */
+function lavoriCheBattono(): { name: string; last_run_at: string }[] {
+  const cartella = join(process.cwd(), 'app/api/cron');
+  return readdirSync(cartella, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && existsSync(join(cartella, d.name, 'route.ts')))
+    .map((d) => ({ name: d.name, last_run_at: new Date().toISOString() }));
+}
 
 /** Una richiesta finta con un indirizzo di rete diverso per ogni caso, così il
  *  freno di 60/minuto non fa fallire il caso successivo. */

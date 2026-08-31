@@ -67,7 +67,12 @@ describe("l'invariante di STRUTTURA sulle vetrine vere", () => {
   // Ogni posto che disegna una scheda prodotto deve passarle le due cose che servono al «+» per
   // decidere. Diventa rossa il giorno che nasce una vetrina nuova senza, invece di scoprirlo dal
   // carrello di qualcuno.
-  const files = execSync('grep -rl "<ProductCard" --include=*.tsx . | grep -v node_modules', { encoding: 'utf8' })
+        // 31/8/2026 — `--exclude-dir=.claude`: un collaudo lascia sotto .claude/worktrees
+        // copie intere del repo, e una ricerca che parte dalla radice conta ogni riscontro
+        // una volta per copia. E' costato un rosso falso: 30 riquadri invece di 5, cioe' i
+        // 5 veri moltiplicati per le sei copie presenti. Il conto va fatto sul progetto, una
+        // volta sola.
+  const files = execSync('grep -rl "<ProductCard" --include=*.tsx --exclude-dir=.claude . | grep -v node_modules', { encoding: 'utf8' })
     .trim().split('\n');
 
   it('le vetrine trovate non sono zero: senza, questo blocco non misura niente', () => {

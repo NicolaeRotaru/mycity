@@ -235,6 +235,66 @@ export async function rateLimitAsync(opts: RateLimitOptions): Promise<RateLimitR
 }
 
 /**
+ * 31/8/2026 (R003/R020, ricaduta) — GUARDARE IL CONTATORE SENZA FARLO SALIRE.
+ *
+ * Serve quando il freno deve contare solo una parte delle richieste — per
+ * esempio i tentativi andati a vuoto — ma deve poter fermare tutti gli altri
+ * prima di spendere qualcosa. Senza questa lettura le due cose non stanno
+ * insieme: o si conta tutto (e chi e' entrato regolarmente paga per chi bussa a
+ * vuoto), o non si ferma niente prima di aver pagato le chiamate di rete.
+ *
+ * `allowed: false` vuol dire «il secchio e' gia' pieno», non «ho aggiunto una
+ * goccia»: chi chiama questa non ha ancora contato niente.
+ */
+export async function contatoreGiaAlTetto(opts: RateLimitOptions): Promise<RateLimitResult> {
+  if (UPSTASH_URL && UPSTASH_TOKEN) {
+    const count = await upstashLeggi(opts.key);
+    if (count !== null) {
+      const allowed = count < opts.max;
+      return {
+        allowed,
+        remaining: Math.max(0, opts.max - count),
+        retryAfterSec: allowed ? 0 : Math.ceil(opts.windowMs / 1000),
+        limit: opts.max,
+      };
+    }
+  }
+  return letturaInMemoria(opts);
+}
+
+/** Il contatore in memoria, letto senza toccarlo. */
+function letturaInMemoria({ key, max, windowMs }: RateLimitOptions): RateLimitResult {
+  const now = Date.now();
+  const since = now - windowMs;
+  const times = (buckets.get(key)?.times ?? []).filter((t) => t > since);
+
+  if (times.length >= max) {
+    const retryAfter = Math.max(1, Math.ceil((times[0] + windowMs - now) / 1000));
+    return { allowed: false, remaining: 0, retryAfterSec: retryAfter, limit: max };
+  }
+  return { allowed: true, remaining: max - times.length, retryAfterSec: 0, limit: max };
+}
+
+/** Una chiave mai vista non e' un guasto: e' zero richieste. */
+async function upstashLeggi(key: string): Promise<number | null> {
+  if (!UPSTASH_URL || !UPSTASH_TOKEN) return null;
+  try {
+    const res = await fetch(`${UPSTASH_URL}/get/${encodeURIComponent(`rl:${key}`)}`, {
+      headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+      signal: AbortSignal.timeout(500),
+    });
+    if (!res.ok) return segnalaRipiego(`Upstash ha risposto HTTP ${res.status} in lettura`);
+    const data: { result?: string | number | null } = await res.json();
+    if (data.result === null || data.result === undefined) return 0;
+    const count = Number(data.result);
+    if (Number.isFinite(count)) return count;
+    return segnalaRipiego('Upstash ha risposto qualcosa che non e un numero in lettura');
+  } catch (e) {
+    return segnalaRipiego(e instanceof Error ? e.message : 'errore di rete in lettura');
+  }
+}
+
+/**
  * Quanti proxy fidati stanno davanti all'applicazione. In produzione ce n'è uno
  * (l'ingresso della piattaforma). Se un giorno se ne aggiunge un altro — per
  * esempio un CDN davanti — si alza questo numero via variabile d'ambiente,
@@ -248,6 +308,133 @@ export async function rateLimitAsync(opts: RateLimitOptions): Promise<RateLimitR
  * tutti insieme sotto la stessa chiave.
  */
 const PROXY_FIDATI = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? '1') || 1);
+
+// =============================================================================
+// CHI DELLA CATENA E' NOSTRO E CHI NO
+// =============================================================================
+//
+// 31/8/2026 (R018, ricaduta) — vedi il commento lungo dentro getClientIp.
+
+/** Un indirizzo IPv4 come numero, oppure null se non e' un IPv4. */
+function numeroIPv4(ip: string): number | null {
+  const pezzi = ip.split('.');
+  if (pezzi.length !== 4) return null;
+  let n = 0;
+  for (const pezzo of pezzi) {
+    if (!/^\d{1,3}$/.test(pezzo)) return null;
+    const v = Number(pezzo);
+    if (v > 255) return null;
+    n = n * 256 + v;
+  }
+  return n >>> 0;
+}
+
+/**
+ * Un indirizzo IPv6 come i suoi otto gruppi da sedici bit, oppure null se non
+ * e' un IPv6. Otto numeri e non un numero solo perche' `tsconfig` prende di
+ * mira es2017, dove i numeri grandi (`BigInt`) non ci sono.
+ */
+function numeroIPv6(ip: string): number[] | null {
+  const pulito = ip.split('%')[0].toLowerCase();
+  if (!pulito.includes(':')) return null;
+  const meta = pulito.split('::');
+  if (meta.length > 2) return null;
+  const sinistra = meta[0] ? meta[0].split(':') : [];
+  const destra = meta.length === 2 && meta[1] ? meta[1].split(':') : [];
+  const mancanti = 8 - sinistra.length - destra.length;
+  if (meta.length === 1 ? mancanti !== 0 : mancanti < 0) return null;
+  const gruppi = [...sinistra, ...Array<string>(meta.length === 2 ? mancanti : 0).fill('0'), ...destra];
+  const numeri: number[] = [];
+  for (const g of gruppi) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+    numeri.push(parseInt(g, 16));
+  }
+  return numeri;
+}
+
+/** `::ffff:1.2.3.4` e' un IPv4 travestito: si guarda quello. */
+function svestiIPv4(ip: string): string {
+  const travestito = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(ip);
+  return travestito ? travestito[1] : ip;
+}
+
+function dentroLaRete(ip: string, rete: string): boolean {
+  const [base, bitTesto] = rete.split('/');
+  const bit = Number(bitTesto);
+
+  const v4 = numeroIPv4(ip);
+  if (v4 !== null) {
+    const baseV4 = numeroIPv4(base);
+    if (baseV4 === null) return false;
+    const maschera = bit === 0 ? 0 : (0xffffffff << (32 - bit)) >>> 0;
+    return ((v4 & maschera) >>> 0) === ((baseV4 & maschera) >>> 0);
+  }
+
+  const v6 = numeroIPv6(ip);
+  const baseV6 = numeroIPv6(base);
+  if (v6 === null || baseV6 === null) return false;
+  for (let g = 0; g < 8; g++) {
+    const bitRimasti = bit - g * 16;
+    if (bitRimasti <= 0) return true;
+    const larghezza = Math.min(16, bitRimasti);
+    const maschera = larghezza === 16 ? 0xffff : (0xffff << (16 - larghezza)) & 0xffff;
+    if ((v6[g] & maschera) !== (baseV6[g] & maschera)) return false;
+  }
+  return true;
+}
+
+/**
+ * Le reti che nessuno puo' avere venendo da internet: sono la nostra idraulica
+ * interna, i salti che si passano la richiesta dentro casa nostra.
+ */
+const RETI_DI_CASA = [
+  '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', // RFC1918
+  '127.0.0.0/8', '169.254.0.0/16', '0.0.0.0/8',    // loopback, link-local, «questa rete»
+  '::1/128', 'fc00::/7', 'fe80::/10',              // gli stessi in IPv6
+];
+
+function eIdraulicaDiCasa(pezzo: string): boolean {
+  const ip = svestiIPv4(pezzo);
+  if (numeroIPv4(ip) === null && numeroIPv6(ip) === null) return false;
+  return RETI_DI_CASA.some((rete) => dentroLaRete(ip, rete));
+}
+
+/**
+ * Le reti da cui Cloudflare esce quando parla con l'origine. Sono pubblicate da
+ * loro (cloudflare.com/ips) e cambiano molto di rado.
+ */
+const RETI_DI_CLOUDFLARE = [
+  '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+  '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+  '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+  '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+  '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+  '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+];
+
+function eDiCloudflare(pezzo: string): boolean {
+  const ip = svestiIPv4(pezzo);
+  return RETI_DI_CLOUDFLARE.some((rete) => dentroLaRete(ip, rete));
+}
+
+/**
+ * L'ultimo salto che il nostro bordo ha visto arrivare da fuori.
+ *
+ * Si guarda la catena da destra e si scartano i pezzi di idraulica interna: da
+ * internet nessuno puo' presentarsi con un indirizzo privato, quindi quei pezzi
+ * li ha scritti la nostra infrastruttura passandosi la richiesta. Il primo
+ * pezzo pubblico che si incontra e' l'indirizzo che il nostro bordo ha visto:
+ * la persona, se davanti non c'e' nessuno, oppure il CDN.
+ *
+ * Se la catena e' TUTTA di casa — sviluppo in locale, chiamata interna — non si
+ * scarta niente e si torna al conto di prima.
+ */
+function indiceDelSaltoEsterno(catena: string[]): number {
+  for (let i = catena.length - 1; i >= 0; i--) {
+    if (!eIdraulicaDiCasa(catena[i])) return i;
+  }
+  return catena.length - 1;
+}
 
 /**
  * L'indirizzo di chi sta chiamando davvero.
@@ -263,8 +450,10 @@ const PROXY_FIDATI = Math.max(1, Number(process.env.TRUSTED_PROXY_HOPS ?? '1') |
  * da destra si tiene: costa niente, dà lo stesso risultato, e resta giusta il
  * giorno in cui davanti al sito ci finisce un CDN.
  *
- * Si legge invece da destra, scartando i proxy fidati: quello è l'indirizzo
- * scritto dalla nostra infrastruttura, che il chiamante non può falsificare.
+ * Si legge invece da destra, scartando prima i salti della nostra idraulica
+ * interna (gli indirizzi privati, che da internet nessuno può avere) e poi i
+ * proxy fidati dichiarati: quello è l'indirizzo scritto dalla nostra
+ * infrastruttura, che il chiamante non può falsificare.
  */
 export function getClientIp(req: Request): string {
   /**
@@ -304,20 +493,51 @@ export function getClientIp(req: Request): string {
    * Quando combacia con `EDGE_TRUST_SECRET`, allora quella riga l'ha scritta
    * Cloudflare e vale.
    */
+  /**
+   * 31/8/2026 (R018, RICADUTA) — QUEL SEGRETO SI SPEDISCE VUOTO.
+   *
+   * Ignorare `cf-connecting-ip` senza segreto era giusto. Ma il segreto e'
+   * spedito vuoto — `.env.example` dice testualmente che lasciarlo vuoto va
+   * bene — e davanti al sito il CDN c'e' davvero (lo dichiara il README). Con
+   * la configurazione che spediamo, quindi, si finiva a leggere l'ultimo pezzo
+   * della catena, che e' un salto della nostra infrastruttura: uguale per tutti.
+   * Tutti i visitatori diventavano lo stesso indirizzo e il freno anti-abuso li
+   * contava insieme — testualmente il danno che il commento del 22 agosto qui
+   * sopra dice di aver riparato.
+   *
+   * La regola che regge da sola, senza credere a nessuna intestazione: dalla
+   * rete pubblica nessuno puo' presentarsi con un indirizzo privato, quindi i
+   * pezzi privati in coda alla catena li ha scritti la nostra infrastruttura e
+   * si scartano. Il primo pezzo pubblico venendo da destra e' quello che il
+   * nostro bordo ha VISTO arrivare, non quello che il chiamante ha dichiarato:
+   * a sinistra c'e' la parte inventabile, e li' non si arriva mai.
+   *
+   * E quel salto dice anche CHI ci ha parlato. Se e' dentro le reti pubblicate
+   * da Cloudflare, allora a parlare e' stato davvero Cloudflare — chi bussa
+   * dritto all'origine da casa sua non ha un indirizzo cosi' — e la sua
+   * `cf-connecting-ip` e' autentica. Non e' credere sulla parola: e' guardare
+   * da dove arriva la voce prima di darle retta.
+   */
+  const cloudflare = req.headers.get('cf-connecting-ip')?.trim() || null;
   const segretoDiBordo = process.env.EDGE_TRUST_SECRET;
-  if (segretoDiBordo && segretiCombaciano(req.headers.get('x-edge-token'), segretoDiBordo)) {
-    const cloudflare = req.headers.get('cf-connecting-ip');
-    if (cloudflare) return cloudflare.trim();
-  }
+  const colSegreto = !!segretoDiBordo && segretiCombaciano(req.headers.get('x-edge-token'), segretoDiBordo);
 
   const xff = req.headers.get('x-forwarded-for');
-  if (xff) {
-    const catena = xff.split(',').map((p) => p.trim()).filter(Boolean);
-    if (catena.length > 0) {
-      const i = Math.max(0, catena.length - PROXY_FIDATI);
-      return catena[i] ?? catena[catena.length - 1];
-    }
+  const catena = xff ? xff.split(',').map((p) => p.trim()).filter(Boolean) : [];
+  const esterno = catena.length > 0 ? indiceDelSaltoEsterno(catena) : -1;
+
+  if (cloudflare && (colSegreto || (esterno >= 0 && eDiCloudflare(catena[esterno])))) {
+    return cloudflare;
   }
+
+  if (esterno >= 0) {
+    // I proxy fidati oltre il primo si scartano ancora a mano: chi ne ha
+    // davanti piu' di uno che si presenta con indirizzo pubblico lo dichiara
+    // con TRUSTED_PROXY_HOPS.
+    const i = Math.max(0, esterno - (PROXY_FIDATI - 1));
+    return catena[i] ?? catena[catena.length - 1];
+  }
+
   const real = req.headers.get('x-real-ip');
   if (real) return real.trim();
   return 'unknown';

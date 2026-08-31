@@ -25,15 +25,23 @@ vi.mock('@/lib/api/middleware', () => ({
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));
-vi.mock('@/lib/stripe/payout', () => ({
-  releaseOrderPayout: (id: string) => releaseOrderPayoutMock(id),
-  releaseRiderPayout: (id: string) => releaseRiderPayoutMock(id),
-  // Gli stati dai quali un compenso rider si puo' ritentare vivono in payout.ts
-  // e li usa anche il cron: prima il cron aveva una sua copia dell'elenco, e
-  // 'HELD' mancava, quindi un compenso fallito non veniva piu' ripescato.
-  FILTRO_RIDER_RITENTABILI:
-    'rider_payout_status.is.null,rider_payout_status.in.(HELD,PENDING_RIDER_ONBOARDING,FAILED)',
-}));
+// Gli stati dai quali un compenso rider si puo' ritentare vivono in payout.ts
+// e li usa anche il cron: prima il cron aveva una sua copia dell'elenco, e
+// 'HELD' mancava, quindi un compenso fallito non veniva piu' ripescato.
+//
+// 31/8/2026 (R120) — E QUI QUELLA COPIA ERA SCRITTA A MANO UN'ALTRA VOLTA.
+// Il finto dichiarava l'elenco degli stati per conto suo: il giorno in cui
+// quello vero cambia, questa prova resta verde raccontando il mondo di ieri.
+// Adesso del modulo si sostituiscono solo le due funzioni che chiamano Stripe,
+// e gli elenchi restano quelli veri.
+vi.mock('@/lib/stripe/payout', async (originale) => {
+  const vero = await originale<typeof import('@/lib/stripe/payout')>();
+  return {
+    ...vero,
+    releaseOrderPayout: (id: string) => releaseOrderPayoutMock(id),
+    releaseRiderPayout: (id: string) => releaseRiderPayoutMock(id),
+  };
+});
 
 // Builder che rispetta i filtri eq/in rilevanti (payment_method, payout_status,
 // delivery_status), così i tre pass (card-seller, rider, COD) vedono il subset giusto.
@@ -73,9 +81,15 @@ function ordersBuilder(rows: OrderRow[]) {
           (f.payout_status === undefined || o.payout_status === f.payout_status) &&
           (f.delivery_status === undefined || o.delivery_status === f.delivery_status) &&
           (f['in:payout_status'] === undefined || (f['in:payout_status'] as string[]).includes(o.payout_status)) &&
-          // R120 — il passaggio dei fattorini cerca anche i contrassegni in
-          // 'HELD': senza questo filtro la finta tabella li dava a tutti.
+          // R120 — il passaggio dei fattorini cerca anche i contrassegni con
+          // un compenso ancora dovuto: senza questo filtro la finta tabella li
+          // dava a tutti. Dal 31/8/2026 quella ricerca chiede la LISTA degli
+          // stati da cui si ritenta, non piu' il solo 'HELD', e la finta
+          // tabella deve saperla applicare: se la ignorasse tornerebbe a
+          // consegnare al giro anche i compensi gia' pagati.
           (f.rider_payout_status === undefined || o.rider_payout_status === f.rider_payout_status) &&
+          (f['in:rider_payout_status'] === undefined ||
+            (f['in:rider_payout_status'] as string[]).includes(o.rider_payout_status as string)) &&
           (f['lt:payout_claimed_at'] === undefined ||
             (o.payout_claimed_at != null && o.payout_claimed_at < (f['lt:payout_claimed_at'] as string))) &&
           disputeOk(o),

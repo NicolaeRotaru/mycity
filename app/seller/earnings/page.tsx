@@ -14,6 +14,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { riepilogoNegozio, riepilogoContanti } from '@/lib/guadagni/negozio';
 import { incassoPerGiorno } from '@/lib/guadagni/giorni';
 import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
+import { spiegazioneCommissione } from './commissione';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
 import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
 
@@ -345,14 +346,11 @@ export default function SellerEarningsPage() {
       <details className="mt-5 rounded-xl border border-cream-300 bg-cream-50">
         <summary className="flex cursor-pointer items-center gap-2 p-4 font-semibold text-ink-700"><Info size={16} className="text-ink-500" aria-hidden /> Come funziona la commissione?</summary>
         <div className="space-y-2 px-4 pb-4 text-sm text-ink-600">
-          <p>
-            Su MyCity paghi <strong>solo l&apos;8% del venduto</strong> realmente concluso (non rimborsi, non ordini annullati).
-            Nessuna commissione mensile, nessun costo di iscrizione.
-          </p>
-          <p>
-            Il bonifico parte <strong>in automatico {fraseAttesaBonifico()}</strong>. In caso di reso o contestazione la
-            quota corrispondente viene trattenuta o recuperata.
-          </p>
+          {spiegazioneCommissione().map((p) => (
+            <p key={p.forte}>
+              {p.prima}<strong>{p.forte}</strong>{p.dopo}
+            </p>
+          ))}
         </div>
       </details>
     </div>

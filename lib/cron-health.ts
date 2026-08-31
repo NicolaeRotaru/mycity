@@ -100,6 +100,14 @@ export function staleCrons(
  * `CRON_MAX_STALENESS_MIN` perché lì l'elenco lo legge lui stesso, e un morto
  * non si segnala da solo. Da /api/health invece si vede, ed è l'unico posto da
  * cui si può vedere.
+ *
+ * 31/8/2026 (R183, secondo giro) — «SI VEDE DA /api/health» ERA VERO SOLO PER
+ * CHI AVEVA IL SEGRETO. Il controllo veniva calcolato dentro `if (autorizzato)`
+ * e in produzione l'unico che chiama davvero quella rotta — il monitor esterno
+ * — non manda nessuna intestazione: leggeva 200 e «ok» con tutti i lavori
+ * fermi. Adesso i battiti si guardano sempre e il risultato esce anche senza
+ * segreto: se qualcuno lo rimette dietro l'autorizzazione, questa frase torna a
+ * essere una copertura dichiarata e inesistente.
  */
 export const SOGLIA_SORVEGLIANTE_MIN = 120;
 
@@ -128,4 +136,100 @@ export function lavoriFermi(
     .filter((t) => Number.isFinite(t));
   const installatoDaMs = quando.length > 0 ? Math.min(...quando) : undefined;
   return staleCrons(battiti, nowMs, soglie, installatoDaMs);
+}
+
+/** Il conto di cosa questa lettura ha davvero potuto guardare. */
+type CensimentoBattiti = {
+  /** Quanti lavori si dovrebbero sorvegliare. */
+  attesi: number;
+  /** Di quanti si è letto un battito vero (data valida). */
+  esaminati: number;
+  /** Quelli che un battito ce l'hanno, ma vecchio oltre la loro soglia. */
+  fermi: StaleCron[];
+  /** Quelli di cui non esiste nessun battito leggibile: non sani, NON VISTI. */
+  maiVisti: string[];
+};
+
+/**
+ * 31/8/2026 (R183, secondo giro) — UN CONTROLLO CHE NON HA GUARDATO NIENTE
+ * NON PUÒ USCIRE VERDE.
+ *
+ * `lavoriFermi` risponde a una domanda sola: «di quelli che ho visto, quali
+ * sono indietro?». Con la tabella dei battiti vuota, o con tutte le date a
+ * NULL, la risposta è «nessuno» — ed è formalmente giusta, ma chi la legge
+ * capisce «va tutto bene» mentre la verità è «non ho guardato niente». Succede
+ * da solo a ogni ambiente nuovo e dopo ogni ripristino del database, cioè
+ * proprio quando i lavori periodici hanno più probabilità di non essere partiti.
+ *
+ * Peggio: da fuori un verde su zero lavori e un verde su dieci erano
+ * indistinguibili, perché il numero di lavori guardati non usciva da nessuna
+ * parte. Questo conto esiste per farlo uscire.
+ *
+ * Un lavoro «mai visto» non è dichiarato fermo qui — quella resta la parola di
+ * `staleCrons`, con la sua finestra di prima accensione, perché è quella che fa
+ * partire le email — ma non può nemmeno passare per sano: chi non l'ha mai
+ * visto battere non ha niente su cui basarsi per dirlo.
+ */
+function censimentoBattiti(
+  battiti: CronHeartbeat[],
+  nowMs: number,
+  soglie: Record<string, number> = SOGLIE_VISTE_DA_FUORI,
+): CensimentoBattiti {
+  const ultimo = new Map(battiti.map((h) => [h.name, h.last_run_at]));
+  const sorvegliati = Object.keys(soglie);
+  // Una data che non si riesce a leggere vale come battito assente: contarla
+  // fra gli esaminati sarebbe un altro modo di dire «guardato» senza aver visto.
+  const maiVisti = sorvegliati.filter((nome) => {
+    const ts = ultimo.get(nome);
+    return !ts || !Number.isFinite(new Date(ts).getTime());
+  });
+  return {
+    attesi: sorvegliati.length,
+    esaminati: sorvegliati.length - maiVisti.length,
+    fermi: lavoriFermi(battiti, nowMs, soglie),
+    maiVisti,
+  };
+}
+
+/** Quello che /api/health racconta dei battiti, a chiunque lo chieda. */
+export type EsitoBattiti = {
+  /** Vero solo se ha guardato tutti i lavori e nessuno era indietro. */
+  ok: boolean;
+  /** Quanti lavori ha davvero guardato. */
+  esaminati: number;
+  /** Quanti ne doveva guardare. */
+  attesi: number;
+  /** Nomi e minuti di ritardo: si legge di notte, in fretta. */
+  error?: string;
+};
+
+/**
+ * 31/8/2026 (R183, secondo giro) — IL VERDETTO STA QUI, NON NELLA ROTTA.
+ *
+ * Perché il caso più insidioso non è un lavoro fermo, è un elenco di soglie
+ * vuoto: zero lavori attesi, zero esaminati, «tutti quelli che dovevo guardare
+ * li ho guardati» → verde, su niente. Nella rotta quella riga non sarebbe
+ * dimostrabile senza un finto database; qui si prova con una chiamata sola.
+ */
+export function esitoBattiti(
+  battiti: CronHeartbeat[],
+  nowMs: number,
+  soglie: Record<string, number> = SOGLIE_VISTE_DA_FUORI,
+): EsitoBattiti {
+  const censimento = censimentoBattiti(battiti, nowMs, soglie);
+  const lamentele = censimento.fermi.map(
+    (c) => `${c.name} fermo da ${c.staleMin}min (soglia ${c.thresholdMin})`,
+  );
+  // Un lavoro già dichiarato fermo non si nomina due volte: la riga la legge una
+  // persona di notte, e due elenchi che si sovrappongono la fanno contare male.
+  const giaDetti = new Set(censimento.fermi.map((c) => c.name));
+  const mutoli = censimento.maiVisti.filter((nome) => !giaDetti.has(nome));
+  if (mutoli.length > 0) lamentele.push(`mai visti battere: ${mutoli.join(', ')}`);
+  if (censimento.attesi === 0) lamentele.push('nessun lavoro da sorvegliare: l elenco delle soglie e vuoto');
+  return {
+    ok: censimento.attesi > 0 && censimento.fermi.length === 0 && censimento.esaminati === censimento.attesi,
+    esaminati: censimento.esaminati,
+    attesi: censimento.attesi,
+    error: lamentele.length > 0 ? lamentele.join('; ') : undefined,
+  };
 }

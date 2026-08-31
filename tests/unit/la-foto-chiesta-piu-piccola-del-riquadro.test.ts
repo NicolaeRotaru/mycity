@@ -93,7 +93,12 @@ describe("l'invariante di STRUTTURA sul sito vero", () => {
   // Legge il codice com'è adesso. Diventa rossa il giorno che qualcuno chiede di nuovo una foto più
   // piccola del riquadro in cui la mette — prima che la foto sgranata arrivi a schermo.
   const files = execSync(
-    'grep -rl "sizedImage(" --include=*.tsx --include=*.ts . | grep -v node_modules | grep -v lib/image-url',
+        // 31/8/2026 — `--exclude-dir=.claude`: un collaudo lascia sotto .claude/worktrees
+        // copie intere del repo, e una ricerca che parte dalla radice conta ogni riscontro
+        // una volta per copia. E' costato un rosso falso: 30 riquadri invece di 5, cioe' i
+        // 5 veri moltiplicati per le sei copie presenti. Il conto va fatto sul progetto, una
+        // volta sola.
+    'grep -rl "sizedImage(" --include=*.tsx --include=*.ts --exclude-dir=.claude . | grep -v node_modules | grep -v lib/image-url',
     { encoding: 'utf8' },
   ).trim().split('\n');
 

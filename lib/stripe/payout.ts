@@ -276,6 +276,16 @@ export async function releaseOrderPayout(orderId: string): Promise<PayoutResult>
  * un transfer fallito), ma la query del cron che cerca i candidati NON lo
  * includeva. Risultato: un compenso fallito una volta non veniva mai piu'
  * ritentato, perche' nessuno lo ripescava. Ora l'elenco e' uno solo.
+ *
+ * 31/8/2026 (R120) — E SERVE ANCHE AI CONTRASSEGNI, MA SENZA IL NULL.
+ *
+ * Il giro dei bonifici cerca i compensi in contanti rimasti scoperti dal
+ * credito con questo elenco (`.in('rider_payout_status', ...)`), non col filtro
+ * qui sotto: sulla carta lo stato vuoto vuol dire «mai provato» e va cercato,
+ * sul contrassegno vuol dire «il contante bastava, niente da versare». Chi
+ * aggiunge uno stato lo aggiunge qui e vale per tutte e due le strade; chi un
+ * domani usasse il filtro anche per i contanti si porterebbe dietro il null e
+ * riempirebbe il giro di ordini da scartare uno per uno.
  */
 export const STATI_RIDER_RITENTABILI = ['HELD', 'PENDING_RIDER_ONBOARDING', 'FAILED'] as const;
 

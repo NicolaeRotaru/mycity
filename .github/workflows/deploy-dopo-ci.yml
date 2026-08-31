@@ -28,8 +28,12 @@ name: Rilascio dopo CI verde
 #   2. SOLO DOPO, una parola in `vercel.json`:
 #      "main": true   diventa   "main": false
 #
-# Finche' i segreti mancano, questo lavoro si limita a dirlo e non fa nulla: non
-# blocca niente e non rilascia niente.
+# Finche' i segreti mancano, questo lavoro non rilascia niente e non blocca
+# nessuna unione — ma dal 31/8/2026 finisce ROSSO invece che verde, perche' un
+# lavoro che non ha guardato niente non puo' mostrare la stessa spunta di uno
+# che e' andato a bussare al sito. Il verde di prima era una risposta a una
+# domanda che nessuno aveva fatto: ventidue esecuzioni su ventidue verdi, e la
+# prova di fumo non era mai partita nemmeno una volta.
 
 on:
   workflow_run:
@@ -194,11 +198,40 @@ jobs:
         run: |
           set -euo pipefail
           VERCEL="vercel@59.10.0"
+
+          # 31/8/2026 (collaudo del rilascio, difetto ①) — A QUALE RILASCIO TORNARE, CHIESTO PRIMA.
+          #
+          # Dopo la pubblicazione il rilascio in produzione e' gia' quello
+          # nuovo: se il ritorno indietro se lo chiedesse dopo, si ritroverebbe
+          # a «tornare» su quello rotto. L'unico momento buono e' adesso.
+          # L'elenco arriva dall'API, non dallo stdout della CLI: cosi' non
+          # dipende da come la CLI decide di stampare le sue righe.
+          RILASCI="$(curl -sS --max-time 30 -H "Authorization: Bearer $TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&state=READY&limit=5" || true)"
+          PRECEDENTE="$(printf '%s' "$RILASCI" | node scripts/prova-di-fumo.mjs --rilascio-di-adesso || true)"
+          if [ -z "$PRECEDENTE" ]; then
+            echo "::warning::Non ho trovato il rilascio che sta in produzione adesso: se quello nuovo non risponde, da qui non potro' tornare indietro."
+          else
+            echo "In produzione adesso c'e': $PRECEDENTE"
+          fi
+          echo "precedente=$PRECEDENTE" >> "$GITHUB_OUTPUT"
+
           npx --yes "$VERCEL" pull --yes --environment=production --token="$TOKEN"
           npx --yes "$VERCEL" build --prod --token="$TOKEN"
-          # L'indirizzo appena pubblicato serve al passo dopo per andarci a
-          # bussare. `deploy` lo stampa come ultima riga.
-          INDIRIZZO="$(npx --yes "$VERCEL" deploy --prebuilt --prod --token="$TOKEN" | tail -n 1 | tr -d '[:space:]')"
+
+          # 31/8/2026 (collaudo del rilascio, difetto ②) — QUI C'ERA
+          # `tail -n 1`, E PRENDEVA LA RIGA SBAGLIATA.
+          #
+          # Con la CLI bloccata alla 59.10.0 l'ultima riga dello stdout e'
+          # l'avviso «Update available 59.10.0 -> 62.0.1»: non e' l'eccezione,
+          # e' lo stato normale di tutti i giorni finche' la versione resta
+          # bloccata. Da li' usciva indirizzo='Updateavailable59.10.0->62.0.1',
+          # la prova di fumo cadeva su tre controlli su tre e si annullava un
+          # rilascio sanissimo. Adesso la riga giusta la sceglie
+          # scripts/prova-di-fumo.mjs, che ha le sue prove.
+          USCITA_DEL_DEPLOY="$(npx --yes "$VERCEL" deploy --prebuilt --prod --token="$TOKEN")"
+          printf '%s\n' "$USCITA_DEL_DEPLOY"
+          INDIRIZZO="$(printf '%s' "$USCITA_DEL_DEPLOY" | node scripts/prova-di-fumo.mjs --indirizzo)"
           echo "Pubblicato su: $INDIRIZZO"
           echo "indirizzo=$INDIRIZZO" >> "$GITHUB_OUTPUT"
 
@@ -213,25 +246,102 @@ jobs:
       # La decisione la prende scripts/prova-di-fumo.mjs, che ha le sue prove in
       # tests/unit/la-prova-di-fumo-boccia-un-sito-rotto.test.ts: un collaudo che
       # dice sempre «va bene» sarebbe peggio di nessun collaudo.
+      #
+      # 31/8/2026 (collaudo del rilascio, difetto ②) — IL NUMERO D'USCITA VA CONSERVATO, NON SOLO SUBITO.
+      #
+      # «Il sito e' rotto» e «mi e' arrivata una riga a caso al posto
+      # dell'indirizzo» non sono la stessa cosa e non possono avere la stessa
+      # risposta: sul primo si torna indietro, sul secondo tornare indietro
+      # vuol dire buttare via un rilascio magari sanissimo. Il passo dopo
+      # legge questo numero per decidere.
       - name: Prova di fumo sul sito appena pubblicato
         id: fumo
         if: steps.rilascio.outputs.indirizzo != ''
-        run: node scripts/prova-di-fumo.mjs "${{ steps.rilascio.outputs.indirizzo }}"
+        env:
+          # L'indirizzo passa da una variabile e non dentro la riga di comando:
+          # cosi' resta un dato, e non puo' diventare un pezzo di script.
+          INDIRIZZO: ${{ steps.rilascio.outputs.indirizzo }}
+        run: |
+          set +e
+          node scripts/prova-di-fumo.mjs "$INDIRIZZO"
+          CODICE=$?
+          echo "codice=$CODICE" >> "$GITHUB_OUTPUT"
+          exit "$CODICE"
 
-      # Solo se la prova di fumo e' caduta: si rimette in piedi la versione di
-      # prima. `rollback` senza argomenti torna al rilascio precedente.
+      # 31/8/2026 (collaudo del rilascio, difetto ①) — «ROLLBACK SENZA ARGOMENTI TORNA AL RILASCIO
+      # PRECEDENTE»: non e' vero, ed e' costato caro.
+      #
+      # Nel sorgente della 59.10.0 il primo argomento posizionale vale «status»
+      # quando manca. Senza indirizzo il comando finiva nel ramo che si limita a
+      # guardare: «No deployment rollback in progress», uscita 0. Il rilascio
+      # rotto restava vivo in produzione, il passo diventava verde, e nel
+      # riepilogo si leggeva «sono tornata alla versione di prima». Adesso
+      # l'indirizzo c'e', e se non c'e' si chiede una mano invece di fingere.
       - name: Torna indietro, il sito appena pubblicato non risponde
-        if: failure() && steps.fumo.outcome == 'failure'
+        id: ritorno
+        # Solo sul numero che vuol dire «il sito e' rotto» (1). Un indirizzo
+        # storto (3) non dice niente sul sito: annullare in quel caso sarebbe
+        # rompere la produzione per un avviso di aggiornamento della CLI.
+        if: always() && steps.fumo.outputs.codice == '1'
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          PRECEDENTE: ${{ steps.rilascio.outputs.precedente }}
         run: |
-          echo "::error::La prova di fumo e' fallita sul rilascio appena pubblicato: torno alla versione precedente."
-          npx --yes vercel@59.10.0 rollback --yes --token="$TOKEN"
+          set -euo pipefail
+          if [ -z "$PRECEDENTE" ]; then
+            echo "::error::Il sito appena pubblicato non risponde e non so a quale rilascio tornare: il ritorno indietro va fatto a mano su Vercel."
+            {
+              echo "## ⛔ Il sito non risponde e in produzione c'e' ancora lui"
+              echo ""
+              echo "Non sapevo a quale rilascio tornare, quindi non ho annullato niente."
+              echo "Apri Vercel → il progetto → i rilasci, e rimetti in produzione quello di prima."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "::error::La prova di fumo e' fallita sul rilascio appena pubblicato: torno a $PRECEDENTE."
+          npx --yes vercel@59.10.0 rollback "$PRECEDENTE" --yes --token="$TOKEN"
+          # Solo dopo che il comando e' andato a buon fine: `set -e` ferma tutto
+          # prima di qui se e' fallito, e una frase scritta comunque sarebbe una
+          # bugia lasciata nel riepilogo.
+          echo "tornato=si" >> "$GITHUB_OUTPUT"
           {
             echo "## ⛔ Rilascio annullato"
             echo ""
-            echo "Il sito appena pubblicato non ha superato la prova di fumo: sono tornata alla versione precedente."
+            echo "Il sito appena pubblicato non ha superato la prova di fumo: sono tornata al rilascio $PRECEDENTE."
             echo "Guarda il passo «Prova di fumo» qui sopra per sapere quale dei tre controlli e' caduto."
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # 31/8/2026 (collaudo del rilascio, difetto ③) — VENTIDUE ESECUZIONI SU VENTIDUE VERDI, E NESSUNA
+      # AVEVA PROVATO NIENTE.
+      #
+      # Senza le chiavi di Vercel ogni passo qui sopra ha una condizione che non
+      # si avvera, quindi salta: l'ultima esecuzione e' durata cinque secondi
+      # con Checkout, Setup Node e tutto il resto «skipped» — e il lavoro e'
+      # finito verde. Da fuori quella spunta e' identica a quella di un rilascio
+      # controllato, e intanto la produzione usciva da un'altra strada.
+      #
+      # Questo passo gira SEMPRE, e' l'unico, e dice cosa e' stato verificato
+      # davvero. Zero controlli fatti non e' un successo: e' un «non lo so», e
+      # un «non lo so» non puo' portare la stessa spunta di un «ho guardato».
+      - name: Il verdetto — cosa ho provato davvero
+        if: always()
+        env:
+          PRONTO: ${{ steps.chiavi.outputs.pronto }}
+          INDIRIZZO: ${{ steps.rilascio.outputs.indirizzo }}
+          CODICE_FUMO: ${{ steps.fumo.outputs.codice }}
+          TORNATO: ${{ steps.ritorno.outputs.tornato }}
+        run: |
+          set -uo pipefail
+          VERDETTO="$(mktemp)"
+          set +e
+          node scripts/prova-di-fumo.mjs --verdetto > "$VERDETTO"
+          CODICE=$?
+          set -e
+          cat "$VERDETTO"
+          cat "$VERDETTO" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$CODICE" != "0" ]; then
+            echo "::error::Questo lavoro non ha verificato che il sito risponda: leggi il riepilogo qui sopra prima di fidarti della produzione."
+            exit 1
+          fi

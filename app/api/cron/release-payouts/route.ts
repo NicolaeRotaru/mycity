@@ -3,7 +3,12 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { isStripeConfigured, getStripe } from '@/lib/stripe/client';
 import { ORE_ATTESA_BONIFICO } from '@/lib/stripe/tempi-bonifico';
-import { releaseOrderPayout, releaseRiderPayout, FILTRO_RIDER_RITENTABILI } from '@/lib/stripe/payout';
+import {
+  releaseOrderPayout,
+  releaseRiderPayout,
+  FILTRO_RIDER_RITENTABILI,
+  STATI_RIDER_RITENTABILI,
+} from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
 // R044 — l'avviso agli amministratori e' quello gia' usato dal webhook: una casa sola.
 import { notifyAdmins } from '@/lib/stripe/webhook/comune';
@@ -284,16 +289,33 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
    * `payment_method = 'card'` e basta. Ma il credito MyCity puo' portare il
    * contante sotto il compenso — fino a zero — e allora una parte resta
    * dovuta. La conferma dell'incasso la lascia in 'HELD'; questi sono gli
-   * ordini che la vengono a prendere. La ricerca e' esplicita su 'HELD' per
-   * non tirare dentro tutti i contrassegni ancora da confermare, che di
-   * compenso da versare non ne hanno.
+   * ordini che la vengono a prendere.
+   *
+   * 31/8/2026 (R120) — MA 'HELD' NON E' L'UNICO STATO DA CUI SI RITENTA.
+   *
+   * Qui la ricerca chiedeva esattamente 'HELD', e bastava un passaggio a
+   * vuoto per perdere l'ordine: se il fattorino non ha ancora collegato
+   * l'IBAN, `releaseRiderPayout` riscrive quello stato in
+   * 'PENDING_RIDER_ONBOARDING'. Da li' in poi l'ordine era fuori da tutte e
+   * due le ricerche del giro — quella della carta filtra
+   * `payment_method='card'` — e il compenso restava dovuto per sempre. Lo
+   * stesso guasto di prima, spostato di un passo: e nessuno vieta a un
+   * fattorino di prendere ordini prima di agganciare Stripe, il controllo su
+   * Connect esiste solo per i negozi.
+   *
+   * Gli stati da cui si ritenta sono quelli della carta, che li' erano gia'
+   * trattati cosi', e vengono dalla stessa casa (`STATI_RIDER_RITENTABILI`).
+   * L'unica differenza e' che qui lo stato vuoto NON entra: sulla carta
+   * significa «mai provato», sul contrassegno significa «niente da versare,
+   * il contante bastava», e tirarlo dentro riempirebbe il giro di ordini da
+   * scartare uno per uno.
    */
   const { data: riderCandsContanti } = await admin
     .from('orders')
     .select('id')
     .eq('payment_method', 'cod')
     .eq('delivery_status', 'DELIVERED')
-    .eq('rider_payout_status', 'HELD')
+    .in('rider_payout_status', [...STATI_RIDER_RITENTABILI])
     .not('rider_id', 'is', null)
     .or(PAYOUT_DISPUTE_FILTER)
     .lte('delivered_at', cutoffIso)

@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { segretiCombaciano, gettoneBearer } from '@/lib/api/segreti';
-import { lavoriFermi, SOGLIE_VISTE_DA_FUORI, type CronHeartbeat } from '@/lib/cron-health';
+import {
+  esitoBattiti,
+  SOGLIE_VISTE_DA_FUORI,
+  type CronHeartbeat,
+  type EsitoBattiti,
+} from '@/lib/cron-health';
 
 export const runtime = 'nodejs';
 // Sempre fresh: i monitor esterni devono sapere lo stato reale, no cache.
@@ -16,8 +21,13 @@ export const dynamic = 'force-dynamic';
  * ① (021, 238) La risposta pubblica diceva a chiunque QUALI segreti mancano —
  *    `checks.env.error` era l'elenco dei nomi — e riportava il messaggio grezzo
  *    del database. È una mappa gratuita di dove il sito è scoperto. Ora fuori
- *    dallo sviluppo la risposta pubblica è {status, timestamp}; il dettaglio
- *    resta, ma dietro il segreto dei lavori periodici.
+ *    dallo sviluppo la risposta pubblica è {status, timestamp, cron}; il
+ *    dettaglio resta, ma dietro il segreto dei lavori periodici.
+ *    31/8/2026 (R183, secondo giro) — `cron` è entrato in quell'elenco: i
+ *    battiti dei lavori periodici sono un dato operativo (nome del lavoro e
+ *    minuti di ritardo), non un segreto, e sono la cosa che il monitor esterno
+ *    deve poter leggere senza chiave. Il messaggio grezzo del database resta
+ *    fuori: quello sì che è una mappa.
  *
  * ② (176, 234) Un guasto NON fatale rispondeva 503. Nasceva contro Render, dove
  *    503 su questa rotta voleva dire «istanza morta, riavviala»: bastava che
@@ -149,9 +159,9 @@ export async function GET(request: Request) {
     checks.db = { ok: false, error: e instanceof Error ? e.message : 'unknown' };
   }
 
-  // Chi ha il segreto dei lavori periodici vede il dettaglio — e solo lui paga
-  // la lettura dei battiti qui sotto. Il calcolo sta qui e non piu' in fondo
-  // perche' adesso decide anche QUALI controlli fare.
+  // Chi ha il segreto dei lavori periodici vede il dettaglio interno. Decide
+  // QUANTO si racconta, non piu' QUALI controlli si fanno: i controlli adesso
+  // si fanno tutti comunque (vedi il blocco qui sotto).
   const segreto = process.env.CRON_SECRET;
   const autorizzato =
     process.env.NODE_ENV !== 'production' ||
@@ -174,25 +184,49 @@ export async function GET(request: Request) {
    *
    * Un lavoro fermo e' `degraded`, non `unhealthy`: 503 qui vuol dire «ammazza
    * il processo», e un cron indietro non si ripara riavviando il sito.
+   *
+   * 31/8/2026 (R183, secondo giro) — ERA CIECO PROPRIO PER CHI GUARDA, E VERDE
+   * SU ZERO LAVORI.
+   *
+   * ① Stava dentro `if (autorizzato)`, e in produzione «autorizzato» vuol dire
+   *    mandare il segreto dei cron. Ma chi interroga questa rotta e' il monitor
+   *    esterno (UptimeRobot / BetterStack, CHANGELOG:44), che quel segreto non
+   *    lo manda — e non lo deve mandare. Misurato con tutti e dieci i lavori
+   *    fermi da dieci giorni: col segreto usciva `degraded` e l'elenco
+   *    completo, da anonimo usciva 200 {"status":"ok"}. Il battito di un lavoro
+   *    periodico e' un dato operativo, non un segreto: nome del lavoro e minuti
+   *    di ritardo escono a chiunque; il messaggio grezzo del database no, resta
+   *    in `dettaglio` per chi ha la chiave.
+   *    Prezzo: una lettura in piu' anche per le chiamate anonime. Si paga
+   *    volentieri — un semaforo che mente a chi lo guarda non vale la query che
+   *    risparmia — e sopra le 600 chiamate al minuto per indirizzo il freno qui
+   *    sopra taglia prima di arrivare fin qui.
+   *
+   * ② Con la tabella dei battiti vuota, o con tutte le date a NULL, la risposta
+   *    era {"ok":true}: zero lavori esaminati, spunta verde, mentre TUTTI i
+   *    lavori periodici erano fermi. Succede da solo a ogni ambiente nuovo e
+   *    dopo ogni ripristino del database. Adesso la risposta porta il conto di
+   *    quanti lavori ha guardato su quanti ne doveva guardare, e uno che non li
+   *    ha visti tutti non si dichiara sano: un verde su zero e un verde su
+   *    dieci non si assomigliano piu'.
    */
-  if (autorizzato) {
-    try {
-      const admin = getAdminSupabase();
-      const { data, error } = await admin.from('cron_heartbeats').select('name, last_run_at');
-      if (error) {
-        checks.cron = { ok: false, error: `battiti non leggibili: ${error.message}` };
-      } else {
-        const fermi = lavoriFermi((data ?? []) as CronHeartbeat[], Date.now(), SOGLIE_VISTE_DA_FUORI);
-        checks.cron = fermi.length === 0
-          ? { ok: true }
-          : {
-              ok: false,
-              error: fermi.map((c) => `${c.name} fermo da ${c.staleMin}min (soglia ${c.thresholdMin})`).join(', '),
-            };
-      }
-    } catch (e) {
-      checks.cron = { ok: false, error: e instanceof Error ? e.message : 'unknown' };
+  const attesi = Object.keys(SOGLIE_VISTE_DA_FUORI).length;
+  let cron: EsitoBattiti;
+  // Il messaggio grezzo del database e' una mappa di dov'e' scoperto il sito:
+  // esce solo con il segreto in mano.
+  let dettaglioBattiti: string | undefined;
+  try {
+    const admin = getAdminSupabase();
+    const { data, error } = await admin.from('cron_heartbeats').select('name, last_run_at');
+    if (error) {
+      cron = { ok: false, esaminati: 0, attesi, error: 'battiti non leggibili' };
+      dettaglioBattiti = error.message;
+    } else {
+      cron = esitoBattiti((data ?? []) as CronHeartbeat[], Date.now(), SOGLIE_VISTE_DA_FUORI);
     }
+  } catch (e) {
+    cron = { ok: false, esaminati: 0, attesi, error: 'battiti non leggibili' };
+    dettaglioBattiti = e instanceof Error ? e.message : 'unknown';
   }
 
   const mancantiVitali = ENV_VITALI.filter((k) => !process.env[k]);
@@ -222,11 +256,14 @@ export async function GET(request: Request) {
    * avere il potere di riavviare.
    */
   const processoMorto = !checks.env.ok;
-  const degradato = !processoMorto && (!checks.db.ok || !checks.envOpzionali.ok || checks.cron?.ok === false);
+  const degradato = !processoMorto && (!checks.db.ok || !checks.envOpzionali.ok || !cron.ok);
   const status = processoMorto ? 'unhealthy' : degradato ? 'degraded' : 'ok';
   const httpStatus = processoMorto ? 503 : 200;
 
   // Il dettaglio lo vede chi ha il segreto dei lavori periodici, non il mondo.
+  // I battiti no: quelli sono la sola cosa che il monitor esterno deve poter
+  // leggere anche senza chiave, altrimenti guarda un semaforo che non guarda
+  // niente (R183, secondo giro).
   const corpo = autorizzato
     ? {
         status,
@@ -236,9 +273,9 @@ export async function GET(request: Request) {
         // dice ancora la verità, ma non è un dato su cui ragionare in produzione.
         uptimeSec: process.uptime?.() ?? null,
         latencyMs: Date.now() - startedAt,
-        checks,
+        checks: { ...checks, cron: dettaglioBattiti ? { ...cron, dettaglio: dettaglioBattiti } : cron },
       }
-    : { status, timestamp: new Date().toISOString() };
+    : { status, timestamp: new Date().toISOString(), cron };
 
   return NextResponse.json(corpo, { status: httpStatus, headers: { 'cache-control': 'no-store' } });
 }

@@ -4,7 +4,7 @@ import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { logger } from '@/lib/logger';
 import { segretiCombaciano } from '@/lib/api/segreti';
 import { ApiErrors } from './responses';
-import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
+import { rateLimitAsync, contatoreGiaAlTetto, getClientIp } from '@/lib/rate-limit';
 import { purchaseBlockReason } from '@/lib/shopping-access';
 import { arrivaDaUnAltroSito } from '@/lib/api/provenienza';
 
@@ -121,29 +121,63 @@ function getSupabaseAuthClient() {
   }
 }
 
-async function authenticate(req: NextRequest): Promise<
+type EsitoAutenticazione =
   | { ok: true; user: User; profile: Profile; supaUtente: ClientDiChiChiama }
-  | { ok: false; response: NextResponse }
-> {
-  // 27/8/2026 (R003 e R020) — IL FRENO ERA SU TRE PORTE SU SEI.
-  //
-  // Il 22 agosto era stato messo un freno per indirizzo di rete PRIMA di
-  // autenticare, e la ragione sta scritta piu' sotto: chi bussa senza un
-  // gettone valido costa comunque due chiamate di rete a testa, e diecimila
-  // tentativi al minuto da un solo indirizzo sono ventimila chiamate pagate da
-  // noi per respingere sempre la stessa persona.
-  //
-  // Ma era finito solo nei tre involucri col rate limit, non nei tre semplici —
-  // che sono quelli usati dal doppio delle rotte (43 contro 22). Meta' delle
-  // porte aveva la serratura, e non c'era modo di accorgersene.
-  //
-  // Adesso il freno sta QUI, che e' il punto per cui passano tutti e sei: un
-  // involucro nuovo lo eredita senza che nessuno debba ricordarsene. La chiave
-  // e' il percorso della richiesta, cosi' una raffica su una rotta non spegne
-  // tutto il resto del sito.
-  const frenato = await frenoDiRete(req, chiaveDelFreno(percorsoDi(req)));
-  if (frenato) return { ok: false, response: frenato };
+  | { ok: false; response: NextResponse; nostraColpa?: true };
 
+/**
+ * 27/8/2026 (R003 e R020) — IL FRENO ERA SU TRE PORTE SU SEI.
+ *
+ * Il 22 agosto era stato messo un freno per indirizzo di rete PRIMA di
+ * autenticare, e la ragione sta scritta piu' sotto: chi bussa senza un gettone
+ * valido costa comunque due chiamate di rete a testa, e diecimila tentativi al
+ * minuto da un solo indirizzo sono ventimila chiamate pagate da noi per
+ * respingere sempre la stessa persona.
+ *
+ * Ma era finito solo nei tre involucri col rate limit, non nei tre semplici —
+ * che sono quelli usati dal doppio delle rotte (43 contro 22). Meta' delle
+ * porte aveva la serratura, e non c'era modo di accorgersene. Adesso sta QUI,
+ * il punto per cui passano tutti e sei: un involucro nuovo lo eredita senza che
+ * nessuno debba ricordarsene.
+ *
+ * 31/8/2026 (ricaduta) — MA COSI' PUNIVA ANCHE CHI ERA ENTRATO DAVVERO.
+ *
+ * Contava OGNI richiesta, e quindi anche quelle delle persone identificate. Il
+ * motivo per cui non deve farlo sta scritto dieci righe piu' sotto, nel freno
+ * per utente: «due persone dietro lo stesso indirizzo — un ufficio, la rete di
+ * un operatore mobile — non si penalizzano a vicenda». In Italia un solo
+ * indirizzo IPv4 di un operatore mobile sta dietro a centinaia di abbonati: il
+ * lunedi' mattina quattrocento clienti sulla stessa rete si toglievano il posto
+ * a vicenda, e cento di loro leggevano «troppe richieste» senza aver fatto
+ * niente.
+ *
+ * Adesso il secchio conta i TENTATIVI ANDATI A VUOTO, non le persone. Chi entra
+ * davvero non consuma niente. Il conto si guarda prima — senza toccarlo — cosi'
+ * quando e' pieno si risponde 429 senza spendere le due chiamate di rete, che
+ * era il punto di tutto.
+ */
+async function authenticate(req: NextRequest): Promise<EsitoAutenticazione> {
+  // La chiave e' il percorso della richiesta, cosi' una raffica su una rotta
+  // non spegne tutto il resto del sito.
+  const secchio = {
+    key: `rete:${chiaveDelFreno(percorsoDi(req))}:${getClientIp(req)}`,
+    max: TETTO_FALLIMENTI_PER_RETE,
+    windowMs: FINESTRA_RETE_MS,
+  };
+
+  const stato = await contatoreGiaAlTetto(secchio);
+  if (!stato.allowed) return { ok: false, response: ApiErrors.rateLimited(stato.retryAfterSec) };
+
+  const esito = await autentica(req);
+
+  // Un 503 «non siamo configurati» e' colpa nostra, non di chi ha bussato: non
+  // deve riempire il secchio di una rete intera.
+  if (!esito.ok && !esito.nostraColpa) await rateLimitAsync(secchio);
+
+  return esito;
+}
+
+async function autentica(req: NextRequest): Promise<EsitoAutenticazione> {
   /**
    * 30/8/2026 (R022) — E QUESTA RICHIESTA, DA DOVE ARRIVA?
    *
@@ -178,7 +212,7 @@ async function authenticate(req: NextRequest): Promise<
 
   if (bearer) {
     const supa = getSupabaseAuthClient();
-    if (!supa) return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+    if (!supa) return { ok: false, response: ApiErrors.unavailable('Auth non configurato'), nostraColpa: true };
     const { data, error } = await supa.auth.getUser(bearer);
     if (!error && data?.user) {
       user = data.user;
@@ -188,7 +222,7 @@ async function authenticate(req: NextRequest): Promise<
         supaUtente = creaClientAnonimo({ gettone: bearer });
       } catch (e) {
         logger.error('[auth] client per l utente non creabile', e);
-        return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+        return { ok: false, response: ApiErrors.unavailable('Auth non configurato'), nostraColpa: true };
       }
     }
   } else {
@@ -205,10 +239,10 @@ async function authenticate(req: NextRequest): Promise<
       // configurazione non è una sessione mancante: chi legge 401 riprova ad
       // accedere all'infinito, chi legge 503 sa che deve guardare il server.
       if (e instanceof Error && e.name === 'AuthNonDisponibile') {
-        return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+        return { ok: false, response: ApiErrors.unavailable('Auth non configurato'), nostraColpa: true };
       }
       logger.error('[auth] modulo server non caricabile', e);
-      return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+      return { ok: false, response: ApiErrors.unavailable('Auth non configurato'), nostraColpa: true };
     }
   }
 
@@ -229,7 +263,7 @@ async function authenticate(req: NextRequest): Promise<
       .single();
     profile = (data as Profile | null) ?? null;
   } catch {
-    return { ok: false, response: ApiErrors.unavailable('Auth non configurato') };
+    return { ok: false, response: ApiErrors.unavailable('Auth non configurato'), nostraColpa: true };
   }
   if (!profile) return { ok: false, response: ApiErrors.forbidden('Profilo non trovato') };
 
@@ -295,8 +329,13 @@ export type AuthRateLimitOpts = {
  * autenticare — abbastanza alta che nessun uso normale la tocchi, abbastanza
  * bassa che una raffica si fermi subito. E quella per utente, dopo, che resta
  * la difesa vera contro l'abuso di chi un account ce l'ha.
+ *
+ * 31/8/2026 — quanti TENTATIVI A VUOTO si sopportano da una stessa rete in un
+ * minuto, non quante richieste. Il nome dice cosa conta: chi e' entrato non
+ * lascia traccia qui, e il numero non ha piu' niente a che vedere con quante
+ * persone stanno dietro a quell'indirizzo.
  */
-const TETTO_PER_RETE = 300;
+const TETTO_FALLIMENTI_PER_RETE = 300;
 const FINESTRA_RETE_MS = 60_000;
 
 /**
@@ -339,15 +378,6 @@ export function chiaveDelFreno(percorso: string): string {
       return pezzo;
     })
     .join('/');
-}
-
-async function frenoDiRete(req: NextRequest, nome: string): Promise<NextResponse | null> {
-  const rl = await rateLimitAsync({
-    key: `rete:${nome}:${getClientIp(req)}`,
-    max: TETTO_PER_RETE,
-    windowMs: FINESTRA_RETE_MS,
-  });
-  return rl.allowed ? null : ApiErrors.rateLimited(rl.retryAfterSec);
 }
 
 export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
