@@ -148,6 +148,17 @@ BEGIN
 END;
 $$;
 
+-- 31/8/2026 — LA PORTA CHE ERA RESTATA APERTA.
+-- Poche righe sopra, `claim_pending_emails` viene tolta a PUBLIC, authenticated e
+-- anon. Questa no: e' nata SECURITY DEFINER e raggiungibile da chiunque, anche da
+-- chi non ha un account. E' una funzione che ACCODA EMAIL: in mano a un anonimo
+-- diventa un modo per far partire posta a nostro nome.
+-- Il trigger continua a funzionare: lo esegue il proprietario della tabella, non
+-- chi ha fatto la UPDATE. Il controllo che lo tiene chiuso e'
+-- tests/sql/rls/10-nessuna-porta-nuova-aperta-agli-anonimi.test.sql, che diventa
+-- rosso il giorno stesso in cui una funzione potente nuova entra senza dichiararsi.
+REVOKE EXECUTE ON FUNCTION public.enqueue_order_status_email() FROM PUBLIC, authenticated, anon;
+
 DROP TRIGGER IF EXISTS trg_enqueue_order_status_email ON public.orders;
 CREATE TRIGGER trg_enqueue_order_status_email
   AFTER UPDATE OF delivery_status ON public.orders

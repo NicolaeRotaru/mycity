@@ -16,10 +16,6 @@ export interface Database {
           last_activity: string;
           recovery_email_sent_at: string | null;
           recovered: boolean;
-          // 30/8/2026 (R164) — quando il carrello e' tornato, cioe' e' diventato
-          // un ordine (migrazione 148). Senza il QUANDO, «recuperato» e' un
-          // si'/no senza tempo: non si puo' misurare a quanti giorni dall'email
-          // arriva l'acquisto, che e' la domanda che decide l'invio.
           recovered_at: string | null;
         };
         Insert: {
@@ -150,6 +146,24 @@ export interface Database {
           is_bot?: boolean;
           metadata?: Json | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_spend_daily: {
+        Row: {
+          giorno: string;
+          cents: number;
+          updated_at: string;
+        };
+        Insert: {
+          giorno: string;
+          cents?: number;
+          updated_at?: string;
+        };
+        Update: {
+          giorno?: string;
+          cents?: number;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -930,30 +944,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      le: {
-        Row: {
-          code: string | null;
-          referred_email: string | null;
-          status: string | null;
-          bonus_awarded: boolean | null;
-          converted_at: string | null;
-        };
-        Insert: {
-          code?: string | null;
-          referred_email?: string | null;
-          status?: string | null;
-          bonus_awarded?: boolean | null;
-          converted_at?: string | null;
-        };
-        Update: {
-          code?: string | null;
-          referred_email?: string | null;
-          status?: string | null;
-          bonus_awarded?: boolean | null;
-          converted_at?: string | null;
-        };
-        Relationships: [];
-      };
       loyalty_accounts: {
         Row: {
           user_id: string;
@@ -1230,9 +1220,6 @@ export interface Database {
           unit_price: number;
           variant_id: string | null;
           variant_label: string | null;
-          // 27/8/2026 (R029) — la copia del nome e della foto del giorno
-          // dell'ordine (migrazione 140). La scrive il database: l'ordine deve
-          // restare leggibile anche se il prodotto cambia nome o sparisce.
           product_name: string | null;
           product_image: string | null;
         };
@@ -1334,9 +1321,6 @@ export interface Database {
           cash_collected_by: string | null;
           delivery_photo_url: string | null;
           delivery_signature_url: string | null;
-          invoice_sdi_status: string | null;
-          invoice_sdi_id: string | null;
-          invoice_issued_at: string | null;
           stripe_transfer_group: string | null;
           stripe_reversal_id: string | null;
           dispute_status: string | null;
@@ -1407,9 +1391,6 @@ export interface Database {
           cash_collected_by?: string | null;
           delivery_photo_url?: string | null;
           delivery_signature_url?: string | null;
-          invoice_sdi_status?: string | null;
-          invoice_sdi_id?: string | null;
-          invoice_issued_at?: string | null;
           stripe_transfer_group?: string | null;
           stripe_reversal_id?: string | null;
           dispute_status?: string | null;
@@ -1480,9 +1461,6 @@ export interface Database {
           cash_collected_by?: string | null;
           delivery_photo_url?: string | null;
           delivery_signature_url?: string | null;
-          invoice_sdi_status?: string | null;
-          invoice_sdi_id?: string | null;
-          invoice_issued_at?: string | null;
           stripe_transfer_group?: string | null;
           stripe_reversal_id?: string | null;
           dispute_status?: string | null;
@@ -2175,6 +2153,11 @@ export interface Database {
           rewarded: boolean | null;
           rewarded_at: string | null;
           created_at: string | null;
+          code: string | null;
+          referred_email: string | null;
+          status: string | null;
+          bonus_awarded: boolean | null;
+          converted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -2184,6 +2167,11 @@ export interface Database {
           rewarded?: boolean | null;
           rewarded_at?: string | null;
           created_at?: string | null;
+          code?: string | null;
+          referred_email?: string | null;
+          status?: string | null;
+          bonus_awarded?: boolean | null;
+          converted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -2193,6 +2181,11 @@ export interface Database {
           rewarded?: boolean | null;
           rewarded_at?: string | null;
           created_at?: string | null;
+          code?: string | null;
+          referred_email?: string | null;
+          status?: string | null;
+          bonus_awarded?: boolean | null;
+          converted_at?: string | null;
         };
         Relationships: [];
       };

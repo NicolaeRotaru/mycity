@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { queryKeys } from '@/lib/queries/keys';
 
 /**
@@ -36,23 +36,69 @@ function chiaviDefinite(): Array<{ dominio: string; nome: string }> {
   return fuori;
 }
 
+/**
+ * 31/8/2026 — LA RICERCA NON SI APPOGGIA PIU' A UN PROGRAMMA ESTERNO.
+ *
+ * Prima questa prova chiamava `rg` (ripgrep) e aveva un `catch` solo: quando il
+ * comando falliva rispondeva «nessuno la usa». Ma `rg` fallisce in DUE modi
+ * diversi — «ho cercato e non ho trovato niente» (uscita 1) e «non esisto su
+ * questa macchina» (ENOENT) — e il catch li trattava uguali.
+ *
+ * Sul computer di chi ha scritto la prova `rg` c'era, e la prova era verde. Sul
+ * server della CI `rg` NON c'e': tutte e 130 le chiavi risultavano non usate da
+ * nessuno, e la prova bocciava il lotto intero. Ha bloccato sette giri di CI di
+ * fila mentre in casa risultava tutto a posto.
+ *
+ * Adesso i file li legge Node, che c'e' sempre. E soprattutto: se la lettura non
+ * raccoglie niente, la prova lo DICE invece di concludere che nessuno usa
+ * niente. Un verde che non ha guardato nessun file non e' un verde.
+ */
+const SORGENTI = leggiSorgenti();
+
+function leggiSorgenti(): Array<{ percorso: string; testo: string }> {
+  const fuori: Array<{ percorso: string; testo: string }> = [];
+  const salta = new Set(['node_modules', '.next', '.git', 'coverage', 'test-results', 'playwright-report']);
+  const giro = (cartella: string) => {
+    for (const voce of readdirSync(cartella, { withFileTypes: true })) {
+      if (voce.name.startsWith('.') && voce.name !== '.') continue;
+      const percorso = join(cartella, voce.name);
+      if (voce.isDirectory()) {
+        if (!salta.has(voce.name)) giro(percorso);
+        continue;
+      }
+      if (!/\.(ts|tsx|js|jsx|mjs)$/.test(voce.name)) continue;
+      fuori.push({ percorso, testo: readFileSync(percorso, 'utf8') });
+    }
+  };
+  giro('.');
+  return fuori;
+}
+
 /** Chi cita `dominio.nome` in tutto il progetto, tolta la sua definizione. */
 function chiLaUsa(dominio: string, nome: string): string[] {
-  try {
-    const uscita = execFileSync(
-      'rg',
-      ['-l', '--glob', '!node_modules', '--glob', '!.next', `\\b${dominio}\\.${nome}\\b`, '.'],
-      { encoding: 'utf8' },
-    );
-    return uscita.split('\n').filter(Boolean);
-  } catch {
-    // rg esce con 1 quando non trova niente: e' proprio il caso che interessa.
-    return [];
-  }
+  const cerca = new RegExp(`\\b${dominio}\\.${nome}\\b`);
+  return SORGENTI.filter((f) => cerca.test(f.testo)).map((f) => f.percorso);
 }
 
 describe('le chiavi della cache', () => {
   const chiavi = chiaviDefinite();
+
+  /*
+   * 31/8/2026 — LA SENTINELLA CHE MANCAVA. Senza questa, una ricerca che non
+   * legge nessun file conclude «nessuno usa niente» ed e' rossa per il motivo
+   * sbagliato — oppure, se il verso della prova fosse l'opposto, verde senza
+   * aver guardato. Il numero non e' tondo apposta: e' il piano del progetto.
+   */
+  it('ha davvero letto i file del progetto, altrimenti non sta misurando niente', () => {
+    expect(
+      SORGENTI.length,
+      'la lettura dei sorgenti non ha raccolto quasi niente: qualunque cosa dica dopo, non ha guardato il progetto',
+    ).toBeGreaterThan(200);
+    expect(
+      SORGENTI.some((f) => f.percorso.includes('lib/queries/keys')),
+      'fra i file letti manca proprio quello che definisce le chiavi',
+    ).toBe(true);
+  });
 
   it('ce ne sono, e sono lette dal modulo vero', () => {
     expect(chiavi.length).toBeGreaterThan(50);
