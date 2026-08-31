@@ -409,3 +409,89 @@ jobs:
               echo "Nessun percorso del sito è stato aperto in un browser in questa CI."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # 31/8/2026 (R102) — L'ACCESSIBILITA' HA UN LAVORO SUO, E NON PUO' SPEGNERSI.
+  #
+  # axe viveva dentro il lavoro qui sopra, dove ogni passo e' appeso a
+  # `steps.e2e.outputs.enabled == 'true'`. Quel valore diventa `false` quando
+  # mancano i segreti di un Supabase di prova, che non ci sono mai stati:
+  # nell'esecuzione 33053827261 su `main` il lavoro risultava SUCCESS con
+  # «Install Playwright», «Build» e «Start app + run e2e» tutti SKIPPED. La
+  # Dichiarazione di Accessibilita' promette la conformita' all'European
+  # Accessibility Act, e l'unica prova che poteva smentirla non ha mai aperto un
+  # browser.
+  #
+  # Qui l'accessibilita' e' staccata dagli smoke: quelli hanno bisogno di dati
+  # veri per avere senso, axe no. Nomi, ruoli, contrasto, landmark e ordine dei
+  # titoli si controllano identici su un sito vuoto, e le variabili sono finte
+  # apposta. NESSUN PASSO DI QUESTO LAVORO HA UN `if:` E NESSUNO LEGGE UN
+  # SEGRETO: e' quello che lo tiene acceso, e la prova
+  # tests/unit/il-cancello-dell-accessibilita-gira-sempre.test.ts diventa rossa
+  # se qualcuno ne aggiunge uno.
+  a11y:
+    name: Accessibilita (axe) — non si spegne mai
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      - name: Installa Chromium per Playwright
+        run: npx playwright install --with-deps chromium
+
+      # Variabili finte, scritte in chiaro qui dentro: non sono un segreto
+      # dimenticato, sono la scelta. Il giorno che qualcuno rimuovesse un
+      # segreto dalle impostazioni del repository, questo lavoro continuerebbe a
+      # girare identico.
+      - name: Build con variabili finte
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://accessibilita-senza-database.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-il-cancello-accessibilita"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+        run: npm run build
+
+      - name: Apri ogni pagina con axe
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://accessibilita-senza-database.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-il-cancello-accessibilita"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          E2E_BASE_URL: "http://localhost:3000"
+        run: |
+          # `npm start` lancia un figlio (il server Next): chiudendo solo npm il
+          # server resta vivo e il lavoro finisce in timeout. Si chiude il gruppo.
+          set -m
+          npm start &
+          APP_PID=$!
+          su=""
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then su="si"; break; fi
+            sleep 1
+          done
+          if [ -z "$su" ]; then
+            echo "::error::l'app non ha risposto entro 60 secondi: axe non ha potuto guardare niente"
+            kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+            exit 1
+          fi
+          set +e
+          npm run test:e2e -- tests/e2e/11-a11y-percorso-acquisto.spec.ts --project=chromium
+          STATUS=$?
+          kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+          exit $STATUS
+
+      # Il difetto era «un verde che non prova niente». L'antidoto e' dire, dove
+      # si guarda, che stavolta ha provato — e su quante pagine.
+      - name: Dichiara che l'accessibilita e' stata provata
+        run: |
+          pagine=$(grep -cE "^  \{ nome:" tests/e2e/11-a11y-percorso-acquisto.spec.ts || true)
+          {
+            echo "✅ **Accessibilita (axe)**: girata su $pagine pagine, senza nessun segreto e senza nessuna condizione."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -61,6 +61,32 @@ export default function GlobalError({
             </svg>
             Riprova
           </button>
+          {/*
+            31/8/2026 (R194) — Il `digest` è lo stesso identificativo che Next
+            scrive nei log del server: senza mostrarlo, chi ci scrive «non
+            funziona» non ha niente da darci e la ricerca nei log parte
+            dall'ora approssimativa. Qui il foglio di stile non esiste (è la
+            schermata che sostituisce il layout rotto), quindi «si può
+            selezionare tutto» e «puoi andare a capo dentro il codice» — che
+            sul telefono evita la barra che scorre di lato — devono stare
+            attaccate all'elemento. Senza digest la riga non compare: una
+            «undefined» sotto le scuse sembra un secondo errore.
+          */}
+          {error.digest ? (
+            <p style={{ fontSize: 13, lineHeight: 1.6, color: '#57534E', margin: '24px 0 0' }}>
+              Codice errore:{' '}
+              <code
+                style={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+                  color: '#3C3835', background: '#F1EDE6', padding: '2px 6px', borderRadius: 4,
+                  userSelect: 'all', wordBreak: 'break-all',
+                }}
+              >
+                {error.digest}
+              </code>
+              {' — riportalo se ci scrivi.'}
+            </p>
+          ) : null}
         </div>
       </body>
     </html>

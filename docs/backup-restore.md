@@ -40,8 +40,14 @@
 
 - **Database**: copia notturna cifrata via GitHub Actions (30 giorni) + quello
   che offre il piano Supabase attivo, da verificare (vedi avviso sopra)
-- **Storage** (immagini prodotti, stories, reviews): ⚠️ **NESSUNA COPIA NOSTRA.**
-  Le foto vivono in un posto solo. Se si perdono, si perdono (vedi §1)
+- **Elenco delle foto** (`storage.objects` + `storage.buckets`): nella copia
+  notturna dal 31/8/2026. Non sono le foto: è la lista di quali file
+  esistevano, con che nome e in che secchio — la mappa per sapere cosa manca
+- **File delle foto** (immagini prodotti, stories, reviews): ⚠️ **ANCORA
+  NESSUNA COPIA NOSTRA.** Il pezzo che le copia è scritto e pronto dentro
+  `scripts/backup-db.sh`, ma è **spento**: si accende da solo appena ci sono un
+  secchio di destinazione e le sue chiavi (vedi §3). Finché è spento, ogni
+  notte scrive `esito-foto: non-configurato` e non finge di aver copiato
 - **Codice**: GitHub origin/main + tutti i branch
 - **Env vars**: Vercel → progetto → Settings → Environment Variables (NON in repo)
 - **Restore drill**: ogni 3 mesi, documenta tempi
@@ -53,7 +59,8 @@
 | Asset | Frequenza backup | RPO | RTO |
 |---|---|---|---|
 | Postgres DB | notturna (GitHub Actions, cifrata) | 24 h | 30 min |
-| Storage (immagini) | ⚠️ **nessuna copia** | ∞ | ∞ |
+| Elenco delle foto (`storage.objects`) | notturna, dentro la stessa copia | 24 h | 30 min |
+| File delle foto (le immagini vere) | ⚠️ **nessuna copia** — il pezzo che le copia è pronto e spento (§3) | ∞ | ∞ |
 | Codice | ogni push | 0 | 5 min (re-deploy) |
 | Env vars | manuale on change | – | 1h (re-input) |
 | DNS Netsons | static | – | 1h (re-config) |
@@ -111,32 +118,100 @@ Dove trovi `SUPABASE_DB_URL`:
 >
 > Qui c'era scritto «Supabase Storage è già backuppato (S3 replication 11 9s)»,
 > e nella tabella §1 le immagini avevano RPO 0 e RTO 0 — cioè: perdita zero,
-> ripristino immediato. Non esiste nessuna copia delle foto: né uno script, né
-> un passo del lavoro notturno, né un secchio nostro. La replica di cui parlava
-> la riga è la durabilità interna del fornitore, che protegge da un disco
-> rotto — non da una cancellazione, non da una chiave compromessa, non dalla
-> chiusura del progetto.
+> ripristino immediato. Non esisteva nessuna copia delle foto: né uno script,
+> né un passo del lavoro notturno, né un secchio nostro. La replica di cui
+> parlava la riga è la durabilità interna del fornitore, che protegge da un
+> disco rotto — non da una cancellazione, non da una chiave compromessa, non
+> dalla chiusura del progetto.
 >
 > È il tipo di riga più pericoloso che ci sia in un documento di ripristino:
 > chi lo legge in emergenza smette di cercare la copia, perché il documento
 > gli dice che c'è.
->
-> **Stato vero: le foto dei prodotti non hanno nessuna copia. Se il progetto
-> Supabase sparisce, spariscono con lui, e con loro ogni scheda del catalogo.**
-> Rifarle vuol dire richiamare ogni negoziante a rifotografare tutto.
->
-> Il comando qui sotto è la strada per rimediare, e non è mai stato eseguito.
-> Serve un secchio di destinazione e le chiavi: fino ad allora questa sezione
-> è un piano, non una rete.
 
-Sync settimanale (da configurare — **oggi non gira**):
+**31/8/2026 (R180) — dove siamo adesso, in due righe:**
+
+| Cosa | Copiata? | Dove |
+|---|---|---|
+| L'**elenco** dei file (nome, secchio, data, proprietario) | ✅ sì, ogni notte | `mycity-elenco-foto_<data>.dump.gpg`, cifrato, insieme al database |
+| I **file** veri (le immagini) | ❌ no — pronto ma spento | serve un secchio di destinazione e le sue chiavi |
+
+#### L'elenco: cosa copre e cosa no
+
+La copia notturna salta apposta lo schema `storage` (dentro ci sono funzioni e
+trigger del fornitore che un ripristino non saprebbe ricreare), e così si
+perdeva **anche la lista**. Da oggi `scripts/backup-db.sh` fa un terzo dump
+delle sole tabelle `storage.buckets` e `storage.objects`.
+
+Non sono le foto. È la mappa: dopo un incidente dice **quali file esistevano,
+con che nome, in che secchio e da quando** — cioè permette di sapere cosa si è
+perso, di rimettere i file al posto giusto se li si recupera altrove, e di dire
+a ogni negoziante esattamente quali immagini deve rifare. Senza, si ripartiva
+da un catalogo che punta a nomi che nessuno conosce più.
+
+Il file si chiama `mycity-elenco-foto_<data>.dump[.gpg]` e **non** comincia con
+`mycity_` di proposito: la prova mensile di ripristino sceglie la copia da
+riaprire per nome (`scripts/copie-di-backup.mjs`), e un terzo file con quel
+prefisso le avrebbe rubato il posto.
+
+Se un giorno l'elenco non si copiasse (permessi, schema spostato dal
+fornitore), **la copia del database non si perde lo stesso**: viene scritta e
+cifrata comunque, e il lavoro notturno diventa rosso alla fine con
+`esito-elenco-foto: fallito`.
+
+#### I file: pronti a partire, ancora spenti
+
+**Stato vero, oggi: le immagini dei prodotti non hanno nessuna copia nostra.**
+Se il progetto Supabase sparisce, spariscono con lui.
+
+Il pezzo che le copia è già scritto in fondo a `scripts/backup-db.sh` e si
+accende da solo: non serve modificare nessun file, servono **due variabili
+d'ambiente e `rclone` installato**. Quello che manca non è codice — è un
+secchio di destinazione fuori dal fornitore e le sue chiavi, che costano
+qualche euro al mese: **la decide Nicola.**
+
+| Variabile | Cos'è | Esempio |
+|---|---|---|
+| `STORAGE_SYNC_SOURCE` | il remote rclone del fornitore (finisce con `:`) | `supabase:` |
+| `STORAGE_SYNC_DEST` | il remote rclone di destinazione | `b2:mycity-foto` |
+| `STORAGE_SYNC_BUCKETS` | quali secchi copiare (facoltativa) | `products stories reviews` |
+
+Ogni notte il lavoro scrive una riga che dice come è andata, e non ne esiste
+una quarta:
+
+- `esito-foto: non-configurato` → mancano le variabili. **Nessun file è stato
+  copiato**, e il lavoro lo dice invece di tacere. Il resto della copia
+  (database, utenti, elenco) è comunque riuscito.
+- `esito-foto: copiate (...)` → i secchi sono stati sincronizzati davvero.
+- `esito-foto: fallita ...` → ci ha provato e non ce l'ha fatta (o manca
+  `rclone`): **il lavoro diventa rosso**, così si scopre in un giorno
+  qualunque invece che la mattina dell'incidente.
+
+Il comportamento è tenuto fermo da
+`tests/unit/la-copia-notturna-non-finge-di-aver-salvato-le-foto.test.ts`, che
+avvia lo script vero: con le chiavi (finte) deve provare a copiare, senza deve
+dire «non configurato» e non dichiararsi riuscito.
+
+**Cosa NON viene copiato anche quando è acceso:** `kyc-docs` (documenti
+d'identità), `invoices` (fatture) e `cod-proof` (prove di pagamento in
+contanti). Sono dati personali: portarli su un fornitore terzo è una decisione
+con dentro il GDPR, e va presa prima — poi si aggiungono a
+`STORAGE_SYNC_BUCKETS`.
+
+#### Per accenderla (quando c'è la destinazione)
 
 ```bash
-# rclone configurato con bucket Supabase + bucket personale
-rclone sync supabase:products gdrive:mycity-backup/products/
-rclone sync supabase:stories gdrive:mycity-backup/stories/
-rclone sync supabase:reviews gdrive:mycity-backup/reviews/
+# 1. crea il secchio di destinazione presso il fornitore scelto e le chiavi
+# 2. configura i due remote rclone (una volta, sulla macchina che fa la copia)
+rclone config   # un remote per Supabase (S3-compatibile) e uno per la destinazione
+
+# 3. passa le due variabili al lavoro notturno; da lì in poi parte da sola
+STORAGE_SYNC_SOURCE="supabase:" STORAGE_SYNC_DEST="b2:mycity-foto" \
+  bash scripts/backup-db.sh
 ```
+
+Su GitHub Actions le due variabili vanno aggiunte al passo che esegue il
+backup, e `rclone` installato nel lavoro: finché non ci sono, il lavoro resta
+verde e scrive `esito-foto: non-configurato`.
 
 ---
 
@@ -171,6 +246,17 @@ rclone sync supabase:reviews gdrive:mycity-backup/reviews/
    -- Verify triggers presenti
    SELECT trigger_name, event_object_table FROM information_schema.triggers
    WHERE trigger_schema = 'public';
+   ```
+
+   L'elenco delle foto sta in un file a parte
+   (`mycity-elenco-foto_<data>.dump[.gpg]`): riaprilo nello stesso database di
+   prova e controlla che ci sia, altrimenti in emergenza non sapresti nemmeno
+   quali immagini mancano.
+
+   ```bash
+   psql -d prova -c "CREATE SCHEMA IF NOT EXISTS storage;"
+   pg_restore --no-owner --no-acl --dbname=prova mycity-elenco-foto_<data>.dump
+   psql -d prova -c "SELECT bucket_id, count(*) FROM storage.objects GROUP BY 1;"
    ```
 
 4. **Smoke test app**
@@ -273,6 +359,8 @@ rclone sync supabase:reviews gdrive:mycity-backup/reviews/
 - [ ] Secret più vecchi di 6 mesi ruotati (sezione 7)
 - [ ] Dump SQL manuale fatto e archiviato cloud-encrypted
 - [ ] Restore tempi target < 30 min confermato
+- [ ] Riga `esito-foto:` dell'ultima copia notturna letta (§3): se dice ancora
+      `non-configurato`, le immagini non hanno nessuna copia
 
 ---
 

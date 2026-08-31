@@ -35,6 +35,23 @@ export default function PageError({
         backHref="/"
         backLabel="Torna alla home"
       />
+      {/*
+        31/8/2026 (R194) — Il `digest` è lo stesso identificativo che Next
+        scrive nei log del server: è l'unico filo che lega una telefonata
+        all'errore vero. Finiva solo dentro Sentry, quindi chi ci scriveva
+        «non funziona» poteva darci al massimo un'ora approssimativa da cui
+        far partire la caccia nei log.
+        Se il digest non c'è (errori che Next non digerisce, sviluppo in
+        locale) la riga non compare affatto: un'etichetta sola, o la parola
+        «undefined» sotto le scuse, sembra un secondo errore.
+      */}
+      {error.digest ? (
+        <p className="mt-6 text-center text-xs leading-relaxed text-ink-500">
+          Codice errore:{' '}
+          <code className="font-mono text-ink-700 select-all break-all">{error.digest}</code>
+          {' — riportalo se ci scrivi.'}
+        </p>
+      ) : null}
     </div>
   );
 }
