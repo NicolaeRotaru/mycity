@@ -55,17 +55,27 @@ export function seguiAltezza(
   elemento: Misurabile | null,
   radice: ConStile,
   osserva: (bersaglio: Misurabile, quandoCambia: () => void) => () => void,
+  /**
+   * 30/8/2026 (R095) — Il nome della variabile si passa da fuori.
+   *
+   * Lo stesso identico difetto era in fondo alla pagina della consegna del
+   * fattorino: una barra fissa alta come i pulsanti che ci stanno dentro, e
+   * sotto il contenuto uno spazio scritto a mano che non la seguiva. Riscrivere
+   * il meccanismo una seconda volta avrebbe voluto dire due posti da riparare
+   * la prossima volta: qui cambia solo il nome della variabile pubblicata.
+   */
+  variabile: string = VARIABILE_ALTEZZA,
 ): () => void {
   const pubblica = () => {
     const px = elemento?.offsetHeight;
-    radice.style.setProperty(VARIABILE_ALTEZZA, altezzaDichiarata(px));
+    radice.style.setProperty(variabile, altezzaDichiarata(px));
   };
   pubblica();
-  if (!elemento) return () => radice.style.setProperty(VARIABILE_ALTEZZA, '0px');
+  if (!elemento) return () => radice.style.setProperty(variabile, '0px');
   const smetti = osserva(elemento, pubblica);
   return () => {
     smetti();
-    radice.style.setProperty(VARIABILE_ALTEZZA, '0px');
+    radice.style.setProperty(variabile, '0px');
   };
 }
 

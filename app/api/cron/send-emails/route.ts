@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendEmail } from '@/lib/email/client';
 import { requireSupabaseService } from '@/lib/env';
-import { preparaEmailCicloDiVita } from '@/lib/email/templates';
+import { preparaEmailCicloDiVita, TEMPLATE_DI_SERVIZIO } from '@/lib/email/templates';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
@@ -37,9 +37,12 @@ export const runtime = 'nodejs';
  * Adesso li prepara `preparaEmailCicloDiVita`, che sta con tutti gli altri.
  */
 
-// Template relazionali/onboarding (welcome, tutorial): esenti dal consenso
-// marketing — l'utente che si iscrive li attende. Gli altri sono marketing.
-const TRANSACTIONAL_TEMPLATES = new Set(['welcome', 'tutorial_day2']);
+// Quali messaggi sono di servizio e quali sono marketing lo dice il file dei
+// template: e' li' che se ne aggiunge uno, quindi e' li' che ci si ricorda di
+// dichiararne la natura. Qui c'era un elenco a mano con dentro due nomi, e i
+// due messaggi d'ordine aggiunti il 30/8 (R007) sarebbero finiti fra le
+// promozioni: chi ha detto no alle offerte avrebbe smesso di sapere quando la
+// sua spesa e' pronta.
 
 /**
  * Segna una riga come annullata e, se la scrittura non riesce, lo dice. Senza
@@ -99,7 +102,22 @@ export const POST = handler;
 // validate al runtime.
 // Acceptable any: tipo Supabase troppo restrittivo senza Database type.
 // eslint-disable-next-line
-async function processBatch(supa: any, batch: { id: string; user_id: string; template: string; attempts?: number }[]): Promise<NextResponse> {
+async function processBatch(
+  supa: any,
+  batch: {
+    id: string;
+    user_id: string;
+    template: string;
+    attempts?: number;
+    /**
+     * 30/8/2026 (R007) — I dati della riga: numero d'ordine, totale, indirizzo e
+     * codice di ritiro. La funzione del database non li restituiva (migrazione
+     * 150), quindi «ordine pronto» e «ordine consegnato» non avrebbero avuto
+     * niente da dire.
+     */
+    metadata?: Record<string, unknown> | null;
+  }[],
+): Promise<NextResponse> {
   let sent = 0, skipped = 0, errors = 0;
 
   /**
@@ -130,15 +148,27 @@ async function processBatch(supa: any, batch: { id: string; user_id: string; tem
     const userProfile = profili.get(row.user_id) ?? null;
     // Il nome di battesimo: lo scrive la persona nel proprio profilo, quindi e'
     // testo di un altro, e il template lo filtra prima di metterlo nell'HTML.
-    const messaggio = preparaEmailCicloDiVita(row.template, { name: userProfile?.full_name?.split(' ')[0] });
+    const dati = (row.metadata ?? {}) as Record<string, unknown>;
+    const messaggio = preparaEmailCicloDiVita(row.template, {
+      name: userProfile?.full_name?.split(' ')[0],
+      // R007 — I dati della riga arrivano al template. Prima passava solo il
+      // nome: bastava per il benvenuto, e lasciava muti i due messaggi d'ordine.
+      orderId: typeof dati.orderId === 'string' ? dati.orderId : null,
+      pickupInStore: dati.pickupInStore === true,
+      storeName: typeof dati.storeName === 'string' ? dati.storeName : null,
+      storeAddress: typeof dati.storeAddress === 'string' ? dati.storeAddress : null,
+      pickupCode: typeof dati.pickupCode === 'string' ? dati.pickupCode : null,
+      totalEuro: typeof dati.totalEuro === 'number' ? dati.totalEuro : Number(dati.totalEuro ?? 0),
+    });
     if (!messaggio) {
       skipped++;
       await annullaRiga(supa, row.id);
       continue;
     }
-    // welcome/tutorial = onboarding relazionale → partono sempre. Gli altri
-    // (promo / re-engagement / win-back) sono marketing → solo con consenso.
-    const isMarketing = !TRANSACTIONAL_TEMPLATES.has(row.template);
+    // Benvenuto, tutorial e i due messaggi d'ordine partono sempre: sono
+    // servizio. Gli altri (promo / re-engagement / win-back) sono marketing →
+    // solo con consenso.
+    const isMarketing = !TEMPLATE_DI_SERVIZIO.has(row.template);
     if (isMarketing && !userProfile?.email_marketing) {
       skipped++;
       await annullaRiga(supa, row.id);

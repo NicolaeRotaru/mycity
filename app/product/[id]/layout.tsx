@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { sizedImage } from '@/lib/image-url';
+import { HydrationBoundary } from '@tanstack/react-query';
+import { precaricaProdotto } from '@/lib/queries/precarico';
 
 export const revalidate = 300; // 5 min ISR sui metadata
 
@@ -121,6 +123,8 @@ export default async function ProductLayout(
    * un preload di un indirizzo diverso scaricherebbe un secondo file invece di
    * anticipare il primo.
    */
+  const precarico = await precaricaProdotto(params.id);
+
   const primaFoto =
     Array.isArray(product?.images) && product.images[0]
       ? sizedImage(product.images[0], 'detail')
@@ -140,7 +144,21 @@ export default async function ProductLayout(
           }}
         />
       )}
-      {props.children}
+      {/*
+        30/8/2026 (R068) — IL PRODOTTO PARTE DENTRO LA PAGINA.
+
+        La scheda e' un componente del browser di milleduecento righe: nome,
+        prezzo e negozio li chiedeva DOPO aver scaricato ed eseguito il codice.
+        Qui siamo sul server, e questa riga la lettura la fa adesso: quando il
+        codice della pagina parte, la risposta e' gia' in mano e non si va in
+        rete. La domanda e' la stessa che fa la pagina — vive in
+        `lib/queries/catalogo.ts` — altrimenti il browser non la riconoscerebbe e
+        rileggerebbe tutto lo stesso.
+
+        La lettura non e' un viaggio in piu': `leggiPerMetadati` qui sopra e
+        questa passano dallo stesso client, e la pagina la chiedeva comunque.
+      */}
+      <HydrationBoundary state={precarico}>{props.children}</HydrationBoundary>
     </>
   );
 }

@@ -121,9 +121,8 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   return apiSuccess({ external: row.external_data ?? null, synced_at: row.external_synced_at, stale: true });
 }
 
-export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withAdminAuth(async (): Promise<NextResponse> => {
-    const { id } = await ctx.params;
+export const POST = withAdminAuth(async ({ params }): Promise<NextResponse> => {
+    const id = String(params.id);
     if (!idSchema.safeParse(id).success) return ApiErrors.invalidRequest('ID non valido');
 
     const row = await loadRow(id);
@@ -132,4 +131,4 @@ export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> })
     const data = await doRefresh(id, row.external_source_url, row.external_marketplace);
     if (!data) return ApiErrors.badGateway('Aggiornamento non riuscito. Riprova.');
     return apiSuccess({ external: data, synced_at: new Date().toISOString() });
-  })(req);
+});

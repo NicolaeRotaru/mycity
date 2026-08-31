@@ -145,4 +145,37 @@ describe('POST /api/cron/expire-stale-orders', () => {
       rpcCalls.some((c) => c.name === 'wallet_credit' && c.args.p_cents === 500 && c.args.p_user === 'u1'),
     ).toBe(true);
   });
+  /**
+   * 30/8/2026 (R126) — LO STESSO FATTO LASCIAVA DUE FORME DIVERSE NEL DATABASE.
+   *
+   * `annullaERimborsa` — la strada che usa il cliente quando annulla lui —
+   * porta il pagamento da «in attesa» a «fallito» insieme all'annullamento.
+   * Questo giro no: scriveva solo lo stato di consegna, e un contrassegno mai
+   * accettato restava «in attesa di pagamento» per sempre. Chi legge i numeri
+   * vedeva una coda di incassi che non esisteva, senza modo di distinguere un
+   * ordine davvero in attesa da uno morto tre settimane prima.
+   */
+  it('un ordine annullato dal giro non resta «in attesa di pagamento»', async () => {
+    state.candidates = [
+      { id: 'o1', user_id: 'u1', payment_method: 'cod', payment_status: 'PENDING', stripe_payment_intent: null, total_price: 20, wallet_applied_cents: 0 },
+    ];
+    await run();
+    const annullamento = state.updates.find((u) => u.delivery_status === 'CANCELED');
+    expect(annullamento, 'il giro non ha nemmeno annullato l\'ordine').toBeTruthy();
+    expect(
+      annullamento!.payment_status,
+      'Il contrassegno mai accettato resta contato fra gli incassi in attesa: la stessa riga che il cliente annullando avrebbe segnato come fallita',
+    ).toBe('FAILED');
+  });
+
+  it('un ordine gia pagato con la carta non viene marcato «fallito»', async () => {
+    // Il pagamento c'e' stato davvero: a raccontarlo e' il rimborso, non un
+    // «fallito» che direbbe il falso sui soldi incassati.
+    state.candidates = [
+      { id: 'o1', user_id: 'u1', payment_method: 'card', payment_status: 'PAID', stripe_payment_intent: 'pi_1', total_price: 50, wallet_applied_cents: 0 },
+    ];
+    await run();
+    const annullamento = state.updates.find((u) => u.delivery_status === 'CANCELED');
+    expect(annullamento!.payment_status).toBeUndefined();
+  });
 });

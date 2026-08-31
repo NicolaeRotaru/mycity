@@ -1,7 +1,11 @@
 // lib/products/draftFromVision.ts
 import { getAttributesForCategory, AI_ATTR_TO_FIELD } from '@/lib/category-attributes';
 import { normalizeCondition } from '@/lib/products/schema';
-import type { CategoryRow } from '@/lib/products/aiPatch';
+import {
+  MAX_NOME_PRODOTTO,
+  MAX_DESCRIZIONE_PRODOTTO,
+  type CategoryRow,
+} from '@/lib/products/aiPatch';
 
 /**
  * Costruisce il payload di INSERT (status='draft') di un prodotto a partire dai
@@ -99,8 +103,11 @@ export function buildDraftProductInsert(opts: {
     }
   }
 
-  const name = (draft.name ?? '').trim().slice(0, 120) || 'Nuovo prodotto';
-  const description = (draft.description ?? '').trim().slice(0, 4000);
+  // 30/8/2026 (R158) — I due numeri erano scritti a mano qui, e la strada che
+  // MODIFICA un prodotto non ne aveva nessuno. Adesso vengono dallo stesso
+  // posto: se uno si sposta, si spostano tutti e due.
+  const name = (draft.name ?? '').trim().slice(0, MAX_NOME_PRODOTTO) || 'Nuovo prodotto';
+  const description = (draft.description ?? '').trim().slice(0, MAX_DESCRIZIONE_PRODOTTO);
   // #204 — Il prezzo mancante diventava silenziosamente 1 euro. Un prodotto da
   // quaranta euro nasceva a uno, e se il venditore pubblicava la bozza senza
   // accorgersene lo vendeva a uno: nessun avviso, nessuna traccia. Ora resta a

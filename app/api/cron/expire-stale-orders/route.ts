@@ -68,7 +68,17 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     // rimborsato, coi soldi del cliente fermi e nessuno che se ne accorgesse.
     const { data: claimed, error: claimErr } = await admin
       .from('orders')
-      .update({ delivery_status: 'CANCELED', canceled_at: new Date().toISOString() })
+      .update({
+        delivery_status: 'CANCELED',
+        canceled_at: new Date().toISOString(),
+        // 30/8/2026 (R126) — Lo stesso fatto lasciava due forme diverse nel
+        // database. Quando e' il cliente ad annullare, `annullaERimborsa` porta
+        // il pagamento da «in attesa» a «fallito». Qui no: un contrassegno che
+        // il negozio non ha mai accettato restava «in attesa di pagamento» per
+        // sempre, e chi conta gli incassi vedeva una coda che non esisteva.
+        // La riga e' la stessa di lib/ordini/annulla.ts, apposta.
+        ...(o.payment_status === 'PENDING' ? { payment_status: 'FAILED' } : {}),
+      })
       .eq('id', o.id)
       .eq('delivery_status', 'NEW')
       .select('id');

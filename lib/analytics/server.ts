@@ -30,6 +30,8 @@ import { logger } from '@/lib/logger';
  * Best-effort per costruzione: una misura non deve mai far fallire un ordine.
  */
 
+import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
+
 const CHIAVE = process.env.NEXT_PUBLIC_POSTHOG_KEY;
 const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 
@@ -64,6 +66,33 @@ export function misuraGoogleAttiva(): boolean {
 
 async function contaAcquistoSuGoogle(a: AcquistoDaContare): Promise<void> {
   if (!misuraGoogleAttiva()) return;
+
+  /**
+   * 30/8/2026 (R166) — QUI PARTIVA L'IDENTIFICATIVO DELLA PERSONA AL POSTO DI
+   * QUELLO DEL BROWSER.
+   *
+   * C'era `client_id: a.buyerId`, cioe' l'UUID di Supabase, con accanto un
+   * commento che diceva «senza il cookie del browser l'unico identificativo
+   * stabile che abbiamo e' la persona». Il commento sbagliava su due cose: il
+   * cookie ce l'abbiamo (viaggia con la richiesta che crea l'ordine, e adesso
+   * si legge di li'), e un UUID come `client_id` GA4 non lo attacca a nessuna
+   * sessione — apre un utente nuovo, senza sorgente di traffico, e mette
+   * l'acquisto sotto «(direct)/(none)». La campagna che ha portato la vendita
+   * non se la vede attribuita: e' il numero su cui si decide il budget.
+   *
+   * Senza il cookie NON si manda niente a Google. Inventare un identificativo
+   * vorrebbe dire creare un utente fantasma e un acquisto non attribuito — cioe'
+   * sporcare il cruscotto invece di riempirlo. In quel caso resta la versione
+   * del browser, che l'identificativo giusto ce l'ha per costruzione.
+   */
+  const clientId = clientIdGaValido(a.gaClientId);
+  if (!clientId) {
+    logger.warn('[analytics] acquisto non mandato a Google: manca il cookie del browser', {
+      orderId: a.orderId,
+    });
+    return;
+  }
+
   try {
     const risposta = await fetch(
       `https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(GA_MISURA as string)}&api_secret=${encodeURIComponent(GA_SEGRETO as string)}`,
@@ -71,9 +100,7 @@ async function contaAcquistoSuGoogle(a: AcquistoDaContare): Promise<void> {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          // Senza il cookie del browser l'unico identificativo stabile che
-          // abbiamo e' la persona. GA4 accetta `user_id` da solo.
-          client_id: a.buyerId,
+          client_id: clientId,
           user_id: a.buyerId,
           non_personalized_ads: true,
           events: [
@@ -81,11 +108,17 @@ async function contaAcquistoSuGoogle(a: AcquistoDaContare): Promise<void> {
               name: 'purchase',
               params: {
                 // GA4 usa questo per NON contare due volte lo stesso acquisto:
-                // e' quello che rende innocua la versione del browser.
+                // e' quello che rende innocua la versione del browser. Vale
+                // davvero solo adesso che i due eventi portano lo STESSO
+                // `client_id`: fra due browser diversi la deduplica non c'e'.
                 transaction_id: a.orderId,
                 currency: 'EUR',
                 value: a.totalCents / 100,
                 payment_type: a.paymentMethod,
+                // Senza questo GA4 non apre nessuna sessione e l'evento non
+                // entra nei rapporti di acquisizione. Un secondo dichiarato:
+                // l'interazione vera e' avvenuta nel browser, non qui.
+                engagement_time_msec: 1000,
                 origine: 'server',
               },
             },
@@ -112,6 +145,13 @@ export type AcquistoDaContare = {
   sellerId: string;
   /** Tiene insieme gli ordini nati dallo stesso carrello. */
   checkoutId?: string | null;
+  /**
+   * 30/8/2026 (R166) — L'identificativo del BROWSER per Google, letto dal
+   * cookie `_ga` della richiesta che crea l'ordine (o rimesso dentro
+   * l'etichetta di Stripe, per la carta, perche' il webhook i cookie non li ha).
+   * Senza, verso Google non parte niente: vedi `contaAcquistoSuGoogle`.
+   */
+  gaClientId?: string | null;
   /**
    * Ha detto sì all'analitica? Obbligatorio, e non ha valore di scorta: chi
    * chiama deve dichiararlo, così dimenticarselo diventa un errore di

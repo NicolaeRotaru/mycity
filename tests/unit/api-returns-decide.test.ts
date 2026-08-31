@@ -12,11 +12,21 @@ const state: { ret: Record<string, unknown> } = {
   ret: { id: 'r1', status: 'REQUESTED', seller_id: 'seller-1', buyer_id: 'b1', order_id: 'o1', reason: 'CHANGED_MIND' },
 };
 
+// 30/8/2026 (R017) — IL FINTO INVOLUCRO ADESSO FA QUELLO CHE FA QUELLO VERO.
+//
+// Prima gli involucri di `lib/api/middleware.ts` prendevano solo la richiesta, e
+// ogni rotta dinamica si riscriveva a mano l'adattatore che risolveva i pezzi
+// dell'indirizzo. Adesso li risolve l'involucro e li consegna nel contesto: il
+// finto qui sotto deve fare lo stesso, altrimenti proverebbe una rotta che nel
+// sito vero non esiste piu'.
 vi.mock('@/lib/api/middleware', () => ({
   withAuthRateLimit:
-    (_opts: unknown, handler: (ctx: { user: typeof FAKE_SELLER }) => unknown) =>
-    (req: Request) =>
-      handler({ user: FAKE_SELLER }),
+    (
+      _opts: unknown,
+      handler: (ctx: { user: typeof FAKE_SELLER; params: Record<string, string>; req: Request }) => unknown,
+    ) =>
+    async (req: Request, ctx?: { params: Promise<Record<string, string>> }) =>
+      handler({ user: FAKE_SELLER, req, params: (await ctx?.params) ?? {} }),
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));

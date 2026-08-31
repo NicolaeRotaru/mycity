@@ -75,8 +75,38 @@ async function potaFileScaduti(
   logger.info('[cron-deletions] file scaduti rimossi', { funzione, secchio, tolti });
 }
 
+/**
+ * 30/8/2026 (R169) — UNA PULIZIA RIFIUTATA NON PASSA PIU' PER FATTA.
+ *
+ * Nessuna delle sei pulizie di ritenzione guardava l'esito. PostgREST non
+ * lancia: torna un oggetto con dentro l'errore, e il `try/catch` che sta
+ * intorno non lo vede. Una pulizia negata dai permessi lasciava i dati dov'erano
+ * e il lavoro rispondeva «fatto» lo stesso — quindi nessun allarme e nessun
+ * sospetto, mentre la finestra dichiarata nella pagina pubblica smetteva di
+ * essere vera.
+ *
+ * Qui l'errore si conta e si scrive. Il conto esce nella risposta del lavoro,
+ * cosi' chi guarda i lavori periodici vede la differenza fra «pulito» e
+ * «provato a pulire».
+ */
+async function pota(
+  cosa: string,
+  scrittura: PromiseLike<{ error: { message: string } | null }>,
+  fallite: { n: number },
+): Promise<void> {
+  const { error } = await scrittura;
+  if (error) {
+    fallite.n++;
+    logger.error('[cron-deletions] pulizia non riuscita: i dati oltre la finestra restano dove sono', {
+      cosa, message: error.message,
+    });
+  }
+}
+
 export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse> => {
   const admin = getAdminSupabase();
+  /** Quante pulizie di ritenzione non sono riuscite: esce nella risposta. */
+  const fallite = { n: 0 };
 
   // 🟡-15: enforcement della retention documentata (privacy §3) per i log che
   // contengono PII (IP/user-agent). I periodi sono dichiarati nella privacy:
@@ -91,11 +121,11 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // periodo piu' lungo di quello che abbiamo dichiarato noi stessi non e' una
     // svista da poco: in un controllo e' una contestazione che ci siamo scritti
     // da soli, sulla nostra pagina pubblica.
-    await admin
+    await pota('activity_events.ip', admin
       .from('activity_events')
       .update({ ip: null, user_agent: null })
       .lt('created_at', monthsAgo(12))
-      .not('ip', 'is', null);
+      .not('ip', 'is', null), fallite);
     // 077 — `consent_log` era l'unica tabella con dati personali che nessuna
     // pulizia toccava: l'indirizzo di rete restava li' per sempre. La PROVA del
     // consenso va conservata (e' l'accountability dell'art. 7.1), l'indirizzo di
@@ -126,29 +156,39 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // li' per sempre proprio sulle righe che nessuno andava a guardare.
     // L'aggiornamento e' idempotente: rifarlo su una riga gia' pulita non costa
     // niente, mentre saltarla costa un dato personale conservato a vita.
-    await admin
+    await pota('activity_events.profilo', admin
       .from('activity_events')
       .update({ anon_id: null, path: null, referrer: null, city: null, country: null })
-      .lt('created_at', monthsAgo(14));
-    await admin
+      .lt('created_at', monthsAgo(14)), fallite);
+    await pota('audit_logs.ip', admin
       .from('audit_logs')
       .update({ ip: null, user_agent: null })
       .lt('created_at', monthsAgo(12))
-      .not('ip', 'is', null);
+      .not('ip', 'is', null), fallite);
 
     // `metadata` e `summary` restavano intatti: sono i campi che contengono i
     // valori vecchi e nuovi delle colonne cambiate, quindi la parte piu'
     // personale della riga. Azzerarli oltre la finestra dichiarata.
-    await admin
+    // 30/8/2026 (R169) — IL FILTRO GUARDAVA UNA COLONNA E LA PULIZIA NE TOCCAVA DUE.
+    //
+    // C'era `.not('metadata','is',null)`, cioe' «ripulisci solo le righe che
+    // hanno i dati grezzi». Ma `metadata` lo scrive solo la PRIMA vista di una
+    // sessione: quasi tutte le righe ce l'hanno vuoto, e quelle non venivano
+    // nemmeno guardate. Il loro `summary` — la frase che racconta cosa e'
+    // successo, indirizzi e ricerche comprese — restava li' per sempre, oltre i
+    // quattordici mesi che promettiamo nella pagina pubblica.
+    //
+    // Adesso il filtro guarda le stesse due colonne che la pulizia azzera.
+    await pota('activity_events.riassunto', admin
       .from('activity_events')
       .update({ metadata: null, summary: null })
       .lt('created_at', monthsAgo(14))
-      .not('metadata', 'is', null);
-    await admin
+      .or('metadata.not.is.null,summary.not.is.null'), fallite);
+    await pota('audit_logs.metadata', admin
       .from('audit_logs')
       .update({ metadata: null })
       .lt('created_at', monthsAgo(12))
-      .not('metadata', 'is', null);
+      .not('metadata', 'is', null), fallite);
 
     // 098 — `product_views` cresceva senza fine: una riga per ogni visita a una
     // scheda, per sempre, mentre la tabella accanto veniva potata da mesi. Ma il
@@ -166,11 +206,11 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // E le righe di semplice navigazione si cancellano, non si sbiancano: senza
     // questo la tabella cresceva per sempre. Le altre categorie restano perche'
     // servono da traccia di sicurezza e contabile.
-    await admin
+    await pota('activity_events.navigazione', admin
       .from('activity_events')
       .delete()
       .eq('category', 'visitor')
-      .lt('created_at', monthsAgo(14));
+      .lt('created_at', monthsAgo(14)), fallite);
 
     // 27/8/2026 (R059) — LE RIGHE DI ACCESSO NON SE NE ANDAVANO MAI.
     //
@@ -181,17 +221,17 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // anche il bottino peggiore da lasciare in mano a un intruso.
     //
     // La finestra e' la stessa che dichiariamo per i log di accesso: 12 mesi.
-    await admin
+    await pota('activity_events.accessi', admin
       .from('activity_events')
       .delete()
       .eq('category', 'auth')
-      .lt('created_at', monthsAgo(12));
+      .lt('created_at', monthsAgo(12)), fallite);
 
     // I messaggi dal modulo contatti oltre due anni non servono piu' a nessuno.
-    await admin
+    await pota('contact_messages', admin
       .from('contact_messages')
       .delete()
-      .lt('created_at', monthsAgo(24));
+      .lt('created_at', monthsAgo(24)), fallite);
 
     // 27/8/2026 (R056) — I DOCUMENTI DI CHI VIENE RESPINTO.
     //
@@ -222,7 +262,7 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
 
   const userIds: string[] = (expired ?? []).map((r: { user_id: string }) => r.user_id);
   if (userIds.length === 0) {
-    return NextResponse.json({ processed: 0, message: 'No accounts to process' });
+    return NextResponse.json({ processed: 0, message: 'No accounts to process', retentionFallite: fallite.n });
   }
 
   const results = { ok: 0, failed: 0, errors: [] as string[] };
@@ -250,6 +290,9 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     failed: results.failed,
     errors: results.errors,
     total: userIds.length,
+    // R169 — Quante pulizie di ritenzione non sono riuscite: senza questo numero
+    // il lavoro rispondeva «fatto» anche quando non aveva pulito niente.
+    retentionFallite: fallite.n,
   });
 });
 

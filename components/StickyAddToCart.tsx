@@ -59,7 +59,12 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
       // #124 — Sopra la barra a schede e, quando c'e', sopra il banner dei
       // cookie: prima ci finiva sotto e il pulsante d'acquisto spariva.
       style={{ bottom: fondoDellaBarra(['var(--tabbar-height)', 'var(--altezza-banner-cookie, 0px)']) }}
-      aria-label="Aggiungi al carrello (sticky)"
+      // 30/8/2026 (R108) — Senza `role` questa etichetta non arrivava a
+      // nessuno: un `aria-label` su un contenitore generico le tecnologie
+      // assistive lo buttano via. Era un nome che chi l'ha scritto credeva di
+      // aver dato.
+      role="region"
+      aria-label="Acquisto rapido"
     >
       <div className="container mx-auto px-3">
         <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-3 flex items-center gap-3">
@@ -76,6 +81,8 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
           {hasStepper && (
             <div
               className="flex items-center rounded-full border border-cream-300 overflow-hidden shrink-0"
+              // Stesso motivo: `aria-label` senza ruolo non veniva esposta.
+              role="group"
               aria-label="Quantità"
             >
               <button
@@ -87,7 +94,19 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
               >
                 <Minus size={16} aria-hidden />
               </button>
-              <span className="min-w-[1.5rem] text-center text-sm font-bold text-ink-900">{qty}</span>
+              {/* 30/8/2026 (R108) — Era uno <span>. Si premeva «+», il numero
+                  cambiava a video e chi non vede lo schermo non sentiva niente:
+                  tre pressioni e nessun modo di sapere se stavi comprando una
+                  confezione o quattro. Nella scheda prodotto e nel carrello lo
+                  stesso numero sta in un <output> da mesi: qui era rimasto
+                  indietro proprio sulla strada da cui si compra col telefono. */}
+              <output
+                aria-live="polite"
+                aria-atomic="true"
+                className="min-w-[1.5rem] text-center text-sm font-bold text-ink-900"
+              >
+                {qty}
+              </output>
               <button
                 type="button"
                 onClick={onInc}

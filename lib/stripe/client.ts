@@ -80,6 +80,17 @@ export type CreateCheckoutInput = {
    * scade insieme a lei: vedi il commento in `sessions.create`.
    */
   pendingExpiresAt?: number;
+  /**
+   * 30/8/2026 (R166) — L'identificativo del BROWSER per Google Analytics, letto
+   * dal cookie `_ga` in questa richiesta.
+   *
+   * Viaggia dentro le etichette della sessione e torna indietro nel webhook,
+   * che i cookie non li ha: e' l'unico modo di far arrivare a Google l'acquisto
+   * con l'identificativo giusto. Senza, Google apre un utente nuovo e mette la
+   * vendita sotto «diretto», cioe' toglie il merito alla campagna che l'ha
+   * portata.
+   */
+  gaClientId?: string | null;
 };
 
 /**
@@ -206,6 +217,8 @@ export async function createMultiSellerCheckoutSession(
       buyer_user_id: input.buyerUserId,
       pending_checkout_id: input.pendingCheckoutId,
       seller_count: String(input.groups.length),
+      // R166 — Torna indietro nel webhook, che i cookie non li ha.
+      ...(input.gaClientId ? { ga_client_id: input.gaClientId } : {}),
     },
     payment_intent_data: {
       transfer_group: `mc_${input.pendingCheckoutId}`,

@@ -23,6 +23,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
+import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { notifyAdmins, provaAMandare, sessionePagata, suonaLaCampanellaAiNegozi } from './comune';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
@@ -503,6 +504,9 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           sellerId: c.sellerId,
           // R163 — la chiave usata dal browser per `checkout_started`, se c'e'.
           checkoutId: groups[0]?.chiaveCheckout ?? pendingCheckoutId,
+          // 30/8/2026 (R166) — L'id del browser per Google, rimesso dentro le
+          // etichette dalla rotta del checkout: qui i cookie non arrivano.
+          gaClientId: clientIdGaValido(session.metadata?.ga_client_id),
           // La variante e' la stessa per tutto il carrello: si legge dal primo
           // gruppo, dove il checkout l'ha scritta.
           varianti: groups[0]?.esperimenti ?? {},

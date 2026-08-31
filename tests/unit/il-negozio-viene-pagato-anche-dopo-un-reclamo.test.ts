@@ -35,8 +35,18 @@ const stato: {
   scrittureOrdine: [],
 };
 
+// 30/8/2026 (R017) — IL FINTO INVOLUCRO ADESSO FA QUELLO CHE FA QUELLO VERO.
+//
+// Prima gli involucri di `lib/api/middleware.ts` prendevano solo la richiesta, e
+// ogni rotta dinamica si riscriveva a mano l'adattatore che risolveva i pezzi
+// dell'indirizzo. Adesso li risolve l'involucro e li consegna nel contesto: il
+// finto qui sotto deve fare lo stesso, altrimenti proverebbe una rotta che nel
+// sito vero non esiste piu'.
 vi.mock('@/lib/api/middleware', () => ({
-  withAdminAuth: (handler: (ctx: { user: typeof ADMIN }) => unknown) => () => handler({ user: ADMIN }),
+  withAdminAuth:
+    (handler: (ctx: { user: typeof ADMIN; params: Record<string, string>; req: Request }) => unknown) =>
+    async (req: Request, ctx?: { params: Promise<Record<string, string>> }) =>
+      handler({ user: ADMIN, req, params: (await ctx?.params) ?? {} }),
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));

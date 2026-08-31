@@ -15,6 +15,7 @@ import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
+import { clientIdGaDalCookie } from '@/lib/analytics/ga-client-id';
 import { marcaCarrelloRecuperato } from '@/lib/carrelli-abbandonati';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
@@ -863,6 +864,11 @@ export const POST = withAuthRateLimit(
     // (Il webhook della carta i cookie non li ha: quella strada la ricuce la
     // rotta /api/stripe/checkout, che invece li riceve.)
     const anonimiDelBrowser = identificativiAnonimi(req.headers.get('cookie'));
+    // 30/8/2026 (R166) — Anche Google vuole il SUO identificativo di browser, e
+    // sta nello stesso posto: il cookie di questa richiesta. Prima gli si
+    // mandava l'UUID della persona, e lui apriva un utente nuovo a ogni
+    // acquisto mettendolo sotto «diretto».
+    const clientIdGoogle = clientIdGaDalCookie(req.headers.get('cookie'));
     const variantiDelBrowser = variantiDaiCookie(req.headers.get('cookie'));
     // R163 — la chiave del checkout arrivata dal browser, ripulita: e' un dato
     // che viene da fuori e finisce come etichetta in un evento.
@@ -881,6 +887,7 @@ export const POST = withAuthRateLimit(
             totalCents: c.totalCents,
             paymentMethod: 'cod',
             sellerId: c.sellerId,
+            gaClientId: clientIdGoogle,
           // 22/8/2026 — LO STESSO CARRELLO PRENDEVA IDENTIFICATIVI DIVERSI.
           //
           // Senza la chiave del tentativo qui si ripiegava sull'id DELL'ORDINE:

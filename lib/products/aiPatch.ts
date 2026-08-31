@@ -95,6 +95,23 @@ function resolveCategoryId(
  */
 export const BANDA_PREZZO_AI = 0.30;
 
+/**
+ * 30/8/2026 (R158) — LA MISURA DEL NOME E DELLA DESCRIZIONE, IN UN POSTO SOLO.
+ *
+ * Chi CREA un prodotto dalle foto tronca da sempre (`draftFromVision`); chi lo
+ * MODIFICA — questa funzione — accettava qualunque lunghezza col solo controllo
+ * «stringa non vuota» e la scriveva nel database, dove le due colonne sono
+ * `text` senza vincolo. Un nome di diecimila caratteri entrava in vetrina, nei
+ * risultati di ricerca, nelle email di conferma e nella pagina pubblica del
+ * negozio.
+ *
+ * I due numeri stavano scritti a mano dentro `draftFromVision`. Adesso stanno
+ * qui e li leggono tutte e due le strade, piu' il vincolo sulla tabella
+ * (migrazione 149) che copre anche la scrittura diretta dal browser.
+ */
+export const MAX_NOME_PRODOTTO = 120;
+export const MAX_DESCRIZIONE_PRODOTTO = 4000;
+
 /** Vero se il prezzo proposto si scosta dall'attuale piu' della banda. */
 export function prezzoAiFuoriBanda(
   proposto: number,
@@ -142,11 +159,12 @@ export function resolveAiPatch(opts: {
   const changed: string[] = [];
 
   if (typeof patch.name === 'string' && patch.name.trim()) {
-    update.name = patch.name.trim();
+    // R158 — Il taglio e' lo stesso che fa chi crea il prodotto dalle foto.
+    update.name = patch.name.trim().slice(0, MAX_NOME_PRODOTTO);
     changed.push('nome');
   }
   if (typeof patch.description === 'string' && patch.description.trim()) {
-    update.description = patch.description.trim();
+    update.description = patch.description.trim().slice(0, MAX_DESCRIZIONE_PRODOTTO);
     changed.push('descrizione');
   }
   if (typeof patch.price === 'number' && patch.price > 0) {

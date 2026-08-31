@@ -62,6 +62,14 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
 // gia' nello stesso file di involucri, e qui non era stato usato. Sessanta
 // etichette in dieci minuti sono piu' di quante un negozio ne stampi in un
 // giorno pieno.
-export const GET = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withSellerAuthRateLimit({ name: 'seller-label', max: 60, windowMs: 10 * 60_000 }, async ({ user }) =>
-    handler(req, user, await ctx.params))(req);
+// 30/8/2026 (R017) — L'ADATTATORE A MANO NON C'E' PIU'.
+//
+// Qui c'era la riga che tutte le rotte dinamiche si riscrivevano: prendeva il
+// secondo argomento di Next, ne aspettava la promessa e la riportava dentro
+// l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
+// per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
+// risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
+export const GET = withSellerAuthRateLimit(
+  { name: 'seller-label', max: 60, windowMs: 10 * 60_000 },
+  ({ req, user, params }) => handler(req, user, { id: String(params.id) }),
+);

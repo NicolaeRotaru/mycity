@@ -98,17 +98,57 @@ export function newOrderSellerTemplate(args: { sellerName?: string | null; order
   };
 }
 
-export function orderReadyTemplate(args: { orderId: string; pickupCode: string; storeAddress: string }) {
+/**
+ * 30/8/2026 (R007) — «IL TUO ORDINE E' PRONTO», AL CLIENTE.
+ *
+ * Questo messaggio esisteva, impaginato, e non lo chiamava nessuno: cercandone
+ * il nome in tutto il progetto si trovava solo la riga che lo definisce. Era
+ * anche scritto per il destinatario sbagliato — parlava al fattorino («un
+ * ordine ti aspetta in negozio», col link all'area fattorini) — mentre il
+ * fattorino, quando l'ordine diventa pronto, non e' ancora stato assegnato: a
+ * quel punto la persona che aspetta una notizia e' il cliente.
+ *
+ * Sul RITIRO IN NEGOZIO il codice serve davvero al cliente: e' quello che
+ * mostra al bancone e che il negoziante digita per chiudere il ritiro
+ * (`confirm_pickup_by_seller`). Su una consegna a domicilio invece non c'entra
+ * niente: quel codice lo legge il negoziante al fattorino, e mandarlo al
+ * cliente sarebbe consegnare una chiave a chi non deve usarla.
+ */
+export function orderReadyTemplate(args: {
+  orderId: string;
+  pickupInStore: boolean;
+  storeName?: string | null;
+  storeAddress?: string | null;
+  pickupCode?: string | null;
+}) {
+  const orderUrl = `${appUrl()}/orders/${args.orderId}`;
+  const negozio = args.storeName?.trim();
+  const dove = args.storeAddress?.trim();
+  const codice = args.pickupCode?.trim();
+
+  const corpoRitiro = `
+    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine e&#39; pronto: puoi passare a ritirarlo${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}.</p>
+    ${dove ? `<p style="margin:0 0 12px;line-height:1.6">Indirizzo: <strong>${escapeHtml(dove)}</strong></p>` : ''}
+    ${codice ? `<p style="margin:0 0 12px;line-height:1.6">Mostra questo codice al negozio: <span style="font-family:monospace;font-size:18px;font-weight:700">${escapeHtml(codice)}</span></p>` : ''}
+  `;
+  const corpoConsegna = `
+    <p style="margin:0 0 12px;line-height:1.6">Il tuo ordine e&#39; pronto${negozio ? ` da <strong>${escapeHtml(negozio)}</strong>` : ''}: un rider lo ritira a breve e te lo porta a casa.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Ti avvisiamo appena parte. Il codice che il fattorino ti chiedera&#39; alla consegna lo trovi nella pagina dell&#39;ordine.</p>
+  `;
+
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">📦 Ordine pronto per il pickup</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Un ordine ti aspetta in negozio. Indirizzo: <strong>${escapeHtml(args.storeAddress)}</strong>.</p>
-    <p style="margin:0 0 12px;line-height:1.6">Codice ritiro: <span style="font-family:monospace;font-size:18px;font-weight:700">${escapeHtml(args.pickupCode)}</span></p>
-    <p style="margin:24px 0">${btn(`${appUrl()}/rider/orders/${args.orderId}`, 'Apri ordine')}</p>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">📦 Il tuo ordine e&#39; pronto</h1>
+    ${args.pickupInStore ? corpoRitiro : corpoConsegna}
+    <p style="margin:24px 0">${btn(orderUrl, 'Vedi l&#39;ordine')}</p>
   `;
   return {
-    subject: `📦 Ordine pronto — pickup richiesto`,
+    subject: args.pickupInStore
+      ? '📦 Il tuo ordine ti aspetta in negozio'
+      : '📦 Il tuo ordine e\' pronto',
     html: shell('Ordine pronto', body),
-    text: `Ordine pronto al pickup. Codice ${args.pickupCode}. ${appUrl()}/rider/orders/${args.orderId}`,
+    text: args.pickupInStore
+      ? `Il tuo ordine e' pronto${dove ? ` da ritirare in ${dove}` : ''}.${codice ? ` Mostra il codice ${codice}.` : ''} ${orderUrl}`
+      : `Il tuo ordine e' pronto: un rider lo ritira a breve. ${orderUrl}`,
   };
 }
 
@@ -127,19 +167,16 @@ export function orderDeliveredTemplate(args: { orderId: string; name?: string | 
   };
 }
 
-export function passwordResetTemplate(args: { resetUrl: string }) {
-  const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Reset password</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Per impostare una nuova password clicca qui sotto (link valido 1 ora):</p>
-    <p style="margin:24px 0">${btn(args.resetUrl, 'Reimposta password')}</p>
-    <p style="margin:0;font-size:13px;color:#64748b">Se non hai richiesto il reset ignora questa email.</p>
-  `;
-  return {
-    subject: `Reset password — ${BRAND}`,
-    html: shell('Reset password', body),
-    text: `Reset password: ${args.resetUrl}`,
-  };
-}
+/*
+ * 30/8/2026 (R007) — IL TEMPLATE DEL «REIMPOSTA PASSWORD» NON C'E' PIU'.
+ *
+ * Stava qui, impaginato, e non lo chiamava nessuno. Non era una dimenticanza da
+ * riparare collegandolo: la email del recupero password la manda Supabase
+ * (`supabase.auth.resetPasswordForEmail`, in app/sign-in), col suo link a
+ * scadenza, e noi quel link non lo possiamo nemmeno costruire. Un template che
+ * non si puo' spedire e' un invito a spedirlo: il prossimo che lo trova crede
+ * che il recupero password passi di qui, e cerca il difetto dove non e'.
+ */
 
 export function refundIssuedTemplate(args: { orderId: string; amount: number; reason?: string | null }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
@@ -210,7 +247,23 @@ export function giftCardBuyerTemplate(args: { code: string; amountEuro: number; 
  * (`escapeHtml`).
  */
 
-export type DatiCicloDiVita = { name?: string | null };
+/**
+ * I dati che una riga della coda porta con se'.
+ *
+ * `name` viene dal profilo. Gli altri campi arrivano da `email_queue.metadata`,
+ * che dal 30/8/2026 (R007) il trigger degli stati riempie per «ordine pronto» e
+ * «ordine consegnato»: senza, quei due messaggi partirebbero vuoti — senza
+ * numero d'ordine, senza indirizzo, senza codice di ritiro.
+ */
+export type DatiCicloDiVita = {
+  name?: string | null;
+  orderId?: string | null;
+  pickupInStore?: boolean | null;
+  storeName?: string | null;
+  storeAddress?: string | null;
+  pickupCode?: string | null;
+  totalEuro?: number | null;
+};
 export type EmailPronta = { subject: string; html: string; text: string };
 
 const TEMPLATE_CICLO_DI_VITA = {
@@ -289,6 +342,41 @@ const TEMPLATE_CICLO_DI_VITA = {
     };
   },
 
+  /**
+   * 30/8/2026 (R007) — I DUE MOMENTI CHE MANCAVANO.
+   *
+   * Il cliente riceveva la conferma d'ordine e poi piu' niente: ne' quando la
+   * spesa e' pronta, ne' quando e' stata consegnata. I due template erano gia'
+   * scritti qui accanto e non li chiamava nessuno, perche' non c'era nessun
+   * punto sul server dove agganciare l'invio — il passaggio di stato lo scrive
+   * il browser del negoziante, e la consegna la chiudono due funzioni dentro il
+   * database. Adesso la strada e' quella che il database usa gia' per le
+   * notifiche: al cambio di stato un trigger (migrazione 150) scrive la riga in
+   * coda, con dentro i dati che servono, e questo giro la spedisce.
+   *
+   * Senza `orderId` non si spedisce: un messaggio che dice «il tuo ordine e'
+   * pronto» senza dire quale non serve a niente, e il link porterebbe nel vuoto.
+   */
+  order_ready: (d: DatiCicloDiVita): EmailPronta | null => {
+    if (!d.orderId) return null;
+    return orderReadyTemplate({
+      orderId: d.orderId,
+      pickupInStore: d.pickupInStore === true,
+      storeName: d.storeName,
+      storeAddress: d.storeAddress,
+      pickupCode: d.pickupCode,
+    });
+  },
+
+  order_delivered: (d: DatiCicloDiVita): EmailPronta | null => {
+    if (!d.orderId) return null;
+    return orderDeliveredTemplate({
+      orderId: d.orderId,
+      name: d.name,
+      total: Number(d.totalEuro ?? 0),
+    });
+  },
+
   abandoned_cart_4h: (): EmailPronta => {
     const body = `
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Il tuo carrello ti aspetta</h1>
@@ -301,7 +389,7 @@ const TEMPLATE_CICLO_DI_VITA = {
       text: `Il tuo carrello ti aspetta su ${BRAND}.`,
     };
   },
-} satisfies Record<string, (d: DatiCicloDiVita) => EmailPronta>;
+} satisfies Record<string, (d: DatiCicloDiVita) => EmailPronta | null>;
 
 export type NomeTemplateCicloDiVita = keyof typeof TEMPLATE_CICLO_DI_VITA;
 
@@ -316,5 +404,22 @@ export type NomeTemplateCicloDiVita = keyof typeof TEMPLATE_CICLO_DI_VITA;
  */
 export function preparaEmailCicloDiVita(nome: string, dati: DatiCicloDiVita): EmailPronta | null {
   if (!Object.prototype.hasOwnProperty.call(TEMPLATE_CICLO_DI_VITA, nome)) return null;
-  return TEMPLATE_CICLO_DI_VITA[nome as NomeTemplateCicloDiVita](dati);
+  return TEMPLATE_CICLO_DI_VITA[nome as NomeTemplateCicloDiVita](dati) ?? null;
 }
+
+/**
+ * 30/8/2026 (R007) — I messaggi che riguardano UN ORDINE DELLA PERSONA, non le
+ * nostre offerte: partono anche a chi ha detto no al marketing. E' il suo
+ * ordine; trattarli come pubblicita' vorrebbe dire che chi rifiuta le
+ * promozioni smette di sapere quando la sua spesa e' pronta.
+ *
+ * Vive qui, accanto ai template, e non dentro la rotta del cron: e' il posto
+ * dove si aggiunge un template, quindi e' il posto dove ci si ricorda di dire
+ * di che natura e'.
+ */
+export const TEMPLATE_DI_SERVIZIO: ReadonlySet<string> = new Set([
+  'welcome',
+  'tutorial_day2',
+  'order_ready',
+  'order_delivered',
+]);

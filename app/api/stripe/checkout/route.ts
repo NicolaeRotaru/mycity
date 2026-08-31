@@ -6,6 +6,7 @@ import { createMultiSellerCheckoutSession, getStripe, isStripeConfigured } from 
 import { createHash } from 'node:crypto';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
+import { clientIdGaDalCookie } from '@/lib/analytics/ga-client-id';
 import { withAuthRateLimit, assertCanPurchase } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
@@ -612,6 +613,9 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       cancelUrl,
       // La sessione scade con la riserva della merce, non 24 ore dopo.
       pendingExpiresAt: pending.expires_at ? new Date(pending.expires_at).getTime() : undefined,
+      // 30/8/2026 (R166) — I cookie passano di qui, nel webhook no: l'id del
+      // browser per Google viaggia con la sessione e torna indietro di la'.
+      gaClientId: clientIdGaDalCookie(req.headers.get('cookie')),
     });
 
     // Salva l'id session su pending_checkout per lookup nel webhook
