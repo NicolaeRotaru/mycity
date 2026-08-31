@@ -88,7 +88,10 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 import { POST as sorvegliante } from '@/app/api/cron/operational-alerts/route';
-import { GET as giroDellaCoda, EMAIL_PER_GIRO, sogliaAllarmeCoerente } from '@/app/api/cron/send-emails/route';
+import { GET as giroDellaCoda } from '@/app/api/cron/send-emails/route';
+// 31/8/2026 — i tre numeri vivono in lib/: un file di rotta puo' esportare solo
+// i verbi HTTP, e `next build` boccia il resto.
+import { EMAIL_PER_GIRO, sogliaAllarmeCoerente } from '@/lib/email/ritmo-della-coda';
 import { logger } from '@/lib/logger';
 
 const bussata = (percorso: string) =>

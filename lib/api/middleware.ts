@@ -72,6 +72,26 @@ export type ParametriRotta = Record<string, string | string[]>;
 export type ContestoRotta = { params: Promise<ParametriRotta> };
 
 /**
+ * 31/8/2026 (R017, seguito) — LA FIRMA CHE `next build` PRETENDE.
+ *
+ * Dichiarare il secondo argomento come `ctx?: ContestoRotta` faceva passare
+ * `tsc --noEmit` e faceva FALLIRE `next build`: Next genera i suoi tipi per
+ * ogni rotta e li confronta con quello che la rotta esporta, e li' il tipo
+ * diventa `ContestoRotta | undefined` mentre lui pretende un contesto e basta
+ * («Expected "RouteContext", got "undefined"»). Il difetto non si vedeva col
+ * controllo dei tipi da solo: si vedeva solo costruendo davvero l'app.
+ *
+ * Due firme invece di una: quella che vede Next ha il contesto e lo pretende;
+ * quella con la sola richiesta serve alle prove, che chiamano la rotta senza
+ * pezzi nell'indirizzo. A tempo di esecuzione non cambia niente — il contesto
+ * resta facoltativo e `risolviParametri` regge il caso in cui non arrivi.
+ */
+type RottaDiNext = {
+  (req: NextRequest, ctx: ContestoRotta): Promise<NextResponse>;
+  (req: NextRequest): Promise<NextResponse>;
+};
+
+/**
  * I parametri dell'indirizzo, risolti una volta sola e qui dentro.
  *
  * Non lancia mai: su una rotta statica Next non passa nessun secondo argomento,
@@ -227,14 +247,14 @@ export function assertCanPurchase(profile: Profile): NextResponse | null {
  *   export const POST = withAuth(async ({ user, profile }) => {...});
  */
 export function withAuth(handler: GenericHandler) {
-  return async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     return handler({
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
       params: await risolviParametri(ctx),
     });
-  };
+  }) as RottaDiNext;
 }
 
 /**
@@ -331,7 +351,7 @@ async function frenoDiRete(req: NextRequest, nome: string): Promise<NextResponse
 }
 
 export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
-  return async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
     // Il freno per indirizzo adesso vive dentro `authenticate()`: valeva per
     // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
     // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
@@ -344,14 +364,14 @@ export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandl
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
       params: await risolviParametri(ctx),
     });
-  };
+  }) as RottaDiNext;
 }
 
 /**
  * Wrapper: richiede auth + role 'seller' approvato (o admin).
  */
 export function withSellerAuth(handler: GenericHandler) {
-  return async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     const { profile } = auth;
@@ -362,14 +382,14 @@ export function withSellerAuth(handler: GenericHandler) {
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
       params: await risolviParametri(ctx),
     });
-  };
+  }) as RottaDiNext;
 }
 
 /**
  * Wrapper: richiede auth + role 'seller' approvato (o admin) + rate limit.
  */
 export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
-  return async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
     // Il freno per indirizzo adesso vive dentro `authenticate()`: valeva per
     // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
     // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
@@ -386,14 +406,14 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
       params: await risolviParametri(ctx),
     });
-  };
+  }) as RottaDiNext;
 }
 
 /**
  * Wrapper: richiede auth + role 'admin'.
  */
 export function withAdminAuth(handler: GenericHandler) {
-  return async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
     const auth = await authenticate(req);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
@@ -401,14 +421,14 @@ export function withAdminAuth(handler: GenericHandler) {
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
       params: await risolviParametri(ctx),
     });
-  };
+  }) as RottaDiNext;
 }
 
 /**
  * Wrapper: richiede auth + role 'admin' + rate limit per-user.
  */
 export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandler) {
-  return async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
+  return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
     // Il freno per indirizzo adesso vive dentro `authenticate()`: valeva per
     // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
     // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
@@ -422,7 +442,7 @@ export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: Generic
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
       params: await risolviParametri(ctx),
     });
-  };
+  }) as RottaDiNext;
 }
 
 /**

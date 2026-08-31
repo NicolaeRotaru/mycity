@@ -36,6 +36,13 @@ type Props = {
   className?: string;
   /** CTA secondaria "Contatta il supporto". Default: /faq. Passa `null` per nasconderla. */
   supportHref?: string | null;
+  /**
+   * 31/8/2026 (R194) — Il `digest` che Next scrive nei log del server. Sta qui
+   * dentro, e non sotto il riquadro, perche' e' `role="alert"` ad annunciare
+   * l'errore: chi usa un lettore di schermo deve sentire il codice insieme al
+   * guasto, non trovarlo scorrendo la pagina dopo.
+   */
+  codiceErrore?: string;
 };
 
 export function ErrorState({
@@ -48,6 +55,7 @@ export function ErrorState({
   variant = 'default',
   className = '',
   supportHref = '/faq',
+  codiceErrore,
 }: Props) {
   const riprova = retry ?? onRetry;
   const compatto = variant === 'compact';
@@ -86,6 +94,18 @@ export function ErrorState({
           </Link>
         )}
       </div>
+      {/*
+        Se il codice non c'e' (errori che Next non digerisce, sviluppo in
+        locale) non resta un'etichetta spaiata: una riga «Codice errore:» senza
+        codice, o la parola «undefined», sotto le scuse sembra un secondo guasto.
+      */}
+      {codiceErrore ? (
+        <p className="mt-6 text-xs leading-relaxed text-ink-500">
+          Codice errore:{' '}
+          <code className="font-mono text-ink-700 select-all break-all">{codiceErrore}</code>
+          {' — riportalo se ci scrivi.'}
+        </p>
+      ) : null}
     </div>
   );
 }

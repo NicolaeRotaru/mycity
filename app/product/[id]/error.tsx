@@ -23,6 +23,7 @@ export default function ProductError({
         retry={reset}
         backHref="/"
         backLabel="Torna alla home"
+        codiceErrore={error.digest}
       />
     </div>
   );

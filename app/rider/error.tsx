@@ -27,6 +27,7 @@ export default function RiderError({
         retry={reset}
         backHref="/rider"
         backLabel="Le tue consegne"
+        codiceErrore={error.digest}
       />
     </div>
   );

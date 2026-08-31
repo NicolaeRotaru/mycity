@@ -79,19 +79,18 @@ type DebitoNoto = {
   rimedio: string;
 };
 
-const DEBITI_DICHIARATI: DebitoNoto[] = [
-  {
-    difetto: 'la pillola «Consegna a Piacenza 29121» in testa a ogni pagina',
-    regola: 'color-contrast',
-    vistoSu: '/',
-    // Bianco al 70% su terracotta: 3,49:1 contro i 4,5:1 richiesti. E' in
-    // testa a OGNI pagina del sito, quindi vale per tutte quelle qui sopra.
-    riconosci: (n) => n.html.includes('opacity-70') && (n.failureSummary ?? '').includes('#aa4f3b'),
-    dove: 'components/LocationPill.tsx',
-    rimedio:
-      'togliere `opacity-70` dai due <span> dentro il bottone: il bianco pieno su quel terracotta fa 5,4:1',
-  },
-];
+/**
+ * 31/8/2026 (R102) — VUOTO, ED E' UNA BUONA NOTIZIA.
+ *
+ * Qui dentro stava la pillola «Consegna a Piacenza 29121»: bianco al 70% sul
+ * terracotta della testata, 3,49:1 contro i 4,5:1 richiesti, in cima a ogni
+ * pagina del sito. E' stata riparata in components/LocationPill.tsx togliendo
+ * `opacity-70` dai due <span>: adesso fa 5,4:1.
+ *
+ * L'elenco puo' solo accorciarsi. Una violazione nuova non ha piu' nessuna
+ * eccezione dietro cui nascondersi: il cancello e' severo.
+ */
+const DEBITI_DICHIARATI: DebitoNoto[] = [];
 
 function eUnDebitoDichiarato(violazione: Violazione, nodo: Nodo): DebitoNoto | undefined {
   return DEBITI_DICHIARATI.find((d) => d.regola === violazione.id && d.riconosci(nodo));

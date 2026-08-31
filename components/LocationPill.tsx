@@ -98,9 +98,17 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
           <span>{loc.zip}</span>
         ) : (
           <>
-            <span className="hidden sm:inline opacity-70">Consegna a</span>
+            {/*
+              31/8/2026 (R102) — Questi due erano `opacity-70`: bianco al 70%
+              sul terracotta della testata fa 3,49:1, sotto i 4,5:1 che servono
+              a chi non ha la vista perfetta, e la pillola sta in cima a OGNI
+              pagina del sito. Il bianco pieno sullo stesso fondo fa 5,4:1. La
+              gerarchia fra «Consegna a» e la citta' la tiene il grassetto,
+              che non costa contrasto.
+            */}
+            <span className="hidden sm:inline">Consegna a</span>
             <span className="font-semibold">{loc.city}</span>
-            <span className="opacity-70">{loc.zip}</span>
+            <span>{loc.zip}</span>
           </>
         )}
         <ChevronDown size={12} strokeWidth={2.4} className="opacity-70" />

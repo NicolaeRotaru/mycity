@@ -149,3 +149,76 @@ describe('la schermata d\'errore che sostituisce tutto il sito', () => {
     s.smonta();
   }, 60000);
 });
+
+/**
+ * 31/8/2026 (R194, seconda metà) — LE SETTE SCHERMATE CHE OSCURANO QUELLA GENERALE.
+ *
+ * In Next una `error.tsx` dentro una cartella VINCE su quella alla radice: per
+ * chi sta in /seller, /checkout, /rider… la schermata che compare non è
+ * app/error.tsx ma la loro. Sistemare solo quella generale lasciava fuori
+ * proprio il negoziante, che è la persona di cui parla questo difetto: va in
+ * errore dentro /seller e continua a non avere nessun codice da darci.
+ *
+ * Il codice deve stare DENTRO il riquadro annunciato (`role="alert"`), non
+ * sotto: chi usa un lettore di schermo sente l'errore e deve sentire anche il
+ * codice, senza doversi mettere a scorrere la pagina per cercarlo.
+ */
+
+const SCHERMATE = [
+  ['app/error.tsx', 'una pagina qualunque'],
+  ['app/seller/error.tsx', "l'area del negoziante"],
+  ['app/admin/error.tsx', "l'area di chi amministra"],
+  ['app/checkout/error.tsx', 'la cassa'],
+  ['app/rider/error.tsx', "l'area del fattorino"],
+  ['app/product/[id]/error.tsx', 'la scheda prodotto'],
+  ['app/store/[id]/error.tsx', 'la vetrina del negozio'],
+  ['app/orders/[id]/error.tsx', 'il dettaglio di un ordine'],
+] as const;
+
+describe('ogni schermata d\'errore, non solo quella generale', () => {
+  for (const [percorso, dove] of SCHERMATE) {
+    it(`${dove} dà il codice da riportare`, async () => {
+      const mod = await monta(percorso);
+      const s = accendi(mod.default, { error: erroreCon(CODICE), reset: () => {} });
+
+      const testo = testoVisibile(s.radice);
+      expect(
+        testo,
+        `Chi va in errore su ${dove} non ha nessun codice da darci: la sua segnalazione resta scollegata dai log. Testo mostrato: ${JSON.stringify(testo)}`,
+      ).toContain(CODICE);
+
+      s.smonta();
+    }, 60000);
+
+    it(`${dove} annuncia il codice insieme all'errore, non dopo`, async () => {
+      const mod = await monta(percorso);
+      const s = accendi(mod.default, { error: erroreCon(CODICE), reset: () => {} });
+
+      const annuncio = s.radice.querySelector('[role="alert"]');
+      expect(
+        annuncio?.textContent ?? '',
+        `Su ${dove} il codice sta fuori dal riquadro annunciato: chi usa un lettore di schermo sente l'errore ma non il codice, e deve mettersi a cercarlo scorrendo la pagina`,
+      ).toContain(CODICE);
+
+      s.smonta();
+    }, 60000);
+  }
+
+  for (const [percorso, dove] of SCHERMATE) {
+    it(`${dove} senza codice non mostra «undefined»`, async () => {
+      const mod = await monta(percorso);
+      const s = accendi(mod.default, { error: erroreCon(undefined), reset: () => {} });
+
+      const testo = testoVisibile(s.radice).toLowerCase();
+      expect(
+        testo,
+        `Su ${dove} manca il codice ma compare comunque qualcosa: sotto le scuse sembra un secondo errore`,
+      ).not.toContain('undefined');
+      expect(testo, `Su ${dove} resta l'etichetta spaiata senza il codice`).not.toContain(
+        'codice errore:',
+      );
+
+      s.smonta();
+    }, 60000);
+  }
+});

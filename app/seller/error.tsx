@@ -27,6 +27,7 @@ export default function SellerError({
         retry={reset}
         backHref="/seller/dashboard"
         backLabel="Dashboard"
+        codiceErrore={error.digest}
       />
     </div>
   );

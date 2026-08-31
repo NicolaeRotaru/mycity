@@ -23,6 +23,7 @@ export default function StoreError({
         retry={reset}
         backHref="/stores"
         backLabel="Vedi tutti i negozi"
+        codiceErrore={error.digest}
       />
     </div>
   );

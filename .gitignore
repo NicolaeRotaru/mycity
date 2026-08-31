@@ -41,3 +41,9 @@ next-env.d.ts
 # storybook
 storybook-static/
 *storybook.log
+
+# 31/8/2026 (R102) — Playwright lascia qui tracce, schermate e video di ogni
+# esecuzione fallita. Adesso che il cancello dell'accessibilita gira davvero,
+# chiunque lo lanci in locale se li ritrova fra le modifiche da committare.
+/test-results/
+/playwright-report/
