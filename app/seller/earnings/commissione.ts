@@ -34,11 +34,38 @@ export const COMMISSIONE_PERCENTO = MARKETPLACE_FEE_BPS / 100;
  * legge come una promessa poco seria. Vale per le percentuali da 0 a 100, le
  * uniche che abbiano senso per una commissione.
  */
-function articoloDavantiA(percento: number): string {
+function siPronunciaConVocale(percento: number): boolean {
   const intero = Math.trunc(percento);
-  const siPronunciaConVocale = intero === 1 || intero === 8 || intero === 11 || intero === 18 || (intero >= 80 && intero <= 89);
-  return siPronunciaConVocale ? "l'" : 'il ';
+  return intero === 1 || intero === 8 || intero === 11 || intero === 18 || (intero >= 80 && intero <= 89);
 }
+
+function articoloDavantiA(percento: number): string {
+  return siPronunciaConVocale(percento) ? "l'" : 'il ';
+}
+
+/**
+ * 31/8/2026 (R037) — LA PERCENTUALE CHE IL NEGOZIO LEGGE PRIMA DI FIRMARE.
+ *
+ * La stessa promessa era battuta a mano in altri quattro punti, fuori da questa
+ * pagina: due sul modulo di candidatura (/sell, dove il negozio legge le
+ * condizioni PRIMA di decidere), una sulla porta dell'area venditori e una sul
+ * banner dell'abbonamento. Oggi il numero e' giusto in tutti e quattro, quindi
+ * non stiamo dicendo niente di falso — ma quattro copie a mano si aggiornano una
+ * per una, e il giorno che la commissione cambia ne resta indietro qualcuna:
+ * e' esattamente cosi' che e' nato questo difetto, con «l'8%» promesso e il 10%
+ * trattenuto.
+ *
+ * Percio' la difesa non e' controllare che le quattro copie siano allineate: e'
+ * togliere la possibilita' di scriverle. Da qui in avanti chi vuole cambiare la
+ * commissione ha un posto solo dove mettere le mani — `MARKETPLACE_FEE_BPS`,
+ * la riga che divide i soldi veri di ogni ordine — e le pagine la seguono da
+ * sole.
+ *
+ * Va infilata dov'era il numero: «commissione ___ sulle vendite», «la
+ * commissione sulle vendite e' ___». La preposizione viaggia insieme al numero
+ * perche' in italiano segue come lo si PRONUNCIA: «del 10%» ma «dell'8%».
+ */
+export const COMMISSIONE_DEL_PERCENTO = `${siPronunciaConVocale(COMMISSIONE_PERCENTO) ? "dell'" : 'del '}${COMMISSIONE_PERCENTO}%`;
 
 /**
  * Un paragrafo della spiegazione: `forte` e' la parte in grassetto sulla pagina.

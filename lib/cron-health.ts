@@ -20,6 +20,17 @@
  *
  * Adesso è vero: /api/health legge i battiti e li confronta con
  * `SOGLIE_VISTE_DA_FUORI`, che è questo elenco PIÙ il sorvegliante stesso.
+ *
+ * 31/8/2026 (R183, terzo giro) — ERA VERO SU UNA PORTA SOLA, E NON LA PIÙ
+ * GUARDATA. Le porte di salute sono due: /api/health dice se il processo è
+ * vivo, /api/health/ready se il sito è pronto a servire — ed è quest'ultima
+ * che il monitor esterno interroga. Con tutti e dieci i lavori fermi da dieci
+ * giorni /ready rispondeva 200 {"status":"ready"}: chi guardava la porta giusta
+ * non vedeva niente. Adesso i battiti si leggono su tutte e due, con queste
+ * stesse soglie e lo stesso `esitoBattiti`, e la prova che le tiene allineate è
+ * tests/unit/la-porta-sei-pronto-dice-anche-se-i-lavori-periodici-sono-fermi.test.ts:
+ * chiede il verdetto a tutte e due le rotte sugli stessi battiti e pretende che
+ * sia identico.
  */
 
 export type CronHeartbeat = { name: string; last_run_at: string | null };
@@ -98,8 +109,8 @@ export function staleCrons(
  *
  * `operational-alerts` gira ogni 15 minuti (vercel.json). Non compare in
  * `CRON_MAX_STALENESS_MIN` perché lì l'elenco lo legge lui stesso, e un morto
- * non si segnala da solo. Da /api/health invece si vede, ed è l'unico posto da
- * cui si può vedere.
+ * non si segnala da solo. Dalle porte di salute invece si vede, e sono l'unico
+ * posto da cui si può vedere.
  *
  * 31/8/2026 (R183, secondo giro) — «SI VEDE DA /api/health» ERA VERO SOLO PER
  * CHI AVEVA IL SEGRETO. Il controllo veniva calcolato dentro `if (autorizzato)`
@@ -108,6 +119,9 @@ export function staleCrons(
  * fermi. Adesso i battiti si guardano sempre e il risultato esce anche senza
  * segreto: se qualcuno lo rimette dietro l'autorizzazione, questa frase torna a
  * essere una copertura dichiarata e inesistente.
+ *
+ * Vale per tutte e due le porte: su /api/health/ready la stessa cosa era ancora
+ * da fare, ed è la porta che il monitor guarda davvero (31/8/2026, terzo giro).
  */
 export const SOGLIA_SORVEGLIANTE_MIN = 120;
 
