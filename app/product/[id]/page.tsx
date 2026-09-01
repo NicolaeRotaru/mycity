@@ -8,13 +8,13 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Heart, Banknote, Bike, RotateCcw, Store, ShoppingCart, Ban, Check, Flame, Package, ShieldCheck, Star, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { domandaProdotto } from '@/lib/queries/catalogo';
 import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
 import { FRASE_RESO, frasePagamento } from '@/lib/promesse-pubbliche';
-import ProductGrid from '@/components/ProductGrid';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
@@ -59,28 +59,11 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
 const ALLERGEN_ACCORDION_KEYS = ['allergeni', 'ingredienti', 'conservazione', 'valori_nutrizionali'];
 
-/** La scheda prodotto come la usa questa pagina (#97: colonne per nome). */
-type SchedaProdotto = {
-  id: string;
-  name: string;
-  description: string | null;
-  price: number | string;
-  images: string[] | null;
-  seller_id: string;
-  status: string | null;
-  created_at: string | null;
-  category_id: string | null;
-  stock: number | null;
-  attributes: Record<string, unknown> | null;
-  unit: string | null;
-  compare_at_price: number | string | null;
-  condition: string | null;
-  express_enabled: boolean | null;
-  has_variants: boolean | null;
-  external_source_url: string | null;
-  categories: { slug: string | null; name: string | null } | null;
-  profiles: { id: string; store_name: string | null; is_approved: boolean | null; offers_express: boolean | null; store_hours: unknown } | null;
-};
+/**
+ * 30/8/2026 (R068) — La forma della scheda e la domanda che la legge stanno in
+ * `lib/queries/catalogo.ts`: da li' le usa anche il guscio della pagina, che
+ * precarica il prodotto sul server e lo consegna dentro l'HTML.
+ */
 
 export default function ProductPage(props: { params: Promise<{ id: string }> }) {
   const params = use(props.params);
@@ -133,42 +116,17 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   const [reviewSort, setReviewSort] = useState<'recent' | 'top' | 'low'>('recent');
   const [reviewsOnlyPhoto, setReviewsOnlyPhoto] = useState(false);
 
-  const { data: product, isLoading, isError, refetch } = useQuery<SchedaProdotto | null>({
-    queryKey: queryKeys.products.detail(id),
-    queryFn: async () => {
-      // #97 — Le colonne per nome, non `*`.
-      //
-      // Con `*` arrivava al browser anche `search_tsv`: l'indice di ricerca del
-      // prodotto, cioe' tutte le parole della scheda ripetute in forma
-      // compressa, che nessuno mostra e nessuno usa. Su una scheda con una
-      // descrizione lunga sono decine di chilobyte per ogni apertura, pagati da
-      // chi guarda il prodotto dal telefono. Arrivavano anche i campi di
-      // sincronizzazione con i marketplace esterni, che qui non servono.
-      const { data, error } = await supabase.from('products').select(`
-        id, name, description, price, images, seller_id, status, created_at, category_id,
-        stock, attributes, unit, compare_at_price, condition, express_enabled, has_variants,
-        external_source_url,
-        categories ( slug, name ), profiles!products_seller_id_fkey ( id, store_name, is_approved, offers_express, store_hours )
-      `).eq('id', id).maybeSingle();
-      // 22/8/2026 — «NON C'E'» E «NON RIESCO A LEGGERLO» SONO DUE COSE DIVERSE.
-      //
-      // Con `.single()` PostgREST tratta «nessuna riga» come un ERRORE
-      // (PGRST116), e qui l'errore veniva rilanciato: la pagina mostrava
-      // «problema di collegamento» con un pulsante «Riprova» che non potra' mai
-      // funzionare, perche' quella cosa non esiste. Chi arriva da un link
-      // vecchio o da un risultato di ricerca scaduto resta li' a premere.
-      //
-      // `.maybeSingle()` risponde `null` quando non c'e' niente, e lascia
-      // l'errore vero — la rete, il database lento — al ramo che offre il
-      // ritentativo. Cosi' i due messaggi dicono la verita' tutti e due.
-      if (error) throw error;
-      if (!data) return null;
-      // Il collegamento a categoria e negozio e' uno a uno: PostgREST lo
-      // restituisce come oggetto, ma con le colonne elencate per nome i tipi
-      // generati lo descrivono come elenco. Si dichiara la forma vera.
-      return data as unknown as SchedaProdotto;
-    },
-  });
+  // 30/8/2026 (R068) — LA SCHEDA ARRIVAVA VUOTA NELL'HTML.
+  //
+  // Questa pagina e' tutta del browser: il telefono scaricava il codice, lo
+  // eseguiva, e solo allora chiedeva nome, prezzo e foto. Due viaggi di rete in
+  // fila prima di vedere qualcosa, sulla pagina che fa comprare.
+  //
+  // La domanda adesso vive in `lib/queries/catalogo.ts` e la fa anche il guscio
+  // (`layout.tsx`), che gira sul server: quando questo codice parte, la risposta
+  // e' gia' in mano e qui non si va in rete. La riga qui sotto non sa niente di
+  // tutto questo — ed e' il punto: funziona perche' la domanda e' LA STESSA.
+  const { data: product, isLoading, isError, refetch } = useQuery(domandaProdotto(supabase, id));
 
   // Varianti (taglie/colori): caricate a parte, alimentano i selettori opzione.
   const { data: variants = [] } = useQuery({

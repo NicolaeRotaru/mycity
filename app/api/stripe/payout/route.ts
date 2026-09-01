@@ -17,7 +17,9 @@ const Body = z.object({
  *
  * Trigger manuale/admin server-to-server (verifica x-internal-secret). La
  * logica vive in lib/stripe/payout.ts (`releaseOrderPayout`), condivisa col
- * cron automatico app/api/cron/release-payouts che paga a consegna +3gg.
+ * cron automatico app/api/cron/release-payouts, che paga un'ora dopo la
+ * consegna (R051 — qui c'era scritto «+3gg», che non e' mai stato vero da
+ * quando il giro esiste: il numero vero sta in lib/stripe/tempi-bonifico.ts).
  */
 export const POST = withInternalAuth(async (req): Promise<NextResponse> => {
   if (!isStripeConfigured()) return ApiErrors.unavailable('Stripe non configurato');

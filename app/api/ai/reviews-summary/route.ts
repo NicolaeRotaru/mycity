@@ -8,7 +8,7 @@ import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { recinta, REGOLA_TESTO_DI_TERZI } from '@/lib/ai/recinto';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Riepilogo recensioni: sintetizza i feedback degli acquirenti (di un prodotto
@@ -63,7 +63,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: Body;
   try {
     body = await jsonRichiesta(req, TETTO_JSON);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
 

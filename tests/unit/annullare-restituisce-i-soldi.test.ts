@@ -27,11 +27,21 @@ const stato: { updates: Record<string, unknown>[]; rpc: Array<{ name: string; ar
   updates: [], rpc: [],
 };
 
+// 27/8/2026 (R131) — La catena del finto database ha una tappa in piu' perche'
+// l'annullamento adesso RIVENDICA l'ordine invece di sovrascriverlo:
+// `.eq(id).neq(stato,'CANCELED').select('id')`. Le verifiche qui sotto sono le
+// stesse di prima: cambia solo la forma della finta scrittura.
 const adminFinto = {
   from: () => ({
-    update: (u: Record<string, unknown>) => ({
-      eq: () => { stato.updates.push(u); return Promise.resolve({ error: null }); },
-    }),
+    update: (u: Record<string, unknown>) => {
+      stato.updates.push(u);
+      const catena: Record<string, unknown> = {
+        eq: () => catena,
+        neq: () => catena,
+        select: () => Promise.resolve({ data: [{ id: 'o1' }], error: null }),
+      };
+      return catena;
+    },
   }),
   rpc: (name: string, args: Record<string, unknown>) => {
     stato.rpc.push({ name, args });

@@ -7,7 +7,13 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext } from '@/lib/ai/productContext';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+// 27/8/2026 (R150) — La riga che dice al modello che la scheda e' un DATO e
+// non un ordine. La chat prodotto, la chat catalogo, il codice a barre e il
+// lavoro massivo ce l'hanno da agosto: qui mancava, e la descrizione importata
+// da un altro marketplace la scrive un estraneo.
+import { REGOLA_TESTO_DI_TERZI } from '@/lib/ai/recinto';
+import { filtroSullaScheda } from '@/lib/ai/schedaSicura';
 
 /**
  * Generazione varianti: propone gli assi di variante (es. Taglia, Colore) con i
@@ -26,7 +32,9 @@ Regole:
 - Per i campi liberi (es. colore) proponi valori realistici e specifici, dedotti da foto/scheda; pochi e sensati (2-6 per asse), niente liste enormi.
 - Proponi un asse SOLO se ha davvero senso avere più versioni per questo prodotto. Se non serve nessuna variante, restituisci "axes" vuoto.
 - Niente duplicati.
-Rispondi sempre e solo chiamando lo strumento "suggest_variants".`;
+Rispondi sempre e solo chiamando lo strumento "suggest_variants".
+
+${REGOLA_TESTO_DI_TERZI}`;
 
 const TOOL: Anthropic.Tool = {
   name: 'suggest_variants',
@@ -67,7 +75,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: Body;
   try {
     body = await jsonRichiesta(req, TETTO_JSON);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   if (!body?.product || typeof body.product !== 'object') {
@@ -93,6 +104,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (fields.length === 0) {
     return ApiErrors.invalidRequest('Questa categoria non ha campi che diventano varianti.');
   }
+
+  // 27/8/2026 (R148) — La scheda passa dal filtro anti-contenuti-vietati come
+  // il testo libero delle altre rotte. Perche' qui e non altrove:
+  // lib/ai/schedaSicura.ts.
+  const nonAmmessa = await filtroSullaScheda(body.product, 'ai-variants-policy');
+  if (nonAmmessa) return nonAmmessa;
 
   const fieldLines = fields
     .map((f) => {

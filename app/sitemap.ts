@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { createClient } from '@supabase/supabase-js';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
 
 export const revalidate = 3600; // sitemap rigenerato ogni ora
@@ -31,9 +31,6 @@ const STATIC_PATHS: Array<{ path: string; priority: number; changeFrequency: 'da
  * Googlebot, Bingbot ecc. La cache è gestita da Next con `revalidate = 3600`.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
   const now = new Date();
   const staticEntries: MetadataRoute.Sitemap = STATIC_PATHS.map((s) => ({
     url: `${APP_URL}${s.path}`,
@@ -42,12 +39,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: s.changeFrequency,
   }));
 
-  // Senza chiavi DB, restituiamo solo le statiche (es. in build locale).
-  if (!url || !key) return staticEntries;
+  // Senza chiavi DB restituiamo solo le pagine statiche. Qui il silenzio è una SCELTA scritta, non
+  // una dimenticanza (R010): una compilazione locale senza chiavi deve poter finire. Ovunque
+  // altrove sotto `app/` la mancanza delle variabili adesso si sente, invece di trasformarsi in un
+  // «non trovato» che finisce su Google.
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return staticEntries;
+  }
 
-  const supabase = createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const supabase = creaClientAnonimo();
 
   type ProductSlug = { id: string; created_at?: string | null; seller_id?: string };
   type StoreSlug = { id: string; created_at?: string | null };

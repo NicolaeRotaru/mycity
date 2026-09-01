@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createHmac } from 'node:crypto';
 import type Stripe from 'stripe';
 import { getStripe } from '@/lib/stripe/client';
 import { getAdminSupabase } from '@/lib/supabase/server';
@@ -90,12 +89,36 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ received: true, duplicated: true }, { status: 200 });
       }
     } else {
+      // 27/8/2026 (R031 · R137) — IL GUARDIANO SI APRIVA DA SOLO QUANDO SI
+      // ROMPEVA: su un errore diverso dal doppione (colonna non ancora
+      // presente, intoppo del database, permesso) si scriveva un log e si
+      // tirava dritto nello `switch`, cioè si lavorava l'evento senza
+      // protezione — e la riconsegna di Stripe rifaceva ordine, bonifico e
+      // giacenza. Un evento ritentato non fa danno, uno senza guardiano sì.
       logger.error(seen.error, { context: 'stripe-event-log-insert' });
+      return NextResponse.json({ error: 'idempotenza non disponibile' }, { status: 503 });
     }
+  }
+
+  // 27/8/2026 (R134) — QUANDO IL GESTORE FALLIVA, IL TURNO RESTAVA PRESO: la
+  // riconsegna di Stripe entro cinque minuti riceveva `200 { duplicated: true }`,
+  // per Stripe la consegna era riuscita, e l'evento spariva. Su una sessione
+  // pagata vuol dire cliente addebitato e ordine mai nato.
+  async function liberaIlTurno(): Promise<void> {
+    const { error } = await admin
+      .from('stripe_event_log')
+      .update({ claimed_at: null })
+      .eq('event_id', event.id)
+      .eq('processed', false);
+    if (error) logger.error(error, { context: 'stripe-event-log-rilascio-turno' });
   }
 
   try {
     switch (event.type) {
+      // 27/8/2026 (R139) — IL PAGAMENTO ASINCRONO ERA PROMESSO NEI COMMENTI E
+      // NON NEL CODICE: finiva nel ramo `default`, cioe' in una riga di log.
+      // Con un bonifico SEPA i soldi entrano e l'ordine non nasce mai.
+      case 'checkout.session.async_payment_succeeded':
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
 
@@ -121,6 +144,13 @@ export async function POST(req: NextRequest) {
             kind: session.metadata?.kind ?? 'ordine',
             paymentStatus: session.payment_status,
           });
+          // 27/8/2026 (R134) — CHIUSURA, NON ABBANDONO: l'uscita lasciava la
+          // riga rivendicata e non lavorata per sempre, cioe' un residuo che
+          // falsa ogni conta degli eventi arretrati.
+          await admin
+            .from('stripe_event_log')
+            .update({ processed: true, processed_at: new Date().toISOString() })
+            .eq('event_id', event.id);
           return NextResponse.json({ received: true, nonPagata: true }, { status: 200 });
         }
 
@@ -167,6 +197,9 @@ export async function POST(req: NextRequest) {
         await handleTransferReversed(event.data.object as Stripe.Transfer);
         break;
       }
+      // 27/8/2026 (R139) — Il pagamento asincrono che non arriva lascia merce
+      // riservata e codice sconto bruciato: stesso rimedio del carrello scaduto.
+      case 'checkout.session.async_payment_failed':
       case 'checkout.session.expired': {
         await handleCheckoutExpired(event.data.object as Stripe.Checkout.Session);
         break;
@@ -206,6 +239,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true }, { status: 200 });
   } catch (err) {
     logger.error(err, { context: 'stripe-webhook-handler' });
+    // Il turno torna libero PRIMA di rispondere, cosi' la riconsegna di Stripe
+    // trova la riga lavorabile invece di un turno fresco.
+    await liberaIlTurno();
     return NextResponse.json({ error: 'Handler error' }, { status: 500 });
   }
 }

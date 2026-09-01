@@ -54,7 +54,17 @@ beforeEach(() => {
     if (feature.endsWith('-policy')) {
       return { toolInput: { allowed: risposteFiltro.allowed, reason: risposteFiltro.reason }, text: '' };
     }
-    return { text: 'una descrizione qualunque', toolInput: undefined };
+    // Una risposta plausibile per tutte le rotte che passano di qui: chi legge
+    // `text` trova il testo, chi legge lo strumento trova un patch valido.
+    return {
+      text: 'una descrizione qualunque',
+      toolInput: {
+        patch: { name: 'Pane di segale', description: 'Cotto a legna ogni mattina.' },
+        summary: 'tutto a posto',
+        issues: [],
+        axes: [],
+      },
+    };
   });
 });
 
@@ -106,4 +116,86 @@ describe('la rotta che scrive le descrizioni passa dal filtro', () => {
     );
     expect(res.status).toBe(400);
   });
+});
+
+/**
+ * 27/8/2026 (R148) — LE CINQUE ROTTE CHE NON CI PASSAVANO.
+ *
+ * Contando gli usi veri di `assertSafeText`/`classifyProductPolicy` nelle
+ * diciannove rotte AI, cinque erano scoperte: migliora-prodotto, diagnosi,
+ * SEO, traduzione, varianti. Tutte e cinque accettano `body.product` dal
+ * browser col solo controllo «è un oggetto» e ne mettono nome e descrizione nel
+ * prompt; «migliora prodotto» per giunta gira sul modello grande con la ricerca
+ * sul web accesa, e quello che produce torna nel form e da lì nel database.
+ *
+ * Il difetto non era «manca un controllo»: era che il controllo c'era su nove
+ * porte e non su cinque, e quale fosse aperta dipendeva da quale pulsante
+ * premeva il venditore.
+ *
+ * Da qui in poi il collegamento non si può staccare in silenzio: se qualcuno lo
+ * toglie da una di queste rotte, questo file diventa rosso.
+ */
+const SCHEDA_VIETATA = {
+  name: 'coltello a serramanico da combattimento',
+  description: 'lama di 12 cm, apertura rapida',
+  price: 40,
+};
+const SCHEDA_NORMALE = {
+  name: 'pane di segale a lievitazione naturale',
+  description: 'cotto a legna ogni mattina',
+  price: 4,
+};
+
+const ROTTE_CON_SCHEDA: { nome: string; modulo: string; feature: string; corpo: (p: unknown) => Record<string, unknown> }[] = [
+  { nome: 'migliora prodotto', modulo: '@/app/api/ai/improve-product/route', feature: 'ai-improve-product', corpo: (product) => ({ product }) },
+  { nome: 'diagnosi', modulo: '@/app/api/ai/diagnose/route', feature: 'ai-diagnose', corpo: (product) => ({ product }) },
+  { nome: 'SEO', modulo: '@/app/api/ai/seo/route', feature: 'ai-seo', corpo: (product) => ({ product }) },
+  { nome: 'traduzione', modulo: '@/app/api/ai/translate/route', feature: 'ai-translate', corpo: (product) => ({ product, targetLang: 'en' }) },
+  {
+    nome: 'varianti',
+    modulo: '@/app/api/ai/variants/route',
+    feature: 'ai-variants',
+    corpo: (product) => ({ product, variantableFields: [{ key: 'colore', type: 'select', options: ['rosso', 'blu'] }] }),
+  },
+];
+
+describe('anche le rotte che lavorano su una scheda gia scritta passano dal filtro', () => {
+  for (const rotta of ROTTE_CON_SCHEDA) {
+    it(`${rotta.nome}: una scheda che il filtro rifiuta non arriva al modello`, async () => {
+      risposteFiltro.allowed = false;
+      const { POST } = (await import(rotta.modulo)) as { POST: (r: Request) => Promise<Response> };
+      const res = await POST(
+        new Request(`http://localhost/api/ai/${rotta.nome}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(rotta.corpo(SCHEDA_VIETATA)),
+        }),
+      );
+      expect(res.status, `la scheda vietata e passata: ${rotta.nome} ha risposto ${res.status}`).toBe(400);
+      const generazioni = runMessage.mock.calls.filter(
+        ([a]) => (a as { feature: string }).feature === rotta.feature,
+      );
+      expect(
+        generazioni.length,
+        `il filtro ha detto no ma ${rotta.nome} ha chiamato il modello lo stesso`,
+      ).toBe(0);
+    });
+
+    it(`${rotta.nome}: una scheda normale passa e il lavoro si fa`, async () => {
+      risposteFiltro.allowed = true;
+      const { POST } = (await import(rotta.modulo)) as { POST: (r: Request) => Promise<Response> };
+      const res = await POST(
+        new Request(`http://localhost/api/ai/${rotta.nome}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(rotta.corpo(SCHEDA_NORMALE)),
+        }),
+      );
+      expect(res.status).toBeLessThan(400);
+      const generazioni = runMessage.mock.calls.filter(
+        ([a]) => (a as { feature: string }).feature === rotta.feature,
+      );
+      expect(generazioni.length).toBe(1);
+    });
+  }
 });

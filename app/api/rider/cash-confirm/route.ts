@@ -4,7 +4,7 @@ import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
-import { compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
+import { compensoDalContante, contanteDaRimettereCents } from '@/lib/shipping';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { aggiornaQuadratura } from '@/lib/cassa/quadratura';
@@ -95,7 +95,20 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   // tiene dal contante che ha in mano, e rimette il resto. Nessun bonifico da
   // fare, nessun saldo piattaforma da anticipare. L'atteso scende di
   // conseguenza, qui e nella quadratura di fine giornata.
-  const compensoTenutoCents = compensoTrattenutoCents(order);
+  //
+  // 30/8/2026 (R120) — E IL CONTANTE DA CUI TENERSELO NON C'E' SEMPRE.
+  //
+  // `total_price` e' il totale DOPO lo scomputo del credito MyCity, e in cassa
+  // la spunta «usa il credito» e' accesa di default. Con 50 € di credito e un
+  // ordine da 22 € in contrassegno l'ordine nasce a zero: il fattorino
+  // consegna, non gli mette in mano niente nessuno, e non ha da cosa
+  // trattenersi i suoi 3 €. Qui si scriveva comunque 'CASH_WITHHELD' — cioe'
+  // «pagato» — perche' la condizione guardava il compenso DOVUTO e non quello
+  // davvero trattenibile, e da li' il giro dei bonifici usciva subito: quei
+  // soldi non sarebbero partiti mai. Vale anche a meta': residuo 2 €, compenso
+  // 3 € → ne perdeva 1 e risultava pagato per intero.
+  const { trattenutoCents, residuoDovutoCents } = compensoDalContante(order);
+  const compensoTenutoCents = trattenutoCents;
   const expectedCents = contanteDaRimettereCents(order);
 
   // Cap difensivo: rifiuta importi palesemente fuori range (errore di battitura/abuso).
@@ -143,8 +156,13 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     // 155 — Il compenso e' stato pagato, in contanti, adesso. Prima questo
     // campo restava NULL per sempre e non c'era modo di distinguere «pagato
     // in contanti» da «mai pagato».
-    rider_payout_status: compensoTenutoCents > 0 ? 'CASH_WITHHELD' : null,
-    rider_payout_at: compensoTenutoCents > 0 ? now.toISOString() : null,
+    //
+    // R120 — «Pagato» solo se il contante bastava davvero. Se ne resta un pezzo
+    // scoperto l'ordine va in 'HELD', che e' lo stato da cui il giro dei
+    // bonifici ripesca i compensi da versare (FILTRO_RIDER_RITENTABILI): la
+    // differenza gli arriva per bonifico, invece di sparire.
+    rider_payout_status: residuoDovutoCents > 0 ? 'HELD' : compensoTenutoCents > 0 ? 'CASH_WITHHELD' : null,
+    rider_payout_at: residuoDovutoCents === 0 && compensoTenutoCents > 0 ? now.toISOString() : null,
   };
 
   const conferma = (valori: Record<string, unknown>) =>
@@ -185,6 +203,17 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
     const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
     const rows = (admins ?? []).map((a) => ({
       user_id: a.id,
+      /**
+       * 30/8/2026 (R127) — «system», non la predefinita del database.
+       *
+       * Senza questo campo la riga nasceva nella categoria 'order' (migrazione
+       * 115), cioe' insieme agli aggiornamenti d'ordine — i piu' rumorosi, e
+       * quindi i primi che un amministratore spegne. `vuole_notifica` governa
+       * l'invio della push: spegnendo quelli si smetteva di ricevere sul
+       * telefono l'unico segnale automatico sul contante che manca all'appello.
+       * 'system' e' la categoria degli avvisi di servizio: non si disattiva.
+       */
+      category: 'system',
       title: '⚠️ Incasso COD non quadra',
       body: `Rider ${user.id.slice(0, 8)} · ordine ${body.orderId.slice(0, 8)}: incassati €${(body.cashCollectedCents / 100).toFixed(2)}, attesi €${(expectedCents / 100).toFixed(2)} (Δ €${(delta / 100).toFixed(2)}).`,
       link: '/admin/orders',
@@ -195,4 +224,3 @@ export const POST = withAuthRateLimit({ name: 'rider-cash-confirm', max: 60, win
   return NextResponse.json({ ok: true, delta, expectedCents }, { status: 200 });
 });
 
-type AdminSupabase = ReturnType<typeof import('@/lib/supabase/server').getAdminSupabase>;

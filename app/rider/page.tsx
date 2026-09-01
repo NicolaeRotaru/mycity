@@ -14,6 +14,8 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { vistaDaQuery } from '@/lib/vista-query';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useProfile } from '@/components/hooks/useProfile';
@@ -104,7 +106,7 @@ export default function RiderDashboardPage() {
    * li ha proprio (`ordini_disponibili_rider`), e la riga intera si legge solo
    * sugli ordini che quel fattorino ha preso.
    */
-  const { data: datiRider, isLoading } = useQuery({
+  const letturaBacheca = useQuery({
     queryKey: queryKeys.rider.orders,
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -210,8 +212,20 @@ export default function RiderDashboardPage() {
   const byZone = <T extends { delivery_city: string | null; delivery_zip?: string | null }>(a: T, b: T) =>
     (inPreferredZone(b) ? 1 : 0) - (inPreferredZone(a) ? 1 : 0);
 
-  const orders = datiRider?.miei ?? [];
-  const liberi = datiRider?.liberi ?? [];
+  /**
+   * 27/8/2026 (R087) — «NESSUN ORDINE PRONTO» A CHI GLI ORDINI CE LI AVEVA.
+   *
+   * Qui prima c'era `datiRider?.miei ?? []`: con la lettura fallita quei due ripieghi
+   * trasformavano un guasto di rete in due elenchi vuoti, e la pagina scriveva al fattorino
+   * che non c'è lavoro. Lui è in strada, col telefono, e non ha modo di sapere che bastava
+   * riprovare: chiude l'app, e le consegne restano ferme.
+   *
+   * Il verdetto adesso viene da `vistaDaQuery`, la stessa dell'area venditore: l'errore batte
+   * tutto, e il ramo dell'errore sta PRIMA di qualunque cosa disegni un elenco vuoto.
+   */
+  const vistaBacheca = vistaDaQuery(letturaBacheca);
+  const orders = letturaBacheca.data?.miei ?? [];
+  const liberi = letturaBacheca.data?.liberi ?? [];
 
   // Gli ordini annullati (CANCELED) non sono consegne attive: restano visibili
   // solo a buyer (proprietario) e admin, non al rider.
@@ -282,7 +296,16 @@ export default function RiderDashboardPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  if (isLoading) return <LoadingState />;
+  if (vistaBacheca.mostraScheletro) return <LoadingState />;
+  if (vistaBacheca.mostraErrore) {
+    return (
+      <ErrorState
+        title="Non riesco a leggere gli ordini"
+        description="La lettura non è riuscita, quindi non so quali consegne ci sono. Non vuol dire che non ce ne siano: riprova fra un momento."
+        onRetry={() => { void letturaBacheca.refetch(); }}
+      />
+    );
+  }
 
   const riderName = profile?.full_name || profile?.email || userEmail || 'Rider';
   const firstName = riderName.trim().split(/\s+/)[0];

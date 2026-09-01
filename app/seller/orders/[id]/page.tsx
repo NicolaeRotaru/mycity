@@ -7,7 +7,8 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
-  ORDER_STATUS_LABEL,
+  COLONNA_ORARIO_DEL_PASSAGGIO,
+  passaggioLecito,
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
@@ -21,6 +22,7 @@ import EmptyState from '@/components/EmptyState';
 import { Package, CheckCircle2, X, Printer, Bike, Phone, MapPin, Clock, Banknote } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 import { riepilogoOrdine } from '@/lib/ordini/riepilogo-ordine';
+import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import ReturnRequestCard, { type ReturnRow } from '@/components/seller/ReturnRequestCard';
 
 type OrderRow = {
@@ -53,6 +55,9 @@ type OrderRow = {
     id: string;
     quantity: number;
     unit_price: number;
+    // 27/8/2026 (R029) — la copia del nome e della foto del giorno dell'ordine.
+    product_name: string | null;
+    product_image: string | null;
     products: { name: string; images: string[] | null } | null;
   }[];
 };
@@ -139,7 +144,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           rider_id,
           rider:profiles!orders_rider_id_fkey ( full_name ),
           order_items (
-            id, quantity, unit_price,
+            id, quantity, unit_price, product_name, product_image,
             products ( name, images )
           )
         `;
@@ -222,10 +227,18 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   });
 
   const transition = useMutation({
-    mutationFn: async (params: { newStatus: OrderStatus; timestampField?: string }) => {
+    // 27/8/2026 (R015) — Via il parametro che portava il nome della colonna
+    // dell'orario, come era gia' stato fatto sulla pagina del fattorino:
+    // lasciava scrivere al BROWSER il nome di una colonna e il suo valore, col
+    // nome passato dal punto in cui si preme il pulsante. Oggi il database para
+    // il colpo (accetta solo le colonne del suo elenco), ma due pagine gemelle
+    // riparate in modo diverso sono la firma del difetto che poi torna. Adesso
+    // la colonna la decide lo stato d'arrivo.
+    mutationFn: async (params: { newStatus: OrderStatus }) => {
       if (!order) throw new Error('Ordine non caricato');
       const update: Record<string, any> = { delivery_status: params.newStatus };
-      if (params.timestampField) update[params.timestampField] = new Date().toISOString();
+      const colonnaOrario = COLONNA_ORARIO_DEL_PASSAGGIO[params.newStatus];
+      if (colonnaOrario) update[colonnaOrario] = new Date().toISOString();
 
       const { error } = await supabase.from('orders').update(update).eq('id', order.id);
       if (error) throw error;
@@ -340,13 +353,13 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         />
       )}
       {/* AZIONI */}
-      {order.delivery_status === 'NEW' && (
+      {passaggioLecito(order.delivery_status, 'ACCEPTED', 'negoziante') && (
         <div className="bg-white border border-cream-300 rounded-xl p-5">
           <p className="text-sm text-ink-600 mb-3">Vuoi accettare questo ordine?</p>
           <div className="flex gap-2 flex-wrap">
             <Button
               icon={CheckCircle2}
-              onClick={() => transition.mutate({ newStatus: 'ACCEPTED', timestampField: 'accepted_at' })}
+              onClick={() => transition.mutate({ newStatus: 'ACCEPTED' })}
               loading={transition.isPending}
             >
               Accetta ordine
@@ -362,13 +375,13 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
           </div>
         </div>
       )}
-      {order.delivery_status === 'ACCEPTED' && (
+      {passaggioLecito(order.delivery_status, 'READY', 'negoziante') && (
         <div className="bg-white border border-cream-300 rounded-xl p-5">
           <p className="text-sm text-ink-600 mb-3">Quando hai finito di preparare l&apos;ordine:</p>
           <div className="flex gap-2 flex-wrap">
             <Button
               icon={Package}
-              onClick={() => transition.mutate({ newStatus: 'READY', timestampField: 'ready_at' })}
+              onClick={() => transition.mutate({ newStatus: 'READY' })}
               loading={transition.isPending}
             >
               {order.pickup_in_store ? 'Pronto per il ritiro' : 'Pronto per il rider'}
@@ -476,7 +489,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
         </div>
         <div className="divide-y divide-cream-100">
           {order.order_items.map((it) => {
-            const img = it.products?.images?.[0];
+            const img = fotoDellaRigaOrdine(it);
             return (
               <div key={it.id} className="px-6 py-3 flex items-center gap-4">
                 <div className="w-14 h-14 rounded bg-cream-100 overflow-hidden flex items-center justify-center shrink-0">
@@ -486,7 +499,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
                   ) : <Package size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-ink-900 truncate">{it.products?.name ?? 'Prodotto'}</p>
+                  <p className="font-medium text-ink-900 truncate">{nomeDellaRigaOrdine(it)}</p>
                   <p className="text-xs text-ink-500">{formatPrice(Number(it.unit_price))} × {it.quantity}</p>
                 </div>
                 <div className="text-right shrink-0">

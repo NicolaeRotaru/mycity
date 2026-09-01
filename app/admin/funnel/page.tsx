@@ -4,7 +4,7 @@ import { logger } from '@/lib/logger';
 import { ordineContaNelFatturato } from '@/lib/metriche-venditore';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, Users, ShoppingCart, Package, UserX, type LucideIcon } from 'lucide-react';
+import { TrendingUp, Users, ShoppingCart, Package, UserX, AlertTriangle, type LucideIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
@@ -33,6 +33,19 @@ type FunnelData = {
   multipleOrders: number;
   /** Un ordine solo, e nessun ordine da 60 giorni. */
   aRischioChurn: number;
+  /**
+   * 27/8/2026 (R170) — «ho letto tutto» oppure «ho letto i primi tanti».
+   *
+   * La lettura degli iscritti si ferma a un tetto duro, e quando ci sbatte
+   * torna `troncato`. Prima quella bandierina finiva in un `logger.warn` e
+   * moriva lì: a schermo restavano percentuali calcolate su un troncone,
+   * disegnate come se fossero il totale. Nessuno guarda la console mentre
+   * legge un cruscotto. Adesso sale fino alla pagina, col numero di righe
+   * lette, e la pagina lo scrive accanto ai numeri.
+   */
+  campione: boolean;
+  /** Quante righe di iscritti sono state lette davvero. */
+  iscrittiLetti: number;
   /**
    * `null` su un mese vuol dire «la finestra non e' ancora finita»: a schermo
    * diventa «—», non «0%». Zero e uno-zero-che-non-si-sa-ancora sono due cose
@@ -240,6 +253,8 @@ export default function AdminFunnelPage() {
         multipleOrders,
         aRischioChurn,
         cohortRetention: cohortMonths,
+        campione: iscrittiTroncati,
+        iscrittiLetti: (signupsList ?? []).length,
       };
     },
   });
@@ -325,6 +340,26 @@ export default function AdminFunnelPage() {
           </select>
         }
       />
+
+      {/* 27/8/2026 (R170) — il primo avviso della pagina: se i numeri sotto sono
+          parziali, chi legge lo deve sapere PRIMA di leggerli. */}
+      {data.campione && (
+        <div className="flex items-start gap-3 rounded-xl border border-accent-200 bg-accent-50 p-4">
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-600 text-white">
+            <AlertTriangle size={18} strokeWidth={2.2} aria-hidden />
+          </span>
+          <div className="flex-1">
+            <p className="font-bold text-accent-800">
+              Attenzione: campione, non totale — lette le prime {data.iscrittiLetti} righe
+            </p>
+            <p className="mt-0.5 text-sm leading-normal text-ink-700">
+              Gli iscritti sono più di quanti se ne possano leggere in una volta sola. Le
+              percentuali e le coorti qui sotto sono calcolate su queste {data.iscrittiLetti}
+              {' '}righe: i numeri veri sono più alti, non più bassi.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Alert churn — buyer con un solo ordine, a rischio abbandono */}
       {oneTime > 0 && (

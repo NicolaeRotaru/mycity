@@ -13,6 +13,8 @@
  */
 
 import { hasConsent } from '@/lib/consent';
+import { ambienteSentry } from './ambiente';
+import { indirizzoSenzaDatiPersonali } from './indirizzo-senza-dati-personali';
 
 export const SENTRY_DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
@@ -26,7 +28,8 @@ export function opzioniSentry() {
     tracesSampleRate: 0.1,
     replaysSessionSampleRate: analyticsOk ? 0.05 : 0,
     replaysOnErrorSampleRate: analyticsOk ? 1.0 : 0,
-    environment: process.env.NODE_ENV,
+    // R187 — `NODE_ENV` su Vercel dice `production` anche per le anteprime.
+    environment: ambienteSentry(),
     // 🟡-11: non inviare PII di default (IP/cookie/header). Esplicito anche se è
     // il default dell'SDK, così non regredisce se cambia in futuro.
     sendDefaultPii: false,
@@ -43,6 +46,39 @@ export function opzioniSentry() {
         delete event.request.cookies;
         delete event.request.headers;
         delete event.request.data;
+        /**
+         * 27/8/2026 (R161) — L'INDIRIZZO DELLA PAGINA USCIVA INTERO.
+         *
+         * Questa pulizia cancellava cookie, intestazioni e corpo, e lasciava
+         * `request.url`. Ma l'errore che si vuole di più è proprio quello che
+         * scoppia mentre qualcuno cerca, e l'indirizzo di quella pagina è
+         * `/search?q=…`: cioè il testo che la persona aveva appena scritto,
+         * allegato all'errore e mandato fuori. Stessa cosa per
+         * `query_string`, che è la stessa informazione nel campo accanto.
+         */
+        if (typeof event.request.url === 'string') {
+          const pulito = indirizzoSenzaDatiPersonali(event.request.url);
+          if (pulito) event.request.url = pulito;
+          else delete event.request.url;
+        }
+        delete event.request.query_string;
+      }
+      /**
+       * 27/8/2026 (R161) — Le briciole raccontano da quale pagina a quale
+       * pagina si è passati: sono indirizzi anche loro, e portavano dentro la
+       * stessa ricerca.
+       */
+      if (Array.isArray(event.breadcrumbs)) {
+        for (const briciola of event.breadcrumbs) {
+          const dati = briciola?.data;
+          if (!dati || typeof dati !== 'object') continue;
+          for (const campo of ['url', 'from', 'to'] as const) {
+            if (typeof dati[campo] !== 'string') continue;
+            const pulito = indirizzoSenzaDatiPersonali(dati[campo]);
+            if (pulito) dati[campo] = pulito;
+            else delete dati[campo];
+          }
+        }
       }
       if (event.user) {
         delete event.user.email;

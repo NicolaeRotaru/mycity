@@ -102,4 +102,40 @@ describe('nessuna delle due rotte si rifa il conto in casa', () => {
       expect(testo, `${r} si calcola il tetto degli sconti da solo`).not.toContain('riduciAlTetto(');
     }
   });
+
+  /**
+   * 27/8/2026 (R008) — E IL COMPENSO DEL FATTORINO SI LEGGE, NON SI RIFA.
+   *
+   * Il conto condiviso lo calcolava (`riderFeeCents`) e non lo leggeva nessuno:
+   * le due rotte se lo ricalcolavano per conto loro. Un campo calcolato e mai
+   * usato fa credere che la regola stia in un posto solo mentre vive in tre.
+   * Che il numero segua davvero `lib/constants` lo ESEGUE
+   * `il-compenso-del-fattorino-ha-una-casa-sola.test.ts`.
+   */
+  it('il compenso del fattorino lo prendono dal conto condiviso', () => {
+    for (const r of rotte) {
+      const testo = readFileSync(r, 'utf8');
+      expect(testo, `${r} non legge il compenso dal conto condiviso`).toContain('riderFeeCents');
+      expect(testo, `${r} si ricalcola il compenso del fattorino da solo`).not.toContain('compensoRiderCents(');
+    }
+  });
+
+  /**
+   * 27/8/2026 (R001) — E NEMMENO LA PAGINA CHE IL CLIENTE GUARDA.
+   *
+   * Le due rotte erano allineate fra loro, ma la terza copia del conto stava
+   * nel browser: `app/checkout/page.tsx` sommava a mano subtotale, spedizione,
+   * fee e sconto, senza il tetto. Il cliente leggeva «0,00 €» e ne pagava 3,01.
+   *
+   * Questa e' la guardia strutturale; quella che ESEGUE il conto delle due
+   * strade sta in `in-cassa-il-totale-mostrato-e-quello-addebitato.test.ts`.
+   */
+  it('nemmeno la pagina della cassa si rifa il totale in casa', () => {
+    const pagina = readFileSync('app/checkout/page.tsx', 'utf8');
+    expect(pagina, 'la cassa non passa piu dal conto condiviso').toContain('riepilogoDaMostrare(');
+    expect(
+      pagina,
+      'la cassa si e rifatta il totale a mano: senza il tetto sugli sconti mostra meno di quello che addebita',
+    ).not.toMatch(/grandSubtotal \+ grandShipping \+ platformDeliveryFee/);
+  });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, Plus, X, Check, Star } from 'lucide-react';
 import { toast } from 'sonner';
@@ -21,6 +21,10 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 type List = { id: string; title: string; cover_emoji: string | null };
 
 export default function AddToListButton({ productId }: { productId: string }) {
+  // 27/8/2026 (R115) — «+ Crea nuova lista» era scritto sopra il campo in un
+  // `<label>` senza `htmlFor`: si vede, ma per il browser il campo non aveva
+  // nome, e restava solo la scritta-suggerimento che sparisce quando scrivi.
+  const idNuovaLista = useId();
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const pannelloRef = useRef<HTMLDivElement>(null);
@@ -165,9 +169,10 @@ export default function AddToListButton({ productId }: { productId: string }) {
               )}
 
               <div className="pt-3 border-t border-cream-200">
-                <label className="block text-sm font-semibold mb-1">+ Crea nuova lista</label>
+                <label htmlFor={idNuovaLista} className="block text-sm font-semibold mb-1">+ Crea nuova lista</label>
                 <div className="flex gap-2">
                   <input
+                    id={idNuovaLista}
                     value={newListTitle}
                     onChange={(e) => setNewListTitle(e.target.value)}
                     placeholder="Es: I miei essenziali"

@@ -39,6 +39,15 @@ export type BatchResultEntry<TInput = unknown> = {
   /** Quanto e' costata questa risposta, per il tetto di spesa giornaliero. */
   tokenIn?: number;
   tokenOut?: number;
+  /**
+   * 27/8/2026 (R144) — COME SI E' FERMATO IL MODELLO.
+   *
+   * Senza questo campo chi legge i risultati del lotto non poteva sapere che
+   * una risposta era stata TAGLIATA a meta' perche' erano finiti i token
+   * concessi (`max_tokens`): il patch mezzo scritto sembrava un patch buono, e
+   * il pulsante «applica a tutti» lo scriveva in vetrina su decine di prodotti.
+   */
+  stopReason?: Anthropic.Message['stop_reason'];
 };
 
 function toHandle(b: Anthropic.Messages.MessageBatch): BatchHandle {
@@ -103,6 +112,7 @@ export async function* streamBatchResults<TInput = unknown>(
         toolInput,
         tokenIn: uso?.input_tokens ?? 0,
         tokenOut: uso?.output_tokens ?? 0,
+        stopReason: entry.result.message.stop_reason,
       };
     } else {
       yield {

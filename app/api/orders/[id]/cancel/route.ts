@@ -60,6 +60,9 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
     if (esito.motivo === 'CONTANTI_INCASSATI') {
       return ApiErrors.conflict('Ordine già incassato in contanti: scrivi all assistenza per la restituzione.');
     }
+    // 27/8/2026 (R131) — Chi arriva secondo (doppio invio, ritentativo di rete)
+    // trova il turno gia' preso: si dice che e' fatto, non si accredita di nuovo.
+    if (esito.motivo === 'GIA_ANNULLATO') return ApiErrors.conflict('Ordine già annullato');
     if (esito.motivo === 'STRIPE_NON_CONFIGURATO') return ApiErrors.unavailable('Rimborsi non disponibili, riprova più tardi');
     if (esito.motivo === 'RIMBORSO_FALLITO') return ApiErrors.badGateway('Rimborso fallito: ' + (esito.dettaglio ?? 'riprova'));
     return ApiErrors.internal('Annullamento fallito');
@@ -87,5 +90,14 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   return NextResponse.json({ ok: true, refundId: esito.refundId }, { status: 200 });
 }
 
-export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withAuthRateLimit({ name: 'order-cancel', max: 10, windowMs: 60_000 }, async ({ user }) => handler(req, user, await ctx.params))(req);
+// 30/8/2026 (R017) — L'ADATTATORE A MANO NON C'E' PIU'.
+//
+// Qui c'era la riga che tutte le rotte dinamiche si riscrivevano: prendeva il
+// secondo argomento di Next, ne aspettava la promessa e la riportava dentro
+// l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
+// per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
+// risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
+export const POST = withAuthRateLimit(
+  { name: 'order-cancel', max: 10, windowMs: 60_000 },
+  ({ req, user, params }) => handler(req, user, { id: String(params.id) }),
+);

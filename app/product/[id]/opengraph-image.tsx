@@ -1,5 +1,5 @@
 import { ImageResponse } from 'next/og';
-import { createClient } from '@supabase/supabase-js';
+import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 
 export const runtime = 'edge';
 export const alt = 'Prodotto su MyCity';
@@ -8,22 +8,13 @@ export const contentType = 'image/png';
 
 type ProductOGData = { name: string; price: number; images: string[] | null; profiles: { store_name: string | null } | null };
 
-async function fetchProduct(id: string): Promise<ProductOGData | null> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return null;
-  try {
-    const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-    const { data } = await supabase
-      .from('products')
-      .select('name, price, images, profiles!products_seller_id_fkey ( store_name )')
-      .eq('id', id)
-      .single();
-    return (data as unknown as ProductOGData) ?? null;
-  } catch {
-    return null;
-  }
-}
+// 27/8/2026 (R010) — una sola fabbrica del collegamento, e nessun silenzio sulle variabili.
+const fetchProduct = (id: string) =>
+  leggiPerMetadati<ProductOGData>(
+    'products',
+    'name, price, images, profiles!products_seller_id_fkey ( store_name )',
+    { id },
+  );
 
 /**
  * Open Graph image generata on-demand per ogni prodotto.

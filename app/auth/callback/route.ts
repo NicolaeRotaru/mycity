@@ -3,6 +3,7 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { env, requireSupabasePublic } from '@/lib/env';
 import { safeInternalPath } from '@/lib/safe-redirect';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { getClientIp } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -101,7 +102,11 @@ export async function GET(req: NextRequest) {
             categoria: 'privacy_terms',
             valore: true,
             versione_testo: versione.slice(0, 60),
-            ip: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+            // 27/8/2026 (R024 · R062) — Era `x-forwarded-for` letto dal primo
+            // pezzo, cioe' quello scritto dal chiamante: l'indirizzo nel
+            // verbale di accettazione se lo dettava l'utente. `getClientIp`
+            // legge da destra scartando i proxy fidati.
+            ip: getClientIp(req),
             user_agent: req.headers.get('user-agent')?.slice(0, 300) ?? null,
           });
           await admin.from('profiles').update({ tos_accepted_at: adesso }).eq('id', utente.id);

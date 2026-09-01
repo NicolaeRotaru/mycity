@@ -23,6 +23,9 @@ type Store = StoreCardData & {
 
 type ProductLite = ProductPreview & { seller_id: string };
 
+/** Quanti negozi al massimo si portano a casa: un tetto scritto, invece di quello a sorpresa. */
+const TETTO_NEGOZI_VICINI = 200;
+
 const fetchNearData = async () => {
   // 22/8/2026 — le due bandierine Stripe arrivano sulla vista con la
   // migrazione 124: su un database che non l'ha ancora, PostgREST rifiuta la
@@ -34,13 +37,18 @@ const fetchNearData = async () => {
   // foto. Resta su /stores, che invece la usa.
   const SELECT_NEAR =
     'id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
-  const conBandierine = () => supabase.from('seller_public_profiles').select(SELECT_NEAR);
+  // 27/8/2026 (R081) — non c'era nessun tetto scritto, e PostgREST ne ha uno suo: mille righe,
+  // sempre, anche quando nessuno lo chiede. Superate quelle, dei negozi sparirebbero dall'elenco
+  // senza che niente lo dica. Duecento è una scelta dichiarata: la pagina «Vicino a te» ordina per
+  // distanza e nessuno scorre oltre. (Su /stores lo stesso difetto resta aperto: quel file è di un
+  // altro lotto.)
+  const conBandierine = () => supabase.from('seller_public_profiles').select(SELECT_NEAR).limit(TETTO_NEGOZI_VICINI);
   const { data: storesRaw, error: erroreNegozi } = await conRipiegoSchema(
     'near/page:seller_public_profiles',
     conBandierine,
     () =>
       stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
-        supabase.from('seller_public_profiles').select(senzaColonne(SELECT_NEAR, COLONNE_124_VISTA)),
+        supabase.from('seller_public_profiles').select(senzaColonne(SELECT_NEAR, COLONNE_124_VISTA)).limit(TETTO_NEGOZI_VICINI),
       ),
   );
   // L'errore veniva ingoiato: `conRipiegoSchema` non lancia — restituisce il risultato com'e' — e
@@ -151,7 +159,7 @@ export default function NearMePage() {
   }, []);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: queryKeys.stores.nearV2,
+    queryKey: queryKeys.stores.vicini,
     queryFn: fetchNearData,
   });
 

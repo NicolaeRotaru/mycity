@@ -3,7 +3,7 @@ import { unstable_cache } from 'next/cache';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/lib/env';
-import { titolare } from '@/lib/legal/titolare';
+import { checkTitolare } from './titolare-check';
 
 /**
  * Health-check REALE dei servizi, usato dalla pagina pubblica /status.
@@ -162,43 +162,6 @@ function checkPush(): ServiceHealth {
   );
 }
 
-/**
- * 22/8/2026 — I DATI DEL TITOLARE NON ERANO DICHIARATI DA NESSUNA PARTE.
- *
- * L'informativa privacy, i termini e la pagina dei contatti leggono nove
- * variabili con dentro nome, indirizzo, partita IVA, PEC e capitale sociale.
- * Nessuna delle nove era dichiarata fra le variabili del progetto.
- *
- * E c'e' un dettaglio che rende il difetto peggiore di quanto sembri: quelle
- * variabili finiscono dentro il pacchetto al momento in cui il sito viene
- * COMPILATO. Se mancano in quel momento restano vuote per sempre nel sito
- * pubblicato — metterle dopo non basta, serve ricompilare. Il codice ripiega su
- * un generico «MyCity» e omette il resto, quindi la pagina esce senza errori e
- * sembra a posto.
- *
- * Un'informativa privacy senza i dati del titolare non e' un'informativa: e'
- * quello che un'ispezione guarda per primo.
- *
- * Qui non si puo' riempirle — sono decisioni e dati veri di Nicola — ma si puo'
- * smettere di far finta che vada tutto bene. Se mancano, la salute dice
- * «degradato» e la pagina lo mostra.
- */
-function checkTitolare(): ServiceHealth {
-  const dati = titolare();
-  const mancanti: string[] = [];
-  if (!dati.indirizzo) mancanti.push('indirizzo');
-  if (!dati.partitaIva) mancanti.push('partita IVA');
-  if (!dati.pec) mancanti.push('PEC');
-  if (dati.denominazione === 'MyCity') mancanti.push('denominazione');
-  return svc(
-    'titolare', 'Dati del titolare', 'Informativa privacy e termini',
-    mancanti.length === 0 ? 'operational' : 'unknown',
-    null,
-    mancanti.length === 0
-      ? null
-      : `Mancano nelle variabili del progetto: ${mancanti.join(', ')}. Vanno messe PRIMA di ricompilare.`,
-  );
-}
 
 /**
  * Servizi senza i quali il marketplace non funziona: se sono «non configurati»

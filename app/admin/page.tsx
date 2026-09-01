@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   Users, ShoppingCart, Store, Bike, Shield, Package, TrendingUp,
   CheckCircle2, Banknote, ShoppingBag, LayoutGrid, Activity, Euro, Percent, Timer, Info,
+  CreditCard,
   type LucideIcon,
 } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
@@ -14,6 +15,7 @@ import { ORDER_STATUS_LABEL, ORDER_STATUS_ICON, type OrderStatus } from '@/lib/o
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { getAccountMenuItems } from '@/lib/account-menu';
+import { tassoAutorizzazione, tassoDaGuardare, type TentativoPagamento } from '@/lib/pagamenti/tasso-autorizzazione';
 import { AdminPageTitle, AdminSectionLabel, AdminStatCard } from '@/components/admin/AdminUI';
 
 // Qui c'era `const TAKE_RATE = 0.14` scritto a mano, mentre la commissione
@@ -103,6 +105,34 @@ export default function AdminDashboard() {
     refetchInterval: 30_000,
   });
 
+  /**
+   * 27/8/2026 (R046) — QUANTI PAGAMENTI VANNO A BUON FINE.
+   *
+   * Ogni tentativo con carta finisce in `payment_attempts` col motivo del
+   * rifiuto. Nessuno lo leggeva: ne' una pagina, ne' una query, ne' un avviso.
+   * Un checkout rotto — una chiave scaduta, il 3D Secure che non funziona su un
+   * browser — lo si sarebbe scoperto dal calo degli ordini, giorni dopo.
+   *
+   * La lettura e' separata da quella dei numeri grossi apposta: se questa non
+   * riesce (la tabella nasce con la migrazione 124) la Panoramica si vede lo
+   * stesso, con un trattino al posto della percentuale.
+   */
+  const { data: pagamenti } = useQuery({
+    queryKey: ['admin', 'tasso-autorizzazione'],
+    queryFn: async () => {
+      const daQuando = new Date(Date.now() - 30 * 86_400_000).toISOString();
+      const { data, error } = await supabase
+        .from('payment_attempts')
+        .select('status, decline_code, error_code')
+        .gte('created_at', daQuando)
+        .limit(5000);
+      if (error) throw error;
+      return tassoAutorizzazione((data ?? []) as TentativoPagamento[]);
+    },
+    refetchInterval: 60_000,
+    retry: false,
+  });
+
   if (isLoading || !stats) {
     return <LoadingState />;
   }
@@ -123,6 +153,14 @@ export default function AdminDashboard() {
   const cancelRate = stats.orders.total > 0 ? (canceled / stats.orders.total) * 100 : 0;
   const fulfillmentLow = fulfillmentRate > 0 && fulfillmentRate < 95;
 
+  // Pagamenti riusciti sul totale di chi ci ha provato davvero. Chi abbandona
+  // sulla schermata della banca non compare ne' fra i riusciti ne' fra i
+  // rifiutati: e' scritto nel riquadro, per non far credere che questo numero
+  // misuri l'abbandono del checkout.
+  const tassoPagamenti = pagamenti?.tasso ?? null;
+  const pagamentiDaGuardare = pagamenti ? tassoDaGuardare(pagamenti) : false;
+  const motivoPrincipale = pagamenti?.motivi[0];
+
   return (
     <div className="space-y-8">
       <AdminPageTitle
@@ -134,12 +172,33 @@ export default function AdminDashboard() {
       {/* Salute del marketplace */}
       <section>
         <AdminSectionLabel icon={Activity}>Salute del marketplace</AdminSectionLabel>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
           <HealthTile icon={Euro} tone="olive" label="GMV (ordini consegnati)" value={formatPrice(gmv)} hint={`AOV ${formatPrice(aov)}`} />
           <HealthTile icon={Percent} tone="primary" label={`Commissioni (${MARKETPLACE_FEE_BPS / 100}% del subtotale)`} value={formatPrice(commissions)} hint="trattenuta reale sugli ordini consegnati" />
           <HealthTile icon={Timer} tone="accent" label="Tasso di consegna" value={`${fulfillmentRate.toFixed(1)}%`} hint="obiettivo ≥ 95%" />
           <HealthTile icon={Store} tone="secondary" label="Tasso di annullamento" value={`${cancelRate.toFixed(1)}%`} hint={`${canceled} ordini annullati`} />
+          <HealthTile
+            icon={CreditCard}
+            tone={pagamentiDaGuardare ? 'accent' : 'primary'}
+            label="Pagamenti riusciti (30 giorni)"
+            value={tassoPagamenti === null ? '—' : `${(tassoPagamenti * 100).toFixed(1)}%`}
+            hint={
+              pagamenti && pagamenti.tentativi > 0
+                ? `${pagamenti.riusciti} su ${pagamenti.tentativi} tentativi con carta${motivoPrincipale ? ` · piu frequente: ${motivoPrincipale.codice}` : ''}`
+                : 'nessun tentativo con carta registrato'
+            }
+          />
         </div>
+        {pagamentiDaGuardare && (
+          <div className="mt-2.5 flex items-center gap-2 rounded-md border border-accent-200 bg-accent-50 px-3.5 py-2.5 text-[13px] text-accent-900">
+            <Info size={15} className="shrink-0 text-accent-700" aria-hidden />
+            <span>
+              Piu di un pagamento su dieci viene rifiutato
+              {motivoPrincipale ? <> (motivo piu frequente: <strong>{motivoPrincipale.codice}</strong>)</> : null}.
+              Chi si ferma sulla schermata della banca non e contato qui: questo e il conto di chi ha provato davvero a pagare.
+            </span>
+          </div>
+        )}
         {fulfillmentLow && (
           <div className="mt-2.5 flex items-center gap-2 rounded-md border border-accent-200 bg-accent-50 px-3.5 py-2.5 text-[13px] text-accent-900">
             <Info size={15} className="shrink-0 text-accent-700" aria-hidden />

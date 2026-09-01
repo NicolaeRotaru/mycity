@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { newId, siteByteSize, MAX_SITE_BYTES } from './store-site';
+import { safeInternalPath } from './safe-redirect';
 
 /**
  * Home del marketplace componibile a blocchi — tipi, validazione (zod), catalogo
@@ -271,10 +272,37 @@ export function homeEnabledSections(site: HomeSite): HomeSection[] {
   return site.sections.filter((s) => s.enabled);
 }
 
-/** href risolto di una CTA banner. null se vuoto. */
+/**
+ * href risolto di una CTA banner: `null` se vuoto — e anche se non e' un
+ * indirizzo che possiamo mettere sotto le mani di un cliente.
+ *
+ * 30/8/2026 (R027) — QUI SOPRA C'ERA SCRITTO CHE SI CONTROLLAVA, E NON SI
+ * CONTROLLAVA.
+ *
+ * Il renderer dei blocchi CMS dichiara «link CTA solo https/percorso interno»
+ * e mette il valore dentro `<a href>`; questa funzione, che e' il punto in cui
+ * quel controllo dovrebbe stare, restituiva la stringa cosi' com'era. Oggi
+ * nessuna strada di scrittura lo permette (lo schema di validazione impone gia'
+ * https o percorso interno), ma una difesa dichiarata dove non esiste e' il
+ * modo piu' rapido per farne nascere una vera un domani: chi legge il commento
+ * smette di guardare.
+ *
+ * Regola: `https://…` oppure un percorso interno che comincia con UNA sola
+ * barra (`safeInternalPath` respinge `//altro-sito`, le barre rovesciate e gli
+ * schemi tipo `javascript:`). Tutto il resto: nessun bottone.
+ */
 export function homeCtaHref(href: string | undefined | null): string | null {
   const v = (href ?? '').trim();
-  return v.length > 0 ? v : null;
+  if (v.length === 0 || v.length > 500) return null;
+  try {
+    // Indirizzo assoluto: passa solo se e' https.
+    const assoluto = new URL(v);
+    return assoluto.protocol === 'https:' ? v : null;
+  } catch {
+    // Non e' un indirizzo assoluto: allora deve essere un percorso nostro.
+  }
+  const interno = safeInternalPath(v, '');
+  return interno.length > 0 ? interno : null;
 }
 
 /** Crea una nuova sezione del tipo dato con config di default sensata (editor). */

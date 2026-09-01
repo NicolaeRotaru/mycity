@@ -14,6 +14,7 @@ type OrderRow = {
   delivery_status: string;
   dispute_status?: string | null;
   payout_claimed_at?: string | null;
+  rider_payout_status?: string | null;
 };
 const state: { orders: OrderRow[] } = { orders: [] };
 const releaseOrderPayoutMock = vi.fn(async (_id: string) => ({ ok: true as const, transferId: 'tr_1' }));
@@ -24,15 +25,23 @@ vi.mock('@/lib/api/middleware', () => ({
 }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), spesa: vi.fn() } }));
 vi.mock('@/lib/stripe/client', () => ({ isStripeConfigured: () => true }));
-vi.mock('@/lib/stripe/payout', () => ({
-  releaseOrderPayout: (id: string) => releaseOrderPayoutMock(id),
-  releaseRiderPayout: (id: string) => releaseRiderPayoutMock(id),
-  // Gli stati dai quali un compenso rider si puo' ritentare vivono in payout.ts
-  // e li usa anche il cron: prima il cron aveva una sua copia dell'elenco, e
-  // 'HELD' mancava, quindi un compenso fallito non veniva piu' ripescato.
-  FILTRO_RIDER_RITENTABILI:
-    'rider_payout_status.is.null,rider_payout_status.in.(HELD,PENDING_RIDER_ONBOARDING,FAILED)',
-}));
+// Gli stati dai quali un compenso rider si puo' ritentare vivono in payout.ts
+// e li usa anche il cron: prima il cron aveva una sua copia dell'elenco, e
+// 'HELD' mancava, quindi un compenso fallito non veniva piu' ripescato.
+//
+// 31/8/2026 (R120) — E QUI QUELLA COPIA ERA SCRITTA A MANO UN'ALTRA VOLTA.
+// Il finto dichiarava l'elenco degli stati per conto suo: il giorno in cui
+// quello vero cambia, questa prova resta verde raccontando il mondo di ieri.
+// Adesso del modulo si sostituiscono solo le due funzioni che chiamano Stripe,
+// e gli elenchi restano quelli veri.
+vi.mock('@/lib/stripe/payout', async (originale) => {
+  const vero = await originale<typeof import('@/lib/stripe/payout')>();
+  return {
+    ...vero,
+    releaseOrderPayout: (id: string) => releaseOrderPayoutMock(id),
+    releaseRiderPayout: (id: string) => releaseRiderPayoutMock(id),
+  };
+});
 
 // Builder che rispetta i filtri eq/in rilevanti (payment_method, payout_status,
 // delivery_status), così i tre pass (card-seller, rider, COD) vedono il subset giusto.
@@ -72,6 +81,15 @@ function ordersBuilder(rows: OrderRow[]) {
           (f.payout_status === undefined || o.payout_status === f.payout_status) &&
           (f.delivery_status === undefined || o.delivery_status === f.delivery_status) &&
           (f['in:payout_status'] === undefined || (f['in:payout_status'] as string[]).includes(o.payout_status)) &&
+          // R120 — il passaggio dei fattorini cerca anche i contrassegni con
+          // un compenso ancora dovuto: senza questo filtro la finta tabella li
+          // dava a tutti. Dal 31/8/2026 quella ricerca chiede la LISTA degli
+          // stati da cui si ritenta, non piu' il solo 'HELD', e la finta
+          // tabella deve saperla applicare: se la ignorasse tornerebbe a
+          // consegnare al giro anche i compensi gia' pagati.
+          (f.rider_payout_status === undefined || o.rider_payout_status === f.rider_payout_status) &&
+          (f['in:rider_payout_status'] === undefined ||
+            (f['in:rider_payout_status'] as string[]).includes(o.rider_payout_status as string)) &&
           (f['lt:payout_claimed_at'] === undefined ||
             (o.payout_claimed_at != null && o.payout_claimed_at < (f['lt:payout_claimed_at'] as string))) &&
           disputeOk(o),
@@ -198,5 +216,51 @@ describe('release-payouts — i turni rimasti appesi', () => {
     const body = await res.json();
     expect(body.appesiRimessiInCoda).toBe(0);
     expect(state.orders[0].payout_status).toBe('PROCESSING');
+  });
+});
+
+/**
+ * 30/8/2026 (R120) — IL COMPENSO DEL FATTORINO RIMASTO SCOPERTO DAL CONTANTE.
+ *
+ * Sul contrassegno il fattorino si tiene il compenso dal contante che ha in
+ * mano, quindi il passaggio dei compensi cercava solo `payment_method='card'`.
+ * Ma il credito MyCity porta il totale — e quindi il contante — sotto il
+ * compenso, fino a zero: il fattorino consegna, non incassa niente, e una parte
+ * del suo compenso resta dovuta. La conferma dell'incasso adesso la lascia in
+ * 'HELD'; se il giro non la va a prendere, quei soldi restano lì per sempre.
+ */
+describe('release-payouts — il compenso in contanti rimasto scoperto', () => {
+  it('ripesca un contrassegno con il compenso ancora dovuto', async () => {
+    state.orders = [
+      {
+        id: 'codrider1',
+        payment_method: 'cod',
+        payout_status: 'AWAITING_REMITTANCE',
+        delivery_status: 'DELIVERED',
+        dispute_status: null,
+        rider_payout_status: 'HELD',
+      },
+    ];
+    await run();
+    expect(
+      releaseRiderPayoutMock,
+      'il giro guarda solo i pagamenti con carta: il compenso scoperto dal credito non lo cerca nessuno',
+    ).toHaveBeenCalledWith('codrider1');
+  });
+
+  it('lascia stare i contrassegni in cui il contante bastava', async () => {
+    state.orders = [
+      {
+        id: 'codrider2',
+        payment_method: 'cod',
+        payout_status: 'AWAITING_REMITTANCE',
+        delivery_status: 'DELIVERED',
+        dispute_status: null,
+        // Se l'e' gia' tenuto dal contante: non c'e' niente da versare.
+        rider_payout_status: 'CASH_WITHHELD',
+      },
+    ];
+    await run();
+    expect(releaseRiderPayoutMock).not.toHaveBeenCalled();
   });
 });

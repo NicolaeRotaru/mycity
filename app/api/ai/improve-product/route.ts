@@ -8,7 +8,8 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { sellerEconomics } from '@/lib/products/economics';
-import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
+import { filtroSullaScheda } from '@/lib/ai/schedaSicura';
 import { PROPRIETA_EDITORIALI } from '@/lib/ai/patchSchema';
 
 /**
@@ -220,7 +221,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: ImproveBody;
   try {
     body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
 
@@ -255,6 +259,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   if (!product || Object.keys(product).length === 0) {
     return ApiErrors.invalidRequest('Manca la scheda del prodotto da migliorare.');
   }
+
+  // 27/8/2026 (R148) — La scheda passa dal filtro anti-contenuti-vietati come
+  // il testo libero delle altre rotte. Perche' qui e non altrove:
+  // lib/ai/schedaSicura.ts.
+  const nonAmmessa = await filtroSullaScheda(product, 'ai-improve-product-policy');
+  if (nonAmmessa) return nonAmmessa;
 
   // Economia del prezzo come DATO: aliquota commissione + netto sul prezzo
   // attuale, così il modello ragiona sul margine reale del venditore.

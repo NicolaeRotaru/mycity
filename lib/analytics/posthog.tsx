@@ -42,7 +42,75 @@ type PostHogLike = {
   opt_out_capturing: () => void;
   /** Proprieta' appiccicate a TUTTI gli eventi successivi (super-property). */
   register: (props: Record<string, unknown>) => void;
+  /** Comandi della telecamera: possono mancare su versioni vecchie. */
+  startSessionRecording?: () => void;
+  stopSessionRecording?: () => void;
 };
+
+/**
+ * 27/8/2026 (R055) — LE PAGINE DOVE LA TELECAMERA NON DEVE GIRARE.
+ *
+ * La registrazione della sessione fa un filmato di quello che appare sullo
+ * schermo. Su queste pagine, sullo schermo ci sono i dati di ALTRE persone:
+ * negli ordini del negozio ci sono nome, telefono e indirizzo di chi ha
+ * comprato; nell'amministrazione c'e' l'elenco degli utenti; nei messaggi c'e'
+ * quello che si sono scritti in due.
+ *
+ * Il consenso ai cookie lo ha dato il negoziante o l'amministratore. Il cliente
+ * che compare sul loro schermo non lo ha dato a nessuno, e non sa nemmeno che
+ * esista un filmato: e' un trasferimento dei suoi dati fuori dall'Unione senza
+ * base giuridica e senza informativa. E' anche l'unico punto in cui indirizzi e
+ * numeri di telefono escono dal database e finiscono in un video su un servizio
+ * di un altro.
+ *
+ * Sono percorsi INTERI, confrontati per segmento: «/sellers-del-mese» non e'
+ * «/seller».
+ */
+export const PAGINE_CON_DATI_DI_TERZI = [
+  '/admin',
+  '/seller',
+  '/rider',
+  '/orders',
+  '/checkout',
+  '/profile',
+  '/messages',
+  '/returns',
+] as const;
+
+/** Si puo' filmare questa pagina senza riprendere i dati di qualcun altro? */
+export function laPaginaSiPuoFilmare(pathname: string | null | undefined): boolean {
+  if (!pathname) return true;
+  const percorso = pathname.split('?')[0];
+  return !PAGINE_CON_DATI_DI_TERZI.some(
+    (p) => percorso === p || percorso.startsWith(`${p}/`),
+  );
+}
+
+/**
+ * Come si registra lo schermo.
+ *
+ * Prima c'erano i soli `maskAllInputs` + `maskInputOptions`: mascherano quello
+ * che la persona STA SCRIVENDO, non quello che e' gia' scritto nella pagina. E
+ * i dati dei clienti nella pagina di un negoziante non li scrive nessuno: ci
+ * sono gia'. `maskTextSelector: '*'` copre ogni testo della pagina.
+ */
+export function opzioniRegistrazioneSchermo() {
+  return {
+    maskAllInputs: true,
+    maskInputOptions: { password: true, email: true },
+    maskTextSelector: '*',
+  } as const;
+}
+
+/** Spegne la telecamera sulle pagine con dati di terzi, la riaccende altrove. */
+export function applicaRegistrazioneSchermo(ph: PostHogLike, pathname: string | null | undefined): void {
+  try {
+    if (laPaginaSiPuoFilmare(pathname)) ph.startSessionRecording?.();
+    else ph.stopSessionRecording?.();
+  } catch {
+    // La telemetria non deve mai far cadere una pagina.
+  }
+}
 
 let posthogInstance: PostHogLike | null = null;
 
@@ -70,10 +138,7 @@ async function getPosthog() {
     person_profiles: 'identified_only',
     capture_pageview: false, // gestiamo noi via useEffect
     capture_pageleave: true,
-    session_recording: {
-      maskAllInputs: true,
-      maskInputOptions: { password: true, email: true },
-    },
+    session_recording: opzioniRegistrazioneSchermo(),
     autocapture: {
       dom_event_allowlist: ['click', 'submit'],
     },
@@ -161,6 +226,11 @@ export default function PostHogProvider() {
         // su ogni singola visita quei campi erano monchi, e ogni analisi di
         // percorso — da dove entrano, dove escono — leggeva un indirizzo che
         // non esiste. Senza passarlo, la libreria lo compila da sola e giusto.
+        // 27/8/2026 (R055) — chi accetta i cookie stando gia' dentro una pagina
+        // con dati di altri (un negoziante sui suoi ordini) accendeva la
+        // telecamera proprio li'. La pagina corrente si legge dal browser: la
+        // variabile di questo effetto e' ferma al primo montaggio.
+        applicaRegistrazioneSchermo(ph, window.location.pathname);
         ph.capture('$pageview');
       });
     };
@@ -173,7 +243,12 @@ export default function PostHogProvider() {
     // Il percorso serve solo a far scattare l'effetto al cambio pagina: non si
     // passa a mano, per la ragione scritta qui sopra.
     getPosthog().then((ph) => {
-      if (ph) ph.capture('$pageview');
+      if (!ph) return;
+      // 27/8/2026 (R055) — prima di registrare qualsiasi cosa, decidi se questa
+      // pagina si puo' filmare. La decisione va presa a ogni navigazione: si
+      // entra negli ordini del negozio da un link, non ricaricando il sito.
+      applicaRegistrazioneSchermo(ph, pathname);
+      ph.capture('$pageview');
     });
   }, [pathname, searchParams]);
 

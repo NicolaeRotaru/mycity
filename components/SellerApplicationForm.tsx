@@ -15,6 +15,10 @@ import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { Input, Textarea, Checkbox } from '@/components/ui/Field';
+// 31/8/2026 (R037) — Questa e' la pagina dove il negozio legge le condizioni
+// PRIMA di firmare: la commissione qui non si scrive a mano, si prende da dove
+// viene poi trattenuta davvero.
+import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
 import { Store, CheckCircle2, CreditCard, Send } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
@@ -158,7 +162,6 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Non autenticato');
-        const ext = file.type.split('/')[1];
         // Primo segmento = user.id: richiesto dalle RLS Storage del bucket `products`
         // (read/update/delete filtrano su (storage.foldername(name))[1] = auth.uid()).
         // upsert:false + path unico = nessun ON CONFLICT. Vedi seller/site/ImageUpload.tsx.
@@ -203,7 +206,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
         </h1>
         <p className="text-primary-100 text-sm leading-relaxed">
           Vetrina dedicata, prodotti illimitati.
-          <strong className="text-white"> Abbonamento €50/mese</strong> e commissione del 10% sulle vendite, attivi solo dopo approvazione del nostro team.
+          <strong className="text-white"> Abbonamento €50/mese</strong> e commissione {COMMISSIONE_DEL_PERCENTO} sulle vendite, attivi solo dopo approvazione del nostro team.
         </p>
         <ul className="text-xs text-primary-100 mt-3 space-y-1">
           <li className="flex items-start gap-1.5">
@@ -216,7 +219,7 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
           </li>
           <li className="flex items-start gap-1.5">
             <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />
-            <span>Abbonamento €50/mese + commissione del 10% sulle vendite</span>
+            <span>Abbonamento €50/mese + commissione {COMMISSIONE_DEL_PERCENTO} sulle vendite</span>
           </li>
           <li className="flex items-start gap-1.5">
             <CheckCircle2 size={16} aria-hidden className="shrink-0 mt-0.5" />

@@ -1,4 +1,3 @@
-import { type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';
@@ -23,19 +22,17 @@ function sanitizeCms(page: CmsPage): CmsPage {
   };
 }
 
-export const GET = (req: NextRequest, ctx: { params: Promise<{ slug: string }> }) =>
-  withAdminAuth(async () => {
-    const { slug } = await ctx.params;
+export const GET = withAdminAuth(async ({ params }) => {
+    const slug = String(params.slug);
     const admin = getAdminSupabase();
     const { data, error } = await admin.from('cms_pages').select('title, sections, status').eq('slug', slug).maybeSingle();
     if (error) return ApiErrors.internal('Impossibile caricare la pagina');
     const parsed = data ? cmsPageSchema.safeParse(data) : null;
     return apiSuccess({ page: parsed?.success ? parsed.data : emptyCmsPage() });
-  })(req);
+});
 
-export const PUT = (req: NextRequest, ctx: { params: Promise<{ slug: string }> }) =>
-  withAdminAuth(async ({ user, req: r }) => {
-    const { slug } = await ctx.params;
+export const PUT = withAdminAuth(async ({ user, req: r, params }) => {
+    const slug = String(params.slug);
     let body: unknown;
     try { body = await r.json(); } catch { return ApiErrors.invalidRequest('Corpo della richiesta non valido'); }
     const raw = (body as { page?: unknown })?.page ?? body;
@@ -60,4 +57,4 @@ export const PUT = (req: NextRequest, ctx: { params: Promise<{ slug: string }> }
     if (error) return ApiErrors.internal('Impossibile salvare la pagina');
 
     return apiSuccess({ page });
-  })(req);
+});

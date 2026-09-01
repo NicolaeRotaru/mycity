@@ -1,4 +1,3 @@
-import { type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors, apiSuccess } from '@/lib/api/responses';

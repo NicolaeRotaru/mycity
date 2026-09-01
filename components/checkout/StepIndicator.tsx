@@ -26,7 +26,10 @@ function Step({ num, label, active, done }: StepProps) {
       >
         {done ? <Check size={15} strokeWidth={3} aria-hidden /> : num}
       </div>
-      <span className={`text-sm font-semibold ${active ? 'text-primary-800' : done ? 'text-olive-700' : 'text-ink-400'}`}>
+      {/* 27/8/2026 (R110) — il passo non ancora raggiunto era `text-ink-400`:
+          sul fondo pagina cream-100 stacca 4,49 volte, appena sotto il 4,5 che
+          serve a un testo normale. `ink-500` arriva a 7,14 e resta grigio. */}
+      <span className={`text-sm font-semibold ${active ? 'text-primary-800' : done ? 'text-olive-700' : 'text-ink-500'}`}>
         {label}
       </span>
     </div>

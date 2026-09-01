@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { CheckCircle2, Truck, Package, ShoppingCart } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
@@ -11,7 +10,6 @@ type Activity = {
   created_at: string;
   delivery_status: string;
   delivery_city: string | null;
-  seller_id: string | null;
   store_name: string | null;
 };
 
@@ -47,7 +45,7 @@ const LiveActivityFeed = () => {
     return () => clearInterval(id);
   }, []);
 
-  const { data: activities = [], refetch } = useQuery({
+  const { data: activities = [] } = useQuery({
     queryKey: queryKeys.home.liveFeed,
     queryFn: async () => {
       const { data } = await supabase
@@ -56,7 +54,12 @@ const LiveActivityFeed = () => {
         // che permetteva a un concorrente di riconoscere gli ordini uno per uno
         // e contarli per negozio. La vista smetterà di darlo (migrazione 120), e
         // questa riga deve smettere di chiederlo PRIMA che quella parta.
-        .select('created_at, delivery_status, delivery_city, seller_id, store_name')
+        //
+        // 27/8/2026 (R030) — e adesso nemmeno `seller_id`: la vista lo smette di dare con la
+        // migrazione 142, che aggiunge anche il DISTINCT (tre ordini nella stessa ora dallo stesso
+        // negozio erano tre righe, cioè il volume della bottega leggibile da chiunque). Si perde
+        // il collegamento alla vetrina da questa riga: si paga volentieri.
+        .select('created_at, delivery_status, delivery_city, store_name')
         .order('created_at', { ascending: false })
         .limit(8);
       return (data ?? []) as unknown as Activity[];
@@ -101,7 +104,7 @@ const LiveActivityFeed = () => {
             ? 'ha ricevuto un ordine da'
             : 'ha appena ordinato da';
           return (
-            <li key={`${a.seller_id ?? 'x'}-${a.created_at}-${i}`} className="flex items-center gap-3 text-sm py-2 border-b border-cream-200 last:border-0 hover:bg-cream-50 -mx-2 px-2 rounded transition-colors">
+            <li key={`${a.store_name ?? 'x'}-${a.created_at}-${i}`} className="flex items-center gap-3 text-sm py-2 border-b border-cream-200 last:border-0 hover:bg-cream-50 -mx-2 px-2 rounded transition-colors">
               <span className="shrink-0 text-ink-500">
                 {a.delivery_status === 'DELIVERED' ? <CheckCircle2 size={18} strokeWidth={2.2} className="text-olive-600" aria-hidden /> :
                  a.delivery_status === 'OUT_FOR_DELIVERY' ? <Truck size={18} strokeWidth={2.2} className="text-primary-600" aria-hidden /> :
@@ -111,13 +114,7 @@ const LiveActivityFeed = () => {
                 <p className="truncate">
                   <strong className="text-ink-900">{chiHaOrdinato(a.delivery_city)}</strong>
                   <span className="text-ink-500"> {verb} </span>
-                  {a.seller_id ? (
-                    <Link href={`/store/${a.seller_id}`} className="font-semibold text-primary-700 hover:underline">
-                      {a.store_name ?? 'un negozio'}
-                    </Link>
-                  ) : (
-                    <span className="font-semibold text-ink-700">{a.store_name ?? 'un negozio'}</span>
-                  )}
+                  <span className="font-semibold text-ink-700">{a.store_name ?? 'un negozio'}</span>
                 </p>
               </div>
               <span className="text-xs text-ink-400 shrink-0">{now !== null ? timeAgo(a.created_at, now) : ''}</span>

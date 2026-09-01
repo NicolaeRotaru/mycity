@@ -37,7 +37,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
 
   const { data: candidates, error } = await admin
     .from('orders')
-    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents')
+    // 27/8/2026 (R121) — `coupon_code` non veniva nemmeno letto, quindi il
+    // codice sconto di un ordine che il negozio non ha mai accettato restava
+    // bruciato: il cliente perdeva il buono senza aver comprato niente.
+    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code')
     .eq('delivery_status', 'NEW')
     .lt('created_at', cutoff)
     .limit(100);
@@ -65,7 +68,17 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     // rimborsato, coi soldi del cliente fermi e nessuno che se ne accorgesse.
     const { data: claimed, error: claimErr } = await admin
       .from('orders')
-      .update({ delivery_status: 'CANCELED', canceled_at: new Date().toISOString() })
+      .update({
+        delivery_status: 'CANCELED',
+        canceled_at: new Date().toISOString(),
+        // 30/8/2026 (R126) — Lo stesso fatto lasciava due forme diverse nel
+        // database. Quando e' il cliente ad annullare, `annullaERimborsa` porta
+        // il pagamento da «in attesa» a «fallito». Qui no: un contrassegno che
+        // il negozio non ha mai accettato restava «in attesa di pagamento» per
+        // sempre, e chi conta gli incassi vedeva una coda che non esisteva.
+        // La riga e' la stessa di lib/ordini/annulla.ts, apposta.
+        ...(o.payment_status === 'PENDING' ? { payment_status: 'FAILED' } : {}),
+      })
       .eq('id', o.id)
       .eq('delivery_status', 'NEW')
       .select('id');
@@ -86,7 +99,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
             notifyBuyer: true,
           });
           refunded++;
-        } catch (errRimborso) {
+        } catch {
           // Rimetti l'ordine in coda: il prossimo giro riprovera'. Senza questo
           // resterebbe annullato e non rimborsato per sempre.
           const { error: errRipristino } = await admin
@@ -120,6 +133,15 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
           p_ref: o.id,
         });
         if (wErr) logger.warn('[cron] expire-stale-orders: storno wallet fallito', { id: o.id, message: wErr.message });
+      }
+
+      // 27/8/2026 (R121) — Il codice sconto torna disponibile. Il turno
+      // sull'ordine e' gia' stato preso qui sopra, quindi la restituzione
+      // avviene una volta sola; `release_coupon` non scende comunque sotto zero.
+      const codice = (o as { coupon_code?: string | null }).coupon_code?.trim();
+      if (codice) {
+        const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice });
+        if (cErr) logger.warn('[cron] expire-stale-orders: codice sconto non restituito', { id: o.id, message: cErr.message });
       }
 
       // Notifica in-app al buyer (best-effort: non deve far fallire l'annullo).

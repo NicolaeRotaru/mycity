@@ -1,6 +1,5 @@
 'use client';
 
-import { leggiTutteLeRighe } from '@/lib/supabase/blocchi';
 import { useEffect, useState } from 'react';
 import { metricheVenditore, ordineContaNelFatturato } from '@/lib/metriche-venditore';
 import { giornoPiacenza, oraPiacenza, ultimiGiorniPiacenza } from '@/lib/tempo-piacenza';
@@ -16,6 +15,7 @@ import { vistaDaQuery } from '@/lib/vista-query';
 import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
+import { numeriDellAndamento, type RigaAndamento } from '@/lib/seller/andamento-negozio';
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 
@@ -64,47 +64,46 @@ export default function SellerAnalyticsPage() {
       };
       if (productIds.length === 0) return empty;
 
-      const [viewsRes, ordersRes, reviewsRes] = await Promise.all([
-        // 22/8/2026 — Anche questa si fermava a mille righe senza dirlo: un
-        // negozio con piu' di mille visite in un mese vedeva un numero piu'
-        // basso del vero, e il tasso di conversione ne usciva gonfiato.
-        leggiTutteLeRighe<{ product_id: string; viewed_at: string }>((da, a) =>
-          supabase
-            .from('product_views')
-            .select('product_id, viewed_at')
-            .in('product_id', productIds)
-            .gte('viewed_at', since30)
-            .order('viewed_at', { ascending: true })
-            .range(da, a) as unknown as PromiseLike<{ data: { product_id: string; viewed_at: string }[] | null; error: { message?: string } | null }>,
-        ),
+      /**
+       * 27/8/2026 (R071) — QUESTA PAGINA SCARICAVA VENTIMILA RIGHE PER MOSTRARE
+       * TRE NUMERI.
+       *
+       * Le visite ai prodotti degli ultimi trenta giorni venivano portate tutte
+       * nel browser, mille righe per volta, in venti richieste una dietro
+       * l'altra, e poi contate in JavaScript. Un negozio con ventimila visite in
+       * un mese — cioè un negozio che sta andando bene — apriva «Andamento» e il
+       * telefono ci metteva decine di secondi e megabyte di traffico. Oltre le
+       * ventimila il conteggio si fermava e sbagliava per difetto.
+       *
+       * Nella stessa lettura le recensioni venivano lette senza limite: quelle
+       * si fermavano a mille in silenzio.
+       *
+       * Adesso conta il database e torna una riga: i tre totali, le visite per
+       * prodotto e il voto medio del negozio. L'indice giusto c'era già.
+       */
+      const [andamentoRes, ordersRes] = await Promise.all([
+        supabase.rpc('andamento_del_negozio'),
         supabase
           .from('orders')
           .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, created_at')
           .eq('seller_id', userId!)
           .gte('created_at', since30),
-        supabase
-          .from('reviews')
-          .select('product_id, rating')
-          .in('product_id', productIds),
       ]);
 
-      // #217 — Prima l'errore veniva buttato: se una delle tre letture falliva,
+      // #217 — Prima l'errore veniva buttato: se una delle letture falliva,
       // la pagina mostrava zero e sembrava una giornata storta. Uno zero che
       // vuol dire «non lo so» e' peggio di un errore, perche' il negoziante ci
       // crede. Ora l'errore risale e react-query mostra lo stato di errore.
-      const erroreLettura = viewsRes.error ?? ordersRes.error ?? reviewsRes.error;
+      const erroreLettura = andamentoRes.error ?? ordersRes.error;
       if (erroreLettura) throw erroreLettura;
 
-      const views = (viewsRes.data ?? []) as Array<{ product_id: string; viewed_at: string }>;
+      const riga = (Array.isArray(andamentoRes.data) ? andamentoRes.data[0] : andamentoRes.data) as RigaAndamento | null;
       const orders = (ordersRes.data ?? []) as Array<{ id: string; total_price: number; delivery_status: string; created_at: string }>;
-      const reviews = (reviewsRes.data ?? []) as Array<{ product_id: string; rating: number }>;
 
-      const views30 = views.length;
-      const views7 = views.filter((v) => v.viewed_at >= since7).length;
-      // #221 — «Oggi» e' oggi a Piacenza, non a Greenwich: fra mezzanotte e le
-      // due le visite finivano nel giorno prima.
-      const oggi = giornoPiacenza();
-      const viewsToday = views.filter((v) => giornoPiacenza(v.viewed_at) === oggi).length;
+      // «Oggi» e' oggi a Piacenza, non a Greenwich (#221): il taglio del giorno
+      // lo fa la funzione del database, con lo stesso fuso.
+      const { views30, views7, viewsToday, viewsByProduct, avgRating, reviewCount } =
+        numeriDellAndamento(riga);
 
       /**
        * 22/8/2026 — «I TUOI ORDINI» CONTAVA ANCHE QUELLI ANNULLATI E MAI PAGATI.
@@ -152,13 +151,7 @@ export default function SellerAnalyticsPage() {
        */
       const conversionRate = views30 > 0 ? (orders30 / views30) * 100 : 0;
 
-      const avgRating = reviews.length > 0
-        ? reviews.reduce((s, r) => s + Number(r.rating), 0) / reviews.length
-        : 0;
-
       // Top products by views
-      const viewsByProduct: Record<string, number> = {};
-      for (const v of views) viewsByProduct[v.product_id] = (viewsByProduct[v.product_id] ?? 0) + 1;
       const productMap = new Map((products ?? []).map((p) => [p.id, p]));
       const topProducts = Object.entries(viewsByProduct)
         .sort((a, b) => b[1] - a[1])
@@ -222,7 +215,7 @@ export default function SellerAnalyticsPage() {
         peakLabel = `${top.hour} e le ${top.hour + 1}`;
       }
 
-      return { views30, views7, viewsToday, orders30, orders7, ordiniRicevuti30, revenue30, revenue7, conversionRate, avgRating, reviewCount: reviews.length, topProducts, slowProducts, revenueSeries, peakHours, peakLabel };
+      return { views30, views7, viewsToday, orders30, orders7, ordiniRicevuti30, revenue30, revenue7, conversionRate, avgRating, reviewCount, topProducts, slowProducts, revenueSeries, peakHours, peakLabel };
     },
   });
 

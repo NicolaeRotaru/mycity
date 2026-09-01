@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
 import { frasePagamento } from '@/lib/promesse-pubbliche';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { headers } from 'next/headers';
+import { HydrationBoundary } from '@tanstack/react-query';
+import { precaricaHome } from '@/lib/queries/precarico';
 import ExperimentExposure from '@/components/home/ExperimentExposure';
 import HomeSectionRenderer, { type HeroDefaults } from '@/components/home-sections/HomeSectionRenderer';
 import { getServerSupabase } from '@/lib/supabase/server';
@@ -95,10 +96,33 @@ export default async function Home() {
   const site = await loadHomeSite();
   const sections = homeEnabledSections(site);
 
+  /**
+   * 30/8/2026 (R068) — LA HOME ARRIVAVA VUOTA NELL'HTML.
+   *
+   * Tutte le sezioni sono componenti del browser, ognuna con la sua lettura: il
+   * telefono scaricava il codice, lo eseguiva, e solo allora cominciava a
+   * chiedere i dati. Il primo contenuto vero — le categorie — compariva dopo due
+   * viaggi di rete in fila.
+   *
+   * Qui il server legge PRIMA e mette la risposta dentro la pagina.
+   * `HydrationBoundary` la consegna al browser gia' pronta: i componenti non
+   * cambiano di una riga, fanno la loro stessa domanda e la trovano risposta.
+   *
+   * Sopra la piega oggi si precaricano le categorie. Il resto (prodotti
+   * popolari, drop del giorno, attivita' dal vivo, vetrina negozi) continua a
+   * riempirsi dal browser: la griglia dei prodotti e' una lettura a pagine, con
+   * una chiave che dipende da una decina di filtri, e precaricarla vuol dire
+   * ricostruire quella chiave identica sul server — se sbaglia, il browser
+   * rilegge tutto e nessuno se ne accorge. E' il pezzo successivo, non questo.
+   */
+  const precarico = await precaricaHome();
+
   return (
     <div className="bg-surface-50">
       <ExperimentExposure experiment="home_hero" variant={heroVariant} />
-      <HomeSectionRenderer sections={sections} heroVariant={heroVariant} heroDefaults={heroDefaults} />
+      <HydrationBoundary state={precarico}>
+        <HomeSectionRenderer sections={sections} heroVariant={heroVariant} heroDefaults={heroDefaults} />
+      </HydrationBoundary>
     </div>
   );
 }

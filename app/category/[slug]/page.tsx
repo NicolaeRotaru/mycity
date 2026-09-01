@@ -2,6 +2,7 @@
 import { use, useRef, useState } from "react";
 
 import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { trackCategoryViewed } from '@/lib/analytics/events';
@@ -12,6 +13,7 @@ import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import ProductGrid, { type SortOption } from '@/components/ProductGrid';
 import CollectionHeader from '@/components/CollectionHeader';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 
 export default function CategoryPage(props: { params: Promise<{ slug: string }> }) {
@@ -37,7 +39,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
    * chiedere insieme: una lettura sola, `slug = questa OPPURE genitore =
    * questa`, e poi si separano qui.
    */
-  const { data: alberoCategoria, isLoading } = useQuery({
+  const { data: alberoCategoria, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.categories.bySlug(slug),
     queryFn: async () => {
       // Le categorie sono poche decine: si leggono tutte in un colpo e si
@@ -104,7 +106,28 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
   ].filter(Boolean).length;
 
   if (isLoading) return <LoadingState />;
-  if (!category) return <div className="container mx-auto p-8 text-center">Categoria non trovata.</div>;
+  /**
+   * 27/8/2026 (R094) — «CATEGORIA NON TROVATA» ANCHE QUANDO ERA SOLO CADUTA LA RETE.
+   *
+   * `category` resta nullo in due casi che non c'entrano niente fra loro: la categoria non esiste,
+   * oppure la lettura è fallita. Finivano tutti e due nella stessa riga di testo, senza «riprova» e
+   * senza una via d'uscita verso il catalogo. E per lo slug davvero morto la pagina rispondeva 200,
+   * quindi per Google restava una pagina valida da proporre.
+   */
+  if (isError) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <ErrorState
+          title="Non riesco a caricare questa categoria"
+          description="C'è stato un problema di collegamento. La categoria probabilmente c'è: riprova fra un attimo."
+          onRetry={() => { void refetch(); }}
+          backHref="/categorie"
+          backLabel="Vedi tutte le categorie"
+        />
+      </div>
+    );
+  }
+  if (!category) notFound();
   // Per le categorie principali aspettiamo le sottocategorie prima di decidere
   // hub vs griglia piatta, così non c'è un flash dal layout sbagliato.
   if (category.parent_id === null && subsLoading) return <LoadingState />;

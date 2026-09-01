@@ -30,6 +30,59 @@ BEGIN
   );
 END $$;
 
+-- ── ①bis Nessun permesso di SCRITTURA senza una regola che lo governi ─────
+-- 27/8/2026 (R034) — Il controllo ① qui sopra guardava nove tabelle di
+-- servizio, scelte a mano. Fuori da quelle nove, `anon` e `authenticated`
+-- avevano il permesso di INSERT, UPDATE o DELETE su una cinquantina di tabelle
+-- per cui NON esisteva nessuna regola di quel comando: 168 combinazioni
+-- tabella-permesso-ruolo, contate sul database ricostruito. Dentro c'erano
+-- `orders`, `order_items`, `wallet_ledger`, `gift_cards`, `notifications`,
+-- `loyalty_transactions`, i codici di consegna e di ritiro, e la cancellazione
+-- dei profili.
+--
+-- Non era sfruttabile: con la protezione riga-per-riga accesa, «nessuna regola»
+-- vuol dire «rifiuta tutto». Ma era l'UNICO strato. Bastava una regola nuova
+-- scritta un po' larga, o un `DISABLE ROW LEVEL SECURITY` messo li' durante una
+-- riparazione, e la porta si apriva senza che nessuno l'avesse aperta. La causa
+-- e' il permesso di partenza di Supabase (GRANT ALL ad anon e authenticated):
+-- le migrazioni 114 e 119 avevano chiuso il rubinetto per le tabelle FUTURE, ma
+-- non erano mai tornate indietro su quelle che c'erano gia'.
+--
+-- Questo controllo e' il ① allargato da nove tabelle a tutte: un permesso di
+-- scrittura vale solo se una regola permissiva di quel comando lo governa, per
+-- quel ruolo. TRUNCATE e REFERENCES non li governa nessuna regola, mai: quelli
+-- devono semplicemente non esserci.
+DO $$
+DECLARE n int; elenco text;
+BEGIN
+  SELECT count(*), coalesce(string_agg(DISTINCT x.riga, ', '), '—')
+    INTO n, elenco
+  FROM (
+    SELECT DISTINCT g.table_name || ' [' || g.privilege_type || ' → ' || g.grantee || ']' AS riga
+    FROM information_schema.role_table_grants g
+    JOIN pg_class c      ON c.relname = g.table_name
+    JOIN pg_namespace ns ON ns.oid = c.relnamespace AND ns.nspname = 'public'
+    WHERE g.table_schema = 'public'
+      AND g.grantee IN ('anon', 'authenticated')
+      AND g.privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES')
+      AND c.relkind IN ('r', 'p')
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_policies p
+        WHERE p.schemaname = 'public'
+          AND p.tablename = g.table_name
+          AND p.permissive = 'PERMISSIVE'
+          AND p.cmd IN (g.privilege_type, 'ALL')
+          AND (p.roles @> ARRAY['public']::name[] OR p.roles @> ARRAY[g.grantee]::name[])
+      )
+  ) x;
+
+  INSERT INTO esiti VALUES (
+    'nessuno puo scrivere su una tabella senza una regola che lo governi',
+    n = 0,
+    format('%s permessi di scrittura scoperti: %s', n, left(elenco, 600))
+  );
+END $$;
+
 -- ── ② Nessuna regola chiama auth.uid() una volta per riga ─────────────────
 DO $$
 DECLARE n int; elenco text;

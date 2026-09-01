@@ -1,6 +1,6 @@
 // lib/ai/catalogBatch.ts
 import type Anthropic from '@anthropic-ai/sdk';
-import { MODELS } from '@/lib/ai/client';
+import { MODELS, estimateCostEur } from '@/lib/ai/client';
 import type { BatchRequest, BatchResultEntry } from '@/lib/ai/batch';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, type ProductRow } from '@/lib/products/aiSnapshot';
@@ -153,7 +153,7 @@ function opSpec(operation: CatalogOperation, langName?: string): {
     case 'translate':
       return {
         withSchema: false,
-        maxTokens: 768,
+        maxTokens: 2048,
         system: conRegola(`Sei un traduttore professionista per "MyCity Piacenza". Traduci nome, descrizione e tag del prodotto in ${langName ?? 'inglese'}, in modo fedele e naturale. Non aggiungere né inventare. I tag sono parole chiave minuscole nella lingua di destinazione. Rispondi solo con lo strumento "translate_one".`),
         tool: PATCH_TOOL('translate_one', 'Traduce la scheda.', {
           patch: {
@@ -207,6 +207,37 @@ function productText(row: ProductRow, categories: CategoryRow[], withSchema: boo
 }
 
 /**
+ * 27/8/2026 (R143) — QUANTO COSTERA' QUESTO LOTTO, DETTO PRIMA DI PARTIRE.
+ *
+ * All'avvio si controllava il tetto di spesa e non si registrava niente: la
+ * spesa entrava nel conto solo se il venditore tornava a guardare lo stato del
+ * lavoro e il lotto risultava finito. Chiudere la pagina bastava a far sparire
+ * dal conto fino a duecento chiamate al modello.
+ *
+ * Serve un numero da impegnare subito. Questo è la stima peggiore ragionevole:
+ * ogni richiesta usa tutti i token di uscita che le abbiamo concesso, e ne
+ * consuma in ingresso quanti ne pesa una scheda prodotto piena di istruzioni.
+ * È volutamente prudente — meglio impegnare qualcosa in più e correggere al
+ * ribasso quando i risultati arrivano, che non contare niente.
+ */
+const TOKEN_INGRESSO_PER_RICHIESTA = 1500;
+
+export function stimaCostoLottoEur(operation: CatalogOperation, numeroRichieste: number): number {
+  if (!Number.isFinite(numeroRichieste) || numeroRichieste <= 0) return 0;
+  const { maxTokens } = opSpec(operation);
+  return estimateCostEur(
+    MODELS.fast,
+    {
+      inputTokens: TOKEN_INGRESSO_PER_RICHIESTA * numeroRichieste,
+      outputTokens: maxTokens * numeroRichieste,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+    },
+    { batch: true },
+  );
+}
+
+/**
  * Costruisce una BatchRequest per ogni prodotto. custom_id = product.id (gli
  * UUID rispettano il pattern richiesto dalla Batch API).
  */
@@ -237,6 +268,32 @@ export function parseCatalogBatchEntry(
   const productId = entry.customId;
   if (entry.status !== 'succeeded') {
     return { product_id: productId, error: entry.errorType ?? entry.status };
+  }
+  /**
+   * 27/8/2026 (R144) — UNA RISPOSTA TAGLIATA NON E' UNA RISPOSTA.
+   *
+   * `stop_reason = 'max_tokens'` vuol dire che il modello si e' fermato perche'
+   * erano finiti i token concessi, non perche' aveva finito di scrivere. Il
+   * risultato e' un patch interrotto a meta' parola — o, sul controllo di
+   * conformita', un verdetto formulato solo a meta'. Prima passava dritto:
+   * `apply` accetta qualunque stringa non vuota, e con un clic finiva in
+   * vetrina su decine di prodotti senza che comparisse nessun errore.
+   *
+   * Meglio un prodotto segnato «da rifare» che una scheda storta pubblicata.
+   */
+  if (entry.stopReason === 'max_tokens') {
+    // Sulla conformita' il dubbio si risolve segnalando, come gia' fa il caso
+    // del verdetto assente qui sotto: un controllo interrotto non e' un via
+    // libera.
+    if (operation === 'moderate') {
+      return {
+        product_id: productId,
+        flagged: true,
+        reason: 'Risposta interrotta a meta: da controllare a mano.',
+        error: 'risposta troncata',
+      };
+    }
+    return { product_id: productId, error: 'risposta troncata' };
   }
   const input = (entry.toolInput ?? {}) as Record<string, unknown>;
   if (operation === 'moderate') {

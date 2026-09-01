@@ -28,7 +28,7 @@ export default function SellerHealthScore() {
   }, []);
 
   const { data: checks, isLoading, isError, refetch } = useQuery({
-    queryKey: queryKeys.seller.healthV2(userId ?? ''),
+    queryKey: queryKeys.seller.health(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<Check[]> => {
       const { data: profile, error: erroreProfilo } = await supabase

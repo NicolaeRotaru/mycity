@@ -6,6 +6,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { ApiErrors } from '@/lib/api/responses';
 import { sendEmail } from '@/lib/email/client';
+import { verifyTurnstileToken } from '@/lib/captcha';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 export const runtime = 'nodejs';
@@ -26,10 +27,22 @@ const Body = z.object({
   city: z.string().max(80).optional(),
   /** Versione del testo informativo mostrato accanto al campo. */
   consentTextVersion: z.string().max(40).optional(),
+  /** Gettone Cloudflare Turnstile, come sulla pagina contatti e sull'accesso. */
+  captchaToken: z.string().optional(),
 });
 
 /** Testo del consenso attualmente mostrato nel modulo. */
 const VERSIONE_TESTO_CONSENSO = 'newsletter-v1';
+
+/**
+ * 27/8/2026 (R025) — QUANTO SPESSO SI PUÒ RISPEDIRE UNA CONFERMA ALLO STESSO INDIRIZZO.
+ *
+ * Prima: sempre. Ogni richiesta ripetuta su un indirizzo non confermato riscriveva la riga con un
+ * gettone nuovo e faceva partire un'altra email. Bastava un ciclo per riempire la casella di un
+ * estraneo col nostro dominio in mittente — e chi la segnala come indesiderata affonda la consegna
+ * di TUTTE le nostre email, conferme d'ordine e codici di ritiro compresi.
+ */
+const RIPETIZIONE_CONFERMA_MS = 10 * 60_000;
 
 export async function POST(request: Request) {
   const ip = getClientIp(request);
@@ -48,6 +61,12 @@ export async function POST(request: Request) {
   const parsed = Body.safeParse(raw);
   if (!parsed.success) return ApiErrors.invalidRequest('Email non valida');
 
+  // Se TURNSTILE_SECRET_KEY non è configurata, `verifyTurnstileToken` risponde ok: lo sviluppo
+  // locale non ha bisogno dell'integrazione. In produzione la chiave c'è, e il modulo pubblico più
+  // esposto del sito smette di essere l'unico senza controllo anti-bot.
+  const antiBot = await verifyTurnstileToken(parsed.data.captchaToken, ip);
+  if (!antiBot.ok) return ApiErrors.invalidRequest('Verifica anti-bot fallita. Riprova.');
+
   const email = parsed.data.email.trim().toLowerCase();
   const admin = getAdminSupabase();
   const token = crypto.randomBytes(24).toString('base64url');
@@ -56,11 +75,19 @@ export async function POST(request: Request) {
   // rispondere «esiste» direbbe a un estraneo chi è iscritto.
   const { data: esistente } = await admin
     .from('newsletter_subscribers')
-    .select('id, confirmed_at')
+    .select('id, confirmed_at, created_at')
     .eq('email', email)
     .maybeSingle();
 
   if (esistente?.confirmed_at) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // Una conferma in attesa scritta pochi minuti fa: il gettone di prima è ancora valido e una
+  // seconda email non serve a nessuno. La risposta resta identica a quella del caso normale —
+  // dire «ne è già partita una» racconterebbe a un estraneo chi si sta iscrivendo.
+  const ultimoTentativo = esistente?.created_at ? Date.parse(String(esistente.created_at)) : NaN;
+  if (Number.isFinite(ultimoTentativo) && Date.now() - ultimoTentativo < RIPETIZIONE_CONFERMA_MS) {
     return NextResponse.json({ ok: true });
   }
 
@@ -72,6 +99,9 @@ export async function POST(request: Request) {
     consent_ip: ip,
     consent_source: 'form-web',
     consent_text_version: parsed.data.consentTextVersion ?? VERSIONE_TESTO_CONSENSO,
+    // La data dice quando è partita l'ULTIMA conferma: è il metro della pausa qui sopra, ed è
+    // anche quello con cui si potano le iscrizioni mai confermate.
+    created_at: new Date().toISOString(),
   };
 
   const { error } = esistente

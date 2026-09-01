@@ -16,6 +16,7 @@ export interface Database {
           last_activity: string;
           recovery_email_sent_at: string | null;
           recovered: boolean;
+          recovered_at: string | null;
         };
         Insert: {
           user_id: string;
@@ -24,6 +25,7 @@ export interface Database {
           last_activity?: string;
           recovery_email_sent_at?: string | null;
           recovered?: boolean;
+          recovered_at?: string | null;
         };
         Update: {
           user_id?: string;
@@ -32,6 +34,7 @@ export interface Database {
           last_activity?: string;
           recovery_email_sent_at?: string | null;
           recovered?: boolean;
+          recovered_at?: string | null;
         };
         Relationships: [];
       };
@@ -143,6 +146,24 @@ export interface Database {
           is_bot?: boolean;
           metadata?: Json | null;
           created_at?: string;
+        };
+        Relationships: [];
+      };
+      ai_spend_daily: {
+        Row: {
+          giorno: string;
+          cents: number;
+          updated_at: string;
+        };
+        Insert: {
+          giorno: string;
+          cents?: number;
+          updated_at?: string;
+        };
+        Update: {
+          giorno?: string;
+          cents?: number;
+          updated_at?: string;
         };
         Relationships: [];
       };
@@ -923,30 +944,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      le: {
-        Row: {
-          code: string | null;
-          referred_email: string | null;
-          status: string | null;
-          bonus_awarded: boolean | null;
-          converted_at: string | null;
-        };
-        Insert: {
-          code?: string | null;
-          referred_email?: string | null;
-          status?: string | null;
-          bonus_awarded?: boolean | null;
-          converted_at?: string | null;
-        };
-        Update: {
-          code?: string | null;
-          referred_email?: string | null;
-          status?: string | null;
-          bonus_awarded?: boolean | null;
-          converted_at?: string | null;
-        };
-        Relationships: [];
-      };
       loyalty_accounts: {
         Row: {
           user_id: string;
@@ -1223,6 +1220,8 @@ export interface Database {
           unit_price: number;
           variant_id: string | null;
           variant_label: string | null;
+          product_name: string | null;
+          product_image: string | null;
         };
         Insert: {
           id?: string;
@@ -1232,6 +1231,8 @@ export interface Database {
           unit_price: number;
           variant_id?: string | null;
           variant_label?: string | null;
+          product_name?: string | null;
+          product_image?: string | null;
         };
         Update: {
           id?: string;
@@ -1241,6 +1242,8 @@ export interface Database {
           unit_price?: number;
           variant_id?: string | null;
           variant_label?: string | null;
+          product_name?: string | null;
+          product_image?: string | null;
         };
         Relationships: [];
       };
@@ -1318,9 +1321,6 @@ export interface Database {
           cash_collected_by: string | null;
           delivery_photo_url: string | null;
           delivery_signature_url: string | null;
-          invoice_sdi_status: string | null;
-          invoice_sdi_id: string | null;
-          invoice_issued_at: string | null;
           stripe_transfer_group: string | null;
           stripe_reversal_id: string | null;
           dispute_status: string | null;
@@ -1391,9 +1391,6 @@ export interface Database {
           cash_collected_by?: string | null;
           delivery_photo_url?: string | null;
           delivery_signature_url?: string | null;
-          invoice_sdi_status?: string | null;
-          invoice_sdi_id?: string | null;
-          invoice_issued_at?: string | null;
           stripe_transfer_group?: string | null;
           stripe_reversal_id?: string | null;
           dispute_status?: string | null;
@@ -1464,9 +1461,6 @@ export interface Database {
           cash_collected_by?: string | null;
           delivery_photo_url?: string | null;
           delivery_signature_url?: string | null;
-          invoice_sdi_status?: string | null;
-          invoice_sdi_id?: string | null;
-          invoice_issued_at?: string | null;
           stripe_transfer_group?: string | null;
           stripe_reversal_id?: string | null;
           dispute_status?: string | null;
@@ -2159,6 +2153,11 @@ export interface Database {
           rewarded: boolean | null;
           rewarded_at: string | null;
           created_at: string | null;
+          code: string | null;
+          referred_email: string | null;
+          status: string | null;
+          bonus_awarded: boolean | null;
+          converted_at: string | null;
         };
         Insert: {
           id?: string;
@@ -2168,6 +2167,11 @@ export interface Database {
           rewarded?: boolean | null;
           rewarded_at?: string | null;
           created_at?: string | null;
+          code?: string | null;
+          referred_email?: string | null;
+          status?: string | null;
+          bonus_awarded?: boolean | null;
+          converted_at?: string | null;
         };
         Update: {
           id?: string;
@@ -2177,6 +2181,11 @@ export interface Database {
           rewarded?: boolean | null;
           rewarded_at?: string | null;
           created_at?: string | null;
+          code?: string | null;
+          referred_email?: string | null;
+          status?: string | null;
+          bonus_awarded?: boolean | null;
+          converted_at?: string | null;
         };
         Relationships: [];
       };

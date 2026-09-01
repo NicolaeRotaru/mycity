@@ -77,6 +77,17 @@ vi.mock('@/lib/supabase/server', () => {
   const adminFrom = vi.fn((table: string) => {
     if (table === 'pending_checkouts') {
       return {
+        // 27/8/2026 (R049/R125/R136) — La rotta adesso guarda se lo stesso
+        // carrello ha gia' un pagamento aperto, per non riservare la merce e
+        // bruciare il codice sconto una seconda volta. Qui non c'e' niente di
+        // aperto: la risposta e' «nessuna riga».
+        select: () => {
+          const b: Record<string, unknown> = {
+            eq: () => b, gt: () => b, filter: () => b, order: () => b, limit: () => b,
+            maybeSingle: () => Promise.resolve({ data: null, error: null }),
+          };
+          return b;
+        },
         insert: () => ({
           select: () => ({
             single: () => Promise.resolve({

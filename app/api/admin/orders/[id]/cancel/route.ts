@@ -1,9 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase } from '@/lib/supabase/server';
-import { isStripeConfigured } from '@/lib/stripe/client';
 import { annullaERimborsa, COLONNE_ANNULLO, type OrdineDaAnnullare } from '@/lib/ordini/annulla';
-import { logger } from '@/lib/logger';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
@@ -58,6 +56,9 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
         '(rimborso al cliente o nota di credito). Registra la scelta prima di annullare.',
       );
     }
+    // 27/8/2026 (R131) — Il secondo annullo sovrapposto non trova righe da
+    // prendere: e' gia' annullato, e i soldi non si toccano una seconda volta.
+    if (esito.motivo === 'GIA_ANNULLATO') return ApiErrors.conflict('Ordine già annullato');
     if (esito.motivo === 'STRIPE_NON_CONFIGURATO') return ApiErrors.unavailable('Stripe non configurato');
     if (esito.motivo === 'RIMBORSO_FALLITO') {
       return ApiErrors.badGateway('Rimborso Stripe fallito: ' + (esito.dettaglio ?? 'unknown'));
@@ -88,5 +89,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   return NextResponse.json({ ok: true, refundId }, { status: 200 });
 }
 
-export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withAdminAuth(async ({ user }) => handler(req, user, await ctx.params))(req);
+// 30/8/2026 (R017) — L'ADATTATORE A MANO NON C'E' PIU'.
+//
+// Qui c'era la riga che tutte le rotte dinamiche si riscrivevano: prendeva il
+// secondo argomento di Next, ne aspettava la promessa e la riportava dentro
+// l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
+// per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
+// risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
+export const POST = withAdminAuth(({ req, user, params }) => handler(req, user, { id: String(params.id) }));

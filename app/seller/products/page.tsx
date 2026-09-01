@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Copy, Trash2, Sparkles, Download, Plus, Pencil, SlidersHorizontal, X, Check, Package } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Copy, EyeOff, Sparkles, Download, Plus, Pencil, SlidersHorizontal, X, Check, Package } from 'lucide-react';
+import { useInfiniteQuery, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
@@ -19,6 +19,8 @@ import EmptyState from '@/components/EmptyState';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
+import { nascondiProdotto } from '@/lib/products/nascondi';
+import { finestraDellaPagina, pagineSuccessiva, unisciPagine, RIGHE_PER_PAGINA } from '@/lib/paginazione';
 
 type SellerProductRow = {
   id: string;
@@ -42,42 +44,60 @@ export default function SellerProductsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('all');
 
-  const queryProducts = useQuery({
+  /**
+   * 27/8/2026 (R070) — QUESTO ELENCO SI FERMAVA AI PRIMI MILLE ARTICOLI.
+   *
+   * Non c'era nessun limite, e PostgREST ne manda al massimo mille quando
+   * nessuno chiede niente: un alimentari o una ferramenta vedeva i primi mille
+   * e non lo sapeva. Adesso si legge una finestra per volta, e chi vuole gli
+   * altri li chiede — senza riscaricare quelli che ha già.
+   *
+   * Il secondo criterio d'ordine (l'identificativo) non è un vezzo: con il solo
+   * `created_at` una riga inserita mentre si sfoglia fa saltare o ripetere
+   * prodotti fra una pagina e l'altra.
+   */
+  const queryProducts = useInfiniteQuery({
     queryKey: queryKeys.seller.products,
-    queryFn: async (): Promise<SellerProductRow[]> => {
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
-      const { data, error } = await supabase
+      const [da, a] = finestraDellaPagina(pageParam as number);
+      const { data, error, count } = await supabase
         .from('products')
-        .select('id, name, price, status, images, stock, categories(name)')
+        .select('id, name, price, status, images, stock, categories(name)', { count: 'exact' })
         .eq('seller_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(da, a);
       if (error) throw error;
-      return (data ?? []) as unknown as SellerProductRow[];
+      return { righe: (data ?? []) as unknown as SellerProductRow[], totale: count ?? null };
     },
+    getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.righe.length, tutte.length),
   });
-  const products = queryProducts.data ?? [];
+  const products = unisciPagine((queryProducts.data?.pages ?? []).map((pagina) => pagina.righe));
+  // Quanti ne ha davvero a catalogo: lo dice il database, non quanti ne ho letti.
+  const totaleProdotti = queryProducts.data?.pages[0]?.totale ?? products.length;
 
-  // "Venduti" reale: SOMMA(order_items.quantity) per gli ordini CONSEGNATI del
-  // venditore, raggruppata per prodotto. Stessa forma del calcolo "venduto" della
-  // dashboard (order_items + products!inner(seller_id)), filtrata a delivery_status
-  // = DELIVERED. Una sola query aggregata; la mappa risultante alimenta la colonna.
+  // "Venduti" reale: la somma dei pezzi consegnati, per prodotto. La fa il
+  // database (`venduti_per_prodotto`, migrazione 141) sui soli prodotti che sono
+  // a schermo, e torna una riga per prodotto invece di decine di migliaia.
+  const idsInPagina = products.map((p) => p.id);
   const queryVenduti = useQuery({
-    queryKey: [...queryKeys.seller.products, 'sold'],
+    queryKey: [...queryKeys.seller.products, 'venduti', idsInPagina.length],
+    enabled: idsInPagina.length > 0,
     queryFn: async (): Promise<Record<string, number>> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return {};
-      const { data, error } = await supabase
-        .from('order_items')
-        .select('product_id, quantity, products!inner(seller_id), orders!inner(delivery_status)')
-        .eq('products.seller_id', user.id)
-        .eq('orders.delivery_status', 'DELIVERED');
+      // 27/8/2026 (R070) — La somma si faceva nel browser, scaricando OGNI riga
+      // d'ordine consegnata del negozio, da sempre e senza limite. Oltre le
+      // mille righe la colonna «Venduti» cominciava a mostrare numeri più bassi
+      // del vero: il negoziante credeva di vendere meno di quanto vendeva e
+      // decideva su un numero falso. Adesso somma il database, sui soli prodotti
+      // che sono a schermo.
+      const { data, error } = await supabase.rpc('venduti_per_prodotto', { p_products: idsInPagina });
       if (error) throw error;
-      const rows = (data ?? []) as unknown as { product_id: string | null; quantity: number }[];
       const map: Record<string, number> = {};
-      for (const r of rows) {
-        if (!r.product_id) continue;
-        map[r.product_id] = (map[r.product_id] ?? 0) + Number(r.quantity);
+      for (const r of (data ?? []) as { product_id: string; venduti: number | string }[]) {
+        map[r.product_id] = Number(r.venduti);
       }
       return map;
     },
@@ -89,14 +109,23 @@ export default function SellerProductsPage() {
   const soldByProduct = queryVenduti.data ?? {};
   const vendutiIgnoti = queryVenduti.isError;
 
-  const remove = useMutation({
+  /**
+   * 27/8/2026 (R029) — QUI SI NASCONDE, NON SI CANCELLA.
+   *
+   * Prima questo pulsante cancellava davvero la riga del catalogo. Con il
+   * prodotto se ne andavano anche le recensioni (agganciate con ON DELETE
+   * CASCADE: chi prendeva una stella cancellava e ripubblicava pulito) e il
+   * nome di quello che il cliente aveva comprato spariva dal suo storico.
+   * Adesso il prodotto va in bozza: fuori dalla vetrina, dentro la storia.
+   */
+  const nascondi = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('products').delete().eq('id', id);
-      if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      await nascondiProdotto(supabase, { id, sellerId: user?.id });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.seller.products });
-      toast.success('Prodotto eliminato');
+      toast.success('Prodotto nascosto: lo trovi fra le bozze');
     },
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
@@ -143,13 +172,13 @@ export default function SellerProductsPage() {
 
   const askDelete = async (p: SellerProductRow) => {
     const ok = await confirmDialog({
-      title: 'Eliminare il prodotto?',
-      message: `"${p.name}" verrà rimosso dal tuo catalogo. L'azione è irreversibile.`,
-      confirmLabel: 'Sì, elimina',
+      title: 'Nascondere il prodotto?',
+      message: `"${p.name}" sparisce dalla vetrina e va fra le bozze. Resta negli ordini già fatti, con le sue recensioni: puoi rimetterlo in vendita quando vuoi.`,
+      confirmLabel: 'Sì, nascondi',
       danger: true,
-      icon: Trash2,
+      icon: EyeOff,
     });
-    if (ok) remove.mutate(p.id);
+    if (ok) nascondi.mutate(p.id);
   };
 
   // Stato "modifica in blocco".
@@ -173,7 +202,7 @@ export default function SellerProductsPage() {
     return products.filter((p) => matcher.match(p.status));
   }, [products, tab]);
 
-  const vistaqueryProducts = vistaDaQuery(queryProducts);
+  const vistaqueryProducts = vistaDaQuery(queryProducts, { quanti: products.length });
   if (vistaqueryProducts.mostraScheletro) return <LoadingState />;
   if (vistaqueryProducts.mostraErrore) {
     return (
@@ -190,7 +219,7 @@ export default function SellerProductsPage() {
       <SellerPageTitle
         eyebrow="Catalogo"
         title="Prodotti"
-        sub={`${products.length} ${products.length === 1 ? 'prodotto' : 'prodotti'} a catalogo`}
+        sub={`${totaleProdotti} ${totaleProdotti === 1 ? 'prodotto' : 'prodotti'} a catalogo`}
         action={
           <>
             {bulk ? (
@@ -364,11 +393,11 @@ export default function SellerProductsPage() {
                         <button
                           type="button"
                           onClick={() => askDelete(p)}
-                          aria-label={`Elimina ${p.name}`}
-                          title="Elimina"
+                          aria-label={`Nascondi ${p.name}`}
+                          title="Nascondi"
                           className="inline-flex items-center justify-center rounded-md p-1.5 text-secondary-600 hover:bg-secondary-50"
                         >
-                          <Trash2 size={16} aria-hidden />
+                          <EyeOff size={16} aria-hidden />
                         </button>
                       </div>
                     </td>
@@ -462,10 +491,10 @@ export default function SellerProductsPage() {
                     <button
                       type="button"
                       onClick={() => askDelete(p)}
-                      aria-label="Elimina"
+                      aria-label="Nascondi"
                       className="rounded-lg bg-secondary-50 px-3 py-2 text-secondary-600"
                     >
-                      <Trash2 size={16} aria-hidden />
+                      <EyeOff size={16} aria-hidden />
                     </button>
                   </div>
                 )}
@@ -473,6 +502,25 @@ export default function SellerProductsPage() {
             ))}
           </div>
         </Card>
+      )}
+
+      {/* Ogni pressione chiede la sua finestra: non riscarica quello che c'e' gia'. */}
+      {queryProducts.hasNextPage && (
+        <div className="pt-3 text-center">
+          <button
+            type="button"
+            onClick={() => queryProducts.fetchNextPage()}
+            disabled={queryProducts.isFetchingNextPage}
+            className="rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700 disabled:opacity-50"
+          >
+            {queryProducts.isFetchingNextPage
+              ? 'Carico…'
+              : `Carica altri ${RIGHE_PER_PAGINA} prodotti`}
+          </button>
+          <p className="mt-1 text-xs text-ink-400">
+            Ne vedi {products.length} di {totaleProdotti}
+          </p>
+        </div>
       )}
 
       {/* Barra azioni "modifica in blocco" */}

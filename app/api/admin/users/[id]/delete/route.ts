@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { cancellaAccount } from '@/lib/account/cancellazione';
 import { withAdminAuthRateLimit } from '@/lib/api/middleware';
@@ -22,15 +22,15 @@ export const runtime = 'nodejs';
 async function handler(_req: NextRequest, caller: { id: string }, { params }: { params: { id: string } }) {
   const targetId = params.id;
 
-  const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseService = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!supabaseUrl || !supabaseService) return ApiErrors.unavailable();
   if (!targetId || targetId.length < 10) return ApiErrors.invalidRequest('ID utente non valido.');
 
-  const admin = createClient(supabaseUrl, supabaseService, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  // 27/8/2026 (R009) — L'OPERAZIONE MENO REVERSIBILE DEL SITO LEGGEVA LA CHIAVE
+  // DI SERVIZIO DA `process.env` A MANO, saltando sia `getAdminSupabase()` sia
+  // il punto unico di lib/env.ts. Era la peggiore delle cinque copie: il giorno
+  // in cui la chiave si ruota o le opzioni del client cambiano, questa e' la
+  // rotta che si scopre rotta per ultima.
+  let admin;
+  try { admin = getAdminSupabase(); } catch { return ApiErrors.unavailable(); }
 
   // Anti lock-out
   if (caller.id === targetId) {
@@ -53,7 +53,10 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
   const esito = await cancellaAccount(admin, targetId);
   if (!esito.ok) {
     logger.error('admin delete: cancellazione fallita', { targetId, errore: esito.errore });
-    return NextResponse.json({ error: esito.errore }, { status: 500 });
+    // 27/8/2026 (R016) — Era `{ error: 'stringa' }`, l'altra forma: il pannello
+    // legge `error.message` e mostrava «Operazione non riuscita» al posto del
+    // motivo vero della cancellazione fallita.
+    return ApiErrors.internal(esito.errore ?? 'Cancellazione non riuscita');
   }
 
   await writeAudit({
@@ -71,5 +74,14 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
 }
 
 // Rate limit destructive: 20 cancellazioni / ora per admin (anti-abuse + audit trail)
-export const DELETE = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withAdminAuthRateLimit({ name: 'admin-delete-user', max: 20, windowMs: 60 * 60_000 }, async ({ user }) => handler(req, user, { params: await ctx.params }))(req);
+// 30/8/2026 (R017) — L'ADATTATORE A MANO NON C'E' PIU'.
+//
+// Qui c'era la riga che tutte le rotte dinamiche si riscrivevano: prendeva il
+// secondo argomento di Next, ne aspettava la promessa e la riportava dentro
+// l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
+// per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
+// risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
+export const DELETE = withAdminAuthRateLimit(
+  { name: 'admin-delete-user', max: 20, windowMs: 60 * 60_000 },
+  ({ req, user, params }) => handler(req, user, { params: { id: String(params.id) } }),
+);

@@ -6,6 +6,9 @@ import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
 import { apiErrorMessage } from '@/lib/errors';
+// 31/8/2026 (R037) — La percentuale non si scrive qui: arriva da dove viene poi
+// trattenuta sul venduto, cosi' non puo' piu' restare indietro da sola.
+import { COMMISSIONE_DEL_PERCENTO } from '@/app/seller/earnings/commissione';
 // 184 — `json.error` funziona solo se il server risponde `{error:'testo'}`.
 // Le rotte rispondono `{ok:false, error:{code,message}}`: `json.error` era
 // un oggetto, quindi falso-y mai e stringa mai, e finiva sempre nel
@@ -51,7 +54,7 @@ export function SubscriptionBanner({ status }: { status: string | null | undefin
             <p className="text-sm text-ink-600">
               {isPastDue
                 ? 'L’ultimo pagamento dell’abbonamento (€50/mese) non è andato a buon fine. Aggiorna il metodo di pagamento per non perdere visibilità.'
-                : 'L’abbonamento venditore costa €50/mese. Attivalo per supportare la piattaforma — la commissione sulle vendite è del 10%.'}
+                : `L’abbonamento venditore costa €50/mese. Attivalo per supportare la piattaforma — la commissione sulle vendite è ${COMMISSIONE_DEL_PERCENTO}.`}
             </p>
           </div>
         </div>

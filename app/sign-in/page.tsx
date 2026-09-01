@@ -148,7 +148,10 @@ const SignInForm = () => {
       }
 
       toast.success('Accesso effettuato!');
-      if (data?.user?.id) trackSignedIn(data.user.id);
+      // 30/8/2026 (R168) — Da qui si entra con email e password, e prima non lo
+      // diceva: il canale restava «sconosciuto» e i due ingressi non si
+      // potevano confrontare.
+      if (data?.user?.id) trackSignedIn(data.user.id, 'email');
       // Atterra sulla home del ruolo (seller/rider/admin) così, dopo un cambio
       // account, non resti sulla pagina del ruolo precedente. I buyer rispettano
       // l'eventuale returnTo (es. checkout).
@@ -253,7 +256,7 @@ const SignInForm = () => {
         {captchaRotto && (
           <p className="text-center text-sm text-ink-600">
             {captchaRotto} Puoi provare lo stesso ad accedere: se non funziona,
-            ricarica la pagina o scrivici da <a className="underline" href="/contact">Contatti</a>.
+            ricarica la pagina o scrivici da <Link className="underline" href="/contact">Contatti</Link>.
           </p>
         )}
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>

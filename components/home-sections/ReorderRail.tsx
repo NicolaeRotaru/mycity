@@ -3,6 +3,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { RotateCcw, ShoppingBasket } from 'lucide-react';
@@ -169,7 +170,7 @@ export default function ReorderRail() {
               {staples.slice(0, 5).map((p) => (
                 <div key={p.id} className="relative h-11 w-11 shrink-0 overflow-hidden rounded-md border border-cream-200 bg-cream-100">
                   {p.image && (
-                    <Image src={sizedImage(p.image, 'thumb')} alt={p.name} fill sizes="44px" unoptimized className="object-cover" />
+                    <Image src={sizedImage(p.image, 'thumb')} alt={p.name} fill sizes="44px" loader={caricatoreFotoRemote} className="object-cover" />
                   )}
                 </div>
               ))}
@@ -199,7 +200,7 @@ export default function ReorderRail() {
                     const img = l.products?.images?.[0];
                     return (
                       <div key={`${o.id}-${i}`} className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-cream-100">
-                        {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="48px" unoptimized className="object-cover" />}
+                        {img && <Image src={sizedImage(img, 'thumb')} alt="" fill sizes="48px" loader={caricatoreFotoRemote} className="object-cover" />}
                       </div>
                     );
                   })}

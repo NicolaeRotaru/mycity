@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { getClientIp } from '@/lib/rate-limit';
 import { withAdminAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { writeAudit } from '@/lib/audit';
@@ -39,7 +40,10 @@ async function handler(req: NextRequest, admin_user: { id: string }, params: { i
     targetTable: 'profiles',
     targetId,
     metadata: { evento: 'lettura_dati_identita', campi: ['legal_fiscal_code', 'business_vat_number'] },
-    ip: req.headers.get('x-forwarded-for') ?? undefined,
+    // 27/8/2026 (R024) — Qui si salvava la catena `x-forwarded-for` INTERA,
+    // pezzi falsificabili compresi: un registro degli accessi ai dati di
+    // identita' che nessuno puo' usare come prova.
+    ip: getClientIp(req),
     userAgent: req.headers.get('user-agent') ?? undefined,
   });
 
@@ -49,5 +53,11 @@ async function handler(req: NextRequest, admin_user: { id: string }, params: { i
   });
 }
 
-export const GET = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withAdminAuth(async ({ user }) => handler(req, user, await ctx.params))(req);
+// 30/8/2026 (R017) — L'ADATTATORE A MANO NON C'E' PIU'.
+//
+// Qui c'era la riga che tutte le rotte dinamiche si riscrivevano: prendeva il
+// secondo argomento di Next, ne aspettava la promessa e la riportava dentro
+// l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
+// per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
+// risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
+export const GET = withAdminAuth(({ req, user, params }) => handler(req, user, { id: String(params.id) }));

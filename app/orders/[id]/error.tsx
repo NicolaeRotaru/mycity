@@ -23,6 +23,7 @@ export default function OrderError({
         retry={reset}
         backHref="/orders"
         backLabel="I miei ordini"
+        codiceErrore={error.digest}
       />
     </div>
   );

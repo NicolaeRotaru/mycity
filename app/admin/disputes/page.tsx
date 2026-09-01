@@ -52,7 +52,7 @@ export default function AdminDisputesPage() {
   const [refundEur, setRefundEur] = useState('');
 
   const { data: disputes = [], isLoading } = useQuery({
-    queryKey: queryKeys.admin.disputes2(filter),
+    queryKey: queryKeys.admin.disputes(filter),
     queryFn: async (): Promise<Dispute[]> => {
       let q = supabase
         .from('disputes')
@@ -92,7 +92,7 @@ export default function AdminDisputesPage() {
       }
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.admin.disputes2() });
+      qc.invalidateQueries({ queryKey: queryKeys.admin.disputes() });
       setOpenId(null);
       setResolution('');
       setRefundEur('');

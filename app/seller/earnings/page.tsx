@@ -12,6 +12,9 @@ import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 import { riepilogoNegozio, riepilogoContanti } from '@/lib/guadagni/negozio';
+import { incassoPerGiorno } from '@/lib/guadagni/giorni';
+import { fraseAttesaBonifico } from '@/lib/stripe/tempi-bonifico';
+import { spiegazioneCommissione } from './commissione';
 import StripeConnectButton from '@/components/seller/StripeConnectButton';
 import StripeDashboardButton from '@/components/seller/StripeDashboardButton';
 
@@ -165,20 +168,13 @@ export default function SellerEarningsPage() {
   );
 
   // Mini-grafico ultimi 7 giorni (incasso lordo carta per giorno).
-  const daily = useMemo(() => {
-    const days: Record<string, number> = {};
-    const now = new Date();
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date(now);
-      d.setDate(now.getDate() - i);
-      days[d.toISOString().slice(0, 10)] = 0;
-    }
-    for (const o of cardOrders) {
-      const k = o.created_at.slice(0, 10);
-      if (k in days) days[k] += Number(o.total_price);
-    }
-    return Object.entries(days);
-  }, [cardOrders]);
+  //
+  // 27/8/2026 (R174) — I giorni si tagliavano a mezzanotte di Greenwich: gli
+  // ordini fatti fra mezzanotte e le due finivano nella colonna del giorno
+  // prima, e lo stesso ordine compariva in due giorni diversi a seconda della
+  // pagina che il negoziante apriva. Il conto adesso sta in un file suo, con la
+  // sua prova, e usa l'orologio di Piacenza come tutte le altre pagine.
+  const daily = useMemo(() => incassoPerGiorno(cardOrders), [cardOrders]);
   const maxDaily = Math.max(...daily.map(([, v]) => v), 1);
 
   const vista = vistaDaQuery(query);
@@ -294,7 +290,9 @@ export default function SellerEarningsPage() {
               )}.
             </p>
             <p className="mt-1 text-xs text-olive-700">
-              Pagamento automatico ~24 ore dopo la consegna, verso l&apos;IBAN registrato su Stripe.
+              {/* R051 — qui c'era «~24 ore», mentre il bonifico parte un'ora dopo la
+                  consegna. Adesso il tempo lo dice chi lo esegue. */}
+              Pagamento automatico {fraseAttesaBonifico()}, verso l&apos;IBAN registrato su Stripe.
               Per saldo e bonifici reali apri la dashboard Stripe.
             </p>
           </div>
@@ -348,14 +346,11 @@ export default function SellerEarningsPage() {
       <details className="mt-5 rounded-xl border border-cream-300 bg-cream-50">
         <summary className="flex cursor-pointer items-center gap-2 p-4 font-semibold text-ink-700"><Info size={16} className="text-ink-500" aria-hidden /> Come funziona la commissione?</summary>
         <div className="space-y-2 px-4 pb-4 text-sm text-ink-600">
-          <p>
-            Su MyCity paghi <strong>solo l&apos;8% del venduto</strong> realmente concluso (non rimborsi, non ordini annullati).
-            Nessuna commissione mensile, nessun costo di iscrizione.
-          </p>
-          <p>
-            Il bonifico parte <strong>in automatico ~24 ore dopo la consegna</strong>. In caso di reso o contestazione la
-            quota corrispondente viene trattenuta o recuperata.
-          </p>
+          {spiegazioneCommissione().map((p) => (
+            <p key={p.forte}>
+              {p.prima}<strong>{p.forte}</strong>{p.dopo}
+            </p>
+          ))}
         </div>
       </details>
     </div>

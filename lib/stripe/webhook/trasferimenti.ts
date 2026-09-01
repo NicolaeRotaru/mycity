@@ -17,7 +17,7 @@
  * webhook sono la dimostrazione che non si è rotto niente.
  */
 import type Stripe from 'stripe';
-import { reverseOrderTransfer, applyConnectAccountStatus } from '@/lib/stripe/payout';
+import { applyConnectAccountStatus } from '@/lib/stripe/payout';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { notifyAdmins } from './comune';

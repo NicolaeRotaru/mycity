@@ -18,6 +18,7 @@
  */
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
 
 export type DisputeOrderRow = {
@@ -82,4 +83,70 @@ export async function notifyAdmins(title: string, body: string, link: string) {
   const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
   if (!admins || admins.length === 0) return;
   await admin.from('notifications').insert(admins.map((a) => ({ user_id: a.id, title, body, link })));
+}
+
+/**
+ * 30/8/2026 (R005) — UN AVVISO CHE NON PARTE NON NE PORTA VIA ALTRI.
+ *
+ * Gli avvisi dopo un ordine partivano dentro un ciclo protetto da un solo
+ * `.catch()` in fondo: la prima cosa che lanciava interrompeva il giro per
+ * tutti gli ordini successivi. Carrello da due o tre negozi pagato con carta,
+ * un intoppo sul primo invio, e il secondo e il terzo negoziante non sapevano
+ * di avere un ordine — mentre il cliente aveva pagato e aspettava.
+ *
+ * Ogni invio nel suo riparo, come fa da sempre la strada dei contanti: quello
+ * che salta e' solo quello che e' saltato, e resta scritto dove si guarda.
+ */
+export async function provaAMandare(
+  cosa: string,
+  dati: Record<string, unknown>,
+  invio: () => Promise<unknown>,
+): Promise<void> {
+  try {
+    await invio();
+  } catch (e) {
+    logger.error(`[stripe] ${cosa} non partita: ordine pagato e destinatario non avvisato`, {
+      ...dati,
+      message: e instanceof Error ? e.message : 'errore',
+    });
+  }
+}
+
+/**
+ * LA CAMPANELLA AL NEGOZIO — la riga in `notifications` da cui parte anche la
+ * notifica push (app/api/cron/send-push la legge da lì).
+ *
+ * 30/8/2026 (R164) — Stava dentro `ordini.ts`, che aveva finito lo spazio: la
+ * prova `webhook-diviso-per-mestiere` tiene ogni file del webhook sotto le
+ * seicento righe, ed è il freno che impedisce di tornare al file unico da mille
+ * righe con dentro otto mestieri. Il posto giusto di un avviso al negozio, che
+ * per giunta serve identico a chi paga in contanti, è qui fra i pezzi
+ * condivisi. Nessuna logica è cambiata nello spostamento.
+ *
+ * Non lancia mai: l'ordine c'è ed è pagato, e far ritentare Stripe ricreerebbe
+ * il giro intero. Ma un negozio che non riceve la campanella è un ordine che
+ * nessuno prepara, quindi il guasto deve restare scritto dove si guarda.
+ */
+export async function suonaLaCampanellaAiNegozi(
+  admin: ReturnType<typeof getAdminSupabase>,
+  nuovi: { orderId: string; sellerId: string; totalCents: number; itemsCount: number }[],
+  pendingCheckoutId: string,
+): Promise<void> {
+  if (nuovi.length === 0) return;
+  const { error } = await admin.from('notifications').insert(
+    nuovi.map((created) => ({
+      // #33 — la categoria decide se la persona vuole ancora ricevere questo
+      // tipo di avviso: senza, gli interruttori non spegnevano niente.
+      category: 'order',
+      user_id: created.sellerId,
+      title: '📦 Nuovo ordine ricevuto',
+      body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
+      link: `/seller/orders/${created.orderId}`,
+    })),
+  );
+  if (error) {
+    logger.error('[stripe] campanella al venditore non scritta: ordine pagato e nessuno avvisato', {
+      pendingCheckoutId, ordini: nuovi.map((c) => c.orderId), message: error.message,
+    });
+  }
 }

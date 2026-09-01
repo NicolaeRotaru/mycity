@@ -61,25 +61,39 @@ describe('le condizioni prima di toccare l’account', () => {
   });
 });
 
-describe('la verifica vera è montata nella pagina, e sta PRIMA del cambio', () => {
-  it('la pagina verifica la password attuale con signInWithPassword', () => {
-    expect(sorgente).toContain('signInWithPassword({');
-    expect(sorgente).toContain('password: currentPassword');
+/**
+ * 27/8/2026 (R019) — QUESTE VERIFICHE CERTIFICAVANO IL DIFETTO, E VANNO
+ * RISCRITTE.
+ *
+ * Pretendevano che nella PAGINA ci fosse `signInWithPassword` prima di
+ * `updateUser({ password })`. Ma `app/profile/settings/page.tsx` è un
+ * componente client: quelle due chiamate giravano tutte e due nel browser, e
+ * sono indipendenti. Chi controlla la pagina — la console degli strumenti per
+ * sviluppatori, un'estensione ostile, uno script iniettato — chiamava
+ * direttamente la seconda e saltava la prima. Il controllo c'era, e non
+ * difendeva da niente: una sessione rubata diventava un account perso per
+ * sempre, perché con la password cambiata il proprietario vero non rientra
+ * più. Su un venditore vuol dire negozio, catalogo e conto Stripe collegato al
+ * payout.
+ *
+ * Quello che serve non è che la verifica venga PRIMA nel file: è che stia dove
+ * il browser non arriva. Adesso verifica e cambio sono una cosa sola dietro
+ * /api/account/cambia-password, e la prova che quella rotta rifiuta la password
+ * sbagliata sta in `tests/unit/la-password-si-cambia-solo-sul-server.test.ts`.
+ * Qui resta il confine: la pagina non deve più poter cambiare la password da
+ * sola.
+ */
+describe('la pagina non cambia più la password da sola', () => {
+  it('IL CASO CHE ROMPEVA — nel browser non c è nessun cambio password diretto', () => {
+    expect(
+      sorgente,
+      'la pagina cambia la password dal browser: chi ha in mano la sessione salta la verifica',
+    ).not.toContain('updateUser({ password');
   });
 
-  it('la verifica viene PRIMA di updateUser: se fallisce non si arriva a cambiare niente', () => {
-    const verifica = sorgente.indexOf('signInWithPassword({');
-    const cambio = sorgente.indexOf('updateUser({ password: newPassword })');
-    expect(verifica).toBeGreaterThan(-1);
-    expect(cambio).toBeGreaterThan(-1);
-    expect(verifica).toBeLessThan(cambio);
-  });
-
-  it('se la verifica fallisce, il motivo lo dice — e non prosegue', () => {
-    const dopoVerifica = sorgente.slice(sorgente.indexOf('signInWithPassword({'));
-    const blocco = dopoVerifica.slice(0, dopoVerifica.indexOf('updateUser('));
-    expect(blocco).toContain('Password attuale non corretta');
-    expect(blocco).toContain('return;');
+  it('la pagina delega alla rotta che fa verifica e cambio insieme', () => {
+    expect(sorgente).toContain('/api/account/cambia-password');
+    expect(sorgente).toContain('passwordAttuale');
   });
 
   it('il pulsante non si accende senza la password attuale', () => {
@@ -87,7 +101,7 @@ describe('la verifica vera è montata nella pagina, e sta PRIMA del cambio', () 
     expect(sorgente).not.toContain('disabled={!newPassword || !confirmPassword}');
   });
 
-  it('`currentPassword` non è più una decorazione: la pagina la USA', () => {
+  it('`currentPassword` non è una decorazione: la pagina la USA', () => {
     // Prima compariva due volte: la useState e il value del campo. Nient'altro.
     const usi = sorgente.split('currentPassword').length - 1;
     expect(usi).toBeGreaterThan(3);

@@ -15,6 +15,22 @@ vi.mock('@/lib/api/middleware', () => ({
 }));
 
 const runMessageMock = vi.fn();
+/**
+ * 27/8/2026 (R148) — IL FILTRO ANTI-CONTENUTI ADESSO PASSA ANCHE DA QUI.
+ *
+ * La scheda prodotto arriva dal browser e finisce nel prompt: era una delle
+ * cinque rotte che non passavano dal filtro Trust & Safety, mentre le altre
+ * nove si'. Qui il filtro e' finto — e' a sua volta una chiamata al modello, e
+ * in una prova il modello non c'e' — ma si controlla che venga CHIAMATO: se
+ * domani qualcuno lo stacca, questo file diventa rosso. La prova che il filtro
+ * blocca davvero sta in tests/unit/il-filtro-e-collegato.test.ts.
+ */
+const filtroChiamato = vi.fn(async () => undefined);
+vi.mock('@/lib/ai/moderation', async (importActual) => {
+  const actual = await importActual<typeof import('@/lib/ai/moderation')>();
+  return { ...actual, assertSafeText: (...a: unknown[]) => filtroChiamato(...(a as [])) };
+});
+
 vi.mock('@/lib/ai/run', async (importActual) => {
   const actual = await importActual<typeof import('@/lib/ai/run')>();
   return { ...actual, runMessage: (...a: unknown[]) => runMessageMock(...a) };

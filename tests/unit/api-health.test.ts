@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { readdirSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 // Mock supabase admin — factory self-contained
 const limitMock = vi.fn<() => Promise<{ error: null | { message: string } }>>(
@@ -6,12 +8,39 @@ const limitMock = vi.fn<() => Promise<{ error: null | { message: string } }>>(
 );
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: vi.fn(() => ({
-    from: vi.fn(() => ({ select: vi.fn(() => ({ limit: limitMock })) })),
+    from: vi.fn((tabella: string) =>
+      // 31/8/2026 (R183, secondo giro) — QUESTO FINTO DATABASE NON SAPEVA DIRE
+      // SE I LAVORI PERIODICI GIRAVANO.
+      //
+      // Prima rispondeva la stessa cosa a qualunque tabella, quindi la rotta
+      // leggeva zero battiti — e passava per «tutto a posto» solo perche' un
+      // controllo che non aveva guardato niente usciva verde lo stesso. Adesso
+      // zero esaminati vale giallo, e questo blocco deve dire cosa succede ai
+      // battiti: qui si misurano database e variabili d'ambiente, non i cron,
+      // quindi i lavori battono tutti regolarmente. Chi collauda i battiti sta
+      // in il-semaforo-parla-anche-al-monitor-senza-segreto.test.ts.
+      tabella === 'cron_heartbeats'
+        ? { select: () => Promise.resolve({ data: lavoriCheBattono(), error: null }) }
+        : { select: vi.fn(() => ({ limit: limitMock })) },
+    ),
   })),
 }));
 
 import { GET } from '@/app/api/health/route';
 import { __resetRateLimitBuckets } from '@/lib/rate-limit';
+
+/**
+ * I lavori periodici che esistono sul disco, tutti con un battito appena dato.
+ * L'elenco si legge dalle cartelle vere e non dalle soglie del codice: cosi' un
+ * lavoro nuovo entra da solo nel finto database, invece di far diventare gialli
+ * dei casi che parlano d'altro.
+ */
+function lavoriCheBattono(): { name: string; last_run_at: string }[] {
+  const cartella = join(process.cwd(), 'app/api/cron');
+  return readdirSync(cartella, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && existsSync(join(cartella, d.name, 'route.ts')))
+    .map((d) => ({ name: d.name, last_run_at: new Date().toISOString() }));
+}
 
 /** Una richiesta finta con un indirizzo di rete diverso per ogni caso, così il
  *  freno di 60/minuto non fa fallire il caso successivo. */
@@ -39,6 +68,22 @@ describe('GET /api/health', () => {
     process.env.RESEND_API_KEY = 're_test';
     process.env.CRON_SECRET = 'cron_test';
     process.env.UPSTASH_REDIS_REST_URL = 'https://upstash.test';
+    // 27/8/2026 (R184) — L'elenco delle variabili «importanti» e' passato da
+    // cinque a dodici: sette segreti che, mancando, spegnevano un pezzo di
+    // marketplace senza far cambiare colore al semaforo. Questo blocco dice
+    // «l'ambiente e' completo», quindi va tenuto completo: altrimenti la prova
+    // qui sotto misura un ambiente a meta' e chiama «ok» un `degraded`.
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'tok_test';
+    process.env.INTERNAL_API_SECRET = 'int_test';
+    process.env.UNSUBSCRIBE_SECRET = 'unsub_test';
+    process.env.MIDDLEWARE_CACHE_SECRET = 'mid_test';
+    process.env.SUPPORT_EMAIL = 'aiuto@mycity.test';
+    process.env.VAPID_PRIVATE_KEY = 'vapid_priv';
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY = 'vapid_pub';
+    // 30/8/2026 (R142) — anche il tetto di spesa AI: senza, vale zero, e zero
+    // vuol dire nessun tetto. Chi conta le variabili «importanti» sta in
+    // il-semaforo-guarda-i-segreti-che-contano.test.ts.
+    process.env.AI_GLOBAL_DAILY_BUDGET_EUR = '20';
   });
 
   afterEach(() => {

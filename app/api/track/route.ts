@@ -5,6 +5,7 @@ import { recordActivity, type ActivityCategory } from '@/lib/activity';
 import { parseUserAgent } from '@/lib/user-agent';
 import { parseConsentCookie, CONSENT_COOKIE } from '@/lib/consent';
 import { jsonConTetto } from '@/lib/api/corpo';
+import { indirizzoSenzaDatiPersonali } from '@/lib/analytics/indirizzo-senza-dati-personali';
 
 export const runtime = 'nodejs';
 
@@ -132,8 +133,21 @@ export async function POST(request: Request) {
   const consent = parseConsentCookie(readCookie(request.headers.get('cookie'), CONSENT_COOKIE) ?? undefined);
   if (category === 'visitor' && !consent.analytics) return noContent();
 
-  const path = typeof body.path === 'string' ? body.path.slice(0, 500) : null;
-  const referrer = typeof body.referrer === 'string' ? body.referrer.slice(0, 500) : null;
+  /**
+   * 27/8/2026 (R161) — QUI ARRIVAVA IL PERCORSO INTERO, TAGLIATO SOLO A 500
+   * CARATTERI.
+   *
+   * Sulla pagina dei risultati il percorso è `/search?q=…`: dentro c'è quello
+   * che la persona ha scritto nella casella di ricerca — la propria email, il
+   * numero d'ordine, il telefono. Finiva così com'era in `activity_events.path`
+   * e, ricopiato parola per parola, nel `summary` qui sotto.
+   *
+   * Adesso passano tutti e due dalla stessa regola: la strada resta, i valori
+   * dei parametri no. Il taglio a 500 lo fa la funzione, che è dove sta il
+   * limite della colonna.
+   */
+  const path = indirizzoSenzaDatiPersonali(body.path);
+  const referrer = indirizzoSenzaDatiPersonali(body.referrer);
   const sessionId = typeof body.session_id === 'string' ? body.session_id.slice(0, 100) : null;
   const metadata = metadataSicuro(body.metadata);
 

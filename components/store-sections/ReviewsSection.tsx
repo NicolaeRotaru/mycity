@@ -131,6 +131,11 @@ function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
 
       {photos.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-2">
+          {/* 27/8/2026 (R117) — le foto di una recensione avevano tutte lo
+              stesso testo alternativo: tre foto, e un lettore di schermo che
+              diceva tre volte «Foto recensione». Cosa ci sia dentro una foto
+              caricata da un cliente non possiamo saperlo, ma almeno adesso si
+              distinguono l'una dall'altra. */}
           {photos.slice(0, 4).map((url, i) => (
             <a
               key={i}
@@ -141,7 +146,7 @@ function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
             >
               <Image
                 src={sizedImage(url, 'thumb')}
-                alt="Foto recensione"
+                alt={`Foto ${i + 1} della recensione`}
                 width={72}
                 height={72}
                 className="h-full w-full object-cover"

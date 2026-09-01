@@ -5,7 +5,7 @@ import { getServerSupabase } from '@/lib/supabase/server';
 // '@/lib/shipping'` prende il file, `'@/lib/shipping/label'` prende la
 // cartella, e chi legge non ha modo di accorgersi della differenza. Rinominata.
 import { buildShippingLabel } from '@/lib/shipping-etichetta/label';
-import { withSellerAuth } from '@/lib/api/middleware';
+import { withSellerAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 
 export const runtime = 'nodejs';
@@ -57,5 +57,19 @@ async function handler(_req: NextRequest, user: { id: string }, params: { id: st
   });
 }
 
-export const GET = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withSellerAuth(async ({ user }) => handler(req, user, await ctx.params))(req);
+// 27/8/2026 (R140) — ERA `withSellerAuth`, SENZA FRENO, sulla rotta piu' cara
+// del lotto: ogni chiamata compone un PDF. `withSellerAuthRateLimit` esisteva
+// gia' nello stesso file di involucri, e qui non era stato usato. Sessanta
+// etichette in dieci minuti sono piu' di quante un negozio ne stampi in un
+// giorno pieno.
+// 30/8/2026 (R017) — L'ADATTATORE A MANO NON C'E' PIU'.
+//
+// Qui c'era la riga che tutte le rotte dinamiche si riscrivevano: prendeva il
+// secondo argomento di Next, ne aspettava la promessa e la riportava dentro
+// l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
+// per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
+// risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
+export const GET = withSellerAuthRateLimit(
+  { name: 'seller-label', max: 60, windowMs: 10 * 60_000 },
+  ({ req, user, params }) => handler(req, user, { id: String(params.id) }),
+);

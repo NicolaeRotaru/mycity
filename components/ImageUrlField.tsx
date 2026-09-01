@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { Upload, X, Link as LinkIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
@@ -71,7 +72,7 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
         <div className="mb-2 flex items-center gap-3">
           <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-cream-100 border border-cream-300 shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <Image src={value} alt="Anteprima" fill sizes="80px" unoptimized className="object-cover" />
+            <Image src={value} alt="Anteprima" fill sizes="80px" loader={caricatoreFotoRemote} className="object-cover" />
           </div>
           <button
             type="button"

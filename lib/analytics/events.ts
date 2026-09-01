@@ -53,15 +53,29 @@ const eur = (cents: number) => Number((cents / 100).toFixed(2));
  * ② `metodo` dice da quale porta e' entrata la persona (email, Google...).
  *    Prima non si vedeva, quindi non si poteva sapere quale porta funziona.
  */
+/**
+ * 30/8/2026 (R168) — «SCONOSCIUTO» ERA IL VALORE DI RIPIEGO, E BASTAVA
+ * DIMENTICARSI UN ARGOMENTO.
+ *
+ * `metodo` era facoltativo, con ripiego a 'sconosciuto'. Il percorso Google lo
+ * passava; il modulo email e password no — `trackSignedIn(data.user.id)`, senza
+ * secondo argomento. Risultato: uno dei due canali d'ingresso era etichettato
+ * «sconosciuto», e il confronto fra le due porte — che è tutto lo scopo della
+ * proprietà — non si poteva fare. Ce ne si accorge sei mesi dopo, guardando i
+ * numeri, quando i dati sono già stati raccolti così.
+ *
+ * Adesso `metodo` è OBBLIGATORIO: chi lo dimentica lo scopre in compilazione,
+ * non nei dati. `npm run typecheck` è il freno.
+ */
 export const trackSignupCompleted = (
   userId: string,
   role: 'buyer' | 'seller' | 'rider' | 'admin',
-  metodo?: string,
+  metodo: string,
 ) =>
-  track('signup_completed', { user_id: userId, role, metodo: metodo ?? 'sconosciuto', $insert_id: `signup:${userId}` });
+  track('signup_completed', { user_id: userId, role, metodo, $insert_id: `signup:${userId}` });
 
-export const trackSignedIn = (userId: string, metodo?: string) =>
-  track('signed_in', { user_id: userId, metodo: metodo ?? 'sconosciuto' });
+export const trackSignedIn = (userId: string, metodo: string) =>
+  track('signed_in', { user_id: userId, metodo });
 
 export const trackSignedOut = () =>
   track('signed_out');
@@ -160,8 +174,23 @@ export const trackRemoveFromCart = (
   });
 };
 
-export const trackCheckoutStarted = (totalCents: number, itemCount: number) => {
-  track('checkout_started', { total_cents: totalCents, item_count: itemCount });
+/**
+ * 30/8/2026 (R163) — L'AVVIO DEL CHECKOUT PORTA LA SUA CHIAVE.
+ *
+ * Partiva senza nessun identificativo, mentre `order_placed` porta
+ * `checkout_id` ed esce una volta per ORDINE (un carrello da due negozi fa due
+ * ordini). Un avvio, due acquisti, niente in comune: la conversione «arriva
+ * alla cassa → paga» poteva superare il 100% e non si poteva ricucire.
+ *
+ * La chiave nasce in `lib/analytics/chiave-checkout.ts` quando si entra in
+ * cassa, e la stessa arriva al server con l'ordine.
+ */
+export const trackCheckoutStarted = (totalCents: number, itemCount: number, checkoutId?: string | null) => {
+  track('checkout_started', {
+    total_cents: totalCents,
+    item_count: itemCount,
+    ...(checkoutId ? { checkout_id: checkoutId } : {}),
+  });
   ga('begin_checkout', { currency: 'EUR', value: eur(totalCents) });
 };
 

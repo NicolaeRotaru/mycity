@@ -24,6 +24,7 @@ export default function CheckoutError({
         retry={reset}
         backHref="/cart"
         backLabel="Torna al carrello"
+        codiceErrore={error.digest}
       />
     </div>
   );

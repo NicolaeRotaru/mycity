@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -80,7 +81,7 @@ export default function FeaturedProductsPicker({ value = [], onChange }: Props) 
                 } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
               >
                 <span className={`relative w-12 h-12 rounded-md overflow-hidden shrink-0 ${selected ? 'ring-2 ring-primary-500' : ''}`}>
-                  <Image src={img} alt="" fill sizes="48px" unoptimized className="object-cover" />
+                  <Image src={img} alt="" fill sizes="48px" loader={caricatoreFotoRemote} className="object-cover" />
                 </span>
                 <span className="flex-1 min-w-0">
                   <span className="block text-sm font-medium text-ink-800 truncate">{p.name}</span>

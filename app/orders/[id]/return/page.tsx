@@ -217,8 +217,16 @@ export default function NewReturnPage() {
           Foto (max 8)
         </label>
         <div className="mt-2 flex flex-wrap gap-2">
-          {photos.map((p) => (
-            <img key={p} src={p} alt="prova" loading="lazy" className="h-20 w-20 rounded-lg object-cover ring-1 ring-cream-300" />
+          {/* 27/8/2026 (R117) — ogni foto allegata al reso si chiamava «prova»:
+              otto foto, otto volte la stessa parola. Almeno si numerano. */}
+          {photos.map((p, i) => (
+            <img
+              key={p}
+              src={p}
+              alt={`Foto ${i + 1} allegata alla richiesta di reso`}
+              loading="lazy"
+              className="h-20 w-20 rounded-lg object-cover ring-1 ring-cream-300"
+            />
           ))}
           {photos.length < 8 && (
             <label className="inline-flex h-20 w-20 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-cream-300 text-2xl text-ink-400 hover:bg-cream-50">

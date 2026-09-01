@@ -7,7 +7,13 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext, type ProductContextInput } from '@/lib/ai/productContext';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+// 27/8/2026 (R150) — La riga che dice al modello che la scheda e' un DATO e
+// non un ordine. La chat prodotto, la chat catalogo, il codice a barre e il
+// lavoro massivo ce l'hanno da agosto: qui mancava, e la descrizione importata
+// da un altro marketplace la scrive un estraneo.
+import { REGOLA_TESTO_DI_TERZI } from '@/lib/ai/recinto';
+import { filtroSullaScheda } from '@/lib/ai/schedaSicura';
 
 /**
  * Traduzione annuncio: traduce nome, descrizione e tag di un prodotto in una
@@ -60,7 +66,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: Body;
   try {
     body = await jsonRichiesta(req, TETTO_JSON);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   if (!body?.product || typeof body.product !== 'object') {
@@ -70,7 +79,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const langName = LANGS[langCode];
   if (!langName) return ApiErrors.invalidRequest('Lingua di destinazione non supportata.');
 
-  const system = `Sei un traduttore professionista per il marketplace "MyCity Piacenza". Traduci il contenuto di un annuncio prodotto in ${langName}, in modo naturale e fedele, mantenendo il significato e il tono commerciale. Non aggiungere né togliere informazioni, non inventare. Mantieni numeri, unità e nomi propri/marche invariati dove ha senso. I tag devono essere parole chiave nella lingua di destinazione (minuscole). Rispondi sempre e solo chiamando lo strumento "translate_product".`;
+  // 27/8/2026 (R148) — La scheda passa dal filtro anti-contenuti-vietati come
+  // il testo libero delle altre rotte. Perche' qui e non altrove:
+  // lib/ai/schedaSicura.ts.
+  const nonAmmessa = await filtroSullaScheda(body.product, 'ai-translate-policy');
+  if (nonAmmessa) return nonAmmessa;
+
+  const system = `Sei un traduttore professionista per il marketplace "MyCity Piacenza". Traduci il contenuto di un annuncio prodotto in ${langName}, in modo naturale e fedele, mantenendo il significato e il tono commerciale. Non aggiungere né togliere informazioni, non inventare. Mantieni numeri, unità e nomi propri/marche invariati dove ha senso. I tag devono essere parole chiave nella lingua di destinazione (minuscole). Rispondi sempre e solo chiamando lo strumento "translate_product".\n\n${REGOLA_TESTO_DI_TERZI}`;
 
   const content = buildProductContext(body, {
     lead: `Traduci questo annuncio in ${langName}.`,

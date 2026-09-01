@@ -23,6 +23,21 @@ interface Props {
 //   rose    → home/destination → secondary-600 burgundy (#B82A28)
 //   amber   → rider  → primary-600 terracotta (#C0492C)
 //   emerald → olive-600 (kept on-palette for any positive-state marker)
+/**
+ * 27/8/2026 (R116) — l'etichetta di un punto è il nome di un negozio o di una
+ * persona: arriva dal database, quindi da qualcuno che l'ha scritta. Qui finisce
+ * dentro una stringa di HTML che Leaflet incolla nella pagina, e una stringa di
+ * HTML non si costruisce mai con del testo altrui senza prima disinnescarlo.
+ */
+function testoInnocuo(t: string): string {
+  return t
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const COLOR_HEX: Record<NonNullable<MapPoint['color']>, string> = {
   indigo:  '#5A7C42',
   rose:    '#B82A28',
@@ -109,9 +124,14 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
               border: 3px solid white;
               display:flex;align-items:center;justify-content:center;
             ">
-              <div style="transform:rotate(45deg);color:white;font-weight:bold;font-size:14px;">
-                ${p.label?.[0] ?? '•'}
+              <div style="transform:rotate(45deg);color:white;font-weight:bold;font-size:14px;" aria-hidden="true">
+                ${testoInnocuo(p.label?.[0] ?? '\u2022')}
               </div>
+              <!-- 27/8/2026 (R116) — dentro il segnaposto c'era solo l'iniziale
+                   dell'etichetta: chi ascolta sentiva «R». Il nome intero
+                   esisteva solo nel cartellino che appare col mouse, che sul
+                   telefono non esiste. -->
+              <span class="sr-only">${testoInnocuo(p.label ?? 'Punto sulla mappa')}</span>
             </div>
           `,
           iconSize: [32, 32],
@@ -139,7 +159,20 @@ const DeliveryMap = ({ points, className = 'w-full h-72 rounded-lg border z-0', 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [points]);
 
-  return <div ref={divRef} className={className} />;
+  /**
+   * 27/8/2026 (R116) — la mappa era un `<div>` nudo: nessun ruolo, nessun nome,
+   * nessuna alternativa. Chi non la vede non aveva niente. Adesso è dichiarata
+   * un'immagine e il suo nome elenca i punti che ci sono sopra — che è la sola
+   * informazione che qui conta davvero: chi consegna, da dove, verso dove.
+   */
+  const descrizione = points
+    .map((p) => p.label)
+    .filter((l): l is string => !!l && l.trim().length > 0);
+  const nomeMappa = descrizione.length > 0
+    ? `Mappa della consegna: ${descrizione.join(', ')}`
+    : 'Mappa della consegna';
+
+  return <div ref={divRef} className={className} role="img" aria-label={nomeMappa} />;
 };
 
 export default DeliveryMap;

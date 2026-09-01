@@ -80,6 +80,75 @@ function resolveCategoryId(
   return top.id;
 }
 
+/**
+ * 27/8/2026 (R145) — LA BANDA SUL PREZZO, IN UN POSTO SOLO.
+ *
+ * Stava dentro `resolveAiPatch`, cioe' solo sulla strada del server: i
+ * suggerimenti che tornano al browser (migliora tutto, diagnosi, chat sul
+ * prodotto, testo per Google, traduzione, codice a barre) li applicava il
+ * modulo del prodotto, che sul prezzo non guardava niente. Uno zero perso dal
+ * modello — 20 € che diventano 2 € — entrava in vetrina.
+ *
+ * Sopra questa soglia la decisione e' del negoziante, non del modello: il
+ * prezzo non si applica e non si tronca nemmeno. Troncare avrebbe scritto
+ * comunque un prezzo che nessuno ha deciso.
+ */
+export const BANDA_PREZZO_AI = 0.30;
+
+/**
+ * 30/8/2026 (R158) — LA MISURA DEL NOME E DELLA DESCRIZIONE, IN UN POSTO SOLO.
+ *
+ * Chi CREA un prodotto dalle foto tronca da sempre (`draftFromVision`); chi lo
+ * MODIFICA — questa funzione — accettava qualunque lunghezza col solo controllo
+ * «stringa non vuota» e la scriveva nel database, dove le due colonne sono
+ * `text` senza vincolo. Un nome di diecimila caratteri entrava in vetrina, nei
+ * risultati di ricerca, nelle email di conferma e nella pagina pubblica del
+ * negozio.
+ *
+ * I due numeri stavano scritti a mano dentro `draftFromVision`. Adesso stanno
+ * qui e li leggono tutte e due le strade, piu' il vincolo sulla tabella
+ * (migrazione 149) che copre anche la scrittura diretta dal browser.
+ */
+export const MAX_NOME_PRODOTTO = 120;
+export const MAX_DESCRIZIONE_PRODOTTO = 4000;
+
+/** Vero se il prezzo proposto si scosta dall'attuale piu' della banda. */
+export function prezzoAiFuoriBanda(
+  proposto: number,
+  attuale: number | string | null | undefined,
+): boolean {
+  const partenza = Number(attuale ?? 0);
+  if (!(partenza > 0)) return false; // prodotto nuovo: non c'e' niente da confrontare
+  return Math.abs(proposto - partenza) / partenza > BANDA_PREZZO_AI;
+}
+
+/** Il motivo, scritto come lo legge il negoziante. */
+export function motivoPrezzoRifiutato(proposto: number, attuale: number | string | null | undefined): string {
+  const partenza = Number(attuale ?? 0);
+  return `prezzo NON applicato (${partenza.toFixed(2)} → ${proposto.toFixed(2)} €: oltre il ${Math.round(
+    BANDA_PREZZO_AI * 100,
+  )}%, va deciso a mano)`;
+}
+
+/**
+ * Il filtro che il MODULO del prodotto passa sopra ogni suggerimento prima di
+ * scriverlo nei campi. Toglie quello che non deve entrare (oggi: il prezzo
+ * fuori banda) e restituisce i motivi da mostrare, con le stesse parole del
+ * server.
+ */
+export function patchAiPerIlForm<T extends { price?: number }>(
+  patch: T,
+  opts: { prezzoAttuale?: number | string | null },
+): { patch: T; rifiutati: string[] } {
+  const rifiutati: string[] = [];
+  if (typeof patch.price === 'number' && patch.price > 0 && prezzoAiFuoriBanda(patch.price, opts.prezzoAttuale)) {
+    rifiutati.push(motivoPrezzoRifiutato(patch.price, opts.prezzoAttuale));
+    const { price: _scartato, ...resto } = patch;
+    return { patch: resto as T, rifiutati };
+  }
+  return { patch, rifiutati };
+}
+
 export function resolveAiPatch(opts: {
   patch: AiProductPatch;
   current: CurrentProduct;
@@ -90,26 +159,21 @@ export function resolveAiPatch(opts: {
   const changed: string[] = [];
 
   if (typeof patch.name === 'string' && patch.name.trim()) {
-    update.name = patch.name.trim();
+    // R158 — Il taglio e' lo stesso che fa chi crea il prodotto dalle foto.
+    update.name = patch.name.trim().slice(0, MAX_NOME_PRODOTTO);
     changed.push('nome');
   }
   if (typeof patch.description === 'string' && patch.description.trim()) {
-    update.description = patch.description.trim();
+    update.description = patch.description.trim().slice(0, MAX_DESCRIZIONE_PRODOTTO);
     changed.push('descrizione');
   }
   if (typeof patch.price === 'number' && patch.price > 0) {
-    // 192 — Banda di sicurezza: un prezzo proposto dall'AI che si scosta di
-    // piu' del 30% da quello attuale non si applica, e non si tronca nemmeno —
-    // si rifiuta e si dice. Troncare avrebbe scritto comunque un prezzo che
-    // nessuno ha deciso. La banda vale anche quando la proposta e' onesta: sopra
-    // quella soglia la decisione e' del negoziante, non del modello.
-    const attuale = Number(current.price ?? 0);
-    const scostamentoTroppoGrande =
-      attuale > 0 && Math.abs(patch.price - attuale) / attuale > 0.30;
-    if (scostamentoTroppoGrande) {
-      changed.push(
-        `prezzo NON applicato (${attuale.toFixed(2)} → ${patch.price.toFixed(2)} €: oltre il 30%, va deciso a mano)`,
-      );
+    // 192 — Banda di sicurezza sul prezzo proposto dal modello. La regola sta
+    // in `prezzoAiFuoriBanda`, e da li' la legge anche il modulo del prodotto
+    // nel browser (R145): finche' era scritta solo qui, meta' dei suggerimenti
+    // non ci passava.
+    if (prezzoAiFuoriBanda(patch.price, current.price)) {
+      changed.push(motivoPrezzoRifiutato(patch.price, current.price));
     } else {
       update.price = patch.price;
       changed.push('prezzo');

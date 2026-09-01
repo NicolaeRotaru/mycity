@@ -11,6 +11,7 @@ import SimpleQR from '@/components/SimpleQR';
 import ConfettiBurst from '@/components/ConfettiBurst';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { formatPrice } from '@/lib/format';
+import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
 import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { toast } from 'sonner';
 import { riordina } from '@/lib/riordino';
@@ -85,6 +86,10 @@ type OrderRow = {
     quantity: number;
     unit_price: number;
     product_id: string | null;
+    // 27/8/2026 (R029) — la copia del nome e della foto del giorno dell'ordine:
+    // il prodotto puo' cambiare nome o sparire, la ricevuta no.
+    product_name: string | null;
+    product_image: string | null;
     products: { name: string; images: string[] | null } | null;
   }[];
 };
@@ -103,7 +108,7 @@ const fetchOrder = async (id: string): Promise<OrderRow | null> => {
       rider:profiles!orders_rider_id_fkey ( full_name ),
       seller_id,
       order_items (
-        id, quantity, unit_price, product_id,
+        id, quantity, unit_price, product_id, product_name, product_image,
         products ( name, images )
       )
     `)
@@ -334,9 +339,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
     const aggiunti = await riordina(
       order.order_items.map((it) => ({
         productId: it.product_id ?? '',
-        name: it.products?.name ?? '',
+        name: nomeDellaRigaOrdine(it),
         prezzoStorico: Number(it.unit_price),
-        image: it.products?.images?.[0],
+        image: fotoDellaRigaOrdine(it),
         quantity: it.quantity,
         sellerId: order.seller_id ?? undefined,
         storeName: order.seller?.store_name ?? undefined,
@@ -594,7 +599,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             <h2 className="mb-3 font-serif text-lg font-bold text-ink-900">Riepilogo</h2>
             <div className="divide-y divide-cream-200">
               {order.order_items.map((it) => {
-                const img = it.products?.images?.[0];
+                const img = fotoDellaRigaOrdine(it);
                 return (
                   <div key={it.id} className="flex items-center gap-2.5 py-2">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-cream-100">
@@ -603,7 +608,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                       ) : <Package size={18} className="text-ink-400" aria-hidden />}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-ink-900">{it.products?.name ?? 'Prodotto'}</p>
+                      <p className="truncate text-[13px] font-semibold text-ink-900">{nomeDellaRigaOrdine(it)}</p>
                       <p className="text-xs text-ink-500">× {it.quantity}</p>
                     </div>
                     <span className="text-[13px] font-bold text-ink-900">{formatPrice(Number(it.unit_price) * it.quantity)}</span>

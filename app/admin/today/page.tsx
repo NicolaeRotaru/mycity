@@ -12,8 +12,11 @@ import { formatPrice } from '@/lib/format';
 import { type OrderStatus } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
+import { vistaDaQuery } from '@/lib/vista-query';
+import { leggiCruscottoOggi, GIORNI_DI_ORDINI_FERMI, ORE_PRIMA_DI_CHIAMARLO_FERMO, type OrdineRecente } from '@/lib/queries/cruscotto-oggi';
 
 /**
  * Admin "Today" dashboard — 1 colpo d'occhio per tutte le metriche vitali.
@@ -27,62 +30,39 @@ import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
  */
 
 export default function AdminTodayPage() {
-  const { data: stats } = useQuery({
+  /**
+   * 27/8/2026 (R162) — la lettura sta in `lib/queries/cruscotto-oggi`, non piu'
+   * qui dentro: così una prova la può eseguire davvero. Prima nessuna delle
+   * otto letture guardava se fosse riuscita, e un guasto arrivava a schermo
+   * come una giornata a zero.
+   */
+  const query = useQuery({
     queryKey: queryKeys.admin.today,
     refetchInterval: 30_000,
-    queryFn: async () => {
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-
-      const [
-        ordersToday,
-        ordersPending,
-        ordersProblem,
-        sellersPending,
-        sosActive,
-        disputesOpen,
-        signupsToday,
-        recentOrders,
-      ] = await Promise.all([
-        supabase.from('orders').select('id, total_price, delivery_status').gte('created_at', todayStart.toISOString()),
-        supabase.from('orders').select('id').eq('delivery_status', 'NEW').gte('created_at', todayStart.toISOString()),
-        supabase.from('orders').select('id').in('delivery_status', ['NEW', 'ACCEPTED']).lt('created_at', new Date(Date.now() - 4 * 60 * 60_000).toISOString()),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'seller').eq('is_approved', false),
-        supabase.from('rider_sos_events').select('id', { count: 'exact', head: true }).is('resolved_at', null),
-        supabase.from('disputes').select('id', { count: 'exact', head: true }).eq('status', 'open'),
-        supabase.from('profiles').select('id', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
-        supabase.from('orders').select('id, total_price, delivery_status, created_at, delivery_full_name, seller:profiles!orders_seller_id_fkey ( store_name )').order('created_at', { ascending: false }).limit(10),
-      ]);
-
-      type TodayOrder = {
-        id: string; total_price: number | string | null;
-        delivery_status: string; created_at: string;
-        delivery_full_name: string | null;
-      };
-      const todayOrders = (ordersToday.data ?? []) as TodayOrder[];
-      const todayGmv = todayOrders
-        .filter((o) => o.delivery_status !== 'CANCELED')
-        .reduce((s, o) => s + Number(o.total_price ?? 0), 0);
-      const todayDelivered = todayOrders.filter((o) => o.delivery_status === 'DELIVERED').length;
-
-      return {
-        ordersTodayCount: todayOrders.length,
-        gmvToday: todayGmv,
-        deliveredToday: todayDelivered,
-        ordersPendingCount: ordersPending.data?.length ?? 0,
-        ordersProblemCount: ordersProblem.data?.length ?? 0,
-        sellersPendingCount: sellersPending.count ?? 0,
-        sosActiveCount: sosActive.count ?? 0,
-        disputesOpenCount: disputesOpen.count ?? 0,
-        signupsTodayCount: signupsToday.count ?? 0,
-        recentOrders: recentOrders.data ?? [],
-      };
-    },
+    queryFn: () => leggiCruscottoOggi(supabase),
   });
+  const vista = vistaDaQuery(query);
 
-  if (!stats) {
+  if (vista.mostraScheletro) {
     return <LoadingState />;
   }
+
+  // Una lettura caduta NON e' un marketplace fermo: si dice che non si sa, e si
+  // offre di riprovare. E' la stessa scelta della pagina Guadagni del venditore.
+  if (vista.mostraErrore || !vista.dati) {
+    return (
+      <div className="space-y-8">
+        <AdminPageTitle eyebrow="Cockpit" title="Today" sub="Non sono riuscito a leggere i numeri di oggi" />
+        <ErrorState
+          title="Non sono riuscito a leggere i numeri di oggi"
+          description="La lettura non è riuscita, quindi non so quanti ordini sono arrivati né quanto avete incassato. Non vuol dire che sia stato zero: riprova fra un momento."
+          onRetry={() => query.refetch()}
+        />
+      </div>
+    );
+  }
+
+  const stats = vista.dati;
 
   type KpiCardProps = {
     icon: LucideIcon;
@@ -134,7 +114,7 @@ export default function AdminTodayPage() {
                 <li>{stats.sosActiveCount} SOS rider attivo — <Link href="/admin/sos" className="font-semibold underline">apri</Link></li>
               )}
               {stats.ordersProblemCount > 0 && (
-                <li>{stats.ordersProblemCount} ordini in problema (NEW/ACCEPTED da +4h) — <Link href="/admin/orders" className="font-semibold underline">verifica</Link></li>
+                <li>{stats.ordersProblemCount} ordini in problema (NEW/ACCEPTED fermi da più di {ORE_PRIMA_DI_CHIAMARLO_FERMO}h, ultimi {GIORNI_DI_ORDINI_FERMI} giorni) — <Link href="/admin/orders" className="font-semibold underline">verifica</Link></li>
               )}
               {stats.disputesOpenCount > 0 && (
                 <li>{stats.disputesOpenCount} dispute aperte — <Link href="/admin/disputes" className="font-semibold underline">risolvi</Link></li>
@@ -147,6 +127,12 @@ export default function AdminTodayPage() {
       {/* KPI today */}
       <section>
         <AdminSectionLabel icon={TrendingUp}>Oggi</AdminSectionLabel>
+        {stats.campione && (
+          <p className="mb-2 text-xs font-semibold text-secondary-700">
+            Oggi ci sono più ordini di quanti se ne possano leggere in una volta: ordini e incasso
+            qui sotto sono un campione, non il totale della giornata.
+          </p>
+        )}
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
           <KpiCard icon={ShoppingBag} label="Ordini oggi" value={stats.ordersTodayCount} href="/admin/orders" color="primary" />
           <KpiCard icon={Euro} label="GMV oggi" value={formatPrice(stats.gmvToday)} color="olive" />
@@ -188,12 +174,7 @@ export default function AdminTodayPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-cream-100">
-                {(stats.recentOrders as unknown as Array<{
-                  id: string; total_price: number | string | null;
-                  delivery_status: string; created_at: string;
-                  delivery_full_name: string | null;
-                  seller: { store_name: string | null } | null;
-                }>).map((o) => (
+                {(stats.recentOrders as OrdineRecente[]).map((o) => (
                   <tr key={o.id} className="hover:bg-cream-50">
                     <td className="px-4 py-3">
                       <Link href={`/admin/orders/${o.id}`} className="font-mono text-xs text-primary-700 hover:underline">

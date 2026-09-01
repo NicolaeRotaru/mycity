@@ -28,6 +28,7 @@ export default function AdminError({
         retry={reset}
         backHref="/admin"
         backLabel="Pannello admin"
+        codiceErrore={error.digest}
       />
     </div>
   );

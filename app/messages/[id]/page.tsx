@@ -88,7 +88,20 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
     },
   });
 
-  const { data: messages = [] } = useQuery({
+  /**
+   * 27/8/2026 (R091) — QUESTA LETTURA NON GUARDAVA IL PROPRIO ERRORE.
+   *
+   * Era `const { data: messages = [] } = useQuery({...})`, mentre venti righe più sopra la
+   * conversazione i suoi tre stati ce li aveva già. La funzione qui sotto fa `if (error) throw
+   * error`: quando fallisce, `data` resta indefinito, il ripiego `= []` prende il suo posto e la
+   * chat si mostrava vuota, con sotto l'invito a scrivere il primo messaggio — a chi ne aveva già
+   * scritti venti. Chi legge non pensa alla rete: pensa che i messaggi siano stati cancellati.
+   */
+  const {
+    data: messages = [],
+    isError: messaggiNonLetti,
+    refetch: rileggiIMessaggi,
+  } = useQuery({
     queryKey: queryKeys.messages.byParam(params.id),
     enabled: !!userId,
     queryFn: async (): Promise<Message[]> => {
@@ -257,7 +270,21 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
 
         {/* THREAD */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-cream-50">
-          {items.length === 0 ? (
+          {messaggiNonLetti ? (
+            /* R091 — l'errore batte tutto: una lettura fallita non è una conversazione da
+               iniziare. Questo ramo sta PRIMA di quello dello stato vuoto, apposta. */
+            <div role="alert" className="text-center text-sm py-12">
+              <p className="font-semibold text-ink-700">Non riesco a caricare i messaggi</p>
+              <p className="mt-1 text-ink-500">Sembra un problema di collegamento. I messaggi ci sono ancora.</p>
+              <button
+                type="button"
+                onClick={() => { void rileggiIMessaggi(); }}
+                className="mt-4 rounded-lg border border-cream-300 bg-white px-4 py-2 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700"
+              >
+                Riprova
+              </button>
+            </div>
+          ) : items.length === 0 ? (
             <div className="text-center text-ink-400 text-sm py-12">
               Scrivi il primo messaggio per iniziare la conversazione.
             </div>

@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef } from 'react';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { ArrowRight, RotateCcw, SearchX } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -12,10 +12,15 @@ import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
 import { classiGriglia, type ColonneMassime } from '@/lib/griglia-prodotti';
 import { ErrorState } from './ui/ErrorState';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
-import { attachSellerProfiles, fetchSellerPublicMap } from '@/lib/queries/seller-public-profiles';
+import { leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
+import { cEUnAltraPagina, finestraDellaPagina, pagineSuccessiva, unisciPagine } from '@/lib/paginazione';
 import { trackSearchPerformed } from '@/lib/analytics/events';
 
-export type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating' | 'discount_desc';
+/**
+ * L'ordinamento della griglia. Vive con la lettura, in `lib/queries/griglia-prodotti.ts`: chi
+ * sceglie l'ordine e chi lo esegue devono guardare la stessa definizione.
+ */
+export type SortOption = OrdineGriglia;
 
 /**
  * Numero massimo di colonne della griglia. `'default'` mantiene la scala storica
@@ -84,8 +89,6 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
    *
    * Ora c'e' «Carica altri»: ogni pressione allarga la finestra.
    */
-  const [pagine, setPagine] = useState(1);
-  useEffect(() => { setPagine(1); }, [categoryId, sellerId, search, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort]);
 
   /**
    * 22/8/2026 — «CARICA ALTRI» FACEVA SPARIRE LA GRIGLIA.
@@ -130,80 +133,62 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     },
   });
 
-  const { data: products = [], isLoading, isError, refetch, isFetching } = useQuery({
+  /**
+   * 30/8/2026 (R080) — «CARICA ALTRI» RISCARICAVA OGNI VOLTA ANCHE I PRODOTTI
+   * GIA' VISTI.
+   *
+   * La finestra si allargava moltiplicando il tetto per il numero di pressioni:
+   * 96, poi 192 (di cui 96 gia' in memoria), poi 288, poi 384. Alla quarta
+   * pressione erano state scaricate 960 righe, con le loro foto, per mostrarne
+   * 384 — sulla connessione di chi guarda, e ogni pressione piu' lenta della
+   * precedente. E siccome la chiave della cache conteneva il tetto, il
+   * risultato di prima veniva buttato via ogni volta.
+   *
+   * Adesso la finestra si SPOSTA: ogni pressione chiede le sue righe e basta, e
+   * quelle gia' arrivate restano dove sono. Lo schema e' quello che la pagina
+   * ordini del negozio usa gia' (`lib/paginazione.ts`).
+   */
+  const dimensionePagina = limit ?? 96;
+  // «In promozione» filtra ancora nel browser: per non far uscire una pagina
+  // quasi vuota si chiede il doppio, ma resta una finestra, non un tetto che
+  // cresce.
+  const righePerPagina = onlyPromo ? Math.min(dimensionePagina * 2, 300) : dimensionePagina;
+
+  const domanda = useInfiniteQuery({
     placeholderData: keepPreviousData,
-    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: (limit ?? 96) * pagine, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
+    queryKey: queryKeys.products.grid({ categoryId, categoryIds, sellerId, search, limit: righePerPagina, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort }),
+    initialPageParam: 0,
     // Senza gli insiemi la query non parte: partirebbe senza filtro, e
     // mostrerebbe proprio i prodotti che il filtro doveva escludere.
     enabled:
       (!onlyOpenStores || apertiOra !== undefined) &&
       (!(minRating !== undefined && minRating > 0) || idsColVoto !== undefined),
-    queryFn: async () => {
-      let q = supabase
-        .from('products')
-        .select(`
-          id, name, price, compare_at_price, images, stock, has_variants, created_at, seller_id, category_id
-        `)
-        .eq('status', 'available');
-
-      // Ordinamento dinamico (default: created_at desc)
-      switch (sort) {
-        case 'price_asc':  q = q.order('price', { ascending: true }); break;
-        case 'price_desc': q = q.order('price', { ascending: false }); break;
-        case 'newest':     q = q.order('created_at', { ascending: false }); break;
-        default:           q = q.order('created_at', { ascending: false });
-      }
-
-      if (categoryIds && categoryIds.length > 0) q = q.in('category_id', categoryIds);
-      else if (categoryId) q = q.eq('category_id', categoryId);
-      if (sellerId)   q = q.eq('seller_id', sellerId);
-      if (search) {
-        const safe = search.replace(/[%_]/g, '\\$&').slice(0, 100);
-        q = q.ilike('name', `%${safe}%`);
-      }
-      if (maxPrice !== undefined) q = q.lte('price', maxPrice);
-      if (minPrice !== undefined) q = q.gte('price', minPrice);
-      // #91 — «Solo disponibili» lo decide il database. Prima si scaricavano
-      // anche gli esauriti e si buttavano via nel browser: righe pagate due
-      // volte (rete e memoria) e, soprattutto, righe che rubavano posto dentro
-      // il tetto — cosi' l'elenco filtrato usciva corto.
-      // Attenzione: `stock` a NULL vuol dire disponibilita' illimitata.
-      if (onlyInStock) q = q.or('stock.is.null,stock.gt.0');
-      // 22/8/2026 — i tre filtri adesso tagliano QUI, prima del tetto: non
-      // serve piu' chiedere quattro volte le righe che servono, e l'elenco non
-      // esce piu' corto in silenzio.
-      if (onlyOpenStores) {
-        if (!apertiOra || apertiOra.length === 0) return [];
-        q = q.in('seller_id', apertiOra);
-      }
-      if (minRating !== undefined && minRating > 0) {
-        if (!idsColVoto || idsColVoto.length === 0) return [];
-        q = q.in('id', idsColVoto);
-      }
-
-      // I negozi non approvati venivano scaricati e poi tolti nel browser:
-      // rubavano posto dentro il tetto, quindi l'elenco usciva corto. La vista
-      // filtra gia' da sola per approvato: qui si prendono da li' gli id.
-      const { data: approvati } = await supabase.from('seller_public_profiles').select('id');
-      const idsApprovati = ((approvati ?? []) as Array<{ id: string }>).map((r) => r.id);
-      if (idsApprovati.length === 0) return [];
-      q = q.in('seller_id', idsApprovati);
-
-      const tetto = (limit ?? 96) * pagine;
-      // «In promozione» resta l'unico con un margine: l'insieme delle promo si
-      // carica in parallelo e puo' non essere pronto al primo giro.
-      q = q.limit(onlyPromo ? Math.min(tetto * 2, 300) : tetto);
-      const { data, error } = await q;
-      if (error) throw error;
-      const rows = data ?? [];
-      const sellerMap = await fetchSellerPublicMap(
-        supabase,
-        rows.map((p) => p.seller_id as string),
-        'id, store_name, store_hours, is_approved',
-      );
-      return attachSellerProfiles(rows, sellerMap).filter((p) => p.profiles?.is_approved);
+    queryFn: async ({ pageParam }) => {
+      // 27/8/2026 (R069, R073) — la lettura vera sta in `lib/queries/griglia-prodotti.ts`, dove una
+      // prova la puo' eseguire: qui dentro nessuno poteva accorgersi ne' del viaggio in piu' ai
+      // negozi approvati ne' della «pertinenza» che ordinava per data.
+      return leggiProdottiDellaGriglia(supabase, {
+        categoryId,
+        categoryIds,
+        sellerId,
+        search,
+        sort,
+        maxPrice,
+        minPrice,
+        onlyInStock,
+        apertiOra: onlyOpenStores ? apertiOra ?? [] : undefined,
+        idsColVoto: minRating !== undefined && minRating > 0 ? idsColVoto ?? [] : undefined,
+        tetto: righePerPagina,
+        finestra: finestraDellaPagina(pageParam as number, righePerPagina),
+      });
     },
+    getNextPageParam: (ultima, tutte) => pagineSuccessiva(ultima.length, tutte.length, righePerPagina),
   });
+
+  const { isLoading, isError, refetch, isFetching } = domanda;
+  // Le pagine gia' lette si uniscono togliendo i doppioni: mentre si sfoglia un
+  // prodotto nuovo puo' entrare in cima e spostare tutte le righe di uno.
+  const products = unisciPagine(domanda.data?.pages ?? []);
 
   // Carica rating aggregato per i prodotti visibili (per filtro/ordinamento per rating)
   type Prod = {
@@ -520,9 +505,11 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
    */
   // 22/8/2026 — «aperto adesso» e «voto minimo» adesso tagliano nel database,
   // quindi il margine serve solo per «in promozione», che resta qui.
-  const tettoDellaFinestra = (limit ?? 96) * pagine;
-  const tettoVero = onlyPromo ? Math.min(tettoDellaFinestra * 2, 300) : tettoDellaFinestra;
-  const forseCeNeSonoAltri = prods.length >= tettoVero;
+  //
+  // 30/8/2026 (R080) — E la domanda adesso e' sull'ultima pagina, non sul
+  // totale: se l'ultima e' tornata piena quasi certamente ce n'e' un'altra.
+  const ultimaPagina = domanda.data?.pages?.[domanda.data.pages.length - 1] ?? [];
+  const forseCeNeSonoAltri = cEUnAltraPagina(ultimaPagina.length, righePerPagina);
 
   return (
     <>
@@ -535,7 +522,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
         <div className="mt-6 flex justify-center">
           <button
             type="button"
-            onClick={() => setPagine((n) => n + 1)}
+            onClick={() => void domanda.fetchNextPage()}
             disabled={isFetching}
             className="rounded-full border border-cream-300 bg-white px-6 py-2.5 text-sm font-semibold text-ink-700 hover:border-primary-300 hover:text-primary-700 disabled:opacity-50"
           >

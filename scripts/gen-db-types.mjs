@@ -82,6 +82,59 @@ function parseColumnLine(line) {
   return { name, tsType: sqlTypeToTs(sqlType), nullable, hasDefault };
 }
 
+/**
+ * 31/8/2026 — IL GENERATORE ESEGUIVA I COMMENTI.
+ *
+ * In questa casa una migrazione documenta come si torna indietro, e lo fa in un
+ * commento. La 148 scrive:
+ *     -- REVERSIBILE: `ALTER TABLE public.abandoned_carts DROP COLUMN recovered_at;`
+ * Il generatore non toglieva i commenti, quindi quella riga la leggeva come
+ * codice: aggiungeva `recovered_at` (dall'ALTER vero) e subito dopo la
+ * cancellava (dal commento). Nei tipi la colonna spariva, senza un errore, senza
+ * una riga di avviso — e il file committato non combaciava piu' con le
+ * migrazioni, che e' esattamente cio' che il lavoro «I tipi del database sono
+ * aggiornati» in CI e' li' per prendere.
+ *
+ * Piu' e' buona l'abitudine di documentare il rollback, piu' colonne sparivano.
+ *
+ * Si tolgono i commenti PRIMA di leggere, rispettando le virgolette: un `--`
+ * dentro una stringa (o dentro un corpo di funzione fra `$$`) e' testo, non un
+ * commento, e cancellarlo cambierebbe il significato del codice vero.
+ */
+export function senzaCommenti(sql) {
+  let fuori = '';
+  let i = 0;
+  while (i < sql.length) {
+    const c = sql[i];
+    const due = sql.slice(i, i + 2);
+
+    if (c === "'") {                                    // stringa: si copia intera
+      const fine = sql.indexOf("'", i + 1);
+      if (fine === -1) { fuori += sql.slice(i); break; }
+      fuori += sql.slice(i, fine + 1); i = fine + 1; continue;
+    }
+    const dollaro = sql.slice(i).match(/^\$([a-z_]*)\$/i);  // corpo di funzione $$ … $$
+    if (dollaro) {
+      const tag = dollaro[0];
+      const fine = sql.indexOf(tag, i + tag.length);
+      if (fine === -1) { fuori += sql.slice(i); break; }
+      fuori += sql.slice(i, fine + tag.length); i = fine + tag.length; continue;
+    }
+    if (due === '--') {                                 // commento di riga: via
+      const fine = sql.indexOf('\n', i);
+      if (fine === -1) break;
+      fuori += '\n'; i = fine + 1; continue;
+    }
+    if (due === '/*') {                                 // commento a blocco: via
+      const fine = sql.indexOf('*/', i + 2);
+      if (fine === -1) break;
+      fuori += ' '; i = fine + 2; continue;
+    }
+    fuori += c; i += 1;
+  }
+  return fuori;
+}
+
 /** Parsing principale. */
 function buildSchema() {
   const files = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort();
@@ -89,7 +142,7 @@ function buildSchema() {
   const tables = {};
 
   for (const file of files) {
-    const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
+    const sql = senzaCommenti(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
 
     // --- CREATE TABLE blocks ---
     const createRe = /create\s+table\s+(?:if\s+not\s+exists\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?\s*\(([\s\S]*?)\n\s*\)\s*;/gi;

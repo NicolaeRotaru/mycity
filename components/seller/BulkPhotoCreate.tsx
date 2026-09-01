@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { resizeImageToBase64 } from '@/lib/image-resize';
 import { uploadProductImages } from '@/lib/products/uploadImages';
-import { formatPrice } from '@/lib/format';
 
 /**
  * Creazione MULTI-prodotto da foto.

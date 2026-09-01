@@ -10,12 +10,13 @@ import { apiErrorMessage, friendlyError } from '@/lib/errors';
  * Catalog Copilot — chat: il venditore scrive un'istruzione in linguaggio naturale
  * ("abbassa del 10% l'elettronica") e il copilot propone le modifiche per i prodotti
  * coinvolti, mostrate in una card di anteprima dentro la bolla della risposta.
- * Applica via /api/ai/catalog-apply (lo stesso apply validato), una per prodotto,
- * dopo conferma. Human-in-the-loop.
+ * Applica via /api/ai/catalog-apply-bulk (lo stesso apply validato, tutte in una
+ * richiesta) dopo conferma. Human-in-the-loop.
  *
  * Design: docs/mockup/ui_kits/seller/src/80-ai.txt → AiCopilot (avatar gradient,
  * stato "Online", bolle utente/assistente, puntini di digitazione, chip suggeriti,
- * anteprime ricche in-linea). Tutta la logica /api/ai/copilot + catalog-apply resta.
+ * anteprime ricche in-linea). Tutta la logica /api/ai/copilot + l'applicazione
+ * in blocco resta.
  */
 
 type Change = { product_id: string; name: string; patch: Record<string, unknown> };
@@ -105,50 +106,51 @@ export default function CatalogCopilot() {
   const applyChanges = async (msgId: string, changes: Change[]) => {
     if (changes.length === 0) return;
     setApplyingId(msgId);
-    let ok = 0;
-    let fermatoDalLimite = false;
     try {
       /**
-       * 22/8/2026 — DUECENTO MODIFICHE PREPARATE, SESSANTA APPLICABILI ALL'ORA.
+       * 27/8/2026 (R157) — DUECENTO MODIFICHE MANDATE UNA ALLA VOLTA.
        *
-       * L'assistente prepara fino a duecento modifiche in una volta. La rotta
-       * che le applica ne accetta sessanta all'ora per venditore, una per
-       * chiamata. Dalla sessantunesima in poi il server rispondeva «troppe
-       * richieste» e QUESTO CICLO INGOIAVA L'ERRORE e tirava dritto: alla fine
-       * diceva «applicato a 60 prodotti su 200» — un numero giusto in un
-       * messaggio che sembrava un successo.
+       * Qui c'era un ciclo che chiamava la rotta di applicazione una volta per
+       * prodotto. Quella rotta, a ogni chiamata, rileggeva il prodotto,
+       * rileggeva tutte le categorie e — se la modifica toccava nome o
+       * descrizione — faceva partire una chiamata al modello per il controllo
+       * di conformita'. Sessanta all'ora era il tetto: dalla sessantunesima in
+       * poi il server rispondeva «troppe richieste», e «abbassa del 10%
+       * l'elettronica» su un catalogo grande diventava un lavoro in tre riprese
+       * a un'ora di distanza.
        *
-       * Il negoziante non aveva modo di sapere QUALI centoquaranta erano
-       * rimasti fuori, ne' che bastava aspettare un'ora. Rifacendo il giro
-       * ricominciava da capo, e ne passavano altri sessanta a caso.
-       *
-       * Adesso al primo muro ci si ferma — le altre chiamate sarebbero
-       * comunque rifiutate — e si dice quanti ne restano e perche'.
+       * Adesso partono tutte insieme, in una richiesta sola. Il server legge i
+       * prodotti una volta, fa i controlli di conformita' in parallelo e scrive.
        */
-      for (const c of changes) {
-        try {
-          await authedFetch('/api/ai/catalog-apply', { productId: c.product_id, patch: c.patch });
-          ok += 1;
-        } catch (err) {
-          if (err instanceof TroppeRichieste) { fermatoDalLimite = true; break; }
-          /* salta il singolo fallito, continua */
-        }
-      }
-      if (fermatoDalLimite) {
+      const json = await authedFetch('/api/ai/catalog-apply-bulk', {
+        changes: changes.map((c) => ({ productId: c.product_id, patch: c.patch })),
+      });
+      const applicate = typeof json.applied === 'number' ? json.applied : 0;
+      if (applicate >= changes.length) {
+        toast.success(`Applicato a ${applicate} prodotti su ${changes.length}.`);
+      } else {
+        // Quello che non e' passato non passera' nemmeno riprovando: o non e'
+        // un prodotto tuo, o la modifica non era valida, o il controllo sui
+        // contenuti l'ha fermata. Dirlo, invece di far ritentare a vuoto.
         toast.warning(
-          `Applicate ${ok} modifiche su ${changes.length}. Le altre ${changes.length - ok} non sono passate: `
-          + 'il limite orario è stato raggiunto. Riprova fra un\'ora — le modifiche restano qui.',
+          `Applicate ${applicate} modifiche su ${changes.length}. Le altre ${changes.length - applicate} `
+          + 'non sono passate: apri quei prodotti e guarda cosa non torna.',
+          { duration: 12_000 },
+        );
+      }
+      setMessages((m) =>
+        m.map((x) => (x.id === msgId && x.role === 'assistant' ? { ...x, applied: true } : x)),
+      );
+    } catch (err) {
+      if (err instanceof TroppeRichieste) {
+        // Le modifiche NON si segnano come applicate: restano li', pronte per
+        // il tentativo dopo.
+        toast.warning(
+          'Hai raggiunto il limite orario delle applicazioni in blocco. Riprova fra un\'ora — le modifiche restano qui.',
           { duration: 12_000 },
         );
       } else {
-        toast.success(`Applicato a ${ok} prodotti su ${changes.length}.`);
-      }
-      // Se il limite ha fermato il giro, le modifiche NON si segnano come
-      // applicate: restano li', pronte per il tentativo dopo.
-      if (!fermatoDalLimite) {
-        setMessages((m) =>
-          m.map((x) => (x.id === msgId && x.role === 'assistant' ? { ...x, applied: true } : x)),
-        );
+        toast.error(friendlyError(err));
       }
     } finally {
       setApplyingId(null);

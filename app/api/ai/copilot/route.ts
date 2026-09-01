@@ -11,7 +11,7 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { productSnapshot, PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { AiProductPatch, CategoryRow } from '@/lib/products/aiPatch';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
 
 /**
@@ -21,7 +21,8 @@ import { REGOLA_TESTO_DI_TERZI, recinta } from '@/lib/ai/recinto';
  * l'elettronica", "metti in bozza gli esauriti", "aggiungi il tag saldi a tutto
  * l'abbigliamento") e il copilot — che vede il catalogo come DATO — propone la
  * lista di modifiche (product_id + patch) per i prodotti coinvolti. NON applica:
- * la UI mostra il piano e applica via /api/ai/catalog-apply (human-in-the-loop).
+ * la UI mostra il piano e applica via /api/ai/catalog-apply-bulk, in una
+ * richiesta sola (human-in-the-loop).
  *
  * Riusa il pattern di catalog-chat (catalogo filtrato per seller come DATO,
  * istruzioni cacheabili nel system) ma restituisce PIÙ modifiche insieme.
@@ -83,7 +84,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: Body;
   try {
     body = await jsonRichiesta(req, TETTO_JSON);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   const instruction = typeof body.instruction === 'string' ? body.instruction.trim().slice(0, 1000) : '';
@@ -100,6 +104,17 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
    * Se il filtro stesso non risponde, la risposta e' la stessa che darebbe la
    * generazione: un messaggio leggibile, non un 500 muto.
    */
+  /**
+   * 27/8/2026 (R152) — SI PAGAVA UNA CHIAMATA AL MODELLO PER SCOPRIRE CHE
+   * L'ISTRUZIONE ERA VUOTA.
+   *
+   * Il controllo sulla stringa vuota stava DIECI RIGHE PIU' SOTTO del filtro,
+   * e `assertSafeText` e' a sua volta una chiamata a pagamento, senza uscita
+   * rapida sul testo vuoto. Venticinque all'ora per venditore: costo piccolo e
+   * continuo, e un modo gratuito per far partire chiamate a vuoto.
+   */
+  if (!instruction) return ApiErrors.invalidRequest('Scrivi un\'istruzione per il copilot.');
+
   try {
     await assertSafeText(instruction, 'ai-copilot-policy');
   } catch (err) {
@@ -110,8 +125,6 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     if (err instanceof AiCallError) return mapAiError(err, 'ai-copilot-policy');
     return ApiErrors.internal('Errore AI.');
   }
-
-  if (!instruction) return ApiErrors.invalidRequest('Scrivi un\'istruzione per il copilot.');
 
   const admin = getAdminSupabase();
   const [{ data: productsData }, { data: categoriesData }] = await Promise.all([

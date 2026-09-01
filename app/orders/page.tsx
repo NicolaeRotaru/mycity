@@ -9,10 +9,12 @@ import { Package, Store, MapPin, RotateCcw } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import Link from 'next/link';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import EmptyState from '@/components/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { clearCart } from '@/lib/cart';
+import { chiudiChiaveDelCheckout } from '@/lib/analytics/chiave-checkout';
 import { formatPrice, formatDate } from '@/lib/format';
 import {
   type OrderStatus,
@@ -85,7 +87,13 @@ function StripeReturnHandler() {
       // Il carrello si svuota anche sul percorso con la carta. Prima lo faceva
       // solo il contrassegno: chi pagava con la carta tornava e ritrovava tutto
       // dentro, con lo stesso ordine pronto a essere rifatto per sbaglio.
-      clearCart();
+      // R164 — «dopo un ordine»: la riga di `abandoned_carts` si marca come
+      // recuperata invece di sparire, altrimenti la vittoria non la conta
+      // nessuno.
+      clearCart({ dopoUnOrdine: true });
+      // R163 — e con lui la chiave del checkout: la spesa dopo e' un altro
+      // checkout, e deve avere un identificativo suo nei conti.
+      chiudiChiaveDelCheckout(typeof window === 'undefined' ? null : window.sessionStorage);
       // #116 — Il webhook Stripe crea l'ordine, e puo' metterci qualche
       // secondo. Prima si riprovava due volte (2 s e 5 s) e poi ci si arrendeva:
       // chi rientrava su una rete lenta, o quando Stripe rallentava, leggeva
@@ -298,7 +306,7 @@ export default function OrdersPage() {
               <div className="flex items-center gap-4 min-w-0 flex-1">
                 <div className="w-12 h-12 rounded-full bg-cream-100 shrink-0 overflow-hidden flex items-center justify-center text-xl">
                   {order.seller?.store_logo ? (
-                    <Image src={sizedImage(order.seller.store_logo, 'thumb')} alt="" width={40} height={40} unoptimized className="w-full h-full object-cover" />
+                    <Image src={sizedImage(order.seller.store_logo, 'thumb')} alt="" width={40} height={40} loader={caricatoreFotoRemote} className="w-full h-full object-cover" />
                   ) : <Store size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="min-w-0">
@@ -327,7 +335,7 @@ export default function OrdersPage() {
                       >
                         <div className="h-12 w-12 overflow-hidden rounded-lg bg-cream-100 flex items-center justify-center">
                           {img ? (
-                            <Image src={sizedImage(img, 'thumb')} alt="" width={48} height={48} unoptimized className="h-full w-full object-cover" />
+                            <Image src={sizedImage(img, 'thumb')} alt="" width={48} height={48} loader={caricatoreFotoRemote} className="h-full w-full object-cover" />
                           ) : <Package size={18} className="text-ink-400" aria-hidden />}
                         </div>
                         <span className="absolute -top-1.5 -right-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-ink-900 px-1 text-[10px] font-bold text-white">

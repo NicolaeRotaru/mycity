@@ -37,10 +37,13 @@ export function CouponInput({
           <span className="text-olive-800 inline-flex items-center gap-1">
             <Check size={14} strokeWidth={2.5} aria-hidden /> <strong>{appliedCoupon.coupon.code}</strong> applicato (−{formatPrice(appliedCoupon.discount)})
           </span>
+          {/* 27/8/2026 (R098) — era testo nudo: un bersaglio da circa 30×16 pixel dentro la
+              cassa. Sotto i 44 raccomandati (WCAG 2.5.8) chi ha le mani grandi lo manca, e chi
+              lo manca crede che il sito non risponda. */}
           <button
             type="button"
             onClick={onRemove}
-            className="text-rose-600 hover:underline text-xs"
+            className="inline-flex min-h-[44px] items-center px-3 py-2 text-xs text-rose-600 hover:underline"
           >
             Rimuovi
           </button>
@@ -65,7 +68,9 @@ export function CouponInput({
             {/* 22/8/2026 — il pulsante restava premibile durante la verifica:
                 chi non vedeva succedere niente premeva di nuovo, e partivano
                 due controlli in parallelo. */}
-            <Button type="button" onClick={onApply} size="sm" loading={applying} disabled={applying}>
+            {/* 27/8/2026 (R098) — la taglia piccola è alta 32 pixel: sotto il minimo che si tocca
+                senza sbagliare. Su un pulsante della cassa non ci va. */}
+            <Button type="button" onClick={onApply} size="md" loading={applying} disabled={applying}>
               {applying ? 'Verifico…' : 'Applica'}
             </Button>
           </div>

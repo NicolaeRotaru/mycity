@@ -34,6 +34,7 @@ export default function PageError({
         retry={reset}
         backHref="/"
         backLabel="Torna alla home"
+        codiceErrore={error.digest}
       />
     </div>
   );

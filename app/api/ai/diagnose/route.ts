@@ -9,7 +9,8 @@ import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext, type ProductContextInput } from '@/lib/ai/productContext';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
 import { sellerEconomics } from '@/lib/products/economics';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { filtroSullaScheda } from '@/lib/ai/schedaSicura';
 
 /**
  * "Perché non vende?" — diagnostica un prodotto fermo e propone correzioni
@@ -96,12 +97,21 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: Body;
   try {
     body = await jsonRichiesta(req, TETTO_JSON);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   if (!body?.product || typeof body.product !== 'object') {
     return ApiErrors.invalidRequest('Manca la scheda del prodotto.');
   }
+
+  // 27/8/2026 (R148) — La scheda passa dal filtro anti-contenuti-vietati come
+  // il testo libero delle altre rotte. Perche' qui e non altrove:
+  // lib/ai/schedaSicura.ts.
+  const nonAmmessa = await filtroSullaScheda(body.product, 'ai-diagnose-policy');
+  if (nonAmmessa) return nonAmmessa;
 
   const price = typeof body.product.price === 'number' ? body.product.price : null;
   const econ = sellerEconomics(price);

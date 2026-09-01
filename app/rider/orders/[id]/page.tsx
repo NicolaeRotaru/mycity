@@ -10,7 +10,7 @@ import DeliveryMap, { MapPoint } from '@/components/DeliveryMapLazy';
 import VerifyCodeDialog from '@/components/VerifyCodeDialog';
 import { formatPrice } from '@/lib/format';
 import {
-  ORDER_STATUS_LABEL,
+  passaggioLecito,
   type OrderStatus,
 } from '@/lib/order-status';
 import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
@@ -27,6 +27,7 @@ import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
 import { trackRiderDeliveryCompleted } from '@/lib/analytics/events';
 import { queryKeys } from '@/lib/queries/keys';
 import { compensoConsegnaEuro, compensoTrattenutoCents, contanteDaRimettereCents } from '@/lib/shipping';
+import { seguiAltezzaBarraAzioni, spazioSottoIlContenuto } from '@/lib/ui/altezza-barra-azioni';
 
 type OrderRow = {
   id: string;
@@ -192,6 +193,8 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   //   Throttle 30s = batteria 6-8h ok."
   // - SRE: "maximumAge 30000 = browser usa fix cached, no GPS request continuo."
   const lastWriteAt = useRef(0);
+  /** La barra fissa in fondo: e' lei a dire quanto spazio serve sotto il contenuto (R095). */
+  const barraRef = useRef<HTMLDivElement | null>(null);
   const startSharing = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocalizzazione non supportata');
@@ -232,6 +235,24 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
 
   useEffect(() => () => stopSharing(), []);
 
+  /**
+   * 30/8/2026 (R095) — LO SPAZIO SOTTO IL CONTENUTO SEGUE LA BARRA VERA.
+   *
+   * Era scritto a mano — 80 pixel — mentre la barra in fondo, con l'ordine gia'
+   * ritirato, ne misura circa 128: due pulsanti grandi impilati. A finire
+   * coperta era l'ultima riga del contenuto, cioe' «Totale (da incassare)»:
+   * proprio l'importo che il fattorino chiede al cliente sulla porta. Su questa
+   * rotta il guscio del fattorino toglie apposta il proprio spazio di
+   * sicurezza, quindi non c'era nessuna rete sotto.
+   *
+   * Adesso la barra si misura da sola e pubblica quanto e' alta; il contenitore
+   * legge quel numero. Cambia lo stato dell'ordine, cambiano i pulsanti, e lo
+   * spazio si aggiusta senza che nessuno debba ricordarsene.
+   */
+  useEffect(() => seguiAltezzaBarraAzioni(barraRef.current, document.documentElement), [
+    order?.delivery_status,
+  ]);
+
   if (isLoading) return <LoadingState />;
   if (!order) return <EmptyState icon={Package} title="Ordine non trovato" ctaLabel="Tutte le consegne" ctaHref="/rider" />;
 
@@ -266,7 +287,10 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
   const tripEta = tripKm !== null ? deliveryEtaMinutes(tripKm, 0) : null;
 
   return (
-    <div className="flex min-h-screen flex-col pb-[calc(80px+env(safe-area-inset-bottom,0px))]">
+    <div
+      className="flex min-h-screen flex-col"
+      style={{ paddingBottom: spazioSottoIlContenuto() }}
+    >
       {/* MAPPA in testa (map-led) */}
       <div className="relative">
         {points.length > 0 ? (
@@ -511,6 +535,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       {/* FOOTER STICKY — azione primaria per stato */}
       {!done && (
         <div
+          ref={barraRef}
           className="fixed bottom-0 left-1/2 z-sticky w-full max-w-[480px] -translate-x-1/2 border-t border-cream-200 bg-surface-0 px-4 py-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         >
@@ -519,7 +544,9 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
               Conferma ritiro al negozio
             </Button>
           )}
-          {order.delivery_status === 'PICKED_UP' && (
+          {/* 27/8/2026 (R014) — quali passaggi sono leciti lo dice la tabella
+              condivisa, la stessa che il database fa rispettare. */}
+          {passaggioLecito(order.delivery_status, 'OUT_FOR_DELIVERY', 'fattorino') && (
             <div className="flex flex-col gap-2">
               <Button
                 onClick={() => transition.mutate({ newStatus: 'OUT_FOR_DELIVERY' })}
@@ -545,6 +572,7 @@ export default function RiderOrderDetailPage(props: { params: Promise<{ id: stri
       )}
       {done && (
         <div
+          ref={barraRef}
           className="fixed bottom-0 left-1/2 z-sticky w-full max-w-[480px] -translate-x-1/2 border-t border-cream-200 bg-surface-0 px-4 py-3"
           style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom, 0px))' }}
         >

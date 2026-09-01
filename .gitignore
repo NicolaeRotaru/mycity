@@ -41,3 +41,14 @@ next-env.d.ts
 # storybook
 storybook-static/
 *storybook.log
+
+# 31/8/2026 (R102) — Playwright lascia qui tracce, schermate e video di ogni
+# esecuzione fallita. Adesso che il cancello dell'accessibilita gira davvero,
+# chiunque lo lanci in locale se li ritrova fra le modifiche da committare.
+/test-results/
+/playwright-report/
+
+# 31/8/2026 — Le cartelle di lavoro isolate che la macchina crea quando fa
+# girare piu' collaudatori in parallelo. Sono usa-e-getta: ne nasce una per
+# ogni giro, e non e' roba del progetto. (`.claude/skills/` invece e' tracciato.)
+/.claude/worktrees/

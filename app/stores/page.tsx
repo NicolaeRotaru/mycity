@@ -246,10 +246,12 @@ export default function StoresPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Cerca per nome negozio…"
+            aria-label="Cerca un negozio per nome"
             className="flex-1 min-w-[160px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
           <button
             onClick={() => setOnlyOpen((v) => !v)}
+            aria-pressed={onlyOpen}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
               onlyOpen ? 'bg-olive-500 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
             }`}
@@ -260,6 +262,7 @@ export default function StoresPage() {
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as SortMode)}
+            aria-label="Ordina i negozi"
             className="border rounded-lg px-3 py-2 text-sm bg-white font-semibold"
           >
             <option value="rating">Più amati</option>
@@ -271,6 +274,7 @@ export default function StoresPage() {
           <div className="flex gap-1.5 flex-wrap">
             <button
               onClick={() => setCategoryId('')}
+              aria-pressed={categoryId === ''}
               className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
                 categoryId === '' ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
               }`}
@@ -281,6 +285,7 @@ export default function StoresPage() {
               <button
                 key={c.id}
                 onClick={() => setCategoryId(c.id === categoryId ? '' : c.id)}
+                aria-pressed={c.id === categoryId}
                 className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-colors ${
                   c.id === categoryId ? 'bg-primary-700 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
                 }`}

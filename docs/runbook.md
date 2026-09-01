@@ -244,6 +244,162 @@ git push origin main
 
 ---
 
+## 6-bis. Coda email indietro (allarme «EMAIL_BACKLOG»)
+
+**Come ti arriva**: una email a `SUPPORT_EMAIL`, oggetto `[MyCity Alert] N
+anomalie operative`, con dentro la riga
+`[EMAIL_BACKLOG] Coda email: N messaggi non inviati da oltre 30 min.`
+Lo stesso avviso compare in `/admin/today`. Torna al massimo una volta l'ora.
+
+### Prima cosa da sapere, se sono le 3 di notte
+
+**Nessuno sta perdendo soldi, e puoi rimandare a domani mattina presto.** In
+questa coda ci sono solo le email di ciclo di vita: benvenuto, tutorial,
+«ordine pronto», «ordine consegnato», promozioni e riaggancio. Le **conferme
+d'ordine e gli avvisi al negozio NON passano di qui**: partono dritte nel
+momento del pagamento, da un'altra strada. Una coda indietro ritarda un «il tuo
+ordine è pronto», non un incasso e non un ordine.
+
+Non è però una cosa da lasciare lì: `order_ready` che arriva il giorno dopo è
+peggio che non arrivare, perché il cliente è già passato in negozio o si è già
+arrabbiato.
+
+### I numeri, per sapere quanto sei indietro
+
+Il giro `/api/cron/send-emails` prende **15 messaggi ogni 10 minuti: 90
+all'ora**. L'allarme suona a **50 messaggi fermi da più di 30 minuti**, ed è
+tarato apposta su quella velocità: 50 messaggi sono **4 giri**, cioè **altri 30
+minuti** per tornare in pari — sempre che nel frattempo non ne arrivino altri.
+Quando l'allarme suona, insomma, la coda è profonda quanto l'attesa che l'ha
+resa visibile.
+
+Il conto a mente, per qualunque numero:
+
+> **minuti per tornare in pari ≈ (quanti in coda ÷ 15, arrotondato per eccesso, − 1) × 10**
+
+150 in coda = un'ora e mezza. 600 in coda = 6 ore e mezza — quella non si
+aspetta, si svuota a mano (punto 3).
+
+I tre numeri (15 per giro, un giro ogni 10 minuti, allarme a 50) sono legati fra
+loro e non si toccano da soli: chi ne cambia uno senza gli altri trova rosso
+`npx vitest run tests/unit/l-allarme-della-coda-email-segue-quanto-in-fretta-la-svuotiamo.test.ts`.
+
+### 1. Guarda quanto è lunga (30 secondi)
+
+Supabase → SQL editor:
+
+```sql
+-- Quanto è lunga adesso e da quando aspetta la più vecchia
+SELECT count(*)                                                         AS in_coda,
+       count(*) FILTER (WHERE send_at <= now() - interval '30 minutes')  AS in_ritardo,
+       count(*) FILTER (WHERE attempts > 0)                              AS gia_fallite,
+       min(send_at)                                                      AS la_piu_vecchia
+FROM public.email_queue
+WHERE sent_at IS NULL AND cancelled_at IS NULL AND send_at <= now();
+```
+
+```sql
+-- Quante ne sono uscite davvero nell'ultima ora. Il massimo possibile è 90:
+-- se sei vicino a 90 la macchina sta andando a tutta e il problema è il volume.
+SELECT count(*) FROM public.email_queue WHERE sent_at > now() - interval '1 hour';
+```
+
+```sql
+-- Chi sta aspettando, e se sta fallendo (last_error è il motivo vero)
+SELECT template, count(*) AS quante, max(attempts) AS tentativi, max(last_error) AS ultimo_errore
+FROM public.email_queue
+WHERE sent_at IS NULL AND cancelled_at IS NULL AND send_at <= now()
+GROUP BY template ORDER BY quante DESC;
+```
+
+```sql
+-- Il giro sta ancora girando? (last_run_at deve essere di pochi minuti fa)
+SELECT name, last_run_at FROM public.cron_heartbeats WHERE name = 'send-emails';
+```
+
+Nei log di Vercel, sulla funzione `send-emails`, la riga da cercare è
+**`coda email piena`**: la scrive ogni giro che si è portato via tutti e 15 i
+messaggi, cioè ogni giro che ne ha lasciati altri indietro.
+
+### 2. Capisci quale dei tre casi è
+
+| Cosa vedi | Cos'è | Dove andare |
+|---|---|---|
+| `last_run_at` vecchio di più di 20 minuti, 0 spedite nell'ultima ora | il giro **non parte** (segreto, 401, 500, deploy rotto) | §6, poi torna qui e svuota a mano |
+| `gia_fallite` alto, `last_error` pieno di messaggi di Resend | il giro parte ma **Resend rifiuta** | resend.com/status e la dashboard Resend; se è un blocco del dominio non serve rilanciare |
+| Giri regolari, `coda email piena` a ogni giro, ~90 spedite nell'ultima ora | va tutto bene, **è il volume**: arrivano più di 90 messaggi l'ora | punto 4 |
+
+⚠️ **Prima di rilanciare qualunque cosa, controlla che `RESEND_API_KEY` ci sia
+su Vercel.** Senza chiave il giro non spedisce ma **consuma un tentativo su ogni
+riga che tocca**, e al quinto la riga viene annullata: quei messaggi sono persi
+per sempre. Con la chiave mancante, il giro a mano fa danno invece che bene.
+
+### 3. Svuota a mano una coda arretrata
+
+Ogni chiamata spedisce fino a 15 messaggi e restituisce cosa ha fatto. Il
+segreto è `CRON_SECRET` (Vercel → Settings → Environment Variables),
+l'indirizzo è quello di `NEXT_PUBLIC_APP_URL`.
+
+```bash
+# 20 chiamate = fino a 300 messaggi. Una alla volta, MAI in parallelo.
+for i in $(seq 1 20); do
+  curl -s -H "Authorization: Bearer $CRON_SECRET" \
+    https://<indirizzo-del-sito>/api/cron/send-emails
+  echo
+  sleep 3
+done
+```
+
+Come si legge la risposta `{"ok":true,"sent":15,"skipped":0,"errors":0,"total":15}`:
+
+- **sent** — partite davvero.
+- **skipped** — scartate di proposito: chi ha detto no alle promozioni, un
+  indirizzo che non esiste più, un nome di messaggio che non esiste. Non è un
+  guasto, e quelle righe non tornano.
+- **errors** — rifiutate da Resend: guarda `last_error` con la terza query.
+  Riprovano da sole dopo 5, poi 25, poi 125 minuti; al quinto tentativo si
+  fermano.
+- **total = 15** — ce n'erano almeno altre: rilancia.
+- **total < 15** — sei in pari, puoi fermarti.
+
+Non lanciare più curl insieme: due giri contemporanei non spediscono la stessa
+email due volte (le righe si prenotano una per una), ma raddoppiano le chiamate
+a Resend, che risponde 429 — e ogni 429 sposta quel messaggio avanti di 5, 25,
+125 minuti. Andresti più piano, non più veloce.
+
+### 4. Quando si alza la cadenza
+
+Solo nel terzo caso: i giri sono verdi, ogni giro torna pieno, ~90 uscite
+nell'ultima ora e la coda **non cala per due ore di fila**. Vuol dire che 90
+all'ora non bastano più: non è un guasto, è cresciuto il traffico.
+
+È un rilascio in produzione → **🔴 lo firma Nicola**, non si fa alle 3 di notte.
+Nel frattempo si tiene in pari a mano (punto 3).
+
+I numeri da muovere **insieme**, altrimenti l'allarme diventa inutile:
+
+1. `vercel.json` → `crons` → la cadenza di `/api/cron/send-emails`;
+2. `EMAIL_PER_GIRO` in `app/api/cron/send-emails/route.ts`;
+3. la soglia dell'allarme in `app/api/cron/operational-alerts/route.ts`.
+
+La prova `tests/unit/l-allarme-della-coda-email-segue-quanto-in-fretta-la-svuotiamo.test.ts`
+resta rossa finché i tre non tornano d'accordo: è lì per quello.
+
+**Meglio accorciare la cadenza che ingrassare il giro.** Ogni riga si prenota
+per 15 minuti (migrazione 085) e costa quattro viaggi al database più la
+chiamata a Resend: un giro che non finisce dentro quei 15 minuti si fa
+scavalcare dal giro dopo, e la stessa persona riceve il messaggio due volte.
+
+### 5. Cosa non fare
+
+- **Non cancellare righe** per far tacere l'allarme: dentro ci sono «ordine
+  pronto» e «ordine consegnato», cioè messaggi che una persona sta aspettando.
+- **Non alzare `EMAIL_PER_GIRO` da solo**, per il motivo qui sopra.
+- **Non rilanciare il giro senza `RESEND_API_KEY`**: bruci i tentativi e perdi i
+  messaggi.
+
+---
+
 ## 7. Stripe webhook non riceve
 
 **Sintomi**: ordini pagati via card non compaiono in DB.
@@ -313,6 +469,7 @@ git push origin main
 |---|---|
 | SOS rider | Apri `/admin/sos`, chiama 112 e numero rider |
 | Sito giù | Verifica UptimeRobot, poi Vercel → Deployments → Instant Rollback (§4-bis). Supporto: vercel.com/help |
+| Allarme «Coda email: N messaggi non inviati» | §6-bis. Non è un'emergenza: le conferme d'ordine non passano da quella coda |
 | Frode evidente | Sospendi user via SQL (vedi #3) |
 | Buyer arrabbiato (telefonata) | Apri ticket WhatsApp, prometti risposta entro 24h |
 

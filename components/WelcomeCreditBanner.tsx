@@ -26,7 +26,6 @@ export default function WelcomeCreditBanner() {
   const { isAuthenticated, isBuyer, profile } = useProfile();
   const [dismissed, setDismissed] = useLocalStorage<boolean>(DISMISS_KEY, false);
   const [show, setShow] = useState(false);
-  const [points, setPoints] = useState(0);
   const [daysLeft, setDaysLeft] = useState<number | null>(null);
 
   useEffect(() => {
@@ -36,7 +35,7 @@ export default function WelcomeCreditBanner() {
       // Controlla che abbia il signup_bonus
       const { data: bonus } = await supabase
         .from('loyalty_transactions')
-        .select('id, delta, created_at')
+        .select('id, created_at')
         .eq('user_id', profile.id)
         .eq('reason', 'signup_bonus')
         .maybeSingle();
@@ -56,14 +55,14 @@ export default function WelcomeCreditBanner() {
       if (remaining <= 0) return; // expired
       setDaysLeft(remaining);
 
-      // Recupera saldo punti corrente
-      const { data: account } = await supabase
-        .from('loyalty_accounts')
-        .select('points_balance')
-        .eq('user_id', profile.id)
-        .maybeSingle();
-
-      setPoints(account?.points_balance ?? bonus.delta);
+      // 30/8/2026 (R013) — QUI SI LEGGEVA IL SALDO PUNTI E NON LO MOSTRAVA
+      // NESSUNO.
+      //
+      // Il saldo finiva in uno stato (`points`) che la striscia non stampa da
+      // nessuna parte: il testo dice «€5 di sconto», fisso. Era una domanda al
+      // database in piu' su ogni visita di chi si e' appena iscritto, per un
+      // numero buttato via — e chi leggeva il codice poteva credere che la
+      // cifra mostrata venisse da li'.
       setShow(true);
     })().catch(() => { /* noop */ });
   }, [isAuthenticated, isBuyer, profile?.id, dismissed]);

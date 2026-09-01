@@ -78,13 +78,37 @@ export async function POST(request: Request) {
   const cookie = request.headers.get('cookie') ?? '';
   const vid = cookie.match(/mc_vid=([^;]+)/)?.[1] ?? null;
   const cidEsistente = cookie.match(/mc_cid=([^;]+)/)?.[1] ?? null;
-  const cidNuovo = !userId && !vid && !cidEsistente ? crypto.randomUUID() : null;
-  const anonId = vid ?? cidEsistente ?? cidNuovo;
-  const userAgent = request.headers.get('user-agent')?.slice(0, 300) ?? null;
-  const versione = parsed.data.versione ?? null;
 
   const categorie = (['analytics', 'marketing'] as const).map((c) => c as string);
   if (typeof parsed.data.functional === 'boolean') categorie.unshift('functional');
+
+  /**
+   * 27/8/2026 (R061) — A CHI DICEVA DI NO METTEVAMO COMUNQUE UN IDENTIFICATORE
+   * DA SEI MESI, E NE REGISTRAVAMO INDIRIZZO E BROWSER.
+   *
+   * «Rifiuta tutto» fa partire la stessa registrazione di «Accetta»: la rotta
+   * creava un cookie `mc_cid` da 180 giorni e scriveva una riga per categoria
+   * con `ip` e `user_agent`. Ma l'art. 7.1 del GDPR chiede di poter dimostrare
+   * il CONSENSO: per il rifiuto non c'è un obbligo di prova equivalente, e
+   * tenere per sei mesi un identificatore persistente più indirizzo e browser
+   * di chi ha appena detto no è il contrario della minimizzazione (art. 5.1.c).
+   *
+   * È il dettaglio che in un'ispezione sui cookie ribalta il giudizio: il
+   * banner è fatto bene — pulsanti di pari peso, X che rifiuta, categorie
+   * spente di default — e poi si scopre che chi rifiuta viene comunque
+   * schedato. Costa poco toglierlo e vale molto.
+   *
+   * Del rifiuto resta quello che serve a RISPETTARLO: categoria, valore, data
+   * e versione del testo. Niente di più.
+   */
+  const haDettoNoATutto = categorie.every(
+    (c) => parsed.data[c as 'analytics' | 'marketing' | 'functional'] === false,
+  );
+
+  const cidNuovo = !haDettoNoATutto && !userId && !vid && !cidEsistente ? crypto.randomUUID() : null;
+  const anonId = vid ?? cidEsistente ?? cidNuovo;
+  const userAgent = haDettoNoATutto ? null : request.headers.get('user-agent')?.slice(0, 300) ?? null;
+  const versione = parsed.data.versione ?? null;
 
   const righe = categorie.map((categoria) => ({
     user_id: userId,
@@ -92,7 +116,7 @@ export async function POST(request: Request) {
     categoria,
     valore: parsed.data[categoria as 'analytics' | 'marketing' | 'functional'] as boolean,
     versione_testo: versione,
-    ip,
+    ip: haDettoNoATutto ? null : ip,
     user_agent: userAgent,
   }));
 

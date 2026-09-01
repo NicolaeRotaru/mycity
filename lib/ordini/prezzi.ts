@@ -1,4 +1,4 @@
-import { shippingCentsFor } from '@/lib/shipping';
+import { compensoRiderCents, shippingCentsFor } from '@/lib/shipping';
 import { ripartisciCentesimi, riduciAlTetto } from '@/lib/stripe/ripartizione';
 import { PICKUP_DISCOUNT_PERCENT, PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 
@@ -73,13 +73,6 @@ export type EsitoPrezzo = {
   grandTotalCents: number;
 };
 
-/** Il compenso del fattorino: fisso, e zero sul ritiro in negozio. */
-function compensoFattorinoCents(pickupInStore: boolean): number {
-  // Volutamente non importato da lib/shipping per non creare un giro di
-  // dipendenze fra i due file: è una costante, non una regola che cambia.
-  return pickupInStore ? 0 : 300;
-}
-
 export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
   const subtotali = ing.gruppi.map((g) => g.subtotalCents);
   const grandSubtotalCents = subtotali.reduce((s, x) => s + x, 0);
@@ -129,7 +122,12 @@ export function prezziDelCarrello(ing: IngressiPrezzo): EsitoPrezzo {
         0,
         subtotali[i] + shippingPerGruppo[i] + deliveryFeeCents - couponPortionCents - pickupPortionCents,
       ),
-      riderFeeCents: compensoFattorinoCents(ing.pickupInStore),
+      // 27/8/2026 (R008) — Il compenso del fattorino era riscritto qui dentro,
+      // con il 300 a mano e la motivazione «non importato da lib/shipping per
+      // non creare un giro di dipendenze»: motivazione falsa, questo file
+      // importa da lib/shipping dalla prima riga. Due copie della stessa cifra
+      // vogliono dire che il giorno in cui cambia una resta indietro.
+      riderFeeCents: compensoRiderCents({ pickupInStore: ing.pickupInStore }),
     };
   });
 

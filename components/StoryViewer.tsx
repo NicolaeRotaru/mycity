@@ -129,8 +129,16 @@ export default function StoryViewer({ stories, startIndex = 0, onClose }: Props)
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setFuocoDentro(false); }}
       className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
     >
+      {/* 27/8/2026 (R118) — le barrette qui sotto dicono a colpo d'occhio a che
+          punto sei, ma sono `<div>` vuoti: in tutto il visore non esisteva da
+          nessuna parte un «Storia 2 di 5». Chi ascolta non sapeva né quante ne
+          restassero né dove si trovava. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        Storia {index + 1} di {stories.length}
+      </p>
+
       {/* Progress bar in alto */}
-      <div className="absolute top-0 left-0 right-0 flex gap-1 p-2 z-10">
+      <div className="absolute top-0 left-0 right-0 flex gap-1 p-2 z-10" aria-hidden>
         {stories.map((_, i) => (
           <div key={i} className="flex-1 h-1 bg-white/30 rounded-full overflow-hidden">
             {i === index ? (

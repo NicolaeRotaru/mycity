@@ -49,5 +49,11 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   return apiSuccess({ id: params.id, seller_reply: reply, seller_reply_at });
 }
 
-export const POST = (req: NextRequest, ctx: { params: Promise<{ id: string }> }) =>
-  withSellerAuth(async ({ user }) => handler(req, user, await ctx.params))(req);
+// 30/8/2026 (R017) — L'ADATTATORE A MANO NON C'E' PIU'.
+//
+// Qui c'era la riga che tutte le rotte dinamiche si riscrivevano: prendeva il
+// secondo argomento di Next, ne aspettava la promessa e la riportava dentro
+// l'involucro. Copiata tredici volte, e in ognuna bastava dimenticare l'`await`
+// per far arrivare `undefined` alla query. Adesso i pezzi dell'indirizzo li
+// risolve l'involucro, una volta sola, e arrivano gia' pronti nel contesto.
+export const POST = withSellerAuth(({ req, user, params }) => handler(req, user, { id: String(params.id) }));

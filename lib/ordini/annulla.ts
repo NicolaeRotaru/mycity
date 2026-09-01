@@ -24,12 +24,26 @@ import { logger } from '@/lib/logger';
 
 export type EsitoAnnullo =
   | { ok: true; refundId: string | null }
-  | { ok: false; motivo: 'CONTANTI_INCASSATI' | 'STRIPE_NON_CONFIGURATO' | 'RIMBORSO_FALLITO' | 'ANNULLAMENTO_FALLITO'; dettaglio?: string };
+  | {
+      ok: false;
+      motivo:
+        | 'CONTANTI_INCASSATI'
+        | 'STRIPE_NON_CONFIGURATO'
+        | 'RIMBORSO_FALLITO'
+        | 'ANNULLAMENTO_FALLITO'
+        | 'GIA_ANNULLATO';
+      dettaglio?: string;
+    };
 
-/** I campi che servono per decidere cosa fare dei soldi. */
+/**
+ * I campi che servono per decidere cosa fare dei soldi.
+ *
+ * 27/8/2026 (R121) — `coupon_code` MANCAVA, quindi il codice sconto non veniva
+ * nemmeno letto: chi annullava restava senza buono senza aver comprato niente.
+ */
 export const COLONNE_ANNULLO =
   'id, user_id, seller_id, total_price, payment_method, payment_status, delivery_status, ' +
-  'stripe_payment_intent, wallet_applied_cents, cash_confirmed_at, refunded_amount_cents';
+  'stripe_payment_intent, wallet_applied_cents, cash_confirmed_at, refunded_amount_cents, coupon_code';
 
 export type OrdineDaAnnullare = {
   id: string;
@@ -43,6 +57,7 @@ export type OrdineDaAnnullare = {
   wallet_applied_cents?: number | null;
   cash_confirmed_at?: string | null;
   refunded_amount_cents?: number | null;
+  coupon_code?: string | null;
 };
 
 /**
@@ -83,6 +98,31 @@ export async function annullaERimborsa(
     }
   }
 
+  /**
+   * 27/8/2026 (R121) — IL CODICE SCONTO RESTAVA BRUCIATO.
+   *
+   * Il codice si consuma in modo atomico prima di creare l'ordine
+   * (`claim_coupon`). La restituzione (`release_coupon`) esisteva, ma la
+   * chiamavano solo il rifiuto del negozio e i rimbalzi del carrello: dal
+   * 21/8 il pulsante «Annulla ordine» del cliente passa di qui, e di qui non
+   * la chiamava nessuno. Il cliente perdeva il buono di benvenuto senza aver
+   * comprato niente, e lo scopriva premendo «Applica» — cioè mentre stava
+   * riprovando a ordinare.
+   *
+   * `release_coupon` non scende mai sotto zero, quindi una restituzione di
+   * troppo non fa danno: è un no-op.
+   */
+  async function restituisciCoupon(): Promise<void> {
+    const codice = order.coupon_code?.trim();
+    if (!codice) return;
+    try {
+      const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice });
+      if (cErr) logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err: cErr.message });
+    } catch (err) {
+      logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err });
+    }
+  }
+
   // Contanti già incassati dal fattorino: la restituzione è un fatto fisico e la
   // decide una persona. Annullare in silenzio lascerebbe il cliente senza merce
   // e senza soldi.
@@ -113,6 +153,7 @@ export async function annullaERimborsa(
       // faceva il rifiuto del negozio lo restituiva già: senza questa riga,
       // farlo passare di qui sarebbe un passo indietro per chi compra.
       await restituisciCredito();
+      await restituisciCoupon();
       return { ok: true, refundId: res.refundId };
     } catch (err) {
       logger.error('[annullaERimborsa] rimborso fallito', { orderId: order.id, err });
@@ -120,19 +161,40 @@ export async function annullaERimborsa(
     }
   }
 
-  const { error: updErr } = await admin
+  /**
+   * 27/8/2026 (R131) — IL TURNO SI PRENDE CON LA SCRITTURA, NON PRIMA.
+   *
+   * L'UPDATE non aveva nessuna condizione sullo stato di partenza: la guardia
+   * viveva solo nel `if` JavaScript dei chiamanti, e fra la lettura e la
+   * scrittura non c'era niente. Due annulli sovrapposti — il giro degli ordini
+   * fermi contro il pulsante del cliente, o un ritentativo di rete — passavano
+   * tutti e due, e subito dopo `restore_stock_for_order` (una somma senza
+   * guardia) e `wallet_credit` giravano due volte: su un ordine in contanti
+   * pagato con 50 € di credito sono 50 € regalati, più pezzi di magazzino che
+   * non esistono e che il negozio venderà.
+   *
+   * `.neq('delivery_status','CANCELED')` invece di un elenco di stati: chi
+   * annulla resta chi annullava prima (il cliente solo da NEW, l'amministrazione
+   * da qualunque stato non annullato) — quello che cambia è che a passare è
+   * uno solo. Il secondo trova zero righe e se ne va senza toccare i soldi.
+   */
+  const { data: preso, error: updErr } = await admin
     .from('orders')
     .update({
       delivery_status: 'CANCELED',
       canceled_at: new Date().toISOString(),
       ...(order.payment_status === 'PENDING' ? { payment_status: 'FAILED' } : {}),
     })
-    .eq('id', order.id);
+    .eq('id', order.id)
+    .neq('delivery_status', 'CANCELED')
+    .select('id');
   if (updErr) return { ok: false, motivo: 'ANNULLAMENTO_FALLITO', dettaglio: updErr.message };
+  if (!preso || preso.length === 0) return { ok: false, motivo: 'GIA_ANNULLATO' };
 
   await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
 
   await restituisciCredito();
+  await restituisciCoupon();
 
   return { ok: true, refundId: null };
 }

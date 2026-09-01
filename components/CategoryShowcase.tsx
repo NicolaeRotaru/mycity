@@ -10,7 +10,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { sizedImage } from '@/lib/image-url';
-import { queryKeys } from '@/lib/queries/keys';
+import { domandaCategorie } from '@/lib/queries/catalogo';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   abbigliamento:  Shirt,
@@ -62,10 +62,6 @@ const iconFor = (slug: string): LucideIcon => ICON_MAP[slug] ?? Tag;
 const gradFor = (slug: string): string => GRAD_MAP[slug] ?? 'from-primary-500 to-primary-700';
 const imgFor = (slug: string): string | null => IMG_MAP[slug] ?? null;
 
-type CategoryRow = {
-  id: string; slug: string; name: string; icon: string | null;
-  sort_order?: number | null; featured?: boolean | null;
-};
 
 /**
  * Tessere illustrate con foto reale per categoria (overlay scuro per la
@@ -82,25 +78,12 @@ type CategoryRow = {
 type Props = { titolo?: string; sottotitolo?: string };
 
 const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
-  const { data: categories = [], isLoading, isError } = useQuery({
-    queryKey: queryKeys.categories.showcase,
-    queryFn: async (): Promise<CategoryRow[]> => {
-      // select('*') è resiliente alle colonne sort_order/featured (migration 076):
-      // se non esistono ancora, l'ordinamento ricade sul nome (comportamento storico).
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .is('parent_id', null);
-      if (error) throw error;
-      const rows = (data ?? []) as CategoryRow[];
-      rows.sort((a, b) =>
-        ((b.featured ? 1 : 0) - (a.featured ? 1 : 0)) ||
-        ((a.sort_order ?? 9999) - (b.sort_order ?? 9999)) ||
-        a.name.localeCompare(b.name),
-      );
-      return rows;
-    },
-  });
+  // 30/8/2026 (R068) — La domanda sta in `lib/queries/catalogo.ts`, e da li' la
+  // fa anche il server prima di mandare la pagina. Perche' il precarico serva a
+  // qualcosa, le due domande devono essere LA STESSA: stessa chiave, stessa
+  // forma della risposta. Riscritta in due posti, basta una lettera diversa
+  // nella chiave e il browser va in rete lo stesso — senza che nessuno lo veda.
+  const { data: categories = [], isLoading, isError } = useQuery(domandaCategorie(supabase));
 
   // Tre esiti. Prima il componente leggeva solo `data` e disegnava comunque la griglia: finché la
   // risposta non arrivava restava un vuoto sotto il titolo «Cosa cerchi oggi?», e se la lettura

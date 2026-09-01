@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Sparkles } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
@@ -114,7 +115,7 @@ export function CartUpsell({ items }: Props) {
                       alt={p.name}
                       fill
                       sizes="144px"
-                      unoptimized
+                      loader={caricatoreFotoRemote}
                       className="object-cover"
                     />
                   )}

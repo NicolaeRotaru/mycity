@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { RotateCcw, Check, X } from 'lucide-react';
+import { RotateCcw, Check, X, Truck, PackageCheck, Undo2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { formatPrice, formatDate } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { apiErrorMessage } from '@/lib/errors';
+import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 
 export type ReturnRow = {
   id: string;
@@ -47,9 +47,38 @@ type Props = {
 };
 
 /**
+ * Le tappe che il negoziante può far fare a un reso dopo averlo approvato, e
+ * il pulsante che le comanda.
+ *
+ * 27/8/2026 (R042) — DOPO «APPROVA» NON C'ERA PIÙ NIENTE. La card diventava di
+ * sola lettura, e un reso approvato senza importo restava in APPROVED per
+ * sempre. Il giro dei bonifici esclude gli ordini con un reso in REQUESTED,
+ * APPROVED, SHIPPED_BACK o RECEIVED: da quel momento i soldi di quell'ordine
+ * erano fermi, anche quando la merce tornava o ci si metteva d'accordo di
+ * persona. Il negozio vedeva «in attesa» senza scadenza e telefonava.
+ */
+const TAPPE: Record<string, Array<{ stato: string; etichetta: string; icona: typeof Truck }>> = {
+  APPROVED: [
+    { stato: 'SHIPPED_BACK', etichetta: 'Il cliente ha rispedito', icona: Truck },
+    { stato: 'RECEIVED', etichetta: 'Ho ricevuto la merce', icona: PackageCheck },
+    { stato: 'CANCELED', etichetta: 'Chiudi senza rimborso', icona: Undo2 },
+  ],
+  SHIPPED_BACK: [
+    { stato: 'RECEIVED', etichetta: 'Ho ricevuto la merce', icona: PackageCheck },
+    { stato: 'CANCELED', etichetta: 'Chiudi senza rimborso', icona: Undo2 },
+  ],
+  RECEIVED: [
+    { stato: 'REFUNDED', etichetta: 'Rimborsa e chiudi', icona: Check },
+    { stato: 'CANCELED', etichetta: 'Chiudi senza rimborso', icona: Undo2 },
+  ],
+};
+
+/**
  * Card richiesta di reso lato venditore. Finché lo stato è REQUESTED mostra
  * le azioni Approva / Rifiuta (con nota e importo rimborso opzionali) che
- * chiamano POST /api/returns/[id]/decide. Negli altri stati è in sola lettura.
+ * chiamano POST /api/returns/[id]/decide. Dopo l'approvazione mostra le tappe
+ * successive (POST /api/returns/[id]/avanza), fino alla chiusura che libera il
+ * bonifico. Negli stati finali è in sola lettura.
  */
 export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props) {
   const [amount, setAmount] = useState(orderTotal ? orderTotal.toFixed(2) : '');
@@ -88,6 +117,38 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
+  const avanza = useMutation({
+    mutationFn: async (stato: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const body: { stato: string; note?: string; refundAmountCents?: number } = { stato };
+      if (notes.trim()) body.note = notes.trim();
+      if (stato === 'REFUNDED') {
+        const cents = Math.round(parseFloat(amount.replace(',', '.')) * 100);
+        if (Number.isFinite(cents) && cents > 0) body.refundAmountCents = cents;
+      }
+      const res = await fetch(`/api/returns/${ret.id}/avanza`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(session?.access_token ? { authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(apiErrorMessage(j, 'Operazione non riuscita'));
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('Reso aggiornato');
+      onDecided();
+    },
+    onError: (err: unknown) => toast.error(friendlyError(err)),
+  });
+
+  const tappe = TAPPE[ret.status] ?? [];
+
   return (
     <div className="bg-white border-2 border-accent-300 rounded-2xl overflow-hidden shadow-warm">
       <div className="flex items-center justify-between gap-3 px-5 py-3 bg-accent-50 border-b border-accent-200">
@@ -112,9 +173,16 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
           </p>
         )}
 
-        {Array.isArray(ret.photo_urls) && ret.photo_urls.length > 0 && (
+        {/*
+          27/8/2026 (R021) — L'INDIRIZZO DELLA FOTO LO SCEGLIEVA CHI APRIVA IL
+          RESO, E FINIVA DRITTO IN UN `href`. Le richieste vecchie, entrate
+          quando la rotta accettava qualunque indirizzo, sono ancora nel
+          database: qui si tengono solo le foto del nostro archivio, le altre
+          non diventano un collegamento che il negoziante puo' cliccare.
+        */}
+        {Array.isArray(ret.photo_urls) && ret.photo_urls.filter(fotoDiCasa).length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {ret.photo_urls.map((url, i) => (
+            {ret.photo_urls.filter(fotoDiCasa).map((url, i) => (
               <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="relative w-20 h-20 rounded-lg overflow-hidden bg-cream-100 border border-cream-200">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={url} alt={`Foto reso ${i + 1}`} loading="lazy" className="w-full h-full object-cover" />
@@ -167,12 +235,53 @@ export default function ReturnRequestCard({ ret, orderTotal, onDecided }: Props)
             </div>
           </div>
         ) : (
-          <div className="pt-2 border-t border-cream-200 space-y-1 text-ink-700">
+          <div className="pt-2 border-t border-cream-200 space-y-3 text-ink-700">
             {ret.refund_amount_cents ? (
               <p><span className="text-ink-500">Rimborso:</span> <span className="font-semibold">{formatPrice(ret.refund_amount_cents / 100)}</span></p>
             ) : null}
             {ret.decision_notes && (
               <p><span className="text-ink-500">Nota:</span> {ret.decision_notes}</p>
+            )}
+
+            {tappe.length > 0 && (
+              <div className="space-y-3">
+                {ret.status === 'RECEIVED' && (
+                  <label className="block text-sm">
+                    <span className="block text-ink-600 mb-1">Importo rimborso (€)</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      placeholder="es. 41.40"
+                      className="w-32 border border-cream-300 rounded-lg px-3 py-2 focus:outline-none focus:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
+                    />
+                  </label>
+                )}
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={2}
+                  maxLength={1000}
+                  placeholder="Nota per il cliente (opzionale)"
+                  className="w-full border border-cream-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary-400 focus-visible:ring-2 focus-visible:ring-primary-700"
+                />
+                <div className="flex gap-2 flex-wrap">
+                  {tappe.map((t) => (
+                    <button
+                      key={t.stato}
+                      onClick={() => avanza.mutate(t.stato)}
+                      disabled={avanza.isPending}
+                      className="inline-flex items-center gap-1.5 bg-white border border-cream-300 text-ink-800 hover:bg-cream-50 px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+                    >
+                      <t.icona size={16} strokeWidth={2.4} /> {t.etichetta}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-ink-400">
+                  Finché il reso resta aperto, il bonifico di questo ordine non parte.
+                </p>
+              </div>
             )}
           </div>
         )}

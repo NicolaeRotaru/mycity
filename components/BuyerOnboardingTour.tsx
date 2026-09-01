@@ -90,8 +90,24 @@ export default function BuyerOnboardingTour() {
   // Fuoco dentro il riquadro, uscita con Esc, ritorno dov'era: le tre cose che
   // rendono un pannello un pannello anche senza mouse.
   const pannelloRef = useRef<HTMLDivElement>(null);
-  const nessunAvvio = useRef<HTMLButtonElement>(null);
-  useBottomSheetA11y(open, pannelloRef, nessunAvvio, close);
+  /**
+   * 27/8/2026 (R112) — QUI IL RIFERIMENTO ERA SEMPRE VUOTO.
+   *
+   * `useBottomSheetA11y` alla chiusura fa `trigger?.focus()`, ma gli veniva
+   * passato un `useRef` creato e mai attaccato a nessun elemento: la chiamata
+   * non faceva niente e il fuoco cadeva sul corpo della pagina. Chi naviga da
+   * tastiera chiudeva il pannello e si ritrovava all'inizio del sito.
+   *
+   * Invece di far viaggiare un riferimento da chi apre a chi si apre, il
+   * pannello si ricorda da solo DOVE stava il fuoco un attimo prima di aprirsi:
+   * funziona da qualunque punto lo si apra, anche da un pulsante che non è
+   * quello previsto.
+   */
+  const avvioRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (open) avvioRef.current = document.activeElement as HTMLButtonElement | null;
+  }, [open]);
+  useBottomSheetA11y(open, pannelloRef, avvioRef, close);
 
   const next = () => {
     if (step >= STEPS.length - 1) close();

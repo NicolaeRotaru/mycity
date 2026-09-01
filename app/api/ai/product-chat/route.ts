@@ -6,9 +6,9 @@ import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
-import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
+import { runMessage, AiCallError, mapAiError, conCacheDelContesto } from '@/lib/ai/run';
 import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
-import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * Assistente AI agentico per la scheda prodotto.
@@ -173,7 +173,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: ProductChatBody;
   try {
     body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
 
@@ -275,7 +278,9 @@ ${attrLines || '- (nessuno)'}`;
   ];
 
   const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: contextContent },
+    // (R156) Il contesto e' stabile per tutta la conversazione: e' il pezzo
+    // che la cache del prompt deve riusare, ed era l'unico che non copriva.
+    { role: 'user', content: conCacheDelContesto(contextContent) },
     {
       role: 'assistant',
       content: 'Ricevuto, ho la scheda prodotto e le foto davanti. Dimmi cosa vuoi fare.',

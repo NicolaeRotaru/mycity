@@ -175,11 +175,14 @@ vi.mock('@/lib/supabase/server', () => {
   };
 });
 
-function richiesta(): never {
+function richiesta(chiaveDelCheckout?: string): never {
   return new Request('http://localhost/api/orders/cod', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
+      // 30/8/2026 (R163) — la chiave nata nel browser all'ingresso in cassa,
+      // quella che ha viaggiato con `checkout_started`.
+      ...(chiaveDelCheckout ? { checkoutId: chiaveDelCheckout } : {}),
       groups: [
         { sellerId: 'aaaaaaaa-0000-0000-0000-000000000001', items: [{ productId: '11111111-1111-1111-1111-111111111111', quantity: 1 }], shippingCents: 0 },
         { sellerId: 'bbbbbbbb-0000-0000-0000-000000000002', items: [{ productId: '22222222-2222-2222-2222-222222222222', quantity: 1 }], shippingCents: 0 },
@@ -194,9 +197,9 @@ function richiesta(): never {
   }) as never;
 }
 
-async function esegui() {
+async function esegui(chiaveDelCheckout?: string) {
   const { POST } = await import('@/app/api/orders/cod/route');
-  return (POST as unknown as (req: never) => Promise<Response>)(richiesta());
+  return (POST as unknown as (req: never) => Promise<Response>)(richiesta(chiaveDelCheckout));
 }
 
 beforeEach(() => {
@@ -281,6 +284,34 @@ describe('ordine in contanti da due negozi', () => {
       'bbbbbbbb-0000-0000-0000-000000000002',
     ]);
     expect(acquistiContati.every((a) => a.paymentMethod === 'cod')).toBe(true);
+  });
+
+  /**
+   * 30/8/2026 (R163) — I DUE CAPI DEL FUNNEL DELLA CASSA.
+   *
+   * `checkout_started` parte una volta per carrello dal browser;
+   * `order_placed` parte una volta per ORDINE dal server, e qui gli ordini sono
+   * due. Finche' i due passi non portavano la stessa chiave, la conversione
+   * «arriva alla cassa → paga» poteva superare il 100% e non si poteva
+   * ricomporre a posteriori.
+   */
+  it('i due acquisti portano la chiave del checkout arrivata dal browser', async () => {
+    const CHIAVE = '7f3c1a90-2b6e-4a11-9a0f-1c2d3e4f5a6b';
+    await esegui(CHIAVE);
+    expect(acquistiContati.length).toBe(2);
+    for (const a of acquistiContati) {
+      expect(
+        a.checkoutId,
+        'l acquisto porta un identificativo che il browser non ha mai visto: il funnel resta spezzato',
+      ).toBe(CHIAVE);
+    }
+  });
+
+  it('senza chiave dal browser si ripiega su quella del tentativo, come prima', async () => {
+    await esegui();
+    expect(acquistiContati.length).toBe(2);
+    expect(new Set(acquistiContati.map((a) => a.checkoutId)).size).toBe(1);
+    expect(String(acquistiContati[0].checkoutId)).toMatch(/^cod-/);
   });
 
   it('un ordine annullato non finisce nei conti', async () => {

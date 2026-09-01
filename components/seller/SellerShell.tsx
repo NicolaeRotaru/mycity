@@ -66,18 +66,28 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(href + '/');
 }
 
-/** Conta gli ordini "da fare" del venditore — stesso filtro della pagina ordini. */
-function useSellerTodoCount() {
+/**
+ * Conta gli ordini "da fare" del venditore — stesso filtro della pagina ordini.
+ *
+ * 27/8/2026 (R075) — QUATTRO RICHIESTE AL MINUTO PER DUE PALLINI, E DUE ERANO CHIAMATE DI RETE
+ * ALL'AUTENTICAZIONE. Ogni giro di questo conteggio cominciava chiedendo al servizio di
+ * autenticazione chi fosse la persona: una chiamata di rete, non una lettura dalla memoria. Chi sei lo sa già la
+ * pagina, che il profilo se l'è fatto dare una volta sola (`useProfile`). Adesso l'identità arriva
+ * da lì, e i due sondaggi girano più piano e solo con la scheda in primo piano: il costo scala con
+ * «negozi × ore aperte», che è la peggiore delle basi di calcolo.
+ */
+function useSellerTodoCount(sellerId: string | null) {
   const { data = 0 } = useQuery({
-    queryKey: [...queryKeys.seller.orders, 'todo-count'],
-    refetchInterval: 30_000,
+    queryKey: [...queryKeys.seller.orders, 'todo-count', sellerId ?? ''],
+    enabled: !!sellerId,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return 0;
+      if (!sellerId) return 0;
       const { count, error } = await supabase
         .from('orders')
         .select('id', { count: 'exact', head: true })
-        .eq('seller_id', user.id)
+        .eq('seller_id', sellerId)
         .in('delivery_status', ['NEW', 'ACCEPTED', 'READY']);
       if (error) return 0;
       return count ?? 0;
@@ -87,17 +97,18 @@ function useSellerTodoCount() {
 }
 
 /** Conta le notifiche non lette per il pallino del campanello. */
-function useNotifUnread() {
+function useNotifUnread(userId: string | null) {
   const { data = 0 } = useQuery({
-    queryKey: [...queryKeys.notifications.count, 'seller-bell'],
-    refetchInterval: 60_000,
+    queryKey: [...queryKeys.notifications.count, 'seller-bell', userId ?? ''],
+    enabled: !!userId,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return 0;
+      if (!userId) return 0;
       const { count, error } = await supabase
         .from('notifications')
         .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .eq('is_read', false);
       if (error) return 0;
       return count ?? 0;
@@ -152,8 +163,9 @@ export default function SellerShell({ children }: { children: React.ReactNode })
   const [notifOpen, setNotifOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const todo = useSellerTodoCount();
-  const notifUnread = useNotifUnread();
+  // L'identità arriva dal profilo già condiviso: due chiamate di rete al minuto in meno (R075).
+  const todo = useSellerTodoCount(profile?.id ?? null);
+  const notifUnread = useNotifUnread(profile?.id ?? null);
 
   const storeName = profile?.store_name || profile?.full_name || profile?.email || userEmail || 'Negozio';
   const initials =

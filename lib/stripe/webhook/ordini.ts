@@ -18,12 +18,14 @@
  */
 import type Stripe from 'stripe';
 import { getStripe, computeOrderSplit } from '@/lib/stripe/client';
+import { marcaCarrelloRecuperato } from '@/lib/carrelli-abbandonati';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { sendEmail } from '@/lib/email/client';
 import { logger } from '@/lib/logger';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
+import { clientIdGaValido } from '@/lib/analytics/ga-client-id';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
-import { notifyAdmins, sessionePagata } from './comune';
+import { notifyAdmins, provaAMandare, sessionePagata, suonaLaCampanellaAiNegozi } from './comune';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 
@@ -44,6 +46,18 @@ export type PendingGroup = {
   deliveryFeeCents?: number;
   /** Compenso del fattorino, calcolato al checkout sulla distanza. */
   riderFeeCents?: number;
+  /**
+   * 27/8/2026 (R165) — Il gruppo del test A/B letto dai cookie al checkout
+   * (`{ home_hero: 'b' }`). Qui il webhook di cookie non ne riceve: se non
+   * viaggiasse con la riga di intento, l'acquisto con carta arriverebbe nei
+   * conti senza dire a quale variante appartiene.
+   */
+  esperimenti?: Record<string, string>;
+  /**
+   * 30/8/2026 (R163) — La chiave del checkout nata nel browser: lega
+   * `checkout_started` (uno per carrello) agli `order_placed` (uno per ordine).
+   */
+  chiaveCheckout?: string | null;
   couponPortionCents: number;
   pickupPortionCents: number;
   totalCents: number;
@@ -467,25 +481,11 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
   const nuovi = createdOrderIds.filter((c) => c.nuovo);
 
   if (nuovi.length > 0) {
-    const { error: errCampanelle } = await admin.from('notifications').insert(
-      nuovi.map((created) => ({
-        // #33 — la categoria decide se la persona vuole ancora ricevere
-        // questo tipo di avviso: senza, gli interruttori non spegnevano niente.
-        category: 'order',
-        user_id: created.sellerId,
-        title: '📦 Nuovo ordine ricevuto',
-        body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
-        link: `/seller/orders/${created.orderId}`,
-      })),
-    );
-    // Non si lancia: l'ordine c'e' ed e' pagato, e far ritentare Stripe
-    // ricreerebbe il giro intero. Ma un negozio che non riceve la campanella e'
-    // un ordine che nessuno prepara: deve restare scritto dove si guarda.
-    if (errCampanelle) {
-      logger.error('[stripe] campanella al venditore non scritta: ordine pagato e nessuno avvisato', {
-        pendingCheckoutId, ordini: nuovi.map((c) => c.orderId), message: errCampanelle.message,
-      });
-    }
+    // 30/8/2026 (R164) — Il carrello di questa persona e' tornato: e' diventato
+    // un ordine. Lo marca anche il browser, ma il browser puo' chiudersi — chi
+    // paga e chiude la scheda non passa mai di li'. Qui il fatto e' certo.
+    await marcaCarrelloRecuperato(admin, buyerId);
+    await suonaLaCampanellaAiNegozi(admin, nuovi, pendingCheckoutId);
   }
 
   // #208 — L'acquisto si conta qui, dove il fatto è certo: gli ordini sono
@@ -502,12 +502,21 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           totalCents: c.totalCents,
           paymentMethod: 'card',
           sellerId: c.sellerId,
-          checkoutId: pendingCheckoutId,
+          // R163 — la chiave usata dal browser per `checkout_started`, se c'e'.
+          checkoutId: groups[0]?.chiaveCheckout ?? pendingCheckoutId,
+          // 30/8/2026 (R166) — L'id del browser per Google, rimesso dentro le
+          // etichette dalla rotta del checkout: qui i cookie non arrivano.
+          gaClientId: clientIdGaValido(session.metadata?.ga_client_id),
+          // La variante e' la stessa per tutto il carrello: si legge dal primo
+          // gruppo, dove il checkout l'ha scritta.
+          varianti: groups[0]?.esperimenti ?? {},
         }),
       ),
     );
   }, 'misura acquisto');
 
+  // 30/8/2026 (R005) — Un intoppo sul primo negozio non zittisce gli altri: il
+  // ciclo stava sotto un solo `.catch()`. Il riparo per invio: `provaAMandare`.
   dopoLaRisposta(async () => {
     for (const created of nuovi) {
       const groupForOrder = groups.find((x) => x.sellerId === created.sellerId);
@@ -520,12 +529,17 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           total: created.totalCents / 100,
           storeName,
         });
-        await sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text });
+        await provaAMandare('conferma al cliente', { orderId: created.orderId }, () =>
+          sendEmail({ to: buyerEmail, subject: t.subject, html: t.html, text: t.text }));
       }
 
-      const { data: sellerAuth } = await admin.auth.admin.getUserById(created.sellerId);
-      const sellerEmail = sellerAuth?.user?.email;
-      if (sellerEmail) {
+      // Anche la lettura dell'indirizzo del negozio sta nel riparo: e' una
+      // chiamata di rete, e se va storta prima portava via con se' gli ordini
+      // rimasti.
+      await provaAMandare('avviso al negozio', { orderId: created.orderId, sellerId: created.sellerId }, async () => {
+        const { data: sellerAuth } = await admin.auth.admin.getUserById(created.sellerId);
+        const sellerEmail = sellerAuth?.user?.email;
+        if (!sellerEmail) return;
         const t = newOrderSellerTemplate({
           sellerName: null,
           orderId: created.orderId,
@@ -533,7 +547,7 @@ export async function handleCheckoutCompleted(session: Stripe.Checkout.Session) 
           itemsCount: created.itemsCount,
         });
         await sendEmail({ to: sellerEmail, subject: t.subject, html: t.html, text: t.text });
-      }
+      });
     }
   }, 'avvisi post-ordine');
 }

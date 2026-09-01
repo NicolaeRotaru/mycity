@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  Sparkles,
   Loader2,
   Send,
   ImagePlus,

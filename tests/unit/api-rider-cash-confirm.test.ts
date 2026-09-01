@@ -21,11 +21,13 @@ const state: {
   order: Record<string, unknown> | null;
   claimed: Array<{ id: string }>;
   reconRows: Array<Record<string, unknown>>;
+  admins: Array<{ id: string }>;
 } = {
   user: { id: 'rider-1' },
   order: null,
   claimed: [],
   reconRows: [],
+  admins: [],
 };
 
 // Query-builder chainabile e "awaitable" che risolve sempre a `result`.
@@ -34,6 +36,8 @@ export const filtriVisti: { in: unknown[][] } = { in: [] };
 export const aggiornamenti: Array<Record<string, unknown>> = [];
 /** Cosa è finito nella quadratura giornaliera (#155). */
 export const quadrature: Array<Record<string, unknown>> = [];
+/** Gli avvisi scritti agli amministratori (R127). */
+export const avvisiAgliAdmin: Array<Record<string, unknown>> = [];
 
 function qb(result: unknown) {
   const chain = () => builder;
@@ -95,8 +99,15 @@ vi.mock('@/lib/supabase/server', () => ({
           },
         };
       }
-      if (table === 'profiles') return { select: () => qb({ data: [], error: null }) };
-      if (table === 'notifications') return { insert: () => Promise.resolve({ error: null }) };
+      if (table === 'profiles') return { select: () => qb({ data: state.admins, error: null }) };
+      if (table === 'notifications') {
+        return {
+          insert: (righe: Record<string, unknown>[]) => {
+            for (const r of righe) avvisiAgliAdmin.push(r);
+            return Promise.resolve({ error: null });
+          },
+        };
+      }
       return { select: () => qb({ data: [], error: null }) };
     },
   }),
@@ -123,6 +134,8 @@ beforeEach(() => {
   filtriVisti.in.length = 0;
   aggiornamenti.length = 0;
   quadrature.length = 0;
+  avvisiAgliAdmin.length = 0;
+  state.admins = [{ id: 'admin-1' }];
   state.user = { id: 'rider-1' };
   // Ordine COD da €10 (sotto la soglia €50, niente prova obbligatoria).
   state.order = {
@@ -188,6 +201,43 @@ describe('POST /api/rider/cash-confirm', () => {
   });
 
   /**
+   * 30/8/2026 (R127) — L'AVVISO SUI SOLDI CHE MANCANO EREDITAVA L'INTERRUTTORE
+   * PIU' OVVIO DA SPEGNERE.
+   *
+   * Quando il contante consegnato non quadra parte un avviso agli
+   * amministratori. L'inserimento non diceva la categoria, quindi il database
+   * ci metteva la sua predefinita, «order» — la stessa degli aggiornamenti
+   * d'ordine. E' la categoria che governa l'invio della notifica push
+   * (`vuole_notifica`, migrazione 115): un amministratore che spegne gli avvisi
+   * d'ordine — la cosa piu' normale del mondo, sono i piu' rumorosi — smetteva
+   * di ricevere sul telefono l'unico segnale automatico sul contante che manca
+   * all'appello, e quello restava solo in una lista che in tempo reale non
+   * guarda nessuno. Il contante e' la parte del giro dove e' piu' facile che
+   * sparisca qualcosa e piu' difficile accorgersene dopo.
+   *
+   * «system» e' la categoria degli avvisi di servizio: nel database cade nel
+   * ramo ELSE, cioe' non si puo' disattivare.
+   */
+  it('l\'avviso di ammanco di cassa non si puo spegnere per sbaglio', async () => {
+    // Attesi 700 centesimi (10 euro meno i 3 di compenso): ne consegna 200.
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 200 });
+    expect(res.status).toBe(200);
+
+    const ammanco = avvisiAgliAdmin.find((a) => String(a.title).includes('non quadra'));
+    expect(ammanco, 'nessun avviso agli amministratori per un ammanco di cinque euro').toBeTruthy();
+    expect(
+      ammanco?.category,
+      'l avviso sui soldi che mancano nasce fra gli aggiornamenti d ordine: chi spegne quelli non lo riceve piu sul telefono',
+    ).toBe('system');
+  });
+
+  it('quando la cassa quadra non si disturba nessuno', async () => {
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
+    expect(res.status).toBe(200);
+    expect(avvisiAgliAdmin).toHaveLength(0);
+  });
+
+  /**
    * #155 — IL FATTORINO NON VENIVA PAGATO PER NESSUNA CONSEGNA IN CONTANTI.
    *
    * Gli si chiedeva di rimettere TUTTO il contante, fee di consegna compresa,
@@ -216,6 +266,44 @@ describe('POST /api/rider/cash-confirm', () => {
     await callPost({ orderId: ORDER_ID, cashCollectedCents: 700 });
     expect(aggiornamenti[0]?.rider_payout_status).toBe('CASH_WITHHELD');
     expect(aggiornamenti[0]?.rider_payout_at).toBeTruthy();
+  });
+
+  /**
+   * 30/8/2026 (R120) — QUANDO IL CREDITO COPRIVA TUTTO, IL COMPENSO RISULTAVA
+   * PAGATO E NON LO ERA.
+   *
+   * `total_price` è il totale DOPO lo scomputo del credito MyCity, e in cassa
+   * la spunta «usa il credito» è accesa di default. Con 50 € di credito e un
+   * ordine da 22 € in contrassegno l'ordine nasce a zero: il fattorino
+   * consegna, non incassa niente, e non ha da cosa trattenersi i suoi 3 €.
+   *
+   * Qui si scriveva comunque 'CASH_WITHHELD' — lo stato che vuol dire «pagato,
+   * in contanti» — perché la condizione guardava il compenso DOVUTO e non
+   * quello davvero trattenibile. Da lì il giro dei bonifici usciva subito:
+   * quei soldi non sarebbero partiti mai, e nessuna quadratura se ne accorgeva
+   * (atteso 0, incassato 0, differenza 0).
+   */
+  it('col credito che copre tutto il compenso resta dovuto, non risulta pagato', async () => {
+    state.order = { ...(state.order as object), total_price: 0 };
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 0 });
+    expect(res.status).toBe(200);
+    expect(
+      aggiornamenti[0]?.rider_payout_status,
+      'il compenso di una consegna fatta davvero risulta gia incassato in contanti che non ha mai visto',
+    ).toBe('HELD');
+    expect(
+      aggiornamenti[0]?.rider_payout_at,
+      'segnato pagato con tanto di ora, mentre il fattorino non ha preso un euro',
+    ).toBeNull();
+  });
+
+  it('col credito che copre quasi tutto resta dovuta la differenza', async () => {
+    // Residuo da pagare in contanti: 2 €. Il compenso è 3: se ne può tenere
+    // solo 2, e uno resta scoperto.
+    state.order = { ...(state.order as object), total_price: 2 };
+    const res = await callPost({ orderId: ORDER_ID, cashCollectedCents: 0 });
+    expect(res.status).toBe(200);
+    expect(aggiornamenti[0]?.rider_payout_status).toBe('HELD');
   });
 
   it('sul ritiro in negozio non c\'è consegna, quindi non c\'è compenso da trattenere', async () => {

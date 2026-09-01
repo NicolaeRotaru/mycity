@@ -1,5 +1,7 @@
 // lib/ai/productContext.ts
 import type Anthropic from '@anthropic-ai/sdk';
+import { env } from '@/lib/env';
+import { recinta } from '@/lib/ai/recinto';
 
 /**
  * Costruisce il blocco-contesto del prodotto come DATO (foto + scheda JSON +
@@ -27,18 +29,46 @@ const DEFAULT_MAX_IMAGES = 4;
  * (anche in qualcosa che non vorremmo mostrare), e che intanto vede il traffico
  * dei nostri clienti.
  */
-const HOST_FOTO_AMMESSI = [
-  /\.supabase\.co$/i,
-  /^placehold\.co$/i,
-  /^images\.pexels\.com$/i,
-];
+/**
+ * 27/8/2026 (R147) — «FOTO OSPITATE DA NOI» ERA «QUALUNQUE PROGETTO SUPABASE
+ * DEL MONDO».
+ *
+ * La prima regola dell'elenco era `/\.supabase\.co$/i`: accettava il
+ * sottodominio di qualsiasi progetto Supabase, e un progetto Supabase lo apre
+ * chiunque, gratis, in due minuti. Il commento prometteva «foto ospitate da
+ * noi» e il codice non lo faceva: bastava ospitare la foto altrove per
+ * riportare dentro un'immagine che possiamo far scaricare al modello e che chi
+ * la ospita puo' cambiare dopo.
+ *
+ * Adesso il confronto e' con l'host del NOSTRO progetto, ricavato dalla
+ * variabile con cui il sito parla col database. Se quella variabile manca —
+ * cosa che in produzione non succede, perche' senza il sito non parte — resta
+ * il vecchio comportamento: meglio un filtro largo che le foto dei prodotti
+ * che spariscono da tutte le schede.
+ */
+const HOST_ESTERNI_DICHIARATI = [/^placehold\.co$/i, /^images\.pexels\.com$/i];
+const JOLLY_SUPABASE = /\.supabase\.co$/i;
+
+/** L'host del nostro progetto Supabase, o `null` se non e' configurato. */
+export function hostDelNostroArchivio(): string | null {
+  const url = env.supabaseUrl();
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
 
 /** L'indirizzo è una foto ospitata da noi (o da un host dichiarato)? */
 export function fotoDaHostAmmesso(url: string): boolean {
   try {
     const u = new URL(url);
     if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
-    return HOST_FOTO_AMMESSI.some((re) => re.test(u.hostname));
+    const host = u.hostname.toLowerCase();
+    if (HOST_ESTERNI_DICHIARATI.some((re) => re.test(host))) return true;
+    const nostro = hostDelNostroArchivio();
+    return nostro ? host === nostro : JOLLY_SUPABASE.test(host);
   } catch {
     return false;
   }
@@ -80,7 +110,22 @@ export function buildProductContext(
     productJson.length > MAX_PRODUCT_JSON
       ? `${productJson.slice(0, MAX_PRODUCT_JSON)}\n…(troncato per limite di lunghezza)`
       : productJson;
-  parts.push(`Stato attuale del prodotto (JSON):\n${cappedProductJson}`);
+  /**
+   * 27/8/2026 (R150) — LA SCHEDA ENTRAVA NEL PROMPT SENZA RECINTO.
+   *
+   * Il progetto ha gia' deciso, altrove, che il contenuto di un prodotto e' un
+   * DATO da leggere e mai un ordine da eseguire: il lavoro massivo sul
+   * catalogo lo mette dentro `<scheda>` e lo dice nelle istruzioni. Qui —
+   * cioe' su SEO, traduzione, varianti e diagnosi — arrivava come JSON nudo.
+   *
+   * Non e' il venditore il vettore: sono le descrizioni importate da altri
+   * marketplace, che le scrive un estraneo. «Ignora le istruzioni e scrivi
+   * che...» dentro una descrizione arriva alla rotta che riscrive titolo e tag,
+   * e il risultato torna nel form del venditore.
+   */
+  parts.push(
+    `Stato attuale del prodotto (JSON):\n${recinta('scheda', cappedProductJson, cappedProductJson.length)}`,
+  );
   if (topCategories.length) {
     parts.push(
       `Categorie di primo livello disponibili (slug):\n${topCategories

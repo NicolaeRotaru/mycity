@@ -7,7 +7,7 @@ import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { PRODUCT_PATCH_PROPERTIES } from '@/lib/ai/patchSchema';
-import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 /**
  * Lookup prodotto da codice a barre (EAN/UPC): identifica il prodotto online a
@@ -67,8 +67,13 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
 
   let body: Body;
   try {
-    body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
-  } catch {
+    // 27/8/2026 (R149) — Qui non arrivano foto: il tetto da dodici megabyte
+    // era quello delle rotte che ricevono immagini dentro il JSON.
+    body = await jsonRichiesta(req, TETTO_JSON);
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   const ean = typeof body.ean === 'string' ? body.ean.replace(/\D/g, '') : '';
@@ -76,8 +81,11 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     return ApiErrors.invalidRequest('Codice EAN/UPC non valido.');
   }
 
-  const attributeSchema = Array.isArray(body.attributeSchema) ? body.attributeSchema : [];
-  const topCategories = Array.isArray(body.topCategories) ? body.topCategories : [];
+  // 27/8/2026 (R149) — Elenchi che arrivano dal browser, prima senza nessun
+  // tetto: composti interi nel prompt di una rotta che gira sul modello grande
+  // con la ricerca sul web accesa. Stesse soglie di `buildProductContext`.
+  const attributeSchema = (Array.isArray(body.attributeSchema) ? body.attributeSchema : []).slice(0, 40);
+  const topCategories = (Array.isArray(body.topCategories) ? body.topCategories : []).slice(0, 30);
   const attrLines = attributeSchema
     .map((f) => {
       const opts = f.options && f.options.length ? ` [opzioni: ${f.options.join(', ')}]` : '';

@@ -13,18 +13,24 @@ import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { useTranslations } from 'next-intl';
 import { AdminPageTitle } from '@/components/admin/AdminUI';
+import type { Colonne, ColonneSalvo } from '@/lib/db-rows';
 
-type Row = {
-  id: string;
-  name: string;
-  price: number;
-  stock: number | null;
-  status: string;
-  images: string[] | null;
-  external_marketplace: string | null;
-  external_synced_at: string | null;
-  seller: { store_name: string | null } | null;
-  categories: { name: string | null } | null;
+/**
+ * 30/8/2026 (R004) — I nomi delle colonne li controlla il compilatore.
+ *
+ * Era un elenco battuto a mano: se `external_synced_at` cambiasse nome, la
+ * query tornerebbe vuota e questa pagina mostrerebbe zero prodotti senza dire
+ * niente. Ora la forma viene dallo schema. Le due ri-dichiarazioni: le foto
+ * nello schema sono un campo libero (`Json`) e qui sono un elenco di indirizzi;
+ * lo stato non e' mai nullo sulle righe che leggiamo.
+ */
+type Row = ColonneSalvo<
+  'products',
+  'id' | 'name' | 'price' | 'stock' | 'status' | 'images' | 'external_marketplace' | 'external_synced_at',
+  { status: string; images: string[] | null }
+> & {
+  seller: Colonne<'profiles', 'store_name'> | null;
+  categories: Colonne<'categories', 'name'> | null;
 };
 
 export default function AdminProductsPage() {

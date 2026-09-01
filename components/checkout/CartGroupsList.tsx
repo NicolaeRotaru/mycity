@@ -1,6 +1,7 @@
 'use client';
 
 import Image from 'next/image';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
@@ -35,7 +36,7 @@ export function CartGroupsList({ groups }: Props) {
                   alt={item.name}
                   fill
                   sizes="40px"
-                  unoptimized
+                  loader={caricatoreFotoRemote}
                   className="object-cover"
                 />
               </div>

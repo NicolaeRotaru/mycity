@@ -1,4 +1,4 @@
-import { controllaTettoSpesaAi } from '@/lib/ai/run';
+import { controllaTettoSpesaAi, registraSpesaAi } from '@/lib/ai/run';
 import { NextResponse } from 'next/server';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
@@ -12,11 +12,12 @@ import {
   buildCatalogBatchRequests,
   isCatalogOperation,
   isSupportedLang,
+  stimaCostoLottoEur,
   type CatalogOperation,
 } from '@/lib/ai/catalogBatch';
 import { PRODUCT_SNAPSHOT_COLS, type ProductRow } from '@/lib/products/aiSnapshot';
 import type { CategoryRow } from '@/lib/products/aiPatch';
-import { jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON_CON_FOTO } from '@/lib/api/corpo';
 
 /**
  * Avvia un job AI massivo sul catalogo (Batch API). Costruisce una richiesta per
@@ -40,7 +41,10 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   let body: Body;
   try {
     body = await jsonRichiesta(req, TETTO_JSON_CON_FOTO);
-  } catch {
+  } catch (errore) {
+    // (R153) Troppo grande e malformato non sono la stessa cosa: il perche' e'
+    // scritto per esteso in app/api/ai/catalog-chat/route.ts.
+    if (errore instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge(errore.message);
     return ApiErrors.invalidRequest('JSON non valido');
   }
   if (!isCatalogOperation(body.operation)) {
@@ -107,8 +111,26 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
      * freno doveva fermarlo — e la sua spesa non veniva contata, quindi il
      * tetto restava fermo mentre i soldi uscivano.
      */
-    controllaTettoSpesaAi('ai-catalog-batch-start');
+    await controllaTettoSpesaAi('ai-catalog-batch-start');
     const handle = await submitBatch(requests);
+    /**
+     * 27/8/2026 (R143) — SI CONTROLLAVA IL TETTO E NON SI REGISTRAVA NIENTE.
+     *
+     * La spesa del lotto entrava nel conto solo dentro la rotta che legge lo
+     * stato del lavoro, e solo se il venditore tornava a guardare la pagina E
+     * il lotto risultava finito. Chi la chiudeva e non tornava portava via
+     * fino a duecento chiamate al modello che non contava nessuno — cinque
+     * avvii all'ora per venditore.
+     *
+     * Adesso appena il lavoro e' partito si impegna la stima. Quando i
+     * risultati arrivano, `status` aggiunge solo la differenza fra il costo
+     * vero e questa stima: i soldi si contano una volta sola, ma subito.
+     */
+    const impegnato = stimaCostoLottoEur(operation, requests.length);
+    await registraSpesaAi(impegnato);
+    logger.info('[ai] spesa del lotto impegnata alla partenza', {
+      jobId: job.id, richieste: requests.length, stimaEur: impegnato.toFixed(4),
+    });
     const { error: errUpd } = await admin
       .from('catalog_ai_jobs')
       .update({ status: 'processing', batch_id: handle.id })

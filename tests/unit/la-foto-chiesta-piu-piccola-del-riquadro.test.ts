@@ -93,7 +93,12 @@ describe("l'invariante di STRUTTURA sul sito vero", () => {
   // Legge il codice com'è adesso. Diventa rossa il giorno che qualcuno chiede di nuovo una foto più
   // piccola del riquadro in cui la mette — prima che la foto sgranata arrivi a schermo.
   const files = execSync(
-    'grep -rl "sizedImage(" --include=*.tsx --include=*.ts . | grep -v node_modules | grep -v lib/image-url',
+        // 31/8/2026 — `--exclude-dir=.claude`: un collaudo lascia sotto .claude/worktrees
+        // copie intere del repo, e una ricerca che parte dalla radice conta ogni riscontro
+        // una volta per copia. E' costato un rosso falso: 30 riquadri invece di 5, cioe' i
+        // 5 veri moltiplicati per le sei copie presenti. Il conto va fatto sul progetto, una
+        // volta sola.
+    'grep -rl "sizedImage(" --include=*.tsx --include=*.ts --exclude-dir=.claude . | grep -v node_modules | grep -v lib/image-url',
     { encoding: 'utf8' },
   ).trim().split('\n');
 
@@ -138,5 +143,47 @@ describe("l'invariante di STRUTTURA sul sito vero", () => {
     // Il numero sta qui perché scenda quando qualcuno li dichiara in pixel, e perché non cresca in
     // silenzio: oggi sono cinque.
     expect(misure.soloVw.length).toBeLessThanOrEqual(5);
+  });
+});
+
+/**
+ * 27/8/2026 (R093) — `unoptimized` SPEGNE IL `sizes` SCRITTO LÌ ACCANTO.
+ *
+ * Il difetto #99 era già scritto in `lib/image-loader.ts` e la cura c'era: un `loader` verso il CDN
+ * di Supabase, che tiene il ridimensionamento dove stava e fa tornare `srcSet` e `sizes`. Solo che
+ * era stata applicata a otto file su venticinque. Negli altri diciassette la foto restava della
+ * misura scritta nell'indirizzo — cento pixel dentro un riquadro da novantasei, che su un telefono
+ * a tre volte ne vorrebbe duecentottantotto. Sgranata nel carrello e nella pagina degli ordini,
+ * cioè dove si decide se confermare. Invisibile da computer, che è a una volta sola.
+ *
+ * La prova qui sopra non poteva vederlo: confronta i pixel CSS e non conosce la densità dello
+ * schermo. Questa qui sotto guarda la cosa giusta — quante foto sono rimaste senza caricatore — e
+ * il numero deve solo scendere.
+ */
+describe('le foto che non passano dal caricatore', () => {
+  const senzaCaricatore = execSync(
+    'grep -rl "unoptimized" app/ components/ || true',
+    { encoding: 'utf8' },
+  ).trim().split('\n').filter(Boolean).sort();
+
+  it('sono quattro, e sono queste: il numero scende e non risale', () => {
+    // ⚪ Debito dichiarato, non un verde: questi quattro file appartengono a un altro lotto e
+    // nessuno di questa squadra può toccarli oggi. Erano DICIASSETTE il 27/8 mattina.
+    expect(senzaCaricatore).toEqual([
+      'app/cart/page.tsx',
+      'app/orders/[id]/page.tsx',
+      'app/seller/products/page.tsx',
+      'app/shared-cart/page.tsx',
+    ]);
+  });
+
+  it('dove il caricatore c è, la foto la chiede il browser della misura che gli serve', () => {
+    // Il comportamento vero (srcSet + sizes col caricatore) è provato in
+    // `foto-che-si-adattano-allo-schermo.test.ts`: qui si tiene solo il conto di chi lo usa.
+    const conCaricatore = execSync(
+      'grep -rl "caricatoreFotoRemote" app/ components/ || true',
+      { encoding: 'utf8' },
+    ).trim().split('\n').filter(Boolean);
+    expect(conCaricatore.length, 'il caricatore è sparito dai file dove era stato messo').toBeGreaterThanOrEqual(20);
   });
 });

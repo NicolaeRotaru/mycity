@@ -96,7 +96,7 @@ export default function AdminCategoriesPage() {
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: queryKeys.admin.categories });
-    qc.invalidateQueries({ queryKey: queryKeys.categories.showcase });
+    qc.invalidateQueries({ queryKey: queryKeys.categories.all });
     qc.invalidateQueries({ queryKey: queryKeys.categories.allList });
   };
 

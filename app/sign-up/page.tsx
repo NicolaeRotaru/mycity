@@ -13,6 +13,7 @@ import { Input, PasswordInput, Checkbox } from '@/components/ui/Field';
 import { Button } from '@/components/ui/Button';
 import { AuthShell, AuthAlternatives } from '@/components/ui/AuthShell';
 import { friendlyError } from '@/lib/errors';
+import { ritornoDopoLaConferma } from '@/lib/analytics/porta-di-ingresso';
 
 /**
  * #79 — Quale versione dei testi legali si sta accettando. Va tenuta allineata
@@ -105,10 +106,20 @@ function SignUpInner() {
         referrerId = ref?.id ?? null;
       }
 
+      /**
+       * 27/8/2026 (R160) — L'INTENZIONE VIAGGIA COL LINK DI CONFERMA.
+       *
+       * Chi si registra qui non veniva mai contato come iscritto: la rotta di
+       * ritorno decideva «registrazione o accesso?» guardando se l'account era
+       * nato da meno di un minuto, e la mail si conferma dopo — a volte il
+       * giorno dopo. Usciva sempre «accesso».
+       *
+       * Adesso il fatto lo dichiara chi lo conosce: questa pagina. Il segnale
+       * sta nel percorso di ritorno, non fra i parametri che la rotta
+       * riscrive, così sopravvive anche al giro da /accetta-condizioni.
+       */
       const base = APP_URL || window.location.origin;
-      const emailRedirectTo = returnTo
-        ? `${base}/auth/callback?next=${encodeURIComponent(returnTo)}`
-        : `${base}/auth/callback`;
+      const emailRedirectTo = ritornoDopoLaConferma(base, returnTo, 'email');
       const { data, error } = await supabase.auth.signUp({
         email,
         password,

@@ -36,23 +36,57 @@ export type PushSendResult = {
 };
 
 /**
+ * 30/8/2026 (R076) — LE ISCRIZIONI DI TANTE PERSONE, IN UNA LETTURA SOLA.
+ *
+ * `sendPushToUser` le rileggeva ogni volta, e il giro delle notifiche la chiama
+ * una volta per notifica: cento notifiche = cento letture della stessa tabella,
+ * dove ne basta una. Non e' un guasto, e' il costo che si presenta al picco
+ * degli ordini — cioe' quando la notifica «il tuo ordine e' pronto» serve
+ * davvero, e sullo stesso database ci sono i clienti veri che navigano.
+ *
+ * Restituisce una mappa persona → sue iscrizioni. Chi non ne ha non compare.
+ */
+export async function iscrizioniPerUtenti(
+  supa: SupabaseClient,
+  userIds: string[],
+): Promise<Map<string, SubRow[]>> {
+  const mappa = new Map<string, SubRow[]>();
+  if (userIds.length === 0) return mappa;
+  const { data } = await supa
+    .from('push_subscriptions')
+    .select('id, user_id, endpoint, p256dh, auth')
+    .in('user_id', userIds);
+  for (const riga of (data ?? []) as Array<SubRow & { user_id: string }>) {
+    const gia = mappa.get(riga.user_id);
+    if (gia) gia.push(riga);
+    else mappa.set(riga.user_id, [riga]);
+  }
+  return mappa;
+}
+
+/**
  * Invia `payload` a tutte le subscription dell'utente. Cancella quelle scadute
  * (404/410) e logga i fallimenti transitori (es. 429/5xx) invece di silenziarli.
  * Ritorna { delivered, total } così il chiamante può distinguere "niente da
  * consegnare" (total=0) da "tutte fallite per errore transitorio" (delivered=0,
  * total>0) e decidere se ritentare. `supa` deve essere un client service-role
  * (così bypassa la RLS su push_subscriptions).
+ *
+ * R076 — Se le iscrizioni le ha gia' lette il chiamante (con
+ * `iscrizioniPerUtenti`), gliele passa e qui non si torna al database. Chi
+ * chiama per una persona sola puo' continuare a non passarle.
  */
 export async function sendPushToUser(
   supa: SupabaseClient,
   userId: string,
   payload: PushPayload,
+  iscrizioniGiaLette?: SubRow[],
 ): Promise<PushSendResult> {
   if (!isPushConfigured()) return { delivered: 0, total: 0 };
-  const { data: subs } = await supa
+  const subs = iscrizioniGiaLette ?? (await supa
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth')
-    .eq('user_id', userId);
+    .eq('user_id', userId)).data;
   if (!subs?.length) return { delivered: 0, total: 0 };
 
   const body = JSON.stringify(payload);

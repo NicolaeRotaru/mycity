@@ -123,14 +123,46 @@ export function compensoTrattenutoCents(o: {
     : Math.max(0, Math.round(Number(o.shipping_cost ?? 0) * 100));
 }
 
-/** Quanto contante deve tornare indietro da una consegna pagata alla consegna. */
-export function contanteDaRimettereCents(o: {
+/** Ordine visto dal lato «contanti»: quanto vale e quanto spetta al fattorino. */
+type OrdineInContanti = {
   total_price?: number | string | null;
   rider_fee_cents?: number | null;
   shipping_cost?: number | string | null;
   pickup_in_store?: boolean | null;
-}): number {
-  return Math.max(0, Math.round(Number(o.total_price ?? 0) * 100) - compensoTrattenutoCents(o));
+};
+
+/**
+ * 30/8/2026 (R120) — QUANTO SE NE TIENE DAVVERO, E QUANTO RESTA DOVUTO.
+ *
+ * Sul contrassegno il fattorino non riceve un bonifico: si tiene il compenso
+ * dal contante che ha in mano. La regola dava per scontato che il contante ci
+ * fosse — e `compensoTrattenutoCents` non guarda affatto il totale dell'ordine.
+ *
+ * Ma `total_price` e' il totale DOPO lo scomputo del credito MyCity, e in cassa
+ * la spunta «usa il credito» e' accesa di default. Con 50 € di credito e un
+ * ordine da 22 € in contrassegno l'ordine nasce a zero: il fattorino consegna,
+ * non gli mette in mano niente nessuno, e non ha da cosa trattenersi i suoi 3 €.
+ * Succedeva anche a meta': residuo 2 €, compenso 3 € → ne perdeva 1.
+ *
+ * Quello che si tiene e' il MINIMO fra il compenso e il contante; la differenza
+ * e' un debito verso di lui, che passa dal giro dei bonifici come gli altri.
+ */
+export function compensoDalContante(o: OrdineInContanti): {
+  /** Quanto riesce a togliersi dal contante che ha in mano. */
+  trattenutoCents: number;
+  /** Quanto gli resta da versare per bonifico, perche' il contante non bastava. */
+  residuoDovutoCents: number;
+} {
+  const dovutoCents = compensoTrattenutoCents(o);
+  const contanteInManoCents = Math.max(0, Math.round(Number(o.total_price ?? 0) * 100));
+  const trattenutoCents = Math.min(dovutoCents, contanteInManoCents);
+  return { trattenutoCents, residuoDovutoCents: dovutoCents - trattenutoCents };
+}
+
+/** Quanto contante deve tornare indietro da una consegna pagata alla consegna. */
+export function contanteDaRimettereCents(o: OrdineInContanti): number {
+  const contanteInManoCents = Math.max(0, Math.round(Number(o.total_price ?? 0) * 100));
+  return contanteInManoCents - compensoDalContante(o).trattenutoCents;
 }
 
 /**
