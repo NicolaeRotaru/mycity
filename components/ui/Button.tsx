@@ -36,7 +36,14 @@ const SIZES: Record<Size, string> = {
   lg: 'px-5 py-3 text-base gap-2 min-h-[48px]',
 };
 
-const BASE = 'inline-flex items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+// Stato disabilitato: fondo e testo espliciti, NON `opacity-50`.
+// L'opacità compone l'intero pulsante sulla pagina, quindi schiarisce testo e
+// fondo insieme e il rapporto di contrasto crolla: misurato in un browser vero
+// (Storybook, storia «Disabled») dava 1,62:1 contro i 4,5:1 richiesti — la
+// scritta era di fatto invisibile, e su `StickyAddToCart` quella scritta è
+// «Non disponibile», cioè un'informazione, non una decorazione.
+// Questa coppia dà 8,80:1 e resta comunque visibilmente "spenta".
+const BASE = 'inline-flex items-center justify-center font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2 disabled:bg-cream-200 disabled:text-ink-600 disabled:border-cream-300 disabled:shadow-none disabled:cursor-not-allowed';
 
 const SHAPES: Record<Shape, string> = {
   rounded: 'rounded',

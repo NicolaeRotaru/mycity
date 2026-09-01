@@ -140,7 +140,13 @@ export function Modal({
       >
         <header className="px-5 py-4 border-b border-cream-200 flex items-center justify-between flex-shrink-0">
           <div className="flex-1 min-w-0">
-            <h2 id={titleId} className="font-bold text-ink-900 truncate">{title}</h2>
+            {/* La dimensione va dichiarata: senza una classe `text-*` questo h2
+                ereditava il default di globals.css (30px, serif Fraunces) e con
+                `truncate` i titoli veri si tagliavano. Misurato nel browser: su
+                un modale `sm` restano 332px utili e «Condividi la lista della
+                spesa» ne occupava 363, «Scansiona il codice a barre» 341.
+                Allineato a ConfirmDialog, che è la finestra gemella. */}
+            <h2 id={titleId} className="text-lg sm:text-xl font-bold text-ink-900 truncate">{title}</h2>
             {description && <p id={descId} className="text-xs text-ink-500 mt-0.5">{description}</p>}
           </div>
           <button
