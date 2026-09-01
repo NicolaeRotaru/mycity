@@ -45,6 +45,21 @@ UPDATE public.profiles
  WHERE id = '22222222-2222-2222-2222-222222222222';
 
 -- Tre ordini dello stesso negozio nella stessa ora, più uno di un altro negozio.
+--
+-- 1/9/2026 — GLI ORARI SONO ANCORATI A UN'ORA, NON CONTATI ALL'INDIETRO DA ADESSO.
+--
+-- Prima le quattro righe nascevano a `now() - interval '10/11/12/13 minutes'`. La prima verifica
+-- qui sotto chiede che i tre ordini del fornaio stiano NELLA STESSA ORA, ma «dodici minuti fa»
+-- scavalca il cambio d'ora quando adesso sono le e:10 o le e:11 — e allora i tre ordini finiscono
+-- in due secchielli invece che in uno, la vista ne restituisce due righe e il controllo diventa
+-- rosso. Non era un difetto del codice: era la prova che si rompeva da sola con l'orologio.
+--
+-- Succedeva in due minuti su sessanta, cioè circa una volta ogni trenta esecuzioni: abbastanza
+-- raro da sembrare un caso, abbastanza spesso da tingere di rosso `main` senza motivo. Preso dal
+-- vivo nell'esecuzione 33542096803 del 1/9, partita alle 18:11:32 — «1 controlli su 4 sono rossi».
+--
+-- Adesso l'ancora è l'inizio di un'ora intera, due ore fa, e i minuti si aggiungono DENTRO quella:
+-- l'ora è sempre la stessa, è sempre nel passato, e non dipende da quando gira la prova.
 INSERT INTO public.orders (
   id, user_id, seller_id, total_price, gross_total_cents, payment_method, payment_status,
   delivery_status, payout_status, seller_payout_cents, rider_fee_cents,
@@ -52,16 +67,20 @@ INSERT INTO public.orders (
 ) VALUES
   ('a0000000-0000-0000-0000-0000000000e1', '33333333-3333-3333-3333-333333333333',
    '11111111-1111-1111-1111-111111111111', 20.00, 2000, 'card', 'PAID', 'NEW', 'HELD', 1800, 300,
-   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121', now() - interval '10 minutes'),
+   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121',
+   date_trunc('hour', now() - interval '2 hours') + interval '50 minutes'),
   ('a0000000-0000-0000-0000-0000000000e2', '33333333-3333-3333-3333-333333333333',
    '11111111-1111-1111-1111-111111111111', 15.00, 1500, 'card', 'PAID', 'NEW', 'HELD', 1350, 300,
-   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121', now() - interval '11 minutes'),
+   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121',
+   date_trunc('hour', now() - interval '2 hours') + interval '49 minutes'),
   ('a0000000-0000-0000-0000-0000000000e3', '33333333-3333-3333-3333-333333333333',
    '11111111-1111-1111-1111-111111111111', 9.00, 900, 'card', 'PAID', 'NEW', 'HELD', 800, 300,
-   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121', now() - interval '12 minutes'),
+   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121',
+   date_trunc('hour', now() - interval '2 hours') + interval '48 minutes'),
   ('a0000000-0000-0000-0000-0000000000e4', '33333333-3333-3333-3333-333333333333',
    '22222222-2222-2222-2222-222222222222', 30.00, 3000, 'card', 'PAID', 'NEW', 'HELD', 2700, 300,
-   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121', now() - interval '13 minutes');
+   'Maria Rossi', '3331234567', 'Via Verdi 10', 'Piacenza', '29121',
+   date_trunc('hour', now() - interval '2 hours') + interval '47 minutes');
 
 -- ---------------------------------------------------------------------------
 -- Da qui in poi si guarda con gli occhi di un estraneo: la chiave pubblica.
