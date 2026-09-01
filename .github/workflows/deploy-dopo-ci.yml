@@ -109,8 +109,25 @@ jobs:
             echo "pronto=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # 1/9/2026 — QUI C'ERA `if: steps.chiavi.outputs.pronto == 'true'`, E
+      # ZITTIVA IL VERDETTO.
+      #
+      # Senza chiavi il checkout saltava, quindi il workspace restava VUOTO. In
+      # fondo pero' c'e' un passo `always()` che gira comunque e chiama
+      # `node scripts/prova-di-fumo.mjs --verdetto`: senza il repository su
+      # disco quel file non esiste, Node muore con MODULE_NOT_FOUND e il
+      # verdetto esce vuoto. Nel riepilogo di Nicola non finiva la spiegazione
+      # di cosa non era stato controllato — ci finiva una traccia di stack.
+      #
+      # Cioe': l'unico passo scritto per dire sempre la verita' era anche
+      # l'unico che non poteva parlare, proprio nel caso per cui era stato
+      # scritto. Visto sul serio nell'esecuzione 33523989477 del 1/9.
+      #
+      # Il checkout ora gira SEMPRE: costa pochi secondi, non tocca niente
+      # fuori dal workspace, e i passi che rilasciano davvero tengono ognuno la
+      # propria guardia. Il rosso resta rosso — il verdetto esce 1 in entrambi
+      # i casi — ma adesso dice perche'.
       - name: Checkout
-        if: steps.chiavi.outputs.pronto == 'true'
         uses: actions/checkout@v4
         with:
           # Il commit che la CI ha appena promosso, non la punta di adesso: fra
