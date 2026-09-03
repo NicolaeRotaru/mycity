@@ -236,13 +236,29 @@ function getSupabaseHost(): string {
   }
 }
 
+/**
+ * ⚠️ QUESTA REGOLA E IL MODO DI COSTRUIRE LE PAGINE DEVONO RESTARE D'ACCORDO.
+ *
+ * In produzione la parola d'ordine (`nonce`) cambia a ogni richiesta e, con
+ * `strict-dynamic`, diventa l'UNICO modo per far girare uno script: l'origine
+ * del sito non basta più. Next sa scriverla nei tag `<script>` solo mentre
+ * costruisce la pagina per quella richiesta.
+ *
+ * Quindi una pagina preparata in anticipo arriva al cliente con tutti gli
+ * script rifiutati: un guscio senza carrello, senza accesso e senza cassa. Il
+ * 3/9/2026 era così per tutte e 95 le pagine preparate in anticipo. Il lato
+ * «costruita a ogni richiesta» è dichiarato in `app/layout.tsx`.
+ *
+ * Se tocchi la riga qui sotto, controlla anche quella. Le sorveglia insieme
+ * `tests/unit/nessuna-pagina-arriva-senza-javascript.test.ts`.
+ */
 function buildCsp(nonce: string, isDev: boolean): string {
   const supaHost = getSupabaseHost();
   // In dev manteniamo unsafe-eval per webpack HMR + React fast refresh.
   // In prod usiamo nonce + strict-dynamic per la massima protezione XSS.
   const scriptSrc = isDev
     ? `'self' 'unsafe-eval' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`
-    : `'self' 'unsafe-inline' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`;
+    : `'self' 'nonce-${nonce}' 'strict-dynamic' https://challenges.cloudflare.com https://js.stripe.com https://www.googletagmanager.com https://www.google-analytics.com https://*.posthog.com https://*.i.posthog.com https://*.sentry.io https://*.ingest.sentry.io`;
 
   return [
     "default-src 'self'",
