@@ -8,6 +8,7 @@ import { ShoppingCart, Truck, CreditCard, Undo2, Settings, Store, Bike, Mail, ty
 // istruzione per selezionare un'opzione che non c'e'.
 import {
   promesseRitiroInNegozio,
+  rispostaComeOrdinare,
   rispostaCostoSpedizione,
   rispostaTempiDiConsegna,
 } from '@/lib/promesse-pubbliche';
@@ -20,10 +21,9 @@ const SECTIONS: Section[] = [
     title: 'Acquisti e ordini',
     icon: ShoppingCart,
     items: [
-      {
-        q: 'Come faccio a ordinare su MyCity?',
-        a: 'Cerca un prodotto o un negozio, aggiungilo al carrello, scegli un indirizzo di consegna o il ritiro in negozio e conferma. Riceverai una notifica per ogni cambio di stato dell\'ordine.',
-      },
+      // 3/9/2026 — La prima risposta prometteva il ritiro in negozio, che alla cassa non esiste:
+      // adesso i passi per ordinare nascono dall'interruttore, come gia' le altre promesse.
+      rispostaComeOrdinare(),
       {
         q: 'Posso comprare da più negozi nello stesso ordine?',
         a: 'Sì. Il carrello supporta più venditori: alla conferma viene creato un ordine separato per ciascun negozio, ognuno con la propria spedizione e gestione.',

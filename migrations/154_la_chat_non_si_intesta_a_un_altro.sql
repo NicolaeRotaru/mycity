@@ -45,6 +45,13 @@
 --    rifiuta il cambio di intestazione a chiunque non sia amministratore o la chiave di servizio,
 --    qualunque permesso abbia.
 --
+--    E il trigger guarda CHI HA CHIAMATO, non chi possiede la funzione. La differenza non e' un
+--    dettaglio: dentro una funzione SECURITY DEFINER `current_user` e' il PROPRIETARIO, e su Supabase
+--    le migrazioni si applicano come `postgres`, quindi una condizione tipo
+--    `current_user IN ('postgres', ...)` sarebbe SEMPRE vera e il guardiano autorizzerebbe se stesso:
+--    verde da fuori, spento da dentro. Chi chiama si legge dal token — `auth.jwt()` — come gia' fanno
+--    le migrazioni 114, 119, 127 e 140.
+--
 -- COSA NON TOCCA. La lettura resta com'e'. L'apertura di una conversazione nuova resta com'e'
 -- (`conversations_insert_buyer`). Il segnare come letto continua a funzionare. La cancellazione di un
 -- account continua a staccare il legame mettendo la colonna a vuoto (122): il guardiano lo ammette.
@@ -79,12 +86,22 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  -- Le due forme in cui arriva il backend: il ruolo dichiarato nel token e il
-  -- ruolo con cui PostgREST esegue davvero la richiesta. Servono tutte e due:
-  -- fuori da PostgREST (manutenzione, ripristino) il token non c'e'.
+  -- Chi puo' cambiare l'intestazione: l'amministratore, il backend con la chiave
+  -- di servizio, e una manutenzione che lo DICHIARA prima di farlo.
+  --
+  -- Qui non si guarda `current_user`: dentro una SECURITY DEFINER e' il
+  -- proprietario della funzione (su Supabase `postgres`), non chi ha chiamato —
+  -- il guardiano finirebbe per autorizzare se stesso. L'identita' di chi chiama
+  -- arriva dal token, ed e' la stessa forma delle 114, 119, 127 e 140.
+  --
+  -- Fuori da PostgREST il token non c'e' (manutenzione, ripristino): li' la porta
+  -- si apre a mano con `SET LOCAL mycity.allow_conversation_reassign = '1'`, come
+  -- `mycity.allow_order_write` (114) e `mycity.allow_profile_write` (119). Chi
+  -- sposta un'intestazione deve scriverlo: e' l'unica differenza visibile fra un
+  -- intervento e un dirottamento.
   privilegiato boolean := public.is_admin()
     OR coalesce((SELECT auth.jwt() ->> 'role'), '') = 'service_role'
-    OR current_user IN ('service_role', 'postgres', 'supabase_admin');
+    OR coalesce(current_setting('mycity.allow_conversation_reassign', true), '') = '1';
 BEGIN
   IF privilegiato THEN
     RETURN NEW;
@@ -111,6 +128,9 @@ DROP TRIGGER IF EXISTS trg_conversazione_non_si_reintesta ON public.conversation
 CREATE TRIGGER trg_conversazione_non_si_reintesta
   BEFORE UPDATE ON public.conversations
   FOR EACH ROW EXECUTE FUNCTION public.conversazione_non_si_reintesta();
+
+COMMENT ON FUNCTION public.conversazione_non_si_reintesta() IS
+  'Guardiano dell''intestazione delle chat. Non usare current_user qui dentro: in una SECURITY DEFINER e'' il proprietario della funzione (su Supabase «postgres»), non chi chiama, e il controllo autorizzerebbe se stesso. Chi chiama si legge da auth.jwt(). Prova: tests/sql/rls/29, controllo dal ⑥ in poi.';
 
 COMMIT;
 

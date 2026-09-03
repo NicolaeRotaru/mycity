@@ -103,6 +103,66 @@ export function tutteLeCorsie(): string[] {
 /** Il pavimento sotto cui chi galleggia non scende. Il perché sta in app/globals.css. */
 export const FONDO_MINIMO = 'var(--fondo-minimo, 1.5rem)';
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * FIN DOVE SERVE IL PAVIMENTO — la misura che era scritta due volte.
+ *
+ * 3/9/2026, secondo giro — IL PULSANTE TONDO TORNAVA SOPRA «CONFERMA ORDINE»
+ * FRA 768 E 1023 PIXEL.
+ *
+ * Il pavimento vale 96 pixel sul telefono e in app/globals.css si abbassava a
+ * 24 da 768 in su, con la motivazione scritta accanto: «sul computer sotto non
+ * c'è niente da scavalcare». Non era vero. La barra «Conferma ordine» della
+ * cassa è `lg:hidden`: resta a video fino a 1023. In quella fascia — cioè ogni
+ * iPad in verticale (768, 820, 834) e ogni finestra affiancata su un portatile
+ * — tutte le corsie valgono zero, il pavimento valeva 24, e il pulsante tondo
+ * dell'assistenza (alto 56, a destra) tornava sopra il pulsante che paga.
+ *
+ * La malattia non era il numero 768: era che il pavimento e la barra che deve
+ * proteggere ragionavano su due soglie diverse, scritte in due file lontani,
+ * e nessuno le confrontava. Qui c'è UNA misura sola: chi non dichiara ancora
+ * la propria corsia dice fin dove si vede, e il pavimento arriva fin lì.
+ *
+ * Perché la barra del fattorino non è in questo elenco: è una colonna centrata
+ * larga al massimo 480 pixel (`components/rider/RiderShell.tsx`,
+ * `app/rider/orders/[id]/page.tsx`). Il suo bordo destro sta a `larghezza/2 +
+ * 240`, il pulsante tondo comincia a `larghezza − 72`: si incontrano solo sotto
+ * i 624 pixel, dove il pavimento del telefono è già acceso. Sopra, quella barra
+ * non passa mai sotto il pulsante.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Le soglie di Tailwind, in pixel: `lg:hidden` vuol dire «sparisce da 1024». */
+export const MISURE_TAILWIND = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 } as const;
+
+export type MisuraTailwind = keyof typeof MISURE_TAILWIND;
+
+export type BarraSenzaCorsia = {
+  /** Come si chiama, per chi legge il messaggio di una prova diventata rossa. */
+  nome: string;
+  /** Dove sta scritta, per chi deve andarci. */
+  dove: string;
+  /** La misura da cui sparisce: `lg:hidden` → 'lg'. La stessa che sta nel file. */
+  spariceDa: MisuraTailwind;
+};
+
+/** Le barre in fondo che NON dichiarano ancora la propria altezza. */
+export const BARRE_SENZA_CORSIA: readonly BarraSenzaCorsia[] = [
+  {
+    nome: 'la barra «Conferma ordine» in cassa',
+    dove: 'app/checkout/page.tsx',
+    spariceDa: 'lg',
+  },
+];
+
+/**
+ * La larghezza da cui il pavimento non serve più: quella in cui è sparita
+ * anche l'ultima barra che la propria corsia non la dichiara. È il numero che
+ * app/globals.css deve usare nella sua `@media`, e una prova controlla che i
+ * due siano lo stesso.
+ */
+export function larghezzaSenzaBarreNonDichiarate(): number {
+  return Math.max(...BARRE_SENZA_CORSIA.map((b) => MISURE_TAILWIND[b.spariceDa]));
+}
+
 /**
  * Il `bottom` di chi galleggia sopra tutto: le corsie dichiarate, più il
  * respiro — ma mai sotto il pavimento.

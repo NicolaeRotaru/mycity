@@ -138,8 +138,15 @@ describe('le pastiglie bianche della cassa si leggono', () => {
 describe('la spedizione gratuita, in cassa, la dice chi la decide', () => {
   it('la cassa non scrive a mano la frase sul costo di consegna', () => {
     const src = leggi('app/checkout/page.tsx');
-    expect(src).toContain("from '@/lib/promesse-pubbliche'");
-    expect(src).toContain('promessaConsegna.dettaglioConsegna');
+    // 3/9/2026 — La frase nasce sempre da `promessaSpedizione`, ma adesso la
+    // cassa gliela chiede attraverso `promessaSpedizioneDelCarrello`: la soglia
+    // dei 30 € vale per NEGOZIO, e col totale sommato 18 € + 18 € diventavano
+    // «Spedizione gratis» su un ordine che pagava due spedizioni. L'invariante
+    // resta lo stesso — la cassa non scrive la frase a mano — e la catena fino
+    // alla casa unica è pinnata dalla riga qui sotto.
+    expect(src).toContain("from '@/lib/ordini/promessa-del-carrello'");
+    expect(src).toContain('promessaConsegna.promessa.dettaglioConsegna');
+    expect(leggi('lib/ordini/promessa-del-carrello.ts')).toContain("from '@/lib/promesse-pubbliche'");
   });
 
   it('e quella frase nasce dalla cifra che la cassa addebita davvero', async () => {

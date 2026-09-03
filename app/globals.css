@@ -146,7 +146,8 @@
      il pulsante tondo scenderebbe a 24px e finirebbe sopra «Conferma ordine» —
      lo stesso difetto, spostato sulla pagina che conta di piu'. 6rem e' la
      misura che il pulsante aveva prima (bottom-24), quindi li' non cambia
-     niente; da 768px in su torna il respiro di 24px (era md:bottom-6).
+     niente; il respiro di 24px torna dove nessuna di quelle barre e' piu' a
+     video (vedi la @media piu' sotto).
      Quando anche quelle due barre dichiareranno la loro corsia, questo
      pavimento si potra' abbassare. */
   --fondo-minimo: 6rem;
@@ -308,7 +309,24 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
    verita' anche di sopra. */
 @media (min-width: 768px) {
   :root { --tabbar-height: 0px; }
-  /* Sul computer sotto non c'e' niente da scavalcare: resta il respiro. */
+}
+
+/* 3/9/2026 (secondo giro) — IL PAVIMENTO ARRIVA FIN DOVE ARRIVA LA BARRA CHE
+   DEVE PROTEGGERE, non fin dove sparisce la barra a schede.
+   Qui c'era 768px, con scritto «sul computer sotto non c'e' niente da
+   scavalcare». Non era vero: la barra «Conferma ordine» della cassa e'
+   `lg:hidden`, cioe' resta a video fino a 1023. Fra 768 e 1023 — ogni iPad in
+   verticale, ogni finestra affiancata su un portatile — tutte le corsie
+   valgono zero, il pavimento scendeva a 24px e il pulsante tondo
+   dell'assistenza tornava sopra il pulsante che paga.
+   1024 NON e' un numero scelto qui: e' quello che torna da
+   `larghezzaSenzaBarreNonDichiarate()` in lib/ui/barra-in-fondo.ts, dove ogni
+   barra senza corsia dichiara fin dove si vede. La prova
+   tests/unit/i-pulsanti-che-galleggiano-non-coprono-chi-compra.test.ts diventa
+   rossa se questo numero e quello del registro smettono di coincidere, o se in
+   cassa la barra cambia la misura da cui sparisce. */
+@media (min-width: 1024px) {
+  /* Qui non c'e' piu' nessuna barra senza corsia: resta il respiro. */
   :root { --fondo-minimo: 1.5rem; }
 }
 

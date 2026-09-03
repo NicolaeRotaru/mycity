@@ -61,6 +61,56 @@ export function promesseRitiroInNegozio(
   ];
 }
 
+/**
+ * COME ARRIVA L'ORDINE — la riga che si legge PRIMA di entrare.
+ *
+ * ── Il difetto che ha prodotto queste tre funzioni ──────────────────────────────────────────
+ * Il lotto precedente aveva ripulito le pagine di contenuto (FAQ ritiro, Spedizioni, scheda
+ * prodotto) e aveva lasciato indietro i posti dove la promessa arriva PRIMA di tutti:
+ *
+ *   ① la descrizione di ogni pagina negozio (`app/store/[id]/layout.tsx`) e di ogni categoria
+ *      (`app/category/[slug]/layout.tsx`): «Consegna locale in 30-60 minuti o ritiro in negozio».
+ *      È il testo che finisce nel risultato di Google e nell'anteprima quando il negoziante incolla
+ *      il link su WhatsApp — cioè il primo contatto di chi arriva dal QR in vetrina;
+ *   ② la PRIMA risposta delle FAQ: «scegli un indirizzo di consegna o il ritiro in negozio»;
+ *   ③ la scheda «Spedizioni» della pagina di aiuto: «Tempi, costi, ritiro in negozio, tracciamento».
+ *
+ * Il ritiro in cassa non c'è: `RITIRO_IN_NEGOZIO_ATTIVO` vale `false`, il riquadro del checkout gli
+ * sta dietro e le due rotte che creano l'ordine forzano `pickupInStore = false`. Il cliente sceglie
+ * MyCity credendo di poter passare a ritirare, riempie il carrello e alla cassa scopre che l'unica
+ * strada è farsi consegnare a casa pagando la consegna. Nicola l'ha spento apposta — «non ne ho
+ * ancora parlato con i negozi» — e noi lo promettevamo lo stesso, in vetrina.
+ *
+ * ── Perché tre funzioni e non quattro frasi corrette ────────────────────────────────────────
+ * Perché i metadati nessuno li rilegge come «testo per il cliente»: non si vedono a schermo. Una
+ * frase corretta a mano oggi torna a mentire alla prossima pagina che qualcuno scrive. Qui la
+ * frase NASCE dall'interruttore, e i minuti dal numero deciso in lib/delivery.ts: riaccendere il
+ * ritiro la fa ricomparire dappertutto da sé.
+ */
+export function fraseComeArriva(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
+  return attivo
+    ? `Consegna locale in ${EXPRESS_ETA_LABEL} o ritiro in negozio.`
+    : `Consegna locale in ${EXPRESS_ETA_LABEL}.`;
+}
+
+/** La prima risposta delle FAQ: i passi per ordinare, senza quello che non si può fare. */
+export function rispostaComeOrdinare(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): DomandaRisposta {
+  const scelta = attivo
+    ? 'scegli un indirizzo di consegna o il ritiro in negozio'
+    : "scegli l'indirizzo di consegna";
+  return {
+    q: 'Come faccio a ordinare su MyCity?',
+    a: `Cerca un prodotto o un negozio, aggiungilo al carrello, ${scelta} e conferma. Riceverai una notifica per ogni cambio di stato dell'ordine.`,
+  };
+}
+
+/** Cosa si trova nella pagina Spedizioni, detto nella scheda della pagina di aiuto. */
+export function temiDellaSpedizione(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
+  return attivo
+    ? 'Tempi, costi, ritiro in negozio, tracciamento.'
+    : 'Tempi, costi e tracciamento della consegna.';
+}
+
 /** Il riquadro «Ritiro in negozio» della pagina Spedizioni, o niente se la funzione è spenta. */
 export function riquadroRitiroInNegozio(
   attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO,

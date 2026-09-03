@@ -18,6 +18,7 @@ import { CartUpsell } from '@/components/cart/CartUpsell';
 import { AlertCircle, Banknote, Check, Lightbulb, Lock, Package, RotateCcw, ShieldCheck, ShoppingCart, Store, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { fondoDellaBarra, corsieSotto } from '@/lib/ui/barra-in-fondo';
+import { chiaveDellaRiga, merceCheTengoIo, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
 
 /**
@@ -54,6 +55,15 @@ export default function CartPage() {
    * parte. `null` = disponibilita' illimitata, `undefined` = non ancora letta.
    */
   const [disponibilita, setDisponibilita] = useState<Record<string, number | null>>({});
+
+  /**
+   * 3/9/2026 — I pezzi che sta tenendo impegnati QUESTA persona con un
+   * pagamento aperto. La giacenza letta qui sopra è già scalata anche dalla sua
+   * riserva: senza rimetterceli, chi ha premuto «Paga con carta» e poi è
+   * tornato indietro leggeva «Non più disponibile» sul proprio ultimo pezzo, e
+   * l'unica cosa che il carrello gli proponeva era toglierlo.
+   */
+  const [tengoIo, setTengoIo] = useState<Record<string, number>>({});
 
   /**
    * Il carrello vero si legge QUI, dopo il primo disegno: `useState([])` parte vuoto perché deve
@@ -100,13 +110,28 @@ export default function CartPage() {
     let vivo = true;
     void (async () => {
       const { supabase } = await import('@/lib/supabase/client');
-      const [prodottiRes, variantiRes] = await Promise.all([
+      // Chi è entrato lo dice la sessione già in memoria: da ospiti non si
+      // chiedono le riserve, perché per riservare bisogna aver ordinato.
+      const idCliente = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
+      const [prodottiRes, variantiRes, tentativiRes] = await Promise.all([
         supabase.from('products').select('id, stock').in('id', ids),
         idVarianti.length > 0
           ? supabase.from('product_variants').select('id, stock').in('id', idVarianti)
           : Promise.resolve({ data: [] as Array<{ id: string; stock: number | null }> }),
+        // I propri tentativi di pagamento ancora aperti.
+        idCliente
+          ? supabase
+              .from('pending_checkouts')
+              .select('groups')
+              .eq('buyer_id', idCliente)
+              .eq('status', 'PENDING')
+              .limit(10)
+          : Promise.resolve({ data: [] as TentativoAperto[] }),
       ]);
       if (!vivo) return;
+      setTengoIo(
+        Object.fromEntries(merceCheTengoIo((tentativiRes.data ?? []) as TentativoAperto[])),
+      );
       const mappa: Record<string, number | null> = {};
       for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null }>) {
         mappa[p.id] = p.stock;
@@ -127,12 +152,15 @@ export default function CartPage() {
    * prodotto intero.
    */
   const massimo = (id: string, variantId?: string | null): number | null => {
+    // Quello che tengo impegnato io torna a contare come mio: sull'ultimo pezzo
+    // la differenza è fra «non più disponibile» e «lo stai comprando».
+    const mio = tengoIo[chiaveDellaRiga(id, variantId)] ?? 0;
     if (variantId) {
       const v = disponibilita[`variante::${variantId}`];
-      if (typeof v === 'number') return v;
+      if (typeof v === 'number') return v + mio;
     }
     const s = disponibilita[id];
-    return typeof s === 'number' ? s : null;
+    return typeof s === 'number' ? s + mio : null;
   };
 
   /**

@@ -32,7 +32,7 @@ const DELIVERY_VECCHIA = {
   notes: null,
   lat: 45.05,
   lng: 9.7,
-  slot: 'Oggi · 18:00–20:00',
+  slot: 'Stasera · 18:00–20:00',
   impronta_carrello: 'impronta-del-primo-tentativo',
 };
 
@@ -146,7 +146,7 @@ function richiesta(delivery: Record<string, unknown>) {
       groups: [{ sellerId: S1, items: [{ productId: P1, quantity: 1 }], shippingCents: 0 }],
       delivery,
       pickupInStore: false,
-      deliverySlot: 'Oggi · 18:00–20:00',
+      deliverySlot: 'Stasera · 18:00–20:00',
     }),
   }) as never;
 }
@@ -204,7 +204,7 @@ describe('il pagamento gia aperto si riusa, ma col contatto di adesso', () => {
       zip: '29121',
       lat: 45.05,
       lng: 9.7,
-      slot: 'Oggi · 18:00–20:00',
+      slot: 'Stasera · 18:00–20:00',
     });
   });
 

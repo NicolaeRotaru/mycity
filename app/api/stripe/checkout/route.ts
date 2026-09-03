@@ -16,6 +16,7 @@ import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
+import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
@@ -67,10 +68,10 @@ const Body = z.object({
   couponDiscountCents: z.number().int().nonnegative().default(0),
   pickupDiscountCents: z.number().int().nonnegative().default(0),
   pickupInStore: z.boolean().default(false),
-  // Fascia di consegna scelta (es. "Oggi · 18:00–20:00"). Etichetta informativa
-  // persistita nel pending_checkout (delivery.slot) e poi su orders.delivery_slot
-  // dal webhook; null per ritiro o se non scelta. Non influisce su prezzi.
-  deliverySlot: z.string().max(120).optional().nullable(),
+  // La fascia scelta in cassa. Non è più solo un'etichetta: da qui decide se il
+  // negozio può servire (vedi `negozioPuoServire`), quindi si accettano solo le
+  // sette che la cassa propone davvero — l'elenco è in lib/quando-arriva.ts.
+  deliverySlot: campoFasciaConsegna,
   /**
    * 30/8/2026 (R163) — La chiave del checkout nata nel browser all'ingresso in
    * cassa. Serve solo ai conti: viaggia dentro la riga di intento fino al

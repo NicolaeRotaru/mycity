@@ -145,7 +145,10 @@ describe('③ a 360 pixel la barra in fondo ci sta, prezzo a tre cifre compreso'
   /** Il prezzo peggiore che ci si aspetta: tre cifre per due pezzi. */
   const prezzo = larghezzaTesto('€246.00', 18);
 
-  const spazi = 2 * spaziatura(Number(BARRA.match(/p-\d+ flex items-center gap-(\d+)/)?.[1] ?? 0));
+  /** I due spazi fra i tre pezzi della riga: prezzo, stepper, pulsante. */
+  const spazi = 2 * spaziatura(
+    Number(BARRA.match(/shadow-warm-lg p-\d+">\s*<div className="flex items-center gap-(\d+)"/)?.[1] ?? 0),
+  );
 
   it('il conto si fa su numeri letti dal file, non riscritti qui', () => {
     expect(dentroLaCard).toBe(312);
@@ -184,5 +187,90 @@ describe('③ a 360 pixel la barra in fondo ci sta, prezzo a tre cifre compreso'
     expect(totale, 'senza truncate la cifra sborda dal riquadro invece di accorciarsi').toContain(
       'truncate',
     );
+  });
+});
+
+/**
+ * ④ 3/9/2026, SECONDO GIRO — «PAGHI ALLA CONSEGNA» SI LEGGEVA «PAGHI ALLA CONSE…».
+ *
+ * Il conto qui sopra misura tre larghezze: lo stepper, il pulsante e la cifra. La barra però ha una
+ * quarta cosa scritta, ed è la più larga di tutte: la riga di rassicurazione sotto il prezzo, quella
+ * che sulla scheda prodotto dice «Paghi alla consegna». Stava dentro il blocco del prezzo — cioè
+ * nello stesso spazio che si dividono lo stepper e il pulsante — dove a 360 pixel restano 93 pixel,
+ * mentre quella frase a 11px ne chiede 121. Col `truncate` addosso, messo per proteggere la CIFRA,
+ * veniva tagliata: sul pulsante che fa comprare si leggeva «Paghi alla conse…».
+ *
+ * Non si vedeva perché la prova guardava i comandi e non il testo: la parte che si rompeva era
+ * l'unica che nessuno misurava. Adesso la riga sta sotto, sulla larghezza intera della card, e
+ * questo conto la misura nello spazio che ha DAVVERO — se qualcuno la rimette dentro il blocco del
+ * prezzo, lo spazio torna 93 e il conto non torna.
+ */
+describe('④ la riga che rassicura si legge intera, non «Paghi alla conse…»', () => {
+  const SCHERMO = 360;
+  const PER_CARATTERE = 0.58;
+  const larghezzaTesto = (testo: string, corpoPx: number) => testo.length * corpoPx * PER_CARATTERE;
+  const rem = (n: number) => n * 16;
+  const spaziatura = (n: number) => n * 4;
+
+  /** La frase vera, presa da dove la scheda prodotto la passa alla barra. */
+  const nota = SCHEDA.match(/<StickyAddToCart[\s\S]*?note="([^"]+)"/)?.[1];
+
+  /** Il corpo del testo della riga, letto dalle sue classi. */
+  const corpo = Number(BARRA.match(/text-\[(\d+)px\][^"]*text-olive-700/)?.[1]);
+
+  /** Le classi di quella riga: servono a sapere se può essere tagliata. */
+  const classiDellaNota = BARRA.match(/<p className="([^"]*text-olive-700[^"]*)"/)?.[1] ?? '';
+
+  /** Il blocco del prezzo: da `min-w-0` alla sua chiusura. Chi sta qui dentro divide 93 pixel. */
+  const bloccoDelPrezzo = (() => {
+    const i = BARRA.indexOf('<div className="min-w-0">');
+    expect(i, 'il blocco del prezzo è cambiato forma: questa prova va riscritta').toBeGreaterThan(-1);
+    return BARRA.slice(i, BARRA.indexOf('</div>', i));
+  })();
+
+  /** Quanto spazio c'è dentro la card, e quanto ne resta al blocco del prezzo. */
+  const dentroLaCard =
+    SCHERMO -
+    2 * spaziatura(Number(BARRA.match(/container mx-auto px-(\d+)/)![1])) -
+    2 * spaziatura(Number(BARRA.match(/rounded-2xl shadow-warm-lg p-(\d+)/)![1]));
+  const stepper =
+    2 * spaziatura(Number(BARRA.match(/className="w-(\d+) h-\d+ inline-flex items-center justify-center text-ink-700/)![1])) +
+    rem(Number(BARRA.match(/min-w-\[([\d.]+)rem\]/)![1])) +
+    2;
+  const pulsante =
+    2 * spaziatura(Number(BARRA.match(/className="ml-auto inline-flex[^"]+"/)![0].match(/\spx-(\d+)/)![1])) +
+    larghezzaTesto(BARRA.match(/const ETICHETTA_CORTA = '([^']+)'/)![1], 14);
+  const spazi = 2 * spaziatura(
+    Number(BARRA.match(/shadow-warm-lg p-\d+">\s*<div className="flex items-center gap-(\d+)"/)?.[1] ?? 0),
+  );
+  const restaAlPrezzo = dentroLaCard - stepper - pulsante - spazi;
+
+  it('la frase e il suo corpo si leggono davvero dai file (se no non sta misurando niente)', () => {
+    expect(nota, 'la scheda prodotto non passa più nessuna riga di rassicurazione alla barra').toBeTruthy();
+    expect(corpo, 'il corpo del testo della riga non si legge più').toBeGreaterThan(0);
+    expect(Math.round(restaAlPrezzo)).toBeGreaterThan(0);
+  });
+
+  it('la frase ci sta nello spazio che ha davvero, a 360 pixel', () => {
+    const dentroIlBlocco = bloccoDelPrezzo.includes('{note');
+    const spazio = dentroIlBlocco ? restaAlPrezzo : dentroLaCard;
+    const serve = larghezzaTesto(nota!, corpo);
+    expect(
+      Math.round(serve),
+      `«${nota}» chiede ${Math.round(serve)} pixel e ne ha ${Math.round(spazio)}` +
+        (dentroIlBlocco
+          ? ' perché sta dentro il blocco del prezzo, che divide lo spazio con lo stepper e il pulsante'
+          : '') +
+        `: si legge tagliata, «${nota!.slice(0, Math.max(1, Math.floor(spazio / (corpo * PER_CARATTERE))) - 1)}…», ` +
+        'sulla barra che fa comprare',
+    ).toBeLessThanOrEqual(Math.round(spazio));
+  });
+
+  it('e non può essere tagliata: una promessa mozzata insospettisce invece di rassicurare', () => {
+    expect(
+      classiDellaNota,
+      `la riga di rassicurazione ha «truncate»: quando non ci sta viene tagliata a metà e nessuno se ` +
+        'ne accorge, che è esattamente come si è rotta la prima volta',
+    ).not.toContain('truncate');
   });
 });

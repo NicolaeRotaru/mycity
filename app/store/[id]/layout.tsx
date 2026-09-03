@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
+import { fraseComeArriva } from '@/lib/promesse-pubbliche';
 import { HydrationBoundary } from '@tanstack/react-query';
 import { precaricaNegozio } from '@/lib/queries/precarico';
 
@@ -35,8 +36,13 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
     return { title: 'Negozio non trovato · MyCity', robots: { index: false } };
   }
   const name = store.store_name ?? 'Negozio';
+  // 3/9/2026 — QUI SI PROMETTEVA IL RITIRO IN NEGOZIO, CHE ALLA CASSA NON C'E'.
+  // Questa descrizione e' quello che si legge nel risultato di Google e nell'anteprima quando il
+  // negoziante incolla il link del suo negozio su WhatsApp: e' il primo contatto, e prometteva
+  // un'opzione spenta (`RITIRO_IN_NEGOZIO_ATTIVO`). Ora la frase nasce dall'interruttore, in
+  // lib/promesse-pubbliche.ts, insieme ai minuti che stanno in lib/delivery.ts.
   const desc =
-    (store.store_description ?? `Compra online da ${name} su MyCity. Consegna locale in 30-60 minuti o ritiro in negozio.`).slice(0, 160);
+    (store.store_description ?? `Compra online da ${name} su MyCity. ${fraseComeArriva()}`).slice(0, 160);
   const img = store.store_logo ? [store.store_logo] : undefined;
 
   const cityHint = store.store_address ? ' a Piacenza' : '';

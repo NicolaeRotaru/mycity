@@ -1,3 +1,5 @@
+import { fasciaAmmessa } from './quando-arriva';
+
 export type HoursInterval = [string, string];
 export type StoreHours = Partial<
   Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', HoursInterval[]>
@@ -68,13 +70,26 @@ export type FasciaConsegna = { domani: boolean; daMinuti: number; aMinuti: numbe
 export function leggiFasciaConsegna(etichetta?: string | null): FasciaConsegna {
   const testo = String(etichetta ?? '').trim();
   if (!testo) return null;
+  /**
+   * 3/9/2026 — SI LEGGONO SOLO LE FASCE CHE LA CASSA PUÒ DAVVERO PROPORRE.
+   *
+   * Prima qui bastava che nel testo comparisse la parola «domani». Ma questa
+   * stringa arriva dal browser, e chi manda la richiesta a mano ci scrive
+   * quello che vuole: con la sola parola «domani», senza orario, il ramo qui
+   * sotto apriva una finestra da mezzanotte a mezzanotte e il negozio chiuso
+   * risultava servibile. Un permesso non lo può allargare un dato che manda la
+   * controparte: l'elenco delle fasce lecite sta in `lib/quando-arriva.ts` e
+   * il confronto è esatto.
+   */
+  if (!fasciaAmmessa(testo)) return null;
   const domani = /domani/i.test(testo);
   if (!domani) return null;
   // Il trattino delle etichette è quello lungo (–), ma si accettano anche il
-  // trattino normale e quello medio: una fascia scritta a mano non deve far
-  // saltare il controllo.
+  // trattino normale e quello medio.
   const orari = testo.match(/(\d{1,2}):(\d{2})\s*[–—-]\s*(\d{1,2}):(\d{2})/);
-  if (!orari) return { domani: true, daMinuti: 0, aMinuti: 24 * 60 };
+  // Fascia senza orario: non si sa quando, quindi non si allarga niente. Torna
+  // `null` e vale la regola di prima — il negozio dev'essere aperto ADESSO.
+  if (!orari) return null;
   const da = Number(orari[1]) * 60 + Number(orari[2]);
   const a = Number(orari[3]) * 60 + Number(orari[4]);
   return { domani: true, daMinuti: da, aMinuti: Math.max(da, a) };

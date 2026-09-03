@@ -109,69 +109,82 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
       aria-label="Acquisto rapido"
     >
       <div className="container mx-auto px-3">
-        <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-3 flex items-center gap-3">
-          <div className="min-w-0">
+        <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-3">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0">
+              {hasStepper && (
+                <p className="truncate text-[11px] text-ink-400 leading-tight">{qty} × {formatPrice(price)}</p>
+              )}
+              <p className="truncate text-lg font-bold text-primary-700 leading-tight">{formatPrice(total)}</p>
+            </div>
+
             {hasStepper && (
-              <p className="truncate text-[11px] text-ink-400 leading-tight">{qty} × {formatPrice(price)}</p>
+              <div
+                className="flex items-center rounded-full border border-cream-300 overflow-hidden shrink-0"
+                // Stesso motivo: `aria-label` senza ruolo non veniva esposta.
+                role="group"
+                aria-label="Quantità"
+              >
+                <button
+                  type="button"
+                  onClick={onDec}
+                  disabled={canDec === false}
+                  aria-label="Diminuisci quantità"
+                  className="w-9 h-9 inline-flex items-center justify-center text-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Minus size={16} aria-hidden />
+                </button>
+                {/* 30/8/2026 (R108) — Era uno <span>. Si premeva «+», il numero
+                    cambiava a video e chi non vede lo schermo non sentiva niente:
+                    tre pressioni e nessun modo di sapere se stavi comprando una
+                    confezione o quattro. Nella scheda prodotto e nel carrello lo
+                    stesso numero sta in un <output> da mesi: qui era rimasto
+                    indietro proprio sulla strada da cui si compra col telefono. */}
+                <output
+                  aria-live="polite"
+                  aria-atomic="true"
+                  className="min-w-[1.5rem] text-center text-sm font-bold text-ink-900"
+                >
+                  {qty}
+                </output>
+                <button
+                  type="button"
+                  onClick={onInc}
+                  disabled={canInc === false}
+                  aria-label="Aumenta quantità"
+                  className="w-9 h-9 inline-flex items-center justify-center text-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Plus size={16} aria-hidden />
+                </button>
+              </div>
             )}
-            <p className="truncate text-lg font-bold text-primary-700 leading-tight">{formatPrice(total)}</p>
-            <p className="truncate text-[11px] text-olive-700 font-medium leading-tight">
-              {note ?? 'Totale'}
-            </p>
+
+            <button
+              onClick={onAdd}
+              disabled={!available}
+              // Il nome intero resta qui anche quando a schermo si legge la parola corta.
+              aria-label={available ? ETICHETTA_INTERA : ETICHETTA_ESAURITO}
+              className="ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-accent-500 hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed text-ink-900 px-4 sm:px-5 py-3 rounded-full font-bold text-sm transition-colors"
+            >
+              <ShoppingCart size={18} strokeWidth={2.4} className="hidden sm:inline" aria-hidden />
+              <span className="sm:hidden">{available ? ETICHETTA_CORTA : ETICHETTA_ESAURITO_CORTA}</span>
+              <span className="hidden sm:inline">{available ? ETICHETTA_INTERA : ETICHETTA_ESAURITO}</span>
+            </button>
           </div>
 
-          {hasStepper && (
-            <div
-              className="flex items-center rounded-full border border-cream-300 overflow-hidden shrink-0"
-              // Stesso motivo: `aria-label` senza ruolo non veniva esposta.
-              role="group"
-              aria-label="Quantità"
-            >
-              <button
-                type="button"
-                onClick={onDec}
-                disabled={canDec === false}
-                aria-label="Diminuisci quantità"
-                className="w-9 h-9 inline-flex items-center justify-center text-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Minus size={16} aria-hidden />
-              </button>
-              {/* 30/8/2026 (R108) — Era uno <span>. Si premeva «+», il numero
-                  cambiava a video e chi non vede lo schermo non sentiva niente:
-                  tre pressioni e nessun modo di sapere se stavi comprando una
-                  confezione o quattro. Nella scheda prodotto e nel carrello lo
-                  stesso numero sta in un <output> da mesi: qui era rimasto
-                  indietro proprio sulla strada da cui si compra col telefono. */}
-              <output
-                aria-live="polite"
-                aria-atomic="true"
-                className="min-w-[1.5rem] text-center text-sm font-bold text-ink-900"
-              >
-                {qty}
-              </output>
-              <button
-                type="button"
-                onClick={onInc}
-                disabled={canInc === false}
-                aria-label="Aumenta quantità"
-                className="w-9 h-9 inline-flex items-center justify-center text-ink-700 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <Plus size={16} aria-hidden />
-              </button>
-            </div>
-          )}
-
-          <button
-            onClick={onAdd}
-            disabled={!available}
-            // Il nome intero resta qui anche quando a schermo si legge la parola corta.
-            aria-label={available ? ETICHETTA_INTERA : ETICHETTA_ESAURITO}
-            className="ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-accent-500 hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed text-ink-900 px-4 sm:px-5 py-3 rounded-full font-bold text-sm transition-colors"
-          >
-            <ShoppingCart size={18} strokeWidth={2.4} className="hidden sm:inline" aria-hidden />
-            <span className="sm:hidden">{available ? ETICHETTA_CORTA : ETICHETTA_ESAURITO_CORTA}</span>
-            <span className="hidden sm:inline">{available ? ETICHETTA_INTERA : ETICHETTA_ESAURITO}</span>
-          </button>
+          {/* 3/9/2026, secondo giro — «PAGHI ALLA CONSEGNA» SI LEGGEVA «PAGHI ALLA CONSE…».
+              Questa riga stava dentro il blocco del prezzo, cioè nello stesso spazio che si
+              dividono lo stepper e il pulsante: a 360 pixel — l'iPhone SE e mezza Piacenza con
+              Android — a quel blocco restavano 93 pixel e la frase ne chiede 121. Col `truncate`,
+              messo per proteggere la CIFRA, veniva tagliata: l'unica rassicurazione visibile nel
+              momento in cui si decide di comprare, mozzata a metà. Chi non vuole anticipare i
+              soldi non si tranquillizza: si insospettisce.
+              Adesso la riga sta SOTTO, sulla larghezza intera della card: 312 pixel invece di 93.
+              Non compete più con i due comandi, e non ha bisogno di essere tagliata per stare al
+              suo posto. La prova rifà il conto con il testo vero che la scheda prodotto passa. */}
+          <p className="mt-1 text-[11px] text-olive-700 font-medium leading-tight">
+            {note ?? 'Totale'}
+          </p>
         </div>
       </div>
     </div>

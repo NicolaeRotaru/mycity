@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ShoppingCart, Truck, Undo2, Settings, Store, Bike, Search, Mail, MessageCircle, FileText } from 'lucide-react';
 import { linkWhatsApp } from '@/lib/contatto-whatsapp';
+import { temiDellaSpedizione } from '@/lib/promesse-pubbliche';
 
 export const metadata = {
   title: 'Centro assistenza · MyCity',
@@ -26,7 +27,9 @@ const TOPICS = [
   {
     icon: Truck,
     title: 'Spedizioni',
-    desc: 'Tempi, costi, ritiro in negozio, tracciamento.',
+    // 3/9/2026 — Nominava il ritiro in negozio, che alla cassa non c'e' e che la pagina
+    // Spedizioni infatti non mostra piu': anche questa riga nasce dall'interruttore.
+    desc: temiDellaSpedizione(),
     href: '/shipping',
   },
   {

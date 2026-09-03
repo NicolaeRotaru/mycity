@@ -64,6 +64,30 @@ export const CHIUSURA_EXPRESS = 21;
 export const ETICHETTA_ADESSO = `Adesso · arrivo in ${EXPRESS_ETA_LABEL}`;
 export const SOTTOTITOLO_ADESSO = EXPRESS_ETA_LABEL;
 
+/**
+ * TUTTE le fasce che la cassa può davvero proporre. Sette, e non una di più.
+ *
+ * ⚠️ Questo elenco è un CANCELLO, non una comodità. La fascia scelta viaggia dal browser fino
+ * alle due rotte che creano gli ordini, e lì decide se il negozio può servire: una fascia per
+ * domani fa guardare gli orari di domani invece dell'orologio di adesso. Finché era testo
+ * libero bastava scrivere la parola «domani» per far rispondere «sì» a un negozio chiuso —
+ * alle 3 di notte nasceva un ordine che nessuno avrebbe preparato.
+ *
+ * Chi aggiunge una fascia la aggiunge qui sopra e la trova ammessa da sola. Chi ne inventa una
+ * dal browser non entra: `lib/ordini/fascia-consegna.ts` rifiuta la richiesta, e
+ * `lib/store-hours.ts` non la legge nemmeno come una finestra.
+ */
+export const FASCE_AMMESSE: readonly string[] = [
+  ETICHETTA_ADESSO,
+  ...FASCE_DI_OGGI.map((f) => f.etichetta),
+  ...FASCE_DI_DOMANI,
+];
+
+/** Vero solo per le sette etichette qui sopra. Il confronto è esatto: niente interpretazioni. */
+export function fasciaAmmessa(valore: unknown): valore is string {
+  return typeof valore === 'string' && FASCE_AMMESSE.includes(valore);
+}
+
 /** Le fasce di oggi non ancora passate. Vuota dopo l'ultima. */
 export function fasceAncoraPossibili(ora: number): string[] {
   return FASCE_DI_OGGI.filter((f) => f.oraDiFine > ora).map((f) => f.etichetta);

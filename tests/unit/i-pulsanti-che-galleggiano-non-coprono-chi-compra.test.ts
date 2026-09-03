@@ -5,7 +5,13 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { monta } from './aiuti/monta-componente';
 import { accendi, attendi } from './aiuti/schermo';
-import { CORSIE_IN_FONDO } from '@/lib/ui/barra-in-fondo';
+import {
+  BARRE_SENZA_CORSIA,
+  CORSIE_IN_FONDO,
+  MISURE_TAILWIND,
+  larghezzaSenzaBarreNonDichiarate,
+  type MisuraTailwind,
+} from '@/lib/ui/barra-in-fondo';
 
 /**
  * 3/9/2026 — DUE COSE CHE GALLEGGIANO COPRIVANO IL PULSANTE CHE FA COMPRARE.
@@ -339,5 +345,172 @@ describe('quando due cose si sovrappongono, chi vince non lo decide il caso', ()
       `il pulsante dell'assistenza dichiara «z-${m?.[1]}», che nella scala non esiste: un numero ` +
         'grezzo non dice a nessuno chi deve stare sopra',
     ).toBe(true);
+  });
+});
+
+/**
+ * 3/9/2026, SECONDO GIRO — IL DIFETTO ERA TORNATO UN PASSO PIÙ IN LÀ.
+ *
+ * Il pavimento (`--fondo-minimo`) valeva 96 pixel sul telefono e in app/globals.css si abbassava a
+ * 24 da 768 in su, con scritto accanto: «sul computer sotto non c'è niente da scavalcare». Non era
+ * vero. La barra «Conferma ordine» della cassa è `lg:hidden`: resta a video fino a 1023. Fra 768 e
+ * 1023 — ogni iPad in verticale (768, 820, 834) e ogni finestra affiancata su un portatile — tutte
+ * le corsie valgono zero, il pavimento valeva 24, e il pulsante tondo dell'assistenza tornava sopra
+ * il pulsante che paga: lo stesso difetto che questo file è nato per chiudere.
+ *
+ * La prova qui sopra non lo vedeva perché leggeva `--fondo-minimo` con la PRIMA occorrenza del
+ * file: prendeva i 96 del telefono e non guardava mai quanto vale il pavimento sopra i 768.
+ *
+ * ── Cosa prova questo blocco, e perché non è una parola cercata ──────────────────────────────────
+ * Risolve il foglio di stile a una larghezza data — le `@media` si leggono e si applicano davvero —
+ * e confronta il pavimento che ne esce con il registro di lib/ui/barra-in-fondo.ts, dove ogni barra
+ * senza corsia dichiara fin dove si vede. Poi va a controllare che quel registro dica la verità:
+ * la misura dichiarata deve essere la stessa scritta nel file della cassa. Se qualcuno riabbassa la
+ * @media, o sposta la barra della cassa a un'altra misura, il conto non torna più.
+ */
+describe('il pavimento arriva fin dove arriva la barra che deve proteggere', () => {
+  /** Il foglio di stile senza commenti: lì dentro le graffe non aprono niente. */
+  const CSS = GLOBALS.replace(/\/\*[\s\S]*?\*\//g, '');
+
+  /** Una dichiarazione di variabile, con le condizioni di larghezza in cui vale. */
+  type Regola = { da: number; fino: number; valore: number };
+
+  /**
+   * Tutte le volte che una variabile viene dichiarata SU `:root`, con la fascia di larghezze in cui
+   * quella dichiarazione è attiva. Si scorre il file tenendo una pila di quello che è aperto: una
+   * `@media` vale finché non si richiude, e il selettore serve perché `body.senza-tabbar` azzera la
+   * stessa variabile su certe pagine — dipende dalla pagina, non dalla larghezza, e qui non conta.
+   */
+  function dichiarazioniDi(variabile: string): Regola[] {
+    const trovate: Regola[] = [];
+    type Aperto = { da: number; fino: number; selettore: string };
+    const pila: Aperto[] = [];
+    const eventi = new RegExp(
+      `@(\\w+)([^{;]*)\\{|([^{}@;]*)\\{|\\}|${variabile}:\\s*([\\d.]+)(rem|px)`,
+      'g',
+    );
+    let e: RegExpExecArray | null;
+    while ((e = eventi.exec(CSS)) !== null) {
+      if (e[1] !== undefined) {
+        const condizione = e[1] === 'media' ? e[2] : '';
+        pila.push({
+          da: Number(condizione.match(/min-width:\s*(\d+)px/)?.[1] ?? 0),
+          fino: Number(condizione.match(/max-width:\s*(\d+)px/)?.[1] ?? Infinity),
+          selettore: '',
+        });
+      } else if (e[3] !== undefined) {
+        pila.push({ da: 0, fino: Infinity, selettore: e[3].trim() });
+      } else if (e[0] === '}') {
+        pila.pop();
+      } else {
+        const dentro = pila[pila.length - 1];
+        if (!dentro || !/(^|,)\s*:root\s*(,|$)/.test(dentro.selettore)) continue;
+        trovate.push({
+          da: Math.max(0, ...pila.map((a) => a.da)),
+          fino: Math.min(Infinity, ...pila.map((a) => a.fino)),
+          valore: Number(e[4]) * (e[5] === 'rem' ? 16 : 1),
+        });
+      }
+    }
+    return trovate;
+  }
+
+  /** Quanto vale una variabile a una larghezza data: vince l'ultima dichiarazione che si applica. */
+  function valoreA(variabile: string, larghezza: number): number {
+    const valide = dichiarazioniDi(variabile).filter((r) => larghezza >= r.da && larghezza <= r.fino);
+    expect(valide.length, `a ${larghezza}px nessuna regola dichiara ${variabile}`).toBeGreaterThan(0);
+    return valide[valide.length - 1].valore;
+  }
+
+  /** La misura da cui un elemento sparisce, letta dalle sue classi: `lg:hidden` → 'lg'. */
+  function misuraDaCuiSparisce(classi: string): string | undefined {
+    return classi.match(/(?:^|\s)(\w+):hidden(?:\s|$)/)?.[1];
+  }
+
+  /** Le classi della barra «Conferma ordine» della cassa, dal file vero. */
+  const classiDellaCassa = readFileSync('app/checkout/page.tsx', 'utf8').match(
+    /className="([^"]*fixed inset-x-0 bottom-0[^"]*)"/,
+  )?.[1];
+
+  /** Le classi della barra a schede, dal file vero. */
+  const classiDellaBarraSchede = readFileSync('components/MobileTabBar.tsx', 'utf8').match(
+    /className="([^"]*fixed bottom-0 inset-x-0[^"]*)"/,
+  )?.[1];
+
+  /** La misura che il pulsante tondo aveva prima del registro (`bottom-24`). Di lì non si scende. */
+  const COM_ERA_PRIMA = 96;
+
+  it('il foglio di stile si legge davvero (se no non sta misurando niente)', () => {
+    expect(
+      dichiarazioniDi('--fondo-minimo').length,
+      'in globals.css il pavimento non si dichiara più: questa prova va riscritta',
+    ).toBeGreaterThanOrEqual(1);
+    expect(valoreA('--fondo-minimo', 360)).toBe(COM_ERA_PRIMA);
+  });
+
+  it('il registro dice la verità: la barra della cassa sparisce dalla misura che dichiara', () => {
+    const registrata = BARRE_SENZA_CORSIA.find((b) => b.dove === 'app/checkout/page.tsx');
+    expect(registrata, 'la barra della cassa non è più nel registro delle barre senza corsia').toBeTruthy();
+    expect(classiDellaCassa, 'in cassa non si trova più la barra incollata in fondo: prova da riscrivere').toBeTruthy();
+    expect(
+      misuraDaCuiSparisce(classiDellaCassa!),
+      `il registro dice che «Conferma ordine» sparisce da «${registrata!.spariceDa}», il file della ` +
+        `cassa dice «${misuraDaCuiSparisce(classiDellaCassa!)}»: il pavimento sta proteggendo una ` +
+        'fascia di schermi diversa da quella dove la barra si vede davvero',
+    ).toBe(registrata!.spariceDa);
+  });
+
+  it('il pavimento non si abbassa finché una barra senza corsia è ancora a video', () => {
+    const soglia = larghezzaSenzaBarreNonDichiarate();
+    // 820 e 834 sono gli iPad in verticale: la fascia dove il difetto era tornato.
+    for (const larghezza of [360, 375, 640, 768, 820, 834, soglia - 1]) {
+      expect(
+        valoreA('--fondo-minimo', larghezza),
+        `a ${larghezza}px il pavimento vale ${valoreA('--fondo-minimo', larghezza)}px, ma lì sotto c'è ` +
+          `ancora ${BARRE_SENZA_CORSIA.map((b) => b.nome).join(', ')}: il pulsante tondo torna sopra ` +
+          'il pulsante che paga',
+      ).toBeGreaterThanOrEqual(COM_ERA_PRIMA);
+    }
+  });
+
+  it('e su un tablet in verticale il pulsante tondo parte da sopra la barra che paga', () => {
+    // Le corsie valgono tutte zero: in cassa la barra a schede è nascosta e nessuna delle altre tre
+    // è a video. Resta solo il pavimento a tenere il pulsante sopra «Conferma ordine».
+    for (const larghezza of [768, 820, 834, larghezzaSenzaBarreNonDichiarate() - 1]) {
+      const valori = {
+        '--fondo-minimo': valoreA('--fondo-minimo', larghezza),
+        '--tabbar-height': valoreA('--tabbar-height', larghezza),
+        '--altezza-banner-cookie': 0,
+        '--altezza-barra-acquisto': 0,
+        '--altezza-banner-installa': 0,
+      };
+      for (const pezzo of [pulsanteAssistenza, bannerInstalla]) {
+        const dove = inPixel(pezzo, valori, 0);
+        expect(
+          dove,
+          `a ${larghezza}px ${pezzo.nome} parte a ${dove}px dal fondo, mentre in cassa «Conferma ` +
+            "ordine» occupa i primi 73: il tocco che doveva pagare apre l'assistenza",
+        ).toBeGreaterThanOrEqual(COM_ERA_PRIMA);
+      }
+    }
+  });
+
+  it('la corsia della barra a schede si azzera esattamente dove la barra sparisce', () => {
+    // Lo stesso errore, sull'altra coppia di misure: se la barra a schede sparisce da `md` ma la sua
+    // corsia resta 72px fin oltre, chi la somma resta alzato sopra il vuoto.
+    const misura = misuraDaCuiSparisce(classiDellaBarraSchede ?? '');
+    expect(misura, 'la barra a schede non dichiara più da quale misura sparisce').toBeTruthy();
+    const soglia = MISURE_TAILWIND[misura as MisuraTailwind];
+    expect(soglia, `«${misura}» non è una misura di Tailwind conosciuta`).toBeGreaterThan(0);
+    expect(
+      valoreA('--tabbar-height', soglia),
+      `la barra a schede sparisce da ${soglia}px ma la sua corsia lì vale ancora ` +
+        `${valoreA('--tabbar-height', soglia)}px: chi la somma resta alzato sopra il vuoto`,
+    ).toBe(0);
+    expect(
+      valoreA('--tabbar-height', soglia - 1),
+      `a ${soglia - 1}px la barra a schede c'è ancora, ma la sua corsia vale zero: chi le sta sopra ` +
+        'le finisce addosso',
+    ).toBeGreaterThan(0);
   });
 });

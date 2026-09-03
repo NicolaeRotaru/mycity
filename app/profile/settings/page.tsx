@@ -612,10 +612,22 @@ export default function SettingsPage() {
               ) : (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-5">
                   <h3 className="font-bold text-red-900 mb-2">Elimina il tuo account</h3>
+                  {/*
+                    3/9/2026 — QUI C'ERA SCRITTO «ANONIMIZZATI» E NON ERA VERO.
+                    Nome, cellulare, via, coordinate della porta di casa e le
+                    note per il fattorino restavano scritti dentro gli ordini.
+                    Adesso vengono tolti davvero (lib/account/cancellazione.ts,
+                    voce `orders`) e questa frase dice, una per una, le cose
+                    che restano: sono le stesse che quel file elenca. Se un
+                    giorno cambia l'elenco, cambia anche questa frase.
+                  */}
                   <p className="text-sm text-red-800 mb-3 leading-relaxed">
-                    Verranno rimossi profilo, indirizzi e preferenze. Gli ordini già evasi resteranno anonimizzati
-                    per obblighi fiscali. C'è un periodo di ripensamento di <strong>7 giorni</strong> durante il
-                    quale puoi annullare; dopo, <strong>l'azione è permanente.</strong>
+                    Verranno rimossi profilo, indirizzi e preferenze. Dei tuoi ordini togliamo nome, telefono,
+                    indirizzo di casa e note per il fattorino. Resta la riga dei conti — data, importo, che cosa
+                    hai comprato, da quale negozio e la città — perché la legge ci obbliga a tenerla per{' '}
+                    <strong>10 anni</strong>: quella riga non porta più il tuo nome. C'è un periodo di ripensamento
+                    di <strong>7 giorni</strong> durante il quale puoi annullare; dopo,{' '}
+                    <strong>l'azione è permanente.</strong>
                   </p>
                   {/*
                     3/9/2026 — QUESTO CAMPO NON AVEVA UN NOME.

@@ -26,6 +26,13 @@
 -- vera di chi lo farebbe, e poi verifica che il segnare-come-letto — l'unica
 -- scrittura che il sito fa davvero su questa tabella — continui a funzionare.
 --
+-- E LO CONTROLLA A DUE STRATI, che e' il punto di questo file. La riparazione
+-- ha due gambe: il permesso sceso alla colonna (①) e il trigger guardiano (②).
+-- I controlli ① ② ③ ④ ⑤ qui sotto misurano il risultato con il sito com'e'
+-- oggi — e li' a respingere e' sempre il permesso: il trigger non gira
+-- nemmeno una volta. Sarebbero verdi anche con il guardiano spento. Il
+-- controllo ⑥ toglie quello strato apposta e misura il guardiano da solo.
+--
 -- Tutto in transazione con ROLLBACK: non lascia dati.
 -- =============================================================================
 
@@ -70,6 +77,19 @@ BEGIN
   RETURN 'PASSATO';
 EXCEPTION WHEN others THEN
   RETURN SQLSTATE;
+END $$;
+
+-- `esito` restituisce il codice, e sul rifiuto il codice e' 42501 sia che a
+-- respingere sia il permesso di colonna sia che sia il trigger: identici visti
+-- da fuori. `motivo` restituisce il MESSAGGIO, che invece dice chi ha parlato.
+-- Serve al controllo ⑥, che deve poter distinguere i due strati.
+CREATE OR REPLACE FUNCTION pg_temp.motivo(p_sql text) RETURNS text
+LANGUAGE plpgsql AS $$
+BEGIN
+  EXECUTE p_sql;
+  RETURN 'PASSATO';
+EXCEPTION WHEN others THEN
+  RETURN SQLERRM;
 END $$;
 
 -- =============================================================================
@@ -194,6 +214,185 @@ BEGIN
     NOT largo,
     CASE WHEN largo THEN 'PASSATO: il permesso e ancora su tutte le colonne'
          ELSE 'il permesso vive solo sui due contatori' END
+  );
+END $$;
+
+-- =============================================================================
+-- ⑥ IL GUARDIANO DA SOLO, SENZA LO STRATO DEL PERMESSO E CON IL PROPRIETARIO
+--    CHE HA IN PRODUZIONE
+--
+--    Perche' esiste questo controllo (3/9/2026, revisione di sicurezza).
+--    I controlli ① e ② dicono il vero — la chat non si sposta — ma a respingerli
+--    e' il permesso di colonna della mossa ①, che nega la scrittura prima che il
+--    trigger venga eseguito. Il trigger non era mai stato provato nemmeno una
+--    volta: erano verdi per un motivo diverso da quello che credevano di
+--    misurare.
+--
+--    Qui si toglie quello strato — si riconcede l'UPDATE su tutta la tabella,
+--    cioe' esattamente cio' che farebbe il ciclo della 145 se rigirasse dopo la
+--    154 — e resta in piedi solo il guardiano. Che e' il caso che la migrazione
+--    dichiara di coprire.
+--
+--    E si prova con la funzione intestata ai tre nomi «da amministratore».
+--    Motivo: dentro una funzione SECURITY DEFINER `current_user` non e' chi
+--    chiama, e' il PROPRIETARIO della funzione. Su Supabase le migrazioni si
+--    applicano come `postgres`, quindi la funzione nasce di `postgres`: un
+--    guardiano che si fidasse di `current_user` si autorizzerebbe da solo e non
+--    scatterebbe mai. In locale la funzione nasce di un altro utente, quindi
+--    senza questo giro sul proprietario il difetto resta invisibile — ed e'
+--    proprio cosi' che era passato.
+--
+--    Il controllo pretende tre cose insieme: la scrittura respinta, la riga
+--    rimasta com'era, e il rifiuto arrivato DAL TRIGGER (lo si riconosce dal
+--    messaggio: il permesso dice «permission denied», il guardiano dice «non si
+--    intesta»).
+-- =============================================================================
+GRANT UPDATE ON public.conversations TO authenticated;
+
+DO $$
+DECLARE
+  proprietario  text;
+  originale     text := pg_get_userbyid((SELECT p.proowner FROM pg_proc p
+                          JOIN pg_namespace n ON n.oid = p.pronamespace
+                         WHERE n.nspname = 'public'
+                           AND p.proname = 'conversazione_non_si_reintesta'));
+  come          text;
+  seller_dopo   uuid;
+  guasti        text := '';
+BEGIN
+  FOREACH proprietario IN ARRAY ARRAY['postgres', 'supabase_admin', 'service_role'] LOOP
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = proprietario) THEN
+      EXECUTE format('CREATE ROLE %I NOLOGIN NOINHERIT', proprietario);
+    END IF;
+    -- Su Supabase questi tre nomi vedono lo schema `auth`; il ruolo che
+    -- l'impalcatura locale inventa al volo no. Senza questa riga il trigger
+    -- morirebbe su `auth.jwt()` con «permission denied for schema auth» — un
+    -- rosso che parla del banco di prova, non del guardiano.
+    EXECUTE format('GRANT USAGE ON SCHEMA auth TO %I', proprietario);
+    EXECUTE format('GRANT CREATE ON SCHEMA public TO %I', proprietario);
+    EXECUTE format('ALTER FUNCTION public.conversazione_non_si_reintesta() OWNER TO %I', proprietario);
+
+    SET LOCAL ROLE authenticated;
+    SET LOCAL request.jwt.claims = '{"sub":"dd000000-0000-0000-0000-00000000000b","role":"authenticated"}';
+    come := pg_temp.motivo($q$
+      UPDATE public.conversations
+         SET seller_id = 'dd000000-0000-0000-0000-00000000000c'
+       WHERE id = 'dd000000-1111-0000-0000-00000000000e'
+    $q$);
+    RESET request.jwt.claims;
+    RESET ROLE;
+
+    SELECT c.seller_id INTO seller_dopo FROM public.conversations c
+     WHERE c.id = 'dd000000-1111-0000-0000-00000000000e';
+
+    IF seller_dopo IS DISTINCT FROM 'dd000000-0000-0000-0000-00000000000a'::uuid THEN
+      guasti := guasti || format('funzione di %s: la chat si e spostata sul fioraio; ', proprietario);
+      -- si rimette a posto per il giro dopo, dalla porta di servizio dichiarata
+      SET LOCAL mycity.allow_conversation_reassign = '1';
+      UPDATE public.conversations SET seller_id = 'dd000000-0000-0000-0000-00000000000a'
+       WHERE id = 'dd000000-1111-0000-0000-00000000000e';
+      RESET mycity.allow_conversation_reassign;
+    ELSIF come NOT ILIKE '%non si intesta%' THEN
+      guasti := guasti || format('funzione di %s: respinta da un altro strato, non dal guardiano (%s); ',
+                                 proprietario, come);
+    END IF;
+  END LOOP;
+
+  EXECUTE format('ALTER FUNCTION public.conversazione_non_si_reintesta() OWNER TO %I', originale);
+
+  INSERT INTO esiti VALUES (
+    'il guardiano ferma il dirottamento anche se il permesso torna largo',
+    guasti = '',
+    CASE WHEN guasti = '' THEN 'respinto dal trigger con tutti e tre i proprietari'
+         ELSE 'PASSATO: ' || guasti END
+  );
+END $$;
+
+-- =============================================================================
+-- ⑦ LE PORTE DI SERVIZIO DICHIARATE RESTANO APERTE
+--    Un guardiano che blocca tutti e' rotto quanto uno spento: il backend con la
+--    chiave di servizio e una manutenzione che si dichiara devono poter ancora
+--    staccare o rifare un'intestazione (per esempio dopo una fusione di account).
+--    Il permesso di tabella e' ancora largo dal controllo ⑥: qui si misura solo
+--    la decisione del guardiano.
+-- =============================================================================
+DO $$
+DECLARE come_servizio text; come_manutenzione text; chi uuid;
+BEGIN
+  -- (a) il backend, che si presenta col ruolo di servizio nel token
+  SET LOCAL ROLE service_role;
+  SET LOCAL request.jwt.claims = '{"role":"service_role"}';
+  come_servizio := pg_temp.motivo($q$
+    UPDATE public.conversations SET seller_id = 'dd000000-0000-0000-0000-00000000000c'
+     WHERE id = 'dd000000-1111-0000-0000-00000000000e'
+  $q$);
+  RESET request.jwt.claims;
+  RESET ROLE;
+
+  -- (b) la manutenzione, che deve dichiararlo prima di farlo
+  SET LOCAL mycity.allow_conversation_reassign = '1';
+  come_manutenzione := pg_temp.motivo($q$
+    UPDATE public.conversations SET seller_id = 'dd000000-0000-0000-0000-00000000000a'
+     WHERE id = 'dd000000-1111-0000-0000-00000000000e'
+  $q$);
+  RESET mycity.allow_conversation_reassign;
+
+  SELECT c.seller_id INTO chi FROM public.conversations c
+   WHERE c.id = 'dd000000-1111-0000-0000-00000000000e';
+
+  INSERT INTO esiti VALUES (
+    'la chiave di servizio e la manutenzione dichiarata passano ancora',
+    come_servizio = 'PASSATO' AND come_manutenzione = 'PASSATO'
+      AND chi = 'dd000000-0000-0000-0000-00000000000a',
+    format('chiave di servizio: %s · manutenzione dichiarata: %s', come_servizio, come_manutenzione)
+  );
+END $$;
+
+REVOKE UPDATE ON public.conversations FROM authenticated;
+GRANT UPDATE (buyer_unread_count, seller_unread_count) ON public.conversations TO authenticated;
+
+-- =============================================================================
+-- ⑧ NESSUN GUARDIANO SI FIDA DI `current_user` — in tutto lo schema, non solo qui
+--
+--    Questa non e' una regola sulle chat: e' il cancello che impedisce alla
+--    stessa malattia di rinascere altrove. Dentro una funzione SECURITY DEFINER
+--    `current_user` e' il proprietario della funzione, non chi ha chiamato: un
+--    controllo di permessi scritto cosi' finisce per autorizzare se stesso e
+--    sembra acceso mentre e' spento. E' il difetto che la revisione del 3/9/2026
+--    ha trovato nella 154, ed e' il tipo peggiore, perche' nessuno lo va piu' a
+--    cercare.
+--
+--    Non e' una ricerca di parole nei file: guarda il database VERO ricostruito
+--    da tutte le migrazioni, quindi vede anche le funzioni create da un ciclo o
+--    da un `EXECUTE`. E guarda il CODICE, non la prosa: i commenti si tolgono
+--    prima di cercare, cosi' una funzione puo' spiegare la trappola per iscritto
+--    senza far scattare il controllo. `session_user` non lo tocca: quello e'
+--    l'utente della connessione, e una SECURITY DEFINER non lo cambia.
+--
+--    Chi ha davvero bisogno di sapere chi possiede la funzione lo scriva in un
+--    altro modo e lo spieghi qui: questo controllo va aggiornato di proposito,
+--    non aggirato.
+-- =============================================================================
+DO $$
+DECLARE elenco text;
+BEGIN
+  SELECT string_agg(n.nspname || '.' || p.proname, ', ' ORDER BY p.proname) INTO elenco
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+   WHERE p.prosecdef
+     AND n.nspname = 'public'
+     -- via i commenti a blocco, poi quelli di riga: resta il codice eseguito
+     AND regexp_replace(
+           regexp_replace(p.prosrc, '/\*.*?\*/', ' ', 'gs'),
+           '--[^\n]*', ' ', 'g')
+         ~ '(^|[^._[:alnum:]])current_user([^._[:alnum:]]|$)';
+
+  INSERT INTO esiti VALUES (
+    'nessuna funzione potente decide i permessi guardando current_user',
+    elenco IS NULL,
+    CASE WHEN elenco IS NULL
+         THEN 'nessuna funzione SECURITY DEFINER di public guarda current_user'
+         ELSE 'PASSATO: si fidano di current_user → ' || elenco END
   );
 END $$;
 

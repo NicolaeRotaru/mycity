@@ -15,7 +15,7 @@ import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
 import { checkoutChiuso } from '@/lib/ordini/partenza';
 import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
 import { formatPrice } from '@/lib/format';
-import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
@@ -51,7 +51,8 @@ import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
-import { promessaSpedizione } from '@/lib/promesse-pubbliche';
+import { promessaSpedizioneDelCarrello } from '@/lib/ordini/promessa-del-carrello';
+import { merceCheTengoIo, problemiDiDisponibilita, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { leggiJson, messaggioDiRete } from '@/lib/api/leggi-json';
 import { queryKeys } from '@/lib/queries/keys';
@@ -281,15 +282,49 @@ export default function CheckoutPage() {
         })
         .map((it) => ({ id: it.id, name: it.name, prima: it.price, adesso: priceMap.get(it.id) as number }));
 
+      /**
+       * 3/9/2026 — L'ULTIMO PEZZO CHE HO IMPEGNATO IO NON È UN PEZZO FINITO.
+       *
+       * Premendo «Paga con carta» il server scala davvero `products.stock` e
+       * apre Stripe. Chi lì fa indietro tornava qui e leggeva «Non più
+       * disponibile»: aveva impegnato lui quell'unico pezzo, e la riserva dura
+       * due ore. Il pulsante d'ordine si spegneva, la richiesta non partiva, e
+       * il rilascio che vive nelle due rotte d'ordine non veniva mai raggiunto.
+       *
+       * Qui si chiedono i propri tentativi ancora aperti — le regole del
+       * database ne mostrano soltanto i propri — e la loro merce torna a
+       * contare come disponibile PER CHI LA TIENE. Così la richiesta arriva al
+       * server, che libera la riserva vecchia e ne fa una nuova, come sa fare.
+       */
+      // L'identificativo si prende dalla sessione già in memoria: nessun viaggio
+      // in più, e da ospiti non c'è niente da chiedere (una riserva nasce solo
+      // da un ordine, e per ordinare bisogna essere entrati). Il filtro sul
+      // proprietario è scritto anche qui: le regole del database lo impongono
+      // già, ma una richiesta che dice cosa vuole è una richiesta che si legge.
+      const idCliente = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
+      const tentativiMiei = idCliente
+        ? (
+            await supabase
+              .from('pending_checkouts')
+              .select('groups')
+              .eq('buyer_id', idCliente)
+              .eq('status', 'PENDING')
+              .limit(10)
+          ).data
+        : [];
+      const tengoIo = merceCheTengoIo((tentativiMiei ?? []) as TentativoAperto[]);
+
       // Disponibilità per riga: stock della variante se presente, altrimenti del
       // prodotto. Blocca e segnala invece di fallire dopo.
       const availableFor = (it: CartItem) =>
         it.variantId
           ? (variantStock.get(it.variantId) ?? 0)
           : (stockMap.get(it.id) ?? Number.POSITIVE_INFINITY);
-      const stockIssues = cart
-        .filter((it) => validIds.has(it.id) && it.quantity > availableFor(it))
-        .map((it) => ({ id: it.id, name: it.name, requested: it.quantity, available: availableFor(it) }));
+      const stockIssues = problemiDiDisponibilita(
+        cart.filter((it) => validIds.has(it.id)),
+        availableFor,
+        tengoIo,
+      );
 
       // Articoli con varianti ma senza variante scelta (es. aggiunti da una card):
       // vanno completati nella scheda prodotto prima di ordinare.
@@ -572,12 +607,18 @@ export default function CheckoutPage() {
    * che decide l'addebito nelle due rotte. `riepilogoDaMostrare` la legge in
    * euro, che è come si stampa.
    */
+  // Il sottototale di OGNI negozio, in centesimi. Uno per gruppo, perché è
+  // così che si contano sia i soldi sia la soglia della spedizione gratuita.
+  const sottototaliPerNegozioCents = groups.map((g) =>
+    // Il prezzo di riga è già quello di adesso e già scontato (#114): qui si
+    // passa solo dagli euro ai centesimi, come fa il server.
+    g.items.reduce((s, it) => s + Math.round(it.price * 100) * it.quantity, 0),
+  );
+
   const riepilogo = riepilogoDaMostrare({
-    gruppi: groups.map((g) => ({
+    gruppi: groups.map((g, i) => ({
       sellerId: g.sellerId,
-      // Il prezzo di riga è già quello di adesso e già scontato (#114): qui si
-      // passa solo dagli euro ai centesimi, come fa il server.
-      subtotalCents: g.items.reduce((s, it) => s + Math.round(it.price * 100) * it.quantity, 0),
+      subtotalCents: sottototaliPerNegozioCents[i],
     })),
     coordinateNegozio: (sellerId) => {
       const g = groups.find((x) => x.sellerId === sellerId);
@@ -596,7 +637,15 @@ export default function CheckoutPage() {
 
   // La promessa sulla spedizione ha una casa sola: `promessaSpedizione` la fa
   // nascere dalla soglia e dal costo di consegna veri.
-  const promessaConsegna = promessaSpedizione(riepilogo.subtotale);
+  //
+  // 3/9/2026 — QUI LE SI PASSAVA IL TOTALE DI TUTTO IL CARRELLO, e la soglia
+  // dei 30 € vale per NEGOZIO: con 18 € dal fornaio e 18 dal macellaio la barra
+  // diceva «Spedizione gratis» e il riepilogo addebitava due spedizioni.
+  // Adesso la domanda parte dall'elenco dei negozi e la risposta guarda quello
+  // più lontano dalla soglia: «gratis» compare solo quando è vero per tutti.
+  const promessaConsegna = promessaSpedizioneDelCarrello(
+    sottototaliPerNegozioCents.map((c) => c / 100),
+  );
 
   const walletEuro = (walletCents ?? 0) / 100;
   const grandSubtotal = riepilogo.subtotale;
@@ -1099,7 +1148,11 @@ export default function CheckoutPage() {
 
           {/* STEP 2 — Quando vuoi riceverlo (consegna / express / ritiro) */}
           <StepCard n={2} icon={Truck} title="Quando vuoi riceverlo">
-            {pickupInStore ? (
+            {/* Il ritiro in negozio oggi è spento (`RITIRO_IN_NEGOZIO_ATTIVO`), e
+                la scelta sta dietro quell'interruttore in PaymentMethodSelector.
+                Qui lo si rilegge invece di fidarsi: la frase sul ritiro non deve
+                poter comparire quando il ritiro non si può fare. */}
+            {RITIRO_IN_NEGOZIO_ATTIVO && pickupInStore ? (
               <div className="flex items-center gap-2 rounded-xl border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-800">
                 <Store size={16} className="text-olive-700 shrink-0" aria-hidden /> Ritiro in negozio selezionato — nessun costo di consegna. Vai tu quando l&apos;ordine è pronto.
               </div>
@@ -1131,8 +1184,8 @@ export default function CheckoutPage() {
                     fine. La frase non si scrive qui: nasce dalla cifra che la
                     cassa addebita davvero (`promessaSpedizione`, la stessa che
                     parla in vetrina). A consegna gratuita sparisce da sé. */}
-                {promessaConsegna.dettaglioConsegna && (
-                  <p className="mt-2 text-xs text-ink-500">{promessaConsegna.dettaglioConsegna}</p>
+                {promessaConsegna.promessa.dettaglioConsegna && (
+                  <p className="mt-2 text-xs text-ink-500">{promessaConsegna.promessa.dettaglioConsegna}</p>
                 )}
               </>
             )}
@@ -1325,9 +1378,13 @@ export default function CheckoutPage() {
 
             <CartGroupsList groups={groups} />
 
-            {/* Spinta add-back: a un soffio dalla spedizione gratis */}
+            {/* Spinta add-back: a un soffio dalla spedizione gratis.
+                Il numero è il sottototale del negozio più lontano dalla soglia,
+                non il totale del carrello: la soglia vale per ciascun negozio,
+                e sommandoli la barra prometteva «gratis» su un ordine che
+                pagava due spedizioni. */}
             <div className="px-5 pt-3">
-              <FreeShippingProgress subtotal={grandSubtotal} />
+              <FreeShippingProgress subtotal={promessaConsegna.sottototaleDellaBarra} />
             </div>
 
             {/* Coupon input */}

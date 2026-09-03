@@ -107,6 +107,21 @@ export const SECCHI_CON_FILE_PERSONALI = ['kyc-docs', 'cod-proof', 'reviews'] as
  * SET NULL) invece di sparire insieme a lui (ON DELETE CASCADE). Le righe che
  * sopravvivono vanno ripulite PRIMA della cancellazione: dopo, la colonna che
  * le legava alla persona vale NULL e non le ritrova piu' nessuno.
+ *
+ * 3/9/2026, LO STESSO GIORNO — MANCAVA `orders`, E MANCAVA IL DATO PEGGIORE.
+ *
+ * L'elenco era nato dai buoni regalo e aveva raccolto le tabelle di testo
+ * libero. Nessuno lo aveva confrontato con l'elenco vero: quali tabelle
+ * tengono dati personali E sopravvivono all'utente. Il confronto, fatto sullo
+ * schema ricostruito dalle migrazioni, ha trovato due bugie: `orders` non
+ * c'era per niente (nome, cellulare, indirizzo, coordinate della porta e note
+ * per il fattorino restavano in chiaro) e `returns` era segnata come se
+ * sparisse con l'utente, mentre migrations/122 l'aveva cambiata apposta in
+ * SET NULL.
+ *
+ * La regola per chi aggiunge una tabella domani: prima si guarda la chiave
+ * esterna vera, poi si scrive `sopravvive`. Se il campo dice il falso, la
+ * riparazione parte gia' storta.
  */
 export type TabellaConDatiPersonali = {
   /** La tabella. */
@@ -152,7 +167,11 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     tabella: 'returns',
     colonna: 'buyer_id',
     azzera: { notes: null },
-    sopravvive: false,
+    // migrations/122 (#179) ha cambiato apposta questa chiave da CASCADE a
+    // ON DELETE SET NULL: «un reso e' una pratica con dei soldi dentro, la
+    // riga resta, anonima». Qui era rimasto scritto il contrario. Verificato
+    // sullo schema ricostruito dalle migrazioni: returns.buyer_id -> SET NULL.
+    sopravvive: true,
     perche: 'le note scritte a mano dentro una richiesta di reso',
   },
   {
@@ -194,6 +213,70 @@ export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
     azzera: { recipient_name: null, recipient_email: null, message: null },
     sopravvive: true,
     perche: 'nome, email e messaggio di chi ha riscattato il regalo e poi ha chiesto di sparire',
+  },
+  {
+    /*
+     * 3/9/2026 — L'INDIRIZZO DI CASA RESTAVA SCRITTO DENTRO GLI ORDINI.
+     *
+     * `orders` non e' mai stata in questo elenco perche' e' sempre stata
+     * considerata «un dato contabile». Lo e', ma solo per una parte delle sue
+     * colonne. Le altre sono il nome, il cellulare, la via col numero civico,
+     * le coordinate della porta di casa e le note per il fattorino — «citofono
+     * Rossi, secondo piano». Cancellato l'account restavano tutte in chiaro, e
+     * `user_id` diventava NULL (SET NULL, verificato sullo schema ricostruito
+     * dalle migrazioni): sopravvivevano nella forma peggiore, cioe' senza piu'
+     * il filo che le riportava alla persona. Irrintracciabili anche volendo.
+     *
+     * LA RIGA NON SI CANCELLA. Un ordine e' una scrittura contabile e va
+     * tenuto dieci anni (art. 2220 c.c.), e al negozio serve lo storico del
+     * venduto. Ma l'obbligo riguarda l'operazione — quando, quanto, che cosa,
+     * da quale negozio — non il numero di telefono e la geolocalizzazione
+     * dell'abitazione: tenere anche quelli e' eccedente rispetto alla
+     * finalita' dichiarata (art. 5.1.c GDPR).
+     *
+     * COSA SI AZZERA, E PERCHE' OGNUNO:
+     *  · delivery_full_name — nome e cognome: e' la persona, punto.
+     *  · delivery_phone     — il cellulare: e' l'aggancio con cui si ritrova
+     *      qualcuno ovunque. Serviva al fattorino per citofonare quel giorno;
+     *      a consegna avvenuta non serve piu' a niente e a nessuno.
+     *  · delivery_address   — via e numero civico: dove abita.
+     *  · delivery_zip       — il CAP e' il quartiere. Da solo dice poco, ma
+     *      sugli ordini vecchi non lo legge nessuno (le zone del fattorino
+     *      guardano gli ordini vivi): tenerlo sarebbe conservare «non si sa mai».
+     *  · delivery_notes     — testo libero, il campo peggiore: «citofono
+     *      Rossi», «lascia dalla vicina del secondo piano». Ci finiscono
+     *      dentro cognomi di terzi e le abitudini di casa.
+     *  · delivery_lat / delivery_lng — le coordinate della porta: il dato piu'
+     *      preciso che abbiamo, e resta esatto anche quando l'indirizzo
+     *      scritto e' sbagliato.
+     *
+     * COSA RESTA, E PERCHE': numero d'ordine, data, importi, stato, negozio, i
+     * prodotti comprati e `delivery_city`. La citta' e' Piacenza per tutti e
+     * non identifica nessuno — e' il ragionamento gia' scritto in
+     * migrations/142 — e serve ai conti del negozio e alle statistiche di zona.
+     * Quello che resta e' scritto anche nelle impostazioni, dove la persona
+     * legge cosa succede: quella frase e questo elenco devono dire la stessa
+     * cosa (app/profile/settings/page.tsx).
+     *
+     * ⚠️ QUI NON VANNO `cash_photo_url`, `delivery_photo_url` e
+     * `cash_signature_url`. Quelle tre colonne sono l'unico filo che porta ai
+     * file nello storage, e le azzera `cancellaProveDiConsegna` DOPO aver
+     * tolto i file. Azzerarle qui — che gira prima — vorrebbe dire lasciare la
+     * fotografia dell'ingresso di casa nello storage per sempre (R058).
+     */
+    tabella: 'orders',
+    colonna: 'user_id',
+    azzera: {
+      delivery_full_name: null,
+      delivery_phone: null,
+      delivery_address: null,
+      delivery_zip: null,
+      delivery_notes: null,
+      delivery_lat: null,
+      delivery_lng: null,
+    },
+    sopravvive: true,
+    perche: 'nome, cellulare, indirizzo di casa, coordinate della porta e note per il fattorino',
   },
 ];
 
@@ -339,11 +422,46 @@ function scritturaPerNome(admin: Admin): ScritturaPerNome {
  * `rider_reviews` non ha la colonna delle foto (nasce in migrations/014 e
  * nessuna migrazione gliela aggiunge): chiederne l'azzeramento farebbe
  * respingere tutto l'aggiornamento e resterebbe anche il commento.
+ *
+ * 3/9/2026 — E SE UNA PULIZIA NON RIESCE, ADESSO SI SA.
+ *
+ * Prima queste scritture partivano tutte insieme e nessuno guardava la
+ * risposta: il database poteva rifiutarne una — una colonna che non esiste, un
+ * guardiano che blocca la scrittura — e la cancellazione tirava dritto fino a
+ * chiudere l'account. Da quel momento quei dati non si ritrovano piu': la
+ * colonna che li legava alla persona vale NULL. Un errore ingoiato, sul passo
+ * che non si puo' rifare. Adesso ogni tabella risponde per se', l'errore
+ * finisce nei log con il suo nome, e chi chiama decide che farne.
  */
-export async function anonimizzaTestoLibero(admin: Admin, userId: string): Promise<void> {
-  await Promise.all(
-    TABELLE_CON_DATI_PERSONALI.map((t) => scritturaPerNome(admin).from(t.tabella).update(t.azzera).eq(t.colonna, userId)),
-  ).catch((e) => logger.warn('[cancellazione] anonimizzazione testo libero parziale', { userId, e }));
+export type PuliziaNonRiuscita = {
+  tabella: string;
+  colonna: string;
+  /** La riga resta in vita anche dopo la cancellazione dell'account? */
+  sopravvive: boolean;
+  errore: string;
+};
+
+export async function anonimizzaTestoLibero(admin: Admin, userId: string): Promise<PuliziaNonRiuscita[]> {
+  const esiti = await Promise.all(
+    TABELLE_CON_DATI_PERSONALI.map(async (t): Promise<PuliziaNonRiuscita | null> => {
+      try {
+        const { error } = await scritturaPerNome(admin).from(t.tabella).update(t.azzera).eq(t.colonna, userId);
+        if (!error) return null;
+        return { tabella: t.tabella, colonna: t.colonna, sopravvive: t.sopravvive, errore: error.message };
+      } catch (e) {
+        const errore = e instanceof Error ? e.message : 'errore';
+        return { tabella: t.tabella, colonna: t.colonna, sopravvive: t.sopravvive, errore };
+      }
+    }),
+  );
+
+  const falliti = esiti.filter((e): e is PuliziaNonRiuscita => e !== null);
+  for (const f of falliti) {
+    logger.warn('[cancellazione] tabella non ripulita', {
+      userId, tabella: f.tabella, colonna: f.colonna, sopravvive: f.sopravvive, err: f.errore,
+    });
+  }
+  return falliti;
 }
 
 /**
@@ -515,6 +633,10 @@ export type EsitoCancellazione = {
  *    quel legame esiste. Dopo la cancellazione quelle colonne valgono NULL e
  *    nessuno le ritrova più: è per questo che «prima cancella, poi pulisci»
  *    sarebbe stata la riparazione peggiore del difetto.
+ * ②bis Se una di quelle pulizie NON è riuscita, ci si ferma prima del ③. È la
+ *    stessa regola vista dall'altro verso: il senso del ② è che dopo non si
+ *    ritrova più niente, quindi andare avanti su una pulizia fallita renderebbe
+ *    permanente un guasto di stanotte. Si riprova domani.
  * ③ La cancellazione dell'account: il passo che può fallire.
  * ④ Il profilo (nome, indirizzo, nome del negozio) solo se il ③ è riuscito.
  */
@@ -532,7 +654,7 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   // toglierli non lascia nessuno con un account a metà.
   await anonimizzaDatiSensibili(admin, userId);
 
-  await anonimizzaTestoLibero(admin, userId);
+  const puliziaFallita = await anonimizzaTestoLibero(admin, userId);
   await togliDallaNewsletter(admin, userId);
 
   const file = await cancellaFilePersonali(admin, userId);
@@ -545,6 +667,29 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
   const prove = await cancellaProveDiConsegna(admin, userId);
   if (prove.errori.length > 0) {
     logger.warn('[cancellazione] prove di consegna non tutte rimosse', { userId, errori: prove.errori });
+  }
+
+  // ②bis Se una riga che SOPRAVVIVE non si è lasciata ripulire, ci si ferma
+  // qui. Cancellare adesso l'account vorrebbe dire lasciare quei dati in
+  // chiaro e senza più il legame che li ritrova: un guasto di stanotte
+  // diventerebbe una cosa che non si ripara più. Non c'è nessun `motivo`
+  // apposta: per il giro notturno questo è un GUASTO, quindi la notte diventa
+  // rossa, qualcuno viene svegliato e domani si riprova (lib/cron-cancellazioni.ts).
+  // Le tabelle che spariscono con l'utente non fermano niente: la riga se ne
+  // va comunque insieme a lui.
+  const perseSeAndiamoAvanti = puliziaFallita.filter((f) => f.sopravvive);
+  if (perseSeAndiamoAvanti.length > 0) {
+    const elenco = perseSeAndiamoAvanti.map((f) => `${f.tabella}: ${f.errore}`).join('; ');
+    logger.error('[cancellazione] fermata: dati che sopravvivono non ripuliti', { userId, elenco });
+    return {
+      ok: false,
+      errore:
+        `L'account non è stato cancellato: prima non siamo riusciti a togliere i dati personali che ` +
+        `restano anche dopo (${elenco}). Cancellarlo adesso li lascerebbe in chiaro e senza più nessun ` +
+        `legame con la persona. Si riprova.`,
+      fileRimossi: file.rimossi + prove.rimossi,
+      erroriFile: [...file.errori, ...prove.errori],
+    };
   }
 
   // ③ Il passo che può fallire. Fin qui non abbiamo toccato niente di ciò che
