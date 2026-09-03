@@ -52,6 +52,14 @@ async function handler(_req: NextRequest, caller: { id: string }, { params }: { 
   // «i tuoi dati vengono cancellati» — e una delle due non la manteneva.
   const esito = await cancellaAccount(admin, targetId);
   if (!esito.ok) {
+    // 3/9/2026 — I contanti che un fattorino non ha ancora versato non sono un
+    // guasto del sito: sono una regola. Rispondere «errore interno» faceva
+    // sembrare rotto il pannello e nascondeva l'unica cosa da fare, cioè farsi
+    // versare i soldi. Qui la risposta dice il motivo e l'importo.
+    if (esito.motivo === 'cassa_da_versare') {
+      logger.warn('admin delete: cancellazione rinviata, cassa contanti aperta', { targetId });
+      return ApiErrors.conflict(esito.errore ?? 'Cancellazione rinviata: cassa contanti ancora aperta.');
+    }
     logger.error('admin delete: cancellazione fallita', { targetId, errore: esito.errore });
     // 27/8/2026 (R016) — Era `{ error: 'stringa' }`, l'altra forma: il pannello
     // legge `error.message` e mostrava «Operazione non riuscita» al posto del

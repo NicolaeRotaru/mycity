@@ -1,4 +1,5 @@
 import { EXPRESS_ETA_LABEL } from './delivery';
+import { formatPrice } from './format';
 export const FREE_SHIPPING_THRESHOLD = 30;
 export const LOW_STOCK_THRESHOLD = 5;
 export const NEW_PRODUCT_DAYS = 14;
@@ -79,8 +80,14 @@ export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
 // La soglia vale per NEGOZIO, non sul totale del carrello: dirlo qui costa tre parole e toglie il
 // caso in cui uno legge «gratuita sopra 30 €», ne spende 35 fra due negozi e paga la spedizione.
 // E i minuti vengono da lib/delivery, dove il numero e' deciso — non riscritti qui.
+// La consegna la nomina il sottotitolo: «gratuita» da sola era falsa, perche' i 3 euro di
+// PLATFORM_DELIVERY_FEE_CENTS si pagano su ogni ordine portato a casa, anche sopra la soglia. La
+// frase nasce da quella cifra: portarla a zero fa tornare da se' il claim pulito. Le parole per la
+// vetrina le decide `promessaSpedizione()` in lib/promesse-pubbliche — qui non si puo' chiamare
+// (quel file importa questo, e il giro si chiuderebbe su se stesso), ma il numero e' lo stesso e
+// una prova tiene le due frasi allineate.
 export const VALUE_PROPS = [
-  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra €${FREE_SHIPPING_THRESHOLD} per negozio` },
+  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra €${FREE_SHIPPING_THRESHOLD} per negozio${PLATFORM_DELIVERY_FEE_CENTS > 0 ? ` · ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} di consegna` : ''}` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
   { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} dalla conferma del negozio` },

@@ -115,7 +115,7 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
       </button>
 
       {hint && !open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-64 rounded-xl bg-white p-3 text-ink-900 shadow-warm-lg ring-1 ring-cream-300">
+        <div className="fixed left-0 right-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white p-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))] text-ink-900 shadow-warm-lg ring-1 ring-cream-300 md:absolute md:right-auto md:bottom-auto md:top-full md:mt-2 md:w-64 md:rounded-xl md:pb-3">
           {/* 27/8/2026 (R110) — la «×» era `text-ink-300` su bianco: 2,52:1,
               sotto il 3:1 che WCAG chiede alle parti grafiche di un comando, e
               il bersaglio erano 14 pixel senza margine. */}
@@ -141,10 +141,24 @@ export default function LocationPill({ compact = false }: { compact?: boolean })
             onClick={() => chiudi(false)}
             aria-hidden
           />
+          {/*
+            31/8/2026 — LA TENDINA CHE USCIVA DALLO SCHERMO.
+            Sul telefono la pillola sta in mezzo alla barra, fra il logo e il
+            carrello: un pannello largo 288 pixel ancorato al suo bordo
+            sinistro partiva da oltre metà di uno schermo da 360 e finiva
+            fuori. Niente `overflow-x` nascosto sopra: la pagina prendeva lo
+            scorrimento laterale, e la metà destra del campo CAP e del pulsante
+            «Aggiorna posizione» restava dove il dito non arriva.
+            Sotto `md` il pannello non è più agganciato alla pillola ma allo
+            SCHERMO — sale dal basso, come il foglio dell'account — e dentro
+            uno schermo ci sta per costruzione, qualunque sia la sua larghezza.
+            Da `md` in su torna la tendina di prima, che sul desktop nasce a
+            sinistra e ha tutto lo spazio che le serve.
+          */}
           <div
             role="dialog"
             aria-labelledby={idTitolo}
-            className="absolute left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-warm-lg ring-1 ring-ink-100 p-4 z-50 text-ink-900"
+            className="fixed left-0 right-0 bottom-0 z-50 max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] shadow-warm-lg ring-1 ring-ink-100 text-ink-900 md:absolute md:right-auto md:bottom-auto md:top-full md:mt-2 md:w-72 md:rounded-xl md:pb-4"
           >
             <p id={idTitolo} className="text-sm font-semibold mb-1">Dove vuoi ricevere?</p>
             <p className="text-xs text-ink-500 mb-3">

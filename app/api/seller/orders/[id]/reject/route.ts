@@ -84,12 +84,20 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.internal('Rifiuto fallito');
   }
 
-  // Il codice sconto torna utilizzabile a chi non ha comprato niente: lo faceva
-  // la funzione del database, e deve continuare a farlo anche di qui.
-  if (order.coupon_code && order.coupon_code.trim()) {
-    const { error: cErr } = await admin.rpc('release_coupon', { p_code: order.coupon_code });
-    if (cErr) logger.warn('[seller-reject] codice sconto non liberato', { orderId: order.id, message: cErr.message });
-  }
+  // 3/9/2026 — QUI IL CODICE SCONTO TORNAVA INDIETRO DUE VOLTE.
+  //
+  // Fino a ieri, sotto questa riga, la rotta chiamava `release_coupon` per conto
+  // suo. Era la copia vecchia: la restituzione l'ha presa in carico
+  // `annullaERimborsa` il 27/8 (R121), su entrambi i rami — carta e contanti.
+  // Il rifiuto del negozio passa di lì da quando esiste questa rotta, quindi il
+  // contatore degli usi scendeva di 2 per un solo ordine rifiutato.
+  //
+  // Un buono da 100 usi, dopo 30 rifiuti del negozio (prodotto finito: il caso
+  // più normale del primo mese), ne regalava 30 in più di quelli decisi. E il
+  // messaggio qui sotto dice al cliente «torna utilizzabile» UNA volta.
+  //
+  // La restituzione ha un padrone solo: `annullaERimborsa`.
+  // La prova: tests/unit/il-buono-torna-una-volta-sola-quando-il-negozio-rifiuta.test.ts.
 
   const creditoCents = Number(order.wallet_applied_cents ?? 0);
   const pezzi = [

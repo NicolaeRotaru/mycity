@@ -20,6 +20,7 @@ import { env } from '@/lib/env';
 // regole: il giorno in cui va aggiunto un carattere da filtrare, due restano
 // indietro — e restano indietro senza dirlo a nessuno.
 import { escapeHtml } from '@/lib/html-escape';
+import { recapitoPrivacy } from '@/lib/legal/titolare';
 
 const BRAND = 'MyCity';
 const BRAND_COLOR = '#4f46e5';
@@ -194,6 +195,30 @@ export function refundIssuedTemplate(args: { orderId: string; amount: number; re
   };
 }
 
+/**
+ * 3/9/2026 — CHI RICEVE UN REGALO NON SI È MAI ISCRITTO A NIENTE.
+ *
+ * Questa è l'unica email che MyCity manda a una persona che non è nostra
+ * cliente: nome, indirizzo e messaggio ce li ha dati qualcun altro. Lei non ha
+ * mai letto la nostra informativa e, prima di questa riga, non aveva modo di
+ * sapere né che abbiamo il suo indirizzo né come farselo togliere.
+ *
+ * L'articolo 14 del GDPR dice esattamente questo: quando i dati arrivano da
+ * un terzo, chi li riceve va informato al primo contatto. Il piede standard
+ * («hai ricevuto questa email perché hai un account su MyCity») per lei era
+ * anche falso: un account non ce l'ha.
+ */
+function piedeDelDestinatarioDelRegalo(mittente: string): string {
+  const dove = recapitoPrivacy();
+  const link = dove.href.startsWith('mailto:') ? dove.href : `${appUrl()}${dove.href}`;
+  return `Hai ricevuto questa email perché ${mittente} ha comprato un buono regalo per te e ci ha lasciato il tuo
+    indirizzo. Non hai un account ${BRAND} e non ti abbiamo iscritto a nulla.<br>
+    Conserviamo il tuo nome, la tua email e il messaggio solo per recapitarti il regalo.
+    <a href="${appUrl()}/privacy" style="color:${BRAND_COLOR}">Come trattiamo i tuoi dati</a> ·
+    per farli cancellare subito scrivi a
+    <a href="${link}" style="color:${BRAND_COLOR}">${escapeHtml(dove.testo)}</a>.`;
+}
+
 export function giftCardRecipientTemplate(args: { code: string; amountEuro: number; senderName?: string | null; message?: string | null }) {
   const redeemUrl = `${appUrl()}/profile/gift-cards`;
   const from = args.senderName?.trim() ? escapeHtml(args.senderName.trim()) : 'Qualcuno';
@@ -207,10 +232,17 @@ export function giftCardRecipientTemplate(args: { code: string; amountEuro: numb
     <p style="margin:24px 0">${btn(redeemUrl, 'Riscatta ora')}</p>
     <p style="margin:0;font-size:13px;color:#64748b">La gift card è valida 2 anni dall'acquisto.</p>
   `;
+  const dove = recapitoPrivacy();
+  const doveTesto = dove.eUnaCasella ? dove.testo : `${appUrl()}${dove.href}`;
   return {
     subject: `🎁 ${from} ti ha regalato €${args.amountEuro.toFixed(2)} su ${BRAND}`,
-    html: shell('Hai ricevuto una gift card', body),
-    text: `${from} ti ha regalato una gift card MyCity da €${args.amountEuro.toFixed(2)}. Codice: ${args.code}. Riscattalo su ${redeemUrl}`,
+    html: shell('Hai ricevuto una gift card', body, piedeDelDestinatarioDelRegalo(from)),
+    text:
+      `${from} ti ha regalato una gift card MyCity da €${args.amountEuro.toFixed(2)}. Codice: ${args.code}. ` +
+      `Riscattalo su ${redeemUrl}\n\n` +
+      `Hai ricevuto questa email perché ${from} ha comprato un buono regalo per te e ci ha lasciato il tuo indirizzo: ` +
+      `non hai un account ${BRAND} e non ti abbiamo iscritto a nulla. Conserviamo nome, email e messaggio solo per ` +
+      `recapitarti il regalo (${appUrl()}/privacy). Per farli cancellare subito: ${doveTesto}`,
   };
 }
 

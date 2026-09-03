@@ -82,10 +82,35 @@ export async function validateCoupon(
   }
   if (coupon.first_order_only) {
     if (!userId) return { ok: false, reason: 'Devi accedere per usare questo codice' };
+    // 3/9/2026 — «PRIMO ORDINE» NON VUOL DIRE «ESISTE UNA RIGA IN orders».
+    //
+    // Qui si contavano TUTTE le righe di quell'utente, senza guardare come
+    // erano andate a finire. Lunedì Maria ordina con BENVENUTO10, il fornaio
+    // rifiuta perché il pane è finito; il sistema le scrive «Il codice sconto
+    // BENVENUTO10 torna utilizzabile» e glielo restituisce davvero. Martedì
+    // Maria riprova e la cassa risponde «Codice valido solo al primo ordine»:
+    // l'ordine annullato contava come primo ordine. Vale anche per l'annullo
+    // del cliente e per l'ordine in contanti scaduto dal giro automatico.
+    //
+    // È il buono di benvenuto, cioè la leva che serve a far fare il primo
+    // acquisto: si perdeva proprio al primo intoppo, e dopo una promessa
+    // scritta del contrario.
+    //
+    // Contano solo gli ordini andati a buon fine: fuori gli annullati e quelli
+    // col pagamento fallito. Un ordine consegnato e poi RIMBORSATO resta
+    // dentro: la merce è arrivata, quel primo acquisto c'è stato — escluderlo
+    // aprirebbe la porta a «compro, mi faccio rimborsare, riuso il buono».
+    //
+    // ⚠️ La stessa regola vive nella funzione `check_coupon` del database, che
+    // è quella che risponde al carrello nel browser. Finché la migrazione
+    // gemella non è applicata, la cassa accetta il codice ma il carrello lo
+    // rifiuta ancora: le due copie vanno cambiate insieme.
     const { count } = await client
       .from('orders')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .neq('delivery_status', 'CANCELED')
+      .neq('payment_status', 'FAILED');
     if ((count ?? 0) > 0) {
       return { ok: false, reason: 'Codice valido solo al primo ordine' };
     }

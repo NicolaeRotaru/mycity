@@ -22,6 +22,7 @@ import CategoryBar from './CategoryBar';
 import { getAccountMenuItems } from '@/lib/account-menu';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import { trackSignedOut } from '@/lib/analytics/events';
+import { scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
 
@@ -51,12 +52,39 @@ export default function Navbar() {
   // buyer), statico su mobile dove la navigazione persistente è affidata alla
   // MobileTabBar in fondo.
 
+  /**
+   * Le notifiche push restano attaccate all'apparecchio, non all'account: se
+   * chi esce non se le porta via, gli avvisi dei suoi ordini finiscono sullo
+   * schermo di chi entra dopo — sul tablet di casa, sul computer del negozio,
+   * su un telefono prestato. Si cancella la riga PRIMA di uscire, perché dopo
+   * la sessione non c'è più e il database non lascia cancellare niente.
+   */
   const handleSignOut = async () => {
     trackSignedOut();
+    await scollegaQuestoDispositivo((endpoint) =>
+      supabase.from('push_subscriptions').delete().eq('endpoint', endpoint),
+    );
     await supabase.auth.signOut();
     router.push('/sign-in');
     router.refresh();
   };
+
+  /**
+   * L'uscita non passa solo da qui: c'è un «Esci» anche nella barra in fondo,
+   * nella colonna dell'account, nelle aree del negozio e del fattorino, e una
+   * sessione può anche scadere da sola. Questa barra è montata su ogni pagina
+   * del sito, quindi è il posto giusto per ascoltare TUTTE le uscite: a
+   * sessione finita la riga non si può più cancellare, ma l'iscrizione del
+   * browser si spegne — ed è quella che consegna gli avvisi di uno all'altro.
+   * La riga rimasta indietro la ripulisce il primo invio fallito.
+   */
+  useEffect(() => {
+    const { data } = supabase.auth.onAuthStateChange((evento) => {
+      if (evento !== 'SIGNED_OUT') return;
+      void scollegaQuestoDispositivo();
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   // Su /admin, /seller e /rider la navbar globale è nascosta: queste aree usano
   // il proprio shell dedicato (AdminSidebar / SellerShell / RiderShell con la
@@ -95,7 +123,7 @@ export default function Navbar() {
         <div className="hidden md:block">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center gap-4">
-              <Link href="/" className="text-2xl font-serif font-bold tracking-tight whitespace-nowrap leading-none">
+              <Link href="/" className="text-2xl font-serif font-bold tracking-tight whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <LocationPill />
@@ -173,14 +201,14 @@ export default function Navbar() {
         <div className="md:hidden">
           <div className="container mx-auto px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <Link href="/" className="shrink-0 text-xl font-serif font-bold whitespace-nowrap leading-none">
+              <Link href="/" className="shrink-0 text-xl font-serif font-bold whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <div className="min-w-0 flex-1 flex justify-center">
                 <LocationPill compact />
               </div>
               {isAuthenticated && canPurchase && (
-                <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white">
+                <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white focus-visible:outline-white">
                   <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                   <span className="sr-only">Carrello{cartCount > 0 ? `, ${cartCount} ${cartCount === 1 ? 'articolo' : 'articoli'}` : ''}</span>
                   {cartCount > 0 && (
@@ -193,7 +221,7 @@ export default function Navbar() {
               {!isAuthenticated && !isLoading && (
                 <>
                   {cartCount > 0 ? (
-                    <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white">
+                    <Link href="/cart" className="relative shrink-0 inline-flex p-2 text-white focus-visible:outline-white">
                       <ShoppingCart size={22} strokeWidth={2} aria-hidden />
                       <span className="sr-only">Carrello, {cartCount} {cartCount === 1 ? 'articolo' : 'articoli'}</span>
                       <span aria-hidden className="pointer-events-none absolute -top-0.5 -right-0.5 bg-accent-500 text-ink-900 text-[10px] font-bold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
@@ -225,6 +253,16 @@ export default function Navbar() {
 
 // ---------------------------------------------------------------------------
 
+// 31/8/2026 — L'ANELLO DEL FUOCO, SUL TERRACOTTA, NON SI VEDEVA.
+// Il segno che dice «sei qui» a chi naviga col tasto Tab è, di regola, un
+// filetto terracotta (app/globals.css): sul fondo terracotta della barra
+// stacca 1,34 volte su 1, cioè è invisibile. Il filetto si disegna FUORI dal
+// comando (l'outline è staccato di due pixel), quindi il fondo che conta è
+// quello della barra: bianco su quel terracotta stacca 6,67. Le scritte
+// «Accedi» e «Registrati», la pillola dell'indirizzo e la riga delle categorie
+// lo facevano già; il logo, il carrello, le tre icone e il menu dell'account
+// no — e sono proprio i comandi che una persona usa per uscire dal sito.
+
 // 27/8/2026 (R109) — c'era `aria-label={label}` sul link, e un `aria-label`
 // non si somma al contenuto: lo sostituisce. La pallina col numero stava
 // dentro il link e non veniva pronunciata mai — cinque notifiche non lette e
@@ -242,7 +280,7 @@ export const IconButton = ({ href, label, badge, unita = 'non letti', children }
   <Link
     href={href}
     title={label}
-    className="relative p-2 hover:bg-white/10 rounded-full transition-colors"
+    className="relative p-2 hover:bg-white/10 rounded-full transition-colors focus-visible:outline-white"
   >
     <span aria-hidden>{children}</span>
     <span className="sr-only">{label}</span>
@@ -264,7 +302,7 @@ const CartButton = ({ count }: { count: number }) => (
   <Link
     href="/cart"
     title="Carrello"
-    className="ml-1 inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-ink-900 px-3 py-2 rounded-full text-sm font-bold transition-colors relative"
+    className="ml-1 inline-flex items-center gap-1.5 bg-accent-500 hover:bg-accent-600 text-ink-900 px-3 py-2 rounded-full text-sm font-bold transition-colors relative focus-visible:outline-white"
   >
     <ShoppingCart size={16} strokeWidth={2.4} aria-hidden />
     <span className="hidden lg:inline">Carrello</span>
@@ -335,7 +373,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
         type="button"
         ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 hover:bg-white/10 px-2 py-1.5 rounded-full transition-colors"
+        className="flex items-center gap-2 hover:bg-white/10 px-2 py-1.5 rounded-full transition-colors focus-visible:outline-white"
         aria-label="Menu account"
         aria-haspopup="true"
         aria-expanded={open}
@@ -347,7 +385,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
         ) : (
           <span className={`w-9 h-9 rounded-full ring-2 ring-white/20 flex items-center justify-center text-sm font-bold uppercase ${
             isSeller ? 'bg-accent-500 text-ink-900' :
-            isRider  ? 'bg-olive-500 text-white' :
+            isRider  ? 'bg-olive-600 text-white' :
             isAdmin  ? 'bg-secondary-500 text-white' :
                        'bg-cream-200 text-primary-700'
           }`}>
@@ -373,7 +411,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
             ) : (
               <span className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold uppercase shrink-0 ${
                 isSeller ? 'bg-accent-500 text-ink-900' :
-                isRider  ? 'bg-olive-500 text-white' :
+                isRider  ? 'bg-olive-600 text-white' :
                 isAdmin  ? 'bg-secondary-500 text-white' :
                            'bg-primary-100 text-primary-700'
               }`}>

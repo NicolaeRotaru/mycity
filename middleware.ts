@@ -18,6 +18,15 @@ import {
   isMarketplaceBrowsePath,
   sellerMayBrowseMarketplace,
 } from '@/lib/shopping-access';
+import {
+  type Risposta,
+  TETTO_PORTIERE_MS,
+  chiediConTetto,
+  comeStaIlFornitore,
+  decidiCacheProfilo,
+  decidiPortiere,
+  motivoLeggibile,
+} from '@/lib/auth/decisione-portiere';
 
 /**
  * Middleware strict: il client browser usa @supabase/ssr, la sessione
@@ -423,19 +432,36 @@ export async function middleware(req: NextRequest) {
   // 27/8/2026 (R185) — «NON E' ENTRATO NESSUNO» E «NON HO POTUTO CHIEDERE»
   // NON SONO LA STESSA COSA.
   //
-  // L'errore qui veniva buttato via, e i due casi finivano nello stesso ramo:
-  // un intoppo di Supabase buttava fuori una persona regolarmente entrata,
-  // spedendola al login senza un messaggio e senza lasciare una riga da
-  // nessuna parte. Il rimando resta — su una pagina protetta e' la scelta
-  // prudente — ma adesso si sa che e' successo, e si vede quante volte.
-  const { data: userResp, error: erroreUtente } = await supabase.auth.getUser();
-  const user = userResp?.user ?? null;
-  if (erroreUtente && !user) {
-    logger.warn('[middleware] non ho potuto chiedere chi e: rimando al login chi forse era entrato', {
-      percorso: pathname,
-      message: erroreUtente instanceof Error ? erroreUtente.message : String((erroreUtente as { message?: string })?.message ?? 'errore'),
-    });
-  }
+  // 3/9/2026 — E NESSUNO DEI DUE PUO' DURARE PER SEMPRE.
+  //
+  // L'errore veniva buttato via e i due casi finivano nello stesso ramo (R185
+  // ha rimesso a posto la riga di log). Restava il resto: nessun tetto di
+  // tempo — trenta secondi lenti del fornitore erano trenta secondi di pagina
+  // appesa — e nessuna decisione scritta da qualche parte. Adesso l'attesa ha
+  // un tetto e la scelta sta in `decidiPortiere`, che si puo' provare da sola.
+  /**
+   * CHI SE NE ACCORGE, E COME.
+   *
+   * Un fornitore lento e' un avviso: durante un intoppo ne escono a migliaia,
+   * e mille eventi identici dentro Sentry spengono quelli veri. Una chiamata
+   * che invece SCOPPIA e' un guasto nostro, e prima di questo tetto di tempo
+   * arrivava a Sentry da sola (come errore del middleware): adesso che la
+   * fermiamo qui, deve arrivarci lo stesso, o l'avremmo solo nascosta meglio.
+   */
+  const registraGuasto = (messaggio: string, risposta: Risposta<{ error?: unknown }>) => {
+    const contesto = { percorso: pathname, motivo: motivoLeggibile(risposta), messaggio };
+    if (risposta.stato === 'rotto') logger.error(risposta.errore, contesto);
+    else logger.warn(messaggio, contesto);
+  };
+
+  const rispostaUtente = await chiediConTetto(() => supabase.auth.getUser(), TETTO_PORTIERE_MS);
+  const user = rispostaUtente.stato === 'ok' ? (rispostaUtente.valore.data?.user ?? null) : null;
+  const decisione = decidiPortiere({
+    fornitore: comeStaIlFornitore(rispostaUtente),
+    utenteTrovato: !!user,
+    areaProtetta: needsAuth,
+  });
+  if (decisione.registra) registraGuasto(decisione.registra, rispostaUtente);
 
   // Helper: aggiunge CSP a una response redirect (mantiene protezione cross-cut).
   const withCsp = (r: NextResponse) => {
@@ -443,14 +469,15 @@ export async function middleware(req: NextRequest) {
     return r;
   };
 
-  if (!user) {
-    // Catalogo pubblico: ospiti ok. Solo le rotte protette richiedono login.
-    if (!needsAuth) return res;
+  if (decisione.azione === 'chiudi-al-login') {
     const url = req.nextUrl.clone();
     url.pathname = '/sign-in';
     url.searchParams.set('returnTo', pathname);
     return withCsp(NextResponse.redirect(url));
   }
+  // «Tira dritto come ospite»: il catalogo si vede anche quando il servizio di
+  // accesso non risponde. Senza una persona verificata non c'e' altro da fare.
+  if (decisione.azione === 'passa-come-ospite' || !user) return res;
 
   if (!user.email_confirmed_at) {
     const url = req.nextUrl.clone();
@@ -466,18 +493,6 @@ export async function middleware(req: NextRequest) {
   let profilo = roleRule ? null : await leggiRuoloDalCookie(req, user.id);
   let daSalvare = false;
   if (!profilo) {
-    const { data: profile, error: erroreProfilo } = await supabase
-      .from('profiles')
-      .select('role, is_approved')
-      .eq('id', user.id)
-      .single();
-    profilo = {
-      role: profile?.role as ProfileRole | undefined,
-      approved: !!profile?.is_approved,
-      // Serve alla scorciatoia del catalogo: senza, un cookie scritto prima
-      // della conferma dell'email lascerebbe scavalcare quel cancello.
-      emailConfermata: true,
-    };
     // 27/8/2026 (R185) — UN SECONDO STORTO DEL DATABASE DURAVA DIECI MINUTI.
     //
     // L'errore non veniva guardato. Se la lettura falliva, da `profile` vuoto
@@ -486,15 +501,30 @@ export async function middleware(req: NextRequest) {
     // uno sconosciuto fuori dal suo pannello per i dieci minuti successivi,
     // anche dopo che il database era gia' tornato a posto.
     //
-    // «Non ho potuto chiedere» non e' una risposta, e in cache non ci va: si
-    // riproverà alla pagina dopo, quando il database sara' tornato.
-    if (erroreProfilo) {
-      logger.warn('[middleware] profilo non letto: non lo metto in cache o durerebbe dieci minuti', {
-        percorso: pathname,
-        message: (erroreProfilo as { message?: string })?.message ?? 'errore',
-      });
-    }
-    daSalvare = !erroreProfilo;
+    // 3/9/2026 — E anche questa attesa ha un tetto: era la seconda delle due
+    // che si mettevano in fila davanti a ogni pagina, e nessuna delle due
+    // finiva mai da sola. Scaduta o rotta vale come «non ho potuto chiedere»:
+    // si riprova alla pagina dopo, e intanto non si mette niente da parte.
+    const rispostaProfilo = await chiediConTetto(
+      () =>
+        supabase
+          .from('profiles')
+          .select('role, is_approved')
+          .eq('id', user.id)
+          .single(),
+      TETTO_PORTIERE_MS,
+    );
+    const profile = rispostaProfilo.stato === 'ok' ? rispostaProfilo.valore.data : null;
+    profilo = {
+      role: profile?.role as ProfileRole | undefined,
+      approved: !!profile?.is_approved,
+      // Serve alla scorciatoia del catalogo: senza, un cookie scritto prima
+      // della conferma dell'email lascerebbe scavalcare quel cancello.
+      emailConfermata: true,
+    };
+    const suProfilo = decidiCacheProfilo(rispostaProfilo);
+    if (suProfilo.registra) registraGuasto(suProfilo.registra, rispostaProfilo);
+    daSalvare = suProfilo.mettiInCache && decisione.scriviCookieRuolo;
   }
   const role = profilo.role as ProfileRole | undefined;
   const approved = profilo.approved;

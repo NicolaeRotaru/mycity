@@ -25,12 +25,33 @@ type Props = {
  * Bottone CTA sticky in fondo allo schermo su mobile — best practice retail
  * (Amazon, Asos, Glovo). Compare quando l'utente scrolla giù oltre l'header.
  *
- * Solo md:hidden — su desktop c'è già la sticky card a destra del prodotto.
+ * Solo lg:hidden — la colonna appiccicata a destra della scheda prodotto esiste solo da `lg`.
+ * Era `md:hidden`, e fra 768 e 1023 pixel spariva questa barra mentre lassù il riquadro d'acquisto
+ * era già scivolato in seconda riga: in quella fascia non restava nessun pulsante per comprare
+ * senza scorrere sotto tutta la colonna delle informazioni.
  * Lascia spazio per la MobileTabBar in basso (z-index + bottom offset).
  *
  * Con `qty` + `onDec`/`onInc` mostra lo stepper, la riga "{qty} × {price}" e il
  * totale (qty×price); altrimenti resta la versione compatta solo prezzo + CTA.
  */
+/**
+ * L'ETICHETTA DEL PULSANTE, e perché ce ne sono due.
+ *
+ * 3/9/2026 — A 360 pixel il conto non tornava. Dentro la card ci sono 312 pixel: lo stepper ne
+ * prende 98 e il pulsante con la scritta intera e l'icona ne chiedeva più di 200, prima ancora del
+ * prezzo. Risultato: «Aggiungi al carrello» andava a capo su due righe e il blocco del prezzo si
+ * stringeva sotto la larghezza della cifra, che usciva dal suo riquadro. Il conto restava negativo
+ * anche a 375 e 390 pixel, cioè sui telefoni più venduti.
+ *
+ * Sotto i 640 pixel si scrive la parola corta e l'icona resta fuori. Il nome per intero non si
+ * perde: sta nell'`aria-label`, quindi chi naviga a voce sente la frase completa. Le due misure
+ * stanno qui, in un posto solo, perché la prova che tiene il conto le legge da qui.
+ */
+const ETICHETTA_CORTA = 'Aggiungi';
+const ETICHETTA_INTERA = 'Aggiungi al carrello';
+const ETICHETTA_ESAURITO_CORTA = 'Esaurito';
+const ETICHETTA_ESAURITO = 'Non disponibile';
+
 export default function StickyAddToCart({ price, available, onAdd, note, qty, onDec, onInc, canDec, canInc }: Props) {
   const [visible, setVisible] = useState(false);
 
@@ -55,7 +76,7 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
       // 27/8/2026 (R096) — Via `pb-safe`: la safe-area la conta gia' `bottom`
       // qui sotto. Contata due volte, la barra galleggiava staccata dal fondo
       // con una fascia vuota sotto il pulsante d'acquisto.
-      className="md:hidden fixed left-0 right-0 z-30 transition-transform duration-300 animate-slide-up"
+      className="lg:hidden fixed left-0 right-0 z-30 transition-transform duration-300 animate-slide-up"
       // #124 — Sopra la barra a schede e, quando c'e', sopra il banner dei
       // cookie: prima ci finiva sotto e il pulsante d'acquisto spariva.
       style={{ bottom: fondoDellaBarra(['var(--tabbar-height)', 'var(--altezza-banner-cookie, 0px)']) }}
@@ -70,10 +91,10 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
         <div className="bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-3 flex items-center gap-3">
           <div className="min-w-0">
             {hasStepper && (
-              <p className="text-[11px] text-ink-400 leading-tight">{qty} × {formatPrice(price)}</p>
+              <p className="truncate text-[11px] text-ink-400 leading-tight">{qty} × {formatPrice(price)}</p>
             )}
-            <p className="text-lg font-bold text-primary-700 leading-tight">{formatPrice(total)}</p>
-            <p className="text-[11px] text-olive-700 font-medium leading-tight">
+            <p className="truncate text-lg font-bold text-primary-700 leading-tight">{formatPrice(total)}</p>
+            <p className="truncate text-[11px] text-olive-700 font-medium leading-tight">
               {note ?? 'Totale'}
             </p>
           </div>
@@ -122,10 +143,13 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
           <button
             onClick={onAdd}
             disabled={!available}
-            className="ml-auto inline-flex items-center gap-2 bg-accent-500 hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed text-ink-900 px-5 py-3 rounded-full font-bold text-sm transition-colors"
+            // Il nome intero resta qui anche quando a schermo si legge la parola corta.
+            aria-label={available ? ETICHETTA_INTERA : ETICHETTA_ESAURITO}
+            className="ml-auto inline-flex shrink-0 items-center gap-2 whitespace-nowrap bg-accent-500 hover:bg-accent-600 disabled:opacity-50 disabled:cursor-not-allowed text-ink-900 px-4 sm:px-5 py-3 rounded-full font-bold text-sm transition-colors"
           >
-            <ShoppingCart size={18} strokeWidth={2.4} />
-            {available ? 'Aggiungi al carrello' : 'Non disponibile'}
+            <ShoppingCart size={18} strokeWidth={2.4} className="hidden sm:inline" aria-hidden />
+            <span className="sm:hidden">{available ? ETICHETTA_CORTA : ETICHETTA_ESAURITO_CORTA}</span>
+            <span className="hidden sm:inline">{available ? ETICHETTA_INTERA : ETICHETTA_ESAURITO}</span>
           </button>
         </div>
       </div>

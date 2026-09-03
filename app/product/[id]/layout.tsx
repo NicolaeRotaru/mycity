@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
 import { sizedImage } from '@/lib/image-url';
+import { precaricoFoto } from '@/lib/preload-foto';
 import { HydrationBoundary } from '@tanstack/react-query';
 import { precaricaProdotto } from '@/lib/queries/precarico';
 
@@ -119,22 +120,27 @@ export default async function ProductLayout(
    * tocco sul link e la foto a schermo, ed e' la voce che pesa di piu'
    * sull'abbandono di un marketplace.
    *
-   * L'indirizzo e' lo STESSO che chiedera' la pagina (`sizedImage(..., 'detail')`):
-   * un preload di un indirizzo diverso scaricherebbe un secondo file invece di
-   * anticipare il primo.
+   * L'indirizzo deve essere lo STESSO che chiedera' la pagina, altrimenti il
+   * telefono scarica un secondo file invece di anticipare il primo — ed e'
+   * esattamente quello che succedeva: qui c'era `sizedImage(..., 'detail')`,
+   * cioe' 800 pixel, una misura che Next non chiede mai. La stessa foto
+   * arrivava due volte. Adesso l'indirizzo lo costruisce `precaricoFoto`, con
+   * lo stesso caricatore e lo stesso `sizes` dell'immagine in pagina.
    */
   const precarico = await precaricaProdotto(params.id);
 
   const primaFoto =
     Array.isArray(product?.images) && product.images[0]
-      ? sizedImage(product.images[0], 'detail')
+      ? precaricoFoto(sizedImage(product.images[0], 'detail'))
       : null;
 
   return (
     <>
       {primaFoto && (
         // eslint-disable-next-line @next/next/no-head-element
-        <link rel="preload" as="image" href={primaFoto} fetchPriority="high" />
+        // Gli attributi si prendono TUTTI da `precaricoFoto`: sceglierne a mano
+        // qualcuno, o riscriverne uno, e' come si era rotto la prima volta.
+        <link rel="preload" as="image" {...primaFoto} fetchPriority="high" />
       )}
       {schema && (
         <script
