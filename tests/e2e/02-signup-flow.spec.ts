@@ -22,14 +22,25 @@ async function servePaginaViva(request: Parameters<typeof diagnosiJavascript>[0]
   test.skip(diagnosi.senzaJavascript, diagnosi.motivo);
 }
 
+/**
+ * Il modulo dell'iscrizione, non un modulo qualsiasi della pagina.
+ *
+ * Dal 3/9/2026 le pagine arrivano vive al browser: il piede accende l'iscrizione alla newsletter,
+ * che ha anche lei un campo email e un pulsante. Un selettore largo ne pesca due e la prova
+ * fallisce senza che ci sia niente di rotto.
+ */
+function moduloIscrizione(page: import('@playwright/test').Page) {
+  return page.getByRole('main').locator('form').first();
+}
+
 test.describe('Signup flow', () => {
   test('form validates required fields', async ({ page }) => {
     await page.goto('/sign-up');
+    const modulo = moduloIscrizione(page);
     // Submit vuoto
-    const submit = page.locator('button[type="submit"]');
-    await submit.click();
+    await modulo.locator('button[type="submit"]').click();
     // HTML5 validation kicks in (email required)
-    const email = page.locator('input[type="email"]');
+    const email = modulo.locator('input[type="email"]');
     const isInvalid = await email.evaluate((el: HTMLInputElement) => !el.validity.valid);
     expect(isInvalid).toBe(true);
   });
@@ -38,21 +49,26 @@ test.describe('Signup flow', () => {
     await servePaginaViva(request);
     await page.goto('/sign-up');
     // 3 role cards visible
-    await expect(page.locator('text=Acquirente')).toBeVisible();
-    await expect(page.locator('text=Venditore')).toBeVisible();
-    await expect(page.locator('text=Rider')).toBeVisible();
+    // Nel piede ci sono «Diventa venditore» e «Diventa rider»: le tre scelte del ruolo si cercano
+    // dentro il contenuto principale.
+    const principale = page.getByRole('main');
+    await expect(principale.getByText('Acquirente', { exact: false }).first()).toBeVisible();
+    await expect(principale.getByText('Venditore', { exact: false }).first()).toBeVisible();
+    await expect(principale.getByText('Rider', { exact: false }).first()).toBeVisible();
   });
 
   test('navigates to sign-in from sign-up', async ({ page, request }) => {
     await servePaginaViva(request);
     await page.goto('/sign-up');
-    await page.click('text=Accedi');
+    // Il collegamento «Accedi», non «Accedi con codice via SMS»: da quando la pagina e' viva ci
+    // sono tutti e due, e il primo che capita apre il pannello del codice invece di cambiare pagina.
+    await page.getByRole('link', { name: /^Accedi$/ }).click();
     await expect(page).toHaveURL(/\/sign-in/);
   });
 
   test('referral code from URL applied', async ({ page, request }) => {
     await servePaginaViva(request);
     await page.goto('/sign-up?ref=TEST123');
-    await expect(page.locator('text=TEST123')).toBeVisible({ timeout: 3000 });
+    await expect(page.getByRole('main').getByText('TEST123').first()).toBeVisible({ timeout: 3000 });
   });
 });

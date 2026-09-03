@@ -33,7 +33,9 @@ test.describe('Cart and Search', () => {
     const diagnosi = await diagnosiJavascript(request, '/stores');
     test.skip(diagnosi.senzaJavascript, diagnosi.motivo);
     await page.goto('/stores');
-    await expect(page.locator('h1')).toBeVisible();
+    // `.first()`: la pagina viva puo' portare piu' di un titolo di primo livello (il piede ne ha
+    // uno suo). Prima le pagine erano gusci morti e il selettore largo bastava.
+    await expect(page.locator('h1').first()).toBeVisible();
   });
 
   test('404 page is custom', async ({ page }) => {

@@ -5,6 +5,7 @@ import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
+import { tagliaAllUltimaFraseIntera } from '@/lib/ai/taglia-alla-frase';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { assertSafeText, UnsafeContentError } from '@/lib/ai/moderation';
 import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
@@ -125,15 +126,21 @@ Nome prodotto: ${recinta('nome', name, 200)}
 ${attuale ? `Descrizione attuale (da migliorare): ${recinta('descrizione', attuale, 500)}` : ''}`;
 
   try {
-    const { text } = await runMessage({
+    // `seTagliata: 'accetta'` e' voluto: con 300 token il taglio qui e' la normalita', e per il
+    // negoziante che sta caricando la merce col telefono in mano una descrizione un po' piu' corta
+    // vale piu' di un errore. Quello che NON gli diamo e' una riga mozza a meta' parola: il testo
+    // viene chiuso all'ultima frase intera.
+    const { text, tagliata } = await runMessage({
       feature: 'ai-description',
       model: MODELS.fast,
       max_tokens: 300,
       system: SYSTEM,
       messages: [{ role: 'user', content: userBlock }],
+      seTagliata: 'accetta',
     });
-    if (!text) return ApiErrors.internal('Nessuna risposta dal modello.');
-    return NextResponse.json({ description: text });
+    const description = tagliata ? tagliaAllUltimaFraseIntera(text ?? '') : (text ?? '');
+    if (!description) return ApiErrors.internal('Nessuna risposta dal modello.');
+    return NextResponse.json({ description });
   } catch (err) {
     if (err instanceof AiConfigError) return ApiErrors.unavailable('Servizio AI non configurato.');
     if (err instanceof AiCallError) return mapAiError(err, 'ai-description');
