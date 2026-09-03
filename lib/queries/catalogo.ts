@@ -23,6 +23,7 @@
  * quello di lettura pubblica.
  */
 import { queryKeys } from '@/lib/queries/keys';
+import { conRipiegoSchema, senzaColonne, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
 
 /** Il minimo che serve per fare una lettura: vale per il client del browser e per quello del server. */
 export type ClientDiLettura = {
@@ -113,6 +114,69 @@ export function domandaProdotto(supa: ClientDiLettura, id: string) {
       // restituisce come oggetto, ma con le colonne elencate per nome i tipi
       // generati lo descrivono come elenco. Si dichiara la forma vera.
       return data as unknown as SchedaProdotto;
+    },
+  };
+}
+
+/** Il profilo pubblico di un negozio, come lo legge la sua vetrina. */
+export type SchedaNegozio = {
+  id: string;
+  store_name: string | null;
+  store_phone: string | null;
+  store_address: string | null;
+  store_lat: number | null;
+  store_lng: number | null;
+  is_approved: boolean | null;
+  stripe_charges_enabled?: boolean | null;
+  stripe_payouts_enabled?: boolean | null;
+  store_logo: string | null;
+  store_hours: unknown;
+  store_media: unknown;
+  store_description: string | null;
+  store_customization: unknown;
+  store_site: unknown;
+  founded_year: number | null;
+};
+
+/** Le colonne della vetrina: elencate per nome, mai `*`. */
+export const COLONNE_SCHEDA_NEGOZIO =
+  'id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year';
+
+/**
+ * Il negozio della vetrina.
+ *
+ * 3/9/2026 — questa domanda stava dentro `useStorePageData`, cioe' dentro un
+ * componente del browser: il server non poteva farla, e la pagina del negozio
+ * arrivava vuota nell'HTML. Adesso vive qui, e la fanno tutti e due con la
+ * STESSA chiave — altrimenti il browser non riconosce quello che ha in mano e
+ * va in rete lo stesso, cioe' il lavoro del server non serve a niente.
+ *
+ * `maybeSingle()` e non `single()`: un negozio che non esiste non e' un guasto
+ * di rete, e la pagina deve poter dire «non trovato» invece di «riprova».
+ *
+ * Il ripiego della 124 resta: la vista `seller_public_profiles` puo' non avere
+ * ancora le due colonne di Stripe, e senza, l'intera vetrina non si aprirebbe.
+ */
+export function domandaNegozio(supa: ClientDiLettura, id: string) {
+  return {
+    queryKey: queryKeys.stores.detail(id),
+    queryFn: async (): Promise<SchedaNegozio | null> => {
+      const conBandierine = () =>
+        supa.from('seller_public_profiles').select(COLONNE_SCHEDA_NEGOZIO).eq('id', id).maybeSingle();
+      const senzaBandierine = () =>
+        supa
+          .from('seller_public_profiles')
+          .select(senzaColonne(COLONNE_SCHEDA_NEGOZIO, COLONNE_124_VISTA))
+          .eq('id', id)
+          .maybeSingle();
+
+      const { data, error } = await conRipiegoSchema<{ data: unknown; error: unknown }>(
+        'domandaNegozio:seller_public_profiles',
+        conBandierine,
+        senzaBandierine,
+      );
+      if (error) throw error;
+      return (data ?? null) as SchedaNegozio | null;
     },
   };
 }

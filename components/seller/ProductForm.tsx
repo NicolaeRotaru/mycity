@@ -252,9 +252,26 @@ export default function ProductForm({
   const handleExtracted = (data: ExtractedProduct) => {
     if (data.name) setValue('name', data.name, { shouldValidate: true });
     if (data.description) setValue('description', data.description, { shouldValidate: true });
-    if (data.suggested_price && data.suggested_price > 0) {
-      setValue('price', data.suggested_price as unknown as number, { shouldValidate: true });
+    /**
+     * 3/9/2026 — ANCHE IL PREZZO CHE ESCE DALLA FOTO PASSA DALLA BANDA.
+     *
+     * R145 aveva portato la banda del 30% dentro `applyPatch`, cioe' sulla
+     * porta dell'assistente. Ma le porte sono due: questa — «riempi dalla
+     * foto» — scriveva nel campo prezzo il numero che il modello legge
+     * dall'immagine, qualunque fosse, e senza dirlo. Il pulsante c'e' anche
+     * quando il prodotto si MODIFICA: il negoziante rifotografa la vetrina
+     * per aggiornare le immagini e si ritrova il prezzo vero sostituito dalla
+     * stima del modello. Stessa malattia della porta di prima, stessa cura:
+     * la banda e' la stessa funzione, e il prezzo scartato si dice.
+     */
+    const { patch: dallaFoto, rifiutati: prezzoScartato } = patchAiPerIlForm(
+      { price: data.suggested_price && data.suggested_price > 0 ? data.suggested_price : undefined },
+      { prezzoAttuale: getValues('price') },
+    );
+    if (typeof dallaFoto.price === 'number') {
+      setValue('price', dallaFoto.price as unknown as number, { shouldValidate: true });
     }
+    for (const motivo of prezzoScartato) toast.warning(motivo);
     // Se l'AI ha riconosciuto una sottocategoria figlia, selezionala: resolveTop
     // ricava da sola la categoria di primo livello. Altrimenti resta sul top.
     const resolvedCategory = data.subcategory_id ?? data.category_id;

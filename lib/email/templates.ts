@@ -324,14 +324,14 @@ const TEMPLATE_CICLO_DI_VITA = {
       <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">
         <li>Paghi alla consegna: la carta non e' obbligatoria</li>
         <li>Spedizione gratis sopra €30</li>
-        <li>Invita un amico: €5 a testa</li>
+        <li>Invita un amico: quando riceve il primo ordine, tu ricevi €5 di credito</li>
       </ul>
       <p style="margin:24px 0">${btn(appUrl(), `Vai su ${BRAND}`)}</p>
     `;
     return {
       subject: `3 cose da sapere su ${BRAND}`,
       html: shell('3 cose da sapere', body),
-      text: 'Tre cose da sapere: paghi alla consegna, spedizione gratis sopra €30, referral €5.',
+      text: 'Tre cose da sapere: paghi alla consegna, spedizione gratis sopra €30, e se inviti un amico ricevi €5 di credito quando lui riceve il primo ordine.',
     };
   },
 

@@ -134,6 +134,27 @@ describe('le vetrine prendono le parole da lì, invece di riscriverle', () => {
     ).toEqual([]);
   });
 
+  it('e il distintivo della card di catalogo dice la stessa cosa, in corto', () => {
+    // La card è l'ultima vetrina che prometteva la gratuità senza nominare i 3 € di consegna: da
+    // lì si aggiunge al carrello senza passare dalla scheda prodotto, quindi era il posto dove il
+    // costo poteva restare invisibile fino al carrello.
+    const src = leggi('components/ProductCard.tsx');
+    expect(src).toContain('promessaSpedizione');
+    expect(src, 'il distintivo scrive un testo suo invece di quello della funzione').toContain(
+      'spedizione.breve',
+    );
+    expect(
+      righeVive(src).filter((r) => PROMETTE_GRATIS.test(r) && !nominaLaConsegna(r)),
+      'la card riscrive a mano la promessa invece di chiederla alla funzione',
+    ).toEqual([]);
+    // E la forma corta, con la consegna a pagamento, i soldi li nomina davvero.
+    if (PLATFORM_DELIVERY_FEE_CENTS > 0) {
+      expect(promessaSpedizione(FREE_SHIPPING_THRESHOLD).breve).toContain(
+        (PLATFORM_DELIVERY_FEE_CENTS / 100).toFixed(2),
+      );
+    }
+  });
+
   it('la barra «ti manca poco» chiama la funzione', () => {
     const src = leggi('components/ui/FreeShippingProgress.tsx');
     expect(src).toContain('promessaSpedizione');
@@ -181,7 +202,8 @@ describe('nessuna NUOVA pagina riscrive la promessa a mano', () => {
 
   /** Debito noto, con l'owner. Ammesse finché ci sono, mai una in più. */
   const SCOPERTE_NOTE = [
-    `components${sep}ProductCard.tsx`, // badge «Sped. gratis» — squadra della card di catalogo
+    // La card di catalogo è uscita da questo elenco il 3/9: adesso chiede l'etichetta corta alla
+    // funzione. Ne restano tre.
     `app${sep}cart${sep}page.tsx`, // sottotitolo del carrello vuoto — squadra del carrello
     `app${sep}shipping${sep}page.tsx`, // pagina Spedizioni — nessuna squadra in questo lotto
     `lib${sep}email${sep}templates.ts`, // email di benvenuto — squadra delle email

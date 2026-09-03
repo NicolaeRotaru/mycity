@@ -24,7 +24,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackOrderPlaced } from '@/lib/analytics/events';
 // #92 — le miniature si chiedono gia' piccole al server
-import { sizedImage } from '@/lib/image-url';
+import { sizedImage, logoNegozio } from '@/lib/image-url';
 
 type OrderItem = {
   id: string;
@@ -306,7 +306,7 @@ export default function OrdersPage() {
               <div className="flex items-center gap-4 min-w-0 flex-1">
                 <div className="w-12 h-12 rounded-full bg-cream-100 shrink-0 overflow-hidden flex items-center justify-center text-xl">
                   {order.seller?.store_logo ? (
-                    <Image src={sizedImage(order.seller.store_logo, 'thumb')} alt="" width={40} height={40} loader={caricatoreFotoRemote} className="w-full h-full object-cover" />
+                    <Image src={logoNegozio(order.seller.store_logo, 48)} alt="" width={48} height={48} loader={caricatoreFotoRemote} className="w-full h-full object-contain" />
                   ) : <Store size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="min-w-0">

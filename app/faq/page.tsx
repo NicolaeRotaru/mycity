@@ -75,7 +75,11 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'In quanto tempo ricevo il rimborso?',
-        a: 'Entro 14 giorni dalla ricezione del prodotto da parte del venditore. Per pagamenti alla consegna il rimborso avviene su IBAN.',
+        // 3/9/2026 — «il rimborso avviene su IBAN» era falso: nessun modulo
+        // chiede l'IBAN e per gli ordini in contanti il rimborso arriva come
+        // credito MyCity (`cod_refund`). Il bonifico resta possibile, ma su
+        // richiesta e a mano: è quello che si può promettere.
+        a: 'Entro 14 giorni dalla ricezione del prodotto da parte del venditore. Per gli ordini pagati alla consegna il rimborso arriva come credito MyCity, spendibile sul prossimo ordine pagato alla consegna; se preferisci il bonifico scrivici e lo facciamo noi.',
       },
       {
         q: 'Chi paga la spedizione del reso?',

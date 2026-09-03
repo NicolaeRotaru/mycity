@@ -57,7 +57,12 @@ vi.mock('@/lib/api/middleware', () => ({
 vi.mock('@/lib/coupons', () => ({ validateCoupon: vi.fn(async () => ({ ok: false, reason: 'nessuno' })) }));
 vi.mock('@/lib/shipping', () => ({ shippingCentsFor: vi.fn(() => 500), compensoRiderCents: vi.fn(() => 250) }));
 vi.mock('@/lib/shipping-coordinate', () => ({ coordinateDaIndirizziSalvati: vi.fn(async () => null) }));
-vi.mock('@/lib/store-hours', () => ({ isStoreClosedForOrder: vi.fn(() => false) }));
+// 3/9/2026 — la rotta adesso decide con `negozioPuoServire`, che guarda la fascia
+// scelta e non solo l'orologio (l'ordine serale per domani non si rifiuta piu').
+vi.mock('@/lib/store-hours', () => ({
+  negozioPuoServire: vi.fn(() => true),
+  motivoNegozioChiuso: vi.fn((n: string) => `${n} è chiuso in questo momento.`),
+}));
 // Anche gli sconti attivi sono un viaggio verso il database: conta come gli altri.
 vi.mock('@/lib/promotions', () => ({
   fetchActiveDiscounts: vi.fn(() => letturaLenta(new Map())),

@@ -179,7 +179,18 @@ function SignUpInner() {
       {refCode && (
         <div className="mb-5 flex items-center gap-1.5 rounded-lg border border-olive-200 bg-olive-50 p-3 text-sm text-olive-900">
           <Gift size={16} strokeWidth={2.2} className="shrink-0 text-olive-600" aria-hidden />
-          <span><strong>Sei stato invitato!</strong> Codice <span className="font-mono font-bold">{refCode}</span> applicato. Hai <strong>€5 di sconto</strong> sul primo ordine.</span>
+          {/* 3/9/2026 — QUI SI PROMETTEVA «HAI €5 DI SCONTO SUL PRIMO ORDINE».
+              Dall'invito, a chi è invitato, non arriva nessuno sconto: il premio
+              va a chi ha invitato, e solo quando questo primo ordine viene
+              consegnato (migrazione 089). Quello che l'invitato riceve davvero è
+              il benvenuto che spetta a ogni nuovo acquirente: 100 punti, che
+              valgono €5 di credito una volta convertiti. */}
+          <span>
+            <strong>Sei stato invitato!</strong> Codice <span className="font-mono font-bold">{refCode}</span> applicato.{' '}
+            {role === 'buyer'
+              ? <>Come nuovo acquirente ricevi <strong>100 punti di benvenuto</strong> (valgono €5 di credito).</>
+              : <>Chi ti ha invitato riceverà €5 di credito quando riceverai il tuo primo ordine.</>}
+          </span>
         </div>
       )}
 

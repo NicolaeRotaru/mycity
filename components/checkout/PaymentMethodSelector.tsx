@@ -150,7 +150,7 @@ export function PaymentMethodSelector({
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-bold text-ink-900">Ritira tu in negozio — salta la fila</p>
             {pickupInStore && pickupDiscount > 0 ? (
-              <span className="bg-olive-500 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
+              <span className="bg-olive-600 text-white text-xs font-bold px-2 py-1 rounded shrink-0">
                 −{formatPrice(pickupDiscount)}
               </span>
             ) : (

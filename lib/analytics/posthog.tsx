@@ -3,6 +3,11 @@
 import { useEffect } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { readConsent } from '@/lib/consent';
+import type { CaptureResult } from 'posthog-js';
+import {
+  indirizzoSenzaDatiPersonali,
+  VALORE_NASCOSTO,
+} from '@/lib/analytics/indirizzo-senza-dati-personali';
 
 /**
  * PostHog client wrapper.
@@ -112,6 +117,86 @@ export function applicaRegistrazioneSchermo(ph: PostHogLike, pathname: string | 
   }
 }
 
+/**
+ * 3/9/2026 — QUI L'INDIRIZZO DELLA PAGINA LO COMPILAVA LA LIBRERIA, DA
+ * `window.location.href`, CON DENTRO LA RICERCA.
+ *
+ * `ph.capture('$pageview')` non passa `$current_url`: è una scelta scritta e
+ * motivata più sotto (senza, dominio, pagina d'ingresso e pagina d'uscita
+ * uscivano monchi). Solo che quando lo compila la libreria ci mette l'indirizzo
+ * INTERO — «/search?q=ordine di mario.rossi@gmail.com» — e quello parte verso
+ * un servizio che sta negli Stati Uniti.
+ *
+ * La regola non si riscrive qui: è la stessa che usano il beacon delle visite e
+ * il registratore degli errori (`indirizzoSenzaDatiPersonali`). Questa funzione
+ * la applica a ogni proprietà che contiene un indirizzo, compreso quello che
+ * PostHog si porta dietro come proprietà della persona (`$set`, `$set_once`).
+ *
+ * Va agganciata a `before_send` in `init`, che PostHog chiama su OGNI evento
+ * appena prima di spedirlo: così non c'è un evento da ricordarsi di ripulire a
+ * mano, nemmeno quelli che manda la libreria per conto suo.
+ *
+ * ⚠️ Non `sanitize_properties`: nella versione installata è deprecata e stampa
+ * un errore in console a OGNI evento («sanitize_properties is deprecated. Use
+ * before_send instead»). Funziona ancora, ma riempirebbe la console di rumore.
+ */
+const PROPRIETA_CHE_SONO_INDIRIZZI = [
+  '$current_url',
+  '$referrer',
+  '$pathname',
+  '$initial_current_url',
+  '$initial_referrer',
+  '$initial_pathname',
+  '$session_entry_url',
+  '$session_entry_referrer',
+  '$session_entry_pathname',
+] as const;
+
+function indirizzoRipulito(valore: unknown): unknown {
+  if (typeof valore !== 'string' || !valore) return valore;
+  // `$direct`, `$organic`… non sono indirizzi: sono i segnaposti di PostHog.
+  if (valore.startsWith('$')) return valore;
+  return indirizzoSenzaDatiPersonali(valore) ?? VALORE_NASCOSTO;
+}
+
+export function proprietaSenzaDatiPersonali(
+  proprieta: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (!proprieta || typeof proprieta !== 'object') return {};
+  const pulite: Record<string, unknown> = { ...proprieta };
+  for (const nome of PROPRIETA_CHE_SONO_INDIRIZZI) {
+    if (nome in pulite) pulite[nome] = indirizzoRipulito(pulite[nome]);
+  }
+  // Le stesse chiavi viaggiano anche dentro le proprietà della persona.
+  for (const contenitore of ['$set', '$set_once'] as const) {
+    const dentro = pulite[contenitore];
+    if (!dentro || typeof dentro !== 'object' || Array.isArray(dentro)) continue;
+    const copia: Record<string, unknown> = { ...(dentro as Record<string, unknown>) };
+    for (const nome of PROPRIETA_CHE_SONO_INDIRIZZI) {
+      if (nome in copia) copia[nome] = indirizzoRipulito(copia[nome]);
+    }
+    pulite[contenitore] = copia;
+  }
+  return pulite;
+}
+
+/**
+ * Il cancello sul DATO: ogni evento passa di qui prima di partire, compresi
+ * quelli che la libreria manda da sola (pageleave, autocapture, telecamera).
+ * Non lancia mai: la telemetria non deve poter rompere una pagina.
+ */
+export function eventoSenzaDatiPersonali(evento: CaptureResult | null): CaptureResult | null {
+  if (!evento) return evento;
+  try {
+    if (evento.properties) evento.properties = proprietaSenzaDatiPersonali(evento.properties);
+    if (evento.$set) evento.$set = proprietaSenzaDatiPersonali(evento.$set);
+    if (evento.$set_once) evento.$set_once = proprietaSenzaDatiPersonali(evento.$set_once);
+  } catch {
+    /* meglio l'evento com'era che una pagina caduta */
+  }
+  return evento;
+}
+
 let posthogInstance: PostHogLike | null = null;
 
 async function getPosthog() {
@@ -138,6 +223,8 @@ async function getPosthog() {
     person_profiles: 'identified_only',
     capture_pageview: false, // gestiamo noi via useEffect
     capture_pageleave: true,
+    // Il cancello sul DATO: ogni evento passa di qui prima di partire.
+    before_send: eventoSenzaDatiPersonali,
     session_recording: opzioniRegistrazioneSchermo(),
     autocapture: {
       dom_event_allowlist: ['click', 'submit'],

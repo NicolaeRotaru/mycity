@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { getCurrentUser } from '@/lib/supabase/server';
-import { recordActivity, type ActivityCategory } from '@/lib/activity';
+import { recordActivity, accessoGiaRegistrato, type ActivityCategory } from '@/lib/activity';
 import { parseUserAgent } from '@/lib/user-agent';
 import { parseConsentCookie, CONSENT_COOKIE } from '@/lib/consent';
 import { jsonConTetto } from '@/lib/api/corpo';
@@ -180,26 +180,44 @@ export async function POST(request: Request) {
     userId = null;
   }
 
-  await recordActivity({
-    category,
-    eventType,
-    summary: (SUMMARY[eventType] ?? (() => eventType))(path ?? undefined),
-    actorId: userId,
-    userId,
-    anonId: vid,
-    sessionId,
-    path,
-    referrer,
-    ip,
-    userAgent: ua,
-    deviceType: parsed.deviceType,
-    browser: parsed.browser,
-    os: parsed.os,
-    country: geo.country,
-    city: geo.city,
-    isBot: parsed.isBot,
-    metadata,
-  });
+  /**
+   * 3/9/2026 — LO STESSO ACCESSO ARRIVA DA DUE PARTI, E LA RIGA DEVE RESTARE UNA.
+   *
+   * Da oggi «questa persona è appena entrata» lo dichiara il catalogo eventi
+   * (`trackSignedIn`), che è la sola strada attraversata anche da chi entra con
+   * Google — prima quegli accessi non lasciavano nessuna riga. Ma per chi entra
+   * con email e password parte ANCHE il vecchio segnale del tracker, che vede
+   * la sessione cambiare dentro il browser: due segnali, un fatto solo.
+   *
+   * Qui si tiene un accesso per persona e per sessione del browser. Un altro
+   * telefono, un altro browser: sessione diversa, accesso diverso, riga nuova —
+   * ed è esattamente quello che serve guardare quando un account viene rubato.
+   */
+  const doppioneDiAccesso =
+    eventType === 'login' && !!userId && (await accessoGiaRegistrato(userId, sessionId));
+
+  if (!doppioneDiAccesso) {
+    await recordActivity({
+      category,
+      eventType,
+      summary: (SUMMARY[eventType] ?? (() => eventType))(path ?? undefined),
+      actorId: userId,
+      userId,
+      anonId: vid,
+      sessionId,
+      path,
+      referrer,
+      ip,
+      userAgent: ua,
+      deviceType: parsed.deviceType,
+      browser: parsed.browser,
+      os: parsed.os,
+      country: geo.country,
+      city: geo.city,
+      isBot: parsed.isBot,
+      metadata,
+    });
+  }
 
   const res = noContent();
   if (setCookie && vid) {

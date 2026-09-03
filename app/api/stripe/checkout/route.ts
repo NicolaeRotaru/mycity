@@ -13,8 +13,9 @@ import { validateCoupon } from '@/lib/coupons';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
-import { isStoreClosedForOrder } from '@/lib/store-hours';
+import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
@@ -282,10 +283,15 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // carta no, quindi alle tre di notte si poteva pagare un ordine che nessuno
   // avrebbe preparato. Il ritiro in negozio è esente: il cliente passa quando è
   // aperto.
+  //
+  // 3/9/2026 — LA DECISIONE GUARDA LA FASCIA SCELTA, NON L'OROLOGIO. Dalle 20:00
+  // la cassa propone «Domani» da sola, e questo controllo rifiutava lo stesso:
+  // ogni ordine serale per il giorno dopo moriva all'ultimo clic. Ora un ordine
+  // per domani passa se domani, in quella fascia, il negozio è aperto.
   if (!body.pickupInStore) {
     for (const s of sellers ?? []) {
-      if (isStoreClosedForOrder((s as { store_hours?: unknown }).store_hours)) {
-        return ApiErrors.conflict(`${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`);
+      if (!negozioPuoServire((s as { store_hours?: unknown }).store_hours, body.deliverySlot)) {
+        return ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot));
       }
     }
   }
@@ -535,6 +541,24 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
     if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
   };
+
+  /**
+   * 3/9/2026 — PRIMA DI RISERVARE, SI LIBERA QUELLO CHE QUESTA STESSA PERSONA
+   * AVEVA GIÀ IMPEGNATO.
+   *
+   * Chi torna indietro dalla pagina di Stripe e cambia la fascia (o l'indirizzo)
+   * arriva qui con un'impronta diversa: la sessione di prima non si riusa, e la
+   * merce veniva riservata una seconda volta. Sull'ultimo pezzo il secondo
+   * tentativo trovava zero — «Stock insufficiente per Torta (0 disponibili)» —
+   * e il pezzo restava invisibile a tutti fino allo scadere delle due ore.
+   * Un secondo tentativo chiude il primo.
+   */
+  await liberaRiserveAbbandonate(admin, {
+    buyerId: user.id,
+    improntaDaTenere: improntaCarrello,
+    soloConProdotti: uniqueProductIds,
+    chiudiSessione: async (sessionId) => { await getStripe().checkout.sessions.expire(sessionId); },
+  });
 
   const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
   if (reserveErr) {

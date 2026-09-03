@@ -28,6 +28,24 @@ name: Rilascio dopo CI verde
 #   2. SOLO DOPO, una parola in `vercel.json`:
 #      "main": true   diventa   "main": false
 #
+# ⚠️ 3/9/2026 — E C'E' UNA TERZA COSA, SCOPERTA GUARDANDO IL PROGETTO VERO.
+#
+# Sul progetto Vercel `mycity` non c'e' NESSUN dominio personalizzato, e la
+# «Vercel Authentication» e' accesa su tutto tranne i domini personalizzati.
+# Tradotto: l'indirizzo che questo lavoro pubblica risponde con la schermata di
+# accesso di Vercel a chiunque non sia della squadra — compresa la prova di
+# fumo qui sotto. Il giorno in cui si accendono i segreti, senza una chiave di
+# passaggio la prova avrebbe trovato tre porte chiuse e annullato un rilascio
+# sano a ogni pubblicazione.
+#
+#   3. quindi, insieme ai tre segreti, conviene mettere anche il quarto:
+#      · VERCEL_AUTOMATION_BYPASS_SECRET
+#        (Vercel → il progetto → Settings → Deployment Protection →
+#         Protection Bypass for Automation: si genera li' e si incolla qui)
+#      Senza, il rilascio funziona lo stesso ma la prova di fumo non vede
+#      niente e il lavoro finisce rosso dicendolo — mai verde, mai un ritorno
+#      indietro deciso al buio.
+#
 # Finche' i segreti mancano, questo lavoro non rilascia niente e non blocca
 # nessuna unione — ma dal 31/8/2026 finisce ROSSO invece che verde, perche' un
 # lavoro che non ha guardato niente non puo' mostrare la stessa spunta di uno
@@ -278,6 +296,20 @@ jobs:
           # L'indirizzo passa da una variabile e non dentro la riga di comando:
           # cosi' resta un dato, e non puo' diventare un pezzo di script.
           INDIRIZZO: ${{ steps.rilascio.outputs.indirizzo }}
+          # 3/9/2026 — LA CHIAVE PER PASSARE LA SCHERMATA DI ACCESSO.
+          #
+          # Sul progetto Vercel la «Vercel Authentication» e' accesa su tutto
+          # tranne i domini personalizzati, e domini personalizzati non ce ne
+          # sono: ogni indirizzo *.vercel.app risponde con la schermata di
+          # accesso a chi non e' della squadra. Senza questa chiave la prova di
+          # fumo sbatte contro il muro e — prima del 3/9 — lo chiamava «sito
+          # rotto», cioe' l'unico esito su cui il passo dopo ANNULLA il
+          # rilascio. Un rilascio sano buttato via a ogni pubblicazione.
+          #
+          # Si prende su Vercel: il progetto → Settings → Deployment Protection
+          # → Protection Bypass for Automation. Se manca, la prova esce 4 —
+          # «non ho potuto vedere» — che e' rosso e non annulla niente.
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: |
           set +e
           node scripts/prova-di-fumo.mjs "$INDIRIZZO"
@@ -299,6 +331,10 @@ jobs:
         # Solo sul numero che vuol dire «il sito e' rotto» (1). Un indirizzo
         # storto (3) non dice niente sul sito: annullare in quel caso sarebbe
         # rompere la produzione per un avviso di aggiornamento della CLI.
+        # Dal 3/9/2026 vale lo stesso per il muro di Vercel (4): una schermata
+        # di accesso davanti al sito non e' una notizia sul sito. Su 3 e su 4 il
+        # lavoro finisce rosso e lo dice nel riepilogo, ma non tocca la
+        # produzione — e' il verdetto in fondo che spiega cosa non si e' visto.
         if: always() && steps.fumo.outputs.codice == '1'
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}

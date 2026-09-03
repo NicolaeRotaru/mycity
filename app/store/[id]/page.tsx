@@ -12,7 +12,8 @@ import { homePage, enabledSections } from '@/lib/store-site';
 import SectionRenderer from '@/components/store-sections/SectionRenderer';
 import StoreNav from '@/components/store-sections/StoreNav';
 import { useStorePageData } from '@/components/store-sections/useStorePageData';
-import { LoadingState } from '@/components/ui/LoadingState';
+import ScheletroNegozio from '@/components/store-sections/ScheletroNegozio';
+import { CONTENITORE_PAGINA_NEGOZIO } from '@/components/store-sections/misure-vetrina';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import EmptyState from '@/components/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -33,12 +34,11 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     staleTime: 60_000,
   });
 
+  // 3/9/2026 — qui c'era un cerchietto che gira dentro una pagina alta poche
+  // righe: era la SECONDA impaginazione dopo lo scheletro del server e prima del
+  // negozio vero. Adesso è lo stesso scheletro, quindi non si vede nessun salto.
   if (data.isLoading) {
-    return (
-      <div className="container mx-auto px-4 py-16">
-        <LoadingState />
-      </div>
-    );
+    return <ScheletroNegozio />;
   }
   // 110 — Prima di dire «non trovato» si guarda se la domanda è arrivata.
   if (data.isError) {
@@ -106,7 +106,7 @@ export default function StorePage(props: { params: Promise<{ id: string }> }) {
     <div
       data-theme={site.theme}
       style={{ ['--store-accent']: accent } as CSSProperties}
-      className="container mx-auto px-4 py-6 max-w-5xl space-y-4"
+      className={CONTENITORE_PAGINA_NEGOZIO}
     >
       <script
         type="application/ld+json"

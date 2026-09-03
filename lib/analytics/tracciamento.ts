@@ -20,6 +20,8 @@
  * 🟢 Pure: nessuna rete, nessun React. Una prova le ESEGUE.
  */
 
+import { VALORE_NASCOSTO } from './indirizzo-senza-dati-personali';
+
 /** Gli eventi che il sito manda a `/api/track`. */
 export type TipoEvento = 'page_view' | 'login' | 'logout';
 
@@ -39,8 +41,35 @@ export function serveIlConsensoStatistico(evento: TipoEvento): boolean {
 const PARAMETRI_CHE_CONTANO = ['q'];
 
 /**
- * L'identità della pagina vista: percorso più i soli parametri che contano. Due indirizzi che
- * differiscono per un filtro danno la stessa chiave, quindi una pagina vista sola.
+ * 3/9/2026 — QUESTA CHIAVE SERVIVA A DUE COSE, E UNA DELLE DUE LA MANDAVA A GOOGLE.
+ *
+ * La chiave nasce per DISTINGUERE due pagine viste, e per quello il testo cercato serve. Ma la
+ * stessa identica stringa veniva anche SPEDITA: `components/GoogleAnalytics.tsx` la passa a Google
+ * come `page_path` e `page_location`. Quindi «/search?q=mario.rossi@gmail.com» partiva verso gli
+ * Stati Uniti così com'era, con dentro l'email che la persona aveva scritto nella casella.
+ *
+ * Un valore fatto per distinguere non deve dire cosa contiene: deve solo cambiare quando cambia il
+ * contenuto. Da qui esce l'impronta, non il testo. Due ricerche diverse restano due pagine diverse
+ * (l'impronta cambia), sette tocchi ai filtri restano una pagina sola (i filtri non entrano), e
+ * fuori non esce più niente di leggibile.
+ *
+ * Il testo cercato non si perde: continua ad arrivare, già ripulito da
+ * `messaggioSenzaDatiPersonali`, dentro l'evento `search_performed`.
+ */
+function improntaDelValore(valore: string): string {
+  // FNV-1a a 32 bit: stabile, senza dipendenze, uguale nel browser e sul server.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < valore.length; i++) {
+    h ^= valore.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+
+/**
+ * L'identità della pagina vista: percorso più i soli parametri che contano, col VALORE nascosto.
+ * Due indirizzi che differiscono per un filtro danno la stessa chiave, quindi una pagina vista
+ * sola; due ricerche diverse danno due chiavi diverse senza che il testo cercato esca da qui.
  */
 export function chiaveDellaPaginaVista(
   percorso: string,
@@ -52,7 +81,9 @@ export function chiaveDellaPaginaVista(
   const tenuti = new URLSearchParams();
   for (const nome of PARAMETRI_CHE_CONTANO) {
     const valore = letti.get(nome);
-    if (valore) tenuti.set(nome, valore);
+    // `VALORE_NASCOSTO` è lo stesso segnaposto della regola di pulizia degli indirizzi: la
+    // maschera è una sola per tutto il sito, e quando cambia cambia dappertutto.
+    if (valore) tenuti.set(nome, `${VALORE_NASCOSTO}${improntaDelValore(valore)}`);
   }
   const coda = tenuti.toString();
   return coda ? `${percorso}?${coda}` : percorso;

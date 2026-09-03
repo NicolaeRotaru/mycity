@@ -14,7 +14,16 @@
  * Il risultato era un incassato più alto di quello arrivato sull'IBAN: la
  * telefonata «dove sono i miei soldi», che sul payout erode la fiducia più di
  * qualunque altra cosa.
+ *
+ * 3/9/2026 — IL LORDO AL NETTO DEI RIMBORSI ERA SCRITTO QUI, E SOLO QUI.
+ * Il cruscotto e la pagina Andamento avevano la loro formula, cieca sui
+ * rimborsi: due strade per lo stesso numero, e quella «certificata» era quella
+ * sbagliata. Adesso il conto di quanto è entrato su un ordine sta in un posto
+ * solo — `incassatoDellOrdineCents` in lib/metriche-venditore — e questa pagina
+ * lo chiama come le altre.
  */
+import { incassatoDellOrdineCents } from '@/lib/metriche-venditore';
+
 export type OrdineNegozio = {
   total_price: number;
   payment_method: string | null;
@@ -74,10 +83,7 @@ export function riepilogoNegozio(ordini: OrdineNegozio[]): RiepilogoNegozio {
   const somma = (righe: OrdineNegozio[]) => righe.reduce((s, o) => s + nettoDopoStorni(o), 0);
 
   return {
-    lordoCents: attivi.reduce(
-      (s, o) => s + Math.max(0, Math.round(Number(o.total_price) * 100) - (o.refunded_amount_cents ?? 0)),
-      0,
-    ),
+    lordoCents: attivi.reduce((s, o) => s + incassatoDellOrdineCents(o), 0),
     commissioniCents: attivi.reduce((s, o) => s + (o.application_fee_cents ?? 0), 0),
     versatiCents: somma(conBonifico.filter((o) => o.payout_status === 'TRANSFERRED')),
     inArrivoCents: somma(

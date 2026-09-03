@@ -1,9 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ShoppingCart, Minus, Plus } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
-import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
+import { fondoDellaBarra, corsieSotto } from '@/lib/ui/barra-in-fondo';
+import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
+
+/** La corsia che questa barra occupa, in fondo allo schermo. */
+const MIA_CORSIA = '--altezza-barra-acquisto';
 
 type Props = {
   price: number;
@@ -54,6 +58,7 @@ const ETICHETTA_ESAURITO = 'Non disponibile';
 
 export default function StickyAddToCart({ price, available, onAdd, note, qty, onDec, onInc, canDec, canInc }: Props) {
   const [visible, setVisible] = useState(false);
+  const barraRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => {
@@ -66,6 +71,19 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  // 3/9/2026 — QUESTA BARRA DICE QUANTO E' ALTA, e chi le sta sopra la legge.
+  //
+  // Il pulsante tondo dell'assistenza stava a 96 pixel scritti a mano e finiva
+  // sopra il lato destro di «Aggiungi al carrello»: il tocco apriva
+  // l'assistenza invece di comprare. Nessuno poteva spostarlo, perche' nessuno
+  // sapeva quanto e' alta questa barra. Ora lo dichiara — e lo ridichiara
+  // mentre cambia, come fa il banner dei cookie: il totale va a capo su uno
+  // schermo stretto, la barra cresce, e chi le sta sopra si sposta con lei.
+  useEffect(() => {
+    if (!visible) return;
+    return seguiAltezza(barraRef.current, document.documentElement, osservatoreDelBrowser, MIA_CORSIA);
+  }, [visible]);
+
   if (!visible) return null;
 
   const hasStepper = typeof qty === 'number' && !!onDec && !!onInc;
@@ -73,13 +91,16 @@ export default function StickyAddToCart({ price, available, onAdd, note, qty, on
 
   return (
     <div
+      ref={barraRef}
       // 27/8/2026 (R096) — Via `pb-safe`: la safe-area la conta gia' `bottom`
       // qui sotto. Contata due volte, la barra galleggiava staccata dal fondo
       // con una fascia vuota sotto il pulsante d'acquisto.
       className="lg:hidden fixed left-0 right-0 z-30 transition-transform duration-300 animate-slide-up"
       // #124 — Sopra la barra a schede e, quando c'e', sopra il banner dei
       // cookie: prima ci finiva sotto e il pulsante d'acquisto spariva.
-      style={{ bottom: fondoDellaBarra(['var(--tabbar-height)', 'var(--altezza-banner-cookie, 0px)']) }}
+      // Le corsie sotto di lei non sono piu' ricopiate qui: le tiene
+      // lib/ui/barra-in-fondo.ts, insieme all'ordine di chi sta sopra chi.
+      style={{ bottom: fondoDellaBarra(corsieSotto(MIA_CORSIA)) }}
       // 30/8/2026 (R108) — Senza `role` questa etichetta non arrivava a
       // nessuno: un `aria-label` su un contenitore generico le tecnologie
       // assistive lo buttano via. Era un nome che chi l'ha scritto credeva di

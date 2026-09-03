@@ -9,7 +9,7 @@ import { validateCoupon } from '@/lib/coupons';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
-import { isStoreClosedForOrder } from '@/lib/store-hours';
+import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
@@ -23,6 +23,7 @@ import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
+import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -272,6 +273,22 @@ export const POST = withAuthRateLimit(
     );
     const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
 
+    /**
+     * 3/9/2026 — CHI PASSA AI CONTANTI NON DEVE TROVARE ESAURITA LA PROPRIA
+     * MERCE.
+     *
+     * Chi ha premuto «Paga con carta», è tornato indietro e adesso sceglie i
+     * contanti trova zero pezzi: quell'unico pezzo lo ha impegnato lui un minuto
+     * fa, e la riserva vive due ore. Si libera qui, PRIMA di leggere le
+     * disponibilità — dopo sarebbe inutile, il numero letto sarebbe già quello
+     * vecchio. Si toccano solo i tentativi che impegnano i prodotti di questo
+     * carrello.
+     */
+    await liberaRiserveAbbandonate(admin, {
+      buyerId: user.id,
+      soloConProdotti: uniqueProductIds,
+    });
+
     type RigaVariante = { id: string; product_id: string; label: string; stock: number };
 
     const [prodottiLetti, discountMap, variantiLette, venditoriLetti] = await Promise.all([
@@ -331,10 +348,14 @@ export const POST = withAuthRateLimit(
     // adesso (il rider andrebbe a vuoto — lo scenario "ordine alle 3 di notte").
     // Solo se il venditore ha orari configurati (NULL-safe). Il ritiro in negozio
     // è esente: il cliente passa durante gli orari di apertura.
+    //
+    // 3/9/2026 — SI GUARDA LA FASCIA SCELTA, NON SOLO L'OROLOGIO. Dalle 20:00 la
+    // cassa propone «Domani»: rifiutare quell'ordine perché il negozio è chiuso
+    // adesso vuol dire perdere tutti gli ordini della sera per il giorno dopo.
     if (!body.pickupInStore) {
       for (const s of sellers ?? []) {
-        if (isStoreClosedForOrder(s.store_hours)) {
-          return esciERilascia(ApiErrors.conflict(`${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`));
+        if (!negozioPuoServire(s.store_hours, body.deliverySlot)) {
+          return esciERilascia(ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot)));
         }
       }
     }

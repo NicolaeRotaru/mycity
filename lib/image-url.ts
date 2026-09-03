@@ -73,13 +73,19 @@ export function pixelDellaTaglia(size: ImageSize): number {
 
 const QUALITY = 75;
 
-function buildPexelsUrl(url: URL, sizePx: number): string {
+function buildPexelsUrl(url: URL, sizePx: number, ritaglia: boolean): string {
   // Pexels accetta w, h, auto=compress, cs=tinysrgb, fit=crop
   url.searchParams.set('w', String(sizePx));
-  url.searchParams.set('h', String(sizePx));
+  // Il ritaglio quadrato resta l'impostazione di fabbrica — su Pexels ci sono
+  // foto, e una foto si può tagliare. Si spegne solo se chi chiama DICHIARA
+  // `quadrato: false`, cioè quando sa che quella non è una foto ma un marchio
+  // con dentro una scritta: `logoNegozio` è l'unico posto che lo fa.
+  if (ritaglia) {
+    url.searchParams.set('h', String(sizePx));
+    url.searchParams.set('fit', 'crop');
+  }
   url.searchParams.set('auto', 'compress');
   url.searchParams.set('cs', 'tinysrgb');
-  url.searchParams.set('fit', 'crop');
   return url.toString();
 }
 
@@ -139,7 +145,7 @@ export function sizedImage(
     const host = url.hostname;
 
     if (host === 'images.pexels.com') {
-      return buildPexelsUrl(url, sizePx);
+      return buildPexelsUrl(url, sizePx, opzioni.quadrato !== false);
     }
     if (host.endsWith('.supabase.co')) {
       return buildSupabaseStorageUrl(url, sizePx, square);
@@ -149,4 +155,31 @@ export function sizedImage(
   } catch {
     return src;
   }
+}
+
+/**
+ * L'indirizzo di un LOGO di negozio. Non ritaglia mai.
+ *
+ * 3/9/2026 — I MARCHI CON LA SCRITTA DIVENTAVANO ILLEGGIBILI.
+ *
+ * Il taglio non lo faceva il cerchio del CSS: lo faceva il server. Per le
+ * misure `thumb` e `card` l'indirizzo viene riscritto con `height` uguale a
+ * `width` e `resize=cover`, cioè il CDN tiene solo il quadrato centrale.
+ * Su un marchio da 1000×300 — la forma normale di un logo con scritto sopra il
+ * nome — restavano i 300 pixel centrali: si leggeva un pezzo di parola. E il
+ * negoziante non poteva farci niente, perché al caricamento non gli viene
+ * chiesto nessun ritaglio: carica il suo marchio e lo ritrova mozzato ovunque.
+ *
+ * Un logo non è una foto di prodotto: la foto si può tagliare, il nome del
+ * negozio no. Qui si chiede solo la larghezza — senza `height` il server
+ * rimpicciolisce e basta — e chi mostra il logo lo mette dentro il cerchio con
+ * `object-contain`, non `object-cover`.
+ *
+ * @param larghezzaBoxPx la larghezza VERA del cerchio sullo schermo, in pixel.
+ *        Chiediamo il doppio perché sui telefoni un pixel dello schermo sono
+ *        due (o tre) pixel veri: chiedendone quaranta per un cerchio da
+ *        quaranta il marchio si vedrebbe sfocato.
+ */
+export function logoNegozio(src: string | undefined | null, larghezzaBoxPx: number): string {
+  return sizedImage(src, Math.max(1, Math.round(larghezzaBoxPx)) * 2, { quadrato: false });
 }

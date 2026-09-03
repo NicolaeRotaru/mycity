@@ -6,10 +6,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { normalizeCustomization, accentHex, socialLinks } from '@/lib/store-customization';
 import { normalizeSite } from '@/lib/store-site';
 import type { SectionContext, SectionPromo, SectionReview, StoreContextRow } from './SectionContext';
-import { conRipiegoSchema, senzaColonne, stessaFormaDi, COLONNE_124_VISTA } from '@/lib/db/migrazione-124';
-
-const SELECT_NEGOZIO =
-  'id, store_name, store_phone, store_address, store_lat, store_lng, is_approved, stripe_charges_enabled, stripe_payouts_enabled, store_logo, store_hours, store_media, store_description, store_customization, store_site, founded_year';
+import { domandaNegozio } from '@/lib/queries/catalogo';
 
 /**
  * Carica tutto ciò che serve a renderizzare una pagina vetrina (home o custom):
@@ -18,32 +15,13 @@ const SELECT_NEGOZIO =
  * non duplicano le query né la logica.
  */
 export function useStorePageData(id: string) {
-  const storeQ = useQuery({
-    queryKey: queryKeys.stores.detail(id),
-    queryFn: async () => {
-      // 22/8/2026 — ripiego sulle due colonne della migrazione 124: senza,
-      // l'intera pagina del negozio non si apre su un database indietro.
-      const conBandierine = () =>
-        supabase.from('seller_public_profiles').select(SELECT_NEGOZIO).eq('id', id).maybeSingle();
-      const { data, error } = await conRipiegoSchema(
-        'useStorePageData:seller_public_profiles',
-        conBandierine,
-        () =>
-          stessaFormaDi<Awaited<ReturnType<typeof conBandierine>>>(
-            supabase
-              .from('seller_public_profiles')
-              .select(senzaColonne(SELECT_NEGOZIO, COLONNE_124_VISTA))
-              .eq('id', id)
-              .maybeSingle(),
-          ),
-      );
-      if (error) throw error;
-      // 22/8/2026 — un negozio che non esiste non e' un guasto di rete: senza
-      // questo, la pagina offriva «Riprova» su un indirizzo che non porta da
-      // nessuna parte.
-      return data ?? null;
-    },
-  });
+  // 3/9/2026 — la domanda sul negozio non e' piu' scritta qui dentro: la fa
+  // anche il guscio del server, prima che il browser esista, e le due devono
+  // essere la STESSA — stessa chiave e stessa forma della risposta. Con due
+  // copie divergenti il precarico del server non servirebbe a niente e nessuno
+  // se ne accorgerebbe, perche' la pagina funzionerebbe uguale. Vive in
+  // `lib/queries/catalogo.ts`, insieme al ripiego della migrazione 124.
+  const storeQ = useQuery(domandaNegozio(supabase, id));
 
   const reviewsQ = useQuery({
     queryKey: queryKeys.reviews.store(id),

@@ -8,6 +8,7 @@ import { Users, Clock, CalendarDays, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import CollectionHeader from '@/components/CollectionHeader';
@@ -159,11 +160,28 @@ export default function EventsPage() {
               <li key={ev.id} className="bg-white border border-cream-300 rounded-2xl overflow-hidden shadow-warm flex flex-col">
                 {ev.cover_image_url ? (
                   <div className="relative aspect-[16/9]">
+                    {/* 3/9/2026 — SENZA CARICATORE, UNA COPERTINA DI CASA
+                        NOSTRA FACEVA CADERE LA PAGINA.
+                        Qui l'immagine passava dall'ottimizzatore interno di
+                        Next, che accetta solo i quattro domini scritti in
+                        `next.config.js`. L'admin puo' incollare un indirizzo
+                        qualunque nel campo copertina: con uno fuori elenco, in
+                        sviluppo Next SOLLEVA un errore durante il disegno — la
+                        pagina Eventi non si vedeva piu' — e in produzione
+                        rispondeva 400, cioe' il riquadro vuoto.
+                        Col caricatore l'indirizzo va dritto al CDN come fa gia'
+                        la striscia in home: la copertina fuori elenco resta
+                        vuota (la blocca comunque la politica di sicurezza), ma
+                        il resto della scheda — titolo, data, «Partecipa» — si
+                        vede e si usa.
+                        ⚠️ Resta aperto l'avviso all'admin quando incolla un
+                        indirizzo non ammesso: sta nel campo, non qui. */}
                     <Image
                       src={sizedImage(ev.cover_image_url, 'detail')}
                       alt={ev.title}
                       fill
                       sizes="(max-width: 768px) 100vw, 400px"
+                      loader={caricatoreFotoRemote}
                       className="object-cover"
                     />
                     {isLive && (

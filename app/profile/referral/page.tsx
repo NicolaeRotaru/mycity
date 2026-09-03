@@ -53,7 +53,16 @@ export default function ReferralPage() {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://mycity.it';
   const inviteLink = `${baseUrl}/sign-up?ref=${profile.referral_code}`;
-  const shareText = `Iscriviti a MyCity Piacenza, il marketplace dei negozi locali. Usa il mio codice ${profile.referral_code} e abbiamo entrambi €5 di sconto!\n${inviteLink}`;
+  // 3/9/2026 — QUI SI PROMETTEVA «ABBIAMO ENTRAMBI €5 DI SCONTO».
+  //
+  // Il codice fa un'altra cosa: alla prima consegna dell'ordine dell'invitato,
+  // il credito va SOLO a chi ha invitato (migrazione 089). Per l'invitato non
+  // esiste nessuno sconto legato all'invito — quello che riceve è il benvenuto
+  // che spetta a chiunque si iscriva. Chi si fida di un amico e poi paga il
+  // prezzo pieno si sente preso in giro, e l'amico fa la figura di chi ha
+  // promesso una cosa falsa: è il canale del passaparola, qui una promessa non
+  // mantenuta costa fiducia a due persone per volta.
+  const shareText = `Iscriviti a MyCity Piacenza, il marketplace dei negozi locali. Usa il mio codice ${profile.referral_code}: appena ricevi il tuo primo ordine io ricevo €5 di credito, e tu parti col benvenuto di MyCity.\n${inviteLink}`;
 
   const copy = async () => {
     await navigator.clipboard.writeText(inviteLink);
@@ -70,8 +79,8 @@ export default function ReferralPage() {
     <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
       <div>
         <Link href="/profile" className="text-sm text-primary-700 hover:underline">← Profilo</Link>
-        <h1 className="text-2xl font-bold text-ink-900 mt-1">Invita amici, guadagnate entrambi €5</h1>
-        <p className="text-sm text-ink-500">Condividi il tuo codice: tu ricevi €5 di credito, anche il tuo amico riceve €5 di sconto sul primo ordine.</p>
+        <h1 className="text-2xl font-bold text-ink-900 mt-1">Invita un amico, ricevi €5 di credito</h1>
+        <p className="text-sm text-ink-500">Condividi il tuo codice: quando il tuo amico riceve il suo primo ordine, tu ricevi €5 di credito MyCity, da usare sugli ordini pagati alla consegna.</p>
         {/* 🟡-21: la pagina leaderboard era orfana (nessun link la raggiungeva). */}
         <Link
           href="/profile/referral/leaderboard"
@@ -146,7 +155,7 @@ export default function ReferralPage() {
 
       <div className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 flex items-start gap-2">
         <Lightbulb size={18} className="text-accent-500 shrink-0 mt-0.5" aria-hidden />
-        <span><strong>Come funziona</strong>: il tuo amico si iscrive col tuo codice → fa il primo ordine → tu ricevi €5 di credito, lui paga €5 in meno.</span>
+        <span><strong>Come funziona</strong>: il tuo amico si iscrive col tuo codice → riceve il suo primo ordine → tu ricevi €5 di credito MyCity, spendibile sugli ordini pagati alla consegna.</span>
       </div>
     </div>
   );

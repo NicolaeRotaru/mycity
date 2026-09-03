@@ -19,7 +19,7 @@ type Props = {
 
 export function StepCard({ n, icon: Icon, title, children }: Props) {
   return (
-    <Card variant="bordered" padding="lg">
+    <Card variant="funnel" padding="lg">
       <div className="flex items-center gap-2.5 mb-4">
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary-700 text-sm font-bold text-white">
           {n}

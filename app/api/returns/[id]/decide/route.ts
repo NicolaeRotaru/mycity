@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
@@ -8,6 +8,7 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import { chiComandaIlReso } from '../../chi-comanda-il-reso';
 
 export const runtime = 'nodejs';
 
@@ -31,19 +32,31 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const supa = await getServerSupabase();
-  const { data: ret, error } = await supa
+  const admin = getAdminSupabase();
+  const { data: ret, error } = await admin
     .from('returns')
     .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents')
     .eq('id', params.id)
     .single();
 
   if (error || !ret) return ApiErrors.notFound('Reso non trovato');
-  if (ret.seller_id !== user.id) {
-    // Admin puo' decidere comunque
-    const { data: prof } = await supa.from('profiles').select('role').eq('id', user.id).single();
-    if (prof?.role !== 'admin') return ApiErrors.forbidden();
+
+  /**
+   * 3/9/2026 — IL NEGOZIO LO DICE L'ORDINE, NON IL RESO.
+   *
+   * Stessa riga sbagliata di `avanza`, e per lo stesso motivo: `ret.seller_id`
+   * e' un campo della riga del reso, e la riga la scriveva il cliente. Chi
+   * decide su un reso e' il venditore dell'ORDINE (oppure un amministratore),
+   * e lo si legge dal server. La regola sta in un posto solo per tutte e due
+   * le rotte: quando si corregge, si corregge ovunque.
+   */
+  const comando = await chiComandaIlReso(ret.order_id, user.id);
+  if (!comando.autorizzato) {
+    return comando.motivo === 'ordine-mancante'
+      ? ApiErrors.notFound('Ordine del reso non trovato')
+      : ApiErrors.forbidden();
   }
+
   if (ret.status !== 'REQUESTED') {
     return ApiErrors.conflict(`Reso gia' in stato ${ret.status}`);
   }
@@ -57,8 +70,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       'Il recesso entro 14 giorni è incondizionato e non può essere rifiutato (Cod. Cons. art. 52-59): approva ed elabora il rimborso.',
     );
   }
-
-  const admin = getAdminSupabase();
 
   /**
    * 27/8/2026 (R138) — IL TETTO SULL'IMPORTO ARRIVAVA TROPPO TARDI, E IN FORMA

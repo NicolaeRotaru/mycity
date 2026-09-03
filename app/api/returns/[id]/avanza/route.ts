@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
+import { getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
@@ -8,6 +8,7 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import { chiComandaIlReso } from '../../chi-comanda-il-reso';
 
 export const runtime = 'nodejs';
 
@@ -61,25 +62,35 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const supa = await getServerSupabase();
-  const { data: ret, error } = await supa
+  const admin = getAdminSupabase();
+  const { data: ret, error } = await admin
     .from('returns')
     .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents')
     .eq('id', params.id)
     .single();
 
   if (error || !ret) return ApiErrors.notFound('Reso non trovato');
-  if (ret.seller_id !== user.id) {
-    const { data: prof } = await supa.from('profiles').select('role').eq('id', user.id).single();
-    if (prof?.role !== 'admin') return ApiErrors.forbidden();
+
+  /**
+   * 3/9/2026 — IL NEGOZIO LO DICE L'ORDINE, NON IL RESO.
+   *
+   * Qui c'era `if (ret.seller_id !== user.id)`: il permesso di rimborsare si
+   * decideva leggendo una colonna della riga del reso, e quella riga il cliente
+   * se la scriveva da solo. Bastava metterci il proprio identificativo per
+   * essere «il negozio» e farsi restituire l'ordine intero tenendo la merce.
+   * Il venditore vero e' quello dell'ordine, che il cliente non tocca.
+   */
+  const comando = await chiComandaIlReso(ret.order_id, user.id);
+  if (!comando.autorizzato) {
+    return comando.motivo === 'ordine-mancante'
+      ? ApiErrors.notFound('Ordine del reso non trovato')
+      : ApiErrors.forbidden();
   }
 
   const partenze = PARTENZE_AMMESSE[body.stato];
   if (!partenze.includes(ret.status)) {
     return ApiErrors.conflict(`Un reso in ${ret.status} non può passare a ${body.stato}.`);
   }
-
-  const admin = getAdminSupabase();
 
   // Il rimborso si controlla PRIMA di prendere il turno, come su `decide`: un
   // importo impossibile non deve lasciare traccia sul reso, e il venditore deve

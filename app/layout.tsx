@@ -24,18 +24,43 @@ import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
+import { indirizzoPubblico } from '@/lib/env';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
+// `style` con il corsivo dentro NON è un dettaglio: senza, si scarica solo la
+// variante dritta e il browser inclina le lettere da solo (corsivo finto). Nel
+// sito ci sono diciassette punti che chiedono il corsivo — fra cui la parola
+// «veri» del titolone della home, in Fraunces a 60px — e Fraunces un corsivo
+// vero, disegnato, ce l'ha. Le regole in più costano qualche riga di CSS: il
+// browser scarica un file solo quando c'è davvero del testo che lo usa.
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+  style: ['normal', 'italic'],
+});
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-serif',
   display: 'swap',
   weight: ['400', '500', '600', '700', '800'],
+  style: ['normal', 'italic'],
 });
 
 // metadataBase: rende assoluti i canonical/openGraph relativi delle pagine
-// (es. /product/[id], /category/[slug]). Stessa fonte di robots.ts e sitemap.ts.
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+// (es. /product/[id], /category/[slug]). Stessa fonte di robots.ts e sitemap.ts:
+// l'indirizzo pubblico si calcola in UN posto solo — lib/env.ts — perché quando
+// ognuno dei tre teneva la sua copia col ripiego su localhost, bastava la
+// variabile mancante su Vercel per dire a Google che il sito sta su un computer
+// che non esiste.
+const { url: APP_URL, fonte: FONTE_APP_URL } = indirizzoPubblico();
+
+if (FONTE_APP_URL === 'dominio-di-riserva') {
+  // Il codice dice ad alta voce quale indirizzo sta usando e perché: senza
+  // questa riga la configurazione sbagliata resta muta e il sito sembra sano.
+  console.warn(
+    `[MyCity] NEXT_PUBLIC_APP_URL non è impostata: il sito si presenta come ${APP_URL}. Impostala nel progetto Vercel.`,
+  );
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
@@ -78,6 +103,9 @@ const orgSchema = {
   '@context': 'https://schema.org',
   '@type': 'OnlineStore',
   name: 'MyCity Piacenza',
+  // Senza `url` lo schema descrive un negozio senza indirizzo: Google non sa a
+  // quale sito attaccarlo. Stessa fonte del canonical, mai una copia a parte.
+  url: APP_URL,
   description: 'Marketplace dei negozi locali di Piacenza con consegna a domicilio.',
   areaServed: {
     '@type': 'City',

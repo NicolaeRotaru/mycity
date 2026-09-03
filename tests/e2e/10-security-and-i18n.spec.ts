@@ -62,7 +62,27 @@ test.describe('Locale switching i18n', () => {
     expect(lang).toBe('it');
   });
 
-  test('POST /api/locale con locale=en setta cookie e cambia lang', async ({ page, request }) => {
+  /*
+   * 3/9/2026 — LA TERZA PROVA DELLA STESSA COPPIA, RIMASTA INDIETRO.
+   *
+   * Il commento qui sotto (#7) spiega che il rilevamento della lingua e'
+   * SPENTO apposta — `RILEVAMENTO_LINGUA_ATTIVO = false` in i18n.ts — finche'
+   * la traduzione non e' completa, e per questo la prova gemella sul selettore
+   * nel piede e' saltata. Questa pero' non era stata toccata: pretendeva che
+   * il biscotto `NEXT_LOCALE=en` cambiasse la lingua del documento, cioe' il
+   * contrario della scelta presa. Restava rossa in silenzio perche' il lavoro
+   * end-to-end in CI si auto-saltava.
+   *
+   * Non si salta: si gira, e si chiede cio' che la scelta promette davvero —
+   * la rotta accetta la lingua e la ricorda, e la pagina resta italiana finche'
+   * l'interruttore e' giu'. Cosi' la prova protegge la decisione invece di
+   * combatterla, e il giorno che si riaccende diventa rossa e va riscritta
+   * insieme al resto.
+   */
+  test('POST /api/locale con locale=en setta cookie ma la pagina resta italiana', async ({
+    page,
+    request,
+  }) => {
     await page.context().clearCookies();
     const r = await request.post('/api/locale', {
       data: { locale: 'en' },
@@ -72,6 +92,8 @@ test.describe('Locale switching i18n', () => {
     const body = await r.json();
     expect(body.ok).toBe(true);
     expect(body.locale).toBe('en');
+    // La rotta deve davvero posare il biscotto: e' la meta' che funziona.
+    expect(String(r.headers()['set-cookie'] ?? '')).toContain('NEXT_LOCALE=en');
 
     // Inietto il cookie nel context
     await page.context().addCookies([
@@ -79,7 +101,10 @@ test.describe('Locale switching i18n', () => {
     ]);
     await page.goto('/');
     const lang = await page.locator('html').getAttribute('lang');
-    expect(lang).toBe('en');
+    expect(
+      lang,
+      'la pagina si e\' dichiarata inglese: o il rilevamento e\' stato riacceso (e allora questa prova va riscritta), o il contenuto italiano viene letto con la fonetica sbagliata',
+    ).toBe('it');
   });
 
   test('POST /api/locale con locale invalido → 400', async ({ request }) => {

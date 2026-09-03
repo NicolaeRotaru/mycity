@@ -18,6 +18,22 @@ type SortOption = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'rating'
 
 const SORT_OPTIONS: SortOption[] = ['relevance', 'newest', 'price_asc', 'price_desc', 'discount_desc', 'rating'];
 
+/**
+ * 3/9/2026 — DUE TERRACOTTE DIVERSE PER LO STESSO PULSANTE.
+ *
+ * Il pulsante principale del sito è definito una volta sola, in `components/ui/Button.tsx`:
+ * `bg-primary-700 hover:bg-primary-800`, cioè il colore che `app/globals.css` chiama `--color-cta`.
+ * Qui dentro i pulsanti pieni erano scritti a mano con la terracotta di un tono più chiaro
+ * (`primary-600`): due rossi diversi per lo stesso gesto, nella stessa schermata, uno accanto
+ * all'altro. Chi guarda non sa dire perché, ma il sito sembra fatto da due persone che non si
+ * parlano — e la fiducia è metà del mestiere di un marketplace.
+ *
+ * La regola, da qui in avanti: un fondo pieno terracotta su una cosa che si clicca è la terracotta
+ * del pulsante principale. Il tono più chiaro resta ai pallini e ai contatori, che pulsanti non
+ * sono. La tiene la prova `tests/unit/il-pulsante-principale-ha-una-terracotta-sola.test.ts`, che
+ * i colori se li calcola dalla tavolozza vera invece di fidarsi di questo commento.
+ */
+
 
 function SearchInner() {
   const params = useSearchParams();
@@ -242,7 +258,7 @@ function SearchInner() {
               onClick={() => setMinRating(r)}
               className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${
                 minRating === r
-                  ? 'bg-primary-600 text-white border-primary-600'
+                  ? 'bg-primary-700 text-white border-primary-700'
                   : 'bg-white text-ink-700 border-cream-300 hover:border-primary-300'
               }`}
             >
@@ -339,7 +355,7 @@ function SearchInner() {
           aria-label={t('filters')}
           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors ${
             activeFilters > 0
-              ? 'bg-primary-600 text-white hover:bg-primary-700'
+              ? 'bg-primary-700 text-white hover:bg-primary-800'
               : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
           }`}
         >
@@ -384,7 +400,7 @@ function SearchInner() {
               )}
               <button
                 onClick={() => setFiltersOpen(false)}
-                className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-bold py-2.5 rounded-xl"
+                className="flex-1 bg-primary-700 hover:bg-primary-800 text-white font-bold py-2.5 rounded-xl"
               >
                 {t('showResults')}
               </button>

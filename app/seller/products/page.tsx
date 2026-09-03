@@ -523,9 +523,31 @@ export default function SellerProductsPage() {
         </div>
       )}
 
-      {/* Barra azioni "modifica in blocco" */}
+      {/*
+        Barra azioni "modifica in blocco".
+
+        3/9/2026 — IL PULSANTE «COPILOT» STAVA SOPRA «SALVA MODIFICHE».
+
+        Il pulsante tondo del Copilot vive nel guscio del venditore
+        (components/seller/SellerShell.tsx), incollato a 24 pixel dal fondo e
+        24 dal bordo destro, su un livello piu' alto di questa barra: sul
+        telefono copriva un quarto di «Salva modifiche», sul computer piu'
+        della meta'. Il tocco apriva il Copilot — che e' un collegamento a
+        un'altra pagina — e le modifiche in blocco non salvate sparivano: dodici
+        prezzi aggiornati il lunedi' mattina, buttati, senza capire perche'.
+
+        Qui la barra tiene le mani fuori dall'angolo che il guscio si e' preso:
+        a destra resta libera la fascia dove il Copilot galleggia (la sua misura
+        piu' il respiro). Non e' la cura definitiva — quella e' il guscio che
+        alza il pulsante quando una pagina mostra una barra in fondo, come fanno
+        gia' le corsie di lib/ui/barra-in-fondo.ts — ma toglie il tocco rubato
+        senza toccare la scala dei livelli. La prova
+        (tests/unit/il-pulsante-del-copilot-non-copre-salva-modifiche.test.ts)
+        rimisura le due scatole dai due sorgenti: se il Copilot cresce o si
+        sposta, diventa rossa.
+      */}
       {bulk && (
-        <div className="fixed inset-x-0 bottom-0 z-sticky flex items-center justify-between gap-3 border-t border-cream-300 bg-surface-0 px-5 py-3 shadow-warm-xl">
+        <div className="fixed inset-x-0 bottom-0 z-sticky flex items-center justify-between gap-3 border-t border-cream-300 bg-surface-0 py-3 pl-5 pr-24 shadow-warm-xl sm:pr-44">
           <span className="text-sm text-ink-600">
             {editCount > 0 ? (
               <><strong className="text-ink-900">{editCount}</strong> {editCount === 1 ? 'prodotto modificato' : 'prodotti modificati'}</>

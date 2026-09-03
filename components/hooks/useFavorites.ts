@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase/client';
 import { queryKeys } from '@/lib/queries/keys';
 import { trackFavoriteAdded } from '@/lib/analytics/events';
 import { idUtenteInMemoria } from '@/components/hooks/useUtente';
+import { opzioniDelTocco, type Verso } from '@/lib/preferiti/tocco-del-cuore';
 
 /**
  * I preferiti dell'utente collegato.
@@ -26,6 +27,13 @@ import { idUtenteInMemoria } from '@/components/hooks/useUtente';
  * E c'è un terzo pezzo che non si cura con un `if`: se la lettura fallisce, «non lo so» non deve
  * uscire come «non è fra i preferiti». Per questo l'insieme esce insieme a `lettoDavvero`, e chi
  * disegna il cuore ha il terzo stato invece di doverlo indovinare.
+ *
+ * ⚠️ E PERCHÉ IL CUORE CAMBIA PRIMA DELLA RISPOSTA DEL SERVER.
+ *
+ * Prima si riempiva alla fine di tre giri di rete: «chi sei», la riga scritta, la rilettura di
+ * tutto l'elenco. Adesso cambia sotto il dito e, se il server rifiuta, torna com'era. Le regole di
+ * quel ribaltamento stanno in `lib/preferiti/tocco-del-cuore.ts`, dove una prova le esegue — il
+ * caso scomodo compreso, cioè il server che dice di no.
  */
 export const useFavorites = () => {
   const qc = useQueryClient();
@@ -52,24 +60,31 @@ export const useFavorites = () => {
   // la seconda risponderebbe di sì su una lettura fallita. È la stessa distinzione di `vistaDaQuery`.
   const lettoDavvero = query.data !== undefined;
 
-  const toggle = useMutation({
-    mutationFn: async (productId: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('AUTH_REQUIRED');
-      const isFav = favorites.has(productId);
-      if (isFav) {
-        const { error } = await supabase.from('favorites').delete().eq('user_id', user.id).eq('product_id', productId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('favorites').insert({ user_id: user.id, product_id: productId });
-        if (error) throw error;
-        // Il conteggio parte DOPO che la riga è entrata davvero: prima si contava un preferito
-        // aggiunto anche quando l'inserimento era fallito, e il numero cresceva senza la riga.
-        trackFavoriteAdded(productId);
-      }
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.favorites.all }),
-  });
+  /**
+   * La scrittura vera, e basta: l'unico pezzo che tocca l'accesso e il database.
+   *
+   * Le regole del tocco — il cuore che cambia subito e torna indietro se il server rifiuta — stanno
+   * in `lib/preferiti/tocco-del-cuore.ts`, dove una prova le può eseguire davvero.
+   */
+  const scriviIlPreferito = async (productId: string, verso: Verso) => {
+    // #88 — Qui basta sapere SE c'è qualcuno collegato: `getSession()` legge il token già in
+    // memoria. Prima c'era `getUser()`, cioè una chiamata di rete piazzata proprio in mezzo al
+    // percorso del tocco, quando la fretta conta.
+    const userId = await idUtenteInMemoria();
+    if (!userId) throw new Error('AUTH_REQUIRED');
+    if (verso === 'togli') {
+      const { error } = await supabase.from('favorites').delete().eq('user_id', userId).eq('product_id', productId);
+      if (error) throw error;
+      return;
+    }
+    const { error } = await supabase.from('favorites').insert({ user_id: userId, product_id: productId });
+    if (error) throw error;
+    // Il conteggio parte DOPO che la riga è entrata davvero: prima si contava un preferito
+    // aggiunto anche quando l'inserimento era fallito, e il numero cresceva senza la riga.
+    trackFavoriteAdded(productId);
+  };
+
+  const toggle = useMutation(opzioniDelTocco(qc, scriviIlPreferito));
 
   return { favorites, lettoDavvero, toggle };
 };

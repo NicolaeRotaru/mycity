@@ -26,10 +26,23 @@ import { resolve } from 'node:path';
 const RADICE = resolve(__dirname, '..', '..');
 const leggi = (f: string) => readFileSync(resolve(RADICE, f), 'utf8');
 
-/** La scatola di un pulsante flottante: angolo, distanza dal fondo, piano. */
+/**
+ * La scatola di un pulsante flottante: angolo, distanza dal fondo, piano.
+ *
+ * 3/9/2026 — LA DISTANZA DAL FONDO PUÒ NON STARE PIÙ FRA LE CLASSI.
+ *
+ * Il pulsante dell'assistenza stava a un numero fisso (`bottom-24`) e finiva sopra il lato destro
+ * di «Aggiungi al carrello»: il tocco apriva la chat invece di comprare. Adesso somma le corsie
+ * occupate in fondo allo schermo (`lib/ui/barra-in-fondo.ts`) e scrive il risultato in `style`.
+ * Se questa lettura restasse ferma alle sole classi, tornerebbe `null` e il controllo qui sotto
+ * smetterebbe di guardare proprio il pulsante che deve guardare — passando per finta.
+ */
 function scatolaFlottante(sorgente: string): { bottom: string; right: string; z: string } | null {
-  const m = sorgente.match(/className="fixed (bottom-[\w[\]-]+)[^"]*?\s(right-[\w[\]-]+)\s(z-[\w[\]-]+)/);
-  return m ? { bottom: m[1], right: m[2], z: m[3] } : null;
+  const m = sorgente.match(/className="fixed (?:(bottom-[\w[\]-]+)\s[^"]*?)?(right-[\w[\]-]+)\s(z-[\w[\]-]+)/);
+  if (!m) return null;
+  const dalloStile = sorgente.match(/style=\{\{\s*bottom:\s*([\s\S]+?)\s*\}\}/);
+  const bottom = m[1] ?? dalloStile?.[1];
+  return bottom ? { bottom, right: m[2], z: m[3] } : null;
 }
 
 describe('il pulsante di emergenza del fattorino', () => {

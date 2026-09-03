@@ -35,6 +35,11 @@ test.describe('404 handling', () => {
   test('404 page renders for invalid route', async ({ page }) => {
     const response = await page.goto('/this-route-does-not-exist-xyz');
     expect(response?.status()).toBe(404);
-    await expect(page.locator('text=/404|non trovata/i')).toBeVisible();
+    // 3/9/2026 — `text=/404|non trovata/i` combacia con due elementi della
+    // pagina (il numerone e la frase sotto), e Playwright si ferma per
+    // ambiguita' invece di guardare. Non era un difetto della pagina: la prova
+    // non diceva QUALE dei due voleva. Adesso chiede la cosa che conta —
+    // qualcosa che spieghi a chi legge che la pagina non c'e'.
+    await expect(page.locator('text=/404|non trovata/i').first()).toBeVisible();
   });
 });

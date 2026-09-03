@@ -27,6 +27,8 @@ export type Passo = {
   id: string | null;
   se: string | null;
   run: string | null;
+  /** `continue-on-error`: quando c'e', un passo fallito non ferma il lavoro. */
+  continuaAncheSeFallisce: string | null;
   ambiente: Record<string, string>;
 };
 
@@ -69,7 +71,7 @@ export function passiDelLavoro(): Passo[] {
 
 function leggiPasso(righe: string[]): Passo {
   const testa = righe[0].replace(/^ {6}- /, '');
-  const passo: Passo = { nome: '', id: null, se: null, run: null, ambiente: {} };
+  const passo: Passo = { nome: '', id: null, se: null, run: null, continuaAncheSeFallisce: null, ambiente: {} };
   const corpo = [testa.length ? `        ${testa}` : '', ...righe.slice(1)];
 
   for (let i = 0; i < corpo.length; i++) {
@@ -83,10 +85,20 @@ function leggiPasso(righe: string[]): Passo {
     else if (chiave.startsWith('run: ')) passo.run = chiave.slice(5).trim();
     else if (chiave === 'if: >-' || chiave === 'if: >') passo.se = blocco(corpo, i).split('\n').join(' ').replace(/\s+/g, ' ').trim();
     else if (chiave.startsWith('if: ')) passo.se = chiave.slice(4).trim();
-    else if (chiave === 'env:') {
+    else if (chiave === 'continue-on-error:' || chiave.startsWith('continue-on-error: ')) {
+      passo.continuaAncheSeFallisce = chiave.slice('continue-on-error:'.length).trim();
+    } else if (chiave === 'env:') {
       for (let j = i + 1; j < corpo.length; j++) {
         const r = corpo[j];
         if (r.trim() === '') continue;
+        // 3/9/2026 — I COMMENTI NON SONO VARIABILI, E FERMAVANO LA LETTURA.
+        //
+        // Un commento senza due punti faceva uscire dal ciclo: tutte le
+        // variabili scritte sotto quel commento sparivano dalla lista. Una
+        // prova che chiede «in questo passo non ci sono manopole che
+        // addomesticano la verifica» si sarebbe accontentata di una lista
+        // troncata — cioe' bastava un commento per nascondere una manopola.
+        if (r.trimStart().startsWith('#')) continue;
         if (r.length - r.trimStart().length !== 10) break;
         const sep = r.indexOf(':');
         if (sep < 0) break;

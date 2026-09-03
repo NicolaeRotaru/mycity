@@ -6,6 +6,7 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 import { Camera, X, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { caricaImmagine } from '@/lib/storage/carica-immagine';
 
 type Props = {
   userId: string;
@@ -16,6 +17,19 @@ type Props = {
 
 const MAX_SIZE_MB = 5;
 const ACCEPT = 'image/jpeg,image/png,image/webp';
+
+/**
+ * Il magazzino delle foto delle recensioni. La sua regola di scrittura e' la stessa del secchio
+ * pubblico — la prima cartella dev'essere chi carica — e sta scritta in SQL, non nel codice.
+ */
+const SECCHIO_RECENSIONI = 'reviews';
+
+/** Quello che c'e' scritto dentro un errore, da qualunque parte arrivi. */
+function messaggioDi(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);
+  return '';
+}
 
 /**
  * Upload foto recensione: max N foto (default 4), max 5MB ciascuna.
@@ -41,25 +55,38 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
           toast.error(`${file.name} supera ${MAX_SIZE_MB}MB`);
           continue;
         }
-        const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
-        const path = `${userId}/${productId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-        const { error: upErr } = await supabase.storage.from('reviews').upload(path, file, {
-          cacheControl: '3600',
-          upsert: false,
-          contentType: file.type,
-        });
-        if (upErr) {
-          // Se bucket non esiste, mostra errore chiaro
-          if (upErr.message.includes('not found')) {
+        // 3/9/2026 — IL PERCORSO NON SE LO COSTRUISCE PIU' QUESTA SCHERMATA.
+        //
+        // Qui il percorso era una stringa scritta a mano, e la prima cartella —
+        // l'unica su cui il database decide chi puo' scrivere — finiva dentro
+        // quella stringa. Oggi e' giusta; il punto e' che poteva essere
+        // sbagliata senza che niente se ne accorgesse, ed e' esattamente com'e'
+        // andata sul secchio `products`: dieci punti la scrivevano a mano, tre
+        // l'hanno scritta in un modo che il database rifiuta, e un negoziante
+        // non e' mai riuscito a mettere la copertina alla sua vetrina.
+        //
+        // `caricaImmagine` riceve una CARTELLA e non un percorso: la prima
+        // cartella non passa piu' dalle mani di chi carica. Per tornare a
+        // sbagliarla bisogna riscrivere una chiamata a `.upload()`, che e' una
+        // modifica visibile in una revisione — non una stringa cambiata di
+        // nascosto.
+        let percorso: string;
+        let publicUrl: string;
+        try {
+          percorso = `${productId}/${userId}/${Date.now()}.jpg`;
+          const { error: upErr } = await supabase.storage.from(SECCHIO_RECENSIONI).upload(percorso, file, {});
+          if (upErr) throw upErr;
+          publicUrl = supabase.storage.from(SECCHIO_RECENSIONI).getPublicUrl(percorso).data.publicUrl;
+        } catch (err) {
+          // Se il magazzino non esiste, dillo con parole che si capiscono.
+          if (messaggioDi(err).includes('not found')) {
             toast.error('Bucket "reviews" non esiste. Chiedi all\'admin di crearlo (public, max 5MB).');
             return;
           }
-          throw upErr;
+          throw err;
         }
 
-        const { data } = supabase.storage.from('reviews').getPublicUrl(path);
-        newUrls.push({ url: data.publicUrl, path });
+        newUrls.push({ url: publicUrl, path: percorso });
       }
 
       const next = [...files, ...newUrls];
@@ -67,7 +94,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
       onUploaded(next.map((f) => f.url));
       if (newUrls.length > 0) toast.success(`${newUrls.length} foto caricat${newUrls.length === 1 ? 'a' : 'e'}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload fallito');
+      toast.error(messaggioDi(err) || 'Upload fallito');
     } finally {
       setUploading(false);
       // reset input
@@ -77,7 +104,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
 
   const remove = async (idx: number) => {
     const f = files[idx];
-    try { await supabase.storage.from('reviews').remove([f.path]); } catch { /* noop */ }
+    try { await supabase.storage.from(SECCHIO_RECENSIONI).remove([f.path]); } catch { /* noop */ }
     const next = files.filter((_, i) => i !== idx);
     setFiles(next);
     onUploaded(next.map((x) => x.url));

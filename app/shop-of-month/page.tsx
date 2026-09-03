@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Crown, Vote, ArrowRight, Trophy, Medal, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage } from '@/lib/image-url';
+import { sizedImage, logoNegozio } from '@/lib/image-url';
 import { useEffect, useState } from 'react';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
@@ -204,11 +204,11 @@ export default function ShopOfMonthPage() {
                   <Link href={`/store/${row.seller_id}`} className="flex items-center gap-3 flex-1 min-w-0 hover:underline">
                     {row.store_logo ? (
                       <Image
-                        src={sizedImage(row.store_logo, 'thumb')}
+                        src={logoNegozio(row.store_logo, 48)}
                         alt={row.store_name ?? ''}
                         width={48}
                         height={48}
-                        className="rounded-full object-cover w-12 h-12 flex-shrink-0"
+                        className="rounded-full object-contain w-12 h-12 flex-shrink-0"
                       />
                     ) : (
                       <div className="w-12 h-12 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold flex-shrink-0">

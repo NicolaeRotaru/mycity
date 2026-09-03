@@ -117,7 +117,7 @@ export default function ProfilePage() {
             <div>
               <p className="text-lg font-extrabold font-serif flex items-center gap-2">
                 <Gift size={20} className="text-white" aria-hidden />
-                Invita un amico, prendete €5 entrambi
+                Invita un amico, ricevi €5 di credito
               </p>
               <p className="text-sm text-primary-100">Condividi il tuo codice referral</p>
             </div>

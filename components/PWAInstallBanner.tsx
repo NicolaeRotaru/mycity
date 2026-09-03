@@ -1,10 +1,18 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Download, Share, SquarePlus, X } from 'lucide-react';
 import { useLocalStorage } from '@/lib/hooks';
 import { Button } from '@/components/ui/Button';
 import { comeSiInstalla, eApple, type ComeSiInstalla } from '@/lib/installabile';
+import { fondoDiChiGalleggia, corsieSotto } from '@/lib/ui/barra-in-fondo';
+import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
+
+/** La corsia che questo banner occupa, in fondo allo schermo. */
+const MIA_CORSIA = '--altezza-banner-installa';
+
+/** Il respiro fra il banner e la barra che gli sta sotto. */
+const RESPIRO = '1rem';
 
 /**
  * PWA install banner — appare dopo 3 visite per buyer non-installati.
@@ -34,6 +42,7 @@ export default function PWAInstallBanner() {
   const [promptEvent, setPromptEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [apple, setApple] = useState(false);
   const [giaInstallata, setGiaInstallata] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
 
   /**
    * 22/8/2026 — L'ASCOLTO SI APRIVA TROPPO TARDI, E COSÌ NON SI APRIVA MAI.
@@ -101,6 +110,17 @@ export default function PWAInstallBanner() {
     );
   }, [promptEvent, apple, giaInstallata, dismissed, visits]);
 
+  // 3/9/2026 — QUESTO BANNER DICE QUANTO E' ALTO, e chi gli sta sopra lo legge.
+  //
+  // Serve al pulsante tondo dell'assistenza, che galleggia sopra tutte le
+  // corsie in fondo allo schermo: senza questa misura si sovrapporrebbe al
+  // banner. La misura SEGUE l'elemento — su uno schermo stretto il banner
+  // cresce di una riga, e chi gli sta sopra si sposta con lui.
+  useEffect(() => {
+    if (modo === 'niente') return;
+    return seguiAltezza(bannerRef.current, document.documentElement, osservatoreDelBrowser, MIA_CORSIA);
+  }, [modo]);
+
   const dismiss = () => {
     setDismissed(true);
     setModo('niente');
@@ -118,7 +138,30 @@ export default function PWAInstallBanner() {
   if (modo === 'niente') return null;
 
   return (
-    <div className="fixed bottom-20 sm:bottom-4 left-4 right-4 sm:left-auto sm:max-w-sm z-30 bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-4 animate-slide-up">
+    <div
+      ref={bannerRef}
+      // 3/9/2026 — QUESTO BANNER COPRIVA LA BARRA «AGGIUNGI AL CARRELLO».
+      //
+      // Stava a `bottom-20` — 80 pixel scritti a mano — ed e' alto circa 120:
+      // occupava la fascia da 80 a 200. La barra d'acquisto parte da 72 pixel
+      // ed e' alta una ottantina: le due fasce si sovrapponevano proprio dove
+      // sta il pulsante che fa incassare. E a parita' di livello (tutti e due
+      // z-30) vince chi viene dopo nel documento, cioe' il banner: sul telefono
+      // il pulsante d'acquisto restava sotto, e per comprare bisognava prima
+      // chiudere il banner.
+      //
+      // Ora si appoggia sopra le corsie che gli stanno sotto (barra a schede,
+      // banner dei cookie, barra d'acquisto), sommate da
+      // lib/ui/barra-in-fondo.ts, senza scendere sotto il pavimento di chi
+      // galleggia. Era `bottom-20 sm:bottom-4`: da 640 a 767 pixel quei 16
+      // pixel lo mettevano SOTTO la barra a schede, che li' c'e' ancora.
+      //
+      // E il livello non e' piu' un numero grezzo: `z-banner` (35) e' la corsia
+      // che tailwind.config.ts dichiara da sempre per questo banner, citandolo
+      // per nome. Con z-30 su entrambi, l'ordine lo decideva il caso.
+      style={{ bottom: fondoDiChiGalleggia(corsieSotto(MIA_CORSIA), RESPIRO) }}
+      className="fixed left-4 right-4 sm:left-auto sm:max-w-sm z-banner bg-white border border-cream-300 rounded-2xl shadow-warm-lg p-4 animate-slide-up"
+    >
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-lg bg-primary-100 text-primary-700 flex items-center justify-center flex-shrink-0">
           <Download size={20} strokeWidth={2.2} aria-hidden />

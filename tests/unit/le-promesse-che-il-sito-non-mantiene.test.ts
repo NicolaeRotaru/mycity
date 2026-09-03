@@ -79,8 +79,12 @@ describe('il negozio chiuso: si dice quello che fanno le rotte', () => {
     const radice = process.cwd();
     for (const rotta of ['app/api/orders/cod/route.ts', 'app/api/stripe/checkout/route.ts']) {
       const src = readFileSync(join(radice, rotta), 'utf8');
+      // 3/9/2026 — il guardiano è passato da `isStoreClosedForOrder` (solo
+      // l'orologio) a `negozioPuoServire` (l'orologio, oppure gli orari di
+      // domani quando la fascia è per domani). Il freno c'è ancora: se sparisce
+      // anche questo nome, la promessa qui sopra va riletta.
       expect(src, `${rotta} non rifiuta piu' sul negozio chiuso: la promessa va riletta`).toMatch(
-        /isStoreClosedForOrder/,
+        /negozioPuoServire|isStoreClosedForOrder/,
       );
       expect(src, `${rotta} deve rispondere con un conflitto, non mettere in coda`).toMatch(
         /conflict\(/,
