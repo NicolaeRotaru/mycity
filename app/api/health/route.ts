@@ -51,6 +51,14 @@ export const dynamic = 'force-dynamic';
  */
 
 // Senza queste il sito non risponde: sono le uniche che valgono un 503.
+//
+// 3/9/2026 — TURNSTILE_SECRET_KEY e' entrata qui, e va detto perche'. Da oggi il controllo
+// anti-robot, se la chiave manca, RIFIUTA invece di lasciar passare tutti in silenzio (scelta
+// giusta: una difesa spenta che si comporta come una difesa accesa e' peggio di nessuna difesa).
+// Il rovescio e' che senza quella chiave, in produzione, si spengono insieme accesso,
+// registrazione, contatti e newsletter — cioe' la porta d'ingresso del marketplace. Se e' cosi'
+// deve dirlo il semaforo, forte, invece di lasciarlo scoprire al primo cliente che non riesce
+// a entrare.
 const ENV_VITALI = [
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
@@ -83,6 +91,12 @@ const ENV_VITALI = [
 // tests/unit/il-semaforo-guarda-i-segreti-che-contano.test.ts: toglie una
 // variabile per volta, chiama questa rotta e pretende che se ne accorga.
 const ENV_IMPORTANTI = [
+  // 3/9/2026 — Da oggi il controllo anti-robot, se la sua chiave manca, RIFIUTA invece di
+  // lasciar passare tutti in silenzio. E' la scelta giusta, e ha un rovescio pesante: senza
+  // questa chiave, in produzione, si spengono insieme accesso, registrazione, contatti e
+  // newsletter. Il sito pero' risponde, quindi non e' un 503: e' un pezzo che manca, e il
+  // semaforo lo deve dire forte invece di lasciarlo scoprire al primo cliente che non entra.
+  'TURNSTILE_SECRET_KEY',
   'STRIPE_SECRET_KEY',
   'STRIPE_WEBHOOK_SECRET',
   'RESEND_API_KEY',

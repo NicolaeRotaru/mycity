@@ -56,6 +56,12 @@ const TUTTE_LE_IMPORTANTI: Record<string, string> = {
   // (`if (!(limitEur > 0)) return` in lib/ai/run.ts): il freno c'e' ed e'
   // spento. La prima notizia di un ciclo impazzito sarebbe la fattura.
   AI_GLOBAL_DAILY_BUDGET_EUR: '20',
+  // 3/9/2026 — la quattordicesima. Da oggi il controllo anti-robot, senza la sua chiave,
+  // RIFIUTA invece di lasciar passare tutti in silenzio: giusto, ma vuol dire che in
+  // produzione senza questa variabile si spengono insieme accesso, registrazione, contatti
+  // e newsletter. Il sito risponde, quindi non e' un 503 — e' un pezzo che manca, e il
+  // semaforo lo deve dire prima che lo scopra il primo cliente che non riesce a entrare.
+  TURNSTILE_SECRET_KEY: 'turnstile_test',
 };
 
 let contatore = 0;

@@ -284,6 +284,11 @@ export const POST = withAuthRateLimit(
      * disponibilità — dopo sarebbe inutile, il numero letto sarebbe già quello
      * vecchio. Si toccano solo i tentativi che impegnano i prodotti di questo
      * carrello.
+     *
+     * Insieme alla merce si chiude anche la scheda di pagamento con la carta
+     * rimasta aperta in un'altra linguetta: le due cose le fa la stessa
+     * funzione, perché una senza l'altra vuol dire farsi pagare e poi
+     * rimborsare chi ha scelto i contanti.
      */
     await liberaRiserveAbbandonate(admin, {
       buyerId: user.id,

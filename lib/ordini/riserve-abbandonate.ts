@@ -29,6 +29,19 @@ import { logger } from '@/lib/logger';
  *   ③ si tocca solo ciò che è di QUESTO cliente e di un carrello DIVERSO da
  *      quello che sta comprando adesso — il tentativo identico è già gestito da
  *      chi riusa la sessione aperta.
+ *
+ * ── 3/9/2026: LIBERARE LA MERCE E CHIUDERE LA PAGINA SONO UNA COSA SOLA ──────
+ * Chiudere la pagina di pagamento era un favore che ogni chiamante doveva
+ * ricordarsi di fare (un parametro facoltativo). La rotta della carta se lo
+ * ricordava, quella dei contanti no: chi premeva «Paga con carta», ci ripensava
+ * e sceglieva i contanti si portava dietro una scheda di Stripe ancora
+ * pagabile. Se ci tornava e pagava, l'avviso di Stripe trovava la riserva già
+ * scaduta e rimborsava: soldi addebitati e riaccreditati a chi aveva già deciso
+ * di pagare in contanti, con la commissione fissa persa e una telefonata
+ * all'assistenza.
+ *
+ * Adesso le due cose non si possono più separare: la chiusura la fa QUESTA
+ * funzione, sempre. Chi la chiama non deve ricordarsi niente.
  */
 
 type Riga = {
@@ -42,6 +55,17 @@ type Riga = {
 /** Il poco che serve del client di servizio: così la prova può eseguirla davvero. */
 export type ClientRiserve = Pick<SupabaseClient, 'from' | 'rpc'>;
 
+/**
+ * La chiusura vera della pagina di pagamento.
+ *
+ * Si carica solo quando c'è davvero una pagina da chiudere: così questo modulo
+ * resta leggero per chi lo importa e per le prove che non hanno Stripe.
+ */
+async function chiudiSuStripe(sessionId: string): Promise<void> {
+  const { getStripe } = await import('@/lib/stripe/client');
+  await getStripe().checkout.sessions.expire(sessionId);
+}
+
 export async function liberaRiserveAbbandonate(
   admin: ClientRiserve,
   opzioni: {
@@ -54,7 +78,11 @@ export async function liberaRiserveAbbandonate(
      * qui si toglie di mezzo ciò che blocca QUESTO acquisto, non tutto il resto.
      */
     soloConProdotti?: string[];
-    /** Chiude anche la pagina di pagamento rimasta aperta, se si può. */
+    /**
+     * NON serve passarla: la pagina di pagamento la chiude questa funzione, da
+     * sola, su Stripe. Esiste solo perché le prove possano guardare che venga
+     * chiusa davvero, senza parlare con Stripe.
+     */
     chiudiSessione?: (sessionId: string) => Promise<void>;
   },
 ): Promise<{ liberati: string[] }> {
@@ -133,12 +161,12 @@ export async function liberaRiserveAbbandonate(
       if (errCodice) logger.warn('[riserve] codice sconto non restituito', { id: riga.id, message: errCodice.message });
     }
 
-    if (riga.stripe_session_id && opzioni.chiudiSessione) {
+    if (riga.stripe_session_id) {
       // La pagina di pagamento rimasta aperta va chiusa insieme alla riserva:
       // altrimenti resta pagabile, e a merce già liberata quel pagamento
       // finirebbe rimborsato.
       try {
-        await opzioni.chiudiSessione(riga.stripe_session_id);
+        await (opzioni.chiudiSessione ?? chiudiSuStripe)(riga.stripe_session_id);
       } catch (e) {
         logger.warn('[riserve] pagamento vecchio non chiuso', { id: riga.id, e });
       }

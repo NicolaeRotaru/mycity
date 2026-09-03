@@ -604,12 +604,16 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
    * tentativo trovava zero — «Stock insufficiente per Torta (0 disponibili)» —
    * e il pezzo restava invisibile a tutti fino allo scadere delle due ore.
    * Un secondo tentativo chiude il primo.
+   *
+   * La pagina di pagamento vecchia la chiude `liberaRiserveAbbandonate`: la
+   * riga qui non c'è più perché non deve stare in due posti. Era proprio
+   * quella dimenticanza, sull'altra rotta, a lasciare pagabile una scheda di
+   * Stripe a merce già rimessa in vendita.
    */
   await liberaRiserveAbbandonate(admin, {
     buyerId: user.id,
     improntaDaTenere: improntaCarrello,
     soloConProdotti: uniqueProductIds,
-    chiudiSessione: async (sessionId) => { await getStripe().checkout.sessions.expire(sessionId); },
   });
 
   const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
