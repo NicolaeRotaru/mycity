@@ -3,7 +3,7 @@
 import { shippingForEuro, dettoDellaSpedizione } from '@/lib/shipping';
 import { RIQUADRO_LO_SAPEVI, frasePagamento } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { CartItem, getCart, updateQuantity, removeFromCart, cartTotal, cartCount } from '@/lib/cart';
@@ -17,6 +17,25 @@ import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicat
 import { CartUpsell } from '@/components/cart/CartUpsell';
 import { AlertCircle, Banknote, Check, Lightbulb, Lock, Package, RotateCcw, ShieldCheck, ShoppingCart, Store, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { fondoDellaBarra, corsieSotto } from '@/lib/ui/barra-in-fondo';
+import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
+
+/**
+ * 3/9/2026 — DAL TELEFONO, IL PULSANTE CHE PORTA I SOLDI ERA L'ULTIMA COSA DELLA PAGINA.
+ *
+ * Sotto i 1024 pixel la pagina è a una colonna sola: prima tutti gli articoli, poi «Completa con»,
+ * poi «Continua lo shopping», e solo in fondo il riepilogo con «Procedi al checkout». Chi compra da
+ * telefono incontrava quindi due inviti a NON concludere prima di trovare il pulsante per
+ * concludere — e per trovarlo doveva scorrere tutto il carrello. Le altre due tappe dello stesso
+ * percorso una barra sempre visibile ce l'hanno già: la scheda prodotto (StickyAddToCart) e la
+ * cassa. Il carrello era l'unico dei tre passaggi senza.
+ *
+ * Adesso ce l'ha anche lui, con lo stesso meccanismo: la barra sta sopra la barra a schede e sopra
+ * il banner dei cookie (le «corsie» di `lib/ui/barra-in-fondo.ts`), e dichiara quanto è alta perché
+ * il pulsante tondo dell'assistenza — che galleggia sopra tutto — sappia di quanto alzarsi. Senza
+ * quella dichiarazione gli finirebbe sopra, che è il difetto già curato sulla scheda prodotto.
+ */
+const CORSIA_DELLA_BARRA = '--altezza-barra-acquisto';
 
 /** Iniziali del negozio per il mini-logo: "Salumeria Verdi" → "SV". */
 const storeInitials = (name: string) =>
@@ -115,6 +134,20 @@ export default function CartPage() {
     const s = disponibilita[id];
     return typeof s === 'number' ? s : null;
   };
+
+  /**
+   * La barra in fondo dice quanto è alta, e chi le sta sopra la legge.
+   *
+   * È la stessa corsia della barra «Aggiungi al carrello»: le due non si incontrano mai (quella vive
+   * sulla scheda prodotto, questa nel carrello), quindi la corsia è libera e non ne serve una nuova.
+   * Quando la barra non c'è — carrello vuoto, o schermo grande — `seguiAltezza` pubblica zero:
+   * dichiarato, non indovinato.
+   */
+  const barraRef = useRef<HTMLDivElement>(null);
+  useEffect(
+    () => seguiAltezza(barraRef.current, document.documentElement, osservatoreDelBrowser, CORSIA_DELLA_BARRA),
+    [letto, items.length],
+  );
 
   // Feedback al rientro da Stripe Checkout annullato (?stripe=canceled)
   useEffect(() => {
@@ -230,7 +263,8 @@ export default function CartPage() {
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 py-8">
+    // Lo spazio in fondo è per la barra fissa del telefono: senza, copre l'ultima riga della pagina.
+    <div className="container mx-auto px-4 sm:px-6 py-8 pb-28 lg:pb-8">
       {/* Step indicator condiviso col checkout (carrello = step 1) */}
       <StepIndicator steps={CHECKOUT_STEPS} currentStep={1} />
 
@@ -388,13 +422,6 @@ export default function CartPage() {
 
           {/* Upsell "Completa con" — prodotti reali degli stessi negozi */}
           <CartUpsell items={items} />
-
-          <Link
-            href="/"
-            className="inline-block text-primary-700 hover:underline font-semibold text-sm mt-2"
-          >
-            ← Continua lo shopping
-          </Link>
         </div>
 
         {/* COLONNA DX: riepilogo sticky */}
@@ -478,6 +505,15 @@ export default function CartPage() {
             </div>
           </div>
 
+          {/* Su una colonna sola questo invito stava PRIMA del pulsante d'ordine: l'ultima cosa
+              letta prima di decidere era «torna a girare per negozi». Ora viene dopo. */}
+          <Link
+            href="/"
+            className="inline-block text-primary-700 hover:underline font-semibold text-sm"
+          >
+            ← Continua lo shopping
+          </Link>
+
           <div className="bg-primary-50 border border-primary-200 rounded-xl p-4 text-sm">
             <p className="font-bold text-primary-900 mb-1 flex items-center gap-2">
               <Lightbulb size={16} className="text-primary-700 shrink-0" aria-hidden /> Lo sapevi?
@@ -487,6 +523,30 @@ export default function CartPage() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* La barra che tiene il totale e il pulsante d'ordine sempre a portata di pollice. Solo sul
+          telefono e sul tablet: da 1024 pixel in su il riepilogo è già appiccicato a destra. */}
+      <div
+        ref={barraRef}
+        className="lg:hidden fixed left-0 right-0 z-30 bg-white border-t border-cream-300 shadow-warm-lg px-4 py-3 flex items-center gap-3"
+        // Sopra la barra a schede e, quando c'è, sopra il banner dei cookie. La safe-area
+        // dell'iPhone la conta `bottom` e nessun altro: contata due volte, la barra galleggia
+        // staccata dal fondo.
+        style={{ bottom: fondoDellaBarra(corsieSotto(CORSIA_DELLA_BARRA)) }}
+        role="region"
+        aria-label="Totale e pagamento"
+      >
+        <div className="leading-tight">
+          <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
+          <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
+        </div>
+        <Link
+          href="/checkout"
+          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+        >
+          <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
+        </Link>
       </div>
     </div>
   );

@@ -30,7 +30,7 @@ const stato: {
   righePrese: Array<{ id: string }>;
 } = {
   reso: { id: 'r1', status: 'APPROVED', seller_id: 'seller-1', buyer_id: 'b1', order_id: 'o1', refund_amount_cents: null },
-  ordine: { stripe_payment_intent: 'pi_1', payment_method: 'card', gross_total_cents: 3000, total_price: 30, refunded_amount_cents: 0 },
+  ordine: { seller_id: 'seller-1', stripe_payment_intent: 'pi_1', payment_method: 'card', gross_total_cents: 3000, total_price: 30, refunded_amount_cents: 0 },
   scritture: [],
   righePrese: [{ id: 'r1' }],
 };
@@ -88,6 +88,9 @@ vi.mock('@/lib/supabase/server', () => ({
       if (tabella === 'orders') {
         return { select: () => ({ eq: () => ({ single: async () => ({ data: stato.ordine, error: null }) }) }) };
       }
+      if (tabella === 'profiles') {
+        return { select: () => ({ eq: () => ({ single: async () => ({ data: { role: 'seller' }, error: null }) }) }) };
+      }
       return { insert: async () => ({ error: null }) };
     },
   }),
@@ -108,7 +111,7 @@ const statiScritti = () => stato.scritture.map((s) => s.patch.status).filter(Boo
 
 beforeEach(() => {
   stato.reso = { id: 'r1', status: 'APPROVED', seller_id: 'seller-1', buyer_id: 'b1', order_id: 'o1', refund_amount_cents: null };
-  stato.ordine = { stripe_payment_intent: 'pi_1', payment_method: 'card', gross_total_cents: 3000, total_price: 30, refunded_amount_cents: 0 };
+  stato.ordine = { seller_id: 'seller-1', stripe_payment_intent: 'pi_1', payment_method: 'card', gross_total_cents: 3000, total_price: 30, refunded_amount_cents: 0 };
   stato.scritture = [];
   stato.righePrese = [{ id: 'r1' }];
   refundOrderMock.mockClear();
@@ -179,8 +182,11 @@ describe('le tappe non si saltano', () => {
 });
 
 describe('chi può far avanzare un reso', () => {
-  it('un venditore che non è quello del reso non può', async () => {
-    stato.reso = { ...stato.reso, seller_id: 'un-altro' };
+  it('un venditore che non è quello dell ordine non può, nemmeno se il reso lo nomina', async () => {
+    // 3/9/2026 — Prima qui si guardava `returns.seller_id`, cioè un campo che
+    // il cliente si poteva scrivere da solo. La fonte è l'ordine.
+    stato.reso = { ...stato.reso, seller_id: 'seller-1' };
+    stato.ordine = { ...stato.ordine, seller_id: 'un-altro' };
     const res = await avanza({ stato: 'CANCELED' });
     expect(res.status).toBe(403);
   });

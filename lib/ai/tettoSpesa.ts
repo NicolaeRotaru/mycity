@@ -46,6 +46,44 @@ export function giornoDiSpesa(quando: Date = new Date()): string {
 const _ripiego = { giorno: '', cents: 0 };
 let _ripieghiSegnalati = 0;
 
+/**
+ * 3/9/2026 (R-lotto) — IL RIPIEGO ERA NATO PER UN'ASSENZA DI MINUTI E IN
+ * PRODUZIONE DURAVA DA SEMPRE.
+ *
+ * In produzione le due funzioni del conto condiviso non ci sono (la migrazione
+ * 131 non e' mai stata applicata la'). Ogni chiamata falliva, ogni chiamata
+ * ripiegava sul contatore in memoria della singola copia, e il tetto
+ * `AI_GLOBAL_DAILY_BUDGET_EUR` tornava a essere quello che il commento in cima
+ * a questo file dichiara inaccettabile: venti euro PER COPIA.
+ *
+ * Perche' nessuno se ne accorgeva: `chiamaRpc` buttava via il messaggio
+ * dell'errore. Con quel messaggio in mano le due situazioni si distinguono a
+ * occhio, e sono opposte:
+ *
+ * · «database irraggiungibile» → passa da solo. Ripiegare e' giusto.
+ * · «questa funzione non esiste» → non passa MAI da solo. Ripiegare per sempre
+ *   vuol dire che il tetto scritto nella variabile d'ambiente e' una promessa
+ *   che il codice non mantiene, e nessuno lo sa.
+ *
+ * Il codice buttava via l'unico dato che le separa. Adesso lo tiene, lo dice
+ * col registro giusto (un'assenza permanente e' `error`, non un `warn` ogni
+ * cento), e lo espone con `statoContoCondiviso()` perche' un allarme possa
+ * diventare rosso quando il ripiego dura da piu' di un'ora.
+ */
+const _stato = {
+  /** Da quando il conto condiviso non risponde. 0 = risponde. */
+  ripiegoDa: 0,
+  /** L'ultima volta che l'abbiamo detto forte. */
+  dettoAlle: 0,
+  /** Vero quando l'errore dice che il conto condiviso non esiste proprio. */
+  permanente: false,
+  /** Il messaggio vero del database, per chi legge i registri. */
+  motivo: '',
+};
+
+/** Ogni quanto si ripete l'allarme, quando l'assenza non passa. */
+const RIPETI_ALLARME_MS = 60 * 60_000;
+
 /** Solo per le prove: rimette a zero il contatore di ripiego. */
 export function __azzeraRipiegoSpesaAi(): void {
   _ripiego.giorno = '';
@@ -53,6 +91,52 @@ export function __azzeraRipiegoSpesaAi(): void {
   _ripieghiSegnalati = 0;
   fallimentiDiFila = 0;
   riprovaDopo = 0;
+  _stato.ripiegoDa = 0;
+  _stato.dettoAlle = 0;
+  _stato.permanente = false;
+  _stato.motivo = '';
+}
+
+/**
+ * Com'e' messo il conto condiviso, adesso. Serve a chi sorveglia: un ripiego
+ * che dura da piu' di un'ora e' un allarme, perche' vuol dire che il tetto
+ * giornaliero non e' piu' quello scritto.
+ */
+export function statoContoCondiviso(adesso: number = Date.now()): {
+  condiviso: boolean;
+  permanente: boolean;
+  motivo: string;
+  daMinuti: number;
+} {
+  if (_stato.ripiegoDa === 0) {
+    return { condiviso: true, permanente: false, motivo: '', daMinuti: 0 };
+  }
+  return {
+    condiviso: false,
+    permanente: _stato.permanente,
+    motivo: _stato.motivo,
+    daMinuti: Math.floor((adesso - _stato.ripiegoDa) / 60_000),
+  };
+}
+
+/**
+ * L'errore dice che il conto condiviso NON ESISTE (funzione o tabella
+ * mancante), non che il database e' occupato o irraggiungibile.
+ *
+ * PostgREST risponde `PGRST202` quando non trova la funzione e `PGRST205`
+ * quando non trova la tabella; Postgres usa `42883` e `42P01` per le stesse due
+ * cose. Il testo lo si guarda lo stesso, perche' il codice non arriva sempre.
+ */
+export function assenzaPermanente(errore: { code?: string; message?: string } | null): boolean {
+  if (!errore) return false;
+  const codice = errore.code ?? '';
+  if (['PGRST202', 'PGRST205', '42883', '42P01'].includes(codice)) return true;
+  const testo = (errore.message ?? '').toLowerCase();
+  return (
+    testo.includes('could not find the function') ||
+    testo.includes('does not exist') ||
+    testo.includes('schema cache')
+  );
 }
 
 function ripiegoCents(giorno: string): number {
@@ -65,10 +149,38 @@ function ripiegoCents(giorno: string): number {
 
 /**
  * Non si riempie il registro di una riga per chiamata: quando il database
- * tace, tace per tutte. Si segnala la prima e poi una ogni cento.
+ * tace, tace per tutte.
+ *
+ * Ma un guasto di passaggio e un conto che non esiste non si dicono nello
+ * stesso modo. Il primo e' un `warn` ogni cento chiamate: passera'. Il secondo
+ * e' un `error` ripetuto ogni ora finche' dura, perche' finche' dura il tetto
+ * giornaliero del sito NON e' quello scritto — e la prima notizia, altrimenti,
+ * arriva con la fattura.
  */
-function segnalaRipiego(motivo: string, giorno: string): void {
+function segnalaRipiego(motivo: string, giorno: string, adesso: number = Date.now()): void {
   _ripieghiSegnalati++;
+  if (_stato.ripiegoDa === 0) _stato.ripiegoDa = adesso;
+  // Il motivo NON si sovrascrive qui: `chiamaRpc` ci ha appena messo le parole
+  // vere del database («Could not find the function…»), e questa e' la frase
+  // generica di chi sta a valle. Rimpiazzarla rifarebbe il difetto di prima —
+  // buttare via l'unica informazione utile — un piano piu' su.
+  if (!_stato.motivo) _stato.motivo = motivo;
+
+  if (_stato.permanente) {
+    if (adesso - _stato.dettoAlle < RIPETI_ALLARME_MS) return;
+    _stato.dettoAlle = adesso;
+    logger.error(
+      '[ai] il conto della spesa condiviso NON ESISTE: il tetto giornaliero vale per copia, non per il sito. Applicare la migrazione 131.',
+      {
+        motivo,
+        detto_dal_database: _stato.motivo,
+        giorno,
+        daMinuti: Math.floor((adesso - _stato.ripiegoDa) / 60_000),
+        ripieghi: _ripieghiSegnalati,
+      },
+    );
+    return;
+  }
   if (_ripieghiSegnalati === 1 || _ripieghiSegnalati % 100 === 0) {
     logger.warn('[ai] il conto della spesa non risponde: conto in memoria, il tetto vero e piu alto', {
       motivo,
@@ -78,7 +190,7 @@ function segnalaRipiego(motivo: string, giorno: string): void {
   }
 }
 
-type RispostaRpc = { data: unknown; error: { message?: string } | null };
+type RispostaRpc = { data: unknown; error: { code?: string; message?: string } | null };
 
 /**
  * Quando il conto condiviso non c'e' — migrazione non ancora applicata, chiave
@@ -106,6 +218,11 @@ function segnaEsito(riuscito: boolean): void {
   if (riuscito) {
     fallimentiDiFila = 0;
     riprovaDopo = 0;
+    // Il conto condiviso ha risposto: il ripiego e' finito, e l'allarme con lui.
+    _stato.ripiegoDa = 0;
+    _stato.dettoAlle = 0;
+    _stato.permanente = false;
+    _stato.motivo = '';
     return;
   }
   fallimentiDiFila++;
@@ -118,17 +235,24 @@ async function chiamaRpc(nome: string, args: Record<string, unknown>): Promise<n
     const admin = getAdminSupabase();
     const { data, error } = (await admin.rpc(nome, args)) as unknown as RispostaRpc;
     if (error) {
+      // Il messaggio non si butta: e' l'unica cosa che distingue «il database e'
+      // occupato adesso» da «questo conto qui non esiste». Prima finiva nel
+      // cestino, e le due cose diventavano la stessa riga di registro.
+      if (assenzaPermanente(error)) _stato.permanente = true;
+      _stato.motivo = error.message ?? `${nome}: errore senza messaggio`;
       segnaEsito(false);
       return null;
     }
     const n = Number(data);
     if (!Number.isFinite(n)) {
+      _stato.motivo = `${nome} ha risposto qualcosa che non e un numero`;
       segnaEsito(false);
       return null;
     }
     segnaEsito(true);
     return n;
-  } catch {
+  } catch (errore) {
+    _stato.motivo = errore instanceof Error ? errore.message : String(errore);
     segnaEsito(false);
     return null;
   }

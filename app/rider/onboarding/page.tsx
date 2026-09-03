@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/errors';
 import { Check, ArrowLeft } from 'lucide-react';
+import { controlloEta } from './maggiore-eta';
 
 type DocKind = 'id_front' | 'id_back' | 'selfie' | 'rider_license' | 'rider_insurance' | 'rider_haccp';
 
@@ -27,6 +28,7 @@ export default function RiderOnboardingPage() {
   const tForms = useTranslations('forms');
   const [uploading, setUploading] = useState<DocKind | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [erroreEta, setErroreEta] = useState<string | null>(null);
   type RiderProfile = {
     rider_license_url?: string | null;
     rider_insurance_url?: string | null;
@@ -100,6 +102,21 @@ export default function RiderOnboardingPage() {
   }
 
   async function saveAndStartCheck() {
+    /**
+     * 3/9/2026 — LA DATA DI NASCITA VENIVA SALVATA E BASTA.
+     *
+     * Fin qui il modulo scriveva `legal_birth_date` nel profilo senza
+     * confrontarla con niente, e la verifica partiva lo stesso: un ragazzo di
+     * quindici anni arrivava fino allo stato «approvato». Le condizioni dicono
+     * diciotto anni compiuti. Qui non si salva e non si manda avanti niente.
+     */
+    const eta = controlloEta(form.legal_birth_date);
+    if (!eta.ok) {
+      setErroreEta(eta.messaggio);
+      toast.error(eta.messaggio ?? 'Controlla la data di nascita');
+      return;
+    }
+    setErroreEta(null);
     setSubmitting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -155,7 +172,14 @@ export default function RiderOnboardingPage() {
           <Field label="Nome" value={form.legal_first_name} onChange={(v) => setForm((f) => ({ ...f, legal_first_name: v }))} />
           <Field label="Cognome" value={form.legal_last_name} onChange={(v) => setForm((f) => ({ ...f, legal_last_name: v }))} />
           <Field label="Codice fiscale" value={form.legal_fiscal_code} onChange={(v) => setForm((f) => ({ ...f, legal_fiscal_code: v.toUpperCase() }))} />
-          <Field label="Data di nascita" type="date" value={form.legal_birth_date} onChange={(v) => setForm((f) => ({ ...f, legal_birth_date: v }))} />
+          <Field
+            label="Data di nascita"
+            type="date"
+            value={form.legal_birth_date}
+            onChange={(v) => { setForm((f) => ({ ...f, legal_birth_date: v })); setErroreEta(null); }}
+            hint="Per consegnare servono 18 anni compiuti."
+            error={erroreEta}
+          />
         </div>
       </section>
 
@@ -228,7 +252,21 @@ export default function RiderOnboardingPage() {
   );
 }
 
-function Field({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function Field({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  hint,
+  error,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  hint?: string;
+  error?: string | null;
+}) {
   return (
     <label className="text-sm">
       <span className="block font-medium text-ink-700">{label}</span>
@@ -236,8 +274,16 @@ function Field({ label, value, onChange, type = 'text' }: { label: string; value
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2"
+        aria-invalid={error ? true : undefined}
+        className={`mt-1 w-full rounded-lg border px-3 py-2 ${error ? 'border-secondary-400' : 'border-cream-300'}`}
       />
+      {error ? (
+        // Senza `role="alert"` il messaggio compare e basta: chi usa un lettore
+        // di schermo preme «Salva», non succede niente di udibile e non sa perché.
+        <span role="alert" className="mt-1 block text-xs font-medium text-secondary-600">{error}</span>
+      ) : hint ? (
+        <span className="mt-1 block text-xs text-ink-500">{hint}</span>
+      ) : null}
     </label>
   );
 }

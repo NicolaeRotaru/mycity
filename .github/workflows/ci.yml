@@ -401,14 +401,178 @@ jobs:
         run: |
           {
             if [ "${{ steps.e2e.outputs.enabled }}" = "true" ]; then
-              echo "✅ **Prove end-to-end (browser vero)**: girate."
+              echo "✅ **Prove end-to-end col database di prova**: girate."
             else
-              echo "⚠️ **Prove end-to-end (browser vero): NON girate.**"
+              echo "⚠️ **Prove end-to-end col database di prova: NON girate.**"
               echo ""
               echo "Mancano i segreti \`SUPABASE_TEST_URL\` e \`SUPABASE_TEST_ANON_KEY\` (un progetto Supabase di PROVA, mai quello vero)."
-              echo "Nessun percorso del sito è stato aperto in un browser in questa CI."
+              echo "Senza, l'ordine vero non nasce mai: nessuno ha visto un acquisto arrivare in fondo."
+              echo "Il browser però ha guardato lo stesso — vedi il lavoro «Prove nel browser (senza chiavi)», che non dipende da nessun segreto."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # 3/9/2026 — LE PROVE NEL BROWSER NON POSSONO PIU' SPEGNERSI DA SOLE.
+  #
+  # Il lavoro qui sopra e' appeso a `steps.e2e.outputs.enabled`, che diventa
+  # `false` quando mancano i segreti di un Supabase di prova: segreti che non
+  # sono mai stati creati. Risultato: da mesi la CI diceva verde e nessun
+  # browser apriva una sola pagina del sito. Nel frattempo le prove sono
+  # invecchiate — accese a mano, 20 delle 68 erano rosse — e nessuna
+  # attraversava la cassa.
+  #
+  # Questo lavoro fa la stessa cosa che il lavoro `a11y` ha fatto per axe
+  # (R102): stacca da quei segreti tutto cio' che si puo' provare senza. E si
+  # puo' provare quasi tutto: il sito si costruisce con variabili finte, si
+  # accende in locale, e il carrello vive nel browser — quindi anche il tratto
+  # che porta alla cassa si percorre senza database.
+  #
+  # NESSUN PASSO DI QUESTO LAVORO HA UN `if:` E NESSUNO LEGGE UN SEGRETO: e'
+  # quello che lo tiene acceso, e la prova
+  # tests/unit/le-prove-nel-browser-non-si-possono-piu-spegnere.test.ts diventa
+  # rossa se qualcuno ne aggiunge uno.
+  #
+  # E non basta che giri: deve anche AVER PROVATO. L'ultimo passo conta le
+  # prove davvero eseguite e fallisce se sono zero, cosi' una suite che si
+  # auto-salta per intero non puo' piu' uscire con la stessa spunta di una che
+  # ha guardato. Le saltate sono elencate con il loro motivo, una per una.
+  e2e-senza-chiavi:
+    name: Prove nel browser (senza chiavi) — non si spegne mai
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install deps
+        run: npm ci --legacy-peer-deps
+
+      - name: Installa Chromium per Playwright
+        run: npx playwright install --with-deps chromium
+
+      # Variabili finte, scritte in chiaro qui dentro: non sono un segreto
+      # dimenticato, sono la scelta. Il giorno che qualcuno togliesse un segreto
+      # dalle impostazioni del repository, questo lavoro girerebbe identico.
+      - name: Build con variabili finte
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://prove-nel-browser-senza-database.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-le-prove-nel-browser"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+        run: npm run build
+
+      # Un passo solo: accende il sito, lo percorre col browser, conta cosa ha
+      # provato davvero e poi decide. Sta tutto insieme apposta — un passo di
+      # resoconto a parte avrebbe avuto bisogno di `if: always()`, cioe' proprio
+      # di quella condizione che questo lavoro non deve avere.
+      - name: Percorri il sito nel browser e dichiara cosa hai provato
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: "https://prove-nel-browser-senza-database.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "chiave-finta-per-le-prove-nel-browser"
+          NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+          E2E_BASE_URL: "http://localhost:3000"
+          CRON_SECRET: "ci-e2e-cron-secret"
+          PLAYWRIGHT_JSON_OUTPUT_NAME: "esito-prove-browser.json"
+        run: |
+          # `npm start` lancia un figlio (il server Next): chiudendo solo npm il
+          # server resta vivo e il lavoro finisce in timeout. Si chiude il gruppo.
+          set -m
+          npm start &
+          APP_PID=$!
+          su=""
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then su="si"; break; fi
+            sleep 1
+          done
+          if [ -z "$su" ]; then
+            echo "::error::l'app non ha risposto entro 60 secondi: nessuna prova nel browser ha potuto girare"
+            kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+            exit 1
+          fi
+          set +e
+          npm run test:e2e -- --project=chromium --reporter=github,json
+          STATUS=$?
+          kill -- -"$APP_PID" 2>/dev/null || kill "$APP_PID" 2>/dev/null || true
+          set -e
+
+          # Il conto vero: quante prove hanno guardato, quante sono rosse e
+          # quali sono state saltate — con il motivo scritto accanto a ognuna.
+          # Serve a rendere impossibile la cosa da cui nasce tutto questo
+          # lavoro: una spunta verde su una suite che non ha aperto niente.
+          cat > /tmp/riassumi-prove-browser.mjs <<'FINE_SCRIPT'
+          import { readFileSync, appendFileSync } from 'node:fs';
+
+          const [percorso, statoDetto] = process.argv.slice(2);
+          const esito = JSON.parse(readFileSync(percorso, 'utf8'));
+
+          /** Scende in tutti i gruppi annidati e restituisce le singole prove. */
+          function tutteLeProve(gruppi = []) {
+            return gruppi.flatMap((g) => [
+              ...(g.specs ?? []).flatMap((s) =>
+                (s.tests ?? []).map((t) => ({
+                  nome: `${(s.file ?? g.file ?? '').replace('tests/e2e/', '')} › ${s.title}`,
+                  stato: t.status,
+                  motivo:
+                    (t.annotations ?? []).find((a) => a.type === 'skip')?.description ??
+                    (t.results ?? []).flatMap((r) => r.annotations ?? []).find((a) => a.type === 'skip')
+                      ?.description ??
+                    '',
+                })),
+              ),
+              ...tutteLeProve(g.suites ?? []),
+            ]);
+          }
+
+          const prove = tutteLeProve(esito.suites);
+          const saltate = prove.filter((p) => p.stato === 'skipped');
+          const rosse = prove.filter((p) => p.stato === 'unexpected' || p.stato === 'timedOut');
+          const ballerine = prove.filter((p) => p.stato === 'flaky');
+          const passate = prove.filter((p) => p.stato === 'expected');
+          const hannoGuardato = prove.length - saltate.length;
+
+          const righe = [];
+          righe.push('### Prove nel browser (senza chiavi)');
+          righe.push('');
+          righe.push(`- **${passate.length} passate** su ${prove.length} scritte`);
+          righe.push(`- **${rosse.length} rosse**`);
+          if (ballerine.length > 0) righe.push(`- **${ballerine.length} ballerine** (verdi solo al secondo tentativo)`);
+          righe.push(`- **${saltate.length} saltate**, e qui sotto c'è il perché di ognuna:`);
+          righe.push('');
+          for (const p of saltate) {
+            righe.push(`  - \`${p.nome}\` — ${p.motivo || 'saltata senza motivo dichiarato'}`);
+          }
+          righe.push('');
+          righe.push(
+            hannoGuardato > 0
+              ? `${hannoGuardato} prove hanno davvero aperto una pagina o interrogato il server. Nessun segreto è stato usato.`
+              : 'NESSUNA prova ha guardato niente.',
+          );
+          if (process.env.GITHUB_STEP_SUMMARY) {
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, righe.join('\n') + '\n');
+          }
+          console.log(righe.join('\n'));
+
+          // ① Una suite che si salta per intero non può uscire con la stessa
+          //    spunta di una che ha provato. È il difetto di partenza, e qui
+          //    diventa rosso invece che verde.
+          if (hannoGuardato === 0) {
+            console.log('::error::le prove nel browser si sono saltate tutte: nessuna pagina è stata aperta, e un verde qui sarebbe una bugia');
+            process.exit(1);
+          }
+          // ② Una prova saltata senza motivo scritto è un interruttore
+          //    travestito: chi la salta deve dire perché.
+          const mute = saltate.filter((p) => !p.motivo);
+          if (mute.length > 0) {
+            for (const p of mute) console.log(`::error::«${p.nome}» è saltata senza dire perché`);
+            process.exit(1);
+          }
+          process.exit(Number(statoDetto) === 0 ? 0 : 1);
+          FINE_SCRIPT
+          node /tmp/riassumi-prove-browser.mjs esito-prove-browser.json "$STATUS"
 
   # 31/8/2026 (R102) — L'ACCESSIBILITA' HA UN LAVORO SUO, E NON PUO' SPEGNERSI.
   #

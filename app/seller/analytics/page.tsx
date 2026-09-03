@@ -284,7 +284,7 @@ export default function SellerAnalyticsPage() {
       ctaLabel: 'Modifica prodotto', ctaHref: slow.id ? `/seller/products/${slow.id}/edit` : '/seller/products',
     });
   }
-  if (analytics.conversionRate > 0 && analytics.conversionRate < 1) {
+  if (analytics.conversionRate != null && analytics.conversionRate > 0 && analytics.conversionRate < 1) {
     insights.push({
       icon: PackageX, tone: 'secondary',
       title: 'Conversione sotto la media',
@@ -298,6 +298,18 @@ export default function SellerAnalyticsPage() {
   return (
     <div>
       <SellerPageTitle eyebrow="Insight" title="Analisi" sub="Andamento delle vendite e prodotti migliori" />
+
+      {/*
+        Quando manca solo il conto delle visite, la pagina resta in piedi ma
+        deve dire cosa non sa: senza questa riga i trattini sembrano un guasto
+        del negozio, non una lettura che non e' riuscita.
+      */}
+      {analytics.visiteIgnote && (
+        <p className="mb-5 rounded-lg border border-accent-200 bg-accent-50 px-4 py-3 text-[13px] text-ink-700">
+          Le visite e le recensioni non si sono lette: dove c’è un trattino non vuol dire zero, vuol dire che
+          in questo momento non lo so. Ordini e fatturato qui sotto sono giusti.
+        </p>
+      )}
 
       {/* Consigli per te */}
       {insights.length > 0 && (
@@ -313,18 +325,49 @@ export default function SellerAnalyticsPage() {
 
       {/* KPI hero */}
       <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-        <KpiCard icon={Eye} label="Visite (30gg)" value={analytics.views30.toString()} delta={`${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7gg`} color="primary" />
+        <KpiCard
+          icon={Eye}
+          label="Visite (30gg)"
+          value={numeroOTrattino(analytics.views30)}
+          delta={
+            analytics.visiteIgnote
+              ? 'Non sono riuscito a leggere le visite'
+              : `${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7gg`
+          }
+          color="primary"
+        />
         <KpiCard icon={ShoppingCart} label="Ordini (30gg)" value={analytics.orders30.toString()} delta={`${analytics.orders7} ultimi 7gg`} color="olive" />
         <KpiCard
           icon={TrendingUp}
           label="Conversion rate"
-          value={`${analytics.conversionRate.toFixed(1)}%`}
+          value={analytics.conversionRate == null ? '—' : `${analytics.conversionRate.toFixed(1)}%`}
           // Il campione, dichiarato: le visite si contano solo su chi accetta i
-          // cookie, quindi questo numero e' un indizio, non una misura.
-          delta={`su ${analytics.views30} visite misurate`}
-          color={analytics.conversionRate >= 2 ? 'olive' : analytics.conversionRate >= 1 ? 'accent' : 'secondary'}
+          // cookie, quindi questo numero e' un indizio, non una misura. E senza
+          // le visite il tasso non c'e': un «0,0%» direbbe che nessuno compra.
+          delta={
+            analytics.conversionRate == null
+              ? 'Serve il conto delle visite per calcolarlo'
+              : `su ${analytics.views30} visite misurate`
+          }
+          color={
+            analytics.conversionRate == null
+              ? 'primary'
+              : analytics.conversionRate >= 2 ? 'olive' : analytics.conversionRate >= 1 ? 'accent' : 'secondary'
+          }
         />
-        <KpiCard icon={Star} label="Rating medio" value={analytics.avgRating > 0 ? analytics.avgRating.toFixed(1) + ' ★' : '—'} delta={analytics.reviewCount > 0 ? `${analytics.reviewCount} recensioni` : 'Nessuna recensione'} color="accent" />
+        <KpiCard
+          icon={Star}
+          label="Rating medio"
+          value={analytics.avgRating != null && analytics.avgRating > 0 ? analytics.avgRating.toFixed(1) + ' ★' : '—'}
+          delta={
+            analytics.visiteIgnote
+              ? 'Non sono riuscito a leggere le recensioni'
+              : analytics.reviewCount != null && analytics.reviewCount > 0
+                ? `${analytics.reviewCount} recensioni`
+                : 'Nessuna recensione'
+          }
+          color="accent"
+        />
       </div>
 
       {/* Revenue grande */}
@@ -357,7 +400,11 @@ export default function SellerAnalyticsPage() {
         <Card variant="bordered" padding="lg">
           <h2 className="mb-4 font-serif text-lg font-bold text-ink-900">Prodotti più visti</h2>
           {analytics.topProducts.length === 0 ? (
-            <p className="text-sm text-ink-500">Nessuna visita ancora.</p>
+            <p className="text-sm text-ink-500">
+              {analytics.visiteIgnote
+                ? 'Il conto delle visite non è disponibile in questo momento.'
+                : 'Nessuna visita ancora.'}
+            </p>
           ) : (
             <div className="space-y-3.5">
               {analytics.topProducts.map((p, i) => {

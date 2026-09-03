@@ -62,6 +62,36 @@ if (FONTE_APP_URL === 'dominio-di-riserva') {
   );
 }
 
+/**
+ * 3/9/2026 — OGNI PAGINA SI COSTRUISCE AL MOMENTO DELLA RICHIESTA.
+ *
+ * Non è una scelta di velocità: è la condizione perché il sito abbia il suo
+ * JavaScript. La regola di sicurezza che il portiere (`middleware.ts`) mette su
+ * ogni risposta accetta soltanto gli script che portano una parola d'ordine
+ * diversa a ogni richiesta. Next sa scrivere quella parola dentro i tag
+ * `<script>` solo mentre costruisce la pagina per QUELLA richiesta.
+ *
+ * Una pagina preparata in anticipo viene scritta prima che la parola d'ordine
+ * esista. I suoi script non ce l'hanno, il browser li rifiuta tutti, e al
+ * cliente arriva un guscio morto: niente carrello, niente accesso, niente
+ * cassa. È successo davvero: in una build di produzione erano così tutte e 95
+ * le pagine preparate in anticipo — l'accesso, la registrazione, la ricerca, i
+ * negozi, il carrello, la cassa, il pannello del negoziante e quello di chi
+ * amministra. In sviluppo non si vedeva, perché lì la regola è più larga.
+ *
+ * Quindi le due cose devono restare d'accordo: finché la regola chiede una
+ * parola d'ordine per ogni richiesta, ogni pagina va costruita a ogni
+ * richiesta. Questa riga è il lato «costruita a ogni richiesta», e sta nel
+ * riquadro principale perché valga anche per le pagine che nasceranno domani:
+ * chi ne aggiunge una non deve ricordarsi di niente.
+ *
+ * Se un giorno si volesse tornare alle pagine preparate in anticipo, va tolta
+ * PRIMA la parola d'ordine dalla regola di sicurezza — non questa riga.
+ * A guardia dei due lati c'è
+ * `tests/unit/nessuna-pagina-arriva-senza-javascript.test.ts`.
+ */
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
   title: 'MyCity Piacenza — Marketplace dei negozi della tua città',

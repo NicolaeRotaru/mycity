@@ -35,10 +35,10 @@ export async function chiComandaIlReso(orderId: string, utenteId: string): Promi
   const admin = getAdminSupabase();
 
   const { data: ordine } = await admin
-    .from('returns')
+    .from('orders')
     .select('seller_id')
     .eq('id', orderId)
-    .maybeSingle();
+    .single();
 
   if (!ordine) return { autorizzato: false, motivo: 'ordine-mancante' };
 
@@ -51,7 +51,7 @@ export async function chiComandaIlReso(orderId: string, utenteId: string): Promi
     .from('profiles')
     .select('role')
     .eq('id', utenteId)
-    .maybeSingle();
+    .single();
 
   if (profilo?.role === 'admin') return { autorizzato: true, sellerOrdine };
 

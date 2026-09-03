@@ -23,6 +23,11 @@
 #   - STORAGE_SYNC_SOURCE   remote rclone del fornitore, es. "supabase:"
 #   - STORAGE_SYNC_DEST     remote rclone di destinazione, es. "b2:mycity-foto"
 #   - STORAGE_SYNC_BUCKETS  quali secchi copiare (default: products stories reviews)
+#   - STORAGE_SYNC_STORICO  dove finiscono i file spariti dall'origine
+#                           (default: "<STORAGE_SYNC_DEST>-storico"). Vedi in
+#                           fondo, R180 secondo giro: senza, la copia e' uno
+#                           specchio e ripete la cancellazione invece di
+#                           proteggerla.
 #
 # Retention: 4 settimane di backup, ruotati FIFO.
 
@@ -171,6 +176,33 @@ SORGENTE_FOTO="${STORAGE_SYNC_SOURCE:-}"
 DESTINAZIONE_FOTO="${STORAGE_SYNC_DEST:-}"
 SECCHI_FOTO="${STORAGE_SYNC_BUCKETS:-products stories reviews}"
 
+# 3/9/2026 (R180, secondo giro) — LA COPIA DELLE FOTO ERA UNO SPECCHIO, E UNO
+# SPECCHIO NON E' UNA COPIA DI SICUREZZA.
+#
+# `rclone sync` allinea la destinazione all'origine: quello che nell'origine non
+# c'e' piu', lo CANCELLA anche di la'. Il male da cui questa copia doveva
+# difendere e' scritto nella scheda che l'ha chiesta — «un incidente sullo
+# storage (cancellazione, bucket sbagliato, guasto del fornitore) cancella il
+# lavoro di catalogazione di tutti i negozi» — ed e' esattamente il male che uno
+# specchio propaga: le foto sparivano da Supabase lunedi', il lavoro notturno le
+# toglieva anche dalla copia martedi' alle 02:17, e la mattina dopo non c'erano
+# piu' da nessuna parte. La riparazione avrebbe avuto ventiquattro ore di vita.
+#
+# `--backup-dir` cambia il verbo: quello che sparisce dall'origine non viene
+# cancellato dalla copia, viene SPOSTATO in una cartella con la data di stanotte.
+# Non si perde niente per costruzione, senza dover ricordarsi di attivare il
+# versionamento del fornitore di destinazione (che dipende da lui, cambia da
+# fornitore a fornitore, e nessuno verifica mai che sia acceso).
+#
+# Il prezzo e' lo spazio: la cartella dello storico cresce, ed e' una spesa da
+# guardare ogni tanto. Si paga volentieri — costa meno di un negoziante che
+# rifotografa tutto il catalogo.
+#
+# Deve stare FUORI dalla cartella di destinazione, altrimenti rclone rifiuta di
+# partire (e allora la notte diventa rossa, che e' il comportamento giusto: una
+# copia che non parte va vista).
+STORICO_FOTO="${STORAGE_SYNC_STORICO:-${DESTINAZIONE_FOTO}-storico}"
+
 if [[ -z "$SORGENTE_FOTO" || -z "$DESTINAZIONE_FOTO" ]]; then
   echo "[backup] esito-foto: non-configurato — l'elenco delle immagini e' nella copia, i FILE no." >&2
   echo "[backup] Per accenderla: STORAGE_SYNC_SOURCE (es. \"supabase:\"), STORAGE_SYNC_DEST (es. \"b2:mycity-foto\") e rclone installato. Vedi docs/backup-restore.md §3." >&2
@@ -180,12 +212,14 @@ elif ! command -v rclone >/dev/null 2>&1; then
 else
   for secchio in $SECCHI_FOTO; do
     echo "[backup] Foto: ${SORGENTE_FOTO}${secchio} → ${DESTINAZIONE_FOTO}/${secchio}"
-    if ! rclone sync "${SORGENTE_FOTO}${secchio}" "${DESTINAZIONE_FOTO}/${secchio}"; then
+    echo "[backup] Le foto sparite dall'origine finiscono in ${STORICO_FOTO}/${TS}/${secchio}, non nel cestino."
+    if ! rclone sync "${SORGENTE_FOTO}${secchio}" "${DESTINAZIONE_FOTO}/${secchio}" \
+         --backup-dir "${STORICO_FOTO}/${TS}/${secchio}"; then
       echo "[backup] esito-foto: fallita — il secchio ${secchio} non e' stato copiato. Le foto NON sono al sicuro." >&2
       exit 5
     fi
   done
-  echo "[backup] esito-foto: copiate (${SECCHI_FOTO} → ${DESTINAZIONE_FOTO})"
+  echo "[backup] esito-foto: copiate (${SECCHI_FOTO} → ${DESTINAZIONE_FOTO}, storico in ${STORICO_FOTO})"
 fi
 
 if [ "$ESITO_ELENCO" != "ok" ]; then

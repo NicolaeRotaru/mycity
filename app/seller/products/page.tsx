@@ -548,14 +548,20 @@ export default function SellerProductsPage() {
       */}
       {bulk && (
         <div className="fixed inset-x-0 bottom-0 z-sticky flex items-center justify-between gap-3 border-t border-cream-300 bg-surface-0 py-3 pl-5 pr-24 shadow-warm-xl sm:pr-44">
-          <span className="text-sm text-ink-600">
+          {/*
+            Il contatore si accorcia coi puntini invece di andare a capo: cosi'
+            la barra resta alta uguale (la pagina le riserva 96 pixel sotto il
+            contenuto) e i due pulsanti restano interi. Su uno schermo molto
+            stretto si legge meno testo, ma non si perde un tocco.
+          */}
+          <span className="min-w-0 truncate text-sm text-ink-600">
             {editCount > 0 ? (
               <><strong className="text-ink-900">{editCount}</strong> {editCount === 1 ? 'prodotto modificato' : 'prodotti modificati'}</>
             ) : (
               'Nessuna modifica'
             )}
           </span>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Button variant="ghost" size="sm" onClick={cancelBulk}>Annulla</Button>
             <Button
               size="sm"

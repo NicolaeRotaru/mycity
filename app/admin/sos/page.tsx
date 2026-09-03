@@ -1,12 +1,17 @@
 'use client';
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, MapPin, Phone, Clock, Siren, History } from 'lucide-react';
+import { AlertTriangle, Check, MapPin, Phone, Clock, RotateCcw, Siren, History } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { queryKeys } from '@/lib/queries/keys';
 import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
+import {
+  puoDireTuttoTranquillo,
+  statoDellaConsolle,
+  type EventoSOS,
+} from './lettura-degli-sos';
 
 /**
  * Admin: gestione eventi SOS rider.
@@ -18,25 +23,13 @@ import { AdminPageTitle, AdminSectionLabel } from '@/components/admin/AdminUI';
  *   allarme' o 'rider ricoverato'). Audit trail."
  */
 
-type SOS = {
-  id: string;
-  rider_id: string;
-  order_id: string | null;
-  lat: number | null;
-  lng: number | null;
-  triggered_at: string;
-  resolved_at: string | null;
-  resolution_note: string | null;
-  rider: { full_name: string | null; phone: string | null } | null;
-};
-
 export default function AdminSOSPage() {
   const qc = useQueryClient();
 
-  const { data: sosList = [] } = useQuery({
+  const { data: sosList, isError, isLoading, isFetching, refetch } = useQuery({
     queryKey: queryKeys.admin.sos,
-    queryFn: async (): Promise<SOS[]> => {
-      const { data } = await supabase
+    queryFn: async (): Promise<EventoSOS[]> => {
+      const { data, error } = await supabase
         .from('rider_sos_events')
         .select(`
           id, rider_id, order_id, lat, lng, triggered_at, resolved_at, resolution_note,
@@ -44,7 +37,10 @@ export default function AdminSOSPage() {
         `)
         .order('triggered_at', { ascending: false })
         .limit(50);
-      return (data ?? []) as unknown as SOS[];
+      // L'errore va sollevato, non ingoiato: se resta dentro, «non ho letto»
+      // e «non c'e' niente» arrivano a schermo come la stessa cosa.
+      if (error) throw error;
+      return (data ?? []) as unknown as EventoSOS[];
     },
     refetchInterval: 10_000,
   });
@@ -69,8 +65,9 @@ export default function AdminSOSPage() {
     onError: (err: unknown) => toast.error(friendlyError(err)),
   });
 
-  const active = sosList.filter((s) => !s.resolved_at);
-  const resolved = sosList.filter((s) => s.resolved_at);
+  const stato = statoDellaConsolle({ dati: sosList, guasto: isError, inCorso: isLoading });
+  const active = stato.attivi;
+  const resolved = stato.risolti;
 
   return (
     <div className="space-y-6">
@@ -80,13 +77,56 @@ export default function AdminSOSPage() {
         sub="Emergenze segnalate dai rider durante le consegne. Aggiornamento automatico ogni 10s."
       />
 
+      {/*
+        Quando la lettura non riesce l'avviso sta IN CIMA e resta rosso: e' la
+        differenza fra «non c'e' nessuna emergenza» e «non lo so». Quello che si
+        era gia' letto resta sotto — con un SOS aperto, il numero di telefono e
+        la mappa non devono sparire proprio adesso.
+      */}
+      {!stato.letturaRiuscita && (
+        <div
+          role="alert"
+          className="bg-secondary-50 border-2 border-secondary-400 rounded-xl p-4 flex items-start gap-3"
+        >
+          <AlertTriangle size={20} strokeWidth={2.4} className="text-secondary-700 shrink-0 mt-0.5" aria-hidden />
+          <div className="space-y-1">
+            <p className="font-bold text-secondary-900">
+              {stato.inAttesa ? 'Sto leggendo gli SOS…' : 'Non riesco a leggere gli SOS'}
+            </p>
+            <p className="text-sm text-ink-700">
+              {stato.inAttesa
+                ? 'Ancora un momento: finché non ho letto non posso dire che va tutto bene.'
+                : stato.maiLetto
+                  ? 'Questa pagina non sta vedendo gli SOS dei fattorini. Se ne arriva uno adesso, qui non compare: chiama il fattorino al telefono.'
+                  : 'L’ultimo aggiornamento non è riuscito. Qui sotto vedi la situazione dell’ultima lettura riuscita, che può essere vecchia.'}
+            </p>
+            {!stato.inAttesa && (
+              <button
+                type="button"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="mt-1 inline-flex items-center gap-1.5 bg-secondary-600 hover:bg-secondary-700 disabled:opacity-60 text-white px-4 py-2 rounded-lg font-bold text-sm"
+              >
+                <RotateCcw size={14} strokeWidth={2.4} aria-hidden />
+                {isFetching ? 'Riprovo…' : 'Riprova'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* SOS attivi */}
       <section>
         <AdminSectionLabel icon={Siren}>Attivi ({active.length})</AdminSectionLabel>
-        {active.length === 0 ? (
+        {puoDireTuttoTranquillo(stato) ? (
           <p className="text-sm text-ink-500 bg-olive-50 border border-olive-200 rounded-lg p-4 flex items-center gap-1.5">
             <Check size={16} strokeWidth={2.4} className="text-olive-600 shrink-0" aria-hidden />
             Nessun SOS attivo. Tutto tranquillo.
+          </p>
+        ) : active.length === 0 ? (
+          // Lettura non riuscita e nessun elenco: qui non si rassicura nessuno.
+          <p className="text-sm text-ink-500 bg-cream-100 border border-cream-300 rounded-lg p-4">
+            Non lo so: l’elenco degli SOS non è stato letto.
           </p>
         ) : (
           <ul className="space-y-3">
@@ -154,7 +194,9 @@ export default function AdminSOSPage() {
       <section>
         <AdminSectionLabel icon={History}>Storico ({resolved.length})</AdminSectionLabel>
         {resolved.length === 0 ? (
-          <p className="text-sm text-ink-500">Nessun SOS risolto.</p>
+          <p className="text-sm text-ink-500">
+            {stato.letturaRiuscita ? 'Nessun SOS risolto.' : 'Storico non letto.'}
+          </p>
         ) : (
           <ul className="space-y-2">
             {resolved.map((s) => (

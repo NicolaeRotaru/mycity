@@ -41,6 +41,14 @@ export type RunMessageArgs = {
    */
   tools?: Anthropic.ToolUnion[];
   tool_choice?: Anthropic.MessageCreateParams['tool_choice'];
+  /**
+   * Cosa farne se il modello si ferma perche' ha finito i token concessi.
+   *
+   * Assente = `rifiuta`, ed e' il punto di tutto: chi chiama non deve
+   * RICORDARSI di controllare, deve DICHIARARE che una risposta a meta' gli va
+   * bene. Chi non dice niente ottiene il comportamento sicuro.
+   */
+  seTagliata?: 'rifiuta' | 'accetta';
 };
 
 export type RunMessageResult<TInput = unknown> = {
@@ -49,6 +57,12 @@ export type RunMessageResult<TInput = unknown> = {
   /** Input del primo blocco `tool_use`, se presente. */
   toolInput?: TInput;
   stopReason: Anthropic.Message['stop_reason'];
+  /**
+   * La risposta si e' fermata a meta' perche' erano finiti i token concessi.
+   * Vero solo per chi ha chiesto `seTagliata: 'accetta'`: agli altri la
+   * chiamata lancia e questa casella non arriva mai a essere letta.
+   */
+  tagliata: boolean;
   usage: {
     inputTokens: number;
     outputTokens: number;
@@ -164,6 +178,35 @@ export class AiCallError extends Error {
   }
 }
 
+/**
+ * 3/9/2026 (R-lotto) — UNA RISPOSTA TAGLIATA A META' NON E' UNA RISPOSTA.
+ *
+ * Quando il modello finisce i token che gli abbiamo concesso si ferma dove
+ * capita e lo dichiara: `stop_reason = 'max_tokens'`. Il testo si interrompe a
+ * meta' parola; il blocco `tool_use` — cioe' il JSON con dentro nome,
+ * descrizione o verdetto — arriva monco, e l'SDK lo consegna lo stesso come
+ * oggetto, con i campi che era riuscito a scrivere.
+ *
+ * `runMessage` restituiva `stopReason` gia' da prima. Il guaio era che restava
+ * una casella da guardare: nessuna delle diciassette chiamate la guardava, e
+ * una descrizione tagliata a meta' finiva in vetrina, un verdetto di
+ * conformita' interrotto passava per «prodotto a posto».
+ *
+ * Restituire il dato non basta, perche' si puo' dimenticare. Adesso il taglio
+ * non e' un'informazione: e' un errore, e chi vuole la risposta a meta' deve
+ * chiederla per nome (`seTagliata: 'accetta'`).
+ */
+export class AiRispostaTagliataError extends AiCallError {
+  constructor(
+    feature: string,
+    /** Il tetto di token che ha fermato il modello: serve per capire di quanto alzarlo. */
+    readonly maxTokens: number,
+  ) {
+    super(feature, 502);
+    this.name = 'AiRispostaTagliataError';
+  }
+}
+
 function extractStatus(err: unknown): number | undefined {
   return typeof err === 'object' && err !== null && 'status' in err
     ? (err as { status?: number }).status
@@ -200,6 +243,12 @@ export function extractRetryAfter(err: unknown): number | undefined {
 export function mapAiError(err: unknown, feature: string): NextResponse {
   const status = err instanceof AiCallError ? err.status : extractStatus(err);
   logger.error('AI call failed', { feature, status }); // solo status, mai raw
+  // La risposta c'era, ma finiva a meta': non e' un guasto del servizio, ed e'
+  // giusto dirlo con parole diverse — chi legge deve capire che riprovando (o
+  // chiedendo meno roba in una volta) la cosa puo' andare a buon fine.
+  if (err instanceof AiRispostaTagliataError) {
+    return ApiErrors.badGateway('La risposta si e interrotta prima della fine. Riprova.');
+  }
   if (status === 401) return ApiErrors.unavailable('Servizio AI non disponibile.');
   if (status === 429) {
     // L'attesa la dichiara Anthropic; 60 secondi solo se non la dichiara.
@@ -281,10 +330,29 @@ export async function runMessage<TInput = unknown>(
     estCostEur: Number(estCostEur.toFixed(6)),
   });
 
+  // IL TAGLIO SI CONTROLLA QUI, DOPO AVER MESSO IL COSTO NEL CONTO.
+  //
+  // L'ordine non e' un dettaglio: quei token li abbiamo pagati anche se la
+  // risposta e' inservibile. Lanciare prima di `registraSpesaAi` renderebbe le
+  // chiamate tagliate gratuite nel registro della spesa — e sono proprio quelle
+  // che si tende a rilanciare, quindi il tetto giornaliero smetterebbe di
+  // vedere la spesa che cresce di piu'.
+  const tagliata = response.stop_reason === 'max_tokens';
+  if (tagliata && args.seTagliata !== 'accetta') {
+    logger.warn('ai_risposta_tagliata', {
+      feature: args.feature,
+      model: args.model,
+      maxTokens: args.max_tokens,
+      outputTokens: usageTokens.outputTokens,
+    });
+    throw new AiRispostaTagliataError(args.feature, args.max_tokens);
+  }
+
   return {
     text,
     toolInput,
     stopReason: response.stop_reason,
+    tagliata,
     usage: { ...usageTokens, estCostEur },
     raw: response,
   };

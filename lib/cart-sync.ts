@@ -3,6 +3,11 @@
 import type { CartItem } from '@/lib/cart';
 import type { Database } from '@/lib/database.types';
 import { erroreDaFornitoreMuto } from '@/lib/auth/decisione-portiere';
+import {
+  COLONNE_148,
+  scriviAncheSeMancaUnaColonnaNuova,
+  type EsitoScrittura,
+} from '@/lib/db/migrazione-148';
 
 /**
  * LA COPIA DEL CARRELLO SUL SERVER — quella che serve a dire «hai dimenticato
@@ -66,17 +71,13 @@ import { erroreDaFornitoreMuto } from '@/lib/auth/decisione-portiere';
  * viene rifiutata perché una colonna non esiste ancora, si riscrive senza
  * quella e si lascia detto nei log: chi ha comprato risulta comunque tornato, e
  * il carrello messo da parte resta al suo posto.
- */
-
-/**
- * Le colonne arrivate con una migrazione recente — oggi solo `recovered_at`,
- * migrazione 148. Servono a MISURARE (a quanti giorni dall'email arriva
- * l'acquisto), e non devono poter far cadere la scrittura che invece conta.
  *
- * Quando la migrazione 148 è applicata ovunque questa lista può tornare vuota:
- * il secondo tentativo semplicemente non scatta più.
+ * Quella regola sta scritta una volta sola, in
+ * `lib/db/migrazione-148.ts`, perché lo stesso identico guasto
+ * ce l'ha il gemello sul server (`lib/carrelli-abbandonati.ts`): due copie
+ * divergono, e il giorno in cui una si comporta male nessuno sa quale delle due
+ * sta guardando.
  */
-const COLONNE_DA_MIGRAZIONE_RECENTE: readonly string[] = ['recovered_at'];
 
 /**
  * I nomi dei campi che scriviamo sono quelli veri della tabella, presi dai tipi
@@ -87,72 +88,28 @@ type CampiCarrello = Partial<
   Record<keyof Database['public']['Tables']['abandoned_carts']['Row'], unknown>
 >;
 
-type ErroreDatabase = { message?: string; code?: string } | null | undefined;
-type EsitoScrittura = { error?: ErroreDatabase } | null | undefined;
-
-/**
- * Il database ha rifiutato la scrittura perché una colonna non esiste?
- *
- * `PGRST204` è il codice con cui PostgREST dice «non trovo la colonna X nella
- * tabella Y»; `42703` è quello di Postgres per la stessa cosa. Il confronto sul
- * testo resta come rete, perché i messaggi cambiano fra le versioni.
- */
-function colonnaNonTrovata(errore: ErroreDatabase): boolean {
-  if (!errore) return false;
-  if (errore.code === 'PGRST204' || errore.code === '42703') return true;
-  const testo = (errore.message ?? '').toLowerCase();
-  return testo.includes('column') && (testo.includes('does not exist') || testo.includes('could not find'));
-}
-
 /**
  * Un avviso nei log, senza far cadere niente: qui siamo sempre best-effort.
  * Il logger si carica solo quando c'è davvero qualcosa da dire, come si fa già
  * in questo file col client del database.
  */
-async function avvisa(messaggio: string, dettaglio?: Record<string, unknown>): Promise<void> {
+async function avvisa(messaggio: string): Promise<void> {
   try {
     const { logger } = await import('@/lib/logger');
-    logger.warn(messaggio, dettaglio);
+    logger.warn(messaggio);
   } catch {
     /* nemmeno l'avviso può rompere il carrello di chi sta comprando */
   }
 }
 
-/**
- * Scrive, GUARDA com'è andata, e se il rifiuto è per una colonna che in questo
- * database non c'è ancora riprova senza le colonne recenti.
- *
- * Il secondo tentativo non è una pezza: pubblicare il codice e applicare la
- * migrazione sono due gesti distinti, fatti in momenti diversi da persone
- * diverse. Il codice deve saper girare su tutti e due gli schemi, altrimenti
- * ogni migrazione si porta dietro una finestra di dati persi in silenzio.
- */
-async function scriviAncheSeMancaUnaColonnaNuova(
+/** Scrive e, se serve, riprova senza le colonne nuove; poi mette l'avviso nei log. */
+async function scrivi(
   cosa: string,
   campi: CampiCarrello,
-  esegui: (campi: CampiCarrello) => PromiseLike<EsitoScrittura>,
+  esegui: (campi: Record<string, unknown>) => PromiseLike<EsitoScrittura>,
 ): Promise<void> {
-  const primo = await esegui(campi);
-  if (!primo?.error) return;
-
-  if (!colonnaNonTrovata(primo.error)) {
-    await avvisa(`[carrello] ${cosa}: il database ha rifiutato la scrittura`, {
-      message: primo.error.message,
-      code: primo.error.code,
-    });
-    return;
-  }
-
-  const essenziali: CampiCarrello = Object.fromEntries(
-    Object.entries(campi).filter(([colonna]) => !COLONNE_DA_MIGRAZIONE_RECENTE.includes(colonna)),
-  );
-  const secondo = await esegui(essenziali);
-  await avvisa(
-    secondo?.error
-      ? `[carrello] ${cosa}: non riesco a scrivere nemmeno senza le colonne nuove`
-      : `[carrello] ${cosa}: scritto senza le colonne della migrazione 148, che qui non è ancora applicata`,
-    { message: (secondo?.error ?? primo.error)?.message },
-  );
+  const esito = await scriviAncheSeMancaUnaColonnaNuova(cosa, campi, COLONNE_148, esegui);
+  if (esito.avviso) await avvisa(esito.avviso);
 }
 
 /** Quanto vale la roba nel carrello, in euro. */
@@ -176,9 +133,7 @@ export async function syncAbandonedCart(items: CartItem[], opzioni: Opzioni): Pr
       // regola che distingue le due cose è una sola e sta col portiere del
       // sito: qui si chiama, non si riscrive.
       if (erroreDaFornitoreMuto(error)) {
-        await avvisa('[carrello] non ho potuto chiedere chi sei: la copia sul server resta indietro', {
-          message: error instanceof Error ? error.message : undefined,
-        });
+        await avvisa('[carrello] non ho potuto chiedere chi sei: la copia sul server resta indietro');
       }
       return; // senza sapere chi è, non c'è riga da toccare
     }
@@ -186,10 +141,8 @@ export async function syncAbandonedCart(items: CartItem[], opzioni: Opzioni): Pr
     if (items.length === 0) {
       if (opzioni.dopoUnOrdine) {
         const marcatura: CampiCarrello = { recovered: true, recovered_at: new Date().toISOString() };
-        await scriviAncheSeMancaUnaColonnaNuova(
-          'il carrello di chi ha appena comprato',
-          marcatura,
-          (campi) => supabase.from('abandoned_carts').update(campi).eq('user_id', userId),
+        await scrivi('il carrello di chi ha appena comprato', marcatura, (campi) =>
+          supabase.from('abandoned_carts').update(campi).eq('user_id', userId),
         );
         return;
       }
@@ -198,9 +151,7 @@ export async function syncAbandonedCart(items: CartItem[], opzioni: Opzioni): Pr
         .delete()
         .eq('user_id', userId);
       if (erroreCancellazione) {
-        await avvisa('[carrello] la riga svuotata a mano non è stata cancellata', {
-          message: erroreCancellazione.message,
-        });
+        await avvisa(`[carrello] la riga svuotata a mano non è stata cancellata — ${erroreCancellazione.message}`);
       }
       return;
     }
@@ -216,7 +167,7 @@ export async function syncAbandonedCart(items: CartItem[], opzioni: Opzioni): Pr
       recovered: false,
       recovered_at: null,
     };
-    await scriviAncheSeMancaUnaColonnaNuova('il carrello messo da parte', riga, (campi) =>
+    await scrivi('il carrello messo da parte', riga, (campi) =>
       supabase.from('abandoned_carts').upsert(campi, { onConflict: 'user_id' }),
     );
   } catch {

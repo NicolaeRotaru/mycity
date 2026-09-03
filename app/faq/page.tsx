@@ -129,7 +129,17 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'Come faccio a consegnare per MyCity?',
-        a: 'Contattaci da questa pagina di FAQ via email: info@mycity.it con oggetto "Candidatura Rider". Ti contatteremo entro 48h.',
+        // 3/9/2026 — QUI SI MANDAVA LA GENTE A UNA CASELLA DI POSTA MENTRE IL
+        // PERCORSO C'ERA GIÀ. La risposta diceva: «scrivi a info@mycity.it con
+        // oggetto Candidatura Rider, ti contatteremo entro 48h». Due cose non
+        // andavano. La prima: quell'indirizzo è su un dominio diverso da quello
+        // dove vive il sito, e nel codice compare come ripiego — chi scrive non
+        // sa se qualcuno legge. La seconda, più seria: l'iscrizione dei rider
+        // esiste ed è automatica (/sign-up?role=rider, poi i documenti), ed è
+        // la stessa strada che la pagina «Lavora con noi» indica già. Mandare a
+        // una email vuol dire far aspettare una risposta che nessuno si è
+        // impegnato a dare — le «48h» non le garantiva nessuno.
+        a: <>Fai tutto dal sito: <Link href="/sign-up?role=rider" className="text-primary-700 underline">registrati come rider</Link>, poi carichi documento, patente e polizza dalla tua pagina documenti. Appena la verifica è finita puoi accettare le prime consegne.</>,
       },
       {
         q: 'Quanto guadagna un rider?',

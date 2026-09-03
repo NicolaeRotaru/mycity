@@ -73,10 +73,13 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
         let percorso: string;
         let publicUrl: string;
         try {
-          percorso = `${productId}/${userId}/${Date.now()}.jpg`;
-          const { error: upErr } = await supabase.storage.from(SECCHIO_RECENSIONI).upload(percorso, file, {});
-          if (upErr) throw upErr;
-          publicUrl = supabase.storage.from(SECCHIO_RECENSIONI).getPublicUrl(percorso).data.publicUrl;
+          ({ percorso, publicUrl } = await caricaImmagine(supabase, {
+            file,
+            userId,
+            cartella: productId,
+            secchio: SECCHIO_RECENSIONI,
+            cacheControl: '3600',
+          }));
         } catch (err) {
           // Se il magazzino non esiste, dillo con parole che si capiscono.
           if (messaggioDi(err).includes('not found')) {

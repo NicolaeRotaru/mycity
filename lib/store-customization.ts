@@ -8,28 +8,84 @@ import { z } from 'zod';
  * La validazione è in app (non nel DB), come per store_hours/store_media.
  *
  * Modalità COLORE: palette CURATA (scelta prodotto) — l'accent è sempre uno degli
- * hex dei preset qui sotto, tutti a livello ~-600 per garantire contrasto su testo
- * bianco. Per passare a "hex libero" basta sostituire accentSchema con un regex hex.
+ * hex dei preset qui sotto, tutti presi dalle rampe di tailwind.config.ts e tutti
+ * sopra 4,5 a 1 sul bianco, perché ci va sopra il testo bianco del pulsante della
+ * vetrina. Per passare a "hex libero" basta sostituire accentSchema con un regex hex.
  */
 
 /* ============================================================================
  * Cataloghi curati
  * ========================================================================== */
 
-/** Colori brand-safe per l'accent della vetrina (sfondo con testo bianco). */
+/**
+ * Colori brand-safe per l'accent della vetrina (sfondo con testo bianco).
+ *
+ * 3/9/2026 — QUATTRO DI QUESTI OTTO COLORI NON ESISTEVANO NEL SITO.
+ *
+ * Salvia (#2F6F6A), Notte (#3B4A7A), Prugna (#6B3A5B) e Cacao (#5C4033) non
+ * comparivano in `tailwind.config.ts`, in `app/globals.css` né nei token del
+ * design: erano quattro tinte scritte a mano qui dentro. E non sono decorative:
+ * l'accent finisce inline come sfondo del pulsante della vetrina, come striscia
+ * della copertina e come colore delle icone dei contatti. Un negozio su
+ * «Notte» aveva pulsanti indaco dentro una pagina con la barra terracotta e il
+ * piede panna — sembrava un pezzo di un altro sito incollato dentro il nostro.
+ *
+ * Adesso gli otto colori escono TUTTI dalle rampe del design system. La causa
+ * era il modo: l'elenco nasceva a mano, senza nessuno che lo confrontasse con
+ * la tavolozza. La prova `tests/unit/la-vetrina-del-negozio-resta-nei-colori-del-sito.test.ts`
+ * legge le rampe da `tailwind.config.ts` e pretende che ogni preset sia una di
+ * quelle: il prossimo colore inventato diventa rosso.
+ */
 export const ACCENT_PRESETS = [
   { key: 'terracotta', label: 'Terracotta', hex: '#C0492C' }, // primary-600 (brand)
   { key: 'bordeaux',   label: 'Bordeaux',   hex: '#B82A28' }, // secondary-600
-  { key: 'senape',     label: 'Senape',     hex: '#C4801F' }, // accent-600
+  { key: 'senape',     label: 'Senape',     hex: '#9D621C' }, // accent-700
   { key: 'oliva',      label: 'Oliva',      hex: '#5A7C42' }, // olive-600
-  { key: 'salvia',     label: 'Salvia',     hex: '#2F6F6A' }, // teal on-brand
-  { key: 'notte',      label: 'Notte',      hex: '#3B4A7A' }, // indigo smorzato
-  { key: 'prugna',     label: 'Prugna',     hex: '#6B3A5B' },
-  { key: 'cacao',      label: 'Cacao',      hex: '#5C4033' },
+  { key: 'bosco',      label: 'Bosco',      hex: '#456236' }, // olive-700
+  { key: 'cacao',      label: 'Cacao',      hex: '#69411C' }, // accent-900
+  { key: 'vino',       label: 'Vino',       hex: '#5C211A' }, // primary-900
+  { key: 'inchiostro', label: 'Inchiostro', hex: '#2C2A28' }, // ink-800
 ] as const;
+
+/**
+ * I colori ritirati e dove finisce chi li aveva scelti.
+ *
+ * NON è un vezzo, ed è la parte più pericolosa di tutta la riparazione. La
+ * validazione qui è tutto-o-niente: un accent che non è più nell'elenco fa
+ * fallire l'INTERO `storeCustomization`, che torna vuoto. E chi lo usa non lo
+ * legge soltanto — `components/seller/site/ThemePicker.tsx` fa leggi-modifica-
+ * scrivi: legge la personalizzazione, ci mette il colore nuovo e RISCRIVE la
+ * riga. Quindi togliere i quattro colori senza rimpiazzo vorrebbe dire che il
+ * primo negoziante su «Notte» che cambia colore si vede cancellare dal database
+ * motto, social, badge, prodotti in vetrina e stile della copertina. Per sempre.
+ * Il difetto che stiamo riparando è un colore stonato: la riparazione fatta a
+ * metà sarebbe stata la perdita dei dati di un negoziante.
+ *
+ * La destinazione è il colore della tavolozza più vicino a occhio (distanza
+ * CIE76 in Lab), con la tinta rispettata dove esisteva: chi aveva il verde-acqua
+ * resta sul verde. Nessuna migrazione: la riga nel database tiene il vecchio
+ * esadecimale finché il negoziante non salva, e chi legge vede già il nuovo.
+ */
+export const ACCENT_RITIRATI: Readonly<Record<string, string>> = {
+  '#2F6F6A': '#456236', // Salvia  → Bosco      (ΔE 25,5: il verde più vicino che abbiamo)
+  '#3B4A7A': '#2C2A28', // Notte   → Inchiostro (ΔE 35,3: nella tavolozza non c'è nessun blu)
+  '#6B3A5B': '#5C211A', // Prugna  → Vino       (ΔE 30,5)
+  '#5C4033': '#69411C', // Cacao   → Cacao      (ΔE 16,7: stesso nome, tinta del design)
+  // Senape era accent-600 (#C4801F). È nella tavolozza, ma sul pulsante della
+  // vetrina ci va sopra il testo bianco e il rapporto era 3,25 a 1: sotto il
+  // 4,5 che serve per leggere. Un tono più giù (accent-700) sale a 5,0 e resta
+  // la stessa ocra. Il commento in cima al file prometteva già che questi
+  // colori garantissero il contrasto sul bianco: adesso è vero.
+  '#C4801F': '#9D621C', // Senape  → Senape     (contrasto 3,25 → 5,00)
+};
 
 export const DEFAULT_ACCENT = ACCENT_PRESETS[0].hex;
 const ACCENT_HEXES: string[] = ACCENT_PRESETS.map((p) => p.hex);
+
+/** Il colore vero da usare: i ritirati diventano il loro sostituto. */
+function accentVivo(v: string): string {
+  return ACCENT_RITIRATI[v] ?? v;
+}
 
 /** Gradienti per la cover quando il negozio non ha foto/video (tutti on-brand). */
 export const COVER_PRESETS = [
@@ -69,7 +125,12 @@ export const MAX_ANNOUNCEMENT = 160;
  * ========================================================================== */
 
 // Modalità curata: accent ∈ hex dei preset. (hex libero => z.string().regex(/^#[0-9a-fA-F]{6}$/))
-const accentSchema = z.string().refine((v) => ACCENT_HEXES.includes(v), 'Colore non valido');
+// I colori ritirati passano dal rimpiazzo PRIMA del controllo: se cadessero qui,
+// tutta la personalizzazione del negozio verrebbe buttata via insieme a loro.
+const accentSchema = z
+  .string()
+  .transform(accentVivo)
+  .refine((v) => ACCENT_HEXES.includes(v), 'Colore non valido');
 const coverSchema = z.string().refine((v) => COVER_KEYS.includes(v), 'Stile cover non valido');
 
 // Handle social: opzionale, accetta stringa vuota. Niente URL completi (li costruiamo noi).
@@ -146,7 +207,7 @@ export function normalizeCustomization(raw: unknown): StoreCustomization {
 
 /** Hex dell'accent, con fallback al brand se assente/non valido. */
 export function accentHex(c?: StoreCustomization | null): string {
-  const a = c?.theme?.accent;
+  const a = c?.theme?.accent ? accentVivo(c.theme.accent) : undefined;
   return a && ACCENT_HEXES.includes(a) ? a : DEFAULT_ACCENT;
 }
 

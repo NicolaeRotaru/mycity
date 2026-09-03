@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { RILEVAMENTO_LINGUA_ATTIVO } from '../../i18n';
 
 /**
  * E2E test per le feature security + i18n aggiunte in wave 21:
@@ -115,16 +116,27 @@ test.describe('Locale switching i18n', () => {
     expect(r.status()).toBe(400);
   });
 
-  // #7 — Questi due controlli pretendevano il contrario di una scelta presa
-  // apposta, e non fallivano solo perché il giro end-to-end in CI si
-  // auto-salta quando mancano i segreti del Supabase di prova. Il giorno in
-  // cui quei segreti si configurano, la CI diventava rossa su una cosa giusta.
-  //
-  // La scelta: il selettore di lingua è tolto dal footer finché la traduzione
-  // non è completa (29 file su 347), e la pagina si dichiara italiana perché
-  // il contenuto è italiano. Si riaccendono insieme, cambiando
-  // RILEVAMENTO_LINGUA_ATTIVO in i18n.ts.
-  test.skip('LocaleSwitcher è presente in Footer', async ({ page }) => {
+  /*
+   * #7 — La scelta: il selettore di lingua è tolto dal footer finché la
+   * traduzione non è completa (29 file su 347), e la pagina si dichiara
+   * italiana perché il contenuto è italiano. Si riaccendono insieme, cambiando
+   * RILEVAMENTO_LINGUA_ATTIVO in i18n.ts.
+   *
+   * 3/9/2026 — QUESTO SALTO NON DICEVA PERCHE', E ADESSO LO DICE.
+   *
+   * Era un `test.skip(...)` secco: il motivo stava solo nel commento, che la CI
+   * non legge. Nel resoconto delle prove usciva come «saltata senza motivo
+   * dichiarato» — cioe' indistinguibile da un interruttore abbassato e
+   * dimenticato, che e' la malattia di questo lotto.
+   *
+   * Adesso il salto e' appeso alla decisione vera, letta da i18n.ts: il giorno
+   * che il rilevamento della lingua si riaccende, questa prova riparte da sola.
+   */
+  test('LocaleSwitcher è presente in Footer', async ({ page }) => {
+    test.skip(
+      !RILEVAMENTO_LINGUA_ATTIVO,
+      'il selettore della lingua e\' tolto dal piede finche\' la traduzione non e\' completa (RILEVAMENTO_LINGUA_ATTIVO = false in i18n.ts): una lingua che si puo\' scegliere e non cambia niente e\' peggio di una lingua sola',
+    );
     await page.goto('/');
     const footer = page.locator('footer');
     await expect(footer).toBeVisible();

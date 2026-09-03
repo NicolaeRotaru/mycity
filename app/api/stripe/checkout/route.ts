@@ -218,7 +218,10 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // Lo stesso carrello di questa persona ha gia' un pagamento aperto?
     admin
       .from('pending_checkouts')
-      .select('id, stripe_session_id')
+      // 3/9/2026 — Anche `delivery`: al riuso i dati di contatto appena
+      // scritti vanno rimessi sulla riga, e per farlo senza cancellare il
+      // resto (impronta, coordinate, fascia) bisogna avere quello che c'e'.
+      .select('id, stripe_session_id, delivery')
       .eq('buyer_id', user.id)
       .eq('status', 'PENDING')
       .gt('expires_at', new Date().toISOString())
@@ -233,13 +236,61 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // scritto — senza questa lettura la difesa dal doppio invio non c'e' piu'.
     logger.warn('[stripe] tentativo gia aperto non cercato', { message: tentativoGiaAperto.error.message });
   }
-  const sessioneGiaAperta = (tentativoGiaAperto.data as { id: string; stripe_session_id: string | null } | null) ?? null;
+  const sessioneGiaAperta =
+    (tentativoGiaAperto.data as {
+      id: string;
+      stripe_session_id: string | null;
+      delivery: Record<string, unknown> | null;
+    } | null) ?? null;
   if (sessioneGiaAperta?.stripe_session_id) {
     try {
       const sessione = await getStripe().checkout.sessions.retrieve(sessioneGiaAperta.stripe_session_id);
       if (sessione.status === 'open' && sessione.url) {
+        /**
+         * 3/9/2026 — CORREGGERE IL TELEFONO IN CASSA DEVE SERVIRE A QUALCOSA.
+         *
+         * L'impronta del carrello dice «stesso carrello» guardando solo quello
+         * che cambia il prezzo: prodotti, sconto, ritiro, via, fascia. Nome,
+         * telefono e note della consegna non entrano nel prezzo e restavano
+         * fuori. Ma l'ordine, poi, il webhook lo scrive leggendo QUESTA riga:
+         * chi scriveva 333 111 1111, tornava indietro dalla pagina del
+         * pagamento, correggeva in 333 999 9999 e ripagava, si ritrovava
+         * l'ordine col numero vecchio — e il fattorino chiamava un numero che
+         * non risponde. Stessa storia per il nome e per «lasciare al portiere».
+         *
+         * Non si mette il contatto nell'impronta: farebbe aprire un secondo
+         * pagamento, che e' quello che l'impronta serve a evitare (riserva
+         * doppia della merce e codice sconto bruciato). Si riscrivono i tre
+         * campi sulla riga gia' aperta, tenendo tutto il resto com'e'.
+         */
+        const vecchio = sessioneGiaAperta.delivery ?? {};
+        const contattoNuovo = {
+          full_name: body.delivery.fullName,
+          phone: body.delivery.phone,
+          notes: body.delivery.notes ?? null,
+        };
+        const cambiato = (Object.keys(contattoNuovo) as Array<keyof typeof contattoNuovo>).some(
+          (campo) => (vecchio[campo] ?? null) !== contattoNuovo[campo],
+        );
+        if (cambiato) {
+          const { error: errContatto } = await admin
+            .from('pending_checkouts')
+            .update({ delivery: { ...vecchio, ...contattoNuovo } })
+            .eq('id', sessioneGiaAperta.id);
+          if (errContatto) {
+            // La sessione si restituisce lo stesso: e' l'unica strada che non
+            // riserva la merce una seconda volta, e la vecchia resta comunque
+            // pagabile. Ma resta scritto forte, perche' l'ordine nascera' con
+            // il contatto di prima e la consegna puo' fallire.
+            logger.error('[stripe] contatto corretto NON salvato sul pagamento gia aperto', {
+              pendingCheckoutId: sessioneGiaAperta.id,
+              message: errContatto.message,
+            });
+          }
+        }
         logger.info('[stripe] stesso carrello, stessa sessione: non ne apro una seconda', {
           pendingCheckoutId: sessioneGiaAperta.id,
+          contattoAggiornato: cambiato,
         });
         return apiSuccess({ id: sessione.id, url: sessione.url });
       }

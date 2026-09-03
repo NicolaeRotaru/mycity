@@ -39,8 +39,19 @@ type Esito = { data: { id: string } | null; error: unknown };
 
 /** L'errore che PostgREST restituisce quando la colonna non c'è ancora. */
 const COLONNA_ASSENTE = { code: '42703', message: 'column "gross_total_cents" does not exist' };
-/** Quello che restituisce quando uno stato nuovo urta il vincolo vecchio. */
-const STATO_RIFIUTATO = { code: '23514', message: 'violates check constraint' };
+/**
+ * Quello che restituisce quando uno stato nuovo urta il vincolo vecchio.
+ *
+ * 3/9/2026 — IL NOME DEL VINCOLO FA PARTE DELLA PROVA. Prima qui c'era un
+ * «violates check constraint» senza nome, e il ripiego lo accettava: cioè
+ * accettava QUALSIASI vincolo di quella tabella, compresi i tre paletti sui
+ * soldi nati con la 127 e la 146. Il messaggio vero di PostgreSQL il nome ce
+ * l'ha sempre, ed è quello che distingue «schema indietro» da «importo storto».
+ */
+const STATO_RIFIUTATO = {
+  code: '23514',
+  message: 'new row for relation "orders" violates check constraint "orders_payout_status_check"',
+};
 
 describe('il ripiego riconosce uno schema indietro', () => {
   it('riconosce colonna assente, funzione assente e vincolo violato', () => {

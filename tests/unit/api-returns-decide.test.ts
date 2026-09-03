@@ -49,6 +49,19 @@ vi.mock('@/lib/supabase/server', () => ({
           }),
         };
       }
+      // 3/9/2026 — Chi comanda su un reso lo dice l'ORDINE, non la riga del
+      // reso: la rotta legge il venditore di qui, dal server, perche' i campi
+      // del reso il cliente se li poteva scrivere da solo.
+      if (table === 'orders') {
+        return {
+          select: () => ({ eq: () => ({ single: async () => ({ data: { seller_id: 'seller-1' }, error: null }) }) }),
+        };
+      }
+      if (table === 'profiles') {
+        return {
+          select: () => ({ eq: () => ({ single: async () => ({ data: { role: 'seller' }, error: null }) }) }),
+        };
+      }
       return { insert: async () => ({ error: null }) };
     },
   }),

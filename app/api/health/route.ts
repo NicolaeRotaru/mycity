@@ -4,6 +4,7 @@ import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { segretiCombaciano, gettoneBearer } from '@/lib/api/segreti';
 import {
   esitoBattiti,
+  battitiNonLetti,
   SOGLIE_VISTE_DA_FUORI,
   type CronHeartbeat,
   type EsitoBattiti,
@@ -219,13 +220,13 @@ export async function GET(request: Request) {
     const admin = getAdminSupabase();
     const { data, error } = await admin.from('cron_heartbeats').select('name, last_run_at');
     if (error) {
-      cron = { ok: false, esaminati: 0, attesi, error: 'battiti non leggibili' };
+      cron = battitiNonLetti(attesi, 'battiti non leggibili');
       dettaglioBattiti = error.message;
     } else {
       cron = esitoBattiti((data ?? []) as CronHeartbeat[], Date.now(), SOGLIE_VISTE_DA_FUORI);
     }
   } catch (e) {
-    cron = { ok: false, esaminati: 0, attesi, error: 'battiti non leggibili' };
+    cron = battitiNonLetti(attesi, 'battiti non leggibili');
     dettaglioBattiti = e instanceof Error ? e.message : 'unknown';
   }
 

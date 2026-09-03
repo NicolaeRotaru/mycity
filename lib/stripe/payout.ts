@@ -607,6 +607,29 @@ export interface RefundOrderOpts {
   notifyBuyer?: boolean;
   /** Idempotency-Key Stripe stabile (es. `return_<id>` / `dispute_<id>`). */
   idempotencyKey?: string;
+  /**
+   * 3/9/2026 — ANNULLARE L'ORDINE E RESTITUIRE TUTTO SONO DUE COSE DIVERSE.
+   *
+   * Fin qui erano la stessa cosa: solo un rimborso PIENO annullava la consegna
+   * e rimetteva la merce a scaffale. Va bene finché le due cose coincidono, ma
+   * non coincidono sempre. Il caso vero è «cliente assente»: il fattorino è
+   * andato, ha suonato, non ha trovato nessuno. La merce torna al negozio — e
+   * quindi va rimessa a magazzino — ma al cliente si restituisce l'ordine AL
+   * NETTO della consegna, perché quel viaggio è stato fatto davvero e il
+   * fattorino va pagato. Chiedere l'annullo passando meno soldi non
+   * funzionava: essendo il rimborso parziale, la merce restava «venduta» e
+   * l'ordine restava aperto.
+   *
+   * Con questo, chi decide dichiara la cosa che sa: «questo ordine è chiuso,
+   * la merce è tornata». L'importo resta l'importo.
+   *
+   * COSA NON DECIDE: il compenso del fattorino non si recupera (il viaggio c'è
+   * stato) e lo stato del bonifico al negozio NON viene toccato — dal negozio
+   * si è già ripresa la quota proporzionale al rimborso, e se al netto gli
+   * resta qualcosa quella resta una decisione di chi governa il caso, non di
+   * questa funzione.
+   */
+  annullaLOrdine?: boolean;
 }
 
 /**
@@ -742,6 +765,10 @@ export async function refundOrder(
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
   const newRefundedTotal = Number(rivendicato.totale_rimborsato ?? 0);
   const isFull = newRefundedTotal >= grossCents;
+  // L'ordine si chiude quando i soldi tornano tutti, OPPURE quando chi decide
+  // dice che è chiuso lo stesso (vedi `annullaLOrdine`): «cliente assente» è
+  // un ordine finito con un rimborso che non è pieno per scelta.
+  const ordineDaChiudere = isFull || opts.annullaLOrdine === true;
 
   // --- COD (🟠-18): nessuna charge Stripe → accredito sul wallet del buyer.
   // Idempotente: ref stabile (idempotencyKey del chiamante, es. return_<id>) +
@@ -806,7 +833,9 @@ export async function refundOrder(
       })
       .eq('id', order.id);
 
-    if (isFull) await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
+    // La merce torna a scaffale quando l'ordine si chiude, non quando i soldi
+    // tornano tutti: sono due fatti diversi (vedi `annullaLOrdine`).
+    if (ordineDaChiudere) await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
     await notifyRefundBuyer(admin, order.user_id, order.id, safeAmountCents, opts);
 
     return { refundId: `wallet:${ref}`, reversedCents };
@@ -910,18 +939,20 @@ export async function refundOrder(
       // `refunded_amount_cents` l'ha già scritto `accumula_rimborso`: riscriverlo
       // qui riaprirebbe la corsa che quella funzione serve a chiudere.
       payment_status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED',
-      ...(isFull
-        ? {
-            payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED',
-            // 054 — Un ordine già CONSEGNATO non torna «annullato» perché è
-            // stato rimborsato: la consegna è avvenuta, il fattorino l'ha
-            // fatta, e riscrivere quello stato cancellava dai numeri consegne
-            // vere e faceva sparire l'ordine dalle liste operative.
-            // Si tocca il pagamento, non la storia della consegna.
-            ...(order.delivery_status === 'DELIVERED'
-              ? {}
-              : { delivery_status: 'CANCELED', canceled_at: new Date().toISOString() }),
-          }
+      // Lo stato del bonifico segue i SOLDI: solo un rimborso pieno chiude la
+      // partita col negozio. Su un rimborso parziale la quota proporzionale è
+      // già stata addebitata qui sopra, e il residuo resta dovuto.
+      ...(isFull ? { payout_status: wasTransferred ? 'REVERSED' : 'REFUNDED' } : {}),
+      // La consegna segue l'ORDINE: si annulla quando l'ordine è chiuso, anche
+      // se il rimborso non è pieno (vedi `annullaLOrdine`).
+      //
+      // 054 — Un ordine già CONSEGNATO non torna «annullato» perché è stato
+      // rimborsato: la consegna è avvenuta, il fattorino l'ha fatta, e
+      // riscrivere quello stato cancellava dai numeri consegne vere e faceva
+      // sparire l'ordine dalle liste operative.
+      // Si tocca il pagamento, non la storia della consegna.
+      ...(ordineDaChiudere && order.delivery_status !== 'DELIVERED'
+        ? { delivery_status: 'CANCELED', canceled_at: new Date().toISOString() }
         : {}),
     })
     .eq('id', order.id);
@@ -950,8 +981,10 @@ export async function refundOrder(
     }
   }
 
-  // Rimborso pieno → ordine annullato → ripristina lo stock (P0-4).
-  if (isFull) {
+  // Ordine chiuso → la merce torna a scaffale (P0-4). Il rimborso pieno è il
+  // caso normale; «cliente assente» è un ordine chiuso con un rimborso che non
+  // è pieno per scelta, e la merce torna lo stesso (vedi `annullaLOrdine`).
+  if (ordineDaChiudere) {
     await admin.rpc('restore_stock_for_order', { p_order_id: order.id });
   }
 

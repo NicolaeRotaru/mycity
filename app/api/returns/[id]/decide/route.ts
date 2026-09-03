@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getAdminSupabase } from '@/lib/supabase/server';
+import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
@@ -32,8 +32,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const admin = getAdminSupabase();
-  const { data: ret, error } = await admin
+  const supa = await getServerSupabase();
+  const { data: ret, error } = await supa
     .from('returns')
     .select('id, status, seller_id, buyer_id, order_id, reason, refund_amount_cents')
     .eq('id', params.id)
@@ -60,6 +60,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (ret.status !== 'REQUESTED') {
     return ApiErrors.conflict(`Reso gia' in stato ${ret.status}`);
   }
+
+  const admin = getAdminSupabase();
 
   // 🟠-22: il recesso (CHANGED_MIND) entro 14 giorni è INCONDIZIONATO (Cod. Cons.
   // art. 52-59): il venditore non può rifiutarlo. Può solo approvarlo ed elaborare

@@ -617,11 +617,23 @@ export default function SettingsPage() {
                     per obblighi fiscali. C'è un periodo di ripensamento di <strong>7 giorni</strong> durante il
                     quale puoi annullare; dopo, <strong>l'azione è permanente.</strong>
                   </p>
-                  <label className="block text-sm font-medium text-red-900 mb-1">
+                  {/*
+                    3/9/2026 — QUESTO CAMPO NON AVEVA UN NOME.
+                    L'etichetta stava sopra ma non era legata al campo: niente
+                    `htmlFor`, e il campo senza `id`. Chi usa un lettore di
+                    schermo ci arrivava e sentiva «campo di testo, modificabile»
+                    — sull'azione piu' distruttiva del profilo, senza sapere che
+                    cosa scrivere. Bastano un `htmlFor` e un `id` uguali: da qui
+                    il lettore legge «Scrivi ELIMINA per confermare».
+                    (WCAG 4.1.2 e 3.3.2, tutti e due di livello A.)
+                  */}
+                  <label htmlFor="conferma-eliminazione" className="block text-sm font-medium text-red-900 mb-1">
                     Scrivi <span className="font-mono bg-white px-1.5 py-0.5 rounded">ELIMINA</span> per confermare:
                   </label>
                   <input
+                    id="conferma-eliminazione"
                     type="text"
+                    autoComplete="off"
                     value={deleteConfirm}
                     onChange={(e) => setDeleteConfirm(e.target.value)}
                     className="w-full border border-red-300 rounded-lg p-2.5 mb-3 focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"

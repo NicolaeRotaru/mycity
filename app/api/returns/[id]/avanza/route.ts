@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { getAdminSupabase } from '@/lib/supabase/server';
+import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { isStripeConfigured } from '@/lib/stripe/client';
 import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
@@ -62,8 +62,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 
-  const admin = getAdminSupabase();
-  const { data: ret, error } = await admin
+  const supa = await getServerSupabase();
+  const { data: ret, error } = await supa
     .from('returns')
     .select('id, status, seller_id, buyer_id, order_id, refund_amount_cents')
     .eq('id', params.id)
@@ -91,6 +91,8 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
   if (!partenze.includes(ret.status)) {
     return ApiErrors.conflict(`Un reso in ${ret.status} non può passare a ${body.stato}.`);
   }
+
+  const admin = getAdminSupabase();
 
   // Il rimborso si controlla PRIMA di prendere il turno, come su `decide`: un
   // importo impossibile non deve lasciare traccia sul reso, e il venditore deve

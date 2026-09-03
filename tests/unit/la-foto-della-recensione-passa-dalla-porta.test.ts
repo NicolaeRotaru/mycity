@@ -124,9 +124,19 @@ describe('la porta, sul magazzino delle recensioni', () => {
 });
 
 /**
- * L'invariante di struttura, per QUESTO magazzino. Oggi il punto che ci carica e' uno solo —
- * la schermata delle foto nelle recensioni — quindi l'elenco degli ammessi e' completo e non
- * nasconde niente: e' il senso di tenerlo qui accanto.
+ * L'invariante di struttura, per QUESTO magazzino. Oggi il punto che ci carica e' uno solo — la
+ * schermata delle foto nelle recensioni — quindi l'elenco degli ammessi e' completo e non nasconde
+ * niente: e' il senso di tenerlo qui accanto.
+ *
+ * ⚠️ LA PRIMA VERSIONE DI QUESTA PROVA NON PROVAVA NIENTE, e vale la pena scriverlo perche' e'
+ * l'errore che si rifara'. Cercavo `from('reviews').upload(` — il nome del magazzino scritto per
+ * esteso. Rimettendo a mano la chiamata dentro il componente, ma col nome preso da una costante
+ * (`from(SECCHIO_RECENSIONI).upload(`), la prova restava VERDE: cioe' misurava come si scrive il
+ * nome, non chi scavalca la porta. Se ne e' accorto l'esperimento del mutante, non la rilettura.
+ *
+ * La regola vera e' quella qui sotto: un file che nomina questo magazzino non chiama `.upload()`,
+ * comunque lo scriva. Cosa NON copre, dichiarato: un file che carichi qui prendendo il nome del
+ * magazzino da un altro modulo e senza mai scriverlo: quello sfugge a entrambe le reti.
  */
 describe('nessuno carica sul magazzino delle recensioni fuori dalla porta', () => {
   const RADICE = process.cwd();
@@ -135,7 +145,24 @@ describe('nessuno carica sul magazzino delle recensioni fuori dalla porta', () =
   const AMMESSI = new Map<string, string>([
     ['lib/storage/carica-immagine.ts', "e' la porta: e' il suo mestiere"],
   ]);
-  const cerca = new RegExp(`from\\(\\s*['"\`]${SECCHIO}['"\`]\\s*\\)\\s*\\.upload\\(`);
+
+  /** Il nome del magazzino scritto per esteso, in qualunque file. */
+  const NOMINA_IL_MAGAZZINO = new RegExp(`['"\`]${SECCHIO}['"\`]`);
+  /**
+   * Una CHIAMATA a `.upload()`, non una citazione. Le parentesi devono avere dentro qualcosa: un
+   * commento che parla di `.upload()` le ha vuote, e un commento non carica niente.
+   */
+  const CHIAMATA_UPLOAD = /\.upload\(\s*[^)\s]/;
+
+  /** Via i commenti, cosi' una spiegazione non viene scambiata per codice. */
+  function senzaCommenti(testo: string): string {
+    return testo
+      .split('\n')
+      // Il commento di riga se ne va, ma «https://» non e' un commento.
+      .map((riga) => riga.replace(/(^|[^:])\/\/.*$/, '$1'))
+      .join('\n')
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+  }
 
   function tuttiIFile(dir: string, out: string[] = []): string[] {
     for (const voce of readdirSync(dir)) {
@@ -147,26 +174,45 @@ describe('nessuno carica sul magazzino delle recensioni fuori dalla porta', () =
     return out;
   }
 
-  const file = CARTELLE.flatMap((c) => tuttiIFile(join(RADICE, c)));
+  const file = CARTELLE.flatMap((c) => tuttiIFile(join(RADICE, c)))
+    .map((f) => relative(RADICE, f))
+    .filter((rel) => !AMMESSI.has(rel));
 
   it('trova davvero dei file da guardare (se no non sta misurando niente)', () => {
     expect(file.length).toBeGreaterThan(200);
   });
 
-  it('il rilevatore non e cieco: su un testo costruito lo trova', () => {
-    expect(cerca.test(`await supabase.storage.from('${SECCHIO}').upload(path, file, {});`)).toBe(true);
+  it('il rilevatore non e cieco, nemmeno col nome preso da una costante', () => {
+    const conNomeScritto = `await supabase.storage.from('${SECCHIO}').upload(percorso, file, {});`;
+    const conCostante = `await supabase.storage.from(SECCHIO_RECENSIONI).upload(percorso, file, {});`;
+    const soloUnCommento = `// per tornare a sbagliare bisogna riscrivere una chiamata a .upload()`;
+
+    for (const testo of [conNomeScritto, conCostante]) {
+      expect(CHIAMATA_UPLOAD.test(senzaCommenti(testo)), `non riconosco: ${testo}`).toBe(true);
+    }
+    // Il contrario conta quanto il resto: se una spiegazione facesse rosso, la prova verrebbe
+    // spenta al primo commento — e una prova spenta non protegge niente.
+    expect(CHIAMATA_UPLOAD.test(senzaCommenti(soloUnCommento))).toBe(false);
   });
 
-  it(`nessun file costruisce a mano il percorso su «${SECCHIO}»`, () => {
-    const colpevoli = file
-      .map((f) => relative(RADICE, f))
-      .filter((rel) => !AMMESSI.has(rel) && cerca.test(readFileSync(join(RADICE, rel), 'utf8')));
+  it(`nessun file che nomina «${SECCHIO}» si costruisce il percorso a mano`, () => {
+    const colpevoli = file.filter((rel) => {
+      const codice = senzaCommenti(readFileSync(join(RADICE, rel), 'utf8'));
+      return NOMINA_IL_MAGAZZINO.test(codice) && CHIAMATA_UPLOAD.test(codice);
+    });
     expect(
       colpevoli,
       `questi file caricano sul magazzino «${SECCHIO}» senza passare dalla porta: si costruiscono il ` +
         `percorso a mano, ed e' esattamente cosi' che tre schermate sono nate rifiutate dal database. ` +
         `Usa caricaImmagine() da @/lib/storage/carica-immagine.\n  ${colpevoli.join('\n  ')}`,
     ).toEqual([]);
+  });
+
+  it(`e nessuno scrive «from('${SECCHIO}').upload(» da nessuna parte`, () => {
+    // La seconda rete: prende anche un file che carichi qui senza nominare il magazzino altrove.
+    const cerca = new RegExp(`from\\(\\s*['"\`]${SECCHIO}['"\`]\\s*\\)\\s*\\.upload\\(`);
+    const colpevoli = file.filter((rel) => cerca.test(senzaCommenti(readFileSync(join(RADICE, rel), 'utf8'))));
+    expect(colpevoli).toEqual([]);
   });
 
   it('le esenzioni dichiarate esistono ancora (se no sono bugie che coprono un buco)', () => {

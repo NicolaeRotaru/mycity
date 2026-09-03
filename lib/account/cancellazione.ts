@@ -30,7 +30,7 @@ export const CAMPI_PROFILO_DA_AZZERARE = {
   address: null,
   city: null,
   zip: null,
-  avatar_url: null,
+  public_avatar_url: null,
   store_name: null,
   store_address: null,
   store_phone: null,

@@ -24,8 +24,9 @@
  * token `--color-cta` — e poi confronta i valori esadecimali. Cambiare la tavolozza non fa mentire
  * questa prova: la fa ricalcolare.
  *
- * Guarda solo le due pagine di questo lotto (ricerca e carrello). Nel resto del sito lo stesso
- * scivolone esiste ancora: è un difetto a parte, non un verde finto qui dentro.
+ * Guarda le tre pagine di questo lotto (ricerca, carrello, categoria). Nel resto del sito lo
+ * stesso scivolone esiste ancora — 37 fra pulsanti e link in 30 file, contati il 3/9: è un difetto
+ * a parte, non un verde finto qui dentro.
  *
  * ⚠️ Cosa NON prova: che a schermo i due rossi si distinguano a occhio. Qui non c'è un browser: si
  * confrontano i valori, non i pixel.
@@ -127,7 +128,7 @@ function fondiPieni(file: string): Fondo[] {
   return trovati;
 }
 
-const PAGINE = ['app/search/page.tsx', 'app/cart/page.tsx'];
+const PAGINE = ['app/search/page.tsx', 'app/cart/page.tsx', 'app/category/[slug]/page.tsx'];
 const FONDI = PAGINE.flatMap(fondiPieni);
 const CLICCABILI = FONDI.filter((f) => SI_CLICCA.has(f.tag));
 
@@ -153,7 +154,7 @@ describe('il pulsante principale del sito', () => {
   });
 });
 
-describe('nella ricerca e nel carrello', () => {
+describe('nella ricerca, nel carrello e nella pagina di una categoria', () => {
   it('c è qualcosa da guardare: se sparisce, questa prova non misura più niente', () => {
     expect(CLICCABILI.length).toBeGreaterThan(0);
   });
