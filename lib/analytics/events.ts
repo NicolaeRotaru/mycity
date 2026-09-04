@@ -26,6 +26,7 @@
 
 import { track } from './posthog';
 import { readConsent } from '@/lib/consent';
+import { registraAccessoNelRegistro } from './registro-accessi';
 
 /**
  * Sink GA4: fan-out parallelo a PostHog per gli eventi e-commerce.
@@ -67,15 +68,33 @@ const eur = (cents: number) => Number((cents / 100).toFixed(2));
  * Adesso `metodo` è OBBLIGATORIO: chi lo dimentica lo scopre in compilazione,
  * non nei dati. `npm run typecheck` è il freno.
  */
+/**
+ * 3/9/2026 — E QUI DENTRO PASSA ANCHE IL REGISTRO DEGLI ACCESSI.
+ *
+ * Il registro difeso come sicurezza — quello che si guarda quando a qualcuno
+ * rubano l'account — lo riempiva solo il tracker del browser, che vede la
+ * sessione nascere DENTRO la pagina. Con Google la sessione la crea il server,
+ * la pagina riparte con la persona già dentro, e la riga non si scriveva mai.
+ *
+ * «Questa persona è appena entrata» è un fatto solo, e da qui passano tutte e
+ * due le strade: il modulo email e password e il ritorno da `/auth/callback`.
+ * Quindi è qui che il fatto si racconta a tutti quelli che devono saperlo —
+ * PostHog per il funnel, e il nostro registro per la sicurezza.
+ * Vedi lib/analytics/registro-accessi.ts.
+ */
 export const trackSignupCompleted = (
   userId: string,
   role: 'buyer' | 'seller' | 'rider' | 'admin',
   metodo: string,
-) =>
-  track('signup_completed', { user_id: userId, role, metodo, $insert_id: `signup:${userId}` });
+) => {
+  registraAccessoNelRegistro(metodo);
+  return track('signup_completed', { user_id: userId, role, metodo, $insert_id: `signup:${userId}` });
+};
 
-export const trackSignedIn = (userId: string, metodo: string) =>
-  track('signed_in', { user_id: userId, metodo });
+export const trackSignedIn = (userId: string, metodo: string) => {
+  registraAccessoNelRegistro(metodo);
+  return track('signed_in', { user_id: userId, metodo });
+};
 
 export const trackSignedOut = () =>
   track('signed_out');

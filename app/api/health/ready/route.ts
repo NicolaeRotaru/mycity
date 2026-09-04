@@ -4,6 +4,7 @@ import { rateLimitAsync, getClientIp } from '@/lib/rate-limit';
 import { segretiCombaciano, gettoneBearer } from '@/lib/api/segreti';
 import {
   esitoBattiti,
+  battitiNonLetti,
   SOGLIE_VISTE_DA_FUORI,
   type CronHeartbeat,
   type EsitoBattiti,
@@ -116,12 +117,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   // seconda query non si fa (sarebbe una connessione in più tolta a un
   // database già in affanno, sulla rotta che si interroga proprio allora) e la
   // risposta lo dice invece di far passare «non guardato» per «sano».
-  let cron: EsitoBattiti = {
-    ok: false,
-    esaminati: 0,
-    attesi,
-    error: 'battiti non letti: il database non risponde',
-  };
+  let cron: EsitoBattiti = battitiNonLetti(attesi, 'battiti non letti: il database non risponde');
   // Il messaggio grezzo del database è una mappa di dov'è scoperto il sito:
   // esce solo a chi ha il segreto in mano.
   let dettaglioBattiti: string | undefined;
@@ -130,13 +126,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       const admin = getAdminSupabase();
       const { data, error } = await admin.from('cron_heartbeats').select('name, last_run_at');
       if (error) {
-        cron = { ok: false, esaminati: 0, attesi, error: 'battiti non leggibili' };
+        cron = battitiNonLetti(attesi, 'battiti non leggibili');
         dettaglioBattiti = error.message;
       } else {
         cron = esitoBattiti((data ?? []) as CronHeartbeat[], Date.now(), SOGLIE_VISTE_DA_FUORI);
       }
     } catch (e) {
-      cron = { ok: false, esaminati: 0, attesi, error: 'battiti non leggibili' };
+      cron = battitiNonLetti(attesi, 'battiti non leggibili');
       dettaglioBattiti = e instanceof Error ? e.message : 'errore sconosciuto';
     }
   }

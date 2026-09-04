@@ -75,7 +75,19 @@ export default function ReturnsPage() {
           <h2 className="mb-3 font-serif text-xl font-bold text-ink-900">Tempi e modalità di rimborso</h2>
           <ul className="list-disc space-y-1 pl-5 leading-relaxed">
             <li>Il rimborso avviene <strong>entro 14 giorni</strong> dalla ricezione del prodotto da parte del venditore.</li>
-            <li>Per pagamento alla consegna il rimborso viene effettuato con bonifico sull&apos;IBAN che ci fornisci.</li>
+            {/* 3/9/2026 — QUI SI PROMETTEVA UN BONIFICO CHE NESSUNO PUÒ FARE.
+                Nel modulo di reso non c'è nessun campo per l'IBAN e la tabella
+                dei resi non ha nessuna colonna bancaria: quando il reso viene
+                approvato, per gli ordini in contanti `refundOrder` accredita
+                l'importo sul credito MyCity («cod_refund»). Chi restituisce una
+                giacca da 80 € aspettando il bonifico riceve 80 € di credito: un
+                reclamo fondato, e una recensione dura. Qui si scrive quello che
+                succede davvero, e resta la strada del bonifico su richiesta —
+                che è quella che facciamo a mano. */}
+            <li>
+              Per pagamento alla consegna il rimborso arriva come <strong>credito MyCity</strong>, spendibile sul
+              prossimo ordine pagato alla consegna. Se preferisci il bonifico, <Link href="/contact" className="text-primary-700 underline">scrivici</Link>: te lo facciamo noi.
+            </li>
             <li>Per pagamenti con carta il rimborso accredita sulla stessa carta usata per l&apos;acquisto.</li>
             <li>Verrai notificato a ogni stato (richiesta inviata, ricevuta, approvata, rimborsata).</li>
           </ul>

@@ -4,6 +4,11 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { cancellaAccount } from '@/lib/account/cancellazione';
+import {
+  verdettoDelGiro,
+  type TentativoCancellazione,
+  type VerdettoGiro,
+} from '@/lib/cron-cancellazioni';
 
 export const runtime = 'nodejs';
 
@@ -249,6 +254,33 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     // giorni dalla consegna: il tempo della quadratura di cassa e di un
     // reclamo. Dopo, e' la fotografia di una casa e basta.
     await potaFileScaduti(admin, 'foto_consegna_da_cancellare', 'cod-proof');
+
+    // 3/9/2026 — IL BUONO REGALO TENEVA PER SEMPRE L'EMAIL DI CHI NON E' NOSTRO
+    // CLIENTE.
+    //
+    // I dati del destinatario di un buono regalo servono a recapitare il
+    // regalo. Finito quello — buono speso o scaduto da piu' di 12 mesi — non
+    // servono a niente, e appartengono a una persona che con noi non ha nessun
+    // rapporto: non ha un account, non ha comprato, spesso non sa nemmeno che
+    // esistiamo. Finche' questa potatura non c'era, il suo nome e la sua email
+    // se ne andavano solo se CHI HA COMPRATO il buono (o chi lo ha riscattato)
+    // chiedeva di cancellare il proprio account: cioe' quasi mai.
+    //
+    // Il credito e il codice restano: si tolgono solo nome, email e messaggio —
+    // il messaggio e' il testo privato che una persona ha scritto a un'altra.
+    // Il filtro `recipient_email is not null` rende la pulizia idempotente:
+    // ripassarci sopra ogni notte non riscrive righe gia' pulite.
+    await pota('gift_cards', admin
+      .from('gift_cards')
+      .update({ recipient_name: null, recipient_email: null, message: null })
+      .lt('expires_at', monthsAgo(12))
+      .not('recipient_email', 'is', null), fallite);
+    await pota('gift_cards_esauriti', admin
+      .from('gift_cards')
+      .update({ recipient_name: null, recipient_email: null, message: null })
+      .eq('balance_cents', 0)
+      .lt('redeemed_at', monthsAgo(12))
+      .not('recipient_email', 'is', null), fallite);
   } catch (e) {
     logger.warn('[cron-deletions] prune retention IP/UA parziale', { e });
   }
@@ -260,23 +292,37 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     return ApiErrors.internal(rpcErr.message);
   }
 
-  const userIds: string[] = (expired ?? []).map((r: { user_id: string }) => r.user_id);
+  const scadute = (expired ?? []) as Array<{ user_id: string; deleted_at: string | null }>;
+  const userIds: string[] = scadute.map((r) => r.user_id);
   if (userIds.length === 0) {
     return NextResponse.json({ processed: 0, message: 'No accounts to process', retentionFallite: fallite.n });
   }
 
-  const results = { ok: 0, failed: 0, errors: [] as string[] };
+  const results = { ok: 0, errors: [] as string[] };
+  const tentativi: TentativoCancellazione[] = [];
 
-  for (const userId of userIds) {
+  for (const riga of scadute) {
+    const userId = riga.user_id;
     // #178 — La stessa pipeline che usa la cancellazione fatta
     // dall'amministratore: anonimizza il profilo e i dati di verifica
     // identita', anonimizza il testo libero, toglie dalla newsletter, cancella
     // i file dallo storage e infine l'account. Prima erano due elenchi di passi
     // scritti in due file, e uno dei due era piu' corto.
     const esito = await cancellaAccount(admin, userId);
+    tentativi.push({
+      userId,
+      ok: esito.ok,
+      motivo: esito.motivo,
+      errore: esito.errore,
+      // La RPC restituisce anche il giorno in cui la persona ha chiesto di
+      // sparire: e' l'unica cosa che dice da quanto sta aspettando, e quindi
+      // l'unica che distingue un rinvio di ieri da un termine di legge scaduto.
+      chiestaIl: riga.deleted_at,
+    });
     if (!esito.ok) {
-      logger.error('[cron-deletions] cancellazione fallita', { userId, errore: esito.errore });
-      results.failed++;
+      logger.error('[cron-deletions] cancellazione fallita', {
+        userId, errore: esito.errore, motivo: esito.motivo ?? null,
+      });
       results.errors.push(`${userId}: ${esito.errore ?? 'errore'}`);
       continue;
     }
@@ -285,16 +331,83 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     logger.info('[cron-deletions] processed', { userId, fileRimossi: esito.fileRimossi });
   }
 
-  return NextResponse.json({
-    processed: results.ok,
-    failed: results.failed,
-    errors: results.errors,
-    total: userIds.length,
-    // R169 — Quante pulizie di ritenzione non sono riuscite: senza questo numero
-    // il lavoro rispondeva «fatto» anche quando non aveva pulito niente.
-    retentionFallite: fallite.n,
-  });
+  const verdetto = verdettoDelGiro(tentativi, Date.now());
+  if (verdetto.daSvegliare) await sveglia(admin, verdetto);
+
+  return NextResponse.json(
+    {
+      processed: results.ok,
+      // 3/9/2026 — `failed` conta SOLO i guasti. Prima contava ogni «non
+      // cancellato», rinvii compresi: chi leggeva la risposta vedeva un
+      // fallimento dove c'era una regola che stava funzionando.
+      failed: verdetto.fallite,
+      errors: results.errors,
+      total: userIds.length,
+      // R169 — Quante pulizie di ritenzione non sono riuscite: senza questo numero
+      // il lavoro rispondeva «fatto» anche quando non aveva pulito niente.
+      retentionFallite: fallite.n,
+      // 3/9/2026 — Un rinvio deciso da noi non e' un fallimento, ma non e'
+      // nemmeno un successo: se non ha un posto suo nella risposta, sparisce
+      // dentro `failed` (e allora l'allarme suona ogni notte) oppure dentro
+      // `processed` (e allora non suona mai).
+      rinviate: verdetto.rinviate,
+      scadute: verdetto.scadute,
+    },
+    // 3/9/2026 — LA NOTTE CHE FALLISCE FINISCE ROSSA.
+    //
+    // Qui si rispondeva 200 con `failed: 3` nel corpo, e il corpo non lo legge
+    // nessuno: ne' Vercel, che guarda il codice di stato, ne' il freno
+    // anti-silenzio, che scrive il battito solo se la risposta e' buona
+    // (`withCronAuth`). Un 500 fa due cose insieme: rende rossa l'esecuzione
+    // nel pannello dei lavori periodici, e NON scrive il battito — cosi' se la
+    // cosa va avanti anche il sorvegliante se ne accorge da solo.
+    { status: verdetto.daSvegliare ? 500 : 200 },
+  );
 });
+
+/**
+ * Sveglia un amministratore. Best-effort di proposito: se la notifica non
+ * riesce, la notte resta rossa lo stesso (il 500 qui sopra non dipende da
+ * questa funzione) — un allarme che non parte non deve poter cancellare il
+ * guasto che doveva annunciare.
+ *
+ * Perche' la notifica in-app e non l'email: la posta ce l'ha gia' in mano il
+ * sorvegliante (`operational-alerts`), che manda un messaggio solo ogni sei ore
+ * per la stessa cosa. Qui si scrive nel pannello, che e' il posto dove un
+ * amministratore guarda comunque, e nel registro degli errori, che arriva a
+ * Sentry.
+ */
+async function sveglia(admin: Admin, verdetto: VerdettoGiro): Promise<void> {
+  logger.error('[cron-deletions] richieste di cancellazione non eseguite', {
+    fallite: verdetto.fallite,
+    scadute: verdetto.scadute,
+    riga: verdetto.riga,
+  });
+  try {
+    const { data: amministratori } = await admin
+      .from('profiles').select('id').eq('role', 'admin').limit(10);
+    if (!amministratori || amministratori.length === 0) {
+      logger.error('[cron-deletions] nessun amministratore a cui dirlo: allarme non recapitato');
+      return;
+    }
+    const { error } = await admin.from('notifications').insert(
+      (amministratori as { id: string }[]).map((a) => ({
+        user_id: a.id,
+        // Categoria di sistema: non e' una promozione e non si spegne con gli
+        // interruttori del marketing (#33).
+        category: 'system',
+        title: 'Cancellazioni account non eseguite',
+        body: verdetto.riga ?? 'Il giro notturno delle cancellazioni non e andato a buon fine.',
+        link: '/admin/users',
+      })),
+    );
+    if (error) {
+      logger.error('[cron-deletions] avviso agli amministratori non scritto', { message: error.message });
+    }
+  } catch (e) {
+    logger.error('[cron-deletions] avviso agli amministratori non partito', { e });
+  }
+}
 
 // I lavori periodici di Vercel bussano in GET, sempre — non c'è modo di
 // chiedergli un POST. Questa rotta nasceva POST-e-basta, dai tempi del cron

@@ -64,7 +64,19 @@ export default function HomeEvents() {
           >
             <div className="relative aspect-[16/9] bg-gradient-to-br from-primary-100 to-secondary-100">
               {e.cover_image_url && (
-                <Image src={sizedImage(e.cover_image_url, 'card')} alt="" fill sizes="(max-width: 640px) 100vw, 25vw" loader={caricatoreFotoRemote} className="object-cover" />
+                // 3/9/2026 — LA LOCANDINA ARRIVAVA QUI TAGLIATA A META'.
+                // La misura `card` fa scrivere nell'indirizzo un'altezza uguale
+                // alla larghezza (`lib/image-url.ts`, `resize=cover`): su una
+                // copertina 16:9 il server buttava via le due fasce laterali, e
+                // poi il riquadro 16:9 qui sotto buttava via sopra e sotto. Di
+                // una locandina 1600x900 restava circa la meta' centrale — via
+                // il titolo, la data, il logo del negozio, che stanno ai bordi.
+                // Il caricatore non salvava niente: l'altezza era gia' scritta
+                // nell'indirizzo e lui la riallinea alla larghezza.
+                // `detail` non scrive nessuna altezza, quindi il server
+                // rimpicciolisce e basta — che e' quello che fa gia' la pagina
+                // Eventi sulla STESSA copertina.
+                <Image src={sizedImage(e.cover_image_url, 'detail')} alt="" fill sizes="(max-width: 640px) 100vw, 25vw" loader={caricatoreFotoRemote} className="object-cover" />
               )}
               {e.discount_percent ? (
                 <span className="absolute top-2 right-2 bg-accent-500 text-ink-900 text-xs font-bold px-2 py-0.5 rounded-full">

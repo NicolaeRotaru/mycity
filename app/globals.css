@@ -67,6 +67,12 @@
   --border:             var(--cream-300);
   --border-strong:      var(--cream-500);
   --border-neutral:     var(--surface-200);
+  /* Il bordo di un COMANDO (campo da compilare), che non e' il bordo di un
+     separatore decorativo. cream-300 su cream-100 stacca 1,24 volte: WCAG 1.4.11
+     ne chiede 3. ink-400 ne stacca 4,49 sul fondo pagina e 4,66 sul bianco.
+     Se un giorno il grigio sembra troppo duro, si ritocca QUI: il minimo e' 3:1
+     misurati, e la prova lo ricalcola dai valori veri. */
+  --border-control:     var(--ink-400);
   --success:            var(--olive-600);
   --warning:            var(--accent-500);
   --danger:             #DC2626;
@@ -114,11 +120,37 @@
   --space-0:0; --space-1:0.25rem; --space-2:0.5rem; --space-3:0.75rem; --space-4:1rem; --space-5:1.25rem;
   --space-6:1.5rem; --space-8:2rem; --space-10:2.5rem; --space-12:3rem; --space-16:4rem; --space-20:5rem;
   --container-max: 1280px; --container-pad: 1rem; --tabbar-height: 72px;
-  /* #124 — Quanto spazio si prende il banner dei cookie, quando c'e'. Vale 0
-     finche' non compare: cosi' le barre in fondo (aggiungi al carrello, ecc.)
-     si spostano sopra di lui invece di finirci sotto. Lo imposta
-     components/CookieBanner.tsx mentre e' visibile. */
+  /* ---- Le corsie in fondo allo schermo -----------------------------------
+     In fondo allo schermo si accatastano quattro cose scritte in file diversi.
+     Ognuna dichiara qui quanto e' alta mentre e' a video; chi le sta sopra
+     somma le corsie sotto di se' invece di indovinare un numero. L'ordine
+     (chi sta sopra chi) vive in lib/ui/barra-in-fondo.ts — una casa sola.
+     Ogni corsia vale 0 finche' quell'elemento non c'e'.
+
+     3/9/2026 — Senza questo registro il pulsante tondo dell'assistenza stava
+     a 96px scritti a mano, pensati per scavalcare la sola barra a schede, e
+     finiva sopra il lato destro di «Aggiungi al carrello»: il tocco apriva
+     l'assistenza invece di mettere il prodotto nel carrello. */
+
+  /* #124 — Lo imposta components/CookieBanner.tsx mentre e' visibile. */
   --altezza-banner-cookie: 0px;
+  /* Lo imposta components/StickyAddToCart.tsx mentre la barra e' a video. */
+  --altezza-barra-acquisto: 0px;
+  /* Lo imposta components/PWAInstallBanner.tsx mentre il banner e' a video. */
+  --altezza-banner-installa: 0px;
+
+  /* IL PAVIMENTO DI CHI GALLEGGIA, e perche' serve.
+     Non tutte le barre in fondo dichiarano ancora la propria corsia: quella
+     della cassa («Conferma ordine») e quella del fattorino no, e su quelle
+     pagine la barra a schede vale zero (body.senza-tabbar). Senza un pavimento
+     il pulsante tondo scenderebbe a 24px e finirebbe sopra «Conferma ordine» —
+     lo stesso difetto, spostato sulla pagina che conta di piu'. 6rem e' la
+     misura che il pulsante aveva prima (bottom-24), quindi li' non cambia
+     niente; il respiro di 24px torna dove nessuna di quelle barre e' piu' a
+     video (vedi la @media piu' sotto).
+     Quando anche quelle due barre dichiareranno la loro corsia, questo
+     pavimento si potra' abbassare. */
+  --fondo-minimo: 6rem;
 
   /* ---- Z-index hierarchy ------------------------------------------------ */
   --z-base:0; --z-dropdown:10; --z-sticky:20; --z-sidebar:25; --z-mobile-nav:30;
@@ -150,11 +182,70 @@ a:hover { color: var(--primary-800); }
 h1, h2, h3, .font-serif-display {
   font-family: var(--font-serif);
   letter-spacing: var(--tracking-display);
-  color: var(--text-heading);
 }
+/* 3/9/2026 — IL COLORE DEI TITOLI STA IN UNA REGOLA SUA, E NON IN LISTA CON UNA CLASSE.
+ *
+ * Era nella regola qui sopra, dove insieme a `h1, h2, h3` c'e' anche
+ * `.font-serif-display`. Il peso di una lista di selettori si conta selettore
+ * per selettore — quindi su un h2 quella regola pesa 0,0,1 — ma e' una finezza
+ * che non tutti i motori applicano allo stesso modo, e sopra ci si e' gia'
+ * rotta la testa una volta. Separare le due cose costa una riga e toglie di
+ * mezzo la finezza: il colore dei titoli pesa quanto un elemento, e la classe
+ * pesa quanto una classe. */
+h1, h2, h3 { color: var(--text-heading); }
+.font-serif-display { color: var(--text-heading); }
 h1 { font-size: var(--text-5xl); font-weight: var(--weight-bold); line-height: var(--leading-none); }
-h2 { font-size: var(--text-3xl); font-weight: var(--weight-bold); line-height: var(--leading-tight); }
-h3 { font-size: var(--text-xl);  font-weight: var(--weight-bold); line-height: var(--leading-snug); }
+/* 3/9/2026 — LA MISURA DI PARTENZA ERA PIU' GRANDE DI QUASI TUTTE QUELLE SCELTE.
+ *
+ * Un titolo senza classe di dimensione prende la misura scritta qui. h2 diceva
+ * 30px: la parola «Filtri» in una colonna laterale usciva a 30px accanto al suo
+ * contatore da 10px, e «Promozioni attive» usciva a 30px mentre le altre
+ * intestazioni della stessa vetrina — che passano da SectionHeading — stanno a
+ * 20/24px. Due titoli di pari grado, due misure diverse nella stessa pagina.
+ *
+ * IL NUMERO NON E' A GUSTO. Nel progetto ci sono 125 h2 con la misura scelta a
+ * mano: la mediana e' 20px (la piu' frequente e' 18px, 44 volte) e 107 su 125
+ * stanno sotto i 30px. Se la misura di partenza e' piu' grande della mediana,
+ * NON scegliere fa un titolo piu' grosso della maggioranza di quelli scelti:
+ * e' esattamente il difetto. Stesso conto per h3: 25 misure scelte, mediana
+ * 18px. Il freno sta in tests/unit/il-titolo-che-nessuno-ha-misurato-non-grida.test.ts,
+ * che il conto lo rifa' sui file veri a ogni giro.
+ *
+ * I titoli grandi non cambiano: hanno gia' la loro classe esplicita, che vince
+ * su queste regole di elemento. */
+h2 { font-size: var(--text-xl); font-weight: var(--weight-bold); line-height: var(--leading-tight); }
+h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: var(--leading-snug); }
+
+/* 3/9/2026 — SUL RIQUADRO SCURO IL TITOLO RESTAVA NERO E IL SOTTOTITOLO DIVENTAVA BIANCO.
+ *
+ * La regola qui sopra da' ai titoli un colore PROPRIO. Quando il riquadro che
+ * li contiene dichiara il bianco, quel bianco si trasmette per eredita' — e
+ * l'eredita' perde sempre contro una dichiarazione scritta sull'elemento.
+ * Risultato: sul gradiente terracotta di /about l'H1 usciva color inchiostro
+ * (2,6:1, sotto i 3:1 che WCAG 1.4.3 chiede anche al testo grande) mentre la
+ * riga sotto era bianca. Lo stesso schema si ripete in una ventina di titoli:
+ * il banner della home, il banner della vetrina, il nome del negozio nel
+ * pannello venditore.
+ *
+ * Non e' l'errore di una pagina: e' una trappola: ogni titolo nuovo dentro un
+ * blocco scuro nasceva sbagliato. Qui il titolo torna a seguire il colore del
+ * suo contenitore, una volta per tutti.
+ *
+ * PERCHE' `:where(...)` E NON IL SELETTORE NUDO. La cura ovvia sarebbe
+ * `[class*="text-white"] h2 { color: inherit }`, ma quella pesa 0,1,1 e
+ * vincerebbe anche sul titolo che dichiara un colore SUO (`text-red-900` pesa
+ * 0,1,0): si curerebbero i titoli dei blocchi scuri rompendo quelli che erano
+ * gia' a posto. `:where()` non conta nel peso, quindi questa regola pesa quanto
+ * quella del colore qui sopra (0,0,1) e la batte solo perche' viene dopo — e
+ * perde, come deve, contro qualunque classe di colore messa sul titolo.
+ *
+ * `[class*=…]` e non `[class~=…]` perche' la stessa cosa si scrive in molti
+ * modi — `text-white`, `md:text-white`, `text-white/90` — e una lista di forme
+ * scritta a mano e' proprio il tipo di controllo che qui si rompe per primo.
+ *
+ * Il freno sta in tests/unit/il-titolo-sul-fondo-scuro-si-legge.test.ts, che
+ * monta le regole vere in un browser finto e rifa' il conto del contrasto. */
+:where([class*="text-white"]) :is(h1, h2, h3) { color: inherit; }
 
 /* Default focus ring più visibile e on-brand */
 :focus-visible {
@@ -207,6 +298,36 @@ h3 { font-size: var(--text-xl);  font-weight: var(--weight-bold); line-height: v
 @media (max-width: 767px) {
   body { padding-bottom: calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0)); }
   body.senza-tabbar { --tabbar-height: 0px; }
+}
+
+/* 3/9/2026 — DA 768px IN SU LA BARRA A SCHEDE NON C'E'.
+   components/MobileTabBar.tsx e' `md:hidden`: sul tablet e sul computer quella
+   barra sparisce. La variabile pero' restava a 72px anche li', e chiunque la
+   sommi nel proprio `bottom` — la barra «Aggiungi al carrello», il pulsante
+   dell'assistenza — restava alzato di 72 pixel sopra il vuoto. Una variabile
+   che dice il falso fa sbagliare tutti quelli che la leggono: qui dice la
+   verita' anche di sopra. */
+@media (min-width: 768px) {
+  :root { --tabbar-height: 0px; }
+}
+
+/* 3/9/2026 (secondo giro) — IL PAVIMENTO ARRIVA FIN DOVE ARRIVA LA BARRA CHE
+   DEVE PROTEGGERE, non fin dove sparisce la barra a schede.
+   Qui c'era 768px, con scritto «sul computer sotto non c'e' niente da
+   scavalcare». Non era vero: la barra «Conferma ordine» della cassa e'
+   `lg:hidden`, cioe' resta a video fino a 1023. Fra 768 e 1023 — ogni iPad in
+   verticale, ogni finestra affiancata su un portatile — tutte le corsie
+   valgono zero, il pavimento scendeva a 24px e il pulsante tondo
+   dell'assistenza tornava sopra il pulsante che paga.
+   1024 NON e' un numero scelto qui: e' quello che torna da
+   `larghezzaSenzaBarreNonDichiarate()` in lib/ui/barra-in-fondo.ts, dove ogni
+   barra senza corsia dichiara fin dove si vede. La prova
+   tests/unit/i-pulsanti-che-galleggiano-non-coprono-chi-compra.test.ts diventa
+   rossa se questo numero e quello del registro smettono di coincidere, o se in
+   cassa la barra cambia la misura da cui sparisce. */
+@media (min-width: 1024px) {
+  /* Qui non c'e' piu' nessuna barra senza corsia: resta il respiro. */
+  :root { --fondo-minimo: 1.5rem; }
 }
 
 /* A11y: reduced motion override per utenti con vestibolare disorders */
@@ -351,4 +472,47 @@ h3 { font-size: var(--text-xl);  font-weight: var(--weight-bold); line-height: v
   select.text-sm {
     font-size: var(--text-base);
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * IL BORDO DEI CAMPI DA COMPILARE — 3:1, o il campo non si vede.
+ *
+ * 3/9/2026 — CREMA SU CREMA: 1,24 VOLTE.
+ *
+ * Il bordo dei campi era `border-cream-300` (#EEDFBA) e la pagina dietro e'
+ * cream-100 (#FBF7F0). Misurato in un browser su /sign-in: 1,24:1. WCAG 2.1
+ * (1.4.11, livello AA) per il bordo di un comando chiede 3:1. Chi ha la vista
+ * calante — l'anziano che ordina il pane — non vedeva dove scrivere: vedeva un
+ * rettangolo di crema su crema. Vale per l'accesso, la registrazione,
+ * l'indirizzo di consegna in cassa, i moduli dell'area venditore.
+ *
+ * LA RADICE. cream-300 e' il colore dei SEPARATORI decorativi, ed e' stato
+ * riusato come bordo dei comandi. Due tinte vicine della stessa rampa non
+ * possono arrivare a 3:1: non e' un valore da ritoccare, e' il colore
+ * sbagliato per quel mestiere. Da qui il token `--border-control`, separato da
+ * `--border`, che resta cream-300 per i separatori.
+ *
+ * PERCHE' QUI E NON IN components/ui/Field.tsx. La primitiva Field non e'
+ * l'unica porta: il pavimento dei 16px qui sopra e' nato perche' 63 campi di
+ * testo su 97 NON passano dalla primitiva. Una riga in Field curerebbe i suoi e
+ * lascerebbe gli altri. Questa regola vale per ogni comando che porta il colore
+ * decorativo, compreso quello che qualcuno scrivera' domani.
+ *
+ * PERCHE' NOMINANDO LA CLASSE E NON SU OGNI `input`. Un bordo forzato su TUTTI
+ * i campi schiaccerebbe anche quelli scelti apposta diversi — il rosso
+ * dell'errore, per esempio. Nominando la classe decorativa si cambia solo cio'
+ * che e' decorativo. La specificita' e' 0,1,1 (elemento piu' classe): vince
+ * sulla utility di Tailwind (0,1,0) senza `!important`, e PERDE contro le
+ * varianti di stato — `focus-visible:border-primary-700` e' 0,2,0 — quindi il
+ * bordo del fuoco resta quello del fuoco.
+ *
+ * IL FRENO. `tests/unit/il-bordo-del-campo-si-vede.test.ts` legge la classe che
+ * la primitiva usa DAVVERO, monta queste regole in un browser finto e rifa' il
+ * conto del contrasto. Se domani la primitiva cambia classe e questa regola non
+ * la copre piu', la prova diventa rossa invece di lasciare il campo invisibile.
+ * ───────────────────────────────────────────────────────────────────────────── */
+input.border-cream-300,
+textarea.border-cream-300,
+select.border-cream-300 {
+  border-color: var(--border-control);
 }

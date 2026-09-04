@@ -60,7 +60,12 @@ vi.mock('@/lib/coupons', () => ({
 vi.mock('@/lib/shipping', () => ({ shippingCentsFor: vi.fn(() => 490), compensoRiderCents: vi.fn(() => 300) }));
 vi.mock('@/lib/shipping-coordinate', () => ({ coordinateDaIndirizziSalvati: vi.fn(async () => null) }));
 vi.mock('@/lib/geocodifica', () => ({ coordinateDiUnIndirizzo: vi.fn(async () => null) }));
-vi.mock('@/lib/store-hours', () => ({ isStoreClosedForOrder: vi.fn(() => false) }));
+// 3/9/2026 — la rotta adesso decide con `negozioPuoServire`, che guarda la fascia
+// scelta e non solo l'orologio (l'ordine serale per domani non si rifiuta piu').
+vi.mock('@/lib/store-hours', () => ({
+  negozioPuoServire: vi.fn(() => true),
+  motivoNegozioChiuso: vi.fn((n: string) => `${n} è chiuso in questo momento.`),
+}));
 vi.mock('@/lib/promotions', () => ({
   fetchActiveDiscounts: vi.fn(async () => new Map()),
   discountedUnitCents: vi.fn((prezzo: number) => Math.round(prezzo * 100)),

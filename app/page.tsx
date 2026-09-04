@@ -2,10 +2,12 @@ import { frasePagamento } from '@/lib/promesse-pubbliche';
 import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
 import { headers } from 'next/headers';
 import { HydrationBoundary } from '@tanstack/react-query';
+import { unstable_cache } from 'next/cache';
 import { precaricaHome } from '@/lib/queries/precarico';
+import { SECONDI_CATALOGO_FRESCO } from '@/lib/queries/cache-pubblica';
 import ExperimentExposure from '@/components/home/ExperimentExposure';
 import HomeSectionRenderer, { type HeroDefaults } from '@/components/home-sections/HomeSectionRenderer';
-import { getServerSupabase } from '@/lib/supabase/server';
+import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { normalizeHomeSite, homeEnabledSections } from '@/lib/home-site';
 import { EXPERIMENTS, expHeaderName, resolveVariant } from '@/lib/experiments';
 
@@ -55,9 +57,14 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
 };
 
 // NB: ISR non applicabile. next-intl è cookie-based → tutte le rotte sono dinamiche
-// per-request. La config della home (site_settings.home_site) è letta server-side a
-// ogni richiesta (SELECT pubblica via RLS); dopo un salvataggio admin la home riflette
-// subito le modifiche.
+// per-request: l'HTML della home NON si può mettere in una cache condivisa, perché
+// cambia con i cookie di chi la chiede (lingua, variante dell'esperimento, accesso).
+//
+// 3/9/2026 — quello che si può tenere è la parte che NON dipende da chi chiede: la
+// composizione della pagina e le categorie, uguali per tutti. Sono dietro una memoria
+// di 60 secondi (vedi sotto), non più rilette a ogni singola visita. Dopo un
+// salvataggio dal pannello la home riflette la modifica entro un minuto — prima era
+// istantaneo, ed è il prezzo dichiarato di questo cambio.
 
 /**
  * Homepage MyCity — ora COMPONIBILE dall'admin (Home builder, /admin/home).
@@ -68,15 +75,58 @@ const HERO_VARIANTS: Record<string, HeroDefaults> = {
  * newsletter → CTA venditore). Le sezioni strutturali riusano i componenti home
  * esistenti; i blocchi di contenuto (testo/banner/galleria/video) sono liberi.
  */
-async function loadHomeSite() {
+async function leggiConfigurazioneHome() {
   try {
-    const supa = await getServerSupabase();
+    // Client ANONIMO, non quello con i cookie della richiesta. Due ragioni, e la
+    // seconda è vincolante: ① la composizione della home è pubblica, la legge
+    // uguale chiunque, quindi la sessione non c'entra; ② una lettura tenuta in
+    // memoria per sessanta secondi non può guardare i cookie di UNA richiesta —
+    // sarebbe la risposta di una persona riusata per la successiva. Next lo
+    // vieta e ferma la pagina, ed è giusto che la fermi.
+    const supa = creaClientAnonimo();
     const { data } = await supa.from('site_settings').select('home_site').eq('id', 1).maybeSingle();
     return normalizeHomeSite((data as { home_site?: unknown } | null)?.home_site);
   } catch {
     return normalizeHomeSite(null);
   }
 }
+
+/**
+ * 3/9/2026 — LA HOME RILEGGEVA IL DATABASE A OGNI SINGOLA VISITA.
+ *
+ * Il precarico ha tolto i viaggi di rete del BROWSER: la pagina parte già piena.
+ * Ma le due letture ci sono ancora — le fa il server al posto del telefono — e
+ * le rifaceva per ognuno che apriva la home: la composizione della pagina e
+ * l'elenco delle categorie. Due risposte identiche per tutti, chieste una volta
+ * a testa. Cento visite nello stesso minuto erano duecento letture per ottenere
+ * due risultati.
+ *
+ * È la curva che fa male al conto: le letture crescono col numero di
+ * VISITATORI, non col numero di ordini. Un articolo che finisce sui social e
+ * porta diecimila curiosi in un pomeriggio costa come diecimila clienti, e non
+ * ne ha portato nemmeno uno.
+ *
+ * Qui la risposta si tiene per sessanta secondi e si riusa per tutti. Sessanta
+ * è lo stesso numero che va nell'intestazione delle rotte pubbliche di catalogo,
+ * e viene dallo stesso file: se un domani si cambia idea, si cambia in un posto
+ * solo. Chi pubblica un prodotto o ricompone la home dal pannello vede il
+ * cambiamento entro un minuto.
+ *
+ * Il precarico resta quello che era — se non riesce, consegna uno stato vuoto e
+ * il browser fa quello che faceva prima — quindi mettergli davanti la memoria
+ * non aggiunge nessun modo nuovo di rompersi.
+ */
+const loadHomeSite = unstable_cache(
+  leggiConfigurazioneHome,
+  ['home-configurazione'],
+  { revalidate: SECONDI_CATALOGO_FRESCO, tags: ['home-configurazione'] },
+);
+
+const precaricoDellaHome = unstable_cache(
+  precaricaHome,
+  ['home-precarico'],
+  { revalidate: SECONDI_CATALOGO_FRESCO, tags: ['home-precarico'] },
+);
 
 export default async function Home() {
   // Home del marketplace, visibile a TUTTI — inclusi admin/seller/rider, che
@@ -115,7 +165,7 @@ export default async function Home() {
    * ricostruire quella chiave identica sul server — se sbaglia, il browser
    * rilegge tutto e nessuno se ne accorge. E' il pezzo successivo, non questo.
    */
-  const precarico = await precaricaHome();
+  const precarico = await precaricoDellaHome();
 
   return (
     <div className="bg-surface-50">

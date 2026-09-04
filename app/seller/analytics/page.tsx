@@ -16,6 +16,7 @@ import { Card } from '@/components/ui/Card';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import { queryKeys } from '@/lib/queries/keys';
 import { numeriDellAndamento, type RigaAndamento } from '@/lib/seller/andamento-negozio';
+import { letturaDellAndamento, tassoDiConversione, numeroOTrattino } from './letture-dell-andamento';
 
 const DAY_LABELS = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 
@@ -51,11 +52,13 @@ export default function SellerAnalyticsPage() {
 
       const productIds = (products ?? []).map((p) => p.id);
       const empty = {
-        views30: 0, views7: 0, viewsToday: 0,
-        orders30: 0, orders7: 0,
+        // Senza prodotti a catalogo questi zeri sono veri, non un ripiego.
+        visiteIgnote: false,
+        views30: 0 as number | null, views7: 0 as number | null, viewsToday: 0 as number | null,
+        orders30: 0, orders7: 0, ordiniRicevuti30: 0,
         revenue30: 0, revenue7: 0,
-        conversionRate: 0,
-        avgRating: 0, reviewCount: 0,
+        conversionRate: null as number | null,
+        avgRating: 0 as number | null, reviewCount: 0 as number | null,
         topProducts: [] as Array<{ id: string; name?: string; price?: number; views: number }>,
         slowProducts: [] as Array<{ id: string; name?: string; views: number }>,
         revenueSeries: [] as Array<{ label: string; value: number }>,
@@ -85,7 +88,10 @@ export default function SellerAnalyticsPage() {
         supabase.rpc('andamento_del_negozio'),
         supabase
           .from('orders')
-          .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, created_at')
+          // 3/9/2026 — senza `refunded_amount_cents` la definizione unica del
+          // fatturato non puo' togliere i rimborsi: la pagina Andamento
+          // mostrava l'ordine rimborsato per intero.
+          .select('id, total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, created_at')
           .eq('seller_id', userId!)
           .gte('created_at', since30),
       ]);
@@ -94,16 +100,31 @@ export default function SellerAnalyticsPage() {
       // la pagina mostrava zero e sembrava una giornata storta. Uno zero che
       // vuol dire «non lo so» e' peggio di un errore, perche' il negoziante ci
       // crede. Ora l'errore risale e react-query mostra lo stato di errore.
-      const erroreLettura = andamentoRes.error ?? ordersRes.error;
-      if (erroreLettura) throw erroreLettura;
+      //
+      // 3/9/2026 — Ma le due letture non hanno lo stesso peso, e prima venivano
+      // buttate insieme. In produzione `andamento_del_negozio` non c'e' ancora
+      // (migrazione 141 non applicata): mancavano le visite, e il negoziante
+      // trovava una schermata di guasto al posto del SUO FATTURATO, che era
+      // stato letto benissimo. Senza gli ordini la pagina si ferma; senza le
+      // visite continua, e quello che non sa lo dice.
+      const esito = letturaDellAndamento(ordersRes.error, andamentoRes.error);
+      if (esito.fermati) throw esito.errore;
+      const visiteIgnote = esito.visiteIgnote;
 
       const riga = (Array.isArray(andamentoRes.data) ? andamentoRes.data[0] : andamentoRes.data) as RigaAndamento | null;
       const orders = (ordersRes.data ?? []) as Array<{ id: string; total_price: number; delivery_status: string; created_at: string }>;
 
       // «Oggi» e' oggi a Piacenza, non a Greenwich (#221): il taglio del giorno
       // lo fa la funzione del database, con lo stesso fuso.
-      const { views30, views7, viewsToday, viewsByProduct, avgRating, reviewCount } =
-        numeriDellAndamento(riga);
+      const numeri = numeriDellAndamento(riga);
+      // Quando le visite non si sono potute leggere, qui non c'e' uno zero: c'e'
+      // un buco dichiarato. Zero visite e «non lo so» si disegnano diversi.
+      const views30 = visiteIgnote ? null : numeri.views30;
+      const views7 = visiteIgnote ? null : numeri.views7;
+      const viewsToday = visiteIgnote ? null : numeri.viewsToday;
+      const avgRating = visiteIgnote ? null : numeri.avgRating;
+      const reviewCount = visiteIgnote ? null : numeri.reviewCount;
+      const viewsByProduct = visiteIgnote ? {} : numeri.viewsByProduct;
 
       /**
        * 22/8/2026 — «I TUOI ORDINI» CONTAVA ANCHE QUELLI ANNULLATI E MAI PAGATI.
@@ -149,7 +170,7 @@ export default function SellerAnalyticsPage() {
        * il consenso non lo richiede — e' il lavoro che chiude davvero il
        * difetto, ed e' scritto nel referto.
        */
-      const conversionRate = views30 > 0 ? (orders30 / views30) * 100 : 0;
+      const conversionRate = tassoDiConversione(orders30, views30);
 
       // Top products by views
       const productMap = new Map((products ?? []).map((p) => [p.id, p]));
@@ -159,8 +180,12 @@ export default function SellerAnalyticsPage() {
         .map(([id, count]) => ({ ...productMap.get(id), views: count }))
         .filter((p) => p.id) as Array<{ id: string; name?: string; price?: number; views: number }>;
 
-      // Slow products (publicati ma pochi/zero view)
-      const slowProducts = (products ?? [])
+      // Slow products (publicati ma pochi/zero view).
+      //
+      // Senza le visite questo elenco non si fa: ogni prodotto avrebbe «0
+      // visite», e la pagina direbbe al negoziante che i suoi tre prodotti
+      // migliori non li guarda nessuno — consigliandogli di scontarli.
+      const slowProducts = visiteIgnote ? [] : (products ?? [])
         .filter((p) => p.status === 'available')
         .map((p) => ({ ...p, views: viewsByProduct[p.id] ?? 0 }))
         .sort((a, b) => a.views - b.views)
@@ -215,7 +240,7 @@ export default function SellerAnalyticsPage() {
         peakLabel = `${top.hour} e le ${top.hour + 1}`;
       }
 
-      return { views30, views7, viewsToday, orders30, orders7, ordiniRicevuti30, revenue30, revenue7, conversionRate, avgRating, reviewCount, topProducts, slowProducts, revenueSeries, peakHours, peakLabel };
+      return { visiteIgnote, views30, views7, viewsToday, orders30, orders7, ordiniRicevuti30, revenue30, revenue7, conversionRate, avgRating, reviewCount, topProducts, slowProducts, revenueSeries, peakHours, peakLabel };
     },
   });
 
@@ -259,7 +284,7 @@ export default function SellerAnalyticsPage() {
       ctaLabel: 'Modifica prodotto', ctaHref: slow.id ? `/seller/products/${slow.id}/edit` : '/seller/products',
     });
   }
-  if (analytics.conversionRate > 0 && analytics.conversionRate < 1) {
+  if (analytics.conversionRate != null && analytics.conversionRate > 0 && analytics.conversionRate < 1) {
     insights.push({
       icon: PackageX, tone: 'secondary',
       title: 'Conversione sotto la media',
@@ -273,6 +298,18 @@ export default function SellerAnalyticsPage() {
   return (
     <div>
       <SellerPageTitle eyebrow="Insight" title="Analisi" sub="Andamento delle vendite e prodotti migliori" />
+
+      {/*
+        Quando manca solo il conto delle visite, la pagina resta in piedi ma
+        deve dire cosa non sa: senza questa riga i trattini sembrano un guasto
+        del negozio, non una lettura che non e' riuscita.
+      */}
+      {analytics.visiteIgnote && (
+        <p className="mb-5 rounded-lg border border-accent-200 bg-accent-50 px-4 py-3 text-[13px] text-ink-700">
+          Le visite e le recensioni non si sono lette: dove c’è un trattino non vuol dire zero, vuol dire che
+          in questo momento non lo so. Ordini e fatturato qui sotto sono giusti.
+        </p>
+      )}
 
       {/* Consigli per te */}
       {insights.length > 0 && (
@@ -288,18 +325,49 @@ export default function SellerAnalyticsPage() {
 
       {/* KPI hero */}
       <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
-        <KpiCard icon={Eye} label="Visite (30gg)" value={analytics.views30.toString()} delta={`${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7gg`} color="primary" />
+        <KpiCard
+          icon={Eye}
+          label="Visite (30gg)"
+          value={numeroOTrattino(analytics.views30)}
+          delta={
+            analytics.visiteIgnote
+              ? 'Non sono riuscito a leggere le visite'
+              : `${analytics.viewsToday} oggi · ${analytics.views7} ultimi 7gg`
+          }
+          color="primary"
+        />
         <KpiCard icon={ShoppingCart} label="Ordini (30gg)" value={analytics.orders30.toString()} delta={`${analytics.orders7} ultimi 7gg`} color="olive" />
         <KpiCard
           icon={TrendingUp}
           label="Conversion rate"
-          value={`${analytics.conversionRate.toFixed(1)}%`}
+          value={analytics.conversionRate == null ? '—' : `${analytics.conversionRate.toFixed(1)}%`}
           // Il campione, dichiarato: le visite si contano solo su chi accetta i
-          // cookie, quindi questo numero e' un indizio, non una misura.
-          delta={`su ${analytics.views30} visite misurate`}
-          color={analytics.conversionRate >= 2 ? 'olive' : analytics.conversionRate >= 1 ? 'accent' : 'secondary'}
+          // cookie, quindi questo numero e' un indizio, non una misura. E senza
+          // le visite il tasso non c'e': un «0,0%» direbbe che nessuno compra.
+          delta={
+            analytics.conversionRate == null
+              ? 'Serve il conto delle visite per calcolarlo'
+              : `su ${analytics.views30} visite misurate`
+          }
+          color={
+            analytics.conversionRate == null
+              ? 'primary'
+              : analytics.conversionRate >= 2 ? 'olive' : analytics.conversionRate >= 1 ? 'accent' : 'secondary'
+          }
         />
-        <KpiCard icon={Star} label="Rating medio" value={analytics.avgRating > 0 ? analytics.avgRating.toFixed(1) + ' ★' : '—'} delta={analytics.reviewCount > 0 ? `${analytics.reviewCount} recensioni` : 'Nessuna recensione'} color="accent" />
+        <KpiCard
+          icon={Star}
+          label="Rating medio"
+          value={analytics.avgRating != null && analytics.avgRating > 0 ? analytics.avgRating.toFixed(1) + ' ★' : '—'}
+          delta={
+            analytics.visiteIgnote
+              ? 'Non sono riuscito a leggere le recensioni'
+              : analytics.reviewCount != null && analytics.reviewCount > 0
+                ? `${analytics.reviewCount} recensioni`
+                : 'Nessuna recensione'
+          }
+          color="accent"
+        />
       </div>
 
       {/* Revenue grande */}
@@ -332,7 +400,11 @@ export default function SellerAnalyticsPage() {
         <Card variant="bordered" padding="lg">
           <h2 className="mb-4 font-serif text-lg font-bold text-ink-900">Prodotti più visti</h2>
           {analytics.topProducts.length === 0 ? (
-            <p className="text-sm text-ink-500">Nessuna visita ancora.</p>
+            <p className="text-sm text-ink-500">
+              {analytics.visiteIgnote
+                ? 'Il conto delle visite non è disponibile in questo momento.'
+                : 'Nessuna visita ancora.'}
+            </p>
           ) : (
             <div className="space-y-3.5">
               {analytics.topProducts.map((p, i) => {

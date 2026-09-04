@@ -212,13 +212,36 @@ export default function StoresPage() {
     return result;
   }, [stores, search, onlyOpen, sort, categoryId, reviewsByStore, countByStore, categoriesByStore]);
 
+  // IL TITOLO DELLA PAGINA STA SOPRA I TRE STATI, NON DENTRO UNO SOLO.
+  //
+  // 3/9/2026: finche' questa pagina arrivava al browser senza JavaScript nessuno se n'era
+  // accorto, ma mentre i negozi caricano — e se la lettura fallisce — la pagina non aveva
+  // NESSUN titolo di primo livello. Per chi naviga con lo screen reader vuol dire arrivare
+  // su una pagina che non dice come si chiama; per Google, una pagina senza titolo.
+  const titoloDellaPagina = (
+    <div className="mb-6">
+      <h1 className="text-3xl sm:text-4xl font-extrabold text-ink-900">Negozi di Piacenza</h1>
+      {!isLoading && !isError && (
+        <p className="text-ink-500 mt-1">
+          {stores.length} negozi locali pronti a consegnarti a casa
+        </p>
+      )}
+    </div>
+  );
+
   if (isLoading) {
-    return <LoadingState />;
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {titoloDellaPagina}
+        <LoadingState />
+      </div>
+    );
   }
 
   if (isError) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {titoloDellaPagina}
         <ErrorState
           title="Impossibile caricare i negozi"
           onRetry={() => refetch()}
@@ -229,14 +252,7 @@ export default function StoresPage() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
-      <div className="mb-6">
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-ink-900">
-          Negozi di Piacenza
-        </h1>
-        <p className="text-ink-500 mt-1">
-          {stores.length} negozi locali pronti a consegnarti a casa
-        </p>
-      </div>
+      {titoloDellaPagina}
 
       {/* Filtri */}
       <div className="bg-white border border-cream-300 rounded-xl p-3 mb-6 shadow-sm space-y-2">

@@ -9,11 +9,21 @@ type ErrResult = { error: null | { message: string } };
 const rpcMock = vi.fn<() => Promise<{ data: unknown; error: null | { message: string } }>>();
 const updateEqMock = vi.fn<() => Promise<ErrResult>>(() => Promise.resolve({ error: null }));
 const deleteUserMock = vi.fn<(id: string) => Promise<ErrResult>>(() => Promise.resolve({ error: null }));
+// 3/9/2026 — La cancellazione, prima di toccare qualunque cosa, legge la cassa
+// contanti del fattorino: se ha ancora soldi da versare non si cancella niente.
+// Senza questa lettura il finto database non somiglia più a quello vero.
+const selectEqMock = vi.fn<() => Promise<{ data: unknown[]; error: null | { message: string } }>>(
+  () => Promise.resolve({ data: [], error: null }),
+);
 
 vi.mock('@/lib/supabase/server', () => ({
   getAdminSupabase: vi.fn(() => ({
     rpc: rpcMock,
-    from: vi.fn(() => ({ update: vi.fn(() => ({ eq: updateEqMock })) })),
+    from: vi.fn(() => ({
+      update: vi.fn(() => ({ eq: updateEqMock })),
+      select: vi.fn(() => ({ eq: selectEqMock })),
+      delete: vi.fn(() => ({ ilike: vi.fn(() => Promise.resolve({ error: null })) })),
+    })),
     auth: { admin: { deleteUser: deleteUserMock } },
   })),
 }));
@@ -39,6 +49,7 @@ describe('POST /api/cron/process-deletions', () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
     updateEqMock.mockResolvedValue({ error: null });
     deleteUserMock.mockResolvedValue({ error: null });
+    selectEqMock.mockResolvedValue({ data: [], error: null });
   });
 
   afterEach(() => {
@@ -93,14 +104,18 @@ describe('POST /api/cron/process-deletions', () => {
     expect(json.errors[0]).toContain('u1');
   });
 
-  it('fallback safe-anonymize se full update fallisce', async () => {
+  it('un azzeramento che non passa non ferma la cancellazione dell account', async () => {
+    // 3/9/2026 — Prima qui c'era il ripiego: l'azzeramento del profilo si
+    // faceva in un colpo solo e, se non passava, si riprovava a pezzi. Adesso i
+    // pezzi sono due dall'inizio — i dati di verifica identità prima della
+    // cancellazione, quelli di vetrina dopo — quindi non c'è più un ripiego da
+    // provare: se uno dei due non passa, viene scritto nel diario e la
+    // cancellazione va avanti lo stesso. L'account deve sparire comunque.
     rpcMock.mockResolvedValueOnce({ data: [{ user_id: 'u1' }], error: null });
-    // full update fallisce, safe update riesce
-    updateEqMock
-      .mockResolvedValueOnce({ error: { message: 'full failed' } })
-      .mockResolvedValueOnce({ error: null });
+    updateEqMock.mockResolvedValueOnce({ error: { message: 'colonna assente' } });
     const res = await POST(makeReq('Bearer secret123') as never);
     const json = await res.json();
-    expect(json.processed).toBe(1); // recuperato col fallback
+    expect(json.processed).toBe(1);
+    expect(deleteUserMock).toHaveBeenCalledWith('u1');
   });
 });

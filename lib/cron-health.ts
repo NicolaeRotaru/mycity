@@ -205,10 +205,42 @@ function censimentoBattiti(
   };
 }
 
+/**
+ * 3/9/2026 (R183, quarto giro) — «NON HO POTUTO GUARDARE» NON E' «I LAVORI SONO
+ * FERMI», E FINORA USCIVANO IDENTICI.
+ *
+ * Le porte di salute rispondevano `{ok: false}` in tutti e due i casi, con la
+ * differenza nascosta dentro una frase in italiano. Chi legge e' un monitor —
+ * che di frasi non capisce niente — oppure una persona alle tre di notte. E i
+ * due casi vogliono due mestieri diversi:
+ *
+ *   fermi      → i lavori periodici hanno smesso: si guarda lo scheduler, il
+ *                rilascio, il segreto dei cron. Si sveglia chi li fa ripartire.
+ *   non_letti  → la sorveglianza e' cieca: permessi del database, chiave di
+ *                servizio, tabella irraggiungibile. I lavori possono girare
+ *                benissimo. Si sveglia chi rimette a posto l'accesso.
+ *
+ * Il 3/9 in produzione usciva `{ok:false, esaminati:0, attesi:10, error:
+ * "battiti non leggibili"}` — cioe' il secondo caso — e la scheda che l'ha
+ * raccolto ha letto «i cron sono fermi». Un cartello che si fa leggere al
+ * contrario e' peggio di nessun cartello: manda a cercare nel posto sbagliato.
+ *
+ * `mai_visti` e' il terzo: la tabella si legge, ma di qualche lavoro non c'e'
+ * nessun battito. Succede da solo a ogni ambiente nuovo e dopo ogni ripristino
+ * del database.
+ */
+export type StatoBattiti = 'ok' | 'fermi' | 'mai_visti' | 'non_letti';
+
 /** Quello che /api/health racconta dei battiti, a chiunque lo chieda. */
 export type EsitoBattiti = {
   /** Vero solo se ha guardato tutti i lavori e nessuno era indietro. */
   ok: boolean;
+  /**
+   * Il perche' in UNA parola, che un monitor puo' leggere senza capire
+   * l'italiano. Obbligatorio apposta: chi costruisce a mano un esito «non ho
+   * potuto leggere» deve dirlo qui, non solo in fondo a una frase.
+   */
+  stato: StatoBattiti;
   /** Quanti lavori ha davvero guardato. */
   esaminati: number;
   /** Quanti ne doveva guardare. */
@@ -216,6 +248,21 @@ export type EsitoBattiti = {
   /** Nomi e minuti di ritardo: si legge di notte, in fretta. */
   error?: string;
 };
+
+/**
+ * L'esito da usare quando i battiti NON si sono potuti leggere.
+ *
+ * Sta qui, e non scritto a mano nelle rotte, perche' era scritto a mano in
+ * cinque punti fra /api/health e /api/health/ready: cinque copie della stessa
+ * riga, e bastava che una si dimenticasse un campo perche' le due porte
+ * raccontassero due storie diverse sullo stesso guasto.
+ *
+ * `esaminati: 0` non e' un dettaglio: dice che il conto e' su zero lavori, cioe'
+ * che qui non c'e' nessuna misura, solo l'assenza di una.
+ */
+export function battitiNonLetti(attesi: number, perche: string): EsitoBattiti {
+  return { ok: false, stato: 'non_letti', esaminati: 0, attesi, error: perche };
+}
 
 /**
  * 31/8/2026 (R183, secondo giro) — IL VERDETTO STA QUI, NON NELLA ROTTA.
@@ -240,8 +287,19 @@ export function esitoBattiti(
   const mutoli = censimento.maiVisti.filter((nome) => !giaDetti.has(nome));
   if (mutoli.length > 0) lamentele.push(`mai visti battere: ${mutoli.join(', ')}`);
   if (censimento.attesi === 0) lamentele.push('nessun lavoro da sorvegliare: l elenco delle soglie e vuoto');
+  // L'ordine non e' alfabetico, e' di gravita': un lavoro che ha smesso di
+  // battere e' un guasto in corso, uno che non ha mai battuto e' quasi sempre
+  // una configurazione. Se ci fosse tutti e due, la parola giusta e' la prima.
+  // Un elenco di soglie vuoto vale come «non ho guardato niente»: e' un verde su
+  // zero, che e' il modo piu' silenzioso di sbagliare.
+  const stato: StatoBattiti =
+    censimento.attesi === 0 ? 'non_letti'
+      : censimento.fermi.length > 0 ? 'fermi'
+      : censimento.esaminati < censimento.attesi ? 'mai_visti'
+      : 'ok';
   return {
-    ok: censimento.attesi > 0 && censimento.fermi.length === 0 && censimento.esaminati === censimento.attesi,
+    ok: stato === 'ok',
+    stato,
     esaminati: censimento.esaminati,
     attesi: censimento.attesi,
     error: lamentele.length > 0 ? lamentele.join('; ') : undefined,

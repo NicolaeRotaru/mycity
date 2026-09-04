@@ -54,6 +54,40 @@ const CategoryBar = () => {
 
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 31/8/2026 — LA RIGA SCORREVA E NON LO DICEVA A NESSUNO.
+   * Sul telefono in questa riga ci stanno il pulsante «Tutte le categorie» e
+   * poco altro: le altre sette destinazioni — Promozioni, Novità, Regali,
+   * Vicino a te, Più venduti, Piccoli prezzi — sono lì a destra, ma la barra
+   * di scorrimento è nascosta (`scrollbar-hide`) e non c'era nessun altro
+   * segno al suo posto. Chi non prova a trascinare non sa che esistono.
+   * Qui la riga si misura da sola e, quando c'è dell'altro oltre il bordo, lo
+   * mostra con una sfumatura da quel lato. Quando ci sta tutto, non compare
+   * niente: il segno non deve mentire.
+   */
+  const rigaRef = useRef<HTMLDivElement>(null);
+  const [altro, setAltro] = useState({ aSinistra: false, aDestra: false });
+
+  useEffect(() => {
+    const riga = rigaRef.current;
+    if (!riga) return;
+    const misura = () => {
+      const massimo = riga.scrollWidth - riga.clientWidth;
+      setAltro({
+        aSinistra: riga.scrollLeft > 4,
+        aDestra: massimo > 4 && riga.scrollLeft < massimo - 4,
+      });
+    };
+    misura();
+    riga.addEventListener('scroll', misura, { passive: true });
+    window.addEventListener('resize', misura);
+    return () => {
+      riga.removeEventListener('scroll', misura);
+      window.removeEventListener('resize', misura);
+    };
+  }, []);
+
   // 27/8/2026 (R106) — con Esc il pannello si chiudeva e il fuoco cadeva sul
   // corpo della pagina: chi naviga da tastiera ripartiva dall'inizio del sito.
   const pulsanteRef = useRef<HTMLButtonElement>(null);
@@ -97,7 +131,8 @@ const CategoryBar = () => {
       <div className="container mx-auto px-3 sm:px-4">
         {/* Tab underline-style: divider sottile sotto la barra, voce attiva con
             underline + colore accent (per mockup navbar). */}
-        <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide border-b border-white/10 text-sm">
+        <div className="relative">
+        <div ref={rigaRef} className="flex items-center gap-1 overflow-x-auto scrollbar-hide border-b border-white/10 text-sm">
           {/* Mega-menu trigger — stessa riga delle tab, attivo quando aperto */}
           <button
             ref={pulsanteRef}
@@ -143,6 +178,22 @@ const CategoryBar = () => {
               </Link>
             );
           })}
+        </div>
+
+          {altro.aSinistra && (
+            <div
+              aria-hidden
+              data-scorrimento="sinistra"
+              className="pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-primary-700 to-transparent"
+            />
+          )}
+          {altro.aDestra && (
+            <div
+              aria-hidden
+              data-scorrimento="destra"
+              className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-primary-700 to-transparent"
+            />
+          )}
         </div>
       </div>
 

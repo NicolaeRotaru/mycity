@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { RILEVAMENTO_LINGUA_ATTIVO } from '../../i18n';
 
 /**
  * E2E test per le feature security + i18n aggiunte in wave 21:
@@ -62,7 +63,27 @@ test.describe('Locale switching i18n', () => {
     expect(lang).toBe('it');
   });
 
-  test('POST /api/locale con locale=en setta cookie e cambia lang', async ({ page, request }) => {
+  /*
+   * 3/9/2026 — LA TERZA PROVA DELLA STESSA COPPIA, RIMASTA INDIETRO.
+   *
+   * Il commento qui sotto (#7) spiega che il rilevamento della lingua e'
+   * SPENTO apposta — `RILEVAMENTO_LINGUA_ATTIVO = false` in i18n.ts — finche'
+   * la traduzione non e' completa, e per questo la prova gemella sul selettore
+   * nel piede e' saltata. Questa pero' non era stata toccata: pretendeva che
+   * il biscotto `NEXT_LOCALE=en` cambiasse la lingua del documento, cioe' il
+   * contrario della scelta presa. Restava rossa in silenzio perche' il lavoro
+   * end-to-end in CI si auto-saltava.
+   *
+   * Non si salta: si gira, e si chiede cio' che la scelta promette davvero —
+   * la rotta accetta la lingua e la ricorda, e la pagina resta italiana finche'
+   * l'interruttore e' giu'. Cosi' la prova protegge la decisione invece di
+   * combatterla, e il giorno che si riaccende diventa rossa e va riscritta
+   * insieme al resto.
+   */
+  test('POST /api/locale con locale=en setta cookie ma la pagina resta italiana', async ({
+    page,
+    request,
+  }) => {
     await page.context().clearCookies();
     const r = await request.post('/api/locale', {
       data: { locale: 'en' },
@@ -72,6 +93,8 @@ test.describe('Locale switching i18n', () => {
     const body = await r.json();
     expect(body.ok).toBe(true);
     expect(body.locale).toBe('en');
+    // La rotta deve davvero posare il biscotto: e' la meta' che funziona.
+    expect(String(r.headers()['set-cookie'] ?? '')).toContain('NEXT_LOCALE=en');
 
     // Inietto il cookie nel context
     await page.context().addCookies([
@@ -79,7 +102,10 @@ test.describe('Locale switching i18n', () => {
     ]);
     await page.goto('/');
     const lang = await page.locator('html').getAttribute('lang');
-    expect(lang).toBe('en');
+    expect(
+      lang,
+      'la pagina si e\' dichiarata inglese: o il rilevamento e\' stato riacceso (e allora questa prova va riscritta), o il contenuto italiano viene letto con la fonetica sbagliata',
+    ).toBe('it');
   });
 
   test('POST /api/locale con locale invalido → 400', async ({ request }) => {
@@ -90,16 +116,27 @@ test.describe('Locale switching i18n', () => {
     expect(r.status()).toBe(400);
   });
 
-  // #7 — Questi due controlli pretendevano il contrario di una scelta presa
-  // apposta, e non fallivano solo perché il giro end-to-end in CI si
-  // auto-salta quando mancano i segreti del Supabase di prova. Il giorno in
-  // cui quei segreti si configurano, la CI diventava rossa su una cosa giusta.
-  //
-  // La scelta: il selettore di lingua è tolto dal footer finché la traduzione
-  // non è completa (29 file su 347), e la pagina si dichiara italiana perché
-  // il contenuto è italiano. Si riaccendono insieme, cambiando
-  // RILEVAMENTO_LINGUA_ATTIVO in i18n.ts.
-  test.skip('LocaleSwitcher è presente in Footer', async ({ page }) => {
+  /*
+   * #7 — La scelta: il selettore di lingua è tolto dal footer finché la
+   * traduzione non è completa (29 file su 347), e la pagina si dichiara
+   * italiana perché il contenuto è italiano. Si riaccendono insieme, cambiando
+   * RILEVAMENTO_LINGUA_ATTIVO in i18n.ts.
+   *
+   * 3/9/2026 — QUESTO SALTO NON DICEVA PERCHE', E ADESSO LO DICE.
+   *
+   * Era un `test.skip(...)` secco: il motivo stava solo nel commento, che la CI
+   * non legge. Nel resoconto delle prove usciva come «saltata senza motivo
+   * dichiarato» — cioe' indistinguibile da un interruttore abbassato e
+   * dimenticato, che e' la malattia di questo lotto.
+   *
+   * Adesso il salto e' appeso alla decisione vera, letta da i18n.ts: il giorno
+   * che il rilevamento della lingua si riaccende, questa prova riparte da sola.
+   */
+  test('LocaleSwitcher è presente in Footer', async ({ page }) => {
+    test.skip(
+      !RILEVAMENTO_LINGUA_ATTIVO,
+      'il selettore della lingua e\' tolto dal piede finche\' la traduzione non e\' completa (RILEVAMENTO_LINGUA_ATTIVO = false in i18n.ts): una lingua che si puo\' scegliere e non cambia niente e\' peggio di una lingua sola',
+    );
     await page.goto('/');
     const footer = page.locator('footer');
     await expect(footer).toBeVisible();

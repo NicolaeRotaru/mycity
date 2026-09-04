@@ -30,7 +30,7 @@ export const CAMPI_PROFILO_DA_AZZERARE = {
   address: null,
   city: null,
   zip: null,
-  avatar_url: null,
+  public_avatar_url: null,
   store_name: null,
   store_address: null,
   store_phone: null,
@@ -82,6 +82,203 @@ export const CAMPI_KYC_DA_AZZERARE = {
  * proprio quello che sopravviveva alla cancellazione.
  */
 export const SECCHI_CON_FILE_PERSONALI = ['kyc-docs', 'cod-proof', 'reviews'] as const;
+
+/**
+ * L'ELENCO UNICO delle tabelle che tengono dati personali, e di cosa si azzera
+ * in ognuna quando una persona chiede di essere cancellata.
+ *
+ * 3/9/2026 — IL BUONO REGALO NON ERA IN NESSUN ELENCO.
+ *
+ * Chi compra un buono regalo scrive nome, indirizzo email e un messaggio del
+ * DESTINATARIO: una persona che non si e' mai iscritta, non ha mai letto la
+ * nostra informativa e non sa nemmeno che il suo indirizzo e' da noi. Le
+ * tabelle da ripulire erano elencate a mano, una riga di codice per ognuna,
+ * quindi ogni tabella nata dopo nasceva fuori dall'elenco. `gift_cards` non
+ * c'era: cancellato Marco che aveva comprato il regalo, restavano «Chiara
+ * Rossi», la sua email e la frase «Buon compleanno, ti aspetto da Pane
+ * Quotidiano!», senza piu' nemmeno il legame con chi le aveva scritte.
+ *
+ * Adesso l'elenco e' un dato: si legge, si percorre e una prova lo esegue
+ * tutto. Una tabella nuova si aggiunge QUI, in un posto solo, e se la si
+ * dimentica la dimenticanza si vede.
+ *
+ * `sopravvive` e' il campo che conta, ed e' quello facile da sbagliare: dice
+ * se la riga RESTA quando l'utente viene cancellato (chiave esterna ON DELETE
+ * SET NULL) invece di sparire insieme a lui (ON DELETE CASCADE). Le righe che
+ * sopravvivono vanno ripulite PRIMA della cancellazione: dopo, la colonna che
+ * le legava alla persona vale NULL e non le ritrova piu' nessuno.
+ *
+ * 3/9/2026, LO STESSO GIORNO — MANCAVA `orders`, E MANCAVA IL DATO PEGGIORE.
+ *
+ * L'elenco era nato dai buoni regalo e aveva raccolto le tabelle di testo
+ * libero. Nessuno lo aveva confrontato con l'elenco vero: quali tabelle
+ * tengono dati personali E sopravvivono all'utente. Il confronto, fatto sullo
+ * schema ricostruito dalle migrazioni, ha trovato due bugie: `orders` non
+ * c'era per niente (nome, cellulare, indirizzo, coordinate della porta e note
+ * per il fattorino restavano in chiaro) e `returns` era segnata come se
+ * sparisse con l'utente, mentre migrations/122 l'aveva cambiata apposta in
+ * SET NULL.
+ *
+ * La regola per chi aggiunge una tabella domani: prima si guarda la chiave
+ * esterna vera, poi si scrive `sopravvive`. Se il campo dice il falso, la
+ * riparazione parte gia' storta.
+ */
+export type TabellaConDatiPersonali = {
+  /** La tabella. */
+  tabella: string;
+  /** La colonna che lega la riga alla persona. */
+  colonna: string;
+  /** I campi da azzerare, col valore che devono prendere. */
+  azzera: Record<string, unknown>;
+  /** La riga resta in vita dopo la cancellazione dell'utente (SET NULL)? */
+  sopravvive: boolean;
+  /** Cosa si perde se questa riga non viene ripulita. Serve a chi legge. */
+  perche: string;
+};
+
+export const TABELLE_CON_DATI_PERSONALI: readonly TabellaConDatiPersonali[] = [
+  {
+    tabella: 'reviews',
+    colonna: 'user_id',
+    azzera: { comment: null, photo_urls: [] },
+    // migrations/001: reviews.user_id -> auth.users ON DELETE SET NULL.
+    sopravvive: true,
+    perche: 'la recensione resta in vetrina, col testo e le foto di chi se n\'e\' andato',
+  },
+  {
+    tabella: 'store_reviews',
+    colonna: 'user_id',
+    azzera: { comment: null, photo_urls: [] },
+    // migrations/014: ON DELETE CASCADE, la riga se ne va con l'utente.
+    sopravvive: false,
+    perche: 'testo e foto della recensione al negozio',
+  },
+  {
+    tabella: 'rider_reviews',
+    colonna: 'user_id',
+    // Questa tabella non ha la colonna delle foto (nasce in migrations/014 e
+    // nessuna migrazione gliela aggiunge): chiederne l'azzeramento farebbe
+    // respingere tutto l'aggiornamento e resterebbe anche il commento.
+    azzera: { comment: null },
+    sopravvive: false,
+    perche: 'il giudizio scritto al fattorino',
+  },
+  {
+    tabella: 'returns',
+    colonna: 'buyer_id',
+    azzera: { notes: null },
+    // migrations/122 (#179) ha cambiato apposta questa chiave da CASCADE a
+    // ON DELETE SET NULL: «un reso e' una pratica con dei soldi dentro, la
+    // riga resta, anonima». Qui era rimasto scritto il contrario. Verificato
+    // sullo schema ricostruito dalle migrazioni: returns.buyer_id -> SET NULL.
+    sopravvive: true,
+    perche: 'le note scritte a mano dentro una richiesta di reso',
+  },
+  {
+    tabella: 'messages',
+    colonna: 'sender_id',
+    azzera: { body: '[messaggio rimosso]' },
+    sopravvive: false,
+    perche: 'i messaggi in chat col negozio',
+  },
+  {
+    tabella: 'contact_messages',
+    colonna: 'user_id',
+    azzera: { name: '[eliminato]', email: '[eliminato]', message: '[rimosso]' },
+    // migrations/028: contact_messages.user_id -> profiles ON DELETE SET NULL.
+    // La riga sopravvive: se non la si ripulisce prima, nome, email e testo
+    // restano in chiaro e senza piu' un proprietario a cui ricondurli.
+    sopravvive: true,
+    perche: 'nome, email e testo scritti dal modulo dei contatti',
+  },
+  {
+    tabella: 'gift_cards',
+    colonna: 'buyer_id',
+    // Si azzerano SOLO i dati del destinatario: la riga resta e il credito
+    // resta spendibile, perche' quei soldi sono stati pagati e la persona che
+    // ha ricevuto il regalo non c'entra niente con chi cancella l'account.
+    azzera: { recipient_name: null, recipient_email: null, message: null },
+    // migrations/030: gift_cards.buyer_id -> profiles ON DELETE SET NULL.
+    sopravvive: true,
+    perche: 'nome, email e messaggio del destinatario, che non e\' nemmeno nostro cliente',
+  },
+  {
+    // La stessa riga, vista dall'altra parte. Se il destinatario si iscrive e
+    // riscatta il buono diventa lui `redeemed_by`, e il giorno che chiede di
+    // essere cancellato il suo nome e la sua email restano scritti nella riga
+    // del regalo: la ripulisce solo chi lo ha comprato. Il credito ormai è nel
+    // suo portafoglio, quei tre campi non servono più a niente.
+    tabella: 'gift_cards',
+    colonna: 'redeemed_by',
+    azzera: { recipient_name: null, recipient_email: null, message: null },
+    sopravvive: true,
+    perche: 'nome, email e messaggio di chi ha riscattato il regalo e poi ha chiesto di sparire',
+  },
+  {
+    /*
+     * 3/9/2026 — L'INDIRIZZO DI CASA RESTAVA SCRITTO DENTRO GLI ORDINI.
+     *
+     * `orders` non e' mai stata in questo elenco perche' e' sempre stata
+     * considerata «un dato contabile». Lo e', ma solo per una parte delle sue
+     * colonne. Le altre sono il nome, il cellulare, la via col numero civico,
+     * le coordinate della porta di casa e le note per il fattorino — «citofono
+     * Rossi, secondo piano». Cancellato l'account restavano tutte in chiaro, e
+     * `user_id` diventava NULL (SET NULL, verificato sullo schema ricostruito
+     * dalle migrazioni): sopravvivevano nella forma peggiore, cioe' senza piu'
+     * il filo che le riportava alla persona. Irrintracciabili anche volendo.
+     *
+     * LA RIGA NON SI CANCELLA. Un ordine e' una scrittura contabile e va
+     * tenuto dieci anni (art. 2220 c.c.), e al negozio serve lo storico del
+     * venduto. Ma l'obbligo riguarda l'operazione — quando, quanto, che cosa,
+     * da quale negozio — non il numero di telefono e la geolocalizzazione
+     * dell'abitazione: tenere anche quelli e' eccedente rispetto alla
+     * finalita' dichiarata (art. 5.1.c GDPR).
+     *
+     * COSA SI AZZERA, E PERCHE' OGNUNO:
+     *  · delivery_full_name — nome e cognome: e' la persona, punto.
+     *  · delivery_phone     — il cellulare: e' l'aggancio con cui si ritrova
+     *      qualcuno ovunque. Serviva al fattorino per citofonare quel giorno;
+     *      a consegna avvenuta non serve piu' a niente e a nessuno.
+     *  · delivery_address   — via e numero civico: dove abita.
+     *  · delivery_zip       — il CAP e' il quartiere. Da solo dice poco, ma
+     *      sugli ordini vecchi non lo legge nessuno (le zone del fattorino
+     *      guardano gli ordini vivi): tenerlo sarebbe conservare «non si sa mai».
+     *  · delivery_notes     — testo libero, il campo peggiore: «citofono
+     *      Rossi», «lascia dalla vicina del secondo piano». Ci finiscono
+     *      dentro cognomi di terzi e le abitudini di casa.
+     *  · delivery_lat / delivery_lng — le coordinate della porta: il dato piu'
+     *      preciso che abbiamo, e resta esatto anche quando l'indirizzo
+     *      scritto e' sbagliato.
+     *
+     * COSA RESTA, E PERCHE': numero d'ordine, data, importi, stato, negozio, i
+     * prodotti comprati e `delivery_city`. La citta' e' Piacenza per tutti e
+     * non identifica nessuno — e' il ragionamento gia' scritto in
+     * migrations/142 — e serve ai conti del negozio e alle statistiche di zona.
+     * Quello che resta e' scritto anche nelle impostazioni, dove la persona
+     * legge cosa succede: quella frase e questo elenco devono dire la stessa
+     * cosa (app/profile/settings/page.tsx).
+     *
+     * ⚠️ QUI NON VANNO `cash_photo_url`, `delivery_photo_url` e
+     * `cash_signature_url`. Quelle tre colonne sono l'unico filo che porta ai
+     * file nello storage, e le azzera `cancellaProveDiConsegna` DOPO aver
+     * tolto i file. Azzerarle qui — che gira prima — vorrebbe dire lasciare la
+     * fotografia dell'ingresso di casa nello storage per sempre (R058).
+     */
+    tabella: 'orders',
+    colonna: 'user_id',
+    azzera: {
+      delivery_full_name: null,
+      delivery_phone: null,
+      delivery_address: null,
+      delivery_zip: null,
+      delivery_notes: null,
+      delivery_lat: null,
+      delivery_lng: null,
+    },
+    sopravvive: true,
+    perche: 'nome, cellulare, indirizzo di casa, coordinate della porta e note per il fattorino',
+  },
+];
 
 /**
  * Cancella i file dell'utente dallo storage.
@@ -187,7 +384,33 @@ export async function cancellaProveDiConsegna(
 }
 
 /**
- * Anonimizza il testo libero scritto dalla persona (recensioni, note, chat).
+ * La stessa scrittura su tabelle diverse, scelte a runtime.
+ *
+ * I tipi generati del database pretendono il nome della tabella scritto come
+ * letterale (`from('reviews')`), perché è da lì che ricavano le colonne. Qui
+ * la tabella arriva dall'elenco, quindi il nome è una stringa e basta: questa
+ * è la forma minima che serve — scrivi questi campi dove questa colonna vale
+ * l'identificativo della persona — e la usa solo questo file.
+ */
+type ScritturaPerNome = {
+  from(tabella: string): {
+    update(valori: Record<string, unknown>): {
+      eq(colonna: string, valore: string): PromiseLike<{ error: { message: string } | null }>;
+    };
+  };
+};
+
+function scritturaPerNome(admin: Admin): ScritturaPerNome {
+  return admin as unknown as ScritturaPerNome;
+}
+
+/**
+ * Anonimizza il testo libero scritto dalla persona (recensioni, note, chat) e
+ * i dati di terzi che ha lasciato da noi (il destinatario di un buono regalo).
+ *
+ * Non decide più niente da sé: percorre `TABELLE_CON_DATI_PERSONALI`, che è
+ * l'unico elenco. Prima le tabelle erano scritte qui una per una, ed è così
+ * che i buoni regalo sono rimasti fuori per un anno.
  *
  * 27/8/2026 (R057) — le recensioni perdevano il commento e tenevano le foto.
  * Azzerare `comment` e lasciare `photo_urls` vuol dire lasciare in vetrina
@@ -199,19 +422,46 @@ export async function cancellaProveDiConsegna(
  * `rider_reviews` non ha la colonna delle foto (nasce in migrations/014 e
  * nessuna migrazione gliela aggiunge): chiederne l'azzeramento farebbe
  * respingere tutto l'aggiornamento e resterebbe anche il commento.
+ *
+ * 3/9/2026 — E SE UNA PULIZIA NON RIESCE, ADESSO SI SA.
+ *
+ * Prima queste scritture partivano tutte insieme e nessuno guardava la
+ * risposta: il database poteva rifiutarne una — una colonna che non esiste, un
+ * guardiano che blocca la scrittura — e la cancellazione tirava dritto fino a
+ * chiudere l'account. Da quel momento quei dati non si ritrovano piu': la
+ * colonna che li legava alla persona vale NULL. Un errore ingoiato, sul passo
+ * che non si puo' rifare. Adesso ogni tabella risponde per se', l'errore
+ * finisce nei log con il suo nome, e chi chiama decide che farne.
  */
-export async function anonimizzaTestoLibero(admin: Admin, userId: string): Promise<void> {
-  await Promise.all([
-    admin.from('reviews').update({ comment: null, photo_urls: [] }).eq('user_id', userId),
-    admin.from('store_reviews').update({ comment: null, photo_urls: [] }).eq('user_id', userId),
-    admin.from('rider_reviews').update({ comment: null }).eq('user_id', userId),
-    admin.from('returns').update({ notes: null }).eq('buyer_id', userId),
-    admin.from('messages').update({ body: '[messaggio rimosso]' }).eq('sender_id', userId),
-    admin
-      .from('contact_messages')
-      .update({ name: '[eliminato]', email: '[eliminato]', message: '[rimosso]' })
-      .eq('user_id', userId),
-  ]).catch((e) => logger.warn('[cancellazione] anonimizzazione testo libero parziale', { userId, e }));
+export type PuliziaNonRiuscita = {
+  tabella: string;
+  colonna: string;
+  /** La riga resta in vita anche dopo la cancellazione dell'account? */
+  sopravvive: boolean;
+  errore: string;
+};
+
+export async function anonimizzaTestoLibero(admin: Admin, userId: string): Promise<PuliziaNonRiuscita[]> {
+  const esiti = await Promise.all(
+    TABELLE_CON_DATI_PERSONALI.map(async (t): Promise<PuliziaNonRiuscita | null> => {
+      try {
+        const { error } = await scritturaPerNome(admin).from(t.tabella).update(t.azzera).eq(t.colonna, userId);
+        if (!error) return null;
+        return { tabella: t.tabella, colonna: t.colonna, sopravvive: t.sopravvive, errore: error.message };
+      } catch (e) {
+        const errore = e instanceof Error ? e.message : 'errore';
+        return { tabella: t.tabella, colonna: t.colonna, sopravvive: t.sopravvive, errore };
+      }
+    }),
+  );
+
+  const falliti = esiti.filter((e): e is PuliziaNonRiuscita => e !== null);
+  for (const f of falliti) {
+    logger.warn('[cancellazione] tabella non ripulita', {
+      userId, tabella: f.tabella, colonna: f.colonna, sopravvive: f.sopravvive, err: f.errore,
+    });
+  }
+  return falliti;
 }
 
 /**
@@ -230,45 +480,181 @@ export async function togliDallaNewsletter(admin: Admin, userId: string): Promis
   }
 }
 
-/** Anonimizza il profilo: prima tutto insieme, poi in due passi se qualcosa non passa. */
-export async function anonimizzaProfilo(admin: Admin, userId: string): Promise<{ ok: boolean; errore?: string }> {
-  const completo = await admin
-    .from('profiles')
-    .update({ ...CAMPI_PROFILO_DA_AZZERARE, ...CAMPI_KYC_DA_AZZERARE })
-    .eq('id', userId);
-  if (!completo.error) return { ok: true };
-
-  logger.warn('[cancellazione] anonimizzazione completa fallita, si riprova a pezzi', {
-    userId, err: completo.error.message,
-  });
-  const base = await admin.from('profiles').update(CAMPI_PROFILO_DA_AZZERARE).eq('id', userId);
-  if (base.error) return { ok: false, errore: base.error.message };
-
-  // I dati di verifica identità non si lasciano mai in chiaro, nemmeno nel ripiego.
-  const { error: errKyc } = await admin.from('profiles').update(CAMPI_KYC_DA_AZZERARE).eq('id', userId);
-  if (errKyc) logger.warn('[cancellazione] dati KYC non tutti azzerati', { userId, err: errKyc.message });
+/**
+ * I dati di verifica identità e di pagamento: si azzerano SUBITO.
+ *
+ * Sono carta d'identità, codice fiscale, IBAN. Nessuno li vede a video, quindi
+ * toglierli non rompe niente per chi sta ancora usando il sito: si tolgono
+ * prima, e se poi la cancellazione dell'account non riesce almeno questi non
+ * sono più lì.
+ */
+export async function anonimizzaDatiSensibili(admin: Admin, userId: string): Promise<{ ok: boolean; errore?: string }> {
+  const { error } = await admin.from('profiles').update(CAMPI_KYC_DA_AZZERARE).eq('id', userId);
+  if (error) {
+    logger.warn('[cancellazione] dati di verifica identità non tutti azzerati', { userId, err: error.message });
+    return { ok: false, errore: error.message };
+  }
   return { ok: true };
+}
+
+/**
+ * I dati di vetrina e anagrafica: si azzerano SOLO DOPO che l'account è
+ * sparito davvero.
+ *
+ * 3/9/2026 — IL PROFILO SVUOTATO CON L'ACCOUNT ANCORA VIVO.
+ *
+ * Questo passo era il primo della catena, e l'ultimo — la cancellazione vera
+ * dell'account — non riusciva mai per chi avesse almeno un ordine. Risultato:
+ * Maria Rossi chiedeva di sparire, sette giorni dopo il suo profilo era vuoto
+ * e il suo account funzionava ancora; per un negozio spariva il nome mentre la
+ * vetrina restava online. E siccome la richiesta restava aperta, la notte dopo
+ * si riprovava, si rifalliva, e nessuno se ne accorgeva.
+ *
+ * Adesso questa riga si scrive solo dopo che `deleteUser` ha detto di sì. Se
+ * la cancellazione non riesce, la persona resta con un account intero e la
+ * richiesta viene ritentata: non le abbiamo tolto niente a metà.
+ *
+ * Nota: la riga del profilo punta a `auth.users` con ON DELETE CASCADE
+ * (migrations/001), quindi cancellato l'utente questa riga di solito non
+ * esiste più e l'aggiornamento non tocca nulla. Resta qui come rete: se un
+ * giorno quel vincolo cambiasse, i dati non rimarrebbero comunque in chiaro.
+ */
+export async function anonimizzaProfilo(admin: Admin, userId: string): Promise<{ ok: boolean; errore?: string }> {
+  const { error } = await admin.from('profiles').update(CAMPI_PROFILO_DA_AZZERARE).eq('id', userId);
+  if (error) return { ok: false, errore: error.message };
+  return { ok: true };
+}
+
+/**
+ * La cassa contanti di un fattorino: quanto ha incassato per le consegne e non
+ * ha ancora versato.
+ *
+ * 3/9/2026 — CANCELLARE IL FATTORINO CANCELLAVA IL SUO DEBITO.
+ *
+ * `cod_reconciliations` è il registro della cassa: una riga per ogni giornata,
+ * con quanto è entrato in contanti e se è stato versato. Quella riga punta
+ * all'utente con ON DELETE CASCADE, cioè sparisce insieme a lui. Un fattorino
+ * con 120 euro incassati il sabato che chiedeva la cancellazione la domenica,
+ * sette giorni dopo non risultava più dovere niente a nessuno: nessun ammanco,
+ * nessun sollecito, i soldi semplicemente non erano mai esistiti.
+ *
+ * Qui la cancellazione si ferma prima di toccare qualunque cosa. Non è un no
+ * per sempre: appena il versamento è registrato, la notte dopo riparte da sola.
+ * I contanti di altri sono soldi altrui, e un obbligo di legge a cancellare non
+ * cancella un debito (art. 17.3 GDPR: conservazione per obblighi contabili e
+ * per far valere un diritto).
+ *
+ * Se il controllo non riesce, la risposta è «fermati». Su una cassa, non
+ * sapere vale quanto sapere di sì: il rischio di rinviare una cancellazione di
+ * un giorno è piccolo, quello di cancellare per sbaglio la prova di un debito
+ * non si ripara.
+ */
+export type CassaContanti = {
+  /** La cancellazione va fermata? */
+  bloccante: boolean;
+  /** Quanto risulta ancora da versare, in centesimi. */
+  centesimi: number;
+  /** Quante giornate di cassa sono ancora aperte. */
+  giornate: number;
+  /** La spiegazione, in parole che leggono sia la persona sia l'amministratore. */
+  motivo: string;
+};
+
+export async function contantiAncoraDaVersare(admin: Admin, userId: string): Promise<CassaContanti> {
+  const nonVerificabile = (perche: string): CassaContanti => ({
+    bloccante: true,
+    centesimi: 0,
+    giornate: 0,
+    motivo: `Non siamo riusciti a controllare la cassa contanti, quindi la cancellazione è rinviata: ${perche}`,
+  });
+
+  let data: unknown;
+  try {
+    const risposta = await admin
+      .from('cod_reconciliations')
+      .select('for_date, collected_cents, status, remitted_at')
+      .eq('rider_id', userId);
+    if (risposta.error) return nonVerificabile(risposta.error.message);
+    data = risposta.data;
+  } catch (e) {
+    return nonVerificabile(e instanceof Error ? e.message : 'errore');
+  }
+
+  const righe = (data ?? []) as Array<{
+    for_date: string;
+    collected_cents: number | null;
+    status: string | null;
+    remitted_at: string | null;
+  }>;
+
+  // Aperta = i contanti non risultano versati, e o c'è del denaro incassato o
+  // la giornata non quadra (un ammanco da chiarire).
+  const aperte = righe.filter(
+    (r) => r.remitted_at == null && ((r.collected_cents ?? 0) > 0 || r.status === 'MISMATCH'),
+  );
+  if (aperte.length === 0) return { bloccante: false, centesimi: 0, giornate: 0, motivo: '' };
+
+  const centesimi = aperte.reduce((somma, r) => somma + (r.collected_cents ?? 0), 0);
+  const euro = (centesimi / 100).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const giornate = aperte.length;
+  return {
+    bloccante: true,
+    centesimi,
+    giornate,
+    motivo:
+      `Cancellazione rinviata: risultano ${euro} € di contanti incassati alle consegne e non ancora versati ` +
+      `(${giornate} ${giornate === 1 ? 'giornata' : 'giornate'} di cassa). ` +
+      `Appena il versamento è registrato la cancellazione riparte da sola.`,
+  };
 }
 
 export type EsitoCancellazione = {
   ok: boolean;
   errore?: string;
+  /** Perché non si è fatto, quando la ragione non è un guasto ma una regola. */
+  motivo?: 'cassa_da_versare';
   fileRimossi: number;
   erroriFile: string[];
 };
 
 /**
  * La cancellazione completa di un account, nell'ordine giusto.
- * I file vanno prima della cancellazione dell'utente: dopo, l'elenco delle sue
- * cartelle non è più ricostruibile.
+ *
+ * L'ordine non è un dettaglio, ed è dove questa funzione si era rotta due
+ * volte. La regola, adesso, è una sola frase: **prima si tolgono le cose che
+ * dopo non si ritrovano più, poi si chiude l'account, e solo alla fine si
+ * svuota il profilo.**
+ *
+ * ① Ciò che deve sopravvivere alla cancellazione (i contanti da versare) la
+ *    ferma prima che parta: non si distrugge il registro di un debito.
+ * ② I dati che si raggiungono SOLO passando dal legame con la persona — le
+ *    recensioni, il buono regalo, l'iscrizione alla newsletter, le foto della
+ *    consegna che stanno nella cartella del fattorino — vanno tolti finché
+ *    quel legame esiste. Dopo la cancellazione quelle colonne valgono NULL e
+ *    nessuno le ritrova più: è per questo che «prima cancella, poi pulisci»
+ *    sarebbe stata la riparazione peggiore del difetto.
+ * ②bis Se una di quelle pulizie NON è riuscita, ci si ferma prima del ③. È la
+ *    stessa regola vista dall'altro verso: il senso del ② è che dopo non si
+ *    ritrova più niente, quindi andare avanti su una pulizia fallita renderebbe
+ *    permanente un guasto di stanotte. Si riprova domani.
+ * ③ La cancellazione dell'account: il passo che può fallire.
+ * ④ Il profilo (nome, indirizzo, nome del negozio) solo se il ③ è riuscito.
  */
 export async function cancellaAccount(admin: Admin, userId: string): Promise<EsitoCancellazione> {
-  const profilo = await anonimizzaProfilo(admin, userId);
-  if (!profilo.ok) {
-    return { ok: false, errore: `Anonimizzazione fallita: ${profilo.errore}`, fileRimossi: 0, erroriFile: [] };
+  // ① Prima di toccare qualsiasi cosa: i soldi degli altri.
+  const cassa = await contantiAncoraDaVersare(admin, userId);
+  if (cassa.bloccante) {
+    logger.error('[cancellazione] rinviata: cassa contanti ancora aperta', {
+      userId, centesimi: cassa.centesimi, giornate: cassa.giornate,
+    });
+    return { ok: false, motivo: 'cassa_da_versare', errore: cassa.motivo, fileRimossi: 0, erroriFile: [] };
   }
 
-  await anonimizzaTestoLibero(admin, userId);
+  // ② I documenti d'identità e l'IBAN non aspettano: non si vedono a video,
+  // toglierli non lascia nessuno con un account a metà.
+  await anonimizzaDatiSensibili(admin, userId);
+
+  const puliziaFallita = await anonimizzaTestoLibero(admin, userId);
   await togliDallaNewsletter(admin, userId);
 
   const file = await cancellaFilePersonali(admin, userId);
@@ -283,14 +669,46 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
     logger.warn('[cancellazione] prove di consegna non tutte rimosse', { userId, errori: prove.errori });
   }
 
+  // ②bis Se una riga che SOPRAVVIVE non si è lasciata ripulire, ci si ferma
+  // qui. Cancellare adesso l'account vorrebbe dire lasciare quei dati in
+  // chiaro e senza più il legame che li ritrova: un guasto di stanotte
+  // diventerebbe una cosa che non si ripara più. Non c'è nessun `motivo`
+  // apposta: per il giro notturno questo è un GUASTO, quindi la notte diventa
+  // rossa, qualcuno viene svegliato e domani si riprova (lib/cron-cancellazioni.ts).
+  // Le tabelle che spariscono con l'utente non fermano niente: la riga se ne
+  // va comunque insieme a lui.
+  const perseSeAndiamoAvanti = puliziaFallita.filter((f) => f.sopravvive);
+  if (perseSeAndiamoAvanti.length > 0) {
+    const elenco = perseSeAndiamoAvanti.map((f) => `${f.tabella}: ${f.errore}`).join('; ');
+    logger.error('[cancellazione] fermata: dati che sopravvivono non ripuliti', { userId, elenco });
+    return {
+      ok: false,
+      errore:
+        `L'account non è stato cancellato: prima non siamo riusciti a togliere i dati personali che ` +
+        `restano anche dopo (${elenco}). Cancellarlo adesso li lascerebbe in chiaro e senza più nessun ` +
+        `legame con la persona. Si riprova.`,
+      fileRimossi: file.rimossi + prove.rimossi,
+      erroriFile: [...file.errori, ...prove.errori],
+    };
+  }
+
+  // ③ Il passo che può fallire. Fin qui non abbiamo toccato niente di ciò che
+  // la persona vede: se va male, il suo account resta intero e la richiesta
+  // viene ritentata.
   const { error: errAuth } = await admin.auth.admin.deleteUser(userId);
   if (errAuth) {
     return {
       ok: false,
-      errore: `Profilo anonimizzato ma cancellazione dell'account fallita: ${errAuth.message}`,
+      errore: `L'account non è stato cancellato: ${errAuth.message}`,
       fileRimossi: file.rimossi + prove.rimossi,
       erroriFile: [...file.errori, ...prove.errori],
     };
+  }
+
+  // ④ L'account non c'è più: adesso il profilo può sparire.
+  const profilo = await anonimizzaProfilo(admin, userId);
+  if (!profilo.ok) {
+    logger.error('[cancellazione] account cancellato ma profilo non ripulito', { userId, err: profilo.errore });
   }
 
   return {

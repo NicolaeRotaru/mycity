@@ -9,7 +9,7 @@ import { validateCoupon } from '@/lib/coupons';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
-import { isStoreClosedForOrder } from '@/lib/store-hours';
+import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
 import { computeOrderSplit } from '@/lib/stripe/client';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
@@ -23,6 +23,8 @@ import { chiaveCheckoutValida } from '@/lib/analytics/chiave-checkout';
 import { dopoLaRisposta } from '@/lib/api/dopo-la-risposta';
 import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124';
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
+import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
+import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -64,10 +66,10 @@ const Body = z.object({
   // Opt-in: usa il credito MyCity (gift card / punti convertiti) per scalare il
   // totale. L'importo applicato è deciso SERVER-SIDE (addebito atomico), mai dal client.
   useCredit: z.boolean().default(false),
-  // Fascia di consegna scelta (es. "Oggi · 18:00–20:00"). Etichetta informativa
-  // persistita su orders.delivery_slot; null per ritiro o se non scelta. Non
-  // influisce su prezzi/spedizione.
-  deliverySlot: z.string().max(120).optional().nullable(),
+  // La fascia scelta in cassa. Non è più solo un'etichetta: da qui decide se il
+  // negozio può servire (vedi `negozioPuoServire`), quindi si accettano solo le
+  // sette che la cassa propone davvero — l'elenco è in lib/quando-arriva.ts.
+  deliverySlot: campoFasciaConsegna,
   /**
    * 30/8/2026 (R163) — La chiave del checkout nata nel browser all'ingresso in
    * cassa. Serve SOLO ai conti: e' l'etichetta che lega `checkout_started` agli
@@ -272,6 +274,27 @@ export const POST = withAuthRateLimit(
     );
     const sellerIds = Array.from(new Set(body.groups.map((g) => g.sellerId)));
 
+    /**
+     * 3/9/2026 — CHI PASSA AI CONTANTI NON DEVE TROVARE ESAURITA LA PROPRIA
+     * MERCE.
+     *
+     * Chi ha premuto «Paga con carta», è tornato indietro e adesso sceglie i
+     * contanti trova zero pezzi: quell'unico pezzo lo ha impegnato lui un minuto
+     * fa, e la riserva vive due ore. Si libera qui, PRIMA di leggere le
+     * disponibilità — dopo sarebbe inutile, il numero letto sarebbe già quello
+     * vecchio. Si toccano solo i tentativi che impegnano i prodotti di questo
+     * carrello.
+     *
+     * Insieme alla merce si chiude anche la scheda di pagamento con la carta
+     * rimasta aperta in un'altra linguetta: le due cose le fa la stessa
+     * funzione, perché una senza l'altra vuol dire farsi pagare e poi
+     * rimborsare chi ha scelto i contanti.
+     */
+    await liberaRiserveAbbandonate(admin, {
+      buyerId: user.id,
+      soloConProdotti: uniqueProductIds,
+    });
+
     type RigaVariante = { id: string; product_id: string; label: string; stock: number };
 
     const [prodottiLetti, discountMap, variantiLette, venditoriLetti] = await Promise.all([
@@ -331,10 +354,14 @@ export const POST = withAuthRateLimit(
     // adesso (il rider andrebbe a vuoto — lo scenario "ordine alle 3 di notte").
     // Solo se il venditore ha orari configurati (NULL-safe). Il ritiro in negozio
     // è esente: il cliente passa durante gli orari di apertura.
+    //
+    // 3/9/2026 — SI GUARDA LA FASCIA SCELTA, NON SOLO L'OROLOGIO. Dalle 20:00 la
+    // cassa propone «Domani»: rifiutare quell'ordine perché il negozio è chiuso
+    // adesso vuol dire perdere tutti gli ordini della sera per il giorno dopo.
     if (!body.pickupInStore) {
       for (const s of sellers ?? []) {
-        if (isStoreClosedForOrder(s.store_hours)) {
-          return esciERilascia(ApiErrors.conflict(`${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`));
+        if (!negozioPuoServire(s.store_hours, body.deliverySlot)) {
+          return esciERilascia(ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot)));
         }
       }
     }

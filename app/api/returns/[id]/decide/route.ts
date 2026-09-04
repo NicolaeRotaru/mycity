@@ -8,6 +8,7 @@ import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import { chiComandaIlReso } from '../../chi-comanda-il-reso';
 
 export const runtime = 'nodejs';
 
@@ -39,14 +40,28 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
     .single();
 
   if (error || !ret) return ApiErrors.notFound('Reso non trovato');
-  if (ret.seller_id !== user.id) {
-    // Admin puo' decidere comunque
-    const { data: prof } = await supa.from('profiles').select('role').eq('id', user.id).single();
-    if (prof?.role !== 'admin') return ApiErrors.forbidden();
+
+  /**
+   * 3/9/2026 — IL NEGOZIO LO DICE L'ORDINE, NON IL RESO.
+   *
+   * Stessa riga sbagliata di `avanza`, e per lo stesso motivo: `ret.seller_id`
+   * e' un campo della riga del reso, e la riga la scriveva il cliente. Chi
+   * decide su un reso e' il venditore dell'ORDINE (oppure un amministratore),
+   * e lo si legge dal server. La regola sta in un posto solo per tutte e due
+   * le rotte: quando si corregge, si corregge ovunque.
+   */
+  const comando = await chiComandaIlReso(ret.order_id, user.id);
+  if (!comando.autorizzato) {
+    return comando.motivo === 'ordine-mancante'
+      ? ApiErrors.notFound('Ordine del reso non trovato')
+      : ApiErrors.forbidden();
   }
+
   if (ret.status !== 'REQUESTED') {
     return ApiErrors.conflict(`Reso gia' in stato ${ret.status}`);
   }
+
+  const admin = getAdminSupabase();
 
   // 🟠-22: il recesso (CHANGED_MIND) entro 14 giorni è INCONDIZIONATO (Cod. Cons.
   // art. 52-59): il venditore non può rifiutarlo. Può solo approvarlo ed elaborare
@@ -57,8 +72,6 @@ async function handler(req: NextRequest, user: { id: string }, params: { id: str
       'Il recesso entro 14 giorni è incondizionato e non può essere rifiutato (Cod. Cons. art. 52-59): approva ed elabora il rimborso.',
     );
   }
-
-  const admin = getAdminSupabase();
 
   /**
    * 27/8/2026 (R138) — IL TETTO SULL'IMPORTO ARRIVAVA TROPPO TARDI, E IN FORMA

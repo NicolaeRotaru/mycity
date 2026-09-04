@@ -79,7 +79,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return ApiErrors.internal('Segnalazione non registrata: riprova');
     }
 
-    // Gli amministratori la devono vedere, non scoprirla.
+    /**
+     * Gli amministratori la devono vedere, non scoprirla.
+     *
+     * 3/9/2026 — L'AVVISO NON PARTIVA, E NESSUNO LO SAPEVA.
+     *
+     * Qui la riga di avviso nasceva con categoria «moderation», e il database
+     * ammette solo `order`, `promo`, `group`, `newsletter`, `system`
+     * (migrazione 115): la scrittura veniva rifiutata. Peggio: il campo
+     * `error` che il client Supabase restituisce non veniva letto — e quel
+     * client non solleva eccezioni, quindi il `try/catch` qui attorno non
+     * scattava mai. La rotta rispondeva «ricevuto» e la segnalazione restava
+     * in tabella finche' qualcuno non apriva a mano /admin/segnalazioni.
+     * Nessuna campanella, nessuna riga nei registri. E' il canale che il
+     * regolamento europeo sui servizi digitali obbliga ad avere e a lavorare
+     * in tempi ragionevoli.
+     *
+     * La categoria giusta e' `system`: sono gli avvisi di servizio, gli unici
+     * che l'amministratore non puo' spegnere dalle preferenze — e una
+     * segnalazione di prodotto pericoloso non deve poter essere silenziata.
+     * L'esito dell'inserimento adesso si legge sempre.
+     */
     try {
       const { data: capi } = await admin.from('profiles').select('id').eq('role', 'admin');
       const righe = (capi ?? []).map((c) => ({
@@ -87,9 +107,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         title: '🚩 Nuova segnalazione',
         body: `Segnalato un ${corpo.tipo} per «${corpo.motivo}». Va esaminata e chiusa con un esito motivato.`,
         link: '/admin/segnalazioni',
-        category: 'moderation',
+        category: 'system',
       }));
-      if (righe.length > 0) await admin.from('notifications').insert(righe);
+      if (righe.length > 0) {
+        const { error: erroreAvviso } = await admin.from('notifications').insert(righe);
+        if (erroreAvviso) {
+          logger.error(new Error(`[segnalazioni] avviso agli amministratori non scritto: ${erroreAvviso.message}`), {
+            context: 'segnalazioni',
+            segnalazione: data.id,
+            destinatari: righe.length,
+          });
+        }
+      } else {
+        logger.error(new Error('[segnalazioni] nessun amministratore a cui mandare l avviso'), {
+          context: 'segnalazioni',
+          segnalazione: data.id,
+        });
+      }
     } catch (e) {
       logger.warn('[segnalazioni] avviso agli amministratori non partito', { e });
     }

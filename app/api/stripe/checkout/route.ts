@@ -13,8 +13,10 @@ import { validateCoupon } from '@/lib/coupons';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
-import { isStoreClosedForOrder } from '@/lib/store-hours';
+import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
+import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { collegaConsensiAnonimi, identificativiAnonimi } from '@/lib/analytics/riconcilia-consenso';
 import { variantiDaiCookie } from '@/lib/analytics/varianti-dai-cookie';
@@ -66,10 +68,10 @@ const Body = z.object({
   couponDiscountCents: z.number().int().nonnegative().default(0),
   pickupDiscountCents: z.number().int().nonnegative().default(0),
   pickupInStore: z.boolean().default(false),
-  // Fascia di consegna scelta (es. "Oggi · 18:00–20:00"). Etichetta informativa
-  // persistita nel pending_checkout (delivery.slot) e poi su orders.delivery_slot
-  // dal webhook; null per ritiro o se non scelta. Non influisce su prezzi.
-  deliverySlot: z.string().max(120).optional().nullable(),
+  // La fascia scelta in cassa. Non è più solo un'etichetta: da qui decide se il
+  // negozio può servire (vedi `negozioPuoServire`), quindi si accettano solo le
+  // sette che la cassa propone davvero — l'elenco è in lib/quando-arriva.ts.
+  deliverySlot: campoFasciaConsegna,
   /**
    * 30/8/2026 (R163) — La chiave del checkout nata nel browser all'ingresso in
    * cassa. Serve solo ai conti: viaggia dentro la riga di intento fino al
@@ -217,7 +219,10 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // Lo stesso carrello di questa persona ha gia' un pagamento aperto?
     admin
       .from('pending_checkouts')
-      .select('id, stripe_session_id')
+      // 3/9/2026 — Anche `delivery`: al riuso i dati di contatto appena
+      // scritti vanno rimessi sulla riga, e per farlo senza cancellare il
+      // resto (impronta, coordinate, fascia) bisogna avere quello che c'e'.
+      .select('id, stripe_session_id, delivery')
       .eq('buyer_id', user.id)
       .eq('status', 'PENDING')
       .gt('expires_at', new Date().toISOString())
@@ -232,13 +237,61 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // scritto — senza questa lettura la difesa dal doppio invio non c'e' piu'.
     logger.warn('[stripe] tentativo gia aperto non cercato', { message: tentativoGiaAperto.error.message });
   }
-  const sessioneGiaAperta = (tentativoGiaAperto.data as { id: string; stripe_session_id: string | null } | null) ?? null;
+  const sessioneGiaAperta =
+    (tentativoGiaAperto.data as {
+      id: string;
+      stripe_session_id: string | null;
+      delivery: Record<string, unknown> | null;
+    } | null) ?? null;
   if (sessioneGiaAperta?.stripe_session_id) {
     try {
       const sessione = await getStripe().checkout.sessions.retrieve(sessioneGiaAperta.stripe_session_id);
       if (sessione.status === 'open' && sessione.url) {
+        /**
+         * 3/9/2026 — CORREGGERE IL TELEFONO IN CASSA DEVE SERVIRE A QUALCOSA.
+         *
+         * L'impronta del carrello dice «stesso carrello» guardando solo quello
+         * che cambia il prezzo: prodotti, sconto, ritiro, via, fascia. Nome,
+         * telefono e note della consegna non entrano nel prezzo e restavano
+         * fuori. Ma l'ordine, poi, il webhook lo scrive leggendo QUESTA riga:
+         * chi scriveva 333 111 1111, tornava indietro dalla pagina del
+         * pagamento, correggeva in 333 999 9999 e ripagava, si ritrovava
+         * l'ordine col numero vecchio — e il fattorino chiamava un numero che
+         * non risponde. Stessa storia per il nome e per «lasciare al portiere».
+         *
+         * Non si mette il contatto nell'impronta: farebbe aprire un secondo
+         * pagamento, che e' quello che l'impronta serve a evitare (riserva
+         * doppia della merce e codice sconto bruciato). Si riscrivono i tre
+         * campi sulla riga gia' aperta, tenendo tutto il resto com'e'.
+         */
+        const vecchio = sessioneGiaAperta.delivery ?? {};
+        const contattoNuovo = {
+          full_name: body.delivery.fullName,
+          phone: body.delivery.phone,
+          notes: body.delivery.notes ?? null,
+        };
+        const cambiato = (Object.keys(contattoNuovo) as Array<keyof typeof contattoNuovo>).some(
+          (campo) => (vecchio[campo] ?? null) !== contattoNuovo[campo],
+        );
+        if (cambiato) {
+          const { error: errContatto } = await admin
+            .from('pending_checkouts')
+            .update({ delivery: { ...vecchio, ...contattoNuovo } })
+            .eq('id', sessioneGiaAperta.id);
+          if (errContatto) {
+            // La sessione si restituisce lo stesso: e' l'unica strada che non
+            // riserva la merce una seconda volta, e la vecchia resta comunque
+            // pagabile. Ma resta scritto forte, perche' l'ordine nascera' con
+            // il contatto di prima e la consegna puo' fallire.
+            logger.error('[stripe] contatto corretto NON salvato sul pagamento gia aperto', {
+              pendingCheckoutId: sessioneGiaAperta.id,
+              message: errContatto.message,
+            });
+          }
+        }
         logger.info('[stripe] stesso carrello, stessa sessione: non ne apro una seconda', {
           pendingCheckoutId: sessioneGiaAperta.id,
+          contattoAggiornato: cambiato,
         });
         return apiSuccess({ id: sessione.id, url: sessione.url });
       }
@@ -282,10 +335,15 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
   // carta no, quindi alle tre di notte si poteva pagare un ordine che nessuno
   // avrebbe preparato. Il ritiro in negozio è esente: il cliente passa quando è
   // aperto.
+  //
+  // 3/9/2026 — LA DECISIONE GUARDA LA FASCIA SCELTA, NON L'OROLOGIO. Dalle 20:00
+  // la cassa propone «Domani» da sola, e questo controllo rifiutava lo stesso:
+  // ogni ordine serale per il giorno dopo moriva all'ultimo clic. Ora un ordine
+  // per domani passa se domani, in quella fascia, il negozio è aperto.
   if (!body.pickupInStore) {
     for (const s of sellers ?? []) {
-      if (isStoreClosedForOrder((s as { store_hours?: unknown }).store_hours)) {
-        return ApiErrors.conflict(`${s.store_name ?? 'Il negozio'} è chiuso in questo momento. Riprova durante gli orari di apertura indicati sulla pagina del negozio.`);
+      if (!negozioPuoServire((s as { store_hours?: unknown }).store_hours, body.deliverySlot)) {
+        return ApiErrors.conflict(motivoNegozioChiuso(s.store_name ?? 'Il negozio', body.deliverySlot));
       }
     }
   }
@@ -535,6 +593,28 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     const { error: relErr } = await admin.rpc('release_coupon', { p_code: validatedCouponCode });
     if (relErr) logger.warn('[stripe] codice sconto non restituito', { code: validatedCouponCode, message: relErr.message });
   };
+
+  /**
+   * 3/9/2026 — PRIMA DI RISERVARE, SI LIBERA QUELLO CHE QUESTA STESSA PERSONA
+   * AVEVA GIÀ IMPEGNATO.
+   *
+   * Chi torna indietro dalla pagina di Stripe e cambia la fascia (o l'indirizzo)
+   * arriva qui con un'impronta diversa: la sessione di prima non si riusa, e la
+   * merce veniva riservata una seconda volta. Sull'ultimo pezzo il secondo
+   * tentativo trovava zero — «Stock insufficiente per Torta (0 disponibili)» —
+   * e il pezzo restava invisibile a tutti fino allo scadere delle due ore.
+   * Un secondo tentativo chiude il primo.
+   *
+   * La pagina di pagamento vecchia la chiude `liberaRiserveAbbandonate`: la
+   * riga qui non c'è più perché non deve stare in due posti. Era proprio
+   * quella dimenticanza, sull'altra rotta, a lasciare pagabile una scheda di
+   * Stripe a merce già rimessa in vendita.
+   */
+  await liberaRiserveAbbandonate(admin, {
+    buyerId: user.id,
+    improntaDaTenere: improntaCarrello,
+    soloConProdotti: uniqueProductIds,
+  });
 
   const { error: reserveErr } = await admin.rpc('reserve_stock', { p_items: stockItems });
   if (reserveErr) {

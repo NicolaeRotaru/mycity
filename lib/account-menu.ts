@@ -30,7 +30,7 @@ export function getAccountMenuItems(role: MenuRole): MenuItem[] {
       { href: '/orders', icon: Package, label: 'I miei ordini' },
       { href: '/favorites', icon: Heart, label: 'Preferiti' },
       { href: '/profile/loyalty', icon: Sparkles, label: 'Punti & Livello' },
-      { href: '/profile/referral', icon: Megaphone, label: 'Invita amici · €5' },
+      { href: '/profile/referral', icon: Megaphone, label: 'Invita amici · €5 per te' },
       { href: '/profile/addresses', icon: MapPin, label: 'Indirizzi' },
       { href: '/profile/gift-cards', icon: Gift, label: 'Gift Card' },
       { href: '/lists', icon: ListChecks, label: 'Liste curate' },

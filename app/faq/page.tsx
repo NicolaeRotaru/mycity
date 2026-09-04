@@ -8,6 +8,7 @@ import { ShoppingCart, Truck, CreditCard, Undo2, Settings, Store, Bike, Mail, ty
 // istruzione per selezionare un'opzione che non c'e'.
 import {
   promesseRitiroInNegozio,
+  rispostaComeOrdinare,
   rispostaCostoSpedizione,
   rispostaTempiDiConsegna,
 } from '@/lib/promesse-pubbliche';
@@ -20,10 +21,9 @@ const SECTIONS: Section[] = [
     title: 'Acquisti e ordini',
     icon: ShoppingCart,
     items: [
-      {
-        q: 'Come faccio a ordinare su MyCity?',
-        a: 'Cerca un prodotto o un negozio, aggiungilo al carrello, scegli un indirizzo di consegna o il ritiro in negozio e conferma. Riceverai una notifica per ogni cambio di stato dell\'ordine.',
-      },
+      // 3/9/2026 — La prima risposta prometteva il ritiro in negozio, che alla cassa non esiste:
+      // adesso i passi per ordinare nascono dall'interruttore, come gia' le altre promesse.
+      rispostaComeOrdinare(),
       {
         q: 'Posso comprare da più negozi nello stesso ordine?',
         a: 'Sì. Il carrello supporta più venditori: alla conferma viene creato un ordine separato per ciascun negozio, ognuno con la propria spedizione e gestione.',
@@ -75,7 +75,11 @@ const SECTIONS: Section[] = [
       },
       {
         q: 'In quanto tempo ricevo il rimborso?',
-        a: 'Entro 14 giorni dalla ricezione del prodotto da parte del venditore. Per pagamenti alla consegna il rimborso avviene su IBAN.',
+        // 3/9/2026 — «il rimborso avviene su IBAN» era falso: nessun modulo
+        // chiede l'IBAN e per gli ordini in contanti il rimborso arriva come
+        // credito MyCity (`cod_refund`). Il bonifico resta possibile, ma su
+        // richiesta e a mano: è quello che si può promettere.
+        a: 'Entro 14 giorni dalla ricezione del prodotto da parte del venditore. Per gli ordini pagati alla consegna il rimborso arriva come credito MyCity, spendibile sul prossimo ordine pagato alla consegna; se preferisci il bonifico scrivici e lo facciamo noi.',
       },
       {
         q: 'Chi paga la spedizione del reso?',
@@ -125,7 +129,17 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: 'Come faccio a consegnare per MyCity?',
-        a: 'Contattaci da questa pagina di FAQ via email: info@mycity.it con oggetto "Candidatura Rider". Ti contatteremo entro 48h.',
+        // 3/9/2026 — QUI SI MANDAVA LA GENTE A UNA CASELLA DI POSTA MENTRE IL
+        // PERCORSO C'ERA GIÀ. La risposta diceva: «scrivi a info@mycity.it con
+        // oggetto Candidatura Rider, ti contatteremo entro 48h». Due cose non
+        // andavano. La prima: quell'indirizzo è su un dominio diverso da quello
+        // dove vive il sito, e nel codice compare come ripiego — chi scrive non
+        // sa se qualcuno legge. La seconda, più seria: l'iscrizione dei rider
+        // esiste ed è automatica (/sign-up?role=rider, poi i documenti), ed è
+        // la stessa strada che la pagina «Lavora con noi» indica già. Mandare a
+        // una email vuol dire far aspettare una risposta che nessuno si è
+        // impegnato a dare — le «48h» non le garantiva nessuno.
+        a: <>Fai tutto dal sito: <Link href="/sign-up?role=rider" className="text-primary-700 underline">registrati come rider</Link>, poi carichi documento, patente e polizza dalla tua pagina documenti. Appena la verifica è finita puoi accettare le prime consegne.</>,
       },
       {
         q: 'Quanto guadagna un rider?',

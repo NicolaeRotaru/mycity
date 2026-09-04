@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
-import { ordineContaNelFatturato, metricheVenditore } from '@/lib/metriche-venditore';
+import { useEffect, useState } from 'react';
+import { ordineContaNelFatturato, metricheVenditore, totaliDiSempre, type NumeriDalDatabase } from '@/lib/metriche-venditore';
 import { giornoPiacenza, inizioGiornoPiacenza } from '@/lib/tempo-piacenza';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,33 +23,58 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { vistaDaQuery } from '@/lib/vista-query';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
+import { esitoRientroDaStripe, type EsitoRientro, type StatoConnect } from './esito-stripe';
 
 export default function SellerDashboard() {
   const { profile, isSeller } = useProfile();
   const queryClient = useQueryClient();
 
+  /**
+   * Cosa è successo davvero su Stripe, al rientro dall'inserimento dell'IBAN.
+   * `null` finché non si torna da lì: la pagina normale non mostra niente.
+   */
+  const [rientroStripe, setRientroStripe] = useState<EsitoRientro | null>(null);
+
   // Feedback + sync al rientro da Stripe Connect onboarding. Il webhook
   // account.updated potrebbe non arrivare (es. endpoint non iscritto agli
   // eventi Connect): qui rileggiamo lo stato da Stripe e invalidiamo le viste
   // che lo mostrano, così checklist e Guadagni si aggiornano subito.
+  //
+  // 3/9/2026 — E QUI USCIVA SEMPRE «CONFIGURAZIONE PAGAMENTI AGGIORNATA!».
+  // La risposta della rotta non veniva mai aperta: il messaggio verde era
+  // scritto in fondo all'effetto, fuori dal try, senza nessun controllo. Chi
+  // finiva l'onboarding coi documenti ancora da caricare leggeva che era tutto
+  // a posto e cominciava a vendere, con gli incassi fermi su Stripe. Adesso il
+  // messaggio lo decide `esitoRientroDaStripe` a partire dallo stato vero, e
+  // qui non resta niente da scegliere.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const s = params.get('stripe');
     if (s === 'connected') {
       (async () => {
+        let stato: StatoConnect | null = null;
         try {
           const { data: { session } } = await supabase.auth.getSession();
           const token = session?.access_token;
-          await fetch('/api/stripe/connect/refresh-status', {
+          const risposta = await fetch('/api/stripe/connect/refresh-status', {
             method: 'POST',
             headers: token ? { authorization: `Bearer ${token}` } : {},
           });
+          // Una risposta che non è andata bene non è uno stato: resta `null`,
+          // cioè «non l'ho potuto verificare».
+          stato = risposta.ok ? ((await risposta.json()) as StatoConnect) : null;
         } catch {
-          /* il webhook resta come fallback */
+          /* il webhook resta come fallback: qui si dice solo la verità a schermo */
         }
-        trackSellerOnboardingCompleted();
+        const esito = esitoRientroDaStripe(stato);
+        // L'onboarding è «completato» quando Stripe paga, non quando il
+        // negoziante torna sulla pagina: prima questo evento partiva sempre.
+        if (esito.tono === 'ok') trackSellerOnboardingCompleted();
         queryClient.invalidateQueries({ queryKey: ['seller'] });
-        toast.success('Configurazione pagamenti aggiornata!');
+        setRientroStripe(esito);
+        if (esito.tono === 'ok') toast.success(esito.titolo);
+        else if (esito.tono === 'attesa') toast(esito.titolo, { icon: <Landmark size={18} aria-hidden /> });
+        else toast.error(esito.titolo);
       })();
       window.history.replaceState({}, '', '/seller/dashboard');
     } else if (s === 'refresh') {
@@ -83,8 +108,12 @@ export default function SellerDashboard() {
         // Adesso il browser legge solo gli ultimi trenta giorni — quelli che
         // servono ai riquadri «oggi / 7 giorni / 30 giorni» — e i totali di
         // sempre li somma il database, che ci mette millisecondi.
+        // 3/9/2026 — `refunded_amount_cents` non veniva letto: la definizione
+        // unica del fatturato poteva anche imparare a togliere i rimborsi, ma
+        // qui non le arrivavano. Un ordine da 100 € rimborsato per 40 restava
+        // 100 sul cruscotto del negoziante.
         supabase.from('orders')
-          .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, created_at')
+          .select('total_price, delivery_status, payment_status, application_fee_cents, shipping_cost, delivery_fee_cents, refunded_amount_cents, created_at')
           .eq('seller_id', user.id)
           .gte('created_at', new Date(Date.now() - 30 * 86400000).toISOString()),
         supabase.rpc('numeri_del_negozio', { p_seller: user.id, p_giorni: 30 }),
@@ -95,24 +124,13 @@ export default function SellerDashboard() {
       const metriche = (da?: Date) => metricheVenditore(ordini as never[], da);
 
       // I totali di sempre arrivano dal database. Se la funzione non c'e'
-      // ancora (migrazione 126 non applicata) si ricade sugli ultimi trenta
-      // giorni: un numero piu' basso del vero, ma mai un errore a schermo.
-      const numeri = (numeriRes?.data ?? null) as {
-        incasso_totale_cents?: number;
-        commissione_totale_cents?: number;
-        non_del_negozio_cents?: number;
-      } | null;
-      const totali = numeri
-        ? {
-            incassatoCents: numeri.incasso_totale_cents ?? 0,
-            tuoNettoCents: Math.max(
-              0,
-              (numeri.incasso_totale_cents ?? 0)
-                - (numeri.commissione_totale_cents ?? 0)
-                - (numeri.non_del_negozio_cents ?? 0),
-            ),
-          }
-        : metriche();
+      // ancora (migrazione 126 non applicata), o se c'e' ma non sa dei
+      // rimborsi, si ricade sugli ultimi trenta giorni: un numero piu' basso
+      // del vero, ma mai piu' alto — e un totale gonfiato dai rimborsi mai
+      // sottratti e' esattamente il numero su cui il negoziante si arrabbia.
+      // Il cancello sta in `totaliDiSempre`, che ha la sua prova.
+      const numeri = (numeriRes?.data ?? null) as NumeriDalDatabase;
+      const totali = totaliDiSempre(numeri, metriche());
       const oggi = metriche(daInizioOggi);
       const sette = metriche(new Date(Date.now() - 7 * 86400000));
       const trenta = metriche(new Date(Date.now() - 30 * 86400000));
@@ -223,9 +241,13 @@ export default function SellerDashboard() {
           <div className="flex flex-wrap items-center gap-4">
             <StoreAvatar logoUrl={profile?.store_logo} storeName={profile?.store_name} size="lg" className="ring-4 ring-white/25 shadow-warm" />
             <div className="min-w-0 flex-1">
-              <p className="text-white/75 text-sm">Bentornato</p>
+              {/* 3/9/2026 — era `text-white/75`: 3,48 volte di stacco sul punto
+                  piu' chiaro della sfumatura, contro le 4,5 che servono. */}
+              <p className="text-white text-sm">Bentornato</p>
               <h1 className="font-serif text-3xl sm:text-4xl font-bold leading-tight truncate">{storeName}</h1>
-              <span className="inline-flex items-center gap-1.5 mt-1.5 text-xs font-semibold bg-olive-500/90 text-white rounded-full px-2.5 py-1">
+              {/* Il verde trasparente lasciava il bianco a 3,89 volte di stacco:
+                  olive-600 pieno lo porta a 4,78. */}
+              <span className="inline-flex items-center gap-1.5 mt-1.5 text-xs font-semibold bg-olive-600 text-white rounded-full px-2.5 py-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Negozio attivo
               </span>
             </div>
@@ -270,6 +292,37 @@ export default function SellerDashboard() {
           </div>
         </div>
       </section>
+
+      {/* ===== Rientro da Stripe: quello che Stripe ha risposto davvero =====
+          Il messaggio a comparsa sparisce dopo qualche secondo. Se i pagamenti
+          non sono attivi il negoziante deve poterlo rileggere, e sapere dove si
+          finisce: qui resta scritto finché non ricarica la pagina. */}
+      {rientroStripe && rientroStripe.tono !== 'ok' && (
+        <section
+          role="status"
+          className={`rounded-2xl border p-4 sm:p-5 ${
+            rientroStripe.tono === 'attesa'
+              ? 'bg-accent-50 border-accent-300'
+              : 'bg-secondary-50 border-secondary-300'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <Landmark size={20} className="text-ink-700 shrink-0 mt-0.5" aria-hidden />
+            <div className="min-w-0">
+              <p className="font-semibold text-ink-900">{rientroStripe.titolo}</p>
+              {rientroStripe.dettaglio && (
+                <p className="text-sm text-ink-700 mt-1">{rientroStripe.dettaglio}</p>
+              )}
+              <Link
+                href="/seller/earnings"
+                className="inline-flex items-center gap-1.5 mt-3 font-semibold text-primary-700 underline underline-offset-2"
+              >
+                Vai a Guadagni <ArrowRight size={16} aria-hidden />
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ===== Onboarding (si nasconde da solo al 100%) ===== */}
       <SellerOnboardingChecklist />
@@ -338,12 +391,32 @@ const TINT: Record<'primary' | 'olive' | 'accent' | 'secondary', Tint> = {
   secondary: { bg: 'bg-secondary-100', fg: 'text-secondary-700', ring: 'group-hover:border-secondary-300' },
 };
 
+/**
+ * 3/9/2026 — LE RIGHE CHE SPIEGANO I NUMERI NON SI LEGGEVANO.
+ *
+ * È lo schermo che il negoziante apre ogni mattina, e la riga illeggibile era
+ * proprio quella che dice cosa vuol dire la cifra sopra. Misurato sui colori
+ * veri, sul punto più chiaro della sfumatura (primary-600) con sopra la
+ * targhetta `bg-white/10`: `text-white/70` staccava 2,87 volte e
+ * `text-white/60` 2,49, contro le 4,5 richieste. E a 11 pixel, il carattere più
+ * piccolo del sito.
+ *
+ * Schiarire il testo non bastava: su quel fondo NEMMENO IL BIANCO PIENO ci
+ * arriva (4,22). Il difetto non era il testo trasparente, era la targhetta che
+ * schiariva il fondo. Adesso la targhetta scurisce invece di schiarire
+ * (`bg-black/10`) e il testo è un colore pieno del sistema: cream-200 stacca
+ * 5,02 volte, il numero in bianco 5,85. Gli 11 pixel diventano 12, il gradino
+ * minimo dichiarato.
+ *
+ * A tenerlo vero è tests/unit/i-numeri-del-negozio-si-leggono, che il conto lo
+ * rifà sui colori veri invece di cercare una classe.
+ */
 function HeroStat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div className="rounded-2xl bg-white/10 backdrop-blur-sm border border-white/15 px-3 py-2.5 sm:px-4 sm:py-3">
-      <p className="text-[11px] uppercase tracking-wide text-white/70 font-semibold">{label}</p>
+    <div className="rounded-2xl bg-black/10 backdrop-blur-sm border border-white/15 px-3 py-2.5 sm:px-4 sm:py-3">
+      <p className="text-xs uppercase tracking-wide text-cream-200 font-semibold">{label}</p>
       <p className="text-lg sm:text-2xl font-bold leading-tight mt-0.5">{value}</p>
-      <p className="text-[11px] text-white/60">{sub}</p>
+      <p className="text-xs text-cream-200">{sub}</p>
     </div>
   );
 }

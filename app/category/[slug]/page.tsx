@@ -241,7 +241,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
               aria-pressed={minRating === r}
               className={`flex-1 text-xs font-semibold py-1.5 rounded-lg border transition-colors ${
                 minRating === r
-                  ? 'bg-primary-600 text-white border-primary-600'
+                  ? 'bg-primary-700 text-white border-primary-700'
                   : 'bg-white text-ink-700 border-cream-300 hover:border-primary-300'
               }`}
             >
@@ -277,8 +277,11 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
     </div>
   );
 
-  // Categoria padre senza sottocategorie → filtra anche i prodotti delle figlie? No:
-  // restiamo sul comportamento storico (categoryId della categoria corrente).
+  // 3/9/2026 — Qui c'era scritto che una categoria madre NON tira dentro i prodotti delle figlie
+  // («restiamo sul comportamento storico»): era la decisione che faceva dire «nessun risultato» a
+  // una categoria piena. Adesso l'albero lo risolve la lettura unica delle griglie
+  // (`lib/queries/griglia-prodotti.ts`), quindi la madre porta con sé le sue figlie e da qui basta
+  // passare la categoria corrente.
   const gridProps = {
     categoryId: category.id,
     maxPrice: maxPrice < 500 ? maxPrice : undefined,
@@ -387,7 +390,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
           aria-expanded={filtersOpen}
           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors ${
             activeFilters > 0
-              ? 'bg-primary-600 text-white hover:bg-primary-700'
+              ? 'bg-primary-700 text-white hover:bg-primary-800'
               : 'bg-white text-primary-700 border border-primary-200 hover:bg-primary-50'
           }`}
         >
@@ -432,7 +435,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
               )}
               <button
                 onClick={() => setFiltersOpen(false)}
-                className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-bold py-2.5 rounded-xl"
+                className="flex-1 bg-primary-700 hover:bg-primary-800 text-white font-bold py-2.5 rounded-xl"
               >
                 {t('showResults')}
               </button>

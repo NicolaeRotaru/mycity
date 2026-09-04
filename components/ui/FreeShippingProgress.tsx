@@ -1,13 +1,17 @@
 import { Truck } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { formatPrice } from '@/lib/format';
 import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
+import { promessaSpedizione } from '@/lib/promesse-pubbliche';
 
 /**
  * Barra "Ti mancano €3 alla spedizione gratis" → stato success al traguardo.
  *
  * Leva AOV (valore medio ordine): incentiva ad aggiungere prodotti per
  * superare la soglia. Riusa FREE_SHIPPING_THRESHOLD già esistente.
+ *
+ * ⚠️ Le parole non si scrivono qui: le decide `promessaSpedizione()`, che le fa nascere dalla
+ * cifra che la cassa addebita davvero. Scritta a mano, questa barra prometteva «Hai la spedizione
+ * gratis» mentre in cassa partivano comunque 3 € di consegna.
  */
 export function FreeShippingProgress({
   subtotal,
@@ -18,9 +22,9 @@ export function FreeShippingProgress({
   threshold?: number;
   className?: string;
 }) {
-  const remaining = Math.max(0, threshold - subtotal);
+  const promessa = promessaSpedizione(subtotal, threshold);
   const pct = Math.min(100, threshold > 0 ? (subtotal / threshold) * 100 : 100);
-  const unlocked = remaining === 0;
+  const unlocked = promessa.sopraSoglia;
 
   return (
     <div
@@ -33,17 +37,14 @@ export function FreeShippingProgress({
     >
       {unlocked ? (
         <p className="text-olive-700 font-semibold flex items-center gap-2 text-sm">
-          <Truck size={16} strokeWidth={2.4} aria-hidden />
-          Hai la <strong>spedizione gratis</strong>
+          <Truck size={16} strokeWidth={2.4} className="shrink-0" aria-hidden />
+          <span>{promessa.titolo}</span>
         </p>
       ) : (
         <>
           <p className="text-accent-700 text-sm font-medium mb-2 flex items-center gap-2">
             <Truck size={16} strokeWidth={2.4} className="shrink-0" aria-hidden />
-            <span>
-              Ti mancano <strong>{formatPrice(remaining)}</strong> alla{' '}
-              <strong>spedizione gratis</strong>
-            </span>
+            <span>{promessa.titolo}</span>
           </p>
           <div className="w-full bg-accent-100 rounded-full h-2 overflow-hidden">
             <div

@@ -36,6 +36,7 @@ function risolvibile(valore: unknown) {
     insert: () => b,
     update: () => b,
     delete: () => b,
+    limit: () => b,
     single: () => Promise.resolve(valore),
     maybeSingle: () => Promise.resolve(valore),
     then: (res: (v: unknown) => unknown) => res(valore),
@@ -61,7 +62,10 @@ vi.mock('@/lib/shipping', () => ({
   compensoRiderCents: vi.fn(() => 250),
 }));
 vi.mock('@/lib/shipping-coordinate', () => ({ coordinateDaIndirizziSalvati: vi.fn(async () => null) }));
-vi.mock('@/lib/store-hours', () => ({ isStoreClosedForOrder: vi.fn(() => negozioChiuso) }));
+vi.mock('@/lib/store-hours', () => ({
+  negozioPuoServire: vi.fn(() => !negozioChiuso),
+  motivoNegozioChiuso: vi.fn((n: string) => `${n} è chiuso in questo momento.`),
+}));
 vi.mock('@/lib/promotions', () => ({
   fetchActiveDiscounts: vi.fn(async () => new Map()),
   discountedUnitCents: vi.fn((prezzo: number) => Math.round(prezzo * 100)),

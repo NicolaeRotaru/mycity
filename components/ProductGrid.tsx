@@ -9,7 +9,13 @@ import ProductCard from './ProductCard';
 import { Button } from '@/components/ui/Button';
 import { queryKeys } from '@/lib/queries/keys';
 import SkeletonCard, { SkeletonGrid } from './SkeletonCard';
-import { classiGriglia, type ColonneMassime } from '@/lib/griglia-prodotti';
+import {
+  CASELLE_FINTE_FILA,
+  CLASSI_CASELLA_FILA,
+  CLASSI_FILA,
+  classiGriglia,
+  type ColonneMassime,
+} from '@/lib/griglia-prodotti';
 import { ErrorState } from './ui/ErrorState';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { leggiProdottiDellaGriglia, type OrdineGriglia } from '@/lib/queries/griglia-prodotti';
@@ -340,9 +346,22 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     trackSearchPerformed(term, filtered.length);
   }, [search, isLoading, filtered.length]);
 
-  // Sezione = rail con intestazione: si comporta come un blocco autonomo
+  /**
+   * LA FORMA DEL BLOCCO SI DECIDE UNA VOLTA SOLA.
+   *
+   * 3/9/2026 — prima la decideva due volte: il ramo del caricamento guardava
+   * `isSection` (fila **e** titolo) e il ramo a dati arrivati guardava `rail`.
+   * In home il titolo lo scrive il renderer fuori dal componente, quindi le due
+   * risposte erano diverse: scheletro a griglia, dati in fila, e la pagina che
+   * si accorciava di un metro sotto gli occhi di chi leggeva.
+   *
+   * `formaFila` è quella domanda, fatta una volta. `isSection` resta, ma dice
+   * un'altra cosa: se la fila si porta dietro anche la sua intestazione.
+   */
+  const formaFila = !!rail;
+  // Sezione = fila con intestazione: si comporta come un blocco autonomo
   // (titolo + "Vedi tutto") e scompare del tutto quando è vuota.
-  const isSection = !!rail && !!title;
+  const isSection = formaFila && !!title;
   const sectionHeader = title ? (
     <div className="mb-4 flex items-end justify-between gap-4">
       {titleHref ? (
@@ -366,14 +385,17 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   ) : null;
 
   if (isLoading) {
-    // Sezione: intestazione + rail di skeleton, così la forma non cambia al load.
-    if (isSection) {
+    // Fila: scheletro a fila, così la forma non cambia quando arrivano i dati.
+    // La condizione è `formaFila`, la stessa che userà il ramo qui sotto:
+    // guardava `isSection`, e in home usciva una griglia di dodici scheletri
+    // che poi si stringeva in una riga sola.
+    if (formaFila) {
       return (
         <section>
-          {sectionHeader}
-          <div className="-mx-4 flex gap-3 overflow-hidden px-4 pb-2 sm:-mx-6 sm:px-6">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="w-40 shrink-0 sm:w-44">
+          {isSection && sectionHeader}
+          <div className={CLASSI_FILA}>
+            {Array.from({ length: CASELLE_FINTE_FILA }).map((_, i) => (
+              <div key={i} className={CLASSI_CASELLA_FILA}>
                 <SkeletonCard />
               </div>
             ))}
@@ -459,12 +481,14 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
     />
   );
 
-  // Rail: riga orizzontale scrollabile (home + sezioni categoria). Bleed ai bordi.
-  if (rail) {
+  // Fila: riga orizzontale scrollabile (home + sezioni categoria). Bleed ai bordi.
+  // Stessa condizione e stesse classi dello scheletro qui sopra: è la riga che
+  // impedisce alle due forme di tornare a divergere.
+  if (formaFila) {
     const railRow = (
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-4 pb-2 sm:-mx-6 sm:px-6">
+      <div className={CLASSI_FILA}>
         {filtered.map((p, i) => (
-          <div key={p.id} className="w-40 shrink-0 snap-start sm:w-44">
+          <div key={p.id} className={CLASSI_CASELLA_FILA}>
             {renderCard(p, i)}
           </div>
         ))}

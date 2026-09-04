@@ -28,10 +28,20 @@ describe('normalizeHomeSite / defaultHomeSite', () => {
   });
 
   it('default home reproduces the current fixed layout order', () => {
+    // 3/9/2026 — L'ORDINE È CAMBIATO, E QUESTA RIGA FISSAVA IL DIFETTO.
+    //
+    // Prima era: hero, reorder, howItWorks, categories, dropOfDay, popularProducts. Per un
+    // visitatore nuovo «reorder» si nasconde da sola e l'offerta del giorno c'è solo se
+    // programmata: l'ordine vero era hero → come funziona → categorie → primo prodotto, cioè
+    // circa 2.150 punti di scorrimento prima del primo articolo con foto e prezzo.
+    //
+    // Adesso i prodotti stanno subito sotto l'hero e «come funziona» è sceso sotto i negozi
+    // vicini. Il perché sta in `lib/home-site.ts`; il conto e la misura riusabile stanno in
+    // `tests/unit/in-home-il-primo-prodotto-non-sta-sotto-tre-sezioni.test.ts`.
     const site = defaultHomeSite();
     expect(site.sections.map((s) => s.type)).toEqual([
-      'hero', 'reorder', 'howItWorks', 'categories', 'dropOfDay', 'popularProducts',
-      'liveActivity', 'nearbyStores', 'trustRow', 'newsletter', 'sellerCta',
+      'hero', 'reorder', 'popularProducts', 'categories', 'dropOfDay',
+      'liveActivity', 'nearbyStores', 'howItWorks', 'trustRow', 'newsletter', 'sellerCta',
     ]);
     expect(site.sections.every((s) => s.enabled)).toBe(true);
   });

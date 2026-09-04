@@ -12,6 +12,7 @@ import { sizedImage } from '@/lib/image-url';
 import { coverClassName, socialLinks, badgeLabel } from '@/lib/store-customization';
 import { isOpenNow, streetFromAddress, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
 import type { SectionConfig, SectionContext } from './SectionContext';
+import { ALTEZZA_COPERTINA } from './misure-vetrina';
 
 const SOCIAL_ICON: Record<string, LucideIcon> = {
   instagram: Instagram,
@@ -86,7 +87,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
       <div className="h-1.5" style={{ backgroundColor: accent }} aria-hidden />
 
       {/* HERO full-bleed (~240px) */}
-      <div className="relative h-60 overflow-hidden">
+      <div className={`relative ${ALTEZZA_COPERTINA} overflow-hidden`}>
         {cover ? (
           <Image
             src={sizedImage(cover.url, 'hero')}
@@ -98,7 +99,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
           />
         ) : media.length > 0 ? (
           // Solo video in copertina: riusa il carousel (gestisce i propri controlli).
-          <StoreMediaCarousel media={media} heightClass="h-60" fallbackClass={coverClassName(custom)} />
+          <StoreMediaCarousel media={media} heightClass={ALTEZZA_COPERTINA} fallbackClass={coverClassName(custom)} />
         ) : (
           // Nessun media: gradiente on-brand scelto dal venditore (fallback grazioso).
           <div className={`h-full w-full ${coverClassName(custom)}`} aria-hidden />
@@ -127,7 +128,11 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
           <div className="absolute right-4 top-4 z-20 flex flex-col items-end gap-1.5">
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-bold shadow ${
-                openNow ? 'bg-olive-500 text-white' : 'bg-black/60 text-white'
+                // 3/9/2026 — «Aperto ora» era bianco su olive-500 (#7C8B5A): 3,69 contro
+                // il 4,5 che serve a un testo (WCAG 2.1 — 1.4.3, livello AA). Con olive-600
+                // (#5A7C42) sale a 4,78. È l'unica informazione della copertina che dice se
+                // si può comprare adesso: deve leggersi anche al sole.
+                openNow ? 'bg-olive-600 text-white' : 'bg-black/60 text-white'
               }`}
             >
               <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" aria-hidden />
@@ -161,8 +166,17 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
           </div>
 
           <div className="min-w-[200px] flex-1">
-            <h1 className="flex flex-wrap items-center gap-2 font-serif text-[28px] font-extrabold leading-tight text-white sm:text-[34px]">
-              <span className="truncate drop-shadow-sm">{store.store_name}</span>
+            {/* 3/9/2026 — IL NOME DEL NEGOZIO SI TAGLIAVA INVECE DI ANDARE A CAPO.
+                Lo `span` col nome aveva `truncate`: una riga sola, il resto via
+                con tre puntini. Su un telefono da 375 punti allo `h1` restano
+                circa 247 punti — tolti la barra, il riquadro del logo e lo
+                spazio in mezzo — che a 28 punti in Fraunces grassetto sono
+                quindici lettere scarse: «Salumeria del Borgo» ne ha diciannove
+                e finiva mozzata. Il nome del negozio è il titolo della sua
+                pagina: si legge intero. `break-words` serve al nome tutto
+                attaccato, che senza andrebbe oltre il bordo. */}
+            <h1 className="flex flex-wrap items-center gap-2 font-serif text-[24px] font-extrabold leading-tight text-white sm:text-[34px]">
+              <span className="break-words drop-shadow-sm">{store.store_name}</span>
               {isVerifiedStore(store) && (
                 <span className="text-white/90">
                   <VerifiedBadge size="md" />

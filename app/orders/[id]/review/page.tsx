@@ -14,17 +14,35 @@ import EmptyState from '@/components/EmptyState';
 import { Package, Store, Bike } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 
-const StarRating = ({ value, onChange }: { value: number; onChange: (v: number) => void }) => (
-  <div className="flex gap-1">
+/**
+ * 3/9/2026 — LE STELLE NON DICEVANO QUAL È IL VOTO SCELTO.
+ *
+ * I cinque pulsanti avevano solo l'etichetta («3 stelle») e nient'altro: chi
+ * naviga con un lettore di schermo sentiva la stessa identica cosa prima e dopo
+ * aver premuto, e non aveva modo di sapere che il modulo parte già con cinque
+ * stelle selezionate. Sono i criteri WCAG 4.1.2 (Name, Role, Value) e 1.4.11.
+ * Lo stesso selettore in app/product/[id]/page.tsx era già stato riparato — la
+ * correzione non era stata portata anche qui.
+ *
+ * Le stelle non scelte erano `text-ink-300`: 2,52 a 1 sul bianco, sotto il 3 a 1
+ * che serve perché una parte grafica si distingua. Ora `text-ink-400`, 4,80 a 1.
+ *
+ * L'etichetta del gruppo arriva da fuori perché in questa pagina i selettori
+ * sono due — il negozio e il fattorino — e sentirseli annunciare tutti e due
+ * «Il tuo voto» non dice quale dei due si sta compilando.
+ */
+const StarRating = ({ value, onChange, etichetta }: { value: number; onChange: (v: number) => void; etichetta: string }) => (
+  <div className="flex gap-1" role="group" aria-label={etichetta}>
     {[1, 2, 3, 4, 5].map((n) => (
       <button
         key={n}
         type="button"
         onClick={() => onChange(n)}
+        aria-pressed={n <= value}
         className="text-4xl transition-transform hover:scale-110"
         aria-label={`${n} ${n === 1 ? 'stella' : 'stelle'}`}
       >
-        <span className={n <= value ? 'text-accent-700' : 'text-ink-300'}>★</span>
+        <span className={n <= value ? 'text-accent-700' : 'text-ink-400'}>★</span>
       </button>
     ))}
   </div>
@@ -121,7 +139,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
         <div>
           <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Store size={16} strokeWidth={2.2} aria-hidden /> {order.seller?.store_name ?? 'Negozio'}</p>
           <p className="text-xs text-ink-500 mb-3">Com'è stato il negozio? Qualità, packaging, prodotti.</p>
-          <StarRating value={storeRating} onChange={setStoreRating} />
+          <StarRating value={storeRating} onChange={setStoreRating} etichetta="Il tuo voto sul negozio" />
           <Textarea
             value={storeComment}
             onChange={(e) => setStoreComment(e.target.value)}
@@ -138,7 +156,7 @@ export default function OrderReviewPage(props: { params: Promise<{ id: string }>
           <div>
             <p className="font-semibold text-ink-900 flex items-center gap-1.5"><Bike size={16} strokeWidth={2.2} aria-hidden /> {order.rider?.full_name ?? 'Il tuo rider'}</p>
             <p className="text-xs text-ink-500 mb-3">Com'è stato il rider? Puntualità, gentilezza.</p>
-            <StarRating value={riderRating} onChange={setRiderRating} />
+            <StarRating value={riderRating} onChange={setRiderRating} etichetta="Il tuo voto sul fattorino" />
             <Textarea
               value={riderComment}
               onChange={(e) => setRiderComment(e.target.value)}

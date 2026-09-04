@@ -10,7 +10,8 @@ import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
+import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
+import { promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { Badge } from './ui/Badge';
 import { useFavorites } from './hooks/useFavorites';
 import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interruttore';
@@ -124,7 +125,12 @@ const ProductCard = ({
   }, [createdAt]);
   const isLowStock = stock !== undefined && stock > 0 && stock <= LOW_STOCK_THRESHOLD;
   const isOutOfStock = stock === 0;
-  const freeShipping = price >= FREE_SHIPPING_THRESHOLD;
+  // La frase della vetrina nasce dalla cifra che si paga in cassa. Sopra la soglia la spedizione del
+  // negozio è gratis davvero, ma la consegna a domicilio si paga lo stesso su ogni ordine: il badge
+  // diceva «Sped. gratis» e taceva quei soldi, che comparivano per la prima volta nel carrello.
+  // `promessaSpedizione` scrive l'etichetta corta con dentro tutti e due i numeri.
+  const spedizione = promessaSpedizione(price);
+  const freeShipping = spedizione.sopraSoglia;
   // Iniziali del negozio per il mini-logo (modello negozi-first): "Salumeria Verdi" → "SV"
   const initials = (storeName ?? '').trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
 
@@ -214,22 +220,33 @@ const ProductCard = ({
               )}
               {freeShipping && (
                 <Badge variant="free" icon={Truck}>
-                  Sped. gratis
+                  {spedizione.breve}
                 </Badge>
               )}
             </div>
           )}
           <div className="flex items-center gap-1.5">
-            {showStrike ? (
-              <>
-                <span className="text-base font-extrabold text-secondary-600">{formatPrice(bigPrice)}</span>
-                <s className="text-[11px] text-ink-500">
-                  <span className="sr-only">Prezzo pieno </span>{formatPrice(strikePrice)}
-                </s>
-              </>
-            ) : (
-              <span className="text-base font-extrabold text-ink-900">{formatPrice(price)}</span>
-            )}
+            {/* La coppia dei prezzi sta in un riquadro che può stringersi (`min-w-0`) e che manda a
+                capo il prezzo barrato (`flex-wrap`) invece di rubare spazio al pulsante. Prima, su
+                un telefono da 360 punti, un prodotto scontato a tre cifre chiedeva più larghezza di
+                quella che c'è dentro la card: la riga sbordava, e la card taglia quello che sborda
+                (`overflow-hidden`, sul riquadro esterno). Il pezzo tagliato era l'ultimo della
+                fila, cioè il «+»: il prodotto scontato — quello che si vuole far comprare di più —
+                era l'unico che dal telefono non si poteva aggiungere al carrello.
+                `overflow-hidden` qui è la rete per le cifre assurde: la cifra si accorcia da sé
+                invece di finire sopra il pulsante. */}
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 overflow-hidden">
+              {showStrike ? (
+                <>
+                  <span className="text-base font-extrabold text-secondary-600">{formatPrice(bigPrice)}</span>
+                  <s className="text-[11px] text-ink-500">
+                    <span className="sr-only">Prezzo pieno </span>{formatPrice(strikePrice)}
+                  </s>
+                </>
+              ) : (
+                <span className="text-base font-extrabold text-ink-900">{formatPrice(price)}</span>
+              )}
+            </div>
             <button
               type="button"
               onClick={handleAdd}

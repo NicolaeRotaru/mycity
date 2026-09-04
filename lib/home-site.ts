@@ -235,10 +235,43 @@ export type HomeSite = z.infer<typeof homeSiteSchema>;
  * Default + normalizzazione (retro-compatibilità)
  * ========================================================================== */
 
-/** Ordine fisso attuale di app/page.tsx (i testi di default sono nel renderer). */
+/**
+ * L'ordine con cui esce la home quando nessuno l'ha ancora composta dal pannello.
+ *
+ * 3/9/2026 — IL PRIMO PRODOTTO DA COMPRARE ARRIVAVA DOPO TRE SEZIONI INTERE.
+ *
+ * L'ordine era: hero, «ordina di nuovo», «come funziona», categorie, offerta del
+ * giorno, prodotti popolari. Per chi non ha fatto accesso — cioè chi arriva la
+ * prima volta, cioè quasi tutti — «ordina di nuovo» si nasconde da sola e
+ * l'offerta del giorno c'è solo se un'offerta è stata programmata. Quindi
+ * l'ordine vero era: hero → come funziona → categorie → primo prodotto.
+ *
+ * IL CONTO, rifatto sulle classi vere per un telefono da 360 punti (il calcolo
+ * sta per esteso nella prova `in-home-il-primo-prodotto-non-sta-sotto-tre-sezioni`):
+ *
+ *   hero            ~783 punti   (la scheda-negozio a fianco è nascosta sotto md)
+ *   come funziona   ~761 punti   (tre schede impilate, una sotto l'altra)
+ *   categorie       ~505 punti   (sei tessere su tre righe)
+ *   ─────────────────────────────
+ *   il primo articolo con foto e prezzo cominciava a ~2.150 punti dall'alto,
+ *   cioè dopo quasi QUATTRO schermate di telefono.
+ *
+ * Su un negozio di paese si può raccontare prima chi sei. Su un mercato no: chi
+ * apre la home vuole vedere della roba da comprare, e se non la vede se ne va.
+ * «Come funziona» spiega una cosa che nessuno ha ancora deciso di fare.
+ *
+ * Adesso i prodotti popolari stanno subito sotto l'hero — il primo articolo
+ * comincia a ~900 punti, meno di due schermate — e «come funziona» scende sotto
+ * i negozi vicini, dove risponde a una domanda che a quel punto uno se l'è fatta.
+ *
+ * ⚠️ Questo è il DEFAULT: vale finché `site_settings.home_site` è vuota. Se la
+ * home è già stata composta dal pannello, l'ordine sta nel database e va
+ * cambiato da lì (/admin/home) — vedi `sezioniPrimaDelPrimoProdotto` qui sotto,
+ * che è la stessa misura applicabile a una home qualunque.
+ */
 const DEFAULT_ORDER: HomeSectionType[] = [
-  'hero', 'reorder', 'howItWorks', 'categories', 'dropOfDay', 'popularProducts',
-  'liveActivity', 'nearbyStores', 'trustRow', 'newsletter', 'sellerCta',
+  'hero', 'reorder', 'popularProducts', 'categories', 'dropOfDay',
+  'liveActivity', 'nearbyStores', 'howItWorks', 'trustRow', 'newsletter', 'sellerCta',
 ];
 
 /** Home di default: riproduce il layout fisso attuale (id deterministici = type). */
@@ -270,6 +303,58 @@ export function isDefaultHomeSite(raw: unknown): boolean {
 /** Sezioni effettivamente da renderizzare (solo quelle attive). */
 export function homeEnabledSections(site: HomeSite): HomeSection[] {
   return site.sections.filter((s) => s.enabled);
+}
+
+/**
+ * Le sezioni che mettono davanti a chi guarda un articolo con foto, prezzo e un
+ * modo per comprarlo.
+ *
+ * Non ci sono le categorie: una tessera «Alimentari» è un cartello, non della
+ * merce. Chi la tocca fa un passo in più prima di vedere un prezzo.
+ */
+export const SEZIONI_CHE_VENDONO: HomeSectionType[] = [
+  'reorder', 'popularProducts', 'dropOfDay', 'promo', 'trending',
+];
+
+/**
+ * Le sezioni che a un visitatore nuovo non compaiono, per quanto in alto stiano.
+ *
+ * `reorder` si nasconde da sola quando nessuno ha fatto accesso
+ * (components/home-sections/ReorderRail.tsx: «ospite → self-hide»), e le altre
+ * spariscono quando non hanno niente da mostrare: un'offerta del giorno che
+ * nessuno ha programmato, una promozione scaduta, una classifica vuota.
+ *
+ * Metterle in alto quindi non conta come «il visitatore vede subito dei
+ * prodotti»: nel caso peggiore — che è il caso normale del primo giorno — sopra
+ * non c'è niente.
+ */
+export const SEZIONI_CHE_POSSONO_NON_COMPARIRE: HomeSectionType[] = [
+  'reorder', 'dropOfDay', 'promo', 'trending', 'stories', 'events', 'shopOfMonth',
+];
+
+/**
+ * Cosa scorre un visitatore nuovo PRIMA di incontrare il primo articolo che può
+ * comprare. Restituisce i tipi delle sezioni che stanno sopra, in ordine.
+ *
+ * È la misura del difetto del 3/9/2026: sulla home di partenza tornava
+ * `['howItWorks', 'categories']` — due sezioni intere, circa 1.270 punti di
+ * scorrimento — e adesso torna `[]`, perché sotto l'hero c'è già della merce.
+ *
+ * Serve anche per una home composta a mano dal pannello: la stessa domanda,
+ * fatta a una configurazione qualunque.
+ */
+export function sezioniPrimaDelPrimoProdotto(site: HomeSite): HomeSectionType[] {
+  const sopra: HomeSectionType[] = [];
+  for (const s of homeEnabledSections(site)) {
+    // L'hero non conta: è l'intestazione della pagina, non una sezione da scorrere.
+    if (s.type === 'hero') continue;
+    const vende = SEZIONI_CHE_VENDONO.includes(s.type);
+    const puoNonEsserci = SEZIONI_CHE_POSSONO_NON_COMPARIRE.includes(s.type);
+    if (vende && !puoNonEsserci) return sopra;
+    if (puoNonEsserci) continue; // non la vede: non gli costa scorrimento
+    sopra.push(s.type);
+  }
+  return sopra;
 }
 
 /**

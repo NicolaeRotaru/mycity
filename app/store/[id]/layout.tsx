@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
+import { fraseComeArriva } from '@/lib/promesse-pubbliche';
+import { HydrationBoundary } from '@tanstack/react-query';
+import { precaricaNegozio } from '@/lib/queries/precarico';
 
 export const revalidate = 300;
 
@@ -33,8 +36,13 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
     return { title: 'Negozio non trovato · MyCity', robots: { index: false } };
   }
   const name = store.store_name ?? 'Negozio';
+  // 3/9/2026 — QUI SI PROMETTEVA IL RITIRO IN NEGOZIO, CHE ALLA CASSA NON C'E'.
+  // Questa descrizione e' quello che si legge nel risultato di Google e nell'anteprima quando il
+  // negoziante incolla il link del suo negozio su WhatsApp: e' il primo contatto, e prometteva
+  // un'opzione spenta (`RITIRO_IN_NEGOZIO_ATTIVO`). Ora la frase nasce dall'interruttore, in
+  // lib/promesse-pubbliche.ts, insieme ai minuti che stanno in lib/delivery.ts.
   const desc =
-    (store.store_description ?? `Compra online da ${name} su MyCity. Consegna locale in 30-60 minuti o ritiro in negozio.`).slice(0, 160);
+    (store.store_description ?? `Compra online da ${name} su MyCity. ${fraseComeArriva()}`).slice(0, 160);
   const img = store.store_logo ? [store.store_logo] : undefined;
 
   const cityHint = store.store_address ? ' a Piacenza' : '';
@@ -53,6 +61,35 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
   };
 }
 
-export default function StoreLayout({ children }: { children: React.ReactNode }) {
-  return children;
+/**
+ * 3/9/2026 — LA PAGINA DEL NEGOZIO ARRIVAVA VUOTA E SI RIEMPIVA DOPO.
+ *
+ * La vetrina e' un componente del browser: nome, orari, copertina e sezioni se
+ * li andava a prendere DOPO aver scaricato ed eseguito il JavaScript. Chi
+ * apriva un negozio da un telefono in 4G vedeva quindi lo scheletro del server,
+ * poi la pagina che si svuotava per l'attesa del browser, e solo alla fine il
+ * negozio. Tre impaginazioni in fila fanno pensare che il sito sia rotto.
+ *
+ * Qui siamo nel guscio, che gira sul server: la lettura la fa adesso e la
+ * consegna dentro la pagina. Quando il codice della vetrina parte, la risposta
+ * e' gia' in mano e non si va in rete.
+ *
+ * La domanda e' la STESSA che fa la pagina — vive in `lib/queries/catalogo.ts`
+ * e la usano tutte e due — perche' se le chiavi non coincidessero il browser
+ * non riconoscerebbe quello che ha ricevuto e rileggerebbe tutto lo stesso: un
+ * viaggio in piu' invece di uno in meno, e nessuno se ne accorgerebbe.
+ *
+ * Vale anche per le pagine su misura del negozio (`[slug]`), che stanno sotto
+ * questo stesso guscio e leggono lo stesso profilo.
+ *
+ * Il precarico non puo' far fallire la pagina: se il server non riesce a
+ * leggere, consegna uno stato vuoto e il browser fa quello che faceva prima.
+ */
+export default async function StoreLayout(
+  props: { children: React.ReactNode; params: Promise<{ id: string }> },
+) {
+  const params = await props.params;
+  const precarico = await precaricaNegozio(params.id);
+
+  return <HydrationBoundary state={precarico}>{props.children}</HydrationBoundary>;
 }

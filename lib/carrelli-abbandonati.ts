@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
+import { COLONNE_148, scriviAncheSeMancaUnaColonnaNuova } from '@/lib/db/migrazione-148';
 
 /**
  * IL CARRELLO ABBANDONATO CHE TORNA — e come si fa a saperlo.
@@ -32,6 +33,17 @@ export const GIORNI_DI_MEMORIA_CARRELLI = 90;
  *
  * Non lancia mai. Un ordine è già stato scritto e pagato: una misura che non
  * riesce non deve poter far ritentare un webhook o far fallire una cassa.
+ *
+ * 3/9/2026 — E NON SI ARRENDE SE IL DATABASE È INDIETRO DI UNA MIGRAZIONE.
+ *
+ * `recovered_at` arriva con la migrazione 148, che si applica a mano: finché
+ * non è firmata, il database rifiutava questa riga INTERA — non «senza quella
+ * colonna»: tutta. Questa è la strada che conta più dell'altra, perché chi paga
+ * con la carta e chiude la scheda non passa mai dal browser che marca: se cade
+ * qui, il mattino dopo riceve «hai lasciato qualcosa nel carrello» dopo aver
+ * pagato. Ora, se il rifiuto è per la colonna nuova, si riscrive senza quella:
+ * si perde il QUANDO, non il fatto. La regola sta in un posto solo, insieme al
+ * gemello nel browser (`lib/cart-sync.ts`).
  */
 export async function marcaCarrelloRecuperato(
   admin: SupabaseClient,
@@ -39,15 +51,15 @@ export async function marcaCarrelloRecuperato(
   oraIso = new Date().toISOString(),
 ): Promise<void> {
   try {
-    const { error } = await admin
-      .from('abandoned_carts')
-      .update({ recovered: true, recovered_at: oraIso })
-      .eq('user_id', userId)
-      .eq('recovered', false);
-    if (error) {
-      logger.warn('[carrelli] recupero non registrato: il conto della campagna resta incompleto', {
-        message: error.message,
-      });
+    const esito = await scriviAncheSeMancaUnaColonnaNuova(
+      'il carrello di chi ha appena comprato',
+      { recovered: true, recovered_at: oraIso },
+      COLONNE_148,
+      (campi) =>
+        admin.from('abandoned_carts').update(campi).eq('user_id', userId).eq('recovered', false),
+    );
+    if (esito.avviso) {
+      logger.warn(`[carrelli] ${esito.avviso}`, { riuscita: esito.riuscita });
     }
   } catch (e) {
     logger.warn('[carrelli] recupero non registrato', {

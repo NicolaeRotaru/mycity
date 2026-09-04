@@ -129,6 +129,23 @@ export default function PrivacyPage() {
                   Il numero di mesi vive ora in un posto solo: la funzione
                   `pota_consent_log` del database (migrations/135). */}
               <tr><td className="border px-3 py-2">Prova del consenso ai cookie (registro consensi)</td><td className="border px-3 py-2">Obbligo di rendere conto del consenso (art. 7.1)</td><td className="border px-3 py-2">La prova resta; indirizzo IP e programma di navigazione azzerati dopo 24 mesi</td></tr>
+              {/* 3/9/2026 — I BUONI REGALO NON ERANO DICHIARATI DA NESSUNA PARTE.
+                  Chi compra un buono scrive nome, email e un messaggio del
+                  DESTINATARIO: una persona che non si è mai iscritta e che di
+                  noi non sapeva niente. Le parole «regalo» e «gift» non
+                  comparivano in questa pagina, e la tabella non aveva la riga:
+                  un trattamento di dati di terzi senza informativa. Adesso c'è
+                  scritto anche quando quei dati se ne vanno, e il codice fa
+                  quello che c'è scritto (lib/account/cancellazione.ts). */}
+                            {/* 3/9/2026 — I BUONI REGALO NON ERANO DICHIARATI DA NESSUNA PARTE.
+                  Chi compra un buono scrive nome, email e un messaggio del
+                  DESTINATARIO: una persona che non si è mai iscritta e che di
+                  noi non sapeva niente. Le parole «regalo» e «gift» non
+                  comparivano in questa pagina, e la tabella non aveva la riga:
+                  un trattamento di dati di terzi senza informativa. Adesso c'è
+                  scritto anche quando quei dati se ne vanno, e il codice fa
+                  quello che c'è scritto (lib/account/cancellazione.ts). */}
+              <tr><td className="border px-3 py-2">Buoni regalo — dati del destinatario (nome, email, messaggio)</td><td className="border px-3 py-2">Legittimo interesse a recapitare il regalo a chi è stato indicato (art. 6.1.f)</td><td className="border px-3 py-2">Nome, email e messaggio del destinatario vengono azzerati quando chi ha comprato il buono cancella il proprio account; il credito resta spendibile fino alla scadenza (2 anni). Il destinatario può chiederne la cancellazione in qualsiasi momento: il modo è scritto nell&apos;email che riceve.</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>

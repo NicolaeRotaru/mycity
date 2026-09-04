@@ -50,7 +50,6 @@ export const VISTA_124 = 'seller_public_profiles';
 const SCHEMA_INDIETRO = new Set([
   '42703', // undefined_column
   '42883', // undefined_function
-  '23514', // check_violation — uno stato nuovo rifiutato dal vincolo vecchio
   // 22/8/2026 — mancava, ed è il codice della TABELLA che non c'è ancora
   // (non della colonna). Senza, il ripiego non sarebbe scattato per
   // `payment_attempts`, che è nata dopo: la strada si sarebbe fermata
@@ -58,9 +57,48 @@ const SCHEMA_INDIETRO = new Set([
   '42P01', // undefined_table
 ]);
 
+/**
+ * 3/9/2026 — «UN VINCOLO QUALSIASI» NON VUOL DIRE «SCHEMA INDIETRO».
+ *
+ * Qui dentro c'era anche 23514, il codice di PostgreSQL per «hai violato un
+ * CHECK». Ci era finito per una ragione vera e stretta: prima della migrazione
+ * 124 il vincolo vecchio sugli stati del bonifico non conosceva gli stati
+ * nuovi, e li rifiutava. Ma 23514 è il codice di TUTTI i CHECK di quella
+ * tabella, non solo di quello.
+ *
+ * Il giorno dopo la 127, e poi la 146, hanno messo sui soldi i paletti che
+ * servivano davvero: il lordo non negativo, il rimborso entro il lordo, il
+ * compenso al negozio non più alto dell'incasso. Anche loro rispondono 23514.
+ * Così il ripiego, nel momento esatto in cui il database fermava un importo
+ * storto, leggeva «migrazione non ancora applicata», toglieva
+ * `gross_total_cents` dalla riga e riprovava — e i paletti, che sono tutti
+ * scritti «se il lordo c'è», con il lordo vuoto lasciavano passare qualsiasi
+ * cifra. Un ordine da 10 euro con 11 euro di compenso al negozio entrava, e
+ * nel registro restava scritta la diagnosi sbagliata.
+ *
+ * Adesso il 23514 si accetta SOLO se l'errore nomina uno dei due vincoli di
+ * stato che la 124 riscrive. Un paletto sui soldi torna com'è: un errore, che
+ * ferma la scrittura e si vede. La regola generale, per chi scriverà il
+ * prossimo ripiego: si distingue per NOME del vincolo o della colonna, mai per
+ * famiglia di codice.
+ */
+const VINCOLI_DI_STATO_124 = ['orders_payout_status_check', 'orders_rider_payout_status_check'] as const;
+
+/** L'errore nomina uno dei due vincoli di stato che la 124 riscrive? */
+function nominaUnVincoloDiStato(errore: unknown): boolean {
+  const e = errore as { message?: unknown; details?: unknown } | null;
+  const testo = `${typeof e?.message === 'string' ? e.message : ''} ${typeof e?.details === 'string' ? e.details : ''}`;
+  return VINCOLI_DI_STATO_124.some((vincolo) => testo.includes(vincolo));
+}
+
 export function eSchemaIndietro(errore: unknown): boolean {
   const code = (errore as { code?: string } | null)?.code;
-  return !!code && SCHEMA_INDIETRO.has(code);
+  if (!code) return false;
+  // 23514 = un CHECK qualsiasi. Vale come «schema indietro» solo quando dice
+  // quale, ed è uno dei due sugli stati del bonifico. Un CHECK senza nome, o
+  // con il nome di un paletto sui soldi, resta un errore vero.
+  if (code === '23514') return nominaUnVincoloDiStato(errore);
+  return SCHEMA_INDIETRO.has(code);
 }
 
 /**

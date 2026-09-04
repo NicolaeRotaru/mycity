@@ -1,10 +1,13 @@
 import type { Metadata } from 'next';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
+import { fraseComeArriva } from '@/lib/promesse-pubbliche';
 
 export const revalidate = 600;
 
 const CATEGORY_LONG_DESC: Record<string, string> = {
-  alimentari: 'Alimentari freschi e tipici dei negozi di Piacenza. Consegna a casa in 30-60 minuti o ritiro in negozio.',
+  // 3/9/2026 — Prometteva «o ritiro in negozio», che alla cassa non c'e': la frase nasce
+  // dall'interruttore in lib/promesse-pubbliche.ts, i minuti dal numero deciso in lib/delivery.ts.
+  alimentari: `Alimentari freschi e tipici dei negozi di Piacenza. ${fraseComeArriva()}`,
   abbigliamento: 'Abbigliamento donna, uomo e bambino dei negozi di Piacenza. Compra online dai brand locali.',
   casa: 'Casa, arredamento e cucina dai negozi di Piacenza. Consegna locale rapida.',
   elettronica: 'Elettronica e accessori dai negozi di Piacenza. Garanzia e supporto locale.',

@@ -70,16 +70,61 @@ export const env = {
   vapidSubject: () => readEnv('VAPID_SUBJECT') ?? 'mailto:no-reply@mycity.it',
 
   // App URL pubblico (per link in email, redirect Stripe, ecc.)
-  appUrl: () => readEnv('NEXT_PUBLIC_APP_URL') ?? indirizzoDiRipiego(),
+  appUrl: () => indirizzoPubblico().url,
 };
 
 /**
- * L'indirizzo del sito quando NEXT_PUBLIC_APP_URL non c'è.
+ * Il dominio con cui MyCity si presenta al mondo, scritto una volta sola.
  *
- * PERCHE' ESISTE. Il 22/8/2026, a sito già spostato su Vercel, questa riga
- * ripiegava dritta su `http://localhost:3000` — e quella variabile su Vercel non
- * era stata messa. Risultato in produzione, controllabile guardando l'HTML che
- * il sito serviva davvero:
+ * È l'ultima rete di sicurezza, non la configurazione: il dominio vero lo
+ * decide NEXT_PUBLIC_APP_URL. Ma se in rete quella variabile manca e Vercel
+ * non ci dice niente, è meglio dichiarare un indirizzo NOSTRO — anche se il
+ * dominio non è ancora agganciato — che dichiarare «localhost», che per Google
+ * vale «questa pagina non esiste» e per WhatsApp «anteprima rotta».
+ */
+export const DOMINIO_PUBBLICO = 'https://mycity-marketplace.com';
+
+/** Da dove arriva l'indirizzo pubblico: serve per poterlo dire ad alta voce. */
+export type FonteIndirizzo =
+  | 'variabile' // NEXT_PUBLIC_APP_URL: la strada giusta
+  | 'dominio-di-produzione' // il dominio che ci dà Vercel per il progetto
+  | 'questa-pubblicazione' // l'indirizzo di questa singola anteprima
+  | 'dominio-di-riserva' // DOMINIO_PUBBLICO: siamo in rete e nessuno ce l'ha detto
+  | 'computer-di-sviluppo'; // localhost: solo mentre si sviluppa
+
+/** Toglie la barra finale e mette il protocollo se chi configura l'ha scordato. */
+function normalizzaIndirizzo(valore: string): string {
+  const conProtocollo = /^https?:\/\//i.test(valore) ? valore : `https://${valore}`;
+  return conProtocollo.replace(/\/+$/, '');
+}
+
+/**
+ * Vero quando il codice NON gira sul computer di chi sviluppa.
+ * Su Vercel c'è sempre VERCEL_ENV; fuori da Vercel, una build di produzione
+ * che gira davvero ha NODE_ENV=production.
+ */
+function siamoInRete(): boolean {
+  return (
+    readEnv('VERCEL') === '1' ||
+    readEnv('VERCEL_ENV') !== undefined ||
+    readEnv('NEXT_PUBLIC_VERCEL_ENV') !== undefined ||
+    process.env.NODE_ENV === 'production'
+  );
+}
+
+/**
+ * L'indirizzo pubblico del sito, e da dove l'abbiamo preso.
+ *
+ * PUNTO UNICO. Ogni file che parla a Google teneva la sua copia della stessa
+ * riga: `app/layout.tsx` (canonical, og:url, dati strutturati), `app/robots.ts`
+ * e `app/sitemap.ts` calcolavano l'indirizzo per conto proprio, e tutti e tre
+ * ripiegavano su `http://localhost:3000`. Bastava che la variabile mancasse su
+ * Vercel perché ripiegassero insieme.
+ *
+ * PERCHE' ESISTE. Il 22/8/2026, a sito già spostato su Vercel, il ripiego era
+ * dritto su `http://localhost:3000` — e quella variabile su Vercel non era
+ * stata messa. Risultato in produzione, controllabile guardando l'HTML che il
+ * sito serviva davvero:
  *
  *   <link rel="canonical" href="http://localhost:3000">
  *   <meta property="og:url"   content="http://localhost:3000">
@@ -101,17 +146,34 @@ export const env = {
  * cui il sito si presenta, ed è per questo che /api/health continua a dire
  * «non sto in piedi» finché manca. Questo è il paracadute, non la scala.
  */
-function indirizzoDiRipiego(): string {
+export function indirizzoPubblico(): { url: string; fonte: FonteIndirizzo } {
+  const dichiarato = readEnv('NEXT_PUBLIC_APP_URL');
+  if (dichiarato) return { url: normalizzaIndirizzo(dichiarato), fonte: 'variabile' };
+
   const dominioDiProduzione = readEnv('NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL');
   const questaPubblicazione = readEnv('NEXT_PUBLIC_VERCEL_URL');
   // In un'anteprima si resta sull'anteprima: mandare un pagamento di prova a
   // rimbalzare sulla produzione è peggio del problema che si sta risolvendo.
-  const anteprima = readEnv('NEXT_PUBLIC_VERCEL_ENV') === 'preview';
-  const host = anteprima
-    ? (questaPubblicazione ?? dominioDiProduzione)
-    : (dominioDiProduzione ?? questaPubblicazione);
-  if (host) return host.startsWith('http') ? host : `https://${host}`;
-  return 'http://localhost:3000';
+  const anteprima =
+    readEnv('NEXT_PUBLIC_VERCEL_ENV') === 'preview' || readEnv('VERCEL_ENV') === 'preview';
+  const ordine: Array<[string | undefined, FonteIndirizzo]> = anteprima
+    ? [
+        [questaPubblicazione, 'questa-pubblicazione'],
+        [dominioDiProduzione, 'dominio-di-produzione'],
+      ]
+    : [
+        [dominioDiProduzione, 'dominio-di-produzione'],
+        [questaPubblicazione, 'questa-pubblicazione'],
+      ];
+  for (const [host, fonte] of ordine) {
+    if (host) return { url: normalizzaIndirizzo(host), fonte };
+  }
+
+  // In rete il nome del computer di chi sviluppa non si pronuncia mai: è quello
+  // il difetto che stiamo chiudendo. Meglio un dominio nostro non ancora
+  // agganciato che «localhost» scritto nel canonical di ogni pagina.
+  if (siamoInRete()) return { url: DOMINIO_PUBBLICO, fonte: 'dominio-di-riserva' };
+  return { url: 'http://localhost:3000', fonte: 'computer-di-sviluppo' };
 }
 
 export function requireSupabasePublic() {

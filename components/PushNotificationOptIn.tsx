@@ -5,6 +5,11 @@ import { Bell, BellOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/Button';
+import {
+  attivaPushSuQuestoDispositivo,
+  notificheAttiveQui,
+  scollegaQuestoDispositivo,
+} from '@/lib/push/dispositivo';
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 
@@ -47,7 +52,21 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
         if (Notification.permission === 'denied') { setStatus('denied'); return; }
         const reg = await navigator.serviceWorker.getRegistration();
         const sub = reg ? await reg.pushManager.getSubscription() : null;
-        setStatus(sub ? 'subscribed' : 'unsubscribed');
+        // Il browser risponde «c'è un'iscrizione» anche quando quell'iscrizione
+        // è di chi ha usato questo apparecchio prima di me: da sola non basta a
+        // scrivere «Notifiche attive». Vale solo se la riga è intestata a me.
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: righe } = await supabase
+          .from('push_subscriptions')
+          .select('endpoint')
+          .eq('user_id', user?.id ?? '')
+          .eq('endpoint', sub?.endpoint ?? '');
+        const mie = ((righe ?? []) as { endpoint: string }[]).map((r) => r.endpoint);
+        setStatus(
+          user && notificheAttiveQui({ endpointDelBrowser: sub?.endpoint ?? null, endpointMiei: mie })
+            ? 'subscribed'
+            : 'unsubscribed',
+        );
       } catch {
         setStatus('unsubscribed');
       }
@@ -67,30 +86,43 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
         return;
       }
 
-      // Cast a BufferSource via .buffer per evitare incompatibilità di tipi
-      // tra Uint8Array<ArrayBufferLike> (lib.dom.d.ts moderna) e BufferSource.
-      const keyArray = urlBase64ToUint8Array(VAPID_PUBLIC);
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: keyArray.buffer as ArrayBuffer,
-      });
-
-      const json = sub.toJSON();
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast.error('Devi essere loggato');
         return;
       }
 
-      await supabase
-        .from('push_subscriptions')
-        .upsert({
-          user_id: user.id,
-          endpoint: json.endpoint!,
-          p256dh: json.keys!.p256dh!,
-          auth: json.keys!.auth!,
-          user_agent: navigator.userAgent.slice(0, 200),
-        }, { onConflict: 'endpoint' });
+      // Cast a BufferSource via .buffer per evitare incompatibilità di tipi
+      // tra Uint8Array<ArrayBufferLike> (lib.dom.d.ts moderna) e BufferSource.
+      const keyArray = urlBase64ToUint8Array(VAPID_PUBLIC);
+      // Se l'indirizzo di questo apparecchio è ancora di chi c'era prima, il
+      // salvataggio viene rifiutato: allora si butta quell'iscrizione (che così
+      // smette di consegnargli gli avvisi qui) e se ne prende una nuova. E se
+      // nemmeno così si salva, non si scrive «attivate» a chi non lo è.
+      const esito = await attivaPushSuQuestoDispositivo({
+        creaIscrizione: () => reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: keyArray.buffer as ArrayBuffer,
+        }),
+        salva: (iscrizione) => {
+          const json = iscrizione.toJSON();
+          return supabase
+            .from('push_subscriptions')
+            .upsert({
+              user_id: user.id,
+              endpoint: json.endpoint!,
+              p256dh: json.keys!.p256dh!,
+              auth: json.keys!.auth!,
+              user_agent: navigator.userAgent.slice(0, 200),
+            }, { onConflict: 'endpoint' });
+        },
+      });
+
+      if (!esito.salvata) {
+        setStatus('unsubscribed');
+        toast.error('Non sono riuscito ad attivare le notifiche su questo dispositivo.');
+        return;
+      }
 
       setStatus('subscribed');
       toast.success('Notifiche attivate!');
@@ -104,15 +136,11 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
   const unsubscribe = async () => {
     setWorking(true);
     try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      const sub = reg ? await reg.pushManager.getSubscription() : null;
-      if (sub) {
-        await sub.unsubscribe();
-        await supabase
-          .from('push_subscriptions')
-          .delete()
-          .eq('endpoint', sub.endpoint);
-      }
+      // Lo stesso lavoro che si fa uscendo dall'account, e nello stesso ordine:
+      // prima la riga (finché la sessione vale), poi l'iscrizione del browser.
+      await scollegaQuestoDispositivo((endpoint) =>
+        supabase.from('push_subscriptions').delete().eq('endpoint', endpoint),
+      );
       setStatus('unsubscribed');
       toast.success('Notifiche disattivate');
     } catch (err) {

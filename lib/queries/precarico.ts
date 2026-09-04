@@ -1,6 +1,6 @@
 import { QueryClient, dehydrate, type DehydratedState } from '@tanstack/react-query';
 import { logger } from '@/lib/logger';
-import { domandaCategorie, domandaProdotto, type ClientDiLettura } from '@/lib/queries/catalogo';
+import { domandaCategorie, domandaNegozio, domandaProdotto, type ClientDiLettura } from '@/lib/queries/catalogo';
 
 /**
  * IL PRECARICO: i dati che partono DENTRO la pagina, invece di essere chiesti
@@ -61,4 +61,18 @@ export function precaricaHome(): Promise<DehydratedState> {
 /** La scheda del prodotto: nome, prezzo, foto e negozio, dentro l'HTML. */
 export function precaricaProdotto(id: string): Promise<DehydratedState> {
   return precarica((supa) => [domandaProdotto(supa, id)]);
+}
+
+/**
+ * La vetrina del negozio: nome, orari, copertina e personalizzazione, dentro
+ * l'HTML.
+ *
+ * 3/9/2026 — senza questa riga la pagina del negozio partiva vuota e chiedeva
+ * tutto al browser: prima lo scheletro del server, poi l'attesa del browser,
+ * poi il negozio. Tre impaginazioni in fila. Con il precarico la seconda non
+ * c'e' piu', perche' quando il codice della pagina parte la risposta e' gia' in
+ * mano.
+ */
+export function precaricaNegozio(id: string): Promise<DehydratedState> {
+  return precarica((supa) => [domandaNegozio(supa, id)]);
 }

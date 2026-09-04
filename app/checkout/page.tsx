@@ -13,19 +13,21 @@ import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
 import { chiaveDelCheckout, chiudiChiaveDelCheckout } from '@/lib/analytics/chiave-checkout';
 import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
 import { checkoutChiuso } from '@/lib/ordini/partenza';
+import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
 import { formatPrice } from '@/lib/format';
-import { PICKUP_DISCOUNT_PERCENT } from '@/lib/constants';
+import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
 import { fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import { validateCouponFromBrowser, type Coupon } from '@/lib/coupons';
 import { trackCheckoutStarted, trackCheckoutStep, trackCouponApplied, trackOrderPlaced } from '@/lib/analytics/events';
-import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { Textarea } from '@/components/ui/Field';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
 import { StepCard } from '@/components/checkout/StepCard';
+import { ScheletroCassa } from '@/components/checkout/ScheletroCassa';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
 import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
 import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
@@ -49,7 +51,10 @@ import { OrderSummary } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
+import { promessaSpedizioneDelCarrello } from '@/lib/ordini/promessa-del-carrello';
+import { merceCheTengoIo, problemiDiDisponibilita, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
+import { leggiJson, messaggioDiRete } from '@/lib/api/leggi-json';
 import { queryKeys } from '@/lib/queries/keys';
 
 type AddressForm = {
@@ -277,15 +282,49 @@ export default function CheckoutPage() {
         })
         .map((it) => ({ id: it.id, name: it.name, prima: it.price, adesso: priceMap.get(it.id) as number }));
 
+      /**
+       * 3/9/2026 — L'ULTIMO PEZZO CHE HO IMPEGNATO IO NON È UN PEZZO FINITO.
+       *
+       * Premendo «Paga con carta» il server scala davvero `products.stock` e
+       * apre Stripe. Chi lì fa indietro tornava qui e leggeva «Non più
+       * disponibile»: aveva impegnato lui quell'unico pezzo, e la riserva dura
+       * due ore. Il pulsante d'ordine si spegneva, la richiesta non partiva, e
+       * il rilascio che vive nelle due rotte d'ordine non veniva mai raggiunto.
+       *
+       * Qui si chiedono i propri tentativi ancora aperti — le regole del
+       * database ne mostrano soltanto i propri — e la loro merce torna a
+       * contare come disponibile PER CHI LA TIENE. Così la richiesta arriva al
+       * server, che libera la riserva vecchia e ne fa una nuova, come sa fare.
+       */
+      // L'identificativo si prende dalla sessione già in memoria: nessun viaggio
+      // in più, e da ospiti non c'è niente da chiedere (una riserva nasce solo
+      // da un ordine, e per ordinare bisogna essere entrati). Il filtro sul
+      // proprietario è scritto anche qui: le regole del database lo impongono
+      // già, ma una richiesta che dice cosa vuole è una richiesta che si legge.
+      const idCliente = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
+      const tentativiMiei = idCliente
+        ? (
+            await supabase
+              .from('pending_checkouts')
+              .select('groups')
+              .eq('buyer_id', idCliente)
+              .eq('status', 'PENDING')
+              .limit(10)
+          ).data
+        : [];
+      const tengoIo = merceCheTengoIo((tentativiMiei ?? []) as TentativoAperto[]);
+
       // Disponibilità per riga: stock della variante se presente, altrimenti del
       // prodotto. Blocca e segnala invece di fallire dopo.
       const availableFor = (it: CartItem) =>
         it.variantId
           ? (variantStock.get(it.variantId) ?? 0)
           : (stockMap.get(it.id) ?? Number.POSITIVE_INFINITY);
-      const stockIssues = cart
-        .filter((it) => validIds.has(it.id) && it.quantity > availableFor(it))
-        .map((it) => ({ id: it.id, name: it.name, requested: it.quantity, available: availableFor(it) }));
+      const stockIssues = problemiDiDisponibilita(
+        cart.filter((it) => validIds.has(it.id)),
+        availableFor,
+        tengoIo,
+      );
 
       // Articoli con varianti ma senza variante scelta (es. aggiunti da una card):
       // vanno completati nella scheda prodotto prima di ordinare.
@@ -568,12 +607,18 @@ export default function CheckoutPage() {
    * che decide l'addebito nelle due rotte. `riepilogoDaMostrare` la legge in
    * euro, che è come si stampa.
    */
+  // Il sottototale di OGNI negozio, in centesimi. Uno per gruppo, perché è
+  // così che si contano sia i soldi sia la soglia della spedizione gratuita.
+  const sottototaliPerNegozioCents = groups.map((g) =>
+    // Il prezzo di riga è già quello di adesso e già scontato (#114): qui si
+    // passa solo dagli euro ai centesimi, come fa il server.
+    g.items.reduce((s, it) => s + Math.round(it.price * 100) * it.quantity, 0),
+  );
+
   const riepilogo = riepilogoDaMostrare({
-    gruppi: groups.map((g) => ({
+    gruppi: groups.map((g, i) => ({
       sellerId: g.sellerId,
-      // Il prezzo di riga è già quello di adesso e già scontato (#114): qui si
-      // passa solo dagli euro ai centesimi, come fa il server.
-      subtotalCents: g.items.reduce((s, it) => s + Math.round(it.price * 100) * it.quantity, 0),
+      subtotalCents: sottototaliPerNegozioCents[i],
     })),
     coordinateNegozio: (sellerId) => {
       const g = groups.find((x) => x.sellerId === sellerId);
@@ -589,6 +634,18 @@ export default function CheckoutPage() {
     usaCredito: paymentMethod === 'cod' && useCredit,
     creditoDisponibileCents: walletCents ?? 0,
   });
+
+  // La promessa sulla spedizione ha una casa sola: `promessaSpedizione` la fa
+  // nascere dalla soglia e dal costo di consegna veri.
+  //
+  // 3/9/2026 — QUI LE SI PASSAVA IL TOTALE DI TUTTO IL CARRELLO, e la soglia
+  // dei 30 € vale per NEGOZIO: con 18 € dal fornaio e 18 dal macellaio la barra
+  // diceva «Spedizione gratis» e il riepilogo addebitava due spedizioni.
+  // Adesso la domanda parte dall'elenco dei negozi e la risposta guarda quello
+  // più lontano dalla soglia: «gratis» compare solo quando è vero per tutti.
+  const promessaConsegna = promessaSpedizioneDelCarrello(
+    sottototaliPerNegozioCents.map((c) => c / 100),
+  );
 
   const walletEuro = (walletCents ?? 0) / 100;
   const grandSubtotal = riepilogo.subtotale;
@@ -754,12 +811,14 @@ export default function CheckoutPage() {
       // 22/8/2026 — la rotta adesso risponde al contratto del progetto,
       // `{ ok: true, data: { … } }`. Si legge da `data`, con il vecchio posto
       // come ripiego finché non è tutto pubblicato.
-      const corpoCod = body as {
-        data?: { orderIds?: string[] };
-        orderIds?: string[];
-      };
-      const createdOrders: string[] = corpoCod.data?.orderIds ?? corpoCod.orderIds ?? [];
-      const ordiniVeri = (body as { ordini?: Array<{ id: string; sellerId: string; totalCents: number }> }).ordini ?? [];
+      //
+      // 3/9/2026 — LE DUE LETTURE ERANO SCRITTE A MANO, E SOLO UNA ERA STATA
+      // SPOSTATA. Gli identificativi si leggevano dentro `data`, l'elenco degli
+      // ordini era rimasto in cima al corpo: su un ordine nuovo era sempre
+      // vuoto, e l'acquisto pagato alla consegna non arrivava mai a Google
+      // Analytics. Adesso legge `leggiOrdiniCod`, che conosce tutte e due le
+      // forme della risposta.
+      const { orderIds: createdOrders, ordini: ordiniVeri } = leggiOrdiniCod(body);
       // #210 e #213 — Prima partiva UN evento solo, con due difetti dentro.
       //
       // Il primo: l'importo era `grandTotal`, cioe' la stima del browser prima
@@ -861,12 +920,32 @@ export default function CheckoutPage() {
           checkoutId: idCheckout,
         }),
       });
-      const data = await res.json();
+      /**
+       * 3/9/2026 — QUI IL CLIENTE LEGGEVA «LA SESSIONE È SCADUTA».
+       *
+       * `res.json()` senza rete di sicurezza: se il gateway risponde con la sua
+       * pagina HTML — un 504 perché la rotta non ha risposto in tempo, un 502 —
+       * il parser lancia «Unexpected token '<'», e quella parola «token» faceva
+       * dire al messaggio d'errore che la sessione era scaduta. Chi aveva la
+       * carta in mano usciva dall'account per un guasto di rete.
+       *
+       * Adesso la lettura non esplode (come già faceva il ramo dei contanti) e,
+       * quando non c'è nessuna risposta nostra da leggere, si parla dello stato
+       * HTTP: l'unica cosa vera che abbiamo in mano.
+       */
+      const data = await leggiJson(res);
       // 22/8/2026 — la rotta risponde al contratto `{ ok, data }`. Il vecchio
       // posto resta come ripiego finché non è tutto pubblicato.
-      const corpo = data as { data?: { url?: string }; url?: string };
+      const corpo = (data ?? {}) as { data?: { url?: string }; url?: string };
       const indirizzo = corpo.data?.url ?? corpo.url;
       if (!res.ok || !indirizzo) {
+        if (data === null) {
+          throw new Error(
+            res.status >= 500
+              ? 'Il pagamento non è partito e non ti è stato addebitato niente. Riprova fra qualche secondo.'
+              : messaggioDiRete(res.status),
+          );
+        }
         throw new Error(apiErrorMessage(data, 'Errore creazione pagamento'));
       }
       return indirizzo;
@@ -996,8 +1075,28 @@ export default function CheckoutPage() {
   // niente». Prima stavano al contrario, e il ramo del vuoto vinceva sempre.
   const vistaCarrello = statoDellaVista({ letto: carrelloLetto, caricando: loadingGroups, quanti: cart.length });
 
+  /**
+   * 3/9/2026 — LA PAGINA NON COLLASSA PIÙ IN UN CERCHIETTO.
+   *
+   * Qui si restituiva `<LoadingState />` al posto di TUTTO: titolo, passi,
+   * riepilogo e pulsante sparivano, e chi stava pagando vedeva la pagina
+   * svuotarsi e riaprirsi. Il titolo e l'indicatore dei passi non dipendono dai
+   * dati: restano a schermo, e solo la parte centrale mostra lo scheletro.
+   */
   if (vistaCarrello.mostraScheletro) {
-    return <LoadingState />;
+    return (
+      <div className="container mx-auto px-4 sm:px-6 py-8 max-w-6xl pb-28 lg:pb-8">
+        <Link
+          href="/cart"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-600 hover:text-ink-900 mb-1"
+        >
+          <ArrowLeft size={17} aria-hidden /> Torna al carrello
+        </Link>
+        <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-900 mb-5">Conferma il tuo ordine</h1>
+        <StepIndicator steps={CHECKOUT_STEPS} currentStep={2} />
+        <ScheletroCassa />
+      </div>
+    );
   }
 
   if (vistaCarrello.mostraVuoto) {
@@ -1049,7 +1148,11 @@ export default function CheckoutPage() {
 
           {/* STEP 2 — Quando vuoi riceverlo (consegna / express / ritiro) */}
           <StepCard n={2} icon={Truck} title="Quando vuoi riceverlo">
-            {pickupInStore ? (
+            {/* Il ritiro in negozio oggi è spento (`RITIRO_IN_NEGOZIO_ATTIVO`), e
+                la scelta sta dietro quell'interruttore in PaymentMethodSelector.
+                Qui lo si rilegge invece di fidarsi: la frase sul ritiro non deve
+                poter comparire quando il ritiro non si può fare. */}
+            {RITIRO_IN_NEGOZIO_ATTIVO && pickupInStore ? (
               <div className="flex items-center gap-2 rounded-xl border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-800">
                 <Store size={16} className="text-olive-700 shrink-0" aria-hidden /> Ritiro in negozio selezionato — nessun costo di consegna. Vai tu quando l&apos;ordine è pronto.
               </div>
@@ -1076,6 +1179,14 @@ export default function CheckoutPage() {
                     {grandShipping === 0 ? <span className="text-olive-700">Gratis</span> : formatPrice(grandShipping)}
                   </span>
                 </div>
+                {/* 3/9/2026 — «Gratis» da solo, mentre il riepilogo qui a fianco
+                    addebita la consegna, è la sorpresa che fa abbandonare alla
+                    fine. La frase non si scrive qui: nasce dalla cifra che la
+                    cassa addebita davvero (`promessaSpedizione`, la stessa che
+                    parla in vetrina). A consegna gratuita sparisce da sé. */}
+                {promessaConsegna.promessa.dettaglioConsegna && (
+                  <p className="mt-2 text-xs text-ink-500">{promessaConsegna.promessa.dettaglioConsegna}</p>
+                )}
               </>
             )}
           </StepCard>
@@ -1141,7 +1252,7 @@ export default function CheckoutPage() {
           )}
 
           {orphans.length > 0 && (
-            <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 space-y-3">
+            <div role="alert" className="bg-secondary-50 border border-secondary-200 rounded-xl p-4 text-sm text-secondary-800 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
                 <span><strong>{orphans.length} {orphans.length === 1 ? 'prodotto non è più disponibile' : 'prodotti non sono più disponibili'}</strong>: {orphans.map((o) => o.name).join(', ')}.</span>
@@ -1153,7 +1264,7 @@ export default function CheckoutPage() {
                   setCart(getCart());
                   toast.success('Articoli non disponibili rimossi');
                 }}
-                className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg font-semibold text-sm"
+                className="bg-secondary-600 hover:bg-secondary-700 text-white px-3 py-1.5 rounded-lg font-semibold text-sm"
               >
                 Rimuovi dal carrello
               </button>
@@ -1167,7 +1278,7 @@ export default function CheckoutPage() {
               perche'. `role="alert"` li fa leggere appena compaiono — e' la
               stessa correzione gia' applicata ai campi del modulo. */}
           {stockIssues.length > 0 && (
-            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 space-y-3">
+            <div role="alert" className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
                 <span><strong>Disponibilità insufficiente</strong> per: {stockIssues.map((s) => `${s.name} (richiesti ${s.requested}, disponibili ${s.available})`).join('; ')}. Riduci le quantità nel carrello, oppure togli l&apos;articolo da qui.</span>
@@ -1183,7 +1294,7 @@ export default function CheckoutPage() {
                     setCart(getCart());
                     toast.success(stockIssues.length === 1 ? 'Articolo rimosso' : 'Articoli rimossi');
                   }}
-                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+                  className="rounded-lg bg-accent-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-800"
                 >
                   Togli dal carrello
                 </button>
@@ -1196,7 +1307,7 @@ export default function CheckoutPage() {
               totale qui sotto e' gia' quello nuovo, cioe' quello che verra'
               addebitato davvero. */}
           {prezziCambiati.length > 0 && (
-            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 flex items-start gap-2">
+            <div role="alert" className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span>
                 <strong>Il prezzo è cambiato</strong> da quando avevi messo nel carrello:{' '}
@@ -1216,7 +1327,7 @@ export default function CheckoutPage() {
               Il pulsante toglie SOLO la riga senza variante: chi ha anche la
               riga giusta, con la taglia scelta, non la perde. */}
           {variantIssues.length > 0 && (
-            <div role="alert" className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900 space-y-3">
+            <div role="alert" className="bg-accent-50 border border-accent-200 rounded-xl p-4 text-sm text-accent-900 space-y-3">
               <p className="flex items-start gap-2">
                 <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
                 <span>
@@ -1227,7 +1338,7 @@ export default function CheckoutPage() {
               <div className="flex flex-wrap gap-2">
                 <Link
                   href={`/product/${variantIssues[0].id}`}
-                  className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+                  className="rounded-lg border border-accent-300 bg-white px-3 py-1.5 text-sm font-semibold text-accent-900 hover:bg-accent-100"
                 >
                   Apri {variantIssues.length === 1 ? 'il prodotto' : 'il primo'}
                 </Link>
@@ -1238,7 +1349,7 @@ export default function CheckoutPage() {
                     setCart(getCart());
                     toast.success(variantIssues.length === 1 ? 'Riga senza opzioni rimossa' : 'Righe senza opzioni rimosse');
                   }}
-                  className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-700"
+                  className="rounded-lg bg-accent-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-800"
                 >
                   Togli dal carrello
                 </button>
@@ -1247,7 +1358,7 @@ export default function CheckoutPage() {
           )}
 
           {groups.length === 0 && orphans.length === 0 && !loadingGroups && (
-            <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-sm text-rose-800 flex items-start gap-2">
+            <div role="alert" className="bg-secondary-50 border border-secondary-200 rounded-xl p-4 text-sm text-secondary-800 flex items-start gap-2">
               <AlertTriangle size={16} className="shrink-0 mt-0.5" aria-hidden />
               <span><strong>Errore nel caricamento dei prodotti.</strong> Prova a ricaricare la pagina, oppure svuota il carrello e riprova.</span>
             </div>
@@ -1256,7 +1367,10 @@ export default function CheckoutPage() {
 
         {/* RIEPILOGO ORDINE */}
         <div className="lg:sticky lg:top-[var(--header-height)] h-fit space-y-4">
-          <div className="bg-white border border-surface-200 rounded-xl shadow-card overflow-hidden">
+          {/* 3/9/2026 — Il riquadro del riepilogo era scritto a mano e non
+              somigliava alle card di sinistra: stessa griglia, angoli e bordi
+              diversi. Adesso è la stessa card del percorso d'acquisto. */}
+          <Card variant="funnel" padding="none" className="overflow-hidden">
             <div className="bg-surface-50 border-b border-surface-200 px-5 py-3 flex justify-between items-center">
               <h2 className="font-serif text-lg font-bold text-ink-900">Riepilogo</h2>
               <span className="text-xs text-ink-400">{cart.length} articoli</span>
@@ -1264,9 +1378,13 @@ export default function CheckoutPage() {
 
             <CartGroupsList groups={groups} />
 
-            {/* Spinta add-back: a un soffio dalla spedizione gratis */}
+            {/* Spinta add-back: a un soffio dalla spedizione gratis.
+                Il numero è il sottototale del negozio più lontano dalla soglia,
+                non il totale del carrello: la soglia vale per ciascun negozio,
+                e sommandoli la barra prometteva «gratis» su un ordine che
+                pagava due spedizioni. */}
             <div className="px-5 pt-3">
-              <FreeShippingProgress subtotal={grandSubtotal} />
+              <FreeShippingProgress subtotal={promessaConsegna.sottototaleDellaBarra} />
             </div>
 
             {/* Coupon input */}
@@ -1292,7 +1410,7 @@ export default function CheckoutPage() {
               paymentMethod={paymentMethod}
               disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
             />
-          </div>
+          </Card>
         </div>
       </div>
 

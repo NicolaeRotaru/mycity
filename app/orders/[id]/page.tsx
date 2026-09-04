@@ -12,7 +12,7 @@ import ConfettiBurst from '@/components/ConfettiBurst';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { formatPrice } from '@/lib/format';
 import { nomeDellaRigaOrdine, fotoDellaRigaOrdine } from '@/lib/ordini/riga-ordine';
-import { haversineKm, deliveryEtaMinutes } from '@/lib/geo';
+import { statoPosizioneRider, stimaArrivoMinuti, daQuantoTempo } from '@/lib/ordini/posizione-rider';
 import { toast } from 'sonner';
 import { riordina } from '@/lib/riordino';
 import {
@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import { queryKeys } from '@/lib/queries/keys';
 // #92 — le miniature si chiedono gia' piccole al server
-import { sizedImage } from '@/lib/image-url';
+import { sizedImage, logoNegozio } from '@/lib/image-url';
 import { riepilogoOrdine, statoPagamento } from '@/lib/ordini/riepilogo-ordine';
 
 type OrderRow = {
@@ -159,6 +159,10 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   // Bottom-sheet di contatto (rider / negozio / assistenza).
   const [contact, setContact] = useState<ContactTarget | null>(null);
 
+  // Il pulsante «Ripeti ordine» mentre lavora: cortesia, non diga. La diga che
+  // impedisce il doppio carrello sta dentro `riordina` (lib/riordino.ts).
+  const [riordinoInCorso, setRiordinoInCorso] = useState(false);
+
   // Realtime subscription: aggiornamenti live dell'ordine (stato + posizione rider)
   useEffect(() => {
     const channel = supabase
@@ -245,8 +249,30 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   if (order.delivery_lat && order.delivery_lng) {
     points.push({ lat: order.delivery_lat, lng: order.delivery_lng, label: 'Casa tua', color: 'rose' });
   }
-  if (order.rider_lat && order.rider_lng && status !== 'DELIVERED' && status !== 'CANCELED') {
-    points.push({ lat: order.rider_lat, lng: order.rider_lng, label: 'Rider', color: 'amber' });
+  // Da quanto è ferma l'ultima posizione mandata dal fattorino. Da qui in poi
+  // niente si mostra «come se fosse adesso» senza aver guardato questo.
+  const posizioneRider = statoPosizioneRider({
+    lat: order.rider_lat,
+    lng: order.rider_lng,
+    aggiornataIl: order.rider_position_updated_at,
+  });
+
+  if (
+    order.rider_lat && order.rider_lng
+    && status !== 'DELIVERED' && status !== 'CANCELED'
+    // Un puntino sulla mappa si legge come «è qui adesso»: sopra la mezz'ora
+    // non lo è più, e allora non si disegna.
+    && posizioneRider.mostraPin
+  ) {
+    points.push({
+      lat: order.rider_lat,
+      lng: order.rider_lng,
+      // Chi ascolta la pagina sente l'etichetta intera: ci mettiamo anche l'età.
+      label: posizioneRider.fresca || posizioneRider.minuti == null
+        ? 'Rider'
+        : `Rider · ultima posizione ${daQuantoTempo(posizioneRider.minuti)}`,
+      color: 'amber',
+    });
   }
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
@@ -260,23 +286,15 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const isCancellable = status === 'NEW';
   const riderPhase = order.rider_id && (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY' || status === 'ASSIGNED');
 
-  // ETA rider in minuti: DERIVATA dalla distanza rider→cliente (haversine su
-  // rider_lat/lng → delivery_lat/lng) a velocità media urbana (~25 km/h, vedi
-  // lib/geo.deliveryEtaMinutes con prep=0: il rider è già in viaggio). Mostrata
-  // SOLO in OUT_FOR_DELIVERY e solo se entrambe le coppie di coordinate esistono;
-  // altrimenti resta null e il chip "~N min" viene omesso (niente stime finte).
-  const riderEtaMin: number | null =
-    status === 'OUT_FOR_DELIVERY'
-    && order.rider_lat != null && order.rider_lng != null
-    && order.delivery_lat != null && order.delivery_lng != null
-      ? Math.max(
-          1,
-          deliveryEtaMinutes(
-            haversineKm(order.rider_lat, order.rider_lng, order.delivery_lat, order.delivery_lng),
-            0,
-          ),
-        )
-      : null;
+  // Fra quanti minuti arriva. Il conto sta in lib/ordini/posizione-rider.ts, e
+  // torna `null` — cioè nessun numero a schermo — anche quando le coordinate
+  // ci sono ma sono vecchie: un «~4 min» calcolato su un puntino di mezz'ora fa
+  // è una bugia detta al minuto.
+  const riderEtaMin: number | null = stimaArrivoMinuti(
+    { lat: order.rider_lat, lng: order.rider_lng, aggiornataIl: order.rider_position_updated_at },
+    { lat: order.delivery_lat, lng: order.delivery_lng },
+    { inViaggio: status === 'OUT_FOR_DELIVERY' },
+  );
 
   // Stato hero: serif heading + sottotitolo coerenti con lo stato corrente.
   const HeroIcon = isDelivered ? CheckCircle2 : ORDER_STATUS_ICON[status];
@@ -305,12 +323,14 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   // "Consegna stimata": in OUT_FOR_DELIVERY usiamo l'ETA DERIVATA (rider→cliente)
   // se disponibile ("~N min"); altrimenti una finestra relativa coerente col copy
   // del marketplace. Niente orari assoluti finti: solo derivazioni reali.
+  // Senza una posizione fresca non si promette un tempo: «In viaggio» è vero,
+  // «In arrivo a breve» era una promessa che nessuno stava mantenendo.
   const etaLabel = isDelivered
     ? 'Consegnato'
     : isCancelled
     ? '—'
     : status === 'OUT_FOR_DELIVERY'
-    ? (riderEtaMin != null ? `~${riderEtaMin} min` : 'In arrivo a breve')
+    ? (riderEtaMin != null ? `~${riderEtaMin} min` : 'In viaggio')
     : '30-60 min dalla conferma';
   const etaCaption = isDelivered ? 'Stato consegna' : 'Consegna stimata';
 
@@ -322,6 +342,9 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   const prepHint: string | null = (() => {
     if (isDelivered || isCancelled) return null;
     if (status === 'OUT_FOR_DELIVERY' && riderEtaMin != null) return null; // già coperto dal chip ETA
+    // Niente stima perché la posizione è vecchia: al posto del numero si dice
+    // da quanto è ferma. È l'unica cosa vera che sappiamo.
+    if (status === 'OUT_FOR_DELIVERY' && posizioneRider.testo) return posizioneRider.testo;
     if (status === 'READY' || status === 'ASSIGNED' || status === 'PICKED_UP') {
       const m = minutesSince(order.ready_at);
       return m != null ? 'Pronto, in consegna a breve' : null;
@@ -336,18 +359,23 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
   // #113 — Una funzione sola per tutti e quattro i pulsanti «riordina»: chiede
   // prima di svuotare il carrello e rilegge i prezzi di adesso.
   const handleReorder = async () => {
-    const aggiunti = await riordina(
-      order.order_items.map((it) => ({
-        productId: it.product_id ?? '',
-        name: nomeDellaRigaOrdine(it),
-        prezzoStorico: Number(it.unit_price),
-        image: fotoDellaRigaOrdine(it),
-        quantity: it.quantity,
-        sellerId: order.seller_id ?? undefined,
-        storeName: order.seller?.store_name ?? undefined,
-      })),
-    );
-    if (aggiunti > 0) router.push('/cart');
+    setRiordinoInCorso(true);
+    try {
+      const aggiunti = await riordina(
+        order.order_items.map((it) => ({
+          productId: it.product_id ?? '',
+          name: nomeDellaRigaOrdine(it),
+          prezzoStorico: Number(it.unit_price),
+          image: fotoDellaRigaOrdine(it),
+          quantity: it.quantity,
+          sellerId: order.seller_id ?? undefined,
+          storeName: order.seller?.store_name ?? undefined,
+        })),
+      );
+      if (aggiunti > 0) router.push('/cart');
+    } finally {
+      setRiordinoInCorso(false);
+    }
   };
 
   const orderRef = `#${order.id.slice(0, 6).toUpperCase()}`;
@@ -366,7 +394,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
           <span
             className={`flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full ${
               isDelivered ? 'bg-olive-100 text-olive-700'
-              : isCancelled ? 'bg-rose-50 text-rose-600'
+              : isCancelled ? 'bg-red-50 text-red-600'
               : 'bg-primary-100 text-primary-700'
             }`}
           >
@@ -402,8 +430,10 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             >
               <Star size={15} strokeWidth={2.2} aria-hidden /> Lascia recensione
             </Link>
-            <Button onClick={handleReorder} size="sm">
-              <span className="inline-flex items-center gap-1.5"><Repeat size={15} strokeWidth={2.2} aria-hidden /> Ripeti ordine</span>
+            {/* L'icona passa dalla prop, non da uno <span> a mano: mentre il
+                riordino lavora il pulsante mostra la rotellina al posto suo. */}
+            <Button onClick={handleReorder} size="sm" icon={Repeat} loading={riordinoInCorso}>
+              Ripeti ordine
             </Button>
             <Link
               href={`/orders/${id}/return`}
@@ -413,7 +443,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             </Link>
             <Link
               href={`/orders/${id}/dispute`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50"
             >
               <AlertTriangle size={15} strokeWidth={2.2} aria-hidden /> Apri reclamo
             </Link>
@@ -428,7 +458,14 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             <Clock size={15} strokeWidth={2.2} className="mt-0.5 shrink-0" aria-hidden />
             <span><strong>In attesa di conferma del negozio.</strong> Puoi annullare l&apos;ordine finché il negozio non lo accetta.</span>
           </p>
-          <button
+          {/* Il pulsante distruttivo passa dal pulsante di casa: così il rosso del
+              pericolo è uno solo in tutto il sito (`variant="danger"`), e mentre
+              l'annullamento è in corso si vede che sta lavorando. */}
+          <Button
+            variant="danger"
+            icon={XCircle}
+            loading={cancel.isPending}
+            className="whitespace-nowrap rounded-lg"
             onClick={async () => {
               const ok = await confirmDialog({
                 title: "Annullare l'ordine?",
@@ -440,16 +477,14 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
               });
               if (ok) cancel.mutate();
             }}
-            disabled={cancel.isPending}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50"
           >
-            <XCircle size={15} strokeWidth={2.2} aria-hidden /> Annulla ordine
-          </button>
+            Annulla ordine
+          </Button>
         </div>
       )}
 
       {isCancelled && (
-        <div className="mt-4 flex items-center gap-1.5 rounded-xl border-2 border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+        <div className="mt-4 flex items-center gap-1.5 rounded-xl border-2 border-red-200 bg-red-50 p-4 text-sm text-red-800">
           <XCircle size={15} strokeWidth={2.2} aria-hidden /> Questo ordine è stato annullato.
         </div>
       )}
@@ -484,7 +519,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
         <Card variant="bordered" padding="lg">
           <h2 className="mb-4 font-serif text-lg font-bold text-ink-900">Stato dell&apos;ordine</h2>
           {isCancelled ? (
-            <div className="text-sm text-rose-700">Questo ordine è stato annullato.</div>
+            <div className="text-sm text-red-700">Questo ordine è stato annullato.</div>
           ) : (
             <ol className="relative">
               {BUYER_TIMELINE.map((step, i) => {
@@ -541,9 +576,12 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
                     <h2 className="inline-flex items-center gap-1.5 font-serif text-base font-bold text-ink-900">
                       <MapPin size={16} strokeWidth={2.2} aria-hidden /> Tracking in tempo reale
                     </h2>
-                    {order.rider_position_updated_at && (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') ? (
-                      <span className="text-xs text-olive-700">
-                        ● agg. {new Date(order.rider_position_updated_at).toLocaleTimeString('it-IT')}
+                    {/* Prima qui c'era «● agg. 14:00»: un orario secco, che chi legge
+                        alle 14:25 non confronta con l'orologio. Adesso c'è scritto da
+                        quanto è ferma, e quando è vecchia il pallino non è più verde. */}
+                    {posizioneRider.testo && (status === 'PICKED_UP' || status === 'OUT_FOR_DELIVERY') ? (
+                      <span className={`text-xs ${posizioneRider.fresca ? 'text-olive-700' : 'text-ink-500'}`}>
+                        ● {posizioneRider.testo}
                       </span>
                     ) : status === 'ASSIGNED' ? (
                       <span className="text-xs text-primary-700">● in arrivo al negozio</span>
@@ -668,7 +706,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-cream-100">
                 {order.seller?.store_logo ? (
-                  (<Image src={sizedImage(order.seller.store_logo, 'thumb')} alt="" width={40} height={40} unoptimized className="h-full w-full object-cover" />)
+                  (<Image src={logoNegozio(order.seller.store_logo, 40)} alt="" width={40} height={40} unoptimized className="h-full w-full object-contain" />)
                 ) : <Store size={18} className="text-ink-400" aria-hidden />}
               </div>
               <div className="min-w-0 flex-1">
@@ -689,7 +727,7 @@ export default function BuyerOrderDetailPage(props: { params: Promise<{ id: stri
           {/* AZIONI */}
           <div className="flex flex-col gap-2.5">
             {isDelivered && (
-              <Button variant="primary" size="lg" fullWidth icon={Repeat} onClick={handleReorder}>
+              <Button variant="primary" size="lg" fullWidth icon={Repeat} onClick={handleReorder} loading={riordinoInCorso}>
                 Ordina di nuovo
               </Button>
             )}

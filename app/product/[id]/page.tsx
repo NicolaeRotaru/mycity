@@ -13,8 +13,9 @@ import { addToCart } from '@/lib/cart';
 import { toast } from 'sonner';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
-import { FREE_SHIPPING_THRESHOLD, LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
-import { FRASE_RESO, frasePagamento } from '@/lib/promesse-pubbliche';
+import { SIZES_FOTO_PRODOTTO } from '@/lib/preload-foto';
+import { LOW_STOCK_THRESHOLD, NEW_PRODUCT_DAYS } from '@/lib/constants';
+import { FRASE_RESO, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { RatingStars } from '@/components/ui/RatingStars';
 import { findLabelForKey, formatAttributeValue } from '@/lib/category-attributes';
@@ -32,6 +33,7 @@ import ProductViewTracker from '@/components/ProductViewTracker';
 import ProductQA from '@/components/ProductQA';
 import RecentlyViewed from '@/components/RecentlyViewed';
 import StickyAddToCart from '@/components/StickyAddToCart';
+import QuandoSiVede from '@/components/QuandoSiVede';
 import SimilarProducts from '@/components/SimilarProducts';
 import ActivePromoBadge from '@/components/ActivePromoBadge';
 import AddToListButton from '@/components/AddToListButton';
@@ -326,7 +328,12 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
   });
 
   const price = Number(product.price);
-  const freeShipping = price >= FREE_SHIPPING_THRESHOLD;
+  // Le parole sulla spedizione non si scrivono qui: le decide `promessaSpedizione()`, che le fa
+  // nascere dalla cifra che la cassa addebita davvero. Scritte a mano, questa scheda prometteva
+  // «Spedizione gratuita» e non nominava da nessuna parte i 3 € di consegna che partono comunque:
+  // il cliente li vedeva per la prima volta nel carrello, cioe' dopo aver scelto.
+  const spedizione = promessaSpedizione(price);
+  const freeShipping = spedizione.sopraSoglia;
   // Prezzo pieno barrato + unità + condizione (campi di primo livello).
   const compareAt = (product as { compare_at_price?: number | string | null }).compare_at_price;
   const compareAtNum = compareAt != null ? Number(compareAt) : null;
@@ -469,7 +476,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     alt={i === 0 ? product.name : `${product.name} — foto ${i + 1}`}
                     fill
                     priority={i === 0}
-                    sizes="(min-width: 1024px) 480px, (min-width: 640px) 50vw, 100vw"
+                    sizes={SIZES_FOTO_PRODOTTO}
                     loader={caricatoreFotoRemote}
                     className="object-cover"
                   />
@@ -597,33 +604,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
           </div>
         )}
 
-        {/* INFO */}
+        {/* INFO
+            3/9/2026 — L'ORDINE DEI BLOCCHI ERA ROVESCIATO, e su telefono la colonna è una sola.
+            Prima si leggeva: negozio, «Segnala questo contenuto», ragione sociale e partita IVA —
+            e solo dopo COSA si sta guardando e QUANTO costa. Chi apre un prodotto dal telefono
+            aveva l'invito a segnalare un abuso prima del nome. Anche i titoli erano invertiti:
+            «Venduto da» apre con un <h2>, e stava sopra l'<h1> della pagina.
+            Adesso: nome, prezzo e riquadro rassicurazione in cima; il negozio subito sotto; chi
+            vende davvero e il canale per le segnalazioni in fondo, dove si cercano. */}
         <div className="space-y-4">
-          {/* Scheda venditore: avatar, valutazione (reale, da store_reviews),
-              "dal AAAA" (created_at), link al negozio. */}
-          {(sellerProfile?.id ?? product.seller_id) && (
-            <SellerCard
-              sellerId={(sellerProfile?.id ?? product.seller_id) as string}
-              storeName={product.profiles?.store_name ?? 'Negozio'}
-            />
-          )}
-
-          {/* Chi vende davvero: ragione sociale, sede, partita IVA. Prima non
-              c'era da nessuna parte, e il cliente non sapeva con chi stava
-              stipulando il contratto. */}
-          {/* Il canale per dirci che qualcosa non va: prima non esisteva
-              da nessuna parte sul sito. */}
-          <div className="pt-1">
-            <Segnala tipo="prodotto" oggettoId={product.id} />
-          </div>
-
-          {(sellerProfile?.id ?? product.seller_id) && (
-            <VendutoDa
-              sellerId={(sellerProfile?.id ?? product.seller_id) as string}
-              storeName={product.profiles?.store_name}
-            />
-          )}
-
           <div className="flex items-start justify-between gap-3">
             <h1 className="flex-1 font-serif text-3xl font-bold leading-tight text-ink-900 md:text-4xl">{product.name}</h1>
             <button
@@ -719,6 +708,15 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
                     cassa, dopo l'indirizzo — dove abbandonare costa di piu'. */}
                 <span>{frasePagamento()}</span>
               </span>
+              {/* Il costo di consegna: fin qui non compariva da nessuna parte, e il primo posto
+                  dove si vedeva era il carrello. Chi legge la promessa qui sopra deve leggere
+                  anche questo, sullo stesso schermo e prima di scegliere. */}
+              {spedizione.dettaglioConsegna && (
+                <span className="inline-flex items-center gap-2 text-sm text-olive-800">
+                  <Bike size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
+                  <span>{spedizione.dettaglioConsegna}</span>
+                </span>
+              )}
               <span className="inline-flex items-center gap-2 text-sm text-olive-800">
                 <RotateCcw size={16} strokeWidth={2.2} className="text-olive-600 shrink-0" aria-hidden />
                 {/* «gratuito» valeva solo per il difetto, non per il ripensamento: la pagina
@@ -730,6 +728,16 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
             {/* Barra spedizione gratis reattiva alla quantità — versione leggera */}
             <FreeShippingProgress subtotal={price * qty} />
           </div>
+
+          {/* Scheda venditore: avatar, valutazione (reale, da store_reviews),
+              "dal AAAA" (created_at), link al negozio. Sta sotto il titolo e il prezzo:
+              di chi ti fidi si decide dopo aver visto cosa costa. */}
+          {(sellerProfile?.id ?? product.seller_id) && (
+            <SellerCard
+              sellerId={(sellerProfile?.id ?? product.seller_id) as string}
+              storeName={product.profiles?.store_name ?? 'Negozio'}
+            />
+          )}
 
           {/* SELETTORE VARIANTI (taglie/colori) */}
           {hasVariants && optionGroups.length > 0 && (
@@ -828,14 +836,38 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
               Negozi di Piacenza
             </span>
           </div>
+
+          {/* Chi vende davvero: ragione sociale, sede, partita IVA. Deve esserci — è con
+              quest'azienda che si stipula il contratto — ma si cerca dopo aver deciso, non
+              prima di sapere cosa si sta guardando. */}
+          {(sellerProfile?.id ?? product.seller_id) && (
+            <VendutoDa
+              sellerId={(sellerProfile?.id ?? product.seller_id) as string}
+              storeName={product.profiles?.store_name}
+            />
+          )}
+
+          {/* Il canale per dirci che qualcosa non va: prima non esisteva da nessuna parte
+              sul sito. Sta in fondo, non sopra il nome del prodotto. */}
+          <div className="pt-1">
+            <Segnala tipo="prodotto" oggettoId={product.id} />
+          </div>
         </div>
 
-        {/* CTA STICKY */}
-        <div className="lg:sticky lg:top-[var(--header-height)] h-fit">
+        {/* CTA STICKY
+            3/9/2026 — FRA 768 E 1023 PIXEL QUESTO RIQUADRO FINIVA DA SOLO IN SECONDA RIGA.
+            La griglia qui sopra è `md:grid-cols-2` e ha tre figli: galleria, informazioni e questo.
+            Alla misura media il terzo andava a capo, sotto tutta la colonna delle informazioni —
+            che è altissima — e la cella accanto restava vuota. Su un iPad in verticale e su un
+            telefono grande girato non c'era nessun pulsante d'acquisto in vista, perché in quella
+            fascia la barra in fondo era già sparita (era `md:hidden`, ora `lg:hidden`).
+            `md:col-span-2` gli fa occupare la riga intera invece di una cella spaiata; da `lg`
+            torna la colonna sua, appiccicata a destra. */}
+        <div className="md:col-span-2 lg:col-span-1 lg:sticky lg:top-[var(--header-height)] h-fit">
           <div className="bg-surface-0 border border-surface-200 rounded-xl p-5 shadow-card space-y-3">
             <div className="text-2xl font-extrabold font-serif text-ink-900">{formatPrice(price)}</div>
             {freeShipping && (
-              <Badge variant="free" icon={Bike}>Spedizione gratuita</Badge>
+              <Badge variant="free" icon={Bike}>{spedizione.titolo}</Badge>
             )}
             <p className="text-xs">
               {isOutOfStock ? (
@@ -920,13 +952,20 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       </div>
 
       {/* SPESSO COMPRATI INSIEME — altri prodotti disponibili dello stesso negozio
-          (dato reale: nessun co-acquisto inventato). */}
+          (dato reale: nessun co-acquisto inventato).
+
+          3/9/2026 — Da qui in giu' le sezioni si montano quando ci si arriva. Aprendo la scheda
+          partivano dieci interrogazioni tutte insieme, e quattro erano di roba in fondo alla
+          pagina: occupavano le connessioni proprio mentre dovevano arrivare il prezzo e la foto
+          grande. Regola: sopra la piega si carica subito, sotto la piega quando ci si arriva. */}
       {(sellerProfile?.id ?? product.seller_id) && (
-        <FrequentlyBoughtTogether
-          productId={id}
-          sellerId={(sellerProfile?.id ?? product.seller_id) as string}
-          storeName={product.profiles?.store_name ?? undefined}
-        />
+        <QuandoSiVede altezzaMinima={320}>
+          <FrequentlyBoughtTogether
+            productId={id}
+            sellerId={(sellerProfile?.id ?? product.seller_id) as string}
+            storeName={product.profiles?.store_name ?? undefined}
+          />
+        </QuandoSiVede>
       )}
 
       {/* RECENSIONI */}
@@ -1119,24 +1158,30 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
       {/* Q&A */}
       <section className="mt-12">
-        <ProductQA
-          productId={id}
-          sellerId={sellerProfile?.id ?? product.seller_id}
-        />
+        <QuandoSiVede altezzaMinima={260}>
+          <ProductQA
+            productId={id}
+            sellerId={sellerProfile?.id ?? product.seller_id}
+          />
+        </QuandoSiVede>
       </section>
 
       {/* Ultimi visti dell'utente (esclude questo prodotto) */}
       <section className="mt-12">
-        <RecentlyViewed excludeId={id} />
+        <QuandoSiVede altezzaMinima={280}>
+          <RecentlyViewed excludeId={id} />
+        </QuandoSiVede>
       </section>
 
       {/* CORRELATI: SimilarProducts intelligente (seller + categoria) */}
       <section className="mt-12">
-        <SimilarProducts
-          productId={id}
-          categoryId={product.category_id ?? undefined}
-          sellerId={sellerProfile?.id ?? product.seller_id}
-        />
+        <QuandoSiVede altezzaMinima={320}>
+          <SimilarProducts
+            productId={id}
+            categoryId={product.category_id ?? undefined}
+            sellerId={sellerProfile?.id ?? product.seller_id}
+          />
+        </QuandoSiVede>
       </section>
 
       {/* Sticky CTA mobile — con stepper quantità, "{qty}×{price}" e totale */}

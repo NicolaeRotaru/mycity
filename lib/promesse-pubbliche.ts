@@ -1,9 +1,11 @@
 import {
   FREE_SHIPPING_THRESHOLD,
   PICKUP_DISCOUNT_PERCENT,
+  PLATFORM_DELIVERY_FEE_CENTS,
   RITIRO_IN_NEGOZIO_ATTIVO,
 } from './constants';
 import { EXPRESS_ETA_LABEL } from './delivery';
+import { formatPrice } from './format';
 
 /**
  * LE PROMESSE PUBBLICHE — quelle scritte nelle pagine, derivate da chi le mantiene.
@@ -59,6 +61,56 @@ export function promesseRitiroInNegozio(
   ];
 }
 
+/**
+ * COME ARRIVA L'ORDINE — la riga che si legge PRIMA di entrare.
+ *
+ * ── Il difetto che ha prodotto queste tre funzioni ──────────────────────────────────────────
+ * Il lotto precedente aveva ripulito le pagine di contenuto (FAQ ritiro, Spedizioni, scheda
+ * prodotto) e aveva lasciato indietro i posti dove la promessa arriva PRIMA di tutti:
+ *
+ *   ① la descrizione di ogni pagina negozio (`app/store/[id]/layout.tsx`) e di ogni categoria
+ *      (`app/category/[slug]/layout.tsx`): «Consegna locale in 30-60 minuti o ritiro in negozio».
+ *      È il testo che finisce nel risultato di Google e nell'anteprima quando il negoziante incolla
+ *      il link su WhatsApp — cioè il primo contatto di chi arriva dal QR in vetrina;
+ *   ② la PRIMA risposta delle FAQ: «scegli un indirizzo di consegna o il ritiro in negozio»;
+ *   ③ la scheda «Spedizioni» della pagina di aiuto: «Tempi, costi, ritiro in negozio, tracciamento».
+ *
+ * Il ritiro in cassa non c'è: `RITIRO_IN_NEGOZIO_ATTIVO` vale `false`, il riquadro del checkout gli
+ * sta dietro e le due rotte che creano l'ordine forzano `pickupInStore = false`. Il cliente sceglie
+ * MyCity credendo di poter passare a ritirare, riempie il carrello e alla cassa scopre che l'unica
+ * strada è farsi consegnare a casa pagando la consegna. Nicola l'ha spento apposta — «non ne ho
+ * ancora parlato con i negozi» — e noi lo promettevamo lo stesso, in vetrina.
+ *
+ * ── Perché tre funzioni e non quattro frasi corrette ────────────────────────────────────────
+ * Perché i metadati nessuno li rilegge come «testo per il cliente»: non si vedono a schermo. Una
+ * frase corretta a mano oggi torna a mentire alla prossima pagina che qualcuno scrive. Qui la
+ * frase NASCE dall'interruttore, e i minuti dal numero deciso in lib/delivery.ts: riaccendere il
+ * ritiro la fa ricomparire dappertutto da sé.
+ */
+export function fraseComeArriva(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
+  return attivo
+    ? `Consegna locale in ${EXPRESS_ETA_LABEL} o ritiro in negozio.`
+    : `Consegna locale in ${EXPRESS_ETA_LABEL}.`;
+}
+
+/** La prima risposta delle FAQ: i passi per ordinare, senza quello che non si può fare. */
+export function rispostaComeOrdinare(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): DomandaRisposta {
+  const scelta = attivo
+    ? 'scegli un indirizzo di consegna o il ritiro in negozio'
+    : "scegli l'indirizzo di consegna";
+  return {
+    q: 'Come faccio a ordinare su MyCity?',
+    a: `Cerca un prodotto o un negozio, aggiungilo al carrello, ${scelta} e conferma. Riceverai una notifica per ogni cambio di stato dell'ordine.`,
+  };
+}
+
+/** Cosa si trova nella pagina Spedizioni, detto nella scheda della pagina di aiuto. */
+export function temiDellaSpedizione(attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO): string {
+  return attivo
+    ? 'Tempi, costi, ritiro in negozio, tracciamento.'
+    : 'Tempi, costi e tracciamento della consegna.';
+}
+
 /** Il riquadro «Ritiro in negozio» della pagina Spedizioni, o niente se la funzione è spenta. */
 export function riquadroRitiroInNegozio(
   attivo: boolean = RITIRO_IN_NEGOZIO_ATTIVO,
@@ -90,11 +142,19 @@ export function rispostaTempiDiConsegna(): DomandaRisposta {
   };
 }
 
-/** La riga sulla spedizione gratuita, con la soglia presa da dove è decisa. */
+/**
+ * La riga sulla spedizione gratuita, con la soglia presa da dove è decisa — e il costo di consegna
+ * detto nella stessa frase, che altrimenti la risposta è vera a metà (vedi `promessaSpedizione`).
+ */
 export function rispostaCostoSpedizione(): DomandaRisposta {
+  const { costoConsegna } = promessaSpedizione(FREE_SHIPPING_THRESHOLD);
+  const consegna =
+    costoConsegna > 0
+      ? ` Resta la consegna: ${formatPrice(costoConsegna)} per negozio su ogni ordine portato a casa, anche sopra la soglia.`
+      : '';
   return {
     q: 'Quanto costa la spedizione?',
-    a: `La spedizione è GRATUITA per ordini sopra €${FREE_SHIPPING_THRESHOLD} dallo stesso venditore — la soglia vale per ciascun negozio, non sul totale del carrello. Sotto soglia il costo varia in base alla distanza dal negozio (in media €2,50–4,50). Vedi tutti i dettagli nella pagina Spedizioni.`,
+    a: `La spedizione è GRATUITA per ordini sopra €${FREE_SHIPPING_THRESHOLD} dallo stesso venditore — la soglia vale per ciascun negozio, non sul totale del carrello. Sotto soglia il costo varia in base alla distanza dal negozio (in media €2,50–4,50).${consegna} Vedi tutti i dettagli nella pagina Spedizioni.`,
   };
 }
 
@@ -154,3 +214,72 @@ export const FRASE_RESO = 'Reso entro 14 giorni';
  */
 export const RIQUADRO_LO_SAPEVI =
   'Ogni euro di questo carrello va ai commercianti di Piacenza. La nostra parte è la consegna, ed è la riga qui sopra: nessun costo a sorpresa.';
+
+/**
+ * LA SPEDIZIONE — quello che si scrive in vetrina, deciso dove si decide quanto si paga.
+ *
+ * ── Il difetto che ha prodotto questa funzione ──────────────────────────────────────────────
+ * In vetrina il sito prometteva «Spedizione gratuita» sopra €30: sulla scheda prodotto, sul
+ * badge della card di catalogo, sulla barra «Hai la spedizione gratis», nelle quattro promesse
+ * della home. In cassa, su ogni ordine consegnato a casa, addebitava comunque 3 € di «Consegna
+ * MyCity» — uno per negozio, anche sopra i 30 € (`PLATFORM_DELIVERY_FEE_CENTS`, e il conto lo fa
+ * `prezziDelCarrello` in lib/ordini/prezzi.ts).
+ *
+ * Per chi compra, «spedizione» e «consegna» sono la stessa cosa. Il costo compariva per la prima
+ * volta nel carrello, cioè dopo la scelta: sulla scheda prodotto — l'ultimo schermo prima di
+ * aggiungere — non c'era da nessuna parte. Al checkout il riepilogo scriveva «Spedizione: Gratis»
+ * e la riga sotto «Consegna MyCity 3,00 €», con «Niente costi nascosti» appoggiato sopra un costo
+ * mai annunciato prima.
+ *
+ * ── Perché una funzione e non quattro testi corretti ────────────────────────────────────────
+ * Perché correggere i testi lascia in piedi il modo in cui si è rotto: la cifra sta in un posto,
+ * la frase che la promette in altri quattro, e il giorno in cui la cifra cambia le frasi restano
+ * indietro. Qui la frase NASCE dalla cifra. Portare la fee a zero fa tornare da sé il claim
+ * pulito; alzarla lo aggiorna dappertutto senza che nessuno riscriva niente.
+ *
+ * 🟢 Pura: nessuna rete, nessun orologio. La prova la ESEGUE con la fee accesa e spenta, e
+ * confronta il numero che dice con quello che la cassa addebita davvero.
+ */
+export interface PromessaSpedizione {
+  /** L'ordine ha superato la soglia oltre la quale la spedizione del negozio non si paga. */
+  sopraSoglia: boolean;
+  /** Quanto manca alla soglia, in euro. Zero se è già superata. */
+  mancano: number;
+  /** Quanto si paga comunque per farsi portare l'ordine a casa, in euro. Zero = niente. */
+  costoConsegna: number;
+  /** La frase principale: quella del badge sulla scheda e della barra di avanzamento. */
+  titolo: string;
+  /** La stessa cosa in un'etichetta stretta, per le card di catalogo. */
+  breve: string;
+  /** La riga che nomina il costo per esteso, o `null` quando non c'è niente da pagare. */
+  dettaglioConsegna: string | null;
+}
+
+export function promessaSpedizione(
+  sottototale: number,
+  soglia: number = FREE_SHIPPING_THRESHOLD,
+  consegnaCents: number = PLATFORM_DELIVERY_FEE_CENTS,
+): PromessaSpedizione {
+  const costoConsegna = Math.max(0, consegnaCents) / 100;
+  const sopraSoglia = sottototale >= soglia;
+  const mancano = sopraSoglia ? 0 : Math.max(0, soglia - sottototale);
+  // La coda che rende onesta ogni frase con dentro la parola «gratis». Se la consegna non si paga
+  // più, la coda sparisce da sé e il claim torna pulito: è tutto quello che serve fare.
+  const coda = costoConsegna > 0 ? ` · ${formatPrice(costoConsegna)} di consegna` : '';
+
+  return {
+    sopraSoglia,
+    mancano,
+    costoConsegna,
+    titolo: sopraSoglia
+      ? `Spedizione gratis${coda}`
+      : `Ti mancano ${formatPrice(mancano)} alla spedizione gratis${coda}`,
+    breve: sopraSoglia
+      ? `Sped. gratis${costoConsegna > 0 ? ` + ${formatPrice(costoConsegna)}` : ''}`
+      : `−${formatPrice(mancano)} alla sped. gratis${costoConsegna > 0 ? ` (+${formatPrice(costoConsegna)})` : ''}`,
+    dettaglioConsegna:
+      costoConsegna > 0
+        ? `Consegna MyCity ${formatPrice(costoConsegna)} per negozio, su ogni ordine a domicilio`
+        : null,
+  };
+}

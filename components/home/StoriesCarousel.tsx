@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage } from '@/lib/image-url';
+import { logoNegozio } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import StoryViewer from '@/components/StoryViewer';
 
@@ -70,11 +70,11 @@ export default function StoriesCarousel() {
               <div className="bg-white p-0.5 rounded-full">
                 {s.seller?.store_logo ? (
                   <Image
-                    src={sizedImage(s.seller.store_logo, 'thumb')}
+                    src={logoNegozio(s.seller.store_logo, 56)}
                     alt=""
                     width={56}
                     height={56}
-                    className="rounded-full object-cover w-14 h-14"
+                    className="rounded-full object-contain w-14 h-14"
                   />
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold">

@@ -417,6 +417,49 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
     });
   }
 
+  /**
+   * 11) LE RICHIESTE DI CANCELLAZIONE ACCOUNT CHE NESSUNO HA ESEGUITO.
+   *
+   * 3/9/2026 — Chi chiede di essere cancellato aspetta sette giorni (il periodo
+   * di ripensamento, scritto nella pagina del suo account) e poi il giro
+   * notturno lo cancella. Se quel giro non gira, o gira e fallisce, la persona
+   * resta nel database e nessuno lo sa: e' una richiesta fatta per legge (GDPR
+   * art. 17) che non e' stata onorata, ed e' esattamente il tipo di guasto che
+   * si scopre in un controllo, non da soli.
+   *
+   * Il controllo si fa sullo STATO, non sull'evento: si guarda chi e' ancora
+   * qui, non chi ha risposto male stanotte. E' l'unica forma che regge anche
+   * quando il lavoro notturno non parte affatto — il caso in cui un allarme
+   * scritto dentro quel lavoro non partirebbe nemmeno lui.
+   *
+   * Nove giorni = i sette del ripensamento piu' due notti di tentativi. Prima
+   * non c'e' niente da guardare: la richiesta sta solo aspettando il suo turno.
+   */
+  const noveGiorniFa = new Date(Date.now() - 9 * 86_400_000).toISOString();
+  const { data: cancellazioniInSospeso, error: errCancellazioni } = await admin
+    .from('profiles')
+    .select('deletion_requested_at')
+    .not('deletion_requested_at', 'is', null)
+    .lt('deletion_requested_at', noveGiorniFa)
+    .order('deletion_requested_at', { ascending: true })
+    .limit(50);
+  if (errCancellazioni) controlliSaltati.push('richieste di cancellazione account rimaste in sospeso');
+  const inSospeso = (cancellazioniInSospeso ?? []) as { deletion_requested_at: string }[];
+  if (inSospeso.length > 0) {
+    const giorni = Math.floor(
+      (Date.now() - new Date(inSospeso[0].deletion_requested_at).getTime()) / 86_400_000,
+    );
+    alerts.push({
+      // La chiave porta il giorno e non il conto: cosi' l'avviso torna una volta
+      // al giorno finche' non e' risolto, invece di ogni quarto d'ora (e invece
+      // di ripartire da capo ogni volta che il numero cambia di uno).
+      key: `CANCELLAZIONE_NON_ESEGUITA|${new Date().toISOString().slice(0, 10)}`,
+      type: 'CANCELLAZIONE_NON_ESEGUITA',
+      detail: `${inSospeso.length} ${inSospeso.length === 1 ? 'persona ha' : 'persone hanno'} chiesto di cancellare l account e ${inSospeso.length === 1 ? 'e' : 'sono'} ancora qui: la piu vecchia aspetta da ${giorni} giorni (il ripensamento dura 7). Il giro notturno non le ha cancellate: o fallisce, o non gira.`,
+      url: '/admin/users',
+    });
+  }
+
   if (controlliSaltati.length > 0) {
     logger.error('[cron] sorvegliante incompleto: NON dichiarare sano quello che non ha guardato', {
       saltati: controlliSaltati,

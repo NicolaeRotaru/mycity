@@ -24,18 +24,73 @@ import SentryProvider from '@/lib/analytics/sentry';
 import { Suspense } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
+import { indirizzoPubblico } from '@/lib/env';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
+// `style` con il corsivo dentro NON è un dettaglio: senza, si scarica solo la
+// variante dritta e il browser inclina le lettere da solo (corsivo finto). Nel
+// sito ci sono diciassette punti che chiedono il corsivo — fra cui la parola
+// «veri» del titolone della home, in Fraunces a 60px — e Fraunces un corsivo
+// vero, disegnato, ce l'ha. Le regole in più costano qualche riga di CSS: il
+// browser scarica un file solo quando c'è davvero del testo che lo usa.
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
+  style: ['normal', 'italic'],
+});
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-serif',
   display: 'swap',
   weight: ['400', '500', '600', '700', '800'],
+  style: ['normal', 'italic'],
 });
 
 // metadataBase: rende assoluti i canonical/openGraph relativi delle pagine
-// (es. /product/[id], /category/[slug]). Stessa fonte di robots.ts e sitemap.ts.
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+// (es. /product/[id], /category/[slug]). Stessa fonte di robots.ts e sitemap.ts:
+// l'indirizzo pubblico si calcola in UN posto solo — lib/env.ts — perché quando
+// ognuno dei tre teneva la sua copia col ripiego su localhost, bastava la
+// variabile mancante su Vercel per dire a Google che il sito sta su un computer
+// che non esiste.
+const { url: APP_URL, fonte: FONTE_APP_URL } = indirizzoPubblico();
+
+if (FONTE_APP_URL === 'dominio-di-riserva') {
+  // Il codice dice ad alta voce quale indirizzo sta usando e perché: senza
+  // questa riga la configurazione sbagliata resta muta e il sito sembra sano.
+  console.warn(
+    `[MyCity] NEXT_PUBLIC_APP_URL non è impostata: il sito si presenta come ${APP_URL}. Impostala nel progetto Vercel.`,
+  );
+}
+
+/**
+ * 3/9/2026 — OGNI PAGINA SI COSTRUISCE AL MOMENTO DELLA RICHIESTA.
+ *
+ * Non è una scelta di velocità: è la condizione perché il sito abbia il suo
+ * JavaScript. La regola di sicurezza che il portiere (`middleware.ts`) mette su
+ * ogni risposta accetta soltanto gli script che portano una parola d'ordine
+ * diversa a ogni richiesta. Next sa scrivere quella parola dentro i tag
+ * `<script>` solo mentre costruisce la pagina per QUELLA richiesta.
+ *
+ * Una pagina preparata in anticipo viene scritta prima che la parola d'ordine
+ * esista. I suoi script non ce l'hanno, il browser li rifiuta tutti, e al
+ * cliente arriva un guscio morto: niente carrello, niente accesso, niente
+ * cassa. È successo davvero: in una build di produzione erano così tutte e 95
+ * le pagine preparate in anticipo — l'accesso, la registrazione, la ricerca, i
+ * negozi, il carrello, la cassa, il pannello del negoziante e quello di chi
+ * amministra. In sviluppo non si vedeva, perché lì la regola è più larga.
+ *
+ * Quindi le due cose devono restare d'accordo: finché la regola chiede una
+ * parola d'ordine per ogni richiesta, ogni pagina va costruita a ogni
+ * richiesta. Questa riga è il lato «costruita a ogni richiesta», e sta nel
+ * riquadro principale perché valga anche per le pagine che nasceranno domani:
+ * chi ne aggiunge una non deve ricordarsi di niente.
+ *
+ * Se un giorno si volesse tornare alle pagine preparate in anticipo, va tolta
+ * PRIMA la parola d'ordine dalla regola di sicurezza — non questa riga.
+ * A guardia dei due lati c'è
+ * `tests/unit/nessuna-pagina-arriva-senza-javascript.test.ts`.
+ */
+export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
   metadataBase: new URL(APP_URL),
@@ -78,6 +133,9 @@ const orgSchema = {
   '@context': 'https://schema.org',
   '@type': 'OnlineStore',
   name: 'MyCity Piacenza',
+  // Senza `url` lo schema descrive un negozio senza indirizzo: Google non sa a
+  // quale sito attaccarlo. Stessa fonte del canonical, mai una copia a parte.
+  url: APP_URL,
   description: 'Marketplace dei negozi locali di Piacenza con consegna a domicilio.',
   areaServed: {
     '@type': 'City',

@@ -6,6 +6,7 @@ import { Trash2, CheckCircle2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input, Textarea, Select, Checkbox } from '@/components/ui/Field';
 import { ImageUrlField } from '@/components/ImageUrlField';
+import { CONSIGLIO_IMMAGINE_BANNER } from '@/lib/banner-vetrina';
 import { supabase } from '@/lib/supabase/client';
 import { friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
@@ -243,7 +244,7 @@ export default function HomeSectionConfigForm({ section, onChange }: { section: 
       };
       return (
         <div className="space-y-3">
-          <ImageUrlField label="Immagine banner" value={c.imageUrl ?? ''} onChange={(url) => set({ imageUrl: url })} pathPrefix="home" hint="Consigliato 16:9. Carica un file o incolla un URL https." />
+          <ImageUrlField label="Immagine banner" value={c.imageUrl ?? ''} onChange={(url) => set({ imageUrl: url })} pathPrefix="home" hint={CONSIGLIO_IMMAGINE_BANNER} />
           <Input label="Titolo" value={c.heading ?? ''} maxLength={120} onChange={(e) => set({ heading: e.target.value })} />
           <Input label="Sottotitolo" value={c.subheading ?? ''} maxLength={200} onChange={(e) => set({ subheading: e.target.value })} />
           <Select label="Sovrapposizione" value={c.overlay ?? 'dark'} onChange={(e) => set({ overlay: e.target.value as 'light' | 'dark' | 'none' })}>

@@ -109,15 +109,50 @@ export async function annullaERimborsa(
    * comprato niente, e lo scopriva premendo «Applica» — cioè mentre stava
    * riprovando a ordinare.
    *
-   * `release_coupon` non scende mai sotto zero, quindi una restituzione di
-   * troppo non fa danno: è un no-op.
+   * 3/9/2026 — «UNA RESTITUZIONE DI TROPPO NON FA DANNO» ERA FALSO.
+   *
+   * Qui c'era scritto: «`release_coupon` non scende mai sotto zero, quindi una
+   * restituzione di troppo non fa danno: è un no-op». Vale solo quando il
+   * contatore è già a zero. `greatest(0, uses_count - 1)` toglie un uso VERO
+   * ogni volta che il contatore è ≥ 1: su un buono con tetto 2 usato da 2
+   * ordini, una restituzione di troppo lo riporta a 0 e il buono accetta altri
+   * 2 ordini — 4 sconti su un tetto di 2. Ogni uso in più è uno sconto che
+   * nessuno ha deciso di regalare.
+   *
+   * Il difetto vero era il doppione nella rotta del rifiuto del negozio (tolto).
+   * Ma la classe di errore resta finché `release_coupon` è un contatore globale
+   * che non sa PER QUALE ORDINE la stanno chiamando: qualunque doppio percorso
+   * di annullo la scala due volte.
+   *
+   * Perciò la chiamata porta anche l'id dell'ordine: la funzione del database
+   * scala l'uso solo se `orders.coupon_released_at` è ancora vuoto, e lo marca
+   * nella stessa istruzione (lo stesso schema di `claim_coupon`). La seconda
+   * chiamata, da qualunque strada arrivi, non scala più niente.
    */
   async function restituisciCoupon(): Promise<void> {
     const codice = order.coupon_code?.trim();
     if (!codice) return;
     try {
-      const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice });
-      if (cErr) logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err: cErr.message });
+      const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice, p_order_id: order.id });
+      if (!cErr) return;
+
+      // La versione con la chiave per ordine non c'è ancora (migrazione non
+      // applicata): si restituisce comunque, una volta sola, con la firma
+      // vecchia. Perdere il buono senza aver comprato niente è il difetto R121,
+      // e non deve tornare mentre si aspetta la firma sulla migrazione.
+      //
+      // Solo su PGRST202 («funzione inesistente»): è un errore di FORMA della
+      // chiamata, quindi non può aver scritto niente. Su ogni altro errore non
+      // si ritenta — un errore di rete può aver scalato l'uso davvero, e
+      // riprovare lo scalerebbe due volte: esattamente il danno di cui sopra.
+      if ((cErr as { code?: string }).code !== 'PGRST202') {
+        logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err: cErr.message });
+        return;
+      }
+      const { error: senzaChiave } = await admin.rpc('release_coupon', { p_code: codice });
+      if (senzaChiave) {
+        logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err: senzaChiave.message });
+      }
     } catch (err) {
       logger.warn('[annullaERimborsa] codice sconto non restituito', { orderId: order.id, err });
     }

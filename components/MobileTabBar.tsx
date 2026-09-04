@@ -187,12 +187,24 @@ export default function MobileTabBar() {
         </ul>
       </nav>
 
-      {/* "Tu" flottante: solo dove la barra non ha già la sua porta all'account.
+      {/* "Tu" flottante: solo a chi è dentro, e solo dove la barra non ha già la
+          sua porta all'account.
           30/8/2026 (R097) — prima la condizione era «venditore o amministratore»,
           e al venditore in modalità acquisto — che è un cliente a tutti gli
           effetti, con la sua scheda «Io» — compariva un secondo pulsante tondo
-          sospeso sopra la griglia dei prodotti. */}
-      {serveIlPulsanteAccount(tabs) && (
+          sospeso sopra la griglia dei prodotti.
+          3/9/2026 — E IL CERCHIO SPUNTAVA ANCHE A CHI NON HA UN ACCOUNT.
+          La regola condivisa guarda le schede: fra quelle del visitatore non c'è
+          nessuna porta all'account (c'è «Accedi», che è un'altra cosa), quindi
+          rispondeva «serve» e il cerchio grigio si appoggiava sopra la colonna
+          destra della griglia prodotti — dove stanno prezzo e pulsante «+».
+          Chi lo toccava si vedeva proporre di uscire da un account che non ha
+          mai avuto. È il primo giro di chi arriva dal QR in vetrina o dal link
+          su WhatsApp: attrito e sfiducia proprio mentre decide se comprare.
+          Il pannello dietro al cerchio si apre solo da qui e dalla scheda
+          «Io»: senza account nessuna delle due esiste più, quindi quel menu
+          adesso è irraggiungibile per chi non è entrato. */}
+      {isAuthenticated && serveIlPulsanteAccount(tabs) && (
         <button
           type="button"
           onClick={() => setSheetOpen(true)}

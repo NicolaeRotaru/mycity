@@ -3,6 +3,7 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
+import { ORE_PER_ACCETTARE, ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
 
 export const runtime = 'nodejs';
 
@@ -11,7 +12,12 @@ export const runtime = 'nodejs';
  * accettato (es. ordine piazzato di notte). Senza questo restano in limbo a
  * tempo indefinito: nessuno stato di prodotto, stock bloccato, buyer all'oscuro.
  *
- * Policy (audit 🟠-16): oltre STALE_NEW_ORDER_HOURS in NEW →
+ * Quando un ordine è «fermo» lo decide `lib/ordini/scadenza-accettazione.ts`,
+ * non l'orologio da solo: se la consegna è promessa per una fascia, l'attesa
+ * finisce quando finisce quella fascia. Prima l'ordine della sera per domani
+ * mattina veniva annullato alle 00:15, col negozio chiuso.
+ *
+ * Policy (audit 🟠-16): oltre la scadenza, ancora in NEW →
  *  - claim atomico NEW → CANCELED (idempotente: nessun doppio annullo/rimborso);
  *  - card pagato: rimborso reale via refundOrder (Stripe refund + ripristino
  *    stock + email buyer; reversal no-op perché il payout è ancora HELD);
@@ -28,8 +34,16 @@ export const runtime = 'nodejs';
  *     https://yourapp.com/api/cron/expire-stale-orders
  */
 
-/** Ore in NEW oltre le quali un ordine non accettato viene annullato. */
-const STALE_NEW_ORDER_HOURS = 3;
+/**
+ * Ore in NEW sotto le quali un ordine non si tocca MAI.
+ *
+ * 3/9/2026 — non è più tutta la regola, è solo il minimo. Chi decide davvero è
+ * `scadenzaAccettazione`, che guarda la fascia di consegna: questo filtro serve
+ * a non tirare su dal database ordini che di sicuro non sono ancora scaduti, e
+ * il numero è lo stesso di là apposta (se qui fosse più grande, il cron
+ * salterebbe ordini da annullare).
+ */
+const STALE_NEW_ORDER_HOURS = ORE_PER_ACCETTARE;
 
 export const POST = withCronAuth(async (): Promise<NextResponse> => {
   const admin = getAdminSupabase();
@@ -40,7 +54,10 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     // 27/8/2026 (R121) — `coupon_code` non veniva nemmeno letto, quindi il
     // codice sconto di un ordine che il negozio non ha mai accettato restava
     // bruciato: il cliente perdeva il buono senza aver comprato niente.
-    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code')
+    // 3/9/2026 — `created_at` e `delivery_slot` non venivano nemmeno letti, e
+    // sono i due campi che dicono se l'attesa è finita davvero: senza,
+    // l'ordine della sera per domani mattina moriva alle 00:15.
+    .select('id, user_id, payment_method, payment_status, stripe_payment_intent, total_price, wallet_applied_cents, coupon_code, created_at, delivery_slot')
     .eq('delivery_status', 'NEW')
     .lt('created_at', cutoff)
     .limit(100);
@@ -53,8 +70,21 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   let canceled = 0;
   let refunded = 0;
   let failed = 0;
+  let rinviati = 0;
 
   for (const o of candidates ?? []) {
+    // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
+    //
+    // Tre ore dalla nascita è la regola giusta per una consegna immediata. Per
+    // un ordine con un appuntamento — «Domani · 9:00–12:00», scelto alle 21:15
+    // perché la cassa da oggi lo accetta — vuol dire annullarlo alle 00:15, col
+    // negozio chiuso e nessuno che potesse accettarlo. Finché la fascia
+    // promessa non è passata l'ordine è ancora buono e non si tocca.
+    if (ancoraNeiTempi(o)) {
+      rinviati++;
+      continue;
+    }
+
     const isCardPaid =
       o.payment_method === 'card' && o.payment_status === 'PAID' && !!o.stripe_payment_intent;
 
@@ -169,7 +199,7 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     logger.spesa(`[cron] expire-stale-orders: ${canceled} annullati (${refunded} rimborsati), ${failed} falliti`);
   }
 
-  return NextResponse.json({ ok: true, canceled, refunded, failed }, { status: 200 });
+  return NextResponse.json({ ok: true, canceled, refunded, failed, rinviati }, { status: 200 });
 });
 
 // I lavori periodici di Vercel bussano in GET, sempre — non c'è modo di

@@ -101,6 +101,25 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
       return SUPABASE_CODE_MAP[e.code];
     }
     if (e.message) {
+      /**
+       * 3/9/2026 — «LA SESSIONE È SCADUTA» DAVANTI A CHI AVEVA LA CARTA IN MANO.
+       *
+       * Quando il gateway risponde con la SUA pagina di errore — «504 GATEWAY
+       * TIMEOUT» in HTML, o un 502, o un 413 — `res.json()` non trova JSON e
+       * lancia «Unexpected token '<'» su Chrome, «JSON Parse error: Unrecognized
+       * token '<'» su Safari. La parola «token» accendeva il ramo qui sotto e il
+       * cliente leggeva «La sessione è scaduta. Accedi di nuovo.»: usciva
+       * dall'account, rientrava, e spesso non tornava. Ordine perso al passo che
+       * incassa, per un guasto che con la sessione non c'entra niente.
+       *
+       * Un errore si riconosce dal TIPO, non da una parola nel testo: qui si
+       * guarda `SyntaxError` (ed è quello che lancia il parser) prima di ogni
+       * espressione regolare.
+       */
+      if (err instanceof SyntaxError || /json parse error|unexpected token|unexpected end of json|is not valid json/i.test(e.message)) {
+        trackErrorShown('risposta_non_json', e.message, context?.page);
+        return 'Il server non ha risposto correttamente. Riprova fra qualche secondo.';
+      }
       // Gli errori di Supabase Auth prima non li conosceva nessuno qui dentro, e uscivano
       // in inglese sulla registrazione e sul cambio password. `traduciErroreAuth` torna
       // `null` su tutto ciò che non riconosce, quindi non ruba niente ai rami sotto.
@@ -130,7 +149,13 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         trackErrorShown('rate_limit', e.message, context?.page);
         return 'Troppe richieste in poco tempo. Aspetta qualche secondo.';
       }
-      if (/jwt|token|expired|unauthor/i.test(e.message)) {
+      // La rete era larghissima: bastava la parola «token» o «expired» in un
+      // messaggio qualsiasi per mandare fuori l'utente. Adesso si riconoscono le
+      // frasi vere di Supabase Auth, non una parola sola.
+      if (
+        e.status === 401 ||
+        /\bjwt\b|refresh token|token (is |has )?expired|session (is |has )?expired|not authenticated|unauthoriz/i.test(e.message)
+      ) {
         trackErrorShown('session_expired', e.message, context?.page);
         return 'La sessione è scaduta. Accedi di nuovo.';
       }

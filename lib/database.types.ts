@@ -2651,18 +2651,21 @@ export interface Database {
           kind: string;
           minuto: string;
           conteggio: number;
+          chiamante: string;
         };
         Insert: {
           campaign_id: string;
           kind: string;
           minuto: string;
           conteggio?: number;
+          chiamante?: string;
         };
         Update: {
           campaign_id?: string;
           kind?: string;
           minuto?: string;
           conteggio?: number;
+          chiamante?: string;
         };
         Relationships: [];
       };

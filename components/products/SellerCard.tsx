@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, BadgeCheck, Bell, Star, Store, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { sizedImage } from '@/lib/image-url';
+import { logoNegozio } from '@/lib/image-url';
 import { queryKeys } from '@/lib/queries/keys';
 import { useFollowStore } from '@/components/hooks/useFollowStore';
 import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interruttore';
@@ -147,12 +147,12 @@ export function SellerCard({
       >
         {data?.store_logo ? (
           <Image
-            src={sizedImage(data.store_logo, 'thumb')}
+            src={logoNegozio(data.store_logo, 48)}
             alt={storeName}
             width={48}
             height={48}
             loader={caricatoreFotoRemote}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-contain"
           />
         ) : (
           <Store size={20} className="text-ink-400" aria-hidden />

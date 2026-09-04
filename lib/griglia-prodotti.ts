@@ -39,3 +39,44 @@ export function classiGriglia(maxColumns?: ColonneMassime): string {
  * sei colonne circa 200. Non coincideva quasi mai, e ogni volta la pagina saltava.
  */
 export const PROPORZIONE_FOTO = 'aspect-square';
+
+/* ============================================================================
+ * LA FILA ORIZZONTALE (le righe curate della home e delle pagine categoria)
+ * ========================================================================== */
+
+/**
+ * 3/9/2026 — LA FILA DEI PRODOTTI POPOLARI CARICAVA COME GRIGLIA E POI DIVENTAVA
+ * UNA RIGA: LA PAGINA SALTAVA DI OLTRE UN METRO.
+ *
+ * La griglia decideva DUE VOLTE che forma avere, con due domande diverse. Mentre
+ * caricava chiedeva «sono una sezione?» — cioè fila **e** titolo — e in home il
+ * titolo lo scrive il renderer fuori dal componente, quindi la risposta era no e
+ * usciva una griglia di dodici scheletri: su un telefono sei righe, quasi un
+ * metro e mezzo di pagina. A dati arrivati chiedeva solo «sono una fila?», la
+ * risposta era sì, e le dodici schede si stringevano in una riga sola alta una
+ * scheda. Tutto quello che stava sotto risaliva di colpo, sotto gli occhi di chi
+ * stava leggendo — e chi aveva già il dito su un link toccava un'altra cosa.
+ *
+ * La cura non è aggiustare la domanda sbagliata: è che la domanda sia UNA, e che
+ * la forma della fila sia scritta in un posto solo. Prima i due elenchi di classi
+ * erano copiati in due punti del file e già divergevano (lo scheletro non aveva
+ * lo scorrimento né gli agganci). Adesso chi disegna lo scheletro e chi disegna
+ * le schede chiedono qui, e non possono più allontanarsi.
+ */
+
+/** Il contenitore della fila: scorre in orizzontale e sborda fino ai bordi dello schermo. */
+export const CLASSI_FILA =
+  `-mx-4 flex snap-x snap-mandatory ${DISTANZA_GRIGLIA} overflow-x-auto scrollbar-hide px-4 pb-2 sm:-mx-6 sm:px-6`;
+
+/** La singola casella della fila: la stessa larghezza per lo scheletro e per la scheda vera. */
+export const CLASSI_CASELLA_FILA = 'w-40 shrink-0 snap-start sm:w-44';
+
+/**
+ * Quante caselle finte disegnare mentre la fila carica.
+ *
+ * In una fila orizzontale il numero non cambia l'altezza della pagina — quello
+ * che sta oltre il bordo destro non spinge niente in basso — quindi ne bastano
+ * poche: servono a far vedere che qualcosa sta arrivando, non a tenere il posto
+ * di tutte.
+ */
+export const CASELLE_FINTE_FILA = 6;

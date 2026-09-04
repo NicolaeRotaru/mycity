@@ -612,16 +612,40 @@ export default function SettingsPage() {
               ) : (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-5">
                   <h3 className="font-bold text-red-900 mb-2">Elimina il tuo account</h3>
+                  {/*
+                    3/9/2026 — QUI C'ERA SCRITTO «ANONIMIZZATI» E NON ERA VERO.
+                    Nome, cellulare, via, coordinate della porta di casa e le
+                    note per il fattorino restavano scritti dentro gli ordini.
+                    Adesso vengono tolti davvero (lib/account/cancellazione.ts,
+                    voce `orders`) e questa frase dice, una per una, le cose
+                    che restano: sono le stesse che quel file elenca. Se un
+                    giorno cambia l'elenco, cambia anche questa frase.
+                  */}
                   <p className="text-sm text-red-800 mb-3 leading-relaxed">
-                    Verranno rimossi profilo, indirizzi e preferenze. Gli ordini già evasi resteranno anonimizzati
-                    per obblighi fiscali. C'è un periodo di ripensamento di <strong>7 giorni</strong> durante il
-                    quale puoi annullare; dopo, <strong>l'azione è permanente.</strong>
+                    Verranno rimossi profilo, indirizzi e preferenze. Dei tuoi ordini togliamo nome, telefono,
+                    indirizzo di casa e note per il fattorino. Resta la riga dei conti — data, importo, che cosa
+                    hai comprato, da quale negozio e la città — perché la legge ci obbliga a tenerla per{' '}
+                    <strong>10 anni</strong>: quella riga non porta più il tuo nome. C'è un periodo di ripensamento
+                    di <strong>7 giorni</strong> durante il quale puoi annullare; dopo,{' '}
+                    <strong>l'azione è permanente.</strong>
                   </p>
-                  <label className="block text-sm font-medium text-red-900 mb-1">
+                  {/*
+                    3/9/2026 — QUESTO CAMPO NON AVEVA UN NOME.
+                    L'etichetta stava sopra ma non era legata al campo: niente
+                    `htmlFor`, e il campo senza `id`. Chi usa un lettore di
+                    schermo ci arrivava e sentiva «campo di testo, modificabile»
+                    — sull'azione piu' distruttiva del profilo, senza sapere che
+                    cosa scrivere. Bastano un `htmlFor` e un `id` uguali: da qui
+                    il lettore legge «Scrivi ELIMINA per confermare».
+                    (WCAG 4.1.2 e 3.3.2, tutti e due di livello A.)
+                  */}
+                  <label htmlFor="conferma-eliminazione" className="block text-sm font-medium text-red-900 mb-1">
                     Scrivi <span className="font-mono bg-white px-1.5 py-0.5 rounded">ELIMINA</span> per confermare:
                   </label>
                   <input
+                    id="conferma-eliminazione"
                     type="text"
+                    autoComplete="off"
                     value={deleteConfirm}
                     onChange={(e) => setDeleteConfirm(e.target.value)}
                     className="w-full border border-red-300 rounded-lg p-2.5 mb-3 focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"

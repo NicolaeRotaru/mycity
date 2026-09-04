@@ -94,6 +94,32 @@ async function idsPiuPertinenti(supabase: SupabaseClient, termine: string, tetto
   return ((data ?? []) as Array<{ id: string }>).map((r) => r.id).filter(Boolean);
 }
 
+/**
+ * 3/9/2026 — SCEGLIERE «ALIMENTARI» NASCONDEVA IL PANE.
+ *
+ * Le categorie sono a due piani: nove madri e sessantatré figlie, e la parentela sta SOLO nella
+ * tabella `categories` (`parent_id`). Chi filtrava per una madre — dal filtro della ricerca, dalla
+ * pagina di una categoria — arrivava qui con un identificativo solo, e la lettura faceva
+ * `category_id = quella madre` secco: il pane classificato in «Panificio» non usciva, e la pagina
+ * diceva «nessun risultato» su una categoria piena. Merce che c'è e non si trova: l'ordine lo perde
+ * il negozio, e nessuno se ne accorge.
+ *
+ * La cura sta QUI e non in chi chiama, perché a chiamare sono sette punti diversi (il filtro della
+ * ricerca, la griglia della categoria, le vetrine per sottocategoria, «Altri prodotti», «Ti
+ * potrebbe interessare», i prodotti simili della scheda, i regali): messa in uno solo, la malattia
+ * resterebbe possibile negli altri sei.
+ *
+ * Costa una lettura in più, piccola e solo quando il filtro categoria è acceso: si chiedono gli
+ * identificativi delle figlie di UNA categoria, non l'albero intero. Se quella lettura fallisce si
+ * resta al comportamento di prima — la madre da sola — invece di lasciare la griglia vuota.
+ */
+async function conLeSueSottocategorie(supabase: SupabaseClient, id: string): Promise<string[]> {
+  const { data, error } = await supabase.from('categories').select('id').eq('parent_id', id);
+  if (error) return [id];
+  const figlie = ((data ?? []) as Array<{ id: string }>).map((r) => r.id).filter(Boolean);
+  return [id, ...figlie];
+}
+
 export async function leggiProdottiDellaGriglia(
   supabase: SupabaseClient,
   d: DomandaGriglia,
@@ -121,6 +147,18 @@ export async function leggiProdottiDellaGriglia(
     if (perPertinenza.length === 0) return [];
   }
 
+  /**
+   * Le categorie da leggere, risolte UNA volta: `base()` viene richiamata per ogni blocco di
+   * identificativi sul ramo pertinenza, e una lettura dentro di lei sarebbe un viaggio di rete per
+   * blocco. Chi passa già un elenco (i regali) ha risolto da sé: non si tocca.
+   */
+  const categorieDaLeggere =
+    d.categoryIds && d.categoryIds.length > 0
+      ? d.categoryIds
+      : d.categoryId
+        ? await conLeSueSottocategorie(supabase, d.categoryId)
+        : null;
+
   const base = () => {
     let q = supabase.from('products').select(COLONNE).eq('status', 'available');
 
@@ -136,8 +174,7 @@ export async function leggiProdottiDellaGriglia(
     // una riga saltata o una riga vista due volte fra una pagina e l'altra.
     q = q.order('id', { ascending: false });
 
-    if (d.categoryIds && d.categoryIds.length > 0) q = q.in('category_id', d.categoryIds);
-    else if (d.categoryId) q = q.eq('category_id', d.categoryId);
+    if (categorieDaLeggere) q = q.in('category_id', categorieDaLeggere);
     if (d.sellerId) q = q.eq('seller_id', d.sellerId);
     // Col ramo pertinenza il filtro sul testo l'ha già fatto il database, meglio di così.
     if (termine && !perPertinenza) q = q.ilike('name', `%${termine}%`);

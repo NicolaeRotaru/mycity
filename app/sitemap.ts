@@ -1,10 +1,9 @@
 import type { MetadataRoute } from 'next';
 import { creaClientAnonimo } from '@/lib/supabase/anonimo';
 import { leggiInBlocchi } from '@/lib/supabase/blocchi';
+import { env } from '@/lib/env';
 
 export const revalidate = 3600; // sitemap rigenerato ogni ora
-
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 
 const STATIC_PATHS: Array<{ path: string; priority: number; changeFrequency: 'daily' | 'weekly' | 'monthly' }> = [
   { path: '/',          priority: 1.0, changeFrequency: 'daily'   },
@@ -31,6 +30,10 @@ const STATIC_PATHS: Array<{ path: string; priority: number; changeFrequency: 'da
  * Googlebot, Bingbot ecc. La cache è gestita da Next con `revalidate = 3600`.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  // Un solo posto decide l'indirizzo del sito (lib/env.ts). Con la copia locale
+  // che ripiegava su localhost, ogni riga della sitemap indicava a Google una
+  // pagina irraggiungibile: nessuna di quelle pagine poteva essere indicizzata.
+  const APP_URL = env.appUrl();
   const now = new Date();
   const staticEntries: MetadataRoute.Sitemap = STATIC_PATHS.map((s) => ({
     url: `${APP_URL}${s.path}`,

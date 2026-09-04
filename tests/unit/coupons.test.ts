@@ -29,11 +29,17 @@ vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: vi.fn((table: string) => {
       if (table === 'orders') {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ordersCountMock()),
-          })),
+        // 3/9/2026 — La catena del conteggio ha piu' anelli: al filtro
+        // sull'utente si sono aggiunti quelli che tengono fuori gli ordini
+        // annullati e i pagamenti falliti. Ogni anello restituisce se stesso e
+        // l'ultimo si puo' aspettare, cosi' la finta non si rompe la prossima
+        // volta che la query cresce.
+        const catena: Record<string, unknown> = {
+          eq: vi.fn(() => catena),
+          neq: vi.fn(() => catena),
+          then: (risolvi: (v: unknown) => unknown) => ordersCountMock().then(risolvi),
         };
+        return { select: vi.fn(() => catena) };
       }
       // Default: coupons table
       return makeQueryBuilder({ data: null, error: null });

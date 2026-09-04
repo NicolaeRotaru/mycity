@@ -18,7 +18,7 @@ import { AlertTriangle, Check, type LucideIcon } from 'lucide-react';
  * UI:
  *  - Mobile  → bottom sheet che sale dal basso (gesto familiare app-like)
  *  - Desktop → modal centrato classico
- *  - Top accent bar con il gradient brand MyCity (o rose per danger)
+ *  - Top accent bar con il gradient brand MyCity (o il rosso del pericolo per danger)
  */
 
 export type ConfirmOptions = {
@@ -100,11 +100,11 @@ export function ConfirmDialogHost() {
     : (isDanger ? AlertTriangle : Check);
 
   const accentBar = isDanger
-    ? 'bg-gradient-to-r from-rose-500 via-rose-600 to-accent-500'
+    ? 'bg-gradient-to-r from-red-500 via-red-600 to-red-700'
     : 'bg-gradient-to-r from-primary-600 via-primary-700 to-secondary-600';
 
   const iconBg = isDanger
-    ? 'bg-gradient-to-br from-rose-100 to-accent-100 text-rose-600 ring-rose-200'
+    ? 'bg-gradient-to-br from-red-100 to-red-50 text-red-600 ring-red-200'
     : 'bg-gradient-to-br from-primary-100 to-secondary-100 text-primary-700 ring-primary-200';
 
   return (
@@ -169,7 +169,7 @@ export function ConfirmDialogHost() {
             autoFocus={!isDanger}
             className={`px-4 py-3 rounded-xl font-bold text-white shadow-md active:scale-[0.98] transition-all ${
               isDanger
-                ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                ? 'bg-red-600 hover:bg-red-700 shadow-red-200'
                 : 'bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700 shadow-primary-200'
             }`}
           >

@@ -39,7 +39,18 @@ export const supabase = {
       data: { session: globalThis.__UTENTE__ ? { user: globalThis.__UTENTE__ } : null },
       error: null,
     }),
-    onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    /**
+     * Chi ascolta i cambi di sessione si registra qui. La prova che vuole
+     * provare cosa succede a un'uscita richiama gli ascolti a mano:
+     * `globalThis.__ASCOLTI_AUTH__.forEach((a) => a('SIGNED_OUT', null))`.
+     * Chi non li guarda non si accorge di niente.
+     */
+    onAuthStateChange: (ascolto) => {
+      if (typeof ascolto === 'function') {
+        (globalThis.__ASCOLTI_AUTH__ ??= []).push(ascolto);
+      }
+      return { data: { subscription: { unsubscribe() {} } } };
+    },
     signOut: async () => ({ error: null }),
   },
   channel: () => ({ on: () => ({ subscribe: () => ({}) }), subscribe: () => ({}), unsubscribe: () => {} }),

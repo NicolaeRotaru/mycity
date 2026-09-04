@@ -53,6 +53,12 @@ export const USCITA = {
   SITO_ROTTO: 1,
   USO_SBAGLIATO: 2,
   INDIRIZZO_NON_VALIDO: 3,
+  // 3/9/2026 — «non ho potuto vedere il sito» e' un terzo esito, e non e' 1.
+  // Vedi `muroDavantiAlSito` qui sotto: davanti alla produzione c'e' il login
+  // di Vercel, e chi bussa senza chiave si prende un 401 che non dice NIENTE
+  // sul sito. Rispondere «rotto» a quel 401 vorrebbe dire annullare un
+  // rilascio sano a ogni pubblicazione.
+  MURO_DAVANTI: 4,
 };
 
 /** Gli indirizzi da provare, con la regola che ognuno deve rispettare. */
@@ -75,6 +81,66 @@ export const CONTROLLI = [
     accetta: (stato) => stato >= 200 && stato < 300,
   },
 ];
+
+/**
+ * 3/9/2026 — DAVANTI ALLA PRODUZIONE C'E' UN MURO, E LA PROVA DI FUMO CI
+ * SBATTEVA CONTRO CHIAMANDOLO «SITO ROTTO».
+ *
+ * Stato verificato il 3/9/2026 con le chiavi vere: sul progetto Vercel `mycity`
+ * la «Vercel Authentication» e' accesa su tutto tranne i domini personalizzati,
+ * e di domini personalizzati non ce n'e' nessuno. Quindi ogni indirizzo
+ * `*.vercel.app` — compreso quello che questo lavoro pubblica — risponde con la
+ * schermata di accesso a chi non e' della squadra.
+ *
+ * Cosa sarebbe successo il giorno in cui si accendono i segreti: tre controlli
+ * su tre respinti dal muro, uscita 1, e il passo dopo — che sull'1 sa fare una
+ * cosa sola — avrebbe annullato un rilascio sanissimo. A ogni pubblicazione, e
+ * tornando su un rilascio dietro lo stesso muro.
+ *
+ * PERCHE' BASTA IL CODICE DI RISPOSTA. Le tre porte che bussiamo non sanno
+ * rispondere 401 ne' 403: `/api/health` e `/api/health/ready` rispondono 200 o
+ * 503 e basta (il segreto serve solo a mostrare i dettagli, non a entrare), e
+ * `/` e' pubblica — `middleware.ts` non nega niente, al massimo rimanda altrove.
+ * Se arriva un 401 o un 403, a rispondere non e' stato il sito: e' qualcuno
+ * davanti a lui. Gli indizi (il biscotto `_vercel_sso_nonce`, la pagina di
+ * Vercel) servono solo a dire CHI, non SE.
+ *
+ * La chiave per passare esiste ed e' di Vercel: Settings → Deployment
+ * Protection → Protection Bypass for Automation. Se il segreto c'e', si passa e
+ * si guarda il sito davvero; se non c'e', si dice «non ho potuto vedere» — che
+ * non e' un verde e non e' un motivo per buttare via un rilascio.
+ *
+ * @returns {string|null} chi sta davanti, oppure null se non c'e' nessun muro.
+ */
+export function muroDavantiAlSito(stato, indizi = {}) {
+  if (stato !== 401 && stato !== 403) return null;
+  const biscotto = String(indizi.biscotto ?? '');
+  const corpo = String(indizi.corpo ?? '');
+  if (/_vercel_sso_nonce/i.test(biscotto) || /sso-api|authentication required/i.test(corpo)) {
+    return 'ha risposto il login di Vercel, non il sito';
+  }
+  return 'qualcuno davanti al sito ha rifiutato la chiamata prima che arrivasse';
+}
+
+/**
+ * Gli indizi su CHI ha risposto, presi senza fidarsi: qui dentro puo' arrivare
+ * una risposta vera di `fetch` o una finta di una prova, e un attrezzo che si
+ * rompe leggendo un'intestazione trasformerebbe un muro in un guasto del sito.
+ */
+async function indiziDellaRisposta(risposta) {
+  const indizi = { biscotto: '', corpo: '' };
+  try {
+    indizi.biscotto = risposta?.headers?.get?.('set-cookie') ?? '';
+  } catch {
+    // Una risposta senza intestazioni leggibili: resta un muro senza nome.
+  }
+  try {
+    indizi.corpo = (await risposta.clone().text()).slice(0, 2000);
+  } catch {
+    // Idem: il nome e' un di piu', il muro l'ha gia' detto il codice.
+  }
+  return indizi;
+}
 
 /**
  * 31/8/2026 (collaudo del rilascio, difetto ②) — Un indirizzo e' un indirizzo
@@ -168,25 +234,45 @@ export function rilascioDaTornare(rispostaDeiRilasci) {
 
 /**
  * La sentenza, separata dalla rete perche' sia provabile.
- * @param {Array<{nome: string, ok: boolean, dettaglio: string}>} esiti
+ * @param {Array<{nome: string, ok: boolean, dettaglio: string, protetto?: boolean}>} esiti
  */
 export function esitoDellaProva(esiti) {
   const falliti = esiti.filter((e) => !e.ok);
-  return {
-    passata: falliti.length === 0,
-    falliti,
-    riassunto: falliti.length === 0
-      ? `prova di fumo passata: ${esiti.length} controlli su ${esiti.length}`
-      : `prova di fumo FALLITA su ${falliti.length} controlli su ${esiti.length}: ` +
-        falliti.map((f) => `${f.nome} (${f.dettaglio})`).join('; '),
-  };
+  // Se TUTTO quello che e' caduto e' caduto contro un muro, del sito non
+  // sappiamo niente: non e' passata e non e' fallita, e' che non l'ho vista.
+  // Se invece almeno un controllo e' caduto per conto suo — un 503, nessuna
+  // risposta — allora il sito e' rotto davvero, e quello vale piu' del muro.
+  const muri = falliti.filter((f) => f.protetto);
+  const protetta = falliti.length > 0 && muri.length === falliti.length;
+  let riassunto;
+  if (falliti.length === 0) {
+    riassunto = `prova di fumo passata: ${esiti.length} controlli su ${esiti.length}`;
+  } else if (protetta) {
+    riassunto =
+      `non ho potuto vedere il sito: ${muri.length} controlli su ${esiti.length} si sono fermati davanti a un muro: ` +
+      muri.map((f) => `${f.nome} (${f.dettaglio})`).join('; ');
+  } else {
+    riassunto =
+      `prova di fumo FALLITA su ${falliti.length} controlli su ${esiti.length}: ` +
+      falliti.map((f) => `${f.nome} (${f.dettaglio})`).join('; ');
+  }
+  return { passata: falliti.length === 0, protetta, falliti, riassunto };
 }
 
 /** Un solo controllo, con i suoi tentativi. */
 export async function provaUnControllo(base, controllo, opzioni = {}) {
-  const { tentativi = 5, attesaMs = 5000, timeoutMs = 10_000, fetchImpl = fetch, dormi } = opzioni;
+  const { tentativi = 5, attesaMs = 5000, timeoutMs = 10_000, fetchImpl = fetch, dormi, segretoDiPassaggio = '' } = opzioni;
   const aspetta = dormi ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   let dettaglio = 'mai provato';
+
+  const intestazioni = { 'user-agent': 'mycity-prova-di-fumo' };
+  if (segretoDiPassaggio) {
+    // La chiave di servizio di Vercel per passare la schermata di accesso senza
+    // essere una persona. Va nell'intestazione e non finisce mai in un `echo`:
+    // e' un segreto, e i log del lavoro li legge chiunque abbia il repository.
+    intestazioni['x-vercel-protection-bypass'] = segretoDiPassaggio;
+    intestazioni['x-vercel-set-bypass-cookie'] = 'false';
+  }
 
   for (let n = 1; n <= tentativi; n++) {
     try {
@@ -194,9 +280,16 @@ export async function provaUnControllo(base, controllo, opzioni = {}) {
       const scadenza = setTimeout(() => ctrl.abort(), timeoutMs);
       const res = await fetchImpl(`${base}${controllo.percorso}`, {
         signal: ctrl.signal,
-        headers: { 'user-agent': 'mycity-prova-di-fumo' },
+        headers: intestazioni,
       });
       clearTimeout(scadenza);
+
+      // Un muro non e' un guasto: non si riprova cinque volte (la risposta
+      // sarebbe la stessa) e non si dice «rotto», si dice «non ho visto».
+      if (res.status === 401 || res.status === 403) {
+        const muro = muroDavantiAlSito(res.status, await indiziDellaRisposta(res));
+        if (muro) return { nome: controllo.nome, ok: false, protetto: true, dettaglio: `HTTP ${res.status}: ${muro}` };
+      }
 
       let corpo = null;
       try {
@@ -294,6 +387,17 @@ export function verdettoDelLavoro(stato = {}) {
         'Va fatto a mano su Vercel: apri il progetto, la scheda dei rilasci, e rimetti in produzione quello di prima.',
       ],
     };
+  } else if (codice === String(USCITA.MURO_DAVANTI)) {
+    verdetto = {
+      verde: false,
+      titolo: '## ⚪ Non ho potuto vedere il sito: davanti c e un muro',
+      righe: [
+        `Ho pubblicato su ${indirizzo}, ma alle tre porte ha risposto una schermata di accesso, non il sito: da qui non posso dire se funziona.`,
+        'Non ho annullato niente, di proposito: un muro non dice che il rilascio e rotto, e buttarne via uno sano fa piu danno del difetto che volevo prendere.',
+        'Si apre in due modi. Uno: su Vercel, il progetto → Settings → Deployment Protection → Protection Bypass for Automation, poi lo stesso valore fra i segreti del repository col nome VERCEL_AUTOMATION_BYPASS_SECRET. Due: un dominio pubblico tuo, che la protezione non copre.',
+        'Finche resta cosi, dopo ogni rilascio il sito va aperto a mano per sapere se risponde.',
+      ],
+    };
   } else if (codice === String(USCITA.INDIRIZZO_NON_VALIDO)) {
     verdetto = {
       verde: false,
@@ -317,6 +421,34 @@ export function verdettoDelLavoro(stato = {}) {
     );
   }
   return verdetto;
+}
+
+/**
+ * Le manopole della prova, lette dall'ambiente.
+ *
+ * PERCHE' ESISTONO. Con i valori di tutti i giorni una prova di fumo su un sito
+ * che non risponde dura piu' di un minuto: nessuna prova automatica puo'
+ * aspettare tanto, e senza una prova che la esegue davvero questa decisione
+ * tornerebbe a essere codice che nessuno ha mai visto girare — che e' il
+ * difetto da cui e' nato tutto questo file.
+ *
+ * PERCHE' NON SI POSSONO USARE PER SPEGNERLA. Sono limitate: almeno un
+ * tentativo, almeno un secondo di attesa per la risposta. Non esiste un valore
+ * che trasformi la prova in un saluto — e il lavoro di rilascio non le imposta,
+ * cosa che una prova a parte tiene ferma.
+ */
+export function manopoleDaAmbiente(ambiente = {}) {
+  const numero = (testo, predefinito, minimo, massimo) => {
+    const n = Number.parseInt(String(testo ?? '').trim(), 10);
+    if (!Number.isFinite(n)) return predefinito;
+    return Math.min(Math.max(n, minimo), massimo);
+  };
+  return {
+    tentativi: numero(ambiente.PROVA_TENTATIVI, 5, 1, 20),
+    attesaMs: numero(ambiente.PROVA_ATTESA_MS, 5000, 0, 60_000),
+    timeoutMs: numero(ambiente.PROVA_TIMEOUT_MS, 10_000, 1000, 60_000),
+    segretoDiPassaggio: String(ambiente.VERCEL_AUTOMATION_BYPASS_SECRET ?? '').trim(),
+  };
 }
 
 /** Legge da vercel.json se Vercel sta ancora pubblicando per conto suo. */
@@ -389,7 +521,14 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     console.error(`«${base}» non e un indirizzo: non c e niente a cui bussare, e da qui non si puo dire niente sul sito.`);
     process.exit(USCITA.INDIRIZZO_NON_VALIDO);
   }
-  const esito = await provaDiFumo(base);
+  const esito = await provaDiFumo(base, manopoleDaAmbiente(process.env));
   console.log(esito.riassunto);
+  if (esito.protetta) {
+    // Non e' 1: sull'1 il lavoro annulla il rilascio, e annullare un rilascio
+    // perche' non si e' potuto guardare vuol dire rompere la produzione per un
+    // dubbio. Rosso si', ma un rosso che dice «non lo so».
+    console.error('Nessuno dei tre controlli e arrivato al sito: da qui non posso dire se il rilascio e sano o rotto.');
+    process.exit(USCITA.MURO_DAVANTI);
+  }
   process.exit(esito.passata ? USCITA.PASSATA : USCITA.SITO_ROTTO);
 }

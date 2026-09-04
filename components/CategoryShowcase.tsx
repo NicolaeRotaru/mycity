@@ -10,7 +10,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { sizedImage } from '@/lib/image-url';
-import { domandaCategorie } from '@/lib/queries/catalogo';
+import { domandaCategoriePubbliche } from '@/lib/queries/categorie-pubbliche';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   abbigliamento:  Shirt,
@@ -83,7 +83,13 @@ const CategoryShowcase = ({ titolo, sottotitolo }: Props = {}) => {
   // qualcosa, le due domande devono essere LA STESSA: stessa chiave, stessa
   // forma della risposta. Riscritta in due posti, basta una lettera diversa
   // nella chiave e il browser va in rete lo stesso — senza che nessuno lo veda.
-  const { data: categories = [], isLoading, isError } = useQuery(domandaCategorie(supabase));
+  //
+  // 3/9/2026 — la lettura passa da `/api/catalogo/categorie`, che risponde con
+  // «vale sessanta secondi»: la stessa risposta serve tutti i visitatori invece
+  // di essere richiesta una volta per ognuno. La CHIAVE resta quella di
+  // `domandaCategorie`, altrimenti il precarico del server non verrebbe
+  // riconosciuto. Se la rotta non risponde si legge dal database come prima.
+  const { data: categories = [], isLoading, isError } = useQuery(domandaCategoriePubbliche(supabase));
 
   // Tre esiti. Prima il componente leggeva solo `data` e disegnava comunque la griglia: finché la
   // risposta non arrivava restava un vuoto sotto il titolo «Cosa cerchi oggi?», e se la lettura

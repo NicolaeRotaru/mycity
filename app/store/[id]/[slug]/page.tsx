@@ -11,7 +11,8 @@ import { pageBySlug, enabledSections } from '@/lib/store-site';
 import SectionRenderer from '@/components/store-sections/SectionRenderer';
 import StoreNav from '@/components/store-sections/StoreNav';
 import { useStorePageData } from '@/components/store-sections/useStorePageData';
-import { LoadingState } from '@/components/ui/LoadingState';
+import ScheletroNegozio from '@/components/store-sections/ScheletroNegozio';
+import { CONTENITORE_PAGINA_NEGOZIO } from '@/components/store-sections/misure-vetrina';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import EmptyState from '@/components/EmptyState';
 
@@ -28,12 +29,11 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
     staleTime: 60_000,
   });
 
+  // 3/9/2026 — stessa malattia della home del negozio, un cartello più in là:
+  // il cerchietto che gira era una terza impaginazione fra lo scheletro e la
+  // pagina. Le pagine della stessa vetrina aspettano nello stesso modo.
   if (data.isLoading) {
-    return (
-      <div className="container mx-auto px-4 py-16">
-        <LoadingState />
-      </div>
-    );
+    return <ScheletroNegozio />;
   }
 
   const notFound = (
@@ -66,7 +66,7 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
     <div
       data-theme={site.theme}
       style={{ ['--store-accent']: accent } as CSSProperties}
-      className="container mx-auto px-4 py-6 max-w-5xl space-y-4"
+      className={CONTENITORE_PAGINA_NEGOZIO}
     >
       <Breadcrumb items={[
         { label: 'Home', href: '/' },

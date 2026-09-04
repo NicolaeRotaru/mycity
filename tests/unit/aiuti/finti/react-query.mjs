@@ -59,3 +59,13 @@ export const useQueryClient = () => ({
 export class QueryClient {}
 export const QueryClientProvider = ({ children }) => children;
 export const keepPreviousData = undefined;
+
+/**
+ * 3/9/2026 — Il guscio della pagina negozio (`app/store/[id]/layout.tsx`) precarica sul server e
+ * consegna lo stato dentro la pagina. Per montarlo — e per poter ESEGUIRE la sua
+ * `generateMetadata`, che è il testo che si legge su Google e nell'anteprima di WhatsApp —
+ * servivano anche questi due. Qui il precarico non deve fare niente: le prove che montano una
+ * pagina il dato lo mettono in `__DATI_QUERY__`.
+ */
+export const HydrationBoundary = ({ children }) => children;
+export const dehydrate = () => ({ mutations: [], queries: [] });

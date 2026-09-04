@@ -1,6 +1,5 @@
 import type { MetadataRoute } from 'next';
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+import { env } from '@/lib/env';
 
 /**
  * robots.txt generato a runtime. Niente Allow esplicito: di default Googlebot
@@ -8,6 +7,10 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
  * devono mai finire in SERP. Sitemap canonica fornita.
  */
 export default function robots(): MetadataRoute.Robots {
+  // L'indirizzo si chiede a lib/env.ts, che è l'unico che sa deciderlo: la
+  // copia locale che ripiegava su localhost mandava a Googlebot una sitemap
+  // ospitata su un computer che non esiste.
+  const APP_URL = env.appUrl();
   return {
     rules: [
       {
@@ -35,7 +38,7 @@ export default function robots(): MetadataRoute.Robots {
         ],
       },
     ],
-    sitemap: `${APP_URL.replace(/\/$/, '')}/sitemap.xml`,
-    host: APP_URL.replace(/\/$/, ''),
+    sitemap: `${APP_URL}/sitemap.xml`,
+    host: APP_URL,
   };
 }

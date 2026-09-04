@@ -20,9 +20,46 @@ import { env } from '@/lib/env';
 // regole: il giorno in cui va aggiunto un carattere da filtrare, due restano
 // indietro — e restano indietro senza dirlo a nessuno.
 import { escapeHtml } from '@/lib/html-escape';
+import { recapitoPrivacy } from '@/lib/legal/titolare';
 
 const BRAND = 'MyCity';
-const BRAND_COLOR = '#4f46e5';
+
+/**
+ * 3/9/2026 — LA RICEVUTA ARRIVAVA BLU MENTRE IL SITO E' TERRACOTTA.
+ *
+ * L'unico colore dichiarato qui era `BRAND_COLOR = '#4f46e5'`, l'indigo della
+ * vecchia veste «SaaS» che tailwind.config.ts dichiara abbandonata dal giorno
+ * del passaggio a terracotta e panna. Intorno c'erano altri sette grigi e verdi
+ * copiati a mano dalla stessa vecchia tavolozza. Chi pagava sul sito riceveva
+ * la conferma nei colori di un altro sito: e' il primo segnale che si insegna a
+ * riconoscere per distinguere una email vera da una truffa.
+ *
+ * Non e' una correzione di otto numeri: era il MODO. I colori stavano scritti
+ * dentro le stringhe, uno per uno, senza nome e senza nessuno che li
+ * confrontasse con la tavolozza vera. Adesso stanno qui, hanno un nome, e una
+ * prova (`tests/unit/la-ricevuta-veste-i-colori-del-sito.test.ts`) LEGGE la
+ * tavolozza da `tailwind.config.ts` e pretende che ogni colore che esce da
+ * questo file sia uno di quelli. Il prossimo colore inventato diventa rosso.
+ *
+ * `tailwind.config.ts` non si puo' importare da qui (il server della posta non
+ * ha il CSS): la fonte unica resta lui, ed e' la prova a tenerli agganciati.
+ */
+const COLORI = {
+  marchio: '#A03B25',   // primary-700 — testata, pulsanti, link (= --color-cta)
+  sfondo: '#FBF7F0',    // cream-100 — lo sfondo della pagina, come sul sito
+  foglio: '#FFFFFF',    // surface-0 — il riquadro del messaggio
+  suFoglio: '#FFFFFF',  // il testo sopra il marchio
+  testo: '#2C2A28',     // ink-800
+  titolo: '#1C1A18',    // ink-900
+  tenue: '#57534E',     // ink-500 — etichette e note secondarie
+  piede: '#F5EDD9',     // cream-200 — la fascia in fondo
+  citazione: '#3C3835', // ink-700 — il messaggio scritto da chi regala
+  buono: '#5A7C42',     // olive-600 — «consegnato»
+  attenzione: '#B82A28',// secondary-600 — la scadenza dei 15 minuti al negozio
+} as const;
+
+/** Il carattere del sito e' Inter: in posta arriva solo a chi ce l'ha, gli altri scendono la lista. */
+const CARATTERE = "Inter,-apple-system,'Segoe UI',Roboto,sans-serif";
 
 function appUrl() {
   return env.appUrl().replace(/\/$/, '');
@@ -36,21 +73,21 @@ function shell(title: string, body: string, footer?: string): string {
 <meta name="viewport" content="width=device-width">
 <title>${escapeHtml(title)}</title>
 </head>
-<body style="margin:0;background:#f8fafc;font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1e293b">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:24px 0">
+<body style="margin:0;background:${COLORI.sfondo};font-family:${CARATTERE};color:${COLORI.testo}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${COLORI.sfondo};padding:24px 0">
   <tr><td align="center">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden">
-      <tr><td style="padding:24px 32px;background:${BRAND_COLOR};color:#ffffff">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:${COLORI.foglio};border-radius:12px;overflow:hidden">
+      <tr><td style="padding:24px 32px;background:${COLORI.marchio};color:${COLORI.suFoglio}">
         <div style="font-size:20px;font-weight:700;letter-spacing:-0.01em">${BRAND}</div>
       </td></tr>
       <tr><td style="padding:32px">
         ${body}
       </td></tr>
-      <tr><td style="padding:24px 32px;background:#f1f5f9;color:#64748b;font-size:12px;line-height:1.5">
+      <tr><td style="padding:24px 32px;background:${COLORI.piede};color:${COLORI.tenue};font-size:12px;line-height:1.5">
         ${footer ?? `Hai ricevuto questa email perché hai un account su ${BRAND}. <br>
-        <a href="${appUrl()}/profile/settings" style="color:${BRAND_COLOR}">Gestisci preferenze</a> ·
-        <a href="${appUrl()}/privacy" style="color:${BRAND_COLOR}">Privacy</a> ·
-        <a href="${appUrl()}/cookies" style="color:${BRAND_COLOR}">Cookie</a>`}
+        <a href="${appUrl()}/profile/settings" style="color:${COLORI.marchio}">Gestisci preferenze</a> ·
+        <a href="${appUrl()}/privacy" style="color:${COLORI.marchio}">Privacy</a> ·
+        <a href="${appUrl()}/cookies" style="color:${COLORI.marchio}">Cookie</a>`}
       </td></tr>
     </table>
   </td></tr>
@@ -59,7 +96,7 @@ function shell(title: string, body: string, footer?: string): string {
 }
 
 function btn(href: string, label: string): string {
-  return `<a href="${href}" style="display:inline-block;background:${BRAND_COLOR};color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">${escapeHtml(label)}</a>`;
+  return `<a href="${href}" style="display:inline-block;background:${COLORI.marchio};color:${COLORI.suFoglio};text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">${escapeHtml(label)}</a>`;
 }
 
 // ---------- Template specifici ----------
@@ -67,14 +104,14 @@ function btn(href: string, label: string): string {
 export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderId: string; total: number; storeName: string }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Ordine ricevuto</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ordine ricevuto</h1>
     <p style="margin:0 0 12px;line-height:1.6">Ciao ${escapeHtml(args.name ?? '')}, abbiamo ricevuto il tuo ordine da <strong>${escapeHtml(args.storeName)}</strong>.</p>
     <table cellpadding="0" cellspacing="0" style="width:100%;margin:16px 0">
-      <tr><td style="padding:8px 0;color:#64748b">Ordine</td><td style="padding:8px 0;text-align:right;font-family:monospace">#${escapeHtml(args.orderId.slice(0, 8))}</td></tr>
-      <tr><td style="padding:8px 0;color:#64748b">Totale</td><td style="padding:8px 0;text-align:right;font-weight:600">€${args.total.toFixed(2)}</td></tr>
+      <tr><td style="padding:8px 0;color:${COLORI.tenue}">Ordine</td><td style="padding:8px 0;text-align:right;font-family:monospace">#${escapeHtml(args.orderId.slice(0, 8))}</td></tr>
+      <tr><td style="padding:8px 0;color:${COLORI.tenue}">Totale</td><td style="padding:8px 0;text-align:right;font-weight:600">€${args.total.toFixed(2)}</td></tr>
     </table>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi ordine')}</p>
-    <p style="margin:0;font-size:13px;color:#64748b">Riceverai aggiornamenti quando il negozio prepara e il rider ritira l'ordine.</p>
+    <p style="margin:0;font-size:13px;color:${COLORI.tenue}">Riceverai aggiornamenti quando il negozio prepara e il rider ritira l'ordine.</p>
   `;
   return {
     subject: `Ordine #${args.orderId.slice(0, 8)} ricevuto — ${BRAND}`,
@@ -86,9 +123,9 @@ export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderI
 export function newOrderSellerTemplate(args: { sellerName?: string | null; orderId: string; total: number; itemsCount: number }) {
   const orderUrl = `${appUrl()}/seller/orders/${args.orderId}`;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">🛒 Nuovo ordine</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🛒 Nuovo ordine</h1>
     <p style="margin:0 0 12px;line-height:1.6">Hai ricevuto un nuovo ordine di ${args.itemsCount} articol${args.itemsCount === 1 ? 'o' : 'i'} per <strong>€${args.total.toFixed(2)}</strong>.</p>
-    <p style="margin:0 0 12px;line-height:1.6;color:#dc2626;font-weight:600">Accetta o rifiuta l'ordine entro 15 minuti.</p>
+    <p style="margin:0 0 12px;line-height:1.6;color:${COLORI.attenzione};font-weight:600">Accetta o rifiuta l'ordine entro 15 minuti.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Gestisci ordine')}</p>
   `;
   return {
@@ -137,7 +174,7 @@ export function orderReadyTemplate(args: {
   `;
 
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">📦 Il tuo ordine e&#39; pronto</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">📦 Il tuo ordine e&#39; pronto</h1>
     ${args.pickupInStore ? corpoRitiro : corpoConsegna}
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi l&#39;ordine')}</p>
   `;
@@ -155,7 +192,7 @@ export function orderReadyTemplate(args: {
 export function orderDeliveredTemplate(args: { orderId: string; name?: string | null; total: number }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#059669">✅ Ordine consegnato</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.buono}">✅ Ordine consegnato</h1>
     <p style="margin:0 0 12px;line-height:1.6">Ciao ${escapeHtml(args.name ?? '')}, il tuo ordine è stato consegnato.</p>
     <p style="margin:0 0 12px;line-height:1.6">Grazie per aver scelto ${BRAND}. Lascia una recensione per aiutare altri acquirenti.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Lascia recensione')}</p>
@@ -181,9 +218,9 @@ export function orderDeliveredTemplate(args: { orderId: string; name?: string | 
 export function refundIssuedTemplate(args: { orderId: string; amount: number; reason?: string | null }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">💶 Rimborso emesso</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 Rimborso emesso</h1>
     <p style="margin:0 0 12px;line-height:1.6">Abbiamo emesso un rimborso di <strong>€${args.amount.toFixed(2)}</strong> sul tuo ordine.</p>
-    ${args.reason ? `<p style="margin:0 0 12px;color:#64748b">Motivo: ${escapeHtml(args.reason)}</p>` : ''}
+    ${args.reason ? `<p style="margin:0 0 12px;color:${COLORI.tenue}">Motivo: ${escapeHtml(args.reason)}</p>` : ''}
     <p style="margin:0 0 12px;line-height:1.6">Il rimborso arriverà sul tuo metodo di pagamento entro 5-10 giorni lavorativi.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi dettaglio')}</p>
   `;
@@ -194,23 +231,54 @@ export function refundIssuedTemplate(args: { orderId: string; amount: number; re
   };
 }
 
+/**
+ * 3/9/2026 — CHI RICEVE UN REGALO NON SI È MAI ISCRITTO A NIENTE.
+ *
+ * Questa è l'unica email che MyCity manda a una persona che non è nostra
+ * cliente: nome, indirizzo e messaggio ce li ha dati qualcun altro. Lei non ha
+ * mai letto la nostra informativa e, prima di questa riga, non aveva modo di
+ * sapere né che abbiamo il suo indirizzo né come farselo togliere.
+ *
+ * L'articolo 14 del GDPR dice esattamente questo: quando i dati arrivano da
+ * un terzo, chi li riceve va informato al primo contatto. Il piede standard
+ * («hai ricevuto questa email perché hai un account su MyCity») per lei era
+ * anche falso: un account non ce l'ha.
+ */
+function piedeDelDestinatarioDelRegalo(mittente: string): string {
+  const dove = recapitoPrivacy();
+  const link = dove.href.startsWith('mailto:') ? dove.href : `${appUrl()}${dove.href}`;
+  return `Hai ricevuto questa email perché ${mittente} ha comprato un buono regalo per te e ci ha lasciato il tuo
+    indirizzo. Non hai un account ${BRAND} e non ti abbiamo iscritto a nulla.<br>
+    Conserviamo il tuo nome, la tua email e il messaggio solo per recapitarti il regalo.
+    <a href="${appUrl()}/privacy" style="color:${COLORI.marchio}">Come trattiamo i tuoi dati</a> ·
+    per farli cancellare subito scrivi a
+    <a href="${link}" style="color:${COLORI.marchio}">${escapeHtml(dove.testo)}</a>.`;
+}
+
 export function giftCardRecipientTemplate(args: { code: string; amountEuro: number; senderName?: string | null; message?: string | null }) {
   const redeemUrl = `${appUrl()}/profile/gift-cards`;
   const from = args.senderName?.trim() ? escapeHtml(args.senderName.trim()) : 'Qualcuno';
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">🎁 Hai ricevuto una gift card</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🎁 Hai ricevuto una gift card</h1>
     <p style="margin:0 0 12px;line-height:1.6"><strong>${from}</strong> ti ha regalato una gift card MyCity da <strong>€${args.amountEuro.toFixed(2)}</strong>, spendibile nei negozi di Piacenza.</p>
-    ${args.message?.trim() ? `<p style="margin:0 0 16px;padding:12px 16px;background:#f1f5f9;border-radius:8px;font-style:italic;color:#334155">«${escapeHtml(args.message.trim())}»</p>` : ''}
-    <p style="margin:0 0 8px;color:#64748b">Il tuo codice</p>
-    <p style="margin:0 0 20px;font-family:monospace;font-size:24px;font-weight:700;letter-spacing:2px;color:${BRAND_COLOR}">${escapeHtml(args.code)}</p>
+    ${args.message?.trim() ? `<p style="margin:0 0 16px;padding:12px 16px;background:${COLORI.piede};border-radius:8px;font-style:italic;color:${COLORI.citazione}">«${escapeHtml(args.message.trim())}»</p>` : ''}
+    <p style="margin:0 0 8px;color:${COLORI.tenue}">Il tuo codice</p>
+    <p style="margin:0 0 20px;font-family:monospace;font-size:24px;font-weight:700;letter-spacing:2px;color:${COLORI.marchio}">${escapeHtml(args.code)}</p>
     <p style="margin:0 0 12px;line-height:1.6">Accedi a MyCity, vai su <strong>Gift Card</strong> e inserisci il codice: il credito verrà aggiunto al tuo account.</p>
     <p style="margin:24px 0">${btn(redeemUrl, 'Riscatta ora')}</p>
-    <p style="margin:0;font-size:13px;color:#64748b">La gift card è valida 2 anni dall'acquisto.</p>
+    <p style="margin:0;font-size:13px;color:${COLORI.tenue}">La gift card è valida 2 anni dall'acquisto.</p>
   `;
+  const dove = recapitoPrivacy();
+  const doveTesto = dove.eUnaCasella ? dove.testo : `${appUrl()}${dove.href}`;
   return {
     subject: `🎁 ${from} ti ha regalato €${args.amountEuro.toFixed(2)} su ${BRAND}`,
-    html: shell('Hai ricevuto una gift card', body),
-    text: `${from} ti ha regalato una gift card MyCity da €${args.amountEuro.toFixed(2)}. Codice: ${args.code}. Riscattalo su ${redeemUrl}`,
+    html: shell('Hai ricevuto una gift card', body, piedeDelDestinatarioDelRegalo(from)),
+    text:
+      `${from} ti ha regalato una gift card MyCity da €${args.amountEuro.toFixed(2)}. Codice: ${args.code}. ` +
+      `Riscattalo su ${redeemUrl}\n\n` +
+      `Hai ricevuto questa email perché ${from} ha comprato un buono regalo per te e ci ha lasciato il tuo indirizzo: ` +
+      `non hai un account ${BRAND} e non ti abbiamo iscritto a nulla. Conserviamo nome, email e messaggio solo per ` +
+      `recapitarti il regalo (${appUrl()}/privacy). Per farli cancellare subito: ${doveTesto}`,
   };
 }
 
@@ -218,10 +286,10 @@ export function giftCardBuyerTemplate(args: { code: string; amountEuro: number; 
   const url = `${appUrl()}/profile/gift-cards`;
   const to = args.recipientName?.trim() ? escapeHtml(args.recipientName.trim()) : 'il destinatario';
   const body = `
-    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Gift card acquistata ✓</h1>
+    <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Gift card acquistata ✓</h1>
     <p style="margin:0 0 12px;line-height:1.6">Grazie! La tua gift card da <strong>€${args.amountEuro.toFixed(2)}</strong> per <strong>${to}</strong> è pronta e gli abbiamo inviato il codice via email.</p>
-    <p style="margin:0 0 8px;color:#64748b">Codice (in caso voglia condividerlo tu)</p>
-    <p style="margin:0 0 20px;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:2px;color:${BRAND_COLOR}">${escapeHtml(args.code)}</p>
+    <p style="margin:0 0 8px;color:${COLORI.tenue}">Codice (in caso voglia condividerlo tu)</p>
+    <p style="margin:0 0 20px;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:2px;color:${COLORI.marchio}">${escapeHtml(args.code)}</p>
     <p style="margin:24px 0">${btn(url, 'Le mie gift card')}</p>
   `;
   return {
@@ -273,7 +341,7 @@ const TEMPLATE_CICLO_DI_VITA = {
     const nome = d.name?.trim();
     const saluto = nome ? `Ciao ${escapeHtml(nome)}, grazie` : 'Grazie';
     const body = `
-      <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:#0f172a">Benvenuto su ${BRAND}</h1>
+      <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:${COLORI.titolo}">Benvenuto su ${BRAND}</h1>
       <p style="margin:0 0 16px;line-height:1.6">${saluto} per esserti iscritto. Il marketplace dei negozi di Piacenza ti aspetta.</p>
       <p style="margin:24px 0">${btn(appUrl(), 'Inizia a esplorare')}</p>
     `;
@@ -288,24 +356,24 @@ const TEMPLATE_CICLO_DI_VITA = {
 
   tutorial_day2: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">3 cose da sapere</h1>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">3 cose da sapere</h1>
       <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">
         <li>Paghi alla consegna: la carta non e' obbligatoria</li>
         <li>Spedizione gratis sopra €30</li>
-        <li>Invita un amico: €5 a testa</li>
+        <li>Invita un amico: quando riceve il primo ordine, tu ricevi €5 di credito</li>
       </ul>
       <p style="margin:24px 0">${btn(appUrl(), `Vai su ${BRAND}`)}</p>
     `;
     return {
       subject: `3 cose da sapere su ${BRAND}`,
       html: shell('3 cose da sapere', body),
-      text: 'Tre cose da sapere: paghi alla consegna, spedizione gratis sopra €30, referral €5.',
+      text: 'Tre cose da sapere: paghi alla consegna, spedizione gratis sopra €30, e se inviti un amico ricevi €5 di credito quando lui riceve il primo ordine.',
     };
   },
 
   first_order_promo: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Hai €5 di benvenuto</h1>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Hai €5 di benvenuto</h1>
       <p style="margin:0 0 16px;line-height:1.6">Usali al primo ordine: lo sconto si applica da solo alla cassa.</p>
       <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Vai allo shopping')}</p>
     `;
@@ -318,7 +386,7 @@ const TEMPLATE_CICLO_DI_VITA = {
 
   reengagement_14d: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Cosa succede in citta</h1>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Cosa succede in citta</h1>
       <p style="margin:0 0 16px;line-height:1.6">Eventi, novita dai negozi e gli sconti del momento.</p>
       <p style="margin:24px 0">${btn(`${appUrl()}/events`, 'Vedi gli eventi')}</p>
     `;
@@ -331,7 +399,7 @@ const TEMPLATE_CICLO_DI_VITA = {
 
   winback_60d: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Ci manchi</h1>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ci manchi</h1>
       <p style="margin:0 0 16px;line-height:1.6">Non ti vediamo da un po'. Usa il codice <strong>RITORNO10</strong> per il -10% sul prossimo ordine.</p>
       <p style="margin:24px 0">${btn(`${appUrl()}/search`, 'Torna a fare la spesa')}</p>
     `;
@@ -379,7 +447,7 @@ const TEMPLATE_CICLO_DI_VITA = {
 
   abandoned_cart_4h: (): EmailPronta => {
     const body = `
-      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#0f172a">Il tuo carrello ti aspetta</h1>
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo carrello ti aspetta</h1>
       <p style="margin:0 0 16px;line-height:1.6">Hai lasciato qualcosa nel carrello: e' ancora li'.</p>
       <p style="margin:24px 0">${btn(`${appUrl()}/cart`, 'Vai al carrello')}</p>
     `;
