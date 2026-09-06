@@ -10,7 +10,7 @@ import { ApiErrors } from '@/lib/api/responses';
 import { verificaImmagineBase64 } from '@/lib/immagini-base64';
 import { env } from '@/lib/env';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
-import { runMessage, AiCallError } from '@/lib/ai/run';
+import { runMessage, mapAiError } from '@/lib/ai/run';
 import type { CategoryRow } from '@/lib/products/aiPatch';
 import {
   CATEGORY_SLUGS,
@@ -235,11 +235,12 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
     products = result.toolInput.products.slice(0, MAX_PRODUCTS);
   } catch (err) {
     if (err instanceof AiConfigError) return ApiErrors.unavailable('API key Anthropic non valida.');
-    const status = err instanceof AiCallError ? err.status : undefined;
-    logger.error('vision-multi: errore Anthropic', { feature: 'vision-extract-multi', status });
-    if (status === 401) return ApiErrors.unavailable('API key Anthropic non valida.');
-    if (status === 429) return ApiErrors.rateLimited(60);
-    return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
+    // 6/9/2026 — LA MAPPA SCRITTA A MANO NON CONOSCEVA IL FRENO DI SPESA.
+    //
+    // A budget del giorno finito questa rotta rispondeva «Errore nel servizio
+    // AI. Riprova.»: invitava a ritentare una cosa che non poteva riuscire fino
+    // a domani. mapAiError e' l'unico posto dove i casi si distinguono.
+    return mapAiError(err, 'vision-extract-multi');
   }
 
   // Categorie caricate una volta: risoluzione in memoria per ogni prodotto.

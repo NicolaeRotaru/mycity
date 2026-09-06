@@ -156,7 +156,7 @@ export async function controllaTettoSpesaAi(feature: string): Promise<void> {
   const spesiCents = await spesaDiOggiCents();
   if (spesiCents >= euroInCents(limitEur)) {
     logger.warn('ai_budget_exceeded', { feature, spentEur: spesiCents / 100, limitEur });
-    throw new AiCallError(feature, 503);
+    throw AiCallError.perTettoSpesa(feature);
   }
 }
 
@@ -172,9 +172,27 @@ export class AiCallError extends Error {
     readonly cause?: unknown,
     /** Secondi di attesa dichiarati da Anthropic, quando l'header c'è. */
     readonly retryAfterSec?: number,
+    /**
+     * 6/9/2026 — DUE COSE DIVERSE ARRIVAVANO CON LO STESSO 503.
+     *
+     * Il freno di spesa nostro e un guasto di Anthropic usano lo stesso codice.
+     * `mapAiError` non poteva distinguerli, e traduceva OGNI 503 in «Budget AI
+     * giornaliero esaurito. Riprova domani.»: un negoziante che caricava il
+     * catalogo alle dieci di mattina, durante un guasto di due minuti del
+     * fornitore, leggeva «riprova domani» e smetteva per la giornata.
+     *
+     * Lo status resta 503 (le rotte che lo guardano non cambiano
+     * comportamento): quello che si aggiunge è il motivo, cioè chi ha frenato.
+     */
+    readonly motivo?: 'tetto_spesa',
   ) {
     super(`AI call failed (${feature}, status=${status ?? 'n/a'})`);
     this.name = 'AiCallError';
+  }
+
+  /** Il freno di spesa giornaliero: nostro, non del fornitore. */
+  static perTettoSpesa(feature: string): AiCallError {
+    return new AiCallError(feature, 503, undefined, undefined, 'tetto_spesa');
   }
 }
 
@@ -258,7 +276,14 @@ export function mapAiError(err: unknown, feature: string): NextResponse {
       err instanceof AiCallError ? err.retryAfterSec : extractRetryAfter(err);
     return ApiErrors.rateLimited((dichiarata ?? 60) + Math.floor(Math.random() * 5));
   }
-  if (status === 503) return ApiErrors.unavailable('Budget AI giornaliero esaurito. Riprova domani.');
+  // Il freno di spesa è nostro e dura fino a mezzanotte: solo qui ha senso dire
+  // «domani». Un 503 che arriva da Anthropic dura tipicamente qualche minuto, e
+  // mandare a casa il venditore per un guasto di due minuti gli costa la
+  // giornata di lavoro.
+  if (err instanceof AiCallError && err.motivo === 'tetto_spesa') {
+    return ApiErrors.unavailable('Budget AI giornaliero esaurito. Riprova domani.');
+  }
+  if (status === 503) return ApiErrors.unavailable('Servizio AI non disponibile in questo momento. Riprova fra qualche minuto.');
   return ApiErrors.badGateway('Errore nel servizio AI. Riprova.');
 }
 

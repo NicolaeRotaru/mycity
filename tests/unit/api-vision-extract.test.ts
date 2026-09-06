@@ -42,6 +42,9 @@ import { AiConfigError } from '@/lib/ai/client';
 // intestazioni vere, minime.
 const JPEG_VERO = '/9j/4AAQSkZJRgABAQAAAQABAAA=';
 const PNG_VERO = 'iVBORw0KGgoAAAANSUhEUg==';
+// GIF 1x1 vera: intestazione GIF89a. Serve a provare che il formato viene
+// rifiutato con parole che lo nominano, non con un errore che parla d'altro.
+const GIF_VERA = 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 const GOOD_TOOL = {
   name: 'Sedia',
@@ -200,5 +203,116 @@ describe('POST /api/vision/extract-product', () => {
     }
     const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
     expect(res.status).toBe(429);
+  });
+});
+
+/**
+ * 6/9/2026 — I TRE DIFETTI CHIUSI QUI.
+ *
+ * ① image_urls accettava foto da qualunque sito e le faceva leggere al modello
+ *    col nostro conto: l'unico controllo era «comincia per http».
+ * ② lo schema prometteva le GIF e il controllo dei byte le rifiutava con un
+ *    messaggio che non nominava il formato.
+ * ③ a budget del giorno finito la rotta diceva «Riprova», e a guasto del
+ *    fornitore avrebbe detto «riprova domani».
+ */
+describe('le foto da indirizzo: solo quelle che ospitiamo noi', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetRateLimitBuckets();
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://progetto.supabase.co');
+    runMessageMock.mockResolvedValue({ toolInput: GOOD_TOOL });
+  });
+
+  it('rifiuta (400) un indirizzo di un host qualunque', async () => {
+    const res = await POST(makeReq({ image_urls: ['https://attaccante.example/foto.png'] }));
+    expect(res.status, 'una foto di chiunque entrava e la pagavamo noi').toBe(400);
+    const json = await res.json();
+    expect(json.error.message).toMatch(/caricate su MyCity/i);
+  });
+
+  it('il modello non riceve l indirizzo dell attaccante', async () => {
+    await POST(makeReq({ image_urls: ['https://attaccante.example/foto.png'] }));
+    expect(
+      JSON.stringify(runMessageMock.mock.calls),
+      'la chiamata a pagamento e partita con dentro l indirizzo di chi ci attacca',
+    ).not.toContain('attaccante.example');
+  });
+
+  it('le foto del nostro archivio passano ancora', async () => {
+    const res = await POST(makeReq({ image_urls: ['https://progetto.supabase.co/storage/v1/object/public/p/1.jpg'] }));
+    expect(res.status).toBe(200);
+    const content = runMessageMock.mock.calls[0][0].messages[0].content;
+    expect(content.filter((b: { type: string }) => b.type === 'image')).toHaveLength(1);
+  });
+});
+
+describe('il formato delle foto: si promette solo quello che si accetta', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetRateLimitBuckets();
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+    runMessageMock.mockResolvedValue({ toolInput: GOOD_TOOL });
+  });
+
+  it('una GIF dichiarata viene rifiutata con un messaggio che nomina i formati veri', async () => {
+    const res = await POST(makeReq({ image_base64: GIF_VERA, media_type: 'image/gif' }));
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(
+      json.error.message,
+      'chi carica una GIF legge un errore che non parla del formato e riprova con la stessa foto',
+    ).toMatch(/image\/jpeg, image\/png o image\/webp/);
+    expect(json.error.message).not.toMatch(/image\/gif/);
+  });
+});
+
+describe('budget finito e fornitore giu non si dicono con la stessa frase', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetRateLimitBuckets();
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+  });
+
+  it('a budget finito dice «riprova domani» (prima diceva solo «Riprova»)', async () => {
+    runMessageMock.mockRejectedValue(AiCallError.perTettoSpesa('vision-extract'));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
+    expect(res.status).toBe(503);
+    const json = await res.json();
+    expect(json.error.message).toMatch(/domani/i);
+  });
+
+  it('a fornitore giu NON manda a casa il negoziante fino a domani', async () => {
+    runMessageMock.mockRejectedValue(new AiCallError('vision-extract', 503));
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
+    expect(res.status).toBe(503);
+    const json = await res.json();
+    expect(
+      json.error.message,
+      'un guasto di due minuti del fornitore fermava il negoziante per tutta la giornata',
+    ).not.toMatch(/domani/i);
+  });
+});
+
+describe('la verifica sul web tratta le pagine trovate come dati, non come ordini', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetRateLimitBuckets();
+    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-test');
+  });
+
+  it('il secondo giro con web_search porta la regola di sicurezza nel system', async () => {
+    runMessageMock
+      .mockResolvedValueOnce({ toolInput: { ...GOOD_TOOL, confidence: 0.3 } })
+      .mockResolvedValueOnce({ toolInput: { ...GOOD_TOOL, confidence: 0.9 } });
+    const res = await POST(makeReq({ image_base64: JPEG_VERO, media_type: 'image/jpeg' }));
+    expect(res.status).toBe(200);
+    expect(runMessageMock).toHaveBeenCalledTimes(2);
+    const verifica = runMessageMock.mock.calls[1][0];
+    expect(
+      String(verifica.system ?? ''),
+      'la pagina web che decide un prezzo entrava senza dire al modello che e un dato',
+    ).toMatch(/REGOLA DI SICUREZZA/);
   });
 });

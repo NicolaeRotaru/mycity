@@ -82,6 +82,11 @@ concurrency:
 # Qui serve solo leggere.
 permissions:
   contents: read
+  # 6/9/2026 — Serve per CHIEDERE a GitHub com'e' andata la CI su un commit,
+  # quando il rilascio parte a mano (passo «A mano si rilascia solo main con la
+  # CI verde»). E' sola lettura sulle esecuzioni: non avvia niente, non scrive
+  # niente.
+  actions: read
 
 jobs:
   vercel:
@@ -153,6 +158,69 @@ jobs:
           # quello non l'ha provato nessuno.
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
+      # 6/9/2026 — IL PULSANTE A MANO PUBBLICAVA QUALUNQUE RAMO.
+      #
+      # Il lavoro parte anche da `workflow_dispatch`, e in quel caso la
+      # condizione del lavoro qui sopra e' vera senza che nessuna CI abbia detto
+      # niente: `github.event.workflow_run` non esiste proprio. Il checkout
+      # allora ripiega su `github.sha`, cioe' la punta del ramo scelto nel menu'
+      # di GitHub — che puo' essere un ramo di lavoro mai unito e mai provato.
+      # In cima questo file promette di rilasciare «SOLO quando i controlli di
+      # main sono passati»: la strada a mano lo smentiva.
+      #
+      # Adesso, quando si parte a mano, si chiede a GitHub com'e' finita la CI
+      # su QUEL commit. Passano solo due cose insieme: il ramo e' `main` e la CI
+      # su quel commit e' «success». Il controllo sta PRIMA delle migrazioni,
+      # che sono il primo passo a toccare la produzione.
+      #
+      # Non e' una condizione `if:` sul lavoro, ed e' voluto: un lavoro saltato
+      # esce VERDE e vuoto — la spunta bugiarda che questo file combatte da tre
+      # settimane. Un rifiuto deve vedersi, quindi qui si finisce ROSSI e si
+      # scrive perche'.
+      - name: A mano si rilascia solo main con la CI verde
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          RAMO: ${{ github.ref }}
+          COMMIT: ${{ github.sha }}
+          DEPOSITO: ${{ github.repository }}
+          CHIAVE_GITHUB: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ "$RAMO" != "refs/heads/main" ]; then
+            echo "::error::Rilascio a mano su $RAMO: da qui si pubblica solo main, e non ho pubblicato niente."
+            {
+              echo "## ⛔ Non ho rilasciato: il ramo scelto non e' \`main\`"
+              echo ""
+              echo "Hai avviato il rilascio a mano su \`$RAMO\`, e in produzione va solo il codice unito in \`main\` e promosso dai controlli."
+              echo "Se quel lavoro deve andare online: uniscilo in \`main\` e ci pensa il rilascio automatico. Se ti serve rilasciare adesso, riavvia questo lavoro scegliendo \`main\`."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          # L'esito lo dice GitHub, non chi preme il pulsante. Se la risposta non
+          # arriva o non si capisce, l'esito resta «nessuna» e il lavoro si ferma:
+          # meglio un rilascio mancato che uno al buio.
+          RISPOSTA="$(curl -sS --max-time 30 \
+            -H "Authorization: Bearer $CHIAVE_GITHUB" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$DEPOSITO/actions/runs?head_sha=$COMMIT&per_page=100" || true)"
+          ESITO="$(printf '%s' "$RISPOSTA" | jq -r '[.workflow_runs[]? | select(.name == "CI")] | sort_by(.run_started_at) | last | .conclusion // "nessuna"' 2>/dev/null || echo "nessuna")"
+
+          if [ "$ESITO" != "success" ]; then
+            echo "::error::Sul commit $COMMIT la CI non e' verde (esito: $ESITO): non rilascio."
+            {
+              echo "## ⛔ Non ho rilasciato: su questo commit la CI non e' verde"
+              echo ""
+              echo "Commit: \`$COMMIT\` · esito dei controlli: **$ESITO**."
+              echo ""
+              echo "«nessuna» vuol dire che su quel commit non ho trovato nessuna esecuzione dei controlli, o che sta ancora girando. Aspetta che la CI finisca verde: quando finisce, il rilascio parte da solo."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "Controlli verdi sul commit $COMMIT: vado avanti."
+
       # La stessa versione su cui gira la produzione (progetto Vercel: 24.x,
       # `engines.node` in package.json: 24.x). Qui c'era 20: `vercel build`
       # costruisce con il Node del runner, quindi il pacchetto che finiva online
@@ -201,7 +269,20 @@ jobs:
           #
           # Adesso si applica e si registra solo cio' che manca. Lo stesso
           # script gira due volte di fila nella CI: l'idempotenza si prova.
-          bash scripts/applica-migrazioni-mancanti.sh
+          #
+          # 6/9/2026 — CHI TORNA INDIETRO DEVE SAPERE DI QUANTO E' AVANTI IL
+          # DATABASE. Qui si tiene il conto di cosa e' stato applicato: il passo
+          # «Torna indietro» lo scrive nel riepilogo, perche' `vercel rollback`
+          # riporta il codice e lo schema resta quello nuovo. `pipefail` c'e'
+          # perche' senza, il `tee` in coda si mangerebbe il fallimento di psql
+          # e le migrazioni sembrerebbero riuscite.
+          set -o pipefail
+          DIARIO="$(mktemp)"
+          bash scripts/applica-migrazioni-mancanti.sh | tee "$DIARIO"
+          QUANTE="$(grep -c '^▶ applico ' "$DIARIO" || true)"
+          ELENCO="$(grep '^▶ applico ' "$DIARIO" | sed 's/^▶ applico //' | tr '\n' ' ' || true)"
+          echo "quante=$QUANTE" >> "$GITHUB_OUTPUT"
+          echo "elenco=$ELENCO" >> "$GITHUB_OUTPUT"
 
       # Il cancello: se dopo le migrazioni il database e' ancora diverso da
       # quello che il codice si aspetta, non si pubblica.
@@ -341,8 +422,41 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           TOKEN: ${{ secrets.VERCEL_TOKEN }}
           PRECEDENTE: ${{ steps.rilascio.outputs.precedente }}
+          # 6/9/2026 — Quante migrazioni ha applicato QUESTO giro, e quali.
+          MIGRAZIONI: ${{ steps.migrazioni.outputs.quante }}
+          MIGRAZIONI_ELENCO: ${{ steps.migrazioni.outputs.elenco }}
         run: |
           set -euo pipefail
+
+          # 6/9/2026 — IL RITORNO INDIETRO RIPORTA IL CODICE, NON IL DATABASE.
+          #
+          # Le migrazioni si applicano PRIMA di pubblicare (passo «Applica le
+          # migrazioni…»), e `vercel rollback` rimette online il codice di prima:
+          # lo schema resta quello nuovo. Finche' una migrazione aggiunge e
+          # basta non succede niente. Il giorno che ne arriva una che TOGLIE una
+          # colonna — nel deposito ce ne sono gia' (105 e 134) — il codice
+          # rimesso online chiede una colonna che non esiste piu', e in
+          # PostgreSQL quella non viene ignorata: fa fallire l'istruzione
+          # intera. E' il guasto del 21 agosto, prodotto dal ritorno indietro.
+          #
+          # Qui quel buco NON si tappa: si smette di nasconderlo. Il riepilogo
+          # diceva «sono tornata al rilascio di prima» e basta, e chi lo leggeva
+          # credeva che la produzione fosse tornata com'era.
+          nota_database() {
+            QUANTE="${MIGRAZIONI:-}"
+            echo ""
+            if [ -z "$QUANTE" ]; then
+              echo "**Il database:** da qui non ho applicato nessuna migrazione in questo giro, quindi non l'ho toccato io."
+            elif [ "$QUANTE" = "0" ]; then
+              echo "**Il database:** non c'era nessuna migrazione nuova da applicare, lo schema e' lo stesso di prima."
+            else
+              echo "**Attenzione: il database e' avanti di $QUANTE migrazioni rispetto al sito che e' online adesso.**"
+              echo "Applicate prima di pubblicare: ${MIGRAZIONI_ELENCO:-non so quali}."
+              echo "Il ritorno indietro rimette il CODICE di prima, non lo schema. Se una di quelle migrazioni TOGLIE qualcosa (DROP COLUMN, DROP TABLE, RENAME), il sito online puo' chiedere una colonna che non c'e' piu' — e il sito resta rotto anche se qui sopra e' scritto che si e' tornati indietro."
+              echo "Prima di considerare chiusa la cosa: apri quelle migrazioni e guarda se contengono DROP o RENAME."
+            fi
+          }
+
           if [ -z "$PRECEDENTE" ]; then
             echo "::error::Il sito appena pubblicato non risponde e non so a quale rilascio tornare: il ritorno indietro va fatto a mano su Vercel."
             {
@@ -350,6 +464,7 @@ jobs:
               echo ""
               echo "Non sapevo a quale rilascio tornare, quindi non ho annullato niente."
               echo "Apri Vercel → il progetto → i rilasci, e rimetti in produzione quello di prima."
+              nota_database
             } >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
@@ -364,6 +479,7 @@ jobs:
             echo ""
             echo "Il sito appena pubblicato non ha superato la prova di fumo: sono tornata al rilascio $PRECEDENTE."
             echo "Guarda il passo «Prova di fumo» qui sopra per sapere quale dei tre controlli e' caduto."
+            nota_database
           } >> "$GITHUB_STEP_SUMMARY"
 
       # 31/8/2026 (collaudo del rilascio, difetto ③) — VENTIDUE ESECUZIONI SU VENTIDUE VERDI, E NESSUNA

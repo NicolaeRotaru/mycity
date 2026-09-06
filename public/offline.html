@@ -10,7 +10,7 @@
     h1 { font-size: 1.8rem; margin: 0 0 0.5rem; color: #C0492C; }
     p { color: #57534E; line-height: 1.5; }
     .icon { font-size: 4rem; margin-bottom: 1rem; }
-    button { background: #C0492C; color: white; border: 0; padding: 0.75rem 1.5rem; border-radius: 999px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 1rem; }
+    .bottone { display: inline-block; background: #C0492C; color: white; border: 0; padding: 0.75rem 1.5rem; border-radius: 999px; font-size: 1rem; font-weight: 600; text-decoration: none; cursor: pointer; margin-top: 1rem; }
   </style>
 </head>
 <body>
@@ -18,7 +18,13 @@
     <div class="icon">🌐</div>
     <h1>Sei offline</h1>
     <p>Sembra che la connessione sia caduta. Quando torni online, riproveremo a caricare la pagina.</p>
-    <button onclick="location.reload()">Riprova</button>
+    <!-- Un link, non un pulsante con JavaScript scritto nell'attributo: la
+         regola di sicurezza del sito (script-src con nonce + strict-dynamic,
+         costruita in middleware.ts) rifiuta i gestori in linea, e qui il nonce
+         non c'e' perche' questa pagina e' un file statico. L'href vuoto rimanda
+         alla stessa pagina che l'utente stava aprendo, quindi riprova davvero
+         quella, come faceva location.reload(). -->
+    <a class="bottone" href="">Riprova</a>
   </div>
 </body>
 </html>

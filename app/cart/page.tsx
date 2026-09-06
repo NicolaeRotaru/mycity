@@ -7,8 +7,9 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { CartItem, getCart, updateQuantity, removeFromCart, cartTotal, cartCount } from '@/lib/cart';
-import { formatPrice } from '@/lib/format';
+import { formatPrice, pluralize } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
@@ -205,7 +206,10 @@ export default function CartPage() {
   if (vista.mostraScheletro) {
     return (
       <div className="container mx-auto px-4 sm:px-6 py-8" aria-busy="true">
-        <div className="h-8 w-48 skeleton rounded-lg mb-6" />
+        {/* Il titolo non aspetta i dati: e' gia' noto, e questa e' l'unica schermata che il
+            server manda. Con il rettangolo grigio al suo posto la pagina arrivava senza h1 —
+            senza titolo per Google e per chi naviga il sito per intestazioni. */}
+        <h1 className="font-serif text-2xl font-bold text-ink-900 mb-6">Il tuo carrello</h1>
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-3">
             {[0, 1, 2].map((i) => (
@@ -222,6 +226,9 @@ export default function CartPage() {
   if (vista.mostraVuoto) {
     return (
       <div className="container mx-auto py-12 max-w-2xl">
+        {/* Anche il carrello vuoto ha il suo titolo: qui il disegno non lo mostra, ma chi
+            naviga per intestazioni deve trovarlo lo stesso. */}
+        <h1 className="sr-only">Il tuo carrello</h1>
         <EmptyState
           icon={ShoppingCart}
           title="Il tuo carrello è vuoto"
@@ -300,7 +307,7 @@ export default function CartPage() {
         {/* COLONNA SX: prodotti */}
         <div className="lg:col-span-2 space-y-4">
           <h1 className="font-serif text-2xl font-bold text-ink-900">
-            Il tuo carrello <span className="text-ink-400 font-normal font-sans text-lg">({count} articoli)</span>
+            Il tuo carrello <span className="text-ink-500 font-normal font-sans text-lg">({pluralize(count, 'articolo', 'articoli')})</span>
           </h1>
 
           {/* Avviso multi-negozio: ogni negozio consegna separatamente */}
@@ -308,7 +315,7 @@ export default function CartPage() {
             <div className="flex items-center gap-2 rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 text-sm text-ink-600">
               <Package size={16} className="text-ink-500 shrink-0" aria-hidden />
               <span>
-                Ordine da <strong className="text-ink-900">{groups.length} negozi</strong> · ogni negozio consegna separatamente
+                Ordine da <strong className="text-ink-900">{pluralize(groups.length, 'negozio', 'negozi')}</strong> · ogni negozio consegna separatamente
               </span>
             </div>
           )}
@@ -337,7 +344,7 @@ export default function CartPage() {
                         alt={item.name}
                         fill
                         sizes="96px"
-                        unoptimized
+                        loader={caricatoreFotoRemote}
                         className="object-cover"
                       />
                     </div>
@@ -423,7 +430,7 @@ export default function CartPage() {
                             >+</button>
                           </div>
                           {massimo(item.id, item.variantId) != null && item.quantity >= (massimo(item.id, item.variantId) as number) && (
-                            <p className="mt-1 text-[11px] text-ink-500">
+                            <p className="mt-1 text-xs text-ink-500">
                               {(massimo(item.id, item.variantId) as number) === 1
                                 ? 'Ne resta solo uno'
                                 : `Disponibili ${massimo(item.id, item.variantId)}`}
@@ -434,7 +441,11 @@ export default function CartPage() {
                             type="button"
                             onClick={() => removeFromCart(item.id, item.variantId)}
                             aria-label={`Rimuovi ${item.name} dal carrello`}
-                            className="text-ink-500 hover:text-secondary-600 text-sm ml-2 flex items-center gap-1"
+                            /* Il bersaglio era alto quanto la riga di testo (20px) e attaccato al «−»:
+                               col pollice si toglieva il prodotto invece di scalare la quantita'. Il
+                               padding lo porta a 36px, il margine negativo tiene la riga alta com'era, e
+                               ml-1+pl-1 lascia il testo dov'e' lasciando 12px fra i due bersagli. */
+                            className="text-ink-500 hover:text-secondary-600 text-sm ml-1 pl-1 pr-2 py-2 -my-2 flex items-center gap-1"
                           >
                             <Trash2 size={15} aria-hidden /> Rimuovi
                           </button>
@@ -457,7 +468,7 @@ export default function CartPage() {
           <div className="bg-white border border-cream-300 rounded-xl p-6 space-y-4 shadow-card">
             <h2 className="font-serif text-lg font-bold text-ink-900 flex items-center justify-between">
               Riepilogo ordine
-              <span className="text-xs font-normal font-sans text-ink-400">{count} articoli</span>
+              <span className="text-xs font-normal font-sans text-ink-400">{pluralize(count, 'articolo', 'articoli')}</span>
             </h2>
 
             <div className="space-y-2 text-sm">
@@ -475,9 +486,9 @@ export default function CartPage() {
                   {/* 107 — La nota compariva solo in certi casi. La spedizione
                       al checkout si calcola per negozio e sulla distanza: è una
                       stima SEMPRE, e dirlo sempre costa zero. */}
-                  <span className="block text-2xs text-ink-500 font-normal">stima · potrebbe variare al checkout</span>
+                  <span className="block text-xs text-ink-500 font-normal">stima · potrebbe variare al checkout</span>
                   {detto.nota && (
-                    <span className="block text-2xs text-ink-500 font-normal">{detto.nota}</span>
+                    <span className="block text-xs text-ink-500 font-normal">{detto.nota}</span>
                   )}
                 </span>
                 <span className={`font-semibold ${detto.gratis ? 'text-olive-700' : 'text-ink-900'}`}>
@@ -490,8 +501,8 @@ export default function CartPage() {
               <span className="text-ink-600">
                 Consegna MyCity
                 {groups.length > 1 && (
-                  <span className="block text-2xs text-ink-500 font-normal">
-                    {groups.length} negozi × {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
+                  <span className="block text-xs text-ink-500 font-normal">
+                    {pluralize(groups.length, 'negozio', 'negozi')} × {formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)}
                   </span>
                 )}
               </span>
@@ -508,7 +519,7 @@ export default function CartPage() {
               <span className="font-bold">Totale</span>
               <div className="text-right">
                 <div className="font-serif text-2xl font-extrabold text-primary-800">{formatPrice(finalTotal)}</div>
-                <div className="text-[10px] text-ink-400 uppercase">IVA inclusa</div>
+                <div className="text-xs tracking-label text-ink-400 uppercase">IVA inclusa</div>
               </div>
             </div>
 
@@ -566,7 +577,7 @@ export default function CartPage() {
         aria-label="Totale e pagamento"
       >
         <div className="leading-tight">
-          <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
+          <div className="text-xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
         </div>
         <Link

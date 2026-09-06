@@ -166,11 +166,12 @@ describe('le foto che non passano dal caricatore', () => {
     { encoding: 'utf8' },
   ).trim().split('\n').filter(Boolean).sort();
 
-  it('sono quattro, e sono queste: il numero scende e non risale', () => {
-    // ⚪ Debito dichiarato, non un verde: questi quattro file appartengono a un altro lotto e
-    // nessuno di questa squadra può toccarli oggi. Erano DICIASSETTE il 27/8 mattina.
+  it('sono tre, e sono questi: il numero scende e non risale', () => {
+    // ⚪ Debito dichiarato, non un verde: questi tre file appartengono a un altro lotto e
+    // nessuno di questa squadra può toccarli oggi. Erano DICIASSETTE il 27/8 mattina e
+    // QUATTRO fino al 6/9: il carrello è uscito dalla lista, la foto del carrello adesso
+    // passa dal caricatore e il suo sizes="96px" è tornato vivo.
     expect(senzaCaricatore).toEqual([
-      'app/cart/page.tsx',
       'app/orders/[id]/page.tsx',
       'app/seller/products/page.tsx',
       'app/shared-cart/page.tsx',
