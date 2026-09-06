@@ -20,6 +20,47 @@ import { Banknote, CreditCard, Info, Store } from 'lucide-react';
 
 type PaymentMethod = 'cod' | 'card';
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * L'INTENZIONE DICHIARATA SULLA SCHEDA PRODOTTO ARRIVA FINO ALLA CASSA.
+ *
+ * 6/9/2026 — «COMPRA ORA · PAGHI ALLA CONSEGNA» APRIVA LA CASSA CON LA CARTA.
+ *
+ * Sulla scheda prodotto c'e' un pulsante che promette una cosa precisa nel suo
+ * testo: paghi alla consegna. Chi lo preme lo preme apposta, spesso proprio
+ * per non mettere la carta. In cassa pero' il metodo partiva sempre da
+ * «carta», perche' e' il valore di partenza quando il pagamento online e'
+ * acceso. La promessa del pulsante e la casella accesa dicevano due cose
+ * diverse, e chi non se ne accorgeva pagava online senza volerlo.
+ *
+ * L'intenzione viaggia nella memoria della scheda del browser
+ * (`sessionStorage`): si scrive quando si preme il pulsante, si legge una
+ * volta sola in cassa e si cancella subito. Non e' una preferenza salvata:
+ * dura il tempo di quel viaggio. Chi arriva in cassa dal carrello, o
+ * ricaricando la pagina, ritrova il valore di partenza di sempre.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+const MEMORIA_METODO_SCELTO = 'mc_metodo_scelto';
+
+/** Scrive l'intenzione prima di mandare la persona in cassa. */
+export function ricordaMetodoScelto(metodo: PaymentMethod) {
+  try {
+    window.sessionStorage.setItem(MEMORIA_METODO_SCELTO, metodo);
+  } catch {
+    // Navigazione privata o memoria piena: si perde l'intenzione, non l'ordine.
+  }
+}
+
+/** Legge l'intenzione UNA volta e la cancella: vale per quel viaggio soltanto. */
+export function raccogliMetodoScelto(): PaymentMethod | null {
+  try {
+    const scelto = window.sessionStorage.getItem(MEMORIA_METODO_SCELTO);
+    window.sessionStorage.removeItem(MEMORIA_METODO_SCELTO);
+    return scelto === 'cod' || scelto === 'card' ? scelto : null;
+  } catch {
+    return null;
+  }
+}
+
 type Props = {
   value: PaymentMethod;
   onChange: (method: PaymentMethod) => void;

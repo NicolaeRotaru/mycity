@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { Store } from 'lucide-react';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 interface Props {
   logoUrl?: string | null;
@@ -31,11 +32,16 @@ const StoreAvatar = ({ logoUrl, storeName, size = 'md', className = '' }: Props)
     const px = SIZE_PX[size];
     return (
       <div className={`relative ${w} ${h} rounded-full overflow-hidden bg-white shrink-0 ${className}`}>
+        {/* L'indirizzo arrivava grezzo — il file intero caricato dal negozio — e a
+            ridimensionarlo era l'ottimizzatore di Vercel, che lo scarica, lo ricodifica per
+            ogni misura e lo mette in conto. Col caricatore il taglio lo fa il CDN di
+            Supabase, che quella foto ce l'ha già. */}
         <Image
           src={logoUrl}
           alt={storeName ?? 'logo negozio'}
           fill
           sizes={`${px}px`}
+          loader={caricatoreFotoRemote}
           className="object-cover"
         />
       </div>

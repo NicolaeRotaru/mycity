@@ -1,7 +1,7 @@
 'use client';
 
 import { shippingForEuro, dettoDellaSpedizione } from '@/lib/shipping';
-import { RIQUADRO_LO_SAPEVI, frasePagamento } from '@/lib/promesse-pubbliche';
+import { RIQUADRO_LO_SAPEVI, frasePagamento, promessaSpedizione } from '@/lib/promesse-pubbliche';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -23,6 +23,8 @@ import { toast } from 'sonner';
 import { fondoDellaBarra, corsieSotto } from '@/lib/ui/barra-in-fondo';
 import { chiaveDellaRiga, merceCheTengoIo, type TentativoAperto } from '@/lib/ordini/merce-che-tengo-io';
 import { seguiAltezza, osservatoreDelBrowser } from '@/lib/altezza-banner';
+import { EXPRESS_ETA_LABEL } from '@/lib/delivery';
+import { expressSiPuo, giornoDiPartenza } from '@/lib/quando-arriva';
 
 /**
  * 3/9/2026 — DAL TELEFONO, IL PULSANTE CHE PORTA I SOLDI ERA L'ULTIMA COSA DELLA PAGINA.
@@ -44,6 +46,57 @@ const CORSIA_DELLA_BARRA = '--altezza-barra-acquisto';
 /** Iniziali del negozio per il mini-logo: "Salumeria Verdi" → "SV". */
 const storeInitials = (name: string) =>
   name.trim().split(/\s+/).map((w) => w[0] ?? '').slice(0, 2).join('').toUpperCase();
+
+/**
+ * 6/9/2026 — IL CARRELLO VUOTO PROMETTEVA «SPEDIZIONE GRATIS SOPRA €30» E TACEVA I 3 € DI CONSEGNA.
+ *
+ * La frase era battuta a mano, con la soglia dentro. Due guai in uno.
+ *
+ * Il primo è la verità: su ogni ordine portato a casa si pagano comunque 3 € di «Consegna MyCity»
+ * per negozio, anche sopra i 30. È il costo che chi compra scopriva soltanto dopo aver riempito il
+ * carrello — cioè dopo aver scelto — ed è il difetto per cui `promessaSpedizione` è stata scritta:
+ * la scheda prodotto, il distintivo di catalogo e la barra «ti manca poco» le parole le chiedono
+ * già a lei. Questa riga era rimasta l'ultima a scriversele da sola.
+ *
+ * Il secondo è la durata: la soglia vive in `FREE_SHIPPING_THRESHOLD` e la consegna in
+ * `PLATFORM_DELIVERY_FEE_CENTS`. Con i numeri ricopiati qui dentro, il giorno che uno dei due
+ * cambia questa frase resta indietro da sola e nessuno se ne accorge.
+ *
+ * Adesso tutti e due li dice `promessaSpedizione()`: su un carrello vuoto `mancano` È la soglia, e
+ * `costoConsegna` è la cifra che la cassa addebita davvero. Portare la consegna a zero fa sparire
+ * la coda da sé; alzarla la aggiorna qui senza riscrivere niente.
+ */
+function descrizioneDelCarrelloVuoto(): string {
+  const spedizione = promessaSpedizione(0);
+  const consegna =
+    spedizione.costoConsegna > 0
+      ? `, più ${formatPrice(spedizione.costoConsegna)} di consegna per negozio`
+      : '';
+  return `Scopri i prodotti dei negozi della tua città. Spedizione gratis sopra ${formatPrice(spedizione.mancano)}${consegna}.`;
+}
+
+/**
+ * 6/9/2026 — ALLE UNDICI DI SERA IL CARRELLO DICEVA «CONSEGNA IN 30-60 MIN». LA CASSA DICEVA DOMANI.
+ *
+ * Le due righe di disponibilità («Disponibile», «Ne restano solo N») chiudevano sempre con la
+ * stessa coda, a qualunque ora, perché il numero era scritto lì dentro a mano. Ma il rider non c'è
+ * di notte: la cassa offre «Adesso» solo fra le 8 e le 21 (`expressSiPuo`), e passate le 20 parte
+ * già da domani (`giornoDiPartenza`). Alle 22:00 la persona leggeva mezz'ora nel carrello e
+ * trovava domani mattina allo schermo dopo — la stessa sorpresa all'ultimo passo che sulla
+ * spedizione è già stata tolta.
+ *
+ * Qui non si decide niente di nuovo: si chiede alle due funzioni che la cassa usa davvero, e la
+ * mezz'ora viene da `EXPRESS_ETA_LABEL`, dove quel numero è stato deciso una volta sola.
+ *
+ * `null` = l'ora non è ancora stata letta (il primo disegno arriva dal server, dove non c'è un
+ * orologio del quale fidarsi): in quel caso la riga non promette nessun tempo, invece di
+ * inventarne uno.
+ */
+function quandoArrivaScrittoNelCarrello(ora: number | null): string | null {
+  if (ora === null) return null;
+  if (expressSiPuo(ora)) return `Consegna in ${EXPRESS_ETA_LABEL}`;
+  return giornoDiPartenza(ora) === 'today' ? 'Consegna in giornata' : 'Consegna domani';
+}
 
 export default function CartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
@@ -108,6 +161,24 @@ export default function CartPage() {
    * — e l'HTML che parte dal server — diceva «Il tuo carrello è vuoto» a chi ce l'ha pieno.
    */
   const [letto, setLetto] = useState(false);
+
+  /**
+   * Che ore sono, per chi sta guardando. Parte da `null` e non da `new Date()` per la stessa
+   * ragione di `letto` qui sopra: il primo disegno lo fa il server, e un'ora presa lì sarebbe
+   * quella del server, non quella di chi compra — l'HTML arriverebbe con una promessa e il browser
+   * la cambierebbe subito dopo.
+   *
+   * Si rilegge ogni minuto perché un carrello lasciato aperto attraversa le 21: senza il battito,
+   * alle 21:05 la pagina prometterebbe ancora mezz'ora solo perché l'ora era stata letta alle 20:59.
+   */
+  const [oraDiAdesso, setOraDiAdesso] = useState<number | null>(null);
+
+  useEffect(() => {
+    const leggiLOra = () => setOraDiAdesso(new Date().getHours());
+    leggiLOra();
+    const battito = setInterval(leggiLOra, 60_000);
+    return () => clearInterval(battito);
+  }, []);
 
   useEffect(() => {
     const refresh = () => {
@@ -320,7 +391,7 @@ export default function CartPage() {
         <EmptyState
           icon={ShoppingCart}
           title="Il tuo carrello è vuoto"
-          description="Scopri i prodotti dei negozi della tua città. Spedizione gratis sopra €30."
+          description={descrizioneDelCarrelloVuoto()}
           ctaLabel="Esplora i prodotti"
           ctaHref="/search"
           secondaryLabel="Vedi i negozi"
@@ -478,6 +549,7 @@ export default function CartPage() {
                           alzare la quantità, e non capiva perché. */}
                       {(() => {
                         const rimasti = massimo(item.id, item.variantId);
+                        const quando = quandoArrivaScrittoNelCarrello(oraDiAdesso);
                         if (rimasti === 0) {
                           return (
                             <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
@@ -498,13 +570,13 @@ export default function CartPage() {
                           return (
                             <p className="text-xs text-amber-700 font-semibold flex items-center gap-1">
                               <AlertCircle size={13} strokeWidth={2.5} aria-hidden />
-                              Ne restano solo {rimasti} · Consegna in 30-60 min
+                              Ne restano solo {rimasti}{quando ? ` · ${quando}` : ''}
                             </p>
                           );
                         }
                         return (
                           <p className="text-xs text-olive-600 font-semibold flex items-center gap-1">
-                            <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile · Consegna in 30-60 min
+                            <Check size={13} strokeWidth={2.5} aria-hidden /> Disponibile{quando ? ` · ${quando}` : ''}
                           </p>
                         );
                       })()}

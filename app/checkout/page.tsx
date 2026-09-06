@@ -29,7 +29,7 @@ import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicat
 import { StepCard } from '@/components/checkout/StepCard';
 import { ScheletroCassa } from '@/components/checkout/ScheletroCassa';
 import { ShippingAddressForm } from '@/components/checkout/ShippingAddressForm';
-import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector';
+import { PaymentMethodSelector, raccogliMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
 import { DeliverySlotPicker } from '@/components/checkout/DeliverySlotPicker';
 import {
   FASCE_DI_DOMANI,
@@ -47,7 +47,7 @@ import {
   giornoDaRimettere,
   metodoDaRimettere,
 } from '@/lib/bozza-checkout';
-import { OrderSummary } from '@/components/checkout/OrderSummary';
+import { OrderSummary, vaiAlPrimoBlocco } from '@/components/checkout/OrderSummary';
 import { CartGroupsList } from '@/components/checkout/CartGroupsList';
 import { CouponInput } from '@/components/checkout/CouponInput';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
@@ -537,6 +537,23 @@ export default function CheckoutPage() {
   const stripeAvailable = !!STRIPE_PUBLISHABLE_KEY;
   const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>(stripeAvailable ? 'card' : 'cod');
 
+  /*
+   * Chi e' arrivato qui da «Compra ora · paghi alla consegna» trova gia'
+   * scelto quello che il pulsante gli aveva promesso.
+   *
+   * Si legge dopo il primo disegno della pagina, non dentro `useState`: la
+   * memoria della scheda del browser sul server non esiste, e leggerla mentre
+   * si costruisce la pagina farebbe partire il sito con due versioni diverse
+   * della stessa schermata. `raccogliMetodoScelto` legge e cancella: vale una
+   * volta sola, per quel viaggio.
+   */
+  useEffect(() => {
+    const scelto = raccogliMetodoScelto();
+    if (!scelto) return;
+    if (scelto === 'card' && !stripeAvailable) return;
+    setPaymentMethod(scelto);
+  }, [stripeAvailable]);
+
   // #NNN — L'ORDINE PARTITO NON TORNA INDIETRO: si puo' ordinare due volte.
   //
   // Il blocco del pulsante era `placeOrders.isPending || payWithStripe.isPending`, e in React Query 5
@@ -979,6 +996,18 @@ export default function CheckoutPage() {
   // fotogramma, cioe' esattamente il genere di cosa che rileggendo non si vede.
   const isCheckingOut = checkoutChiuso(inPartenza, placeOrders, payWithStripe);
 
+  /*
+   * 6/9/2026 — PERCHE' L'ORDINE NON PUO' PARTIRE, IN UN POSTO SOLO.
+   *
+   * La stessa condizione era scritta due volte a mano: una nel riepilogo di
+   * fianco (desktop) e una nella barra in fondo (telefono). Due copie della
+   * stessa frase si separano al primo motivo di blocco che se ne aggiunge uno,
+   * e a separarsi sarebbe stato il pulsante del telefono — l'unico che si vede
+   * davvero quando si compra.
+   */
+  const ordineBloccato =
+    groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile;
+
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};
     if (!form.fullName.trim()) e.fullName = 'Inserisci nome e cognome';
@@ -1159,7 +1188,7 @@ export default function CheckoutPage() {
                 Qui lo si rilegge invece di fidarsi: la frase sul ritiro non deve
                 poter comparire quando il ritiro non si può fare. */}
             {RITIRO_IN_NEGOZIO_ATTIVO && pickupInStore ? (
-              <div className="flex items-center gap-2 rounded-xl border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-800">
+              <div className="flex items-center gap-2 rounded-lg border border-olive-200 bg-olive-50 px-4 py-3 text-sm text-olive-800">
                 <Store size={16} className="text-olive-700 shrink-0" aria-hidden /> Ritiro in negozio selezionato — nessun costo di consegna. Vai tu quando l&apos;ordine è pronto.
               </div>
             ) : (
@@ -1176,7 +1205,7 @@ export default function CheckoutPage() {
                 />
 
                 {/* Metodo + costo di consegna (invariato). */}
-                <div className="flex items-center justify-between rounded-xl border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
+                <div className="flex items-center justify-between rounded-lg border border-cream-300 bg-cream-50 px-4 py-3 mt-3">
                   <div>
                     <p className="font-bold text-ink-900">Consegna a domicilio</p>
                     <p className="text-sm text-ink-600">{rigaQuandoArriva(consegna)}{groups.length > 1 ? ` · ${groups.length} negozi` : ''}</p>
@@ -1212,7 +1241,7 @@ export default function CheckoutPage() {
 
             {/* Credito MyCity — solo COD in questo flusso */}
             {paymentMethod === 'cod' && walletEuro > 0 && (
-              <label className="mt-3 flex items-start gap-3 p-4 rounded-xl border-2 border-cream-300 bg-white cursor-pointer hover:border-primary-200">
+              <label className="mt-3 flex items-start gap-3 p-4 rounded-lg border-2 border-cream-300 bg-white cursor-pointer hover:border-primary-200">
                 <input
                   type="checkbox"
                   checked={useCredit}
@@ -1229,6 +1258,40 @@ export default function CheckoutPage() {
                   </p>
                 </div>
               </label>
+            )}
+
+            {/*
+                6/9/2026 — IL CREDITO SPARIVA DALLO SCHERMO SENZA UNA PAROLA.
+                La casella «Usa il mio credito MyCity» compare solo col
+                pagamento alla consegna. Scegliendo la carta spariva e il totale
+                risaliva, senza che niente dicesse perche'. Il caso tipico e'
+                proprio quello di chi ha ricevuto un buono regalo: fa la spesa,
+                sceglie la carta perche' non vuole contanti in casa, e paga
+                tutto pieno con il buono fermo nel conto.
+                Finche' il credito non passa anche da Stripe, almeno lo si
+                dice — e si offre il modo di usarlo in un tocco. */}
+            {paymentMethod === 'card' && walletEuro > 0 && (
+              <div className="mt-3 flex items-start gap-3 rounded-lg border border-cream-300 bg-cream-50 p-4">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700">
+                  <Wallet size={20} aria-hidden />
+                </span>
+                <div className="flex-1">
+                  <p className="font-bold text-ink-900">Hai {formatPrice(walletEuro)} di credito MyCity</p>
+                  <p className="mt-0.5 text-sm text-ink-600">
+                    Per ora il credito si usa solo pagando alla consegna. Con la carta questo ordine lo paghi per intero e il credito resta tuo, da spendere su un altro ordine.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('cod');
+                      trackCheckoutStep('payment_method', { method: 'cod' });
+                    }}
+                    className="mt-2 rounded-lg bg-primary-700 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+                  >
+                    Paga alla consegna e usa il credito
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* NOTE PER IL RIDER — spostate qui (step conferma) come da mockup.
@@ -1419,7 +1482,7 @@ export default function CheckoutPage() {
               total={finalTotal}
               isCheckingOut={isCheckingOut}
               paymentMethod={paymentMethod}
-              disabled={groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
+              disabled={ordineBloccato}
             />
           </Card>
         </div>
@@ -1446,16 +1509,36 @@ export default function CheckoutPage() {
           <div className="text-2xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
         </div>
+        {/*
+            6/9/2026 — SUL TELEFONO IL PULSANTE SI SPEGNEVA SENZA DIRE PERCHE'.
+            Il gemello sul computer (OrderSummary) era gia' stato sistemato:
+            resta premibile, dichiara di essere bloccato e porta sul riquadro
+            che spiega il motivo. Questo no: era spento davvero, e un pulsante
+            spento esce dal giro del tasto Tab, non risponde al tocco e non dice
+            niente. Sul telefono questo e' l'UNICO pulsante che si vede: chi
+            aveva un articolo finito nel carrello premeva nel vuoto.
+            Ora vale lo stesso schema di la'. Spento davvero solo mentre
+            l'ordine sta partendo, che e' l'unico caso in cui premere di nuovo
+            farebbe danno. */}
         <button
-          type="submit"
+          type={ordineBloccato && !isCheckingOut ? 'button' : 'submit'}
           form="checkout-form"
-          disabled={isCheckingOut || groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile}
+          disabled={isCheckingOut}
+          aria-disabled={ordineBloccato || isCheckingOut}
+          onClick={
+            ordineBloccato && !isCheckingOut
+              ? (e) => {
+                  e.preventDefault();
+                  vaiAlPrimoBlocco();
+                }
+              : undefined
+          }
           aria-label={
             paymentMethod === 'card'
               ? 'Paga con carta e conferma ordine'
               : 'Ordina e paga alla consegna'
           }
-          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
         >
           {isCheckingOut
             ? (paymentMethod === 'card' ? 'Apertura…' : 'Elaborazione…')

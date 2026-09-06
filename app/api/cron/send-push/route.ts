@@ -3,7 +3,45 @@ import { logger } from '@/lib/logger';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
-import { isPushConfigured, iscrizioniPerUtenti, sendPushToUser } from '@/lib/push/send';
+import {
+  isPushConfigured, iscrizioniPerUtenti, sendPushToUser, type PushDeliveryOptions,
+} from '@/lib/push/send';
+
+/**
+ * 6/9/2026 — QUANTO A LUNGO VALE UN AVVISO, A SECONDA DI COSA DICE.
+ *
+ * Il servizio push di Apple/Google/Mozilla tiene in coda il messaggio se il
+ * telefono e' spento: senza istruzioni per quattro settimane. «Il tuo ordine e'
+ * in consegna» che arriva lunedi' per una consegna di sabato non e' un avviso,
+ * e' un motivo per spegnere le notifiche. Un'ora per ordini e avvisi di
+ * servizio, un giorno per promozioni, gruppi e newsletter (quelle possono
+ * aspettare la prossima volta che lo schermo si accende).
+ */
+const UNORA = 3_600;
+const UNGIORNO = 86_400;
+const CONSEGNA_PER_CATEGORIA: Record<string, PushDeliveryOptions> = {
+  order:      { TTL: UNORA,    urgency: 'high' },
+  system:     { TTL: UNORA,    urgency: 'high' },
+  promo:      { TTL: UNGIORNO, urgency: 'normal' },
+  group:      { TTL: UNGIORNO, urgency: 'normal' },
+  newsletter: { TTL: UNGIORNO, urgency: 'low' },
+};
+
+/**
+ * 6/9/2026 — UN AVVISO PER ORDINE, NON UNO PER MESSAGGIO.
+ *
+ * Il contrassegno (`tag`) dice al telefono quale notifica sostituire. Era
+ * l'identificativo della notifica, cioe' sempre diverso: «confermato», «in
+ * preparazione», «pronto», «in consegna» dello stesso ordine si impilavano in
+ * quattro avvisi. Con il collegamento all'ordine l'ultimo stato prende il posto
+ * del precedente e `renotify` fa comunque suonare il telefono.
+ *
+ * Se il collegamento e' generico ('/' o assente) si torna all'identificativo:
+ * altrimenti due promozioni diverse si mangerebbero a vicenda.
+ */
+function contrassegno(n: { id: string; link: string | null }): string {
+  return n.link && n.link !== '/' ? n.link : n.id;
+}
 
 /**
  * Cron: invia le web push per le notifiche non ancora inviate (pushed_at NULL)
@@ -129,8 +167,9 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
           title: n.title,
           body: n.body ?? undefined,
           url: n.link ?? '/',
-          tag: n.id,
-        }, iscrizioni.get(n.user_id) ?? []),
+          tag: contrassegno(n),
+          renotify: true,
+        }, iscrizioni.get(n.user_id) ?? [], CONSEGNA_PER_CATEGORIA[n.category ?? 'order']),
       ),
     );
     esiti.forEach((esito, k) => {

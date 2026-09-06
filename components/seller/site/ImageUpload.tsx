@@ -6,6 +6,7 @@ import { useDropzone } from 'react-dropzone';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
 import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 
@@ -59,7 +60,7 @@ export function SingleImageUpload({ value, onChange }: { value: string; onChange
     <div>
       {value && (
         <div className="relative w-full h-40 rounded-lg overflow-hidden mb-2 border border-cream-200">
-          <Image src={sizedImage(value, 480, { quadrato: true })} alt="" fill sizes="480px" className="object-cover" />
+          <Image src={sizedImage(value, 480, { quadrato: true })} alt="" fill sizes="480px" loader={caricatoreFotoRemote} className="object-cover" />
           <button
             type="button"
             onClick={() => onChange('')}

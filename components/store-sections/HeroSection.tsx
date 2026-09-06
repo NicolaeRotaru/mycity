@@ -9,6 +9,7 @@ import StoreMediaCarousel, { type StoreMediaItem } from '@/components/StoreMedia
 import { VerifiedBadge } from '@/components/ui/VerifiedBadge';
 import { isVerifiedStore } from '@/lib/store-trust';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { coverClassName, socialLinks, badgeLabel } from '@/lib/store-customization';
 import { isOpenNow, streetFromAddress, DAY_KEYS, type StoreHours } from '@/lib/store-hours';
 import type { SectionConfig, SectionContext } from './SectionContext';
@@ -94,6 +95,7 @@ export default function HeroSection({ config, ctx }: { config: SectionConfig<'he
             alt={`Copertina di ${store.store_name ?? 'questo negozio'}`}
             fill
             sizes="(max-width: 768px) 100vw, 1024px"
+            loader={caricatoreFotoRemote}
             className="object-cover"
             priority
           />

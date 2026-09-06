@@ -355,10 +355,12 @@ export default function SellerAnalyticsPage() {
               : analytics.conversionRate >= 2 ? 'olive' : analytics.conversionRate >= 1 ? 'accent' : 'secondary'
           }
         />
+        {/* Con la virgola: in italiano il voto si scrive «4,5», ed e' cosi' che
+            lo scrive la pagina delle recensioni del rider. */}
         <KpiCard
           icon={Star}
           label="Rating medio"
-          value={analytics.avgRating != null && analytics.avgRating > 0 ? analytics.avgRating.toFixed(1) + ' ★' : '—'}
+          value={analytics.avgRating != null && analytics.avgRating > 0 ? analytics.avgRating.toFixed(1).replace('.', ',') + ' ★' : '—'}
           delta={
             analytics.visiteIgnote
               ? 'Non sono riuscito a leggere le recensioni'

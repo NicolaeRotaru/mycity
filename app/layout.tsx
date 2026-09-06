@@ -126,6 +126,30 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   themeColor: '#C0492C',
+  /*
+   * 6/9/2026 — LA «ZONA SICURA» DELL'IPHONE ERA SCRITTA DAPPERTUTTO E NON
+   * VALEVA DA NESSUNA PARTE.
+   *
+   * In fondo agli iPhone senza tasto casa c'è la barra grigia con cui si torna
+   * alla schermata Home. Il telefono sa quanto è alta e lo dice al sito con
+   * `env(safe-area-inset-bottom)`. Le due barre che chiudono un acquisto — la
+   * «Conferma ordine» in cassa e la «Aggiungi al carrello» sulla scheda
+   * prodotto — quella misura la chiedevano già, e così la barra a schede, i
+   * pannelli che salgono dal basso e la scheda del fattorino.
+   *
+   * Solo che il telefono quella misura la dà a zero finché la pagina non
+   * dichiara di volersi prendere tutto lo schermo, bordi arrotondati inclusi.
+   * La dichiarazione è questa riga, e non c'era in nessun punto del progetto.
+   * Risultato: tutti quei conti valevano zero e i due pulsanti che chiudono
+   * l'acquisto finivano sotto la barra grigia, dove il dito preme e non
+   * succede niente.
+   *
+   * Si può accendere adesso perché la misura ha una casa sola: la conta
+   * `bottom` una volta (lib/ui/barra-in-fondo.ts) e il padding non la conta
+   * più. Prima di quel lavoro, accendere questa riga l'avrebbe contata due
+   * volte e la barra sarebbe rimasta staccata dal fondo.
+   */
+  viewportFit: 'cover',
 };
 
 // Schema markup Organization a livello di sito

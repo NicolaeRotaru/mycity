@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/Field';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { friendlyError } from '@/lib/errors';
 import { MAX_GALLERY_ITEMS, type SiteSection } from '@/lib/store-site';
 import { uploadSiteImage } from './ImageUpload';
@@ -61,7 +62,7 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
           {items.map((it, i) => (
             <div key={i} className="space-y-1">
               <div className="relative aspect-square rounded-lg overflow-hidden border border-cream-200">
-                <Image src={sizedImage(it.url, 160, { quadrato: true })} alt="" fill sizes="160px" className="object-cover" />
+                <Image src={sizedImage(it.url, 160, { quadrato: true })} alt="" fill sizes="160px" loader={caricatoreFotoRemote} className="object-cover" />
                 <button
                   type="button"
                   onClick={() => remove(i)}

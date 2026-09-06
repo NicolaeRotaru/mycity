@@ -28,6 +28,7 @@ import { useFavorites } from '@/components/hooks/useFavorites';
 import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interruttore';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from '@/components/hooks/useShoppingMode';
+import { ricordaMetodoScelto } from '@/components/checkout/PaymentMethodSelector';
 import ContactSellerButton from '@/components/ContactSellerButton';
 import ProductViewTracker from '@/components/ProductViewTracker';
 import ProductQA from '@/components/ProductQA';
@@ -437,6 +438,9 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
       variantId: selectedVariant?.id,
       variantLabel: selectedVariant?.label,
     });
+    // Il pulsante promette «paghi alla consegna»: la promessa viaggia fino alla
+    // cassa, che senza questa riga si apriva sempre con la carta selezionata.
+    ricordaMetodoScelto('cod');
     router.push('/checkout');
   };
 

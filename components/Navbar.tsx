@@ -23,6 +23,7 @@ import { getAccountMenuItems } from '@/lib/account-menu';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import { trackSignedOut } from '@/lib/analytics/events';
 import { scollegaQuestoDispositivo } from '@/lib/push/dispositivo';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 type Role = 'buyer' | 'seller' | 'rider' | 'admin' | null;
 
@@ -380,7 +381,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
       >
         {isSeller && storeLogo ? (
           <span className="w-9 h-9 rounded-full ring-2 ring-white/20 overflow-hidden bg-white relative shrink-0">
-            <Image src={storeLogo} alt={displayName} fill sizes="36px" className="object-cover" />
+            <Image src={storeLogo} alt={displayName} fill sizes="36px" loader={caricatoreFotoRemote} className="object-cover" />
           </span>
         ) : (
           <span className={`w-9 h-9 rounded-full ring-2 ring-white/20 flex items-center justify-center text-sm font-bold uppercase ${
@@ -406,7 +407,7 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
           <div className="px-4 py-3 border-b border-ink-100 bg-cream-100 flex items-center gap-3">
             {isSeller && storeLogo ? (
               <span className="w-11 h-11 rounded-full overflow-hidden bg-white ring-1 ring-ink-100 relative shrink-0">
-                <Image src={storeLogo} alt={displayName} fill sizes="44px" className="object-cover" />
+                <Image src={storeLogo} alt={displayName} fill sizes="44px" loader={caricatoreFotoRemote} className="object-cover" />
               </span>
             ) : (
               <span className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold uppercase shrink-0 ${

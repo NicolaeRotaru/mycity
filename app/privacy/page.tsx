@@ -86,6 +86,13 @@ export default function PrivacyPage() {
               pratica è l'ingresso di casa del cliente. Un trattamento che non
               compare nell'informativa è un trattamento senza informativa. */}
           <li><strong>Prove di consegna (solo pagamento alla consegna):</strong> fotografia del contante ricevuto, fotografia del pacco consegnato (che può ritrarre l&apos;ingresso dell&apos;abitazione) e firma per ricevuta, scattate dal Rider al momento della consegna.</li>
+          {/* 6/9/2026 — LE NOTIFICHE DEL BROWSER NON ERANO DICHIARATE DA NESSUNA
+              PARTE. Chi accende gli avvisi ci lascia l'indirizzo del servizio
+              push del suo telefono, due chiavi di cifratura e la stringa del
+              programma di navigazione: e' l'impronta di un dispositivo, e la
+              parola «push» in questa pagina non compariva. Un trattamento che
+              non compare nell'informativa e' un trattamento senza informativa. */}
+          <li><strong>Iscrizione alle notifiche push:</strong> indirizzo del servizio push del browser (endpoint di Apple, Google o Mozilla), le due chiavi di cifratura del dispositivo e la stringa del programma di navigazione (user-agent) — raccolti solo se attivi le notifiche, e cancellati quando le disattivi o quando il servizio push ci dice che quel dispositivo non esiste più.</li>
           <li><strong>Dati di navigazione:</strong> pagine visitate, click, tempo di permanenza (se attivi i cookie analytics).</li>
         </ul>
       </LegalSection>
@@ -146,6 +153,14 @@ export default function PrivacyPage() {
                   scritto anche quando quei dati se ne vanno, e il codice fa
                   quello che c'è scritto (lib/account/cancellazione.ts). */}
               <tr><td className="border px-3 py-2">Buoni regalo — dati del destinatario (nome, email, messaggio)</td><td className="border px-3 py-2">Legittimo interesse a recapitare il regalo a chi è stato indicato (art. 6.1.f)</td><td className="border px-3 py-2">Nome, email e messaggio del destinatario vengono azzerati quando chi ha comprato il buono cancella il proprio account; il credito resta spendibile fino alla scadenza (2 anni). Il destinatario può chiederne la cancellazione in qualsiasi momento: il modo è scritto nell&apos;email che riceve.</td></tr>
+              {/* 6/9/2026 — La riga mancava: le push partono da un lavoro
+                  automatico ogni cinque minuti (app/api/cron/send-push) e
+                  nessuno aveva dichiarato ne' la base giuridica ne' quanto
+                  teniamo l'iscrizione. Le due basi sono diverse: lo stato
+                  dell'ordine e' il contratto, la promozione e' consenso — ed e'
+                  il consenso che l'interruttore in Impostazioni revoca. */}
+              <tr><td className="border px-3 py-2">Notifiche push (stato dell&apos;ordine e avvisi di servizio)</td><td className="border px-3 py-2">Esecuzione del contratto (art. 6.1.b)</td><td className="border px-3 py-2">L&apos;iscrizione del dispositivo resta fino alla disattivazione delle notifiche, alla cancellazione dell&apos;account o al primo rifiuto del servizio push</td></tr>
+              <tr><td className="border px-3 py-2">Notifiche push promozionali (offerte, gruppi d&apos;acquisto, newsletter)</td><td className="border px-3 py-2">Consenso (art. 6.1.a), revocabile in Impostazioni &gt; Notifiche</td><td className="border px-3 py-2">Fino a revoca del consenso o disiscrizione del dispositivo</td></tr>
               <tr><td className="border px-3 py-2">Gestione reclami e contenzioso</td><td className="border px-3 py-2">Legittimo interesse</td><td className="border px-3 py-2">Fino a prescrizione (10 anni)</td></tr>
             </tbody>
           </table>

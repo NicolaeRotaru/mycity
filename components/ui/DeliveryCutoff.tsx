@@ -118,9 +118,23 @@ export function DeliveryCutoff({
 
   if (variant === 'banner') {
     return (
+      // 6/9/2026 — LA SCATOLA NASCEVA DI UNA RIGA E NE DIVENTAVA DUE.
+      //
+      // Prima dell'idratazione il testo è «Arriva oggi», undici caratteri. Dopo diventa
+      // «Ordina entro 02:14:31 e arriva oggi in 30-60 min», una cinquantina: dentro i 384
+      // punti dell'hero non ci sta su una riga, va a capo, la scatola cresce di venti punti e
+      // spinge giù le tre righe di rassicurazione — proprio mentre uno le sta leggendo.
+      //
+      // Il commento qui sopra diceva «no layout shift»: valeva per le cifre del contatore, che
+      // sono a larghezza fissa, non per la frase, che quadruplica. Lo spazio delle due righe
+      // adesso è riservato da subito: il testo cambia, la scatola no.
       <div
         className={cn(
           'flex items-center gap-2 rounded-lg bg-olive-50 text-olive-800 px-3 py-2 text-sm font-medium',
+          // Due righe di testo piccolo (2 × 1,25rem) più il padding verticale (2 × 0,5rem).
+          // Vale a ogni misura di schermo: la scatola è larga `max-w-sm` sempre, quindi la
+          // frase lunga va a capo anche da computer.
+          'min-h-[3.5rem]',
           className,
         )}
       >

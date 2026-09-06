@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 
 export type StoreMediaItem = {
   type: 'image' | 'video';
@@ -69,6 +70,7 @@ const StoreMediaCarousel = ({
                 alt=""
                 fill
                 sizes="(max-width: 768px) 100vw, 1024px"
+                loader={caricatoreFotoRemote}
                 className="object-cover"
                 priority={i === 0}
               />

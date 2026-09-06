@@ -1,5 +1,7 @@
 'use client';
 
+import { useId } from 'react';
+
 /**
  * Campo trappola anti-spam: invisibile a un essere umano (off-screen,
  * tabIndex -1, autocomplete=off) ma i bot riempiono ciecamente ogni input
@@ -21,6 +23,11 @@ type Props = {
 };
 
 export default function Honeypot({ value, onChange, name = 'company_website' }: Props) {
+  // L'identificativo nasceva dal nome del campo, che e' una costante: due moduli con la stessa
+  // trappola nella stessa pagina — il pie' di pagina e la sezione newsletter della home — davano
+  // due volte `id="hp-company"` e due etichette che puntavano allo stesso posto. `useId` ne da'
+  // uno diverso per ogni copia, e il nome resta libero di fare l'esca per i robot.
+  const campoId = useId();
   return (
     <div
       aria-hidden="true"
@@ -33,10 +40,10 @@ export default function Honeypot({ value, onChange, name = 'company_website' }: 
         overflow: 'hidden',
       }}
     >
-      <label htmlFor={`hp-${name}`}>
+      <label htmlFor={campoId}>
         Non compilare se sei umano
         <input
-          id={`hp-${name}`}
+          id={campoId}
           type="text"
           name={name}
           tabIndex={-1}

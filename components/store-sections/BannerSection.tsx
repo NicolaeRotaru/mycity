@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { sizedImage } from '@/lib/image-url';
+import caricatoreFotoRemote from '@/lib/image-loader';
 import { ctaHref } from '@/lib/store-site';
 import type { SectionConfig, SectionContext } from './SectionContext';
 
@@ -26,6 +27,7 @@ export default function BannerSection({ config, ctx }: { config: SectionConfig<'
         alt={config.heading ?? ''}
         fill
         sizes="(max-width: 768px) 100vw, 1024px"
+        loader={caricatoreFotoRemote}
         className="object-cover"
       />
       {overlayClass && <div className={`absolute inset-0 ${overlayClass}`} aria-hidden />}

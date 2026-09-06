@@ -29,6 +29,25 @@ type Props = {
   couponSection?: React.ReactNode;
 };
 
+/**
+ * Porta la persona sul primo riquadro che spiega perche' l'ordine non parte.
+ *
+ * 6/9/2026 — Sta qui, esportata, perche' i pulsanti che chiudono l'acquisto
+ * sono DUE: questo (di fianco, sul computer) e la barra incollata in fondo
+ * (sul telefono, l'unico che si vede davvero). Scritta due volte si sarebbe
+ * separata al primo ritocco.
+ *
+ * I riquadri sono gia' nella pagina, sopra il pulsante, e portano
+ * `role="alert"`: si scorre fino al primo e gli si mette il fuoco, cosi' anche
+ * chi usa un lettore di schermo se lo sente leggere.
+ */
+export function vaiAlPrimoBlocco() {
+  const primoBlocco = document.querySelector<HTMLElement>('[role="alert"]');
+  primoBlocco?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  primoBlocco?.setAttribute('tabindex', '-1');
+  primoBlocco?.focus();
+}
+
 export function OrderSummary({
   subtotal,
   shipping,
@@ -104,10 +123,7 @@ export function OrderSummary({
           disabled && !isCheckingOut
             ? (e) => {
                 e.preventDefault();
-                const primoBlocco = document.querySelector<HTMLElement>('[role="alert"]');
-                primoBlocco?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                primoBlocco?.setAttribute('tabindex', '-1');
-                primoBlocco?.focus();
+                vaiAlPrimoBlocco();
               }
             : undefined
         }
