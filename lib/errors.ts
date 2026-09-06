@@ -159,6 +159,37 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         trackErrorShown('session_expired', e.message, context?.page);
         return 'La sessione è scaduta. Accedi di nuovo.';
       }
+      /**
+       * 6/9/2026 — IL DEPOSITO DELLE FOTO PARLAVA INGLESE AL NEGOZIANTE.
+       *
+       * Lo Storage rifiuta un file con frasi sue, in inglese: «mime type
+       * image/svg+xml is not supported» quando il formato non va, «The object
+       * exceeded the maximum allowed size» quando il file supera i 10 MB. Non
+       * hanno un codice, quindi nessuna delle mappe qui sopra le riconosceva:
+       * cadevano nell'ultimo ramo, quello che ripulisce il testo e lo lascia
+       * passare com'è se è corto e comincia per lettera. Una rete di sicurezza
+       * che qui si comportava da porta aperta.
+       *
+       * Il negoziante leggeva l'inglese, non capiva che gli bastava salvare il
+       * logo in PNG, e restava senza logo. Queste quattro righe stanno PRIMA di
+       * quel ramo apposta: sono i casi che il ramo lasciava passare.
+       */
+      if (/mime type|invalid mime type/i.test(e.message)) {
+        trackErrorShown('storage_formato', e.message, context?.page);
+        return 'Formato non accettato: usa una foto JPG, PNG o WEBP.';
+      }
+      if (/exceeded the maximum allowed size|payload too large/i.test(e.message)) {
+        trackErrorShown('storage_troppo_pesante', e.message, context?.page);
+        return 'La foto è troppo pesante: il limite è 10 MB. Riducila o scattane un\'altra.';
+      }
+      if (/resource already exists/i.test(e.message)) {
+        trackErrorShown('storage_gia_esiste', e.message, context?.page);
+        return 'Un file con questo nome c\'è già. Rinominalo e riprova.';
+      }
+      if (/value too long/i.test(e.message)) {
+        trackErrorShown('testo_troppo_lungo', e.message, context?.page);
+        return 'Testo troppo lungo: accorcialo e riprova.';
+      }
       trackErrorShown(e.code ?? 'unknown', e.message, context?.page);
       // Strip technical details
       const cleaned = e.message

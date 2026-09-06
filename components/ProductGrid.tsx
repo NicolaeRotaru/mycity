@@ -362,16 +362,30 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // Sezione = fila con intestazione: si comporta come un blocco autonomo
   // (titolo + "Vedi tutto") e scompare del tutto quando è vuota.
   const isSection = formaFila && !!title;
+  /**
+   * 6/9/2026 — I TITOLI DELLE FILE VENIVANO TAGLIATI INVECE DI ANDARE A CAPO.
+   *
+   * Tutte e due le varianti dell'intestazione (con link e senza) avevano `truncate`: una riga
+   * sola, il resto mozzato con tre puntini. Il titolo divide la riga col collegamento «Vedi
+   * tutto», che e' `shrink-0` e quindi non cede spazio: su uno schermo da 320px al titolo ne
+   * restano circa 180, cioe' una dozzina di lettere in Fraunces grassetto a 20px. Nomi come
+   * «Abbigliamento sportivo» o «Latticini & Formaggi» non ci stavano — e il nome della
+   * sottocategoria e' l'unica cosa che dice alla persona cosa sta guardando.
+   *
+   * `line-clamp-2` fa quello che serve: va a capo, e taglia solo dopo la seconda riga. La
+   * misura parte piu' piccola sul telefono (`text-lg`) e risale da tablet in su, cosi' il
+   * caso da 320px sta dentro senza toccare come si vede da grande.
+   */
   const sectionHeader = title ? (
     <div className="mb-4 flex items-end justify-between gap-4">
       {titleHref ? (
         <Link href={titleHref} className="group min-w-0">
-          <h2 className="truncate font-serif text-xl font-bold text-ink-900 transition-colors group-hover:text-primary-700 md:text-2xl">
+          <h2 className="line-clamp-2 font-serif text-lg font-bold text-ink-900 transition-colors group-hover:text-primary-700 sm:text-xl md:text-2xl">
             {title}
           </h2>
         </Link>
       ) : (
-        <h2 className="truncate font-serif text-xl font-bold text-ink-900 md:text-2xl">{title}</h2>
+        <h2 className="line-clamp-2 min-w-0 font-serif text-lg font-bold text-ink-900 sm:text-xl md:text-2xl">{title}</h2>
       )}
       {seeAllHref && (
         <Link

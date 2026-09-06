@@ -10,7 +10,9 @@ import { CartItem, getCart, updateQuantity, removeFromCart, cartTotal, cartCount
 import { formatPrice, pluralize } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { PLATFORM_DELIVERY_FEE_CENTS } from '@/lib/constants';
+import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
 import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
@@ -67,6 +69,40 @@ export default function CartPage() {
   const [tengoIo, setTengoIo] = useState<Record<string, number>>({});
 
   /**
+   * 6/9/2026 — IL CARRELLO MOSTRAVA IL PREZZO DEL GIORNO IN CUI AVEVI MESSO DENTRO IL PRODOTTO.
+   *
+   * L'unica lettura dal database chiedeva `id, stock`: tutti i prezzi a video e il totale nascevano
+   * da `it.price`, cioè il numero congelato nel browser quando il prodotto è stato aggiunto. La
+   * cassa invece rilegge `products.price` e ci applica le promozioni attive — come fanno le due
+   * rotte che creano l'ordine. Quindi bastava che il fornaio ritoccasse un prezzo, o che partisse o
+   * finisse una promozione, e il totale cambiava al passo dopo: un prodotto entrato a 31 € e oggi
+   * scontato del 15% faceva scrivere al carrello 31 € con la spedizione gratis (soglia 30), e alla
+   * cassa 26,35 € più 4,90 di spedizione.
+   *
+   * Qui c'è il prezzo di ADESSO, letto con la stessa funzione della cassa. Vuoto finché non arriva:
+   * il carrello non aspetta la rete per disegnarsi.
+   */
+  const [prezzoDiOggi, setPrezzoDiOggi] = useState<Record<string, number>>({});
+
+  /**
+   * 6/9/2026 — LA SPEDIZIONE SCRITTA QUI NON ERA QUELLA CHE SI PAGAVA ALLA CASSA.
+   *
+   * Questa pagina chiamava `shippingForEuro` passando sempre le coordinate a `null`, e senza
+   * coordinate quella funzione ripiega sulla tariffa fissa di 4,90 €. La cassa le passa eccome: chi
+   * ha un indirizzo salvato se lo ritrova già scelto appena la pagina si apre, con la sua latitudine
+   * e longitudine, e allora la spedizione diventa 2,50 € più 1,20 € al chilometro. Negozio in centro
+   * a Piacenza, cliente a 2,9 km, carrello da 20 €: qui 4,90, un tocco dopo 6,00. Sotto i due
+   * chilometri succedeva il contrario — 4,90 qui e 3,10 alla cassa — quindi il prezzo ballava in
+   * tutte e due le direzioni proprio nell'ultimo passo.
+   *
+   * Adesso il carrello legge gli stessi due ingressi della cassa: dove sta il negozio e dove
+   * consegniamo. Quando uno dei due manca — ospite, nessun indirizzo salvato, negozio senza
+   * coordinate — si resta sulla tariffa fissa e la riga lo dice, come faceva prima.
+   */
+  const [dovEIlNegozio, setDovEIlNegozio] = useState<Record<string, { lat: number | null; lng: number | null }>>({});
+  const [doveConsegniamo, setDoveConsegniamo] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+
+  /**
    * Il carrello vero si legge QUI, dopo il primo disegno: `useState([])` parte vuoto perché deve
    * partire da qualcosa, non perché il carrello sia vuoto. Senza questa bandierina il primo render
    * — e l'HTML che parte dal server — diceva «Il tuo carrello è vuoto» a chi ce l'ha pieno.
@@ -107,6 +143,9 @@ export default function CartPage() {
     const idVarianti = Array.from(
       new Set(carrello.map((i) => i.variantId).filter((v): v is string => !!v)),
     );
+    const idNegozi = Array.from(
+      new Set(carrello.map((i) => i.sellerId).filter((v): v is string => !!v)),
+    );
     if (ids.length === 0) return;
     let vivo = true;
     void (async () => {
@@ -114,8 +153,9 @@ export default function CartPage() {
       // Chi è entrato lo dice la sessione già in memoria: da ospiti non si
       // chiedono le riserve, perché per riservare bisogna aver ordinato.
       const idCliente = (await supabase.auth.getSession()).data.session?.user?.id ?? null;
-      const [prodottiRes, variantiRes, tentativiRes] = await Promise.all([
-        supabase.from('products').select('id, stock').in('id', ids),
+      const [prodottiRes, variantiRes, tentativiRes, scontiRes, negoziRes, indirizzoRes] = await Promise.all([
+        // Il prezzo si legge insieme alla scorta: e' la stessa riga di tabella, non costa un viaggio in piu'.
+        supabase.from('products').select('id, stock, price').in('id', ids),
         idVarianti.length > 0
           ? supabase.from('product_variants').select('id, stock').in('id', idVarianti)
           : Promise.resolve({ data: [] as Array<{ id: string; stock: number | null }> }),
@@ -128,15 +168,43 @@ export default function CartPage() {
               .eq('status', 'PENDING')
               .limit(10)
           : Promise.resolve({ data: [] as TentativoAperto[] }),
+        // Le promozioni attive: stessa funzione della cassa e delle due rotte che creano l'ordine.
+        fetchActiveDiscounts(supabase, ids),
+        // Dove sta ogni negozio: senza queste la spedizione non puo' che essere la tariffa fissa.
+        idNegozi.length > 0
+          ? supabase.from('profiles').select('id, store_lat, store_lng').in('id', idNegozi)
+          : Promise.resolve({ data: [] as Array<{ id: string; store_lat: number | null; store_lng: number | null }> }),
+        // Dove consegniamo: l'indirizzo predefinito, letto con la stessa query della cassa.
+        idCliente
+          ? supabase
+              .from('user_addresses')
+              .select('lat, lng')
+              .eq('user_id', idCliente)
+              .order('is_default', { ascending: false })
+              .limit(1)
+          : Promise.resolve({ data: [] as Array<{ lat: number | null; lng: number | null }> }),
       ]);
       if (!vivo) return;
       setTengoIo(
         Object.fromEntries(merceCheTengoIo((tentativiRes.data ?? []) as TentativoAperto[])),
       );
       const mappa: Record<string, number | null> = {};
-      for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null }>) {
+      const prezzi: Record<string, number> = {};
+      for (const p of (prodottiRes.data ?? []) as Array<{ id: string; stock: number | null; price: number | string | null }>) {
         mappa[p.id] = p.stock;
+        const pieno = Number(p.price ?? NaN);
+        // Il prezzo che si mostra e' quello che il server fara' pagare: pieno meno la promozione attiva.
+        if (Number.isFinite(pieno)) prezzi[p.id] = discountedUnitCents(pieno, scontiRes.get(p.id) ?? 0) / 100;
       }
+      setPrezzoDiOggi(prezzi);
+      setDovEIlNegozio(
+        Object.fromEntries(
+          ((negoziRes.data ?? []) as Array<{ id: string; store_lat: number | null; store_lng: number | null }>)
+            .map((n) => [n.id, { lat: n.store_lat, lng: n.store_lng }]),
+        ),
+      );
+      const casa = ((indirizzoRes.data ?? []) as Array<{ lat: number | null; lng: number | null }>)[0];
+      setDoveConsegniamo({ lat: casa?.lat ?? null, lng: casa?.lng ?? null });
       // La variante si indicizza con la sua chiave di riga, così una riga con
       // variante non eredita la scorta del prodotto intero.
       for (const v of (variantiRes.data ?? []) as Array<{ id: string; stock: number | null }>) {
@@ -187,8 +255,28 @@ export default function CartPage() {
     }
   }, []);
 
-  const total = cartTotal(items);
-  const count = cartCount(items);
+  /**
+   * Le righe con il prezzo di ADESSO, non con quello congelato nel browser.
+   *
+   * Finché la lettura non è tornata, `prezzoDiOggi` è vuoto e qui non cambia niente: la pagina si
+   * disegna subito col prezzo che ha, e si corregge da sola quando arriva quello vero.
+   */
+  const righe: CartItem[] = items.map((it) => {
+    const oggi = prezzoDiOggi[it.id];
+    return oggi != null && Math.abs(oggi - it.price) >= 0.01 ? { ...it, price: oggi } : it;
+  });
+  /** Quali prezzi sono cambiati sotto il naso di chi compra: si dice, non si cambia il totale in silenzio. */
+  const cambiatoDaQuandoLoHaiMesso = new Map<string, number>(
+    items
+      .filter((it) => {
+        const oggi = prezzoDiOggi[it.id];
+        return oggi != null && Math.abs(oggi - it.price) >= 0.01;
+      })
+      .map((it) => [`${it.id}::${it.variantId ?? ''}`, it.price]),
+  );
+
+  const total = cartTotal(righe);
+  const count = cartCount(righe);
   // La parola sulla spedizione NON si calcola piu' qui: la dava `total >= FREE_SHIPPING_THRESHOLD`,
   // cioe' il totale di tutto il carrello, mentre il numero addebitato si calcola per negozio. Con
   // 20 € dal fornaio e 15 € dal macellaio la riga diceva «Gratis*» e nel totale c'erano 9,80 €.
@@ -246,7 +334,7 @@ export default function CartPage() {
   // nel CartItem. Nessuna mutazione di stato — solo il rendering cambia.
   const groupOrder: string[] = [];
   const groupsByStore = new Map<string, { storeName: string; items: CartItem[] }>();
-  for (const it of items) {
+  for (const it of righe) {
     const key = it.sellerId ?? it.storeName ?? '__nostore__';
     if (!groupsByStore.has(key)) {
       groupsByStore.set(key, { storeName: it.storeName ?? 'Negozio', items: [] });
@@ -274,23 +362,34 @@ export default function CartPage() {
    * due negozi il carrello prometteva 4,90 e il checkout ne chiedeva 9,80: il
    * raddoppio compariva all'ultimo passo, dove l'abbandono costa di piu'.
    *
-   * Adesso e' la stessa funzione del checkout, chiamata per gruppo-negozio,
-   * con le coordinate a null finche' non c'e' un indirizzo — esattamente come
-   * fa il checkout prima che la persona lo scriva.
+   * Adesso e' la stessa funzione del checkout, chiamata per gruppo-negozio.
+   *
+   * 6/9/2026 — E CON GLI STESSI INGRESSI. Qui le coordinate erano scritte a `null` con accanto un
+   * commento che diceva «esattamente come fa il checkout prima che la persona lo scriva». Non era
+   * vero: chi ha un indirizzo salvato se lo ritrova gia' scelto appena la cassa si apre, con le sue
+   * coordinate, e la stessa funzione con quelle in mano risponde un altro numero. Due pagine, la
+   * stessa formula, ingressi diversi: il prezzo cambiava nell'ultimo passo. Ora gli ingressi sono
+   * gli stessi — dove sta il negozio e dove consegniamo — e quando uno dei due manca si torna alla
+   * tariffa fissa, che e' quello che fa anche la cassa.
    */
   const shippingCost = groups.reduce(
     (somma, g) =>
       somma
       + shippingForEuro({
         subtotal: g.items.reduce((s, it) => s + it.price * it.quantity, 0),
-        storeLat: null,
-        storeLng: null,
-        deliveryLat: null,
-        deliveryLng: null,
+        storeLat: dovEIlNegozio[g.key]?.lat ?? null,
+        storeLng: dovEIlNegozio[g.key]?.lng ?? null,
+        deliveryLat: doveConsegniamo.lat,
+        deliveryLng: doveConsegniamo.lng,
         pickupInStore: false,
       }),
     0,
   );
+  /** Vero quando il numero qui sopra nasce dagli stessi dati della cassa: allora non e' una stima. */
+  const spedizioneSulTuoIndirizzo =
+    doveConsegniamo.lat != null
+    && doveConsegniamo.lng != null
+    && groups.every((g) => dovEIlNegozio[g.key]?.lat != null && dovEIlNegozio[g.key]?.lng != null);
   const finalTotal = total + shippingCost + platformDeliveryFee;
   // Una parola sola, e nasce dal numero che sta dentro `finalTotal`.
   const detto = dettoDellaSpedizione({ costo: shippingCost, negozi: groups.length, formatta: formatPrice });
@@ -340,7 +439,7 @@ export default function CartPage() {
                   <div key={`${item.id}::${item.variantId ?? ''}`} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-4 hover:shadow-card transition-shadow">
                     <div className="relative w-24 h-24 bg-cream-100 rounded-lg shrink-0 overflow-hidden">
                       <Image
-                        src={sizedImage(item.image ?? 'https://placehold.co/200x200/F5EDD9/78716C?text=Foto', 'thumb')}
+                        src={sizedImage(item.image ?? FOTO_MANCANTE, 'thumb')}
                         alt={item.name}
                         fill
                         sizes="96px"
@@ -358,6 +457,20 @@ export default function CartPage() {
                       {item.variantLabel && (
                         <p className="text-xs font-semibold text-ink-500">{item.variantLabel}</p>
                       )}
+                      {/* 6/9/2026 — Se il prezzo è cambiato da quando l'hai messo dentro, si dice
+                          qui e adesso: prima lo si scopriva alla cassa, che è il punto in cui si
+                          chiude la pagina. */}
+                      {(() => {
+                        const prima = cambiatoDaQuandoLoHaiMesso.get(`${item.id}::${item.variantId ?? ''}`);
+                        if (prima == null) return null;
+                        const sceso = item.price < prima;
+                        return (
+                          <p className={`text-xs font-semibold ${sceso ? 'text-olive-700' : 'text-amber-700'}`}>
+                            {sceso ? 'Buona notizia: il prezzo è sceso' : 'Il prezzo è cambiato'} da{' '}
+                            {formatPrice(prima)} a {formatPrice(item.price)}
+                          </p>
+                        );
+                      })()}
                       {/* 22/8/2026 — questa riga diceva «Disponibile» sempre,
                           anche su una riga esaurita. La scorta era già letta
                           qui sopra e serviva solo a limitare il pulsante «+»:
@@ -404,7 +517,7 @@ export default function CartPage() {
                               onClick={() => updateQuantity(item.id, item.quantity - 1, item.variantId)}
                               disabled={item.quantity <= 1}
                               aria-label={`Diminuisci quantità di ${item.name}`}
-                              className="w-10 h-10 hover:bg-cream-100 rounded-l-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                              className="w-11 h-11 hover:bg-cream-100 rounded-l-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             >−</button>
                             {/* 22/8/2026 — LA QUANTITA' CAMBIAVA IN SILENZIO.
                                 Si premeva «+» e non veniva annunciato niente:
@@ -426,7 +539,7 @@ export default function CartPage() {
                               onClick={() => updateQuantity(item.id, item.quantity + 1, item.variantId)}
                               disabled={massimo(item.id, item.variantId) != null && item.quantity >= (massimo(item.id, item.variantId) as number)}
                               aria-label={`Aumenta quantità di ${item.name}`}
-                              className="w-10 h-10 hover:bg-cream-100 rounded-r-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                              className="w-11 h-11 hover:bg-cream-100 rounded-r-full disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                             >+</button>
                           </div>
                           {massimo(item.id, item.variantId) != null && item.quantity >= (massimo(item.id, item.variantId) as number) && (
@@ -484,9 +597,15 @@ export default function CartPage() {
                       non sono allineati. */}
                   {detto.gratis && multiStore ? 'Spedizione stimata' : 'Spedizione'}
                   {/* 107 — La nota compariva solo in certi casi. La spedizione
-                      al checkout si calcola per negozio e sulla distanza: è una
-                      stima SEMPRE, e dirlo sempre costa zero. */}
-                  <span className="block text-xs text-ink-500 font-normal">stima · potrebbe variare al checkout</span>
+                      al checkout si calcola per negozio e sulla distanza: quando uno dei due punti
+                      non lo sappiamo è una stima, e dirlo costa zero.
+                      6/9/2026 — Quando invece li sappiamo tutti e due, il numero è già quello della
+                      cassa: chiamarlo «stima» sarebbe stato prudente per finta. */}
+                  <span className="block text-xs text-ink-500 font-normal">
+                    {spedizioneSulTuoIndirizzo
+                      ? 'calcolata sul tuo indirizzo predefinito'
+                      : 'stima · potrebbe variare al checkout'}
+                  </span>
                   {detto.nota && (
                     <span className="block text-xs text-ink-500 font-normal">{detto.nota}</span>
                   )}
@@ -539,7 +658,24 @@ export default function CartPage() {
             <div className="space-y-2 pt-2 text-xs text-ink-500">
               <p className="flex items-center gap-2"><Banknote size={14} className="text-olive-600 shrink-0" aria-hidden /> {frasePagamento()}</p>
               <p className="flex items-center gap-2"><ShieldCheck size={14} className="text-olive-600 shrink-0" aria-hidden /> I tuoi dati sono al sicuro</p>
-              <p className="flex items-center gap-2"><RotateCcw size={14} className="text-olive-600 shrink-0" aria-hidden /> Reso facile entro 14 giorni</p>
+              {/* 6/9/2026 — QUI SI PROMETTEVA IL RESO ANCHE SU PANE, TORTE E GASTRONOMIA.
+                  La riga diceva «Reso facile entro 14 giorni» per qualunque carrello. Sui beni
+                  deperibili il diritto di ripensarci non c'è (art. 59 lettera d del Codice del
+                  Consumo) e la nostra pagina dei resi lo scrive già; il primo negozio vero è un
+                  forno, quindi la riga era sbagliata su ogni suo ordine. In più nessuna pagina del
+                  percorso diceva come si fa un reso: adesso ci si arriva da qui.
+                  ⚠️ Resta da fare la versione per categoria — mostrarla solo sul non alimentare —
+                  che ha bisogno della categoria del prodotto (il carrello non ce l'ha) e di una
+                  decisione su quali categorie sono escluse: non è una scelta da prendere qui. */}
+              <p className="flex items-start gap-2">
+                <RotateCcw size={14} className="text-olive-600 shrink-0 mt-0.5" aria-hidden />
+                <span>
+                  Reso entro 14 giorni ·{' '}
+                  <Link href="/returns" className="font-semibold text-primary-700 underline hover:text-primary-800">
+                    alcuni prodotti sono esclusi
+                  </Link>
+                </span>
+              </p>
               <p className="flex items-center gap-2"><Store size={14} className="text-olive-600 shrink-0" aria-hidden /> Supporti il commercio locale</p>
             </div>
           </div>

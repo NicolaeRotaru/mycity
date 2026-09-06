@@ -154,6 +154,7 @@ export default function SellerCustomersPage() {
         <input
           type="search"
           placeholder="Cerca nome…"
+          aria-label="Cerca un cliente per nome"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="ml-auto border border-cream-300 rounded-lg px-3 py-1.5 text-sm flex-1 sm:flex-none sm:w-56"

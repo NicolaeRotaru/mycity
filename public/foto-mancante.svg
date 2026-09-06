@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="Foto non disponibile">
+  <rect width="400" height="400" fill="#FBF7F0"/>
+  <g fill="none" stroke="#C0492C" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" opacity="0.55">
+    <rect x="128" y="146" width="144" height="112" rx="14"/>
+    <path d="M128 226l38-36 30 28 34-40 42 48"/>
+    <circle cx="176" cy="180" r="12"/>
+  </g>
+  <text x="200" y="300" text-anchor="middle" font-family="Helvetica,Arial,sans-serif" font-size="26" font-weight="700" fill="#A03B25" opacity="0.75">Foto in arrivo</text>
+</svg>

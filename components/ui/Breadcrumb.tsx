@@ -18,9 +18,25 @@ type Crumb = { label: string; href?: string };
 type Props = {
   items: Crumb[];
   className?: string;
+  /**
+   * 6/9/2026 — QUESTO E' L'UNICO BRICIOLO DI PANE DEL SITO. PRIMA ERANO TRE.
+   *
+   * Lo stesso elemento — quello che dice alla persona dove si trova — era scritto in tre
+   * posti: qui, dentro `components/CollectionHeader.tsx` e a mano dentro
+   * `app/search/page.tsx`. Testo di due misure diverse (14px qui, 13px negli altri due) e
+   * la freccia messa prima della voce qui, dopo la voce negli altri. Passando da una
+   * categoria a un prodotto lo stesso punto di riferimento cambiava ritmo sotto gli occhi.
+   * Le due copie a mano sono state cancellate: ora tutti passano di qui.
+   *
+   * Il dato strutturato per Google, pero', non si puo' accendere ovunque a scatola chiusa:
+   * `app/category/[slug]/page.tsx` il suo `BreadcrumbList` lo stampa gia' per conto suo, e
+   * due schede uguali sulla stessa pagina sono peggio di una. Chi ha gia' il suo lo spegne
+   * qui; per tutti gli altri resta acceso, che e' il comportamento di sempre.
+   */
+  datiStrutturati?: boolean;
 };
 
-export function Breadcrumb({ items, className }: Props) {
+export function Breadcrumb({ items, className, datiStrutturati = true }: Props) {
   // Build Schema.org BreadcrumbList JSON-LD (filter only those with href)
   const schema = {
     '@context': 'https://schema.org',
@@ -58,10 +74,12 @@ export function Breadcrumb({ items, className }: Props) {
           })}
         </ol>
       </nav>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }}
-      />
+      {datiStrutturati && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, '\\u003c').replace(/>/g, '\\u003e') }}
+        />
+      )}
     </>
   );
 }

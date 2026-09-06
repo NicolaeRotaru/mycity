@@ -56,6 +56,7 @@ import { queryKeys } from '@/lib/queries/keys';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { trackReviewSubmitted } from '@/lib/analytics/events';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 
 // Chiavi attributo gestite dall'accordion "Ingredienti e allergeni": vengono
 // escluse dalla griglia generica "Caratteristiche" per non duplicarle.
@@ -308,7 +309,7 @@ export default function ProductPage(props: { params: Promise<{ id: string }> }) 
 
   const images: string[] = Array.isArray(product.images) && product.images.length > 0
     ? (product.images as string[])
-    : ['https://placehold.co/600x600/F5EDD9/78716C?text=Foto+prodotto'];
+    : [FOTO_MANCANTE];
   numeroFoto.current = images.length;
 
   const avgRating = reviews.length

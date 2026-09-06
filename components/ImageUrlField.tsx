@@ -33,7 +33,11 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
   const [uploading, setUploading] = useState(false);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/*': [] },
+    accept: {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/webp': ['.webp'],
+    },
     maxFiles: 1,
     multiple: false,
     disabled: uploading,
@@ -86,12 +90,14 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
 
       {/* Dropzone "carica da dispositivo" */}
       <div
-        {...getRootProps()}
+        {...getRootProps({ role: 'button', 'aria-label': 'Carica immagine: trascina un file o premi Invio per sceglierlo' })}
         className={`flex items-center justify-center gap-2 border-2 border-dashed rounded-lg px-3 py-3 text-sm cursor-pointer transition-colors mb-2 ${
           isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 bg-cream-50 hover:border-primary-300'
         } ${uploading ? 'opacity-60 cursor-wait' : ''}`}
       >
-        <input {...getInputProps()} />
+        {/* Il campo file di react-dropzone non e' nascosto: e' rimpicciolito a un pixel, quindi
+            chi usa un lettore di schermo ci arriva e sente «campo», senza sapere cosa sia. */}
+        <input {...getInputProps({ 'aria-label': 'Carica immagine' })} />
         <Upload size={16} strokeWidth={2.2} className="text-ink-500" aria-hidden />
         <span className="text-ink-600">
           {uploading ? 'Caricamento…' : isDragActive ? 'Rilascia qui…' : 'Carica da dispositivo'}
@@ -106,6 +112,7 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="oppure incolla un URL https://…"
+          aria-label={label ? `${label}: indirizzo web dell'immagine` : "Indirizzo web dell'immagine"}
           className="w-full bg-cream-50 border border-cream-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
         />
       </div>

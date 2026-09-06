@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { LoadingState } from '@/components/ui/LoadingState';
 import EmptyState from '@/components/EmptyState';
 import { Textarea } from '@/components/ui/Field';
-import { apiErrorMessage } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { useTranslations } from 'next-intl';
 import { Package, RefreshCw, AlertTriangle, MessageSquare, Clock, Pencil, type LucideIcon } from 'lucide-react';
@@ -61,7 +61,11 @@ export default function NewReturnPage() {
       });
       setPhotos((p) => [...p, publicUrl]);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Upload fallito');
+      // Qui il messaggio grezzo del deposito arrivava al cliente senza passare da
+      // nessuna traduzione: «The object exceeded the maximum allowed size», in
+      // inglese, mentre sta allegando la foto del prodotto arrivato rotto. Gli
+      // altri tre punti che caricano passano tutti da friendlyError: questo no.
+      toast.error(friendlyError(e));
     } finally {
       setUploading(false);
     }
@@ -233,7 +237,7 @@ export default function NewReturnPage() {
               {uploading ? '…' : '+'}
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="sr-only"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

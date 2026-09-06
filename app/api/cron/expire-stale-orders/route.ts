@@ -3,7 +3,25 @@ import { getAdminSupabase } from '@/lib/supabase/server';
 import { withCronAuth } from '@/lib/api/middleware';
 import { refundOrder } from '@/lib/stripe/payout';
 import { logger } from '@/lib/logger';
+// L'avviso agli amministratori e' quello gia' usato dal giro dei bonifici e dal
+// webhook: una casa sola, cosi' i tre percorsi non divergono.
+import { notifyAdmins } from '@/lib/stripe/webhook/comune';
 import { ORE_PER_ACCETTARE, ancoraNeiTempi } from '@/lib/ordini/scadenza-accettazione';
+
+/**
+ * 6/9/2026 — QUALI RIMBORSI FALLITI HA SENSO RITENTARE.
+ *
+ * `refundOrder` marchia con `ritentabile: false` (classe
+ * `RimborsoNonRitentabile`, in lib/stripe/payout.ts) gli errori che non
+ * cambieranno mai esito: ordine gia' rimborsato per intero, niente da
+ * rimborsare, ordine sparito. Leggiamo il marchio e non il testo del
+ * messaggio apposta: una frase si riscrive senza accorgersene, e il giro
+ * tornerebbe a rimbalzare per sempre. Leggiamo il campo e non il tipo perche'
+ * l'errore attraversa il confine fra due moduli.
+ */
+function rimborsoSenzaRitorno(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { ritentabile?: unknown }).ritentabile === false;
+}
 
 export const runtime = 'nodejs';
 
@@ -71,6 +89,8 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
   let refunded = 0;
   let failed = 0;
   let rinviati = 0;
+  /** Annullati con un rimborso impossibile: restano fermi, li chiude una persona. */
+  let daChiudereAMano = 0;
 
   for (const o of candidates ?? []) {
     // 3/9/2026 — L'ORDINE DELLA SERA PER DOMANI MORIVA NELLA NOTTE.
@@ -129,7 +149,40 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
             notifyBuyer: true,
           });
           refunded++;
-        } catch {
+        } catch (errRimborso) {
+          // 6/9/2026 — UN ORDINE CHE NON SI PUO' RIMBORSARE NON SI RIMETTE IN CODA.
+          //
+          // Rimettere in «nuovo» serve quando il rimborso puo' ancora riuscire:
+          // Stripe che non risponde, un limite di richieste, un errore
+          // passeggero. Se invece sull'ordine non c'e' piu' niente da
+          // rimborsare — un reso lo aveva gia' chiuso, oppure il credito
+          // MyCity copriva tutto — ogni tentativo fallira' allo stesso modo:
+          // annullato, resuscitato, riannullato mezz'ora dopo, all'infinito. Il
+          // negozio se lo vedeva in lista come da accettare, e l'unica traccia
+          // era un numero nella risposta del giro che non guarda nessuno.
+          //
+          // Adesso quell'ordine resta annullato e un avviso arriva agli
+          // amministratori: e' un lavoro da fare a mano, non da ritentare per
+          // sempre. L'avviso parte una volta sola, perche' l'ordine non torna
+          // fra i candidati del giro dopo.
+          if (rimborsoSenzaRitorno(errRimborso)) {
+            const motivo = errRimborso instanceof Error ? errRimborso.message : String(errRimborso);
+            logger.error('[cron] expire-stale-orders: rimborso impossibile, ordine lasciato annullato', {
+              id: o.id, message: motivo,
+            });
+            await notifyAdmins(
+              'Ordine annullato da chiudere a mano',
+              `L'ordine #${o.id.slice(0, 6).toUpperCase()} e' stato annullato perche' il negozio non lo ha accettato, ma il rimborso non puo' riuscire (${motivo}). Controlla su Stripe se il cliente ha gia' avuto i suoi soldi.`,
+              '/admin/orders',
+            ).catch((errAvviso) =>
+              logger.error('[cron] expire-stale-orders: avviso agli amministratori non partito', {
+                id: o.id, message: errAvviso instanceof Error ? errAvviso.message : String(errAvviso),
+              }),
+            );
+            daChiudereAMano++;
+            continue;
+          }
+
           // Rimetti l'ordine in coda: il prossimo giro riprovera'. Senza questo
           // resterebbe annullato e non rimborsato per sempre.
           const { error: errRipristino } = await admin
@@ -195,11 +248,16 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     }
   }
 
-  if (canceled > 0 || failed > 0) {
-    logger.spesa(`[cron] expire-stale-orders: ${canceled} annullati (${refunded} rimborsati), ${failed} falliti`);
+  if (canceled > 0 || failed > 0 || daChiudereAMano > 0) {
+    logger.spesa(
+      `[cron] expire-stale-orders: ${canceled} annullati (${refunded} rimborsati), ${failed} falliti, ${daChiudereAMano} da chiudere a mano`,
+    );
   }
 
-  return NextResponse.json({ ok: true, canceled, refunded, failed, rinviati }, { status: 200 });
+  return NextResponse.json(
+    { ok: true, canceled, refunded, failed, rinviati, daChiudereAMano },
+    { status: 200 },
+  );
 });
 
 // I lavori periodici di Vercel bussano in GET, sempre — non c'è modo di

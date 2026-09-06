@@ -209,6 +209,29 @@ async function processBatch(
       subject: messaggio.subject,
       html: messaggio.html,
       text: messaggio.text,
+      /**
+       * 6/9/2026 — CHI SPEDISCE DEVE DIRE CHE MESSAGGIO STA SPEDENDO.
+       *
+       * `sendEmail` sa gia' tenere il piede «annulla l'iscrizione» fuori dalle
+       * email di servizio (27/8, R067), ma solo se glielo si dichiara: chi non
+       * dichiara niente viene trattato come commerciale, di proposito. Questo
+       * giro non lo dichiarava, e allora «ordine pronto» e «ordine consegnato»
+       * — che sono avvisi sull'ordine di una persona — uscivano con il piede di
+       * disiscrizione e con le due intestazioni che accendono il pulsante
+       * «Annulla iscrizione» dentro Gmail.
+       *
+       * Chi lo premeva li' credeva di spegnere gli avvisi del suo ordine.
+       * Invece spegneva `email_marketing` e `notif_promos` (migrazione 118): le
+       * promozioni sparivano senza che le avesse rifiutate, e gli avvisi
+       * dell'ordine continuavano ad arrivare lo stesso. Poi ci segnalava come
+       * spam, e da li' in poi finiva nello spam la posta di tutti.
+       *
+       * La distinzione non la invento qui: e' la stessa riga sopra. Chi sta in
+       * `TEMPLATE_DI_SERVIZIO` parte senza consenso commerciale ED e' di
+       * servizio anche per il piede — un template nuovo dichiarato li' eredita
+       * le due cose insieme, e non si puo' piu' sbagliarne una sola.
+       */
+      tipo: isMarketing ? 'marketing' : 'transazionale',
       tags: [{ name: 'template', value: row.template }],
     });
     if ('ok' in res && res.ok) {

@@ -553,6 +553,24 @@ export const POST = withCronAuth(async (_req: NextRequest): Promise<NextResponse
         to: adminEmail,
         subject: `[MyCity Alert] ${fresh.length} anomalie operative`,
         html: body,
+        /**
+         * 6/9/2026 — LO STESSO RAGIONAMENTO DI #33, VENTI RIGHE PIU' SU.
+         *
+         * Li' e' gia' scritto che «un allarme operativo non e' una promozione e
+         * non si spegne con gli interruttori del marketing»: vale per l'avviso
+         * dentro il sito. La email non lo diceva, e chi non dichiara niente
+         * viene trattato come commerciale — quindi in fondo all'allarme delle
+         * tre di notte arrivava «Annulla l'iscrizione con un clic», e un clic
+         * distratto spegneva le promozioni di chi lo riceve.
+         *
+         * C'e' di peggio, ed e' il motivo per cui non e' solo una questione di
+         * forma: se UNSUBSCRIBE_SECRET non e' impostata, `sendEmail` si RIFIUTA
+         * di spedire un messaggio commerciale e torna «saltato». Non lancia,
+         * quindi il `catch` qui sotto non se ne accorge e il giro dichiara di
+         * essere andato bene. Gli allarmi operativi sparivano in silenzio,
+         * proprio mentre il sito aveva qualcosa che non andava.
+         */
+        tipo: 'transazionale',
       });
     } catch (err) {
       // Stessa ragione: se l'invio fallisce mentre ci sono anomalie fresche,

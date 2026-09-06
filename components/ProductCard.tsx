@@ -18,6 +18,7 @@ import { eAcceso, siPuoPremere, statoInterruttore } from '@/lib/stato-interrutto
 import { useProfile } from './hooks/useProfile';
 import { useShoppingMode, useCanPurchase } from './hooks/useShoppingMode';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 
 interface ProductCardProps {
   id: string;
@@ -61,7 +62,7 @@ const ProductCard = ({
   const badgePct = hasDiscount
     ? (discountPercent as number)
     : (compareValid ? Math.round((1 - price / (compareAtPrice as number)) * 100) : 0);
-  const rawImg = images?.[0] ?? 'https://placehold.co/400x400/FBF7F0/C0492C?text=Foto';
+  const rawImg = images?.[0] ?? FOTO_MANCANTE;
   const img = sizedImage(rawImg, 'card');
   const router = useRouter();
   const { favorites, lettoDavvero: preferitiLetti, toggle } = useFavorites();

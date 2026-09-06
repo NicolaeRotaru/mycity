@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import caricatoreFotoRemote from '@/lib/image-loader';
+import { FOTO_MANCANTE } from '@/lib/foto-mancante';
 import { Store } from 'lucide-react';
 import { formatPrice } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
@@ -28,11 +29,16 @@ export function CartGroupsList({ groups }: Props) {
       {groups.map((g) => (
         <div key={g.sellerId} className="px-5 py-3">
           <p className="text-xs font-semibold text-primary-800 mb-2 flex items-center gap-1"><Store size={13} aria-hidden /> {g.storeName}</p>
+          {/* 6/9/2026 — DUE VARIANTI DELLO STESSO PRODOTTO ERANO DUE RIGHE IDENTICHE.
+              Qui si stampavano foto, nome, «×quantita'» e prezzo, ma non la variante scelta: un
+              carrello con «Maglietta (M)» e «Maglietta (L)» mostrava due righe uguali proprio nel
+              riquadro che si legge prima di pagare. E la chiave era `item.id`, la stessa per tutte
+              e due: la chiave di riga vera e' prodotto + variante, come nel carrello. */}
           {g.items.map((item) => (
-            <div key={item.id} className="flex gap-3 items-center pl-2 py-1">
+            <div key={`${item.id}::${item.variantId ?? ''}`} className="flex gap-3 items-center pl-2 py-1">
               <div className="relative w-10 h-10 bg-cream-100 rounded shrink-0 overflow-hidden">
                 <Image
-                  src={sizedImage(item.image ?? 'https://placehold.co/100x100/F5EDD9/78716C?text=?', 'thumb')}
+                  src={sizedImage(item.image ?? FOTO_MANCANTE, 'thumb')}
                   alt={item.name}
                   fill
                   sizes="40px"
@@ -42,6 +48,9 @@ export function CartGroupsList({ groups }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-ink-800 text-sm truncate">{item.name}</p>
+                {item.variantLabel && (
+                  <p className="text-xs font-semibold text-ink-500 truncate">{item.variantLabel}</p>
+                )}
                 <p className="text-xs text-ink-400">×{item.quantity}</p>
               </div>
               <span className="font-semibold text-ink-800 text-sm">{formatPrice(item.price * item.quantity)}</span>

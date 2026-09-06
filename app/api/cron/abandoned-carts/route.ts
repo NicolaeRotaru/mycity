@@ -93,12 +93,19 @@ const handler = withCronAuth(async (): Promise<NextResponse> => {
     const res = await sendEmail({
       to: c.email,
       subject: 'Hai dimenticato qualcosa nel carrello',
+      // 6/9/2026 — QUESTA EMAIL SCRIVEVA UN TOTALE VECCHIO.
+      // `cart_total` e' la fotografia del carrello al momento in cui e' stato abbandonato: se il
+      // negozio ha ritoccato un prezzo, o se una promozione e' partita o finita, quella cifra non
+      // esiste piu'. La persona tornava sul sito per un numero che non trovava piu' da nessuna
+      // parte — nel momento in cui la stiamo richiamando, cioe' quando la fiducia conta di piu'.
+      // La lista di cosa c'e' dentro resta e basta a far tornare; il totale vero lo dice il
+      // carrello, che adesso lo rilegge dal database.
       html: `<p>Ciao ${escapeHtml(first)},</p>
-             <p>Il tuo carrello (€${Number(c.cart_total).toFixed(2)}) ti aspetta.</p>
+             <p>Il tuo carrello ti aspetta.</p>
              ${itemsList ? `<ul>${itemsList}</ul>` : ''}
              <p><a href="${env.appUrl()}/cart" style="background:#C0492C;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none">Completa l&apos;acquisto →</a></p>
              <p style="font-size:12px;color:#888">Se hai cambiato idea, ignora questa email. Non ti scriveremo più per questo carrello.</p>`,
-      text: `Il tuo carrello ti aspetta. Totale €${Number(c.cart_total).toFixed(2)}. Vai su ${env.appUrl()}/cart.`,
+      text: `Il tuo carrello ti aspetta. Vai su ${env.appUrl()}/cart.`,
       tags: [{ name: 'template', value: 'abandoned_cart_4h' }],
     });
     if ('ok' in res && res.ok) {

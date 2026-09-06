@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase/client';
 import { resizeImageToFile } from '@/lib/image-resize';
-import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 
 /**
  * Upload condiviso delle immagini prodotto sul bucket pubblico `products`.
@@ -41,7 +41,7 @@ export async function uploadProductImages(files: File[]): Promise<string[]> {
       file,
       userId: user.id,
       etichetta: safeName,
-      cacheControl: '3600',
+      cacheControl: ANNO_IN_SECONDI,
     });
     uploaded.push(publicUrl);
   }

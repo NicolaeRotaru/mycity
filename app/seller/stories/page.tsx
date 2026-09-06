@@ -214,8 +214,9 @@ export default function SellerStoriesPage() {
       >
           <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold mb-1">Foto (verticale 3:4 consigliata)</label>
+                <label htmlFor="foto-storia" className="block text-sm font-semibold mb-1">Foto (verticale 3:4 consigliata)</label>
                 <input
+                  id="foto-storia"
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => setImage(e.target.files?.[0] ?? null)}

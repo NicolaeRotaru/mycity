@@ -7,14 +7,14 @@ import { AlertTriangle, ArrowLeft, MapPin, Store, Truck, Wallet } from 'lucide-r
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante } from '@/lib/cart';
+import { CartItem, getCart, clearCart, removeFromCart, rimuoviRigaSenzaVariante, cartCount } from '@/lib/cart';
 import { statoDellaVista } from '@/lib/stato-vista';
 import { chiaveTentativo, chiudiTentativo } from '@/lib/ordini/tentativo';
 import { chiaveDelCheckout, chiudiChiaveDelCheckout } from '@/lib/analytics/chiave-checkout';
 import { laChiaveVaButtata } from '@/lib/ordini/chiave-dopo-l-errore';
 import { checkoutChiuso } from '@/lib/ordini/partenza';
 import { leggiOrdiniCod } from '@/lib/ordini/risposta-ordini-cod';
-import { formatPrice } from '@/lib/format';
+import { formatPrice, pluralize } from '@/lib/format';
 import { PICKUP_DISCOUNT_PERCENT, RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { shippingForEuro } from '@/lib/shipping';
 import { riepilogoDaMostrare } from '@/lib/ordini/riepilogo-cassa';
@@ -1119,7 +1119,13 @@ export default function CheckoutPage() {
       </Link>
       <h1 className="font-serif text-2xl sm:text-3xl font-bold text-ink-900 mb-5">Conferma il tuo ordine</h1>
 
-      <StepIndicator steps={CHECKOUT_STEPS} currentStep={2} />
+      {/* 6/9/2026 — IL TERZO PASSO NON SI ACCENDEVA MAI.
+          `currentStep` era fisso a 2: nessuna pagina passava 3, quindi «Conferma» restava grigio
+          per tutto il percorso e la barra diceva «2 di 3» anche mentre l'ordine partiva — come se
+          dopo il pagamento ci fosse ancora un passaggio. `inPartenza` diventa vero quando l'ordine
+          e' stato accettato e la pagina sta solo aspettando di sparire: e' quello il momento in cui
+          il percorso e' completo, e la barra ora lo dice. */}
+      <StepIndicator steps={CHECKOUT_STEPS} currentStep={inPartenza ? 3 : 2} />
 
       {!authUser && (
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
@@ -1373,7 +1379,12 @@ export default function CheckoutPage() {
           <Card variant="funnel" padding="none" className="overflow-hidden">
             <div className="bg-surface-50 border-b border-surface-200 px-5 py-3 flex justify-between items-center">
               <h2 className="font-serif text-lg font-bold text-ink-900">Riepilogo</h2>
-              <span className="text-xs text-ink-400">{cart.length} articoli</span>
+              {/* 6/9/2026 — QUI SI CONTAVANO LE RIGHE, NEL CARRELLO I PEZZI.
+                  Con due filoni e tre focacce il carrello scriveva «5 articoli» e questo riquadro,
+                  un tocco dopo, «2 articoli». Un numero che cala fra un passo e l'altro proprio
+                  prima di pagare fa tornare indietro a controllare se e' arrivato tutto.
+                  `cartCount` e' la stessa funzione che usa il carrello: un contatore solo. */}
+              <span className="text-xs text-ink-400">{pluralize(cartCount(cart), 'articolo', 'articoli')}</span>
             </div>
 
             <CartGroupsList groups={groups} />

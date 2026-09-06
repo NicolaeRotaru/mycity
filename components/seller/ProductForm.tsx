@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -136,6 +136,7 @@ export default function ProductForm({
   const [uploading, setUploading] = useState(false);
   const [attributes, setAttributes] = useState<Record<string, unknown>>(initialValues?.attributes ?? {});
   const [tags, setTags] = useState<string[]>(initialValues?.tags ?? []);
+  const idTag = useId();
   const [tagInput, setTagInput] = useState('');
   const [unit, setUnit] = useState<ProductUnit>((initialValues?.unit as ProductUnit) ?? 'pezzo');
   const [condition, setCondition] = useState<ProductCondition | ''>((initialValues?.condition as ProductCondition) ?? '');
@@ -853,7 +854,7 @@ export default function ProductForm({
 
         {/* Tag / parole chiave */}
         <div className="border-t pt-4">
-          <label className="block text-sm font-medium text-ink-700 mb-1">Tag / parole chiave</label>
+          <label htmlFor={idTag} className="block text-sm font-medium text-ink-700 mb-1">Tag / parole chiave</label>
           <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-cream-300 p-2">
             {tags.map((t) => (
               <span key={t} className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
@@ -862,6 +863,7 @@ export default function ProductForm({
               </span>
             ))}
             <input
+              id={idTag}
               value={tagInput}
               onChange={(e) => setTagInput(e.target.value)}
               onKeyDown={(e) => {

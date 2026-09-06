@@ -6,7 +6,7 @@ import caricatoreFotoRemote from '@/lib/image-loader';
 import { Camera, X, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { caricaImmagine } from '@/lib/storage/carica-immagine';
+import { ANNO_IN_SECONDI, caricaImmagine } from '@/lib/storage/carica-immagine';
 
 type Props = {
   userId: string;
@@ -78,7 +78,7 @@ export default function PhotoReviewUpload({ userId, productId, onUploaded, max =
             userId,
             cartella: productId,
             secchio: SECCHIO_RECENSIONI,
-            cacheControl: '3600',
+            cacheControl: ANNO_IN_SECONDI,
           }));
         } catch (err) {
           // Se il magazzino non esiste, dillo con parole che si capiscono.

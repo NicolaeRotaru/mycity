@@ -709,6 +709,31 @@ async function addebitaQuotaVenditoreSeNonPagato(
   return nuovoAddebito - giaAddebitato;
 }
 
+/**
+ * 6/9/2026 — UN RIMBORSO CHE NON PUO' RIUSCIRE NON SI RITENTA.
+ *
+ * Il giro delle mezz'ore che annulla gli ordini mai accettati chiede il
+ * rimborso e, se il rimborso lancia, rimette l'ordine in «nuovo» per riprovare
+ * al giro dopo. Ma non tutti gli errori sono uguali: se Stripe non risponde
+ * riprovare e' giusto, mentre se sull'ordine non c'e' piu' niente da
+ * rimborsare — perche' un reso lo aveva gia' chiuso — riprovare non servira'
+ * mai. Quell'ordine rimbalzava fra annullato e nuovo ogni mezz'ora, per
+ * sempre, e il negozio continuava a vederselo in lista come da accettare.
+ *
+ * Da qui in avanti chi sa PERCHE' il rimborso e' fallito lo dice: gli errori
+ * senza ritorno portano il marchio `ritentabile = false`. Chi ritenta lo legge
+ * e si ferma, invece di indovinare dal testo del messaggio.
+ */
+export class RimborsoNonRitentabile extends Error {
+  /** Marchio letto da chi ritenta: il messaggio si puo' riscrivere, questo no. */
+  readonly ritentabile = false;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'RimborsoNonRitentabile';
+  }
+}
+
 export async function refundOrder(
   opts: RefundOrderOpts,
 ): Promise<{ refundId: string; reversedCents: number }> {
@@ -720,7 +745,7 @@ export async function refundOrder(
     () => admin.from('orders').select(senzaColonne(COLONNE_RIMBORSO, COLONNE_124)).eq('id', opts.orderId).single(),
   );
 
-  if (error || !order) throw new Error('refundOrder: ordine non trovato');
+  if (error || !order) throw new RimborsoNonRitentabile('refundOrder: ordine non trovato');
 
   // 055 — DUE BASI DIVERSE, E IL CONTO NON TORNAVA.
   //
@@ -741,7 +766,7 @@ export async function refundOrder(
   const grossCents = order.gross_total_cents ?? Math.round(Number(order.total_price) * 100);
   const alreadyRefunded = order.refunded_amount_cents ?? 0;
   const safeAmountCents = Math.max(0, Math.min(opts.amountCents, grossCents - alreadyRefunded));
-  if (safeAmountCents <= 0) throw new Error('refundOrder: importo rimborso non valido');
+  if (safeAmountCents <= 0) throw new RimborsoNonRitentabile('refundOrder: importo rimborso non valido');
 
   // 051 — LA RIVENDICAZIONE VIENE PRIMA DEI SOLDI.
   // Prima il totale rimborsato veniva letto qui, sommato in memoria e riscritto
@@ -759,7 +784,7 @@ export async function refundOrder(
   }
   const rivendicato = Array.isArray(claimRimborso) ? claimRimborso[0] : claimRimborso;
   if (!rivendicato) {
-    throw new Error('refundOrder: rimborso già registrato o oltre il totale dell ordine');
+    throw new RimborsoNonRitentabile('refundOrder: rimborso già registrato o oltre il totale dell ordine');
   }
 
   // payment_status distingue REFUNDED (pieno) da PARTIALLY_REFUNDED (parziale).
@@ -778,7 +803,7 @@ export async function refundOrder(
   // ristorato in credito spendibile, non in contanti.
   if (!order.stripe_payment_intent) {
     if (order.payment_method !== 'cod') {
-      throw new Error('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
+      throw new RimborsoNonRitentabile('refundOrder: ordine senza payment_intent e non COD (non rimborsabile)');
     }
     const ref = opts.idempotencyKey ?? `cod_refund_${order.id}_${safeAmountCents}`;
 

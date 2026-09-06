@@ -23,7 +23,11 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
   const [busy, setBusy] = useState(false);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/*': [] },
+    accept: {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/webp': ['.webp'],
+    },
     disabled: busy || items.length >= MAX_GALLERY_ITEMS,
     onDrop: async (files) => {
       const toUpload = files.slice(0, MAX_GALLERY_ITEMS - items.length);
@@ -72,6 +76,7 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
                 maxLength={120}
                 onChange={(e) => setItem(i, { alt: e.target.value })}
                 placeholder="Descrizione"
+                aria-label={`Descrizione dell'immagine ${i + 1}`}
                 className="w-full border border-cream-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-primary-700"
               />
             </div>
@@ -80,12 +85,12 @@ export default function GalleryFields({ section, onChange }: { section: GalleryS
       )}
       {items.length < MAX_GALLERY_ITEMS && (
         <div
-          {...getRootProps()}
+          {...getRootProps({ role: 'button', 'aria-label': 'Aggiungi immagini alla galleria: trascina i file o premi Invio' })}
           className={`border-2 border-dashed rounded-lg p-4 cursor-pointer text-sm text-center transition-colors ${
             isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
           } ${busy ? 'opacity-50 pointer-events-none' : ''}`}
         >
-          <input {...getInputProps()} />
+          <input {...getInputProps({ 'aria-label': 'Aggiungi immagini alla galleria' })} />
           {busy ? 'Caricamento…' : `Aggiungi immagini (max ${MAX_GALLERY_ITEMS})`}
         </div>
       )}

@@ -127,7 +127,7 @@ export default function ProductImagesField({
 
       {/* Dropzone galleria/file */}
       <div
-        {...getRootProps()}
+        {...getRootProps({ role: 'button', 'aria-label': 'Carica le foto del prodotto: trascina i file o premi Invio' })}
         className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
           error
             ? 'border-rose-300 bg-rose-50'
@@ -136,12 +136,12 @@ export default function ProductImagesField({
               : 'border-cream-300 hover:border-primary-400'
         }`}
       >
-        <input {...getInputProps()} />
+        <input {...getInputProps({ 'aria-label': 'Carica le foto del prodotto' })} />
         {uploading ? <LoadingState variant="inline" /> : <p className="text-ink-500">{dropzoneHint}</p>}
       </div>
 
       {hint && <p className="text-xs text-ink-400 mt-1">{hint}</p>}
-      {error && <p className="text-sm text-rose-600 mt-1">{error}</p>}
+      {error && <p role="alert" className="text-sm font-medium text-secondary-600 mt-1">{error}</p>}
 
       {value.length > 0 && (
         <>

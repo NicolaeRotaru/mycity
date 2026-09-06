@@ -271,6 +271,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
                     onChange={(e) => updateProduct(idx, { name: e.target.value })}
                     disabled={creating}
                     placeholder="Nome prodotto"
+                    aria-label={`Nome del prodotto ${idx + 1}`}
                     className="w-full rounded border border-cream-300 bg-white px-2 py-1 text-sm font-semibold focus-visible:ring-2 focus-visible:ring-primary-700 focus:outline-none"
                   />
                 )}

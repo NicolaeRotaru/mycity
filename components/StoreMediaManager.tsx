@@ -26,7 +26,14 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
   const videoCount = value.filter((m) => m.type === 'video').length;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { 'image/*': [], 'video/*': [] },
+    // Le foto: solo i tre formati che il deposito accetta davvero (prima diceva «image/*»,
+    // cioe' anche SVG, che viene respinto alla fine del caricamento).
+    accept: {
+      'image/jpeg': ['.jpg', '.jpeg'],
+      'image/png': ['.png'],
+      'image/webp': ['.webp'],
+      'video/*': [],
+    },
     multiple: true,
     onDrop: async (files) => {
       setUploading(true);
@@ -161,12 +168,12 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
 
       {canAddMore && (
         <div
-          {...getRootProps()}
+          {...getRootProps({ role: 'button', 'aria-label': 'Carica foto o video del negozio: trascina i file o premi Invio' })}
           className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
             isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
           } ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
         >
-          <input {...getInputProps()} />
+          <input {...getInputProps({ 'aria-label': 'Carica foto o video del negozio' })} />
           <p className="text-sm text-ink-600">
             {uploading
               ? tStates('loading')
