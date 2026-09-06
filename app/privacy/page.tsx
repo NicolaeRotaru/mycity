@@ -144,14 +144,6 @@ export default function PrivacyPage() {
                   un trattamento di dati di terzi senza informativa. Adesso c'è
                   scritto anche quando quei dati se ne vanno, e il codice fa
                   quello che c'è scritto (lib/account/cancellazione.ts). */}
-                            {/* 3/9/2026 — I BUONI REGALO NON ERANO DICHIARATI DA NESSUNA PARTE.
-                  Chi compra un buono scrive nome, email e un messaggio del
-                  DESTINATARIO: una persona che non si è mai iscritta e che di
-                  noi non sapeva niente. Le parole «regalo» e «gift» non
-                  comparivano in questa pagina, e la tabella non aveva la riga:
-                  un trattamento di dati di terzi senza informativa. Adesso c'è
-                  scritto anche quando quei dati se ne vanno, e il codice fa
-                  quello che c'è scritto (lib/account/cancellazione.ts). */}
               <tr><td className="border px-3 py-2">Buoni regalo — dati del destinatario (nome, email, messaggio)</td><td className="border px-3 py-2">Legittimo interesse a recapitare il regalo a chi è stato indicato (art. 6.1.f)</td><td className="border px-3 py-2">Nome, email e messaggio del destinatario vengono azzerati quando chi ha comprato il buono cancella il proprio account; il credito resta spendibile fino alla scadenza (2 anni). Il destinatario può chiederne la cancellazione in qualsiasi momento: il modo è scritto nell&apos;email che riceve.</td></tr>
               {/* 6/9/2026 — La riga mancava: le push partono da un lavoro
                   automatico ogni cinque minuti (app/api/cron/send-push) e

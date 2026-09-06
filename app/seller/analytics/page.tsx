@@ -288,7 +288,7 @@ export default function SellerAnalyticsPage() {
     insights.push({
       icon: PackageX, tone: 'secondary',
       title: 'Conversione sotto la media',
-      body: `Tante visite ma pochi ordini (${analytics.conversionRate.toFixed(1)}%). Una promo a tempo può creare urgenza.`,
+      body: `Tante visite ma pochi ordini (${analytics.conversionRate.toFixed(1).replace('.', ',')}%). Una promo a tempo può creare urgenza.`,
       ctaLabel: 'Crea una promo', ctaHref: '/seller/promotions',
     });
   }
@@ -340,7 +340,7 @@ export default function SellerAnalyticsPage() {
         <KpiCard
           icon={TrendingUp}
           label="Conversion rate"
-          value={analytics.conversionRate == null ? '—' : `${analytics.conversionRate.toFixed(1)}%`}
+          value={analytics.conversionRate == null ? '—' : `${analytics.conversionRate.toFixed(1).replace('.', ',')}%`}
           // Il campione, dichiarato: le visite si contano solo su chi accetta i
           // cookie, quindi questo numero e' un indizio, non una misura. E senza
           // le visite il tasso non c'e': un «0,0%» direbbe che nessuno compra.

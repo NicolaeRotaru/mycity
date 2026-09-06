@@ -6,6 +6,7 @@ import { Star, StarHalf, User, BadgeCheck, ThumbsUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
+import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import type { SectionContext, SectionReview } from './SectionContext';
 import { RatingStars } from '@/components/ui/RatingStars';
 
@@ -42,7 +43,12 @@ function AverageStars({ value }: { value: number }) {
 function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
   const author = r.author ?? null;
   const verified = r.order_id != null;
-  const photos = Array.isArray(r.photo_urls) ? r.photo_urls : [];
+  // Ogni foto diventa un collegamento cliccabile sulla vetrina pubblica, e
+  // l'indirizzo lo sceglie chi scrive la recensione: nessuna rotta server e
+  // nessun vincolo sulla colonna lo controllano. `fotoDiCasa` tiene solo gli
+  // `https` del nostro archivio — la stessa regola gia' applicata alle foto dei
+  // resi (lib/storage/foto-di-casa.ts).
+  const photos = (Array.isArray(r.photo_urls) ? r.photo_urls : []).filter(fotoDiCasa);
 
   // Stato voto "Utile": parte dal conteggio reale; lo stato own-voted viene
   // risolto a runtime (review_helpful own-row) e poi mantenuto ottimisticamente.

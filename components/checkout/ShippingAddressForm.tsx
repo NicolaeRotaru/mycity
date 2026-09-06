@@ -5,6 +5,7 @@ import { useState, type ChangeEvent, type FormEvent } from 'react';
 import { Plus, X } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Field';
+import { RAGGIO_CONSEGNA_KM } from '@/lib/constants';
 
 /**
  * Form indirizzo di consegna per checkout.
@@ -190,6 +191,12 @@ export function ShippingAddressForm({
             inputMode="numeric"
             required
             error={errors.zip}
+            /* 6/9/2026 — DOVE ARRIVIAMO, DETTO MENTRE SI SCRIVE L'INDIRIZZO.
+               Chi abita fuori zona compilava tutto — nome, via, CAP, telefono,
+               metodo di pagamento — e lo scopriva solo al clic finale. Il
+               numero viene da dove è deciso (RAGGIO_CONSEGNA_KM), così la frase
+               non può dire una cosa mentre la cassa ne fa un'altra. */
+            hint={`Consegniamo a Piacenza e dintorni, entro ${RAGGIO_CONSEGNA_KM} km dal negozio`}
           />
         </div>
         <Input

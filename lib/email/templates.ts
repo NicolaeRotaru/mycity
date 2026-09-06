@@ -99,13 +99,34 @@ function btn(href: string, label: string): string {
   return `<a href="${href}" style="display:inline-block;background:${COLORI.marchio};color:${COLORI.suFoglio};text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600">${escapeHtml(label)}</a>`;
 }
 
+/**
+ * IL SALUTO CHE NON RESTA A META' QUANDO IL NOME NON C'E'.
+ *
+ * 6/9/2026 — La prima email dopo un ordine apriva con «Ciao ${nome ?? ''},»: se
+ * sul profilo il nome manca — registrazione senza nome, accesso con Google che
+ * non lo passa, profilo vecchio — al cliente arrivava «Ciao , abbiamo ricevuto
+ * il tuo ordine da Pane Quotidiano». E' il primo messaggio che riceve dopo aver
+ * pagato: e' li' che decide se siamo un negozio serio o un sito raffazzonato.
+ *
+ * La cura giusta era gia' in questo file, nell'email di benvenuto: quando il
+ * nome manca non si lascia il buco, si cambia la frase. Qui diventa un aiutante
+ * solo, cosi' il prossimo template nasce gia' giusto.
+ *
+ * Torna la frase INTERA di saluto, virgola compresa, con il nome ripulito
+ * (e' testo scritto da un'altra persona: va sempre filtrato).
+ */
+function saluto(nome?: string | null): string {
+  const n = nome?.trim();
+  return n ? `Ciao ${escapeHtml(n)},` : 'Ciao,';
+}
+
 // ---------- Template specifici ----------
 
 export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderId: string; total: number; storeName: string }) {
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Ordine ricevuto</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Ciao ${escapeHtml(args.name ?? '')}, abbiamo ricevuto il tuo ordine da <strong>${escapeHtml(args.storeName)}</strong>.</p>
+    <p style="margin:0 0 12px;line-height:1.6">${saluto(args.name)} abbiamo ricevuto il tuo ordine da <strong>${escapeHtml(args.storeName)}</strong>.</p>
     <table cellpadding="0" cellspacing="0" style="width:100%;margin:16px 0">
       <tr><td style="padding:8px 0;color:${COLORI.tenue}">Ordine</td><td style="padding:8px 0;text-align:right;font-family:monospace">#${escapeHtml(args.orderId.slice(0, 8))}</td></tr>
       <tr><td style="padding:8px 0;color:${COLORI.tenue}">Totale</td><td style="padding:8px 0;text-align:right;font-weight:600">€${args.total.toFixed(2)}</td></tr>
@@ -193,7 +214,7 @@ export function orderDeliveredTemplate(args: { orderId: string; name?: string | 
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.buono}">✅ Ordine consegnato</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Ciao ${escapeHtml(args.name ?? '')}, il tuo ordine è stato consegnato.</p>
+    <p style="margin:0 0 12px;line-height:1.6">${saluto(args.name)} il tuo ordine è stato consegnato.</p>
     <p style="margin:0 0 12px;line-height:1.6">Grazie per aver scelto ${BRAND}. Lascia una recensione per aiutare altri acquirenti.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Lascia recensione')}</p>
   `;

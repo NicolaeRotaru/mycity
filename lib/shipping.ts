@@ -1,5 +1,6 @@
 import { COMPENSO_RIDER_CENTS, FREE_SHIPPING_THRESHOLD, SHIPPING_PER_ORDER } from './constants';
 import { haversineKm, prezzoSpedizioneEuro } from './geo';
+import { fuoriZonaDiConsegna } from './ordini/zona-di-consegna';
 
 /**
  * Calcolo spedizione per un gruppo (un venditore). FONTE UNICA condivisa tra
@@ -8,7 +9,7 @@ import { haversineKm, prezzoSpedizioneEuro } from './geo';
  *
  * Regole (identiche alla UI originale):
  *  - ritiro in negozio o coupon FREE_SHIPPING → 0
- *  - subtotale ≥ soglia spedizione gratuita → 0
+ *  - subtotale ≥ soglia spedizione gratuita → 0, ma solo dentro la zona servita
  *  - coordinate negozio+consegna note → tariffa distanza (prezzoSpedizioneEuro)
  *  - altrimenti → tariffa flat di fallback
  *
@@ -26,7 +27,18 @@ export function shippingForEuro(opts: {
 }): number {
   const { subtotal, storeLat, storeLng, deliveryLat, deliveryLng, pickupInStore, freeShipping } = opts;
   if (pickupInStore || freeShipping) return 0;
-  if (subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
+  /**
+   * 6/9/2026 — LA SOGLIA DELLA SPEDIZIONE GRATIS CORTOCIRCUITAVA LA DISTANZA.
+   *
+   * `subtotal >= 30 → 0` stava PRIMA del conto sui chilometri: una consegna a
+   * 60 km su un carrello da 35 € risultava gratuita, e il carrello scriveva
+   * «Gratis» su una consegna che non faremo mai. Fuori zona la promessa non si
+   * può fare: resta il prezzo della distanza, e l'ordine lo rifiutano comunque
+   * le due rotte che lo creano. La soglia continua a valere identica per tutti
+   * gli indirizzi che serviamo, che sono quelli veri.
+   */
+  const fuoriZona = fuoriZonaDiConsegna({ storeLat, storeLng, deliveryLat, deliveryLng, pickupInStore });
+  if (!fuoriZona && subtotal >= FREE_SHIPPING_THRESHOLD) return 0;
   if (storeLat && storeLng && deliveryLat && deliveryLng) {
     return prezzoSpedizioneEuro(haversineKm(storeLat, storeLng, deliveryLat, deliveryLng));
   }

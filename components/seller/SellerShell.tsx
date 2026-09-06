@@ -409,10 +409,16 @@ export default function SellerShell({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        {/* CONTENT */}
-        <main className="w-full max-w-[1100px] flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-7">
+        {/* CONTENT
+            6/9/2026 — qui c'era un secondo `<main>`. Il guscio del sito
+            (app/layout.tsx) avvolge gia' tutto in `<main id="main-content">`, e
+            un `<main>` dentro un `<main>` non e' HTML valido: chi naviga con il
+            lettore di schermo salta da un punto di riferimento all'altro e si
+            trova due «contenuto principale», senza sapere quale sia quello
+            buono. Il punto di riferimento resta uno solo, quello fuori. */}
+        <div className="w-full max-w-[1100px] flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-7">
           {children}
-        </main>
+        </div>
       </div>
 
       {/* Copilot FAB — sempre raggiungibile */}

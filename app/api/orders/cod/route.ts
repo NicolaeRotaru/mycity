@@ -8,10 +8,11 @@ import { ApiErrors, apiSuccess } from '@/lib/api/responses';
 import { validateCoupon } from '@/lib/coupons';
 import { RITIRO_IN_NEGOZIO_ATTIVO } from '@/lib/constants';
 import { coordinateDaIndirizziSalvati } from '@/lib/shipping-coordinate';
+import { fuoriZonaDiConsegna, motivoFuoriZona } from '@/lib/ordini/zona-di-consegna';
 import { coordinateDiUnIndirizzo } from '@/lib/geocodifica';
 import { motivoNegozioChiuso, negozioPuoServire } from '@/lib/store-hours';
 import { computeOrderSplit } from '@/lib/stripe/client';
-import { fetchActiveDiscounts, discountedUnitCents } from '@/lib/promotions';
+import { fetchActiveDiscounts } from '@/lib/promotions';
 import { sendEmail } from '@/lib/email/client';
 import { orderConfirmedBuyerTemplate, newOrderSellerTemplate } from '@/lib/email/templates';
 import { contaAcquisto, analyticsConsentita } from '@/lib/analytics/server';
@@ -25,6 +26,7 @@ import { CAMPI_124, conRipiegoSchema, senzaCampi } from '@/lib/db/migrazione-124
 import { decisioneSuChiaveOccupata } from '@/lib/ordini/tentativo';
 import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
+import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
@@ -78,6 +80,36 @@ const Body = z.object({
    */
   checkoutId: z.string().max(80).optional().nullable(),
 });
+
+/**
+ * 6/9/2026 — «ORDINE GIA IN CORSO» USCIVA IN UNA FORMA CHE NESSUN'ALTRA ROTTA USA.
+ *
+ * Il contratto del progetto (lib/api/responses.ts) dice che un errore e'
+ * `{ ok:false, error:{ code, message } }` — «cosi' il frontend sa esattamente
+ * cosa aspettarsi». Queste due uscite rispondevano invece `{ error: 'stringa' }`.
+ * Chi scrive una chiamata nuova la legge nel modo sbagliato: il motivo vero non
+ * arriva a schermo e chi sta comprando vede «Operazione non riuscita» senza
+ * sapere perche' — su una rotta di cassa, la differenza fra riprovare e
+ * abbandonare.
+ *
+ * `inCorso` resta dov'e', in cima al corpo: NON e' decorazione. Il browser lo
+ * legge (`laChiaveVaButtata`, lib/ordini/chiave-dopo-l-errore.ts) per capire che
+ * la chiave del tentativo appartiene a un invio gemello ancora vivo e NON va
+ * buttata. Toglierlo da li' vuol dire ricreare il doppio ordine che tutta questa
+ * storia serve a evitare. Il posto giusto per quel segnale sarebbe
+ * `error.details`, ma spostarlo tocca il file che lo legge: quando si fa, si
+ * fanno le due cose insieme.
+ */
+function ordineGiaInCorso(): NextResponse {
+  return NextResponse.json(
+    {
+      ok: false,
+      error: { code: 'CONFLICT', message: 'Ordine gia in corso, attendi qualche secondo.' },
+      inCorso: true,
+    },
+    { status: 409 },
+  );
+}
 
 /**
  * Crea ordini COD (pagamento alla consegna) SERVER-SIDE.
@@ -167,7 +199,7 @@ export const POST = withAuthRateLimit(
           logger.error('[cod] rivendicazione del tentativo fallita', {
             chiave: chiaveTentativo, message: errRivendica.message,
           });
-          return NextResponse.json({ error: 'Impossibile registrare l ordine, riprova.' }, { status: 503 });
+          return ApiErrors.unavailable('Impossibile registrare l ordine, riprova.');
         }
 
         // Chiave gia' presa: o e' lo stesso invio ripetuto, o e' il gemello
@@ -212,14 +244,11 @@ export const POST = withAuthRateLimit(
             .from('cod_checkout_attempts')
             .insert({ chiave: chiaveTentativo, user_id: user.id, order_ids: [] });
           if (errRiprova) {
-            return NextResponse.json({ error: 'Ordine gia in corso, attendi qualche secondo.', inCorso: true }, { status: 409 });
+            return ordineGiaInCorso();
           }
         } else {
           logger.warn('[cod] invio gemello ancora in corso sulla stessa chiave', { chiave: chiaveTentativo });
-          return NextResponse.json(
-            { error: 'Ordine gia in corso, attendi qualche secondo.', inCorso: true },
-            { status: 409 },
-          );
+          return ordineGiaInCorso();
         }
       }
     }
@@ -375,38 +404,30 @@ export const POST = withAuthRateLimit(
       let groupSubtotalCents = 0;
       const items: Array<CodItem> = [];
       for (const it of g.items) {
-        const p = products.find((x) => x.id === it.productId);
-        if (!p) return esciERilascia(ApiErrors.notFound(`Prodotto ${it.productId} non trovato`));
-        if (p.seller_id !== g.sellerId) {
-          return esciERilascia(ApiErrors.invalidRequest(`Prodotto ${p.name} non appartiene al venditore indicato.`));
-        }
-        if (p.status !== 'available') {
-          return esciERilascia(ApiErrors.invalidRequest(`Prodotto ${p.name} non disponibile.`));
-        }
-        // Varianti: prodotto con varianti richiede una variante valida; lo stock
-        // controllato è quello della variante.
-        const hasVariants = Boolean((p as { has_variants?: boolean }).has_variants);
-        let variantId: string | null = null;
-        let variantLabel: string | null = null;
-        if (hasVariants) {
-          if (!it.variantId) {
-            return esciERilascia(ApiErrors.invalidRequest(`Scegli un'opzione (es. taglia/colore) per ${p.name}.`));
-          }
-          const v = variantMap.get(it.variantId);
-          if (!v || v.product_id !== p.id) {
-            return esciERilascia(ApiErrors.invalidRequest(`Variante non valida per ${p.name}.`));
-          }
-          if (v.stock < it.quantity) {
-            return esciERilascia(ApiErrors.conflict(`Disponibilità insufficiente per ${p.name} (${v.label}): ${v.stock} disponibili.`));
-          }
-          variantId = v.id;
-          variantLabel = v.label;
-        } else if (typeof p.stock === 'number' && p.stock < it.quantity) {
-          return esciERilascia(ApiErrors.conflict(`Stock insufficiente per ${p.name} (${p.stock} disponibili).`));
-        }
-        const unitCents = discountedUnitCents(p.price, discountMap.get(p.id) ?? 0);
-        items.push({ productId: p.id, quantity: it.quantity, unitCents, variantId, variantLabel });
-        groupSubtotalCents += unitCents * it.quantity;
+        /**
+         * 6/9/2026 — LA REGOLA «QUESTO CARRELLO SI PUO' VENDERE?» STA IN UN
+         * POSTO SOLO, CONDIVISO CON LA ROTTA DELLA CARTA.
+         *
+         * Qui c'erano trenta righe — prodotto esistente, del negozio giusto,
+         * disponibile, variante valida e sua, scorte, prezzo scontato — copiate
+         * parola per parola dentro app/api/stripe/checkout/route.ts. Due copie
+         * della stessa regola sono due regole: la prossima da aggiungere
+         * (prodotto sospeso, tetto per cliente, categoria non consegnabile)
+         * sarebbe finita in una sola, e la stessa cosa si sarebbe potuta
+         * comprare in contanti ma non con la carta.
+         *
+         * I messaggi e i codici di risposta sono rimasti identici.
+         */
+        const esito = validaRigaDelCarrello({
+          riga: it,
+          sellerId: g.sellerId,
+          prodotti: products,
+          varianti: variantMap,
+          sconti: discountMap,
+        });
+        if (!esito.ok) return esciERilascia(rispostaPerCarrelloNonVendibile(esito.scarto));
+        items.push(esito.riga);
+        groupSubtotalCents += esito.riga.unitCents * esito.riga.quantity;
       }
       subtotalPerGroupCents.push(groupSubtotalCents);
       itemsPerGroupCents.push(items);
@@ -414,24 +435,6 @@ export const POST = withAuthRateLimit(
 
     const grandSubtotalCents = subtotalPerGroupCents.reduce((s, x) => s + x, 0);
     if (grandSubtotalCents <= 0) return esciERilascia(ApiErrors.invalidRequest('Importo non valido.'));
-
-    // --- 4. Coupon / spedizione / ritiro: ricalcolati server-side.
-    let couponDiscountCents = 0;
-    let couponFreeShipping = false;
-    let validatedCouponCode: string | null = null;
-    if (body.couponCode && body.couponCode.trim()) {
-      const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
-      if (!couponRes.ok) return esciERilascia(ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`));
-      couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
-      couponFreeShipping = couponRes.freeShipping;
-      validatedCouponCode = couponRes.coupon.code;
-      // Claim atomico: check + increment in un'unica operazione — previene la race condition (fix #36).
-      // Se due richieste parallele arrivano con lo stesso coupon, solo una ottiene il claim.
-      const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
-      if (claimErr || !claimed) {
-        return esciERilascia(ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.'));
-      }
-    }
 
     // Coordinate della consegna prese dal database, non dal browser: il prezzo
     // della consegna dipende dalla distanza, e finora quel numero lo scriveva il
@@ -467,6 +470,57 @@ export const POST = withAuthRateLimit(
         city: body.delivery.city,
         zip: body.delivery.zip,
       }));
+
+    /**
+     * 6/9/2026 — FIN DOVE ARRIVIAMO, DETTO PRIMA CHE L'ORDINE NASCA.
+     *
+     * Non esisteva nessun controllo della zona di consegna, in nessun punto del
+     * progetto: una consegna a Milano passava, e sopra i 30 euro passava pure
+     * gratis (la soglia della spedizione gratuita azzerava il prezzo prima di
+     * guardare la distanza). La persona compilava tutto, riceveva la conferma,
+     * e poi qualcuno doveva telefonarle e annullare: un rimborso, una
+     * recensione arrabbiata e un negoziante che aveva gia' preparato la merce.
+     *
+     * Il controllo sta QUI, prima della rivendicazione del codice sconto: se
+     * fosse dopo, un rifiuto per zona lascerebbe il buono bruciato senza che
+     * nessuno abbia comprato niente.
+     *
+     * Se le coordinate non ci sono — negozio senza posizione, indirizzo che il
+     * geocodificatore non riconosce — non si blocca: `fuoriZonaDiConsegna`
+     * risponde «no» e l'ordine passa come prima.
+     */
+    if (!body.pickupInStore) {
+      for (const s of sellers ?? []) {
+        const fuori = fuoriZonaDiConsegna({
+          storeLat: s.store_lat ?? null,
+          storeLng: s.store_lng ?? null,
+          deliveryLat: coordPerLaMappa?.lat ?? null,
+          deliveryLng: coordPerLaMappa?.lng ?? null,
+        });
+        if (fuori) {
+          logger.info('[cod] consegna fuori zona: ordine non creato', { sellerId: s.id });
+          return esciERilascia(ApiErrors.invalidRequest(motivoFuoriZona(s.store_name)));
+        }
+      }
+    }
+
+    // --- 4. Coupon / spedizione / ritiro: ricalcolati server-side.
+    let couponDiscountCents = 0;
+    let couponFreeShipping = false;
+    let validatedCouponCode: string | null = null;
+    if (body.couponCode && body.couponCode.trim()) {
+      const couponRes = await validateCoupon(body.couponCode, grandSubtotalCents / 100, user.id, supa);
+      if (!couponRes.ok) return esciERilascia(ApiErrors.invalidRequest(`Coupon non valido: ${couponRes.reason}`));
+      couponDiscountCents = Math.max(0, Math.round(couponRes.discount * 100));
+      couponFreeShipping = couponRes.freeShipping;
+      validatedCouponCode = couponRes.coupon.code;
+      // Claim atomico: check + increment in un'unica operazione — previene la race condition (fix #36).
+      // Se due richieste parallele arrivano con lo stesso coupon, solo una ottiene il claim.
+      const { data: claimed, error: claimErr } = await admin.rpc('claim_coupon', { p_code: validatedCouponCode });
+      if (claimErr || !claimed) {
+        return esciERilascia(ApiErrors.invalidRequest('Coupon non disponibile: potrebbe essere esaurito nel frattempo.'));
+      }
+    }
 
     /**
      * 22/8/2026 — IL CONTO LO FA UNA FUNZIONE SOLA, LA STESSA DELLA CARTA.

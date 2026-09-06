@@ -99,7 +99,12 @@ export const metadata: Metadata = {
     'Compra online dai negozi di Piacenza: alimentari, abbigliamento, casa, elettronica, libri. Consegna in 30-60 minuti, pagamento alla consegna.',
   manifest: '/manifest.json',
   icons: {
+    // Prima il favicon classico: e' l'indirizzo che i lettori piu' vecchi e
+    // parecchi aggregatori chiedono da soli (/favicon.ico), e fino a oggi
+    // rispondeva 404 perche' il file non esisteva. Poi l'SVG, che i browser
+    // moderni preferiscono perche' resta nitido a qualsiasi misura.
     icon: [
+      { url: '/favicon.ico', sizes: '16x16 32x32 48x48', type: 'image/x-icon' },
       { url: '/icon-192.svg', type: 'image/svg+xml' },
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
     ],

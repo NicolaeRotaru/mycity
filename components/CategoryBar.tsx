@@ -91,6 +91,24 @@ const CategoryBar = () => {
   // 27/8/2026 (R106) — con Esc il pannello si chiudeva e il fuoco cadeva sul
   // corpo della pagina: chi naviga da tastiera ripartiva dall'inizio del sito.
   const pulsanteRef = useRef<HTMLButtonElement>(null);
+  const pannelloRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 6/9/2026 — SI APRIVA, MA DA TASTIERA NON CI SI ENTRAVA.
+   * Il pannello è un fratello della riga scorrevole, quindi nell'ordine della
+   * pagina viene DOPO le sette destinazioni: chi premeva Tab dopo aver aperto
+   * «Tutte le categorie» finiva su «Tutti i negozi» della barra, non dentro al
+   * pannello appena aperto. Qui il fuoco entra sul primo link del pannello;
+   * con Esc torna sul pulsante (poco sopra). Non è una finestra modale — si
+   * chiude anche cliccando fuori — quindi niente trappola del fuoco e niente
+   * blocco dello scorrimento: si sposta il fuoco, e basta.
+   * Con preventScroll, perché il pannello si apre già sotto il pulsante: chi tocca
+   * lo schermo non deve vedersi saltare la pagina.
+   */
+  useEffect(() => {
+    if (!open) return;
+    pannelloRef.current?.querySelector<HTMLElement>('a[href]')?.focus({ preventScroll: true });
+  }, [open]);
 
   const { data: cats = [] } = useQuery({
     queryKey: ['categories', 'tree'],
@@ -202,9 +220,15 @@ const CategoryBar = () => {
       {open && (
         <div className="pointer-events-none absolute left-0 right-0 top-full z-50">
           <div className="container mx-auto px-3 sm:px-4">
+            {/* 6/9/2026 — il pannello elenca tutte le categorie principali con
+                fino a sei sottocategorie ciascuna, su telefono in due colonne:
+                diventava molto più alto dello schermo e copriva la pagina sotto.
+                Ora si ferma a 70vh e scorre dentro di sé; overscroll-contain
+                perché arrivato in fondo non trascini via la pagina. */}
             <div
+              ref={pannelloRef}
               id={PANNELLO_ID}
-              className="pointer-events-auto mt-1 w-full max-w-[900px] rounded-2xl bg-white p-5 text-ink-800 shadow-warm-lg ring-1 ring-cream-300"
+              className="pointer-events-auto mt-1 max-h-[70vh] w-full max-w-[900px] overflow-y-auto overscroll-contain rounded-2xl bg-white p-5 text-ink-800 shadow-warm-lg ring-1 ring-cream-300"
             >
               <div className="mb-4 flex flex-wrap gap-2 border-b border-cream-200 pb-4">
                 <Link href="/stores" onClick={() => setOpen(false)} className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100">
