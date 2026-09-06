@@ -196,11 +196,22 @@ export const removeFromCart = (id: string, variantId?: string) => {
   );
   // #226 — La rimozione porta quantita' e prezzo, come l'aggiunta. Prima
   // viaggiava nuda: su GA4 il valore tolto dal carrello era sempre zero.
-  const qta = tolte.reduce((s, r) => s + r.quantity, 0);
-  const riga = tolte[0];
-  if (!riga) return;
+  //
+  // 6/9/2026 — E PRIMA MANDAVA IL PREZZO DELLA PRIMA RIGA PER TUTTE.
+  //
+  // Senza variante questa funzione toglie TUTTE le righe del prodotto, ma
+  // l'evento era uno solo: la quantita' era la somma di tutte le righe e il
+  // prezzo quello della prima tolta. Due varianti a prezzo diverso — 3 pezzi
+  // da 4 € e 2 da 6 € — facevano 5 x 4 = 20 € invece di 24 €, e il valore
+  // netto del carrello su GA4 non tornava. Ogni riga tolta manda il suo:
+  // la sua quantita' e il suo prezzo.
+  if (tolte.length === 0) return;
   import('@/lib/analytics/events')
-    .then((m) => m.trackRemoveFromCart(id, qta, Math.round(riga.price * 100), { name: riga.name, storeName: riga.storeName }))
+    .then((m) => {
+      for (const riga of tolte) {
+        m.trackRemoveFromCart(id, riga.quantity, Math.round(riga.price * 100), { name: riga.name, storeName: riga.storeName });
+      }
+    })
     .catch(() => {});
 };
 

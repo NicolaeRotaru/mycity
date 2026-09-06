@@ -17,6 +17,7 @@
  */
 import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
+import { giornoLocale } from '@/lib/tempo/giorno-locale';
 import { logger } from '@/lib/logger';
 
 /**
@@ -37,11 +38,41 @@ export async function handleSponsoredPurchase(session: Stripe.Checkout.Session) 
     throw new Error(`sponsorizzazione con dati incompleti (sessione ${session.id})`);
   }
 
-  const today = new Date();
-  const end = new Date(today.getTime() + days * 86_400_000);
-  const startStr = today.toISOString().slice(0, 10);
-  const endStr = end.toISOString().slice(0, 10);
-  const perDay = days > 0 ? Math.round(amountCents / days) : amountCents;
+  /**
+   * 6/9/2026 — LA VETRINA COMPRATA DI NOTTE PARTIVA DAL GIORNO PRIMA.
+   *
+   * `toISOString()` dà il giorno di Greenwich. Fra mezzanotte e le due di
+   * notte (l'una d'inverno) a Piacenza è già domani e a Greenwich è ancora
+   * ieri: chi comprava sette giorni di vetrina alle 00:30 se li vedeva
+   * scritti come iniziati il giorno prima, e finiti un giorno prima del
+   * dovuto. Poco denaro, ma è il torto che il negoziante nota e racconta.
+   *
+   * `giornoLocale()` è la stessa funzione con cui si quadra la cassa del
+   * fattorino (lib/tempo/giorno-locale.ts): la giornata è una sola per tutti.
+   */
+  const oggi = new Date();
+  const fine = new Date(oggi.getTime() + days * 86_400_000);
+  const startStr = giornoLocale(oggi);
+  const endStr = giornoLocale(fine);
+
+  /**
+   * E LA SPESA È QUELLA CHE STRIPE HA DAVVERO INCASSATO.
+   *
+   * `amount_cents` arriva dai metadati della sessione, cioè da quello che
+   * avevamo chiesto; `amount_total` è quello che è entrato in cassa. Se i due
+   * divergono — un prezzo cambiato mentre la cassa era aperta, un buono
+   * applicato da Stripe — il rendiconto della sponsorizzazione racconterebbe
+   * una cifra che nessuno ha pagato. Comanda la cassa; i metadati restano
+   * come ripiego se Stripe non manda il totale, e la differenza resta scritta.
+   */
+  const incassato = typeof session.amount_total === 'number' ? session.amount_total : null;
+  const speso = incassato ?? amountCents;
+  if (incassato !== null && incassato !== amountCents) {
+    logger.warn('[stripe] sponsorizzazione: importo incassato diverso dai metadati', {
+      sessionId: session.id, incassato, metadati: amountCents,
+    });
+  }
+  const perDay = days > 0 ? Math.round(speso / days) : speso;
 
   const { error } = await admin.from('sponsored_listings').insert({
     product_id: productId,
@@ -51,7 +82,7 @@ export async function handleSponsoredPurchase(session: Stripe.Checkout.Session) 
     start_date: startStr,
     end_date: endStr,
     daily_budget_cents: perDay,
-    spent_cents: amountCents,
+    spent_cents: speso,
     status: 'active',
     stripe_session_id: session.id,
   });

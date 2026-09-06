@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   isOpenNow,
   isStoreClosedForOrder,
   formatToday,
   streetFromAddress,
   DAY_KEYS,
+  type HoursInterval,
 } from '@/lib/store-hours';
 
 /**
@@ -160,5 +161,40 @@ describe('formatToday', () => {
   it('says "Chiuso oggi" for empty/no intervals', () => {
     expect(formatToday(undefined, mkDate(10))).toBe('Chiuso oggi');
     expect(formatToday([], mkDate(10))).toBe('Chiuso oggi');
+  });
+});
+
+/**
+ * UN OROLOGIO SOLO PER «È APERTO?».
+ *
+ * Il server del sito gira in UTC, il negozio ha orari italiani. Alle 13:30 di
+ * Piacenza il server legge 11:30: la vetrina diceva «aperto» su un negozio che
+ * chiude alle 13:00, e poi la cassa rifiutava l'ordine con «è chiuso adesso».
+ * Questa prova fissa quell'istante e pretende la stessa risposta dalle due
+ * funzioni. Diventa rossa se qualcuno rimette l'orologio della macchina come
+ * valore di partenza in lib/store-hours.ts.
+ */
+describe('vetrina e cassa leggono lo stesso orologio', () => {
+  const orariMercoledi: HoursInterval[] = [['09:00', '13:00']];
+  const orari = { wed: orariMercoledi };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('alle 13:30 italiane (11:30 UTC) sono chiusi tutti e due', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-27T11:30:00Z')); // mercoledì
+    expect(isOpenNow(orari.wed)).toBe(false);
+    expect(isStoreClosedForOrder(orari)).toBe(true);
+    expect(formatToday(orari.wed)).toBe('Chiuso ora');
+  });
+
+  it('alle 11:00 italiane (09:00 UTC) sono aperti tutti e due', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-27T09:00:00Z')); // mercoledì
+    expect(isOpenNow(orari.wed)).toBe(true);
+    expect(isStoreClosedForOrder(orari)).toBe(false);
+    expect(formatToday(orari.wed)).toBe('Aperto fino alle 13:00');
   });
 });

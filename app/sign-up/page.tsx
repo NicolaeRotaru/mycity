@@ -282,7 +282,7 @@ function SignUpInner() {
         )}
 
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>
-          {isLoading ? 'Registrazione in corso...' : `Registrati come ${selectedRole.title.toLowerCase()}`}
+          {isLoading ? 'Registrazione in corso…' : `Registrati come ${selectedRole.title.toLowerCase()}`}
         </Button>
       </form>
 

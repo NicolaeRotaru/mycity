@@ -321,7 +321,7 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
             type="text"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Scrivi un messaggio..."
+            placeholder="Scrivi un messaggio…"
             aria-label="Scrivi un messaggio"
             maxLength={4000}
             disabled={sendMutation.isPending}

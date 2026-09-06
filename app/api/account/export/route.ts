@@ -98,6 +98,72 @@ export const GET = withAuthRateLimit(
     admin.from('consent_log').select('*').eq('user_id', userId),
   ]);
 
+  /**
+   * 6/9/2026 — L'EXPORT SALTAVA VENTICINQUE TABELLE.
+   *
+   * L'elenco delle tabelle viveva scritto a mano qui dentro e si aggiornava
+   * solo quando qualcuno se ne ricordava — i commenti «🟡-13» e «mancavano
+   * all'appello» qui sopra sono la prova che è già successo due volte. Ogni
+   * tabella nuova nasceva fuori dall'export: restavano fuori il credito del
+   * portafoglio, i punti fedeltà, i buoni regalo comprati, le domande scritte
+   * sui prodotti e perfino gli SOS del fattorino.
+   *
+   * Chi chiede «i miei dati» e non ci trova il proprio credito ha in mano una
+   * risposta incompleta a una richiesta fatta per legge (art. 15 e 20).
+   *
+   * LA RIPARAZIONE VERA NON È QUESTO ELENCO, È LA PROVA CHE LO SORVEGLIA:
+   * tests/unit/scarica-i-miei-dati-non-salta-nessuna-tabella.test.ts legge le
+   * chiavi esterne verso `profiles` e `auth.users` nelle migrazioni e diventa
+   * rossa se una tabella non è né qui né fra le esclusioni motivate. La
+   * prossima tabella nuova non può più nascere fuori dall'export in silenzio.
+   */
+  const altreTabelle = {
+    portafoglio: admin.from('wallet_ledger').select('*').eq('user_id', userId),
+    punti_fedelta: admin.from('loyalty_accounts').select('*').eq('user_id', userId),
+    punti_movimenti: admin.from('loyalty_transactions').select('*').eq('user_id', userId),
+    buoni_regalo: admin.from('gift_cards').select('*').or(`buyer_id.eq.${userId},redeemed_by.eq.${userId}`),
+    domande_sui_prodotti: admin
+      .from('product_questions')
+      .select('*')
+      .or(`author_id.eq.${userId},answered_by.eq.${userId}`),
+    sos_del_fattorino: admin.from('rider_sos_events').select('*').eq('rider_id', userId),
+    carrello_salvato: admin.from('user_carts').select('*').eq('user_id', userId),
+    carrelli_abbandonati: admin.from('abandoned_carts').select('*').eq('user_id', userId),
+    iscrizioni_agli_eventi: admin.from('event_rsvps').select('*').eq('user_id', userId),
+    negozi_seguiti: admin.from('follows').select('*').eq('user_id', userId),
+    liste_di_prodotti: admin.from('product_lists').select('*').eq('owner_id', userId),
+    ordini_di_gruppo: admin
+      .from('group_orders')
+      .select('*')
+      .or(`organizer_id.eq.${userId},seller_id.eq.${userId}`),
+    partecipazioni_di_gruppo: admin.from('group_participants').select('*').eq('user_id', userId),
+    ordini_ricorrenti: admin
+      .from('subscription_orders')
+      .select('*')
+      .or(`user_id.eq.${userId},seller_id.eq.${userId}`),
+    tentativi_di_pagamento: admin.from('payment_attempts').select('*').eq('user_id', userId),
+    casse_aperte: admin.from('pending_checkouts').select('*').eq('buyer_id', userId),
+    casse_contanti: admin.from('cod_checkout_attempts').select('*').eq('user_id', userId),
+    email_in_coda: admin.from('email_queue').select('*').eq('user_id', userId),
+    segnalazioni_fatte: admin.from('segnalazioni').select('*').eq('segnalante_id', userId),
+    cashback_riscosso: admin.from('cashback_redemptions').select('*').eq('user_id', userId),
+    codici_di_zona_usati: admin.from('zone_code_uses').select('*').eq('user_id', userId),
+    recensioni_votate_utili: admin.from('review_helpful').select('*').eq('user_id', userId),
+    storie_guardate: admin.from('seller_story_views').select('*').eq('user_id', userId),
+    voti_negozio_del_mese: admin.from('shop_of_month_votes').select('*').eq('voter_id', userId),
+    traguardi: admin.from('user_achievements').select('*').eq('user_id', userId),
+  };
+
+  const altre: Record<string, unknown[]> = {};
+  await Promise.all(
+    Object.entries(altreTabelle).map(async ([chiave, domanda]) => {
+      // Una tabella che non risponde non fa cadere tutto l'export: resta vuota
+      // e il guasto si vede nel file, invece di negare l'intera richiesta.
+      const esito = (await domanda) as { data: unknown[] | null };
+      altre[chiave] = esito.data ?? [];
+    }),
+  );
+
   // Anonimizza/maschera campi sensibili anche nell'export
   const profileClean = profile.data ? {
     ...profile.data,
@@ -141,6 +207,7 @@ export const GET = withAuthRateLimit(
     resi: returns.data ?? [],
     contestazioni: disputes.data ?? [],
     consensi: consents.data ?? [],
+    ...altre,
   };
 
   const today = new Date().toISOString().slice(0, 10);

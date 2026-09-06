@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, Share, SquarePlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +10,7 @@ import {
   notificheAttiveQui,
   scollegaQuestoDispositivo,
 } from '@/lib/push/dispositivo';
+import { eApple, percheNienteNotifiche, type PercheNienteNotifiche } from '@/lib/installabile';
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 
@@ -38,11 +39,34 @@ type Status = 'unsupported' | 'denied' | 'unsubscribed' | 'subscribed' | 'checki
 export default function PushNotificationOptIn({ compact = false }: { compact?: boolean }) {
   const [status, setStatus] = useState<Status>('checking');
   const [working, setWorking] = useState(false);
+  // 6/9/2026 — SU iPHONE QUI SI LEGGEVA «IL TUO BROWSER NON SUPPORTA», E NON ERA VERO.
+  //
+  // Safari su iOS espone `PushManager` solo quando il sito è stato aggiunto alla schermata Home:
+  // dal browser il controllo qui sotto cade sempre in `unsupported`, e la frase dava del vecchio
+  // al telefono di chi compra invece di dirgli i due gesti che accendono le notifiche.
+  // Il perché sta in lib/installabile.ts, insieme alla decisione sull'installazione.
+  const [motivo, setMotivo] = useState<PercheNienteNotifiche>('browser-senza-push');
 
   const supported = typeof window !== 'undefined'
     && 'serviceWorker' in navigator
     && 'PushManager' in window
     && !!VAPID_PUBLIC;
+
+  // `navigator` esiste solo nel browser: la domanda si fa dopo il montaggio, non durante il render.
+  //
+  // ⚠️ `matchMedia` si chiede prima di usarlo. Manca in qualche webview incorporata — e mancava
+  // nell'ambiente in cui gira la prova della pagina impostazioni: questa riga, scritta senza
+  // riparo, faceva cadere l'INTERA pagina delle impostazioni. Una domanda su cosa sa fare il
+  // telefono non deve mai poter spegnere la pagina che la fa: nel dubbio, non è installata.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const inHome = typeof window.matchMedia === 'function'
+      && window.matchMedia('(display-mode: standalone)').matches;
+    setMotivo(percheNienteNotifiche({
+      eApple: eApple(navigator.userAgent, navigator.maxTouchPoints ?? 0),
+      giaInstallata: inHome,
+    }));
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -151,7 +175,28 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
   };
 
   if (status === 'unsupported') {
-    return compact ? null : (
+    if (compact) return null;
+    // Su iPhone non c'è niente di rotto: manca solo l'icona in Home. Si dicono i due gesti, gli
+    // stessi che compaiono nel banner d'installazione, così la frase è una sola su tutto il sito.
+    if (motivo === 'iphone-da-installare') {
+      return (
+        <div className="text-xs text-ink-600">
+          <p>Su iPhone le notifiche funzionano dall&apos;app in schermata Home.</p>
+          <ol className="mt-2 space-y-1.5 text-ink-700">
+            <li className="flex items-center gap-1.5">
+              <Share size={14} className="shrink-0 text-primary-700" aria-hidden />
+              Tocca <strong>Condividi</strong>, in fondo allo schermo
+            </li>
+            <li className="flex items-center gap-1.5">
+              <SquarePlus size={14} className="shrink-0 text-primary-700" aria-hidden />
+              Poi <strong>Aggiungi a Home</strong>
+            </li>
+          </ol>
+          <p className="mt-2">Poi torna qui e attivale.</p>
+        </div>
+      );
+    }
+    return (
       <p className="text-xs text-ink-400 italic">
         Il tuo browser non supporta le notifiche push, oppure il marketplace non le ha ancora configurate.
       </p>

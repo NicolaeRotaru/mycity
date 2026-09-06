@@ -41,7 +41,23 @@ export const env = {
 
   // Resend (email transazionale)
   resendKey: () => readEnv('RESEND_API_KEY'),
-  resendFrom: () => readEnv('RESEND_FROM') ?? 'MyCity <no-reply@example.com>',
+  /**
+   * 6/9/2026 — IL MITTENTE FINTO FACEVA FALLIRE LE EMAIL UNA PER UNA.
+   *
+   * Se RESEND_FROM mancava, qui si ripiegava su «no-reply@example.com» e
+   * `lib/email/client.ts` lo usava come mittente vero. Resend rifiuta un
+   * dominio non verificato, quindi la conferma d'ordine al cliente e l'avviso
+   * al negozio fallivano all'INVIO, uno alla volta, e non alla configurazione:
+   * il sito incassava e nessuno riceveva niente. È lo stesso errore già
+   * riparato per NEXT_PUBLIC_APP_URL qui sotto — lì «localhost» finiva
+   * nell'HTML, qui «example.com» finiva nella busta.
+   *
+   * In rete non c'è più nessun ripiego: manca il mittente, la posta non parte
+   * e lo si sa subito (`lib/email/client.ts` e il semaforo `/api/health`). Sul
+   * computer di chi sviluppa il ripiego resta, perché lì non parte niente
+   * comunque.
+   */
+  resendFrom: () => readEnv('RESEND_FROM') ?? MITTENTE_DI_RISERVA,
   resendReplyTo: () => readEnv('RESEND_REPLY_TO'),
 
   // Cloudflare Turnstile (CAPTCHA)
@@ -83,6 +99,18 @@ export const env = {
  * vale «questa pagina non esiste» e per WhatsApp «anteprima rotta».
  */
 export const DOMINIO_PUBBLICO = 'https://mycity-marketplace.com';
+
+/**
+ * Il mittente di riserva, sullo STESSO dominio con cui il sito si presenta al mondo.
+ *
+ * Vale la regola di qui sopra: è l'ultima rete di sicurezza, non la configurazione. Il mittente
+ * vero lo decide RESEND_FROM. Ma se quella variabile manca, è meglio partire da un indirizzo
+ * NOSTRO che da uno che non esiste: `example.com` è un dominio riservato agli esempi, Resend non
+ * lo verificherà mai, e ogni singola email — conferma d'ordine al cliente e avviso al negozio —
+ * falliva all'INVIO, una alla volta, mentre il sito incassava. Il guasto si scopriva una email per
+ * volta invece che una volta sola.
+ */
+const MITTENTE_DI_RISERVA = `MyCity <no-reply@${DOMINIO_PUBBLICO.replace(/^https?:\/\//, '')}>`;
 
 /** Da dove arriva l'indirizzo pubblico: serve per poterlo dire ad alta voce. */
 export type FonteIndirizzo =

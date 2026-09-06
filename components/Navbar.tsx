@@ -248,7 +248,7 @@ export default function Navbar() {
               )}
             </div>
             <div className="mt-2">
-              <SearchBar placeholder="Cerca a Piacenza..." />
+              <SearchBar placeholder="Cerca a Piacenza…" />
             </div>
           </div>
         </div>

@@ -244,8 +244,29 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       const colonnaOrario = COLONNA_ORARIO_DEL_PASSAGGIO[params.newStatus];
       if (colonnaOrario) update[colonnaOrario] = new Date().toISOString();
 
-      const { error } = await supabase.from('orders').update(update).eq('id', order.id);
+      // 6/9/2026 — «STATO AGGIORNATO» ANCHE QUANDO IL DATABASE NON AVEVA
+      // CAMBIATO NIENTE.
+      //
+      // Con le regole di riga (RLS) una riga che non si ha piu' il diritto di
+      // toccare NON produce un errore: la scrittura ne tocca zero e torna
+      // pulita. Il fattorino a cui l'ordine e' stato riassegnato premeva «In
+      // consegna», leggeva il messaggio verde e se ne andava; al ricaricamento
+      // l'ordine spariva senza spiegazione, e il cliente non aveva ricevuto
+      // niente. `.select()` fa tornare le righe toccate davvero: zero righe
+      // vuol dire che non e' stato fatto niente, e va detto.
+      const { data: righeToccate, error } = await supabase
+        .from('orders')
+        .update(update)
+        .eq('id', order.id)
+        .select('id');
       if (error) throw error;
+      if (!righeToccate || righeToccate.length === 0) {
+        // Rileggi lo stato vero: senza, il pulsante resta com'era e il prossimo
+        // tocco ridà lo stesso errore.
+        qc.invalidateQueries({ queryKey: queryKeys.seller.order(id) });
+        qc.invalidateQueries({ queryKey: queryKeys.seller.orders });
+        throw new Error("Non ho potuto aggiornare l'ordine: è cambiato nel frattempo. Ricarica la pagina.");
+      }
 
       // Notifica il buyer del cambio stato
       if (order.user_id) {

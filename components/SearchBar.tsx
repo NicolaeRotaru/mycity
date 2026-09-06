@@ -33,7 +33,7 @@ type Props = {
  *  - tasto Esc chiude, Enter va al search /search?q=...
  *  - keyboard nav (arrow up/down + enter sui suggerimenti) — MVP: clic
  */
-export default function SearchBar({ className = '', placeholder = 'Cerca prodotti, negozi, categorie...', autoFocus = false }: Props) {
+export default function SearchBar({ className = '', placeholder = 'Cerca prodotti, negozi, categorie…', autoFocus = false }: Props) {
   const router = useRouter();
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);

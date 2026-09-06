@@ -160,7 +160,18 @@ function SectionTabs({ sections, ctx }: { sections: SiteSection[]; ctx: SectionC
 
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="Sezioni del negozio" className="flex gap-1 border-b border-cream-300">
+      {/*
+        6/9/2026 — Le tre schede portano i conteggi («Prodotti · 24»,
+        «Recensioni · 12») e a 360 pixel di schermo non ci stavano: l'etichetta
+        andava a capo dentro il bottone e la barra si spezzava su due righe.
+        Ora scorre di lato come il menu del negozio (StoreNav) invece di
+        comprimersi.
+      */}
+      <div
+        role="tablist"
+        aria-label="Sezioni del negozio"
+        className="flex gap-1 overflow-x-auto scrollbar-hide border-b border-cream-300"
+      >
         {visibleTabs.map((t) => {
           const selected = t === current;
           return (
@@ -177,7 +188,7 @@ function SectionTabs({ sections, ctx }: { sections: SiteSection[]; ctx: SectionC
               tabIndex={selected ? 0 : -1}
               onClick={() => setActive(t)}
               onKeyDown={onKeyDown}
-              className={`-mb-px border-b-2 px-4 py-2.5 text-sm font-sans transition-colors ${
+              className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-sans transition-colors ${
                 selected
                   ? 'font-bold text-ink-900'
                   : 'border-transparent font-medium text-ink-500 hover:text-ink-800'

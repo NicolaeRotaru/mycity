@@ -205,7 +205,8 @@ export async function POST(req: NextRequest) {
         break;
       }
       case 'payout.failed': {
-        await handlePayoutFailed(event.data.object as Stripe.Payout);
+        // `event.account`: il conto Connect da cui arriva, cioè di quale negozio parla.
+        await handlePayoutFailed(event.data.object as Stripe.Payout, event.account ?? null);
         break;
       }
       case 'payment_intent.payment_failed': {

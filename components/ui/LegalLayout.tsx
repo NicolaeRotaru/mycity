@@ -72,10 +72,17 @@ export function LegalLayout({ title, active, meta, summary, toc, children }: Pro
           {children}
         </div>
 
-        {/* Indice / TOC */}
+        {/*
+          Indice / TOC.
+          6/9/2026 — Si fermava a `top-24`, cioe' 96 pixel, mentre l'intestazione
+          appiccicata in cima ne occupa 144 (`--header-height` in globals.css).
+          Scorrendo, i primi 48 pixel dell'indice — bordo e prima voce — finivano
+          sotto la barra e non si potevano piu' cliccare. Ora l'altezza
+          dell'intestazione ha una casa sola e la colonna la legge da li'.
+        */}
         <nav
           aria-label="Indice della pagina"
-          className="order-2 mt-8 lg:mt-0 lg:sticky lg:top-24 bg-white border border-cream-300 rounded-lg p-4 text-[13px]"
+          className="order-2 mt-8 lg:mt-0 lg:sticky lg:top-[var(--header-height)] bg-white border border-cream-300 rounded-lg p-4 text-[13px]"
         >
           <p className="text-2xs font-bold uppercase tracking-label text-ink-900 mb-2">
             In questa pagina

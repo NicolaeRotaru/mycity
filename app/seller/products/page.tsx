@@ -547,7 +547,14 @@ export default function SellerProductsPage() {
         sposta, diventa rossa.
       */}
       {bulk && (
-        <div className="fixed inset-x-0 bottom-0 z-sticky flex items-center justify-between gap-3 border-t border-cream-300 bg-surface-0 py-3 pl-5 pr-24 shadow-warm-xl sm:pr-44">
+        /*
+          6/9/2026 — La barra si incollava al bordo dello schermo senza tenere
+          conto della striscia che iPhone si riserva in fondo per il gesto di
+          uscita: gli ultimi 34 pixel di «Annulla» e «Salva modifiche» finivano
+          sotto quella striscia e il tocco non arrivava al pulsante. Ora sotto
+          c'e' sempre lo spazio del sistema, in piu' al padding normale.
+        */
+        <div className="fixed inset-x-0 bottom-0 z-sticky flex items-center justify-between gap-3 border-t border-cream-300 bg-surface-0 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] pl-5 pr-24 shadow-warm-xl sm:pr-44">
           {/*
             Il contatore si accorcia coi puntini invece di andare a capo: cosi'
             la barra resta alta uguale (la pagina le riserva 96 pixel sotto il

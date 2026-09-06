@@ -238,7 +238,7 @@ const StoreLocationPicker = ({ defaultValue, onChange }: Props) => {
           ) : (
             <Target size={16} aria-hidden />
           )}
-          {locating ? 'Ricerca posizione...' : 'Usa la mia posizione attuale'}
+          {locating ? 'Ricerca posizione…' : 'Usa la mia posizione attuale'}
         </button>
         <span className="text-xs text-ink-400 font-mono inline-flex items-center gap-1">
           <MapPin size={16} aria-hidden />

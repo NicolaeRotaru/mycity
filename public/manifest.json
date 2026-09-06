@@ -2,11 +2,12 @@
   "name": "MyCity Piacenza — marketplace locale",
   "short_name": "MyCity",
   "description": "Compra dai negozi di Piacenza, consegna in 30-60 min, pagamento alla consegna.",
-  "start_url": "/",
+  "id": "/",
+  "start_url": "/?source=pwa",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "background_color": "#FBF7F0",
   "theme_color": "#C0492C",
-  "orientation": "portrait",
   "icons": [
     {
       "src": "/icon-192.png",

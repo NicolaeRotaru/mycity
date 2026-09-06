@@ -35,6 +35,21 @@ type DetectedProduct = {
   policy_reason: string | null;
 };
 
+/**
+ * 6/9/2026 — CANCELLARE UNA RIGA SPOSTAVA QUELLO CHE SI STAVA SCRIVENDO SULLA
+ * RIGA SBAGLIATA.
+ *
+ * L'elenco usava come chiave React la POSIZIONE. Chi toglieva la riga 1 mentre
+ * aveva il cursore nel nome della riga 2 si ritrovava a scrivere sul terzo
+ * prodotto: React riusa il nodo, il cursore resta dov'è, il contenuto sotto è
+ * cambiato. Con dieci prodotti caricati in un colpo, nomi e prezzi si
+ * scambiavano fra prodotti e il negoziante se ne accorgeva solo in vetrina.
+ *
+ * `chiave` nasce col prodotto e non cambia mai: è quella che identifica la
+ * riga, non il suo posto in fila.
+ */
+type RigaProdotto = DetectedProduct & { chiave: string };
+
 type Phase = 'idle' | 'analyzing' | 'review' | 'creating';
 
 type Props = {
@@ -48,7 +63,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [files, setFiles] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
-  const [products, setProducts] = useState<DetectedProduct[]>([]);
+  const [products, setProducts] = useState<RigaProdotto[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Object URL delle anteprime: vanno revocati per non perdere memoria.
@@ -99,7 +114,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
         reset();
         return;
       }
-      setProducts(detected);
+      setProducts(detected.map((p) => ({ ...p, chiave: crypto.randomUUID() })));
       setPhase('review');
     } catch (err) {
       toast.error(friendlyError(err));
@@ -114,10 +129,10 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
     });
   };
 
-  const updateProduct = (idx: number, patch: Partial<DetectedProduct>) =>
-    setProducts((prev) => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
-  const removeProduct = (idx: number) =>
-    setProducts((prev) => prev.filter((_, i) => i !== idx));
+  const updateProduct = (chiave: string, patch: Partial<DetectedProduct>) =>
+    setProducts((prev) => prev.map((p) => (p.chiave === chiave ? { ...p, ...patch } : p)));
+  const removeProduct = (chiave: string) =>
+    setProducts((prev) => prev.filter((p) => p.chiave !== chiave));
 
   const creatable = products.filter((p) => p.policy_ok && p.name.trim());
 
@@ -240,7 +255,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
           const blocked = !p.policy_ok;
           return (
             <div
-              key={idx}
+              key={p.chiave}
               className={`flex gap-3 rounded-lg border p-2.5 ${
                 blocked ? 'border-rose-200 bg-rose-50' : 'border-cream-200 bg-cream-50'
               }`}
@@ -268,7 +283,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
                 ) : (
                   <input
                     value={p.name}
-                    onChange={(e) => updateProduct(idx, { name: e.target.value })}
+                    onChange={(e) => updateProduct(p.chiave, { name: e.target.value })}
                     disabled={creating}
                     placeholder="Nome prodotto"
                     aria-label={`Nome del prodotto ${idx + 1}`}
@@ -293,7 +308,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
                       min="0"
                       value={p.suggested_price ?? ''}
                       onChange={(e) =>
-                        updateProduct(idx, {
+                        updateProduct(p.chiave, {
                           suggested_price: e.target.value === '' ? null : Number(e.target.value),
                         })
                       }
@@ -305,7 +320,7 @@ export default function BulkPhotoCreate({ onCreated }: Props) {
                 )}
                 <button
                   type="button"
-                  onClick={() => removeProduct(idx)}
+                  onClick={() => removeProduct(p.chiave)}
                   disabled={creating}
                   aria-label="Rimuovi prodotto"
                   className="text-ink-400 hover:text-rose-600 disabled:opacity-50"

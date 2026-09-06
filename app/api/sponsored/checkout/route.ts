@@ -54,6 +54,25 @@ export const POST = withAuthRateLimit(
     // Il webhook (handleSponsoredPurchase) resta day-based: convertiamo le
     // settimane in giorni per il calcolo di start_date/end_date.
     const days = body.weeks * 7;
+    // 6/9/2026 — DUE CLIC SU «METTI IN PRIMO PIANO» APRIVANO DUE PAGAMENTI.
+    //
+    // Qui non c'era nessuna chiave di idempotenza: la rotta gemella delle gift
+    // card ce l'aveva, questa no, e ogni nuova rotta di pagamento nasceva senza.
+    // Il negoziante che premeva due volte perché la pagina era lenta poteva
+    // pagare 9,98 € invece di 4,99 e ritrovarsi due campagne sovrapposte sullo
+    // stesso prodotto: i primi euro che un negozio spende su MyCity, il momento
+    // peggiore per fargli chiedere un rimborso.
+    //
+    // La chiave buona la manda il browser — una per apertura del modulo,
+    // rigenerata dopo ogni esito — ed è la stessa intestazione della gift card.
+    // Senza intestazione si ripiega su una finestra di dieci minuti: qui il
+    // ripiego non ha il rovescio che ha sui regali, perché due sponsorizzazioni
+    // uguali sullo stesso prodotto nello stesso minuto non sono mai due cose
+    // volute, sono un doppio tocco.
+    const chiaveTentativo = (req.headers.get('idempotency-key') ?? '').trim().slice(0, 100);
+    const chiaveIdempotenza = chiaveTentativo
+      ? `sponsored_${user.id}_${chiaveTentativo}`
+      : `sponsored_${user.id}_${product.id}_${body.weeks}_${Math.floor(Date.now() / 600_000)}`;
     const stripe = getStripe();
 
     try {
@@ -84,7 +103,7 @@ export const POST = withAuthRateLimit(
         },
         success_url: `${env.appUrl()}/seller/promote?sponsor=success`,
         cancel_url: `${env.appUrl()}/seller/promote?sponsor=canceled`,
-      });
+      }, { idempotencyKey: chiaveIdempotenza });
       return NextResponse.json({ url: session.url }, { status: 200 });
     } catch (e) {
       logger.error('[sponsored] creazione sessione Stripe fallita', e);

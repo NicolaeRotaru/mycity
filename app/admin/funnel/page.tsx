@@ -427,47 +427,52 @@ export default function AdminFunnelPage() {
         <p className="text-xs text-ink-500 mb-4">
           % buyer di una coorte mensile che ha fatto almeno 1 ordine nei mesi successivi.
         </p>
-        <table className="w-full text-sm">
-          <thead className="text-ink-600 text-xs uppercase tracking-wider">
-            <tr>
-              <th className="text-left px-3 py-2">Coorte</th>
-              <th className="text-right px-3 py-2">Signup</th>
-              <th className="text-right px-3 py-2">M+1</th>
-              <th className="text-right px-3 py-2">M+2</th>
-              <th className="text-right px-3 py-2">M+3</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-cream-100">
-            {data.cohortRetention.map((c) => {
-              // null = la finestra non e' ancora finita: si scrive «—», mai 0%.
-              const pct = (n: number | null) =>
-                n === null || c.cohortSize === 0 ? null : (n / c.cohortSize) * 100;
-              const color = (p: number) => p >= 40 ? 'bg-olive-100 text-olive-800' : p >= 20 ? 'bg-accent-100 text-accent-800' : p > 0 ? 'bg-secondary-100 text-secondary-700' : 'text-ink-400';
-              const cella = (n: number | null) => {
-                const p = pct(n);
-                if (p === null) {
+        {/* 6/9/2026 — Cinque colonne piu' i mesi: su un telefono la tabella
+            spingeva la larghezza e tutta la pagina scorreva di lato. Ora scorre
+            solo lei, come nelle altre tredici tabelle del sito. */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-ink-600 text-xs uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-3 py-2">Coorte</th>
+                <th className="text-right px-3 py-2">Signup</th>
+                <th className="text-right px-3 py-2">M+1</th>
+                <th className="text-right px-3 py-2">M+2</th>
+                <th className="text-right px-3 py-2">M+3</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-cream-100">
+              {data.cohortRetention.map((c) => {
+                // null = la finestra non e' ancora finita: si scrive «—», mai 0%.
+                const pct = (n: number | null) =>
+                  n === null || c.cohortSize === 0 ? null : (n / c.cohortSize) * 100;
+                const color = (p: number) => p >= 40 ? 'bg-olive-100 text-olive-800' : p >= 20 ? 'bg-accent-100 text-accent-800' : p > 0 ? 'bg-secondary-100 text-secondary-700' : 'text-ink-400';
+                const cella = (n: number | null) => {
+                  const p = pct(n);
+                  if (p === null) {
+                    return (
+                      <span className="text-ink-400" title="Il mese non è ancora finito: non c'è niente da misurare">
+                        —
+                      </span>
+                    );
+                  }
                   return (
-                    <span className="text-ink-400" title="Il mese non è ancora finito: non c'è niente da misurare">
-                      —
-                    </span>
+                    <span className={`inline-block px-2 py-0.5 rounded ${color(p)}`}>{p.toFixed(0)}%</span>
                   );
-                }
+                };
                 return (
-                  <span className={`inline-block px-2 py-0.5 rounded ${color(p)}`}>{p.toFixed(0)}%</span>
+                  <tr key={c.month}>
+                    <td className="px-3 py-2 font-semibold capitalize">{c.month}</td>
+                    <td className="px-3 py-2 text-right">{c.cohortSize}</td>
+                    <td className="px-3 py-2 text-right">{cella(c.m1)}</td>
+                    <td className="px-3 py-2 text-right">{cella(c.m2)}</td>
+                    <td className="px-3 py-2 text-right">{cella(c.m3)}</td>
+                  </tr>
                 );
-              };
-              return (
-                <tr key={c.month}>
-                  <td className="px-3 py-2 font-semibold capitalize">{c.month}</td>
-                  <td className="px-3 py-2 text-right">{c.cohortSize}</td>
-                  <td className="px-3 py-2 text-right">{cella(c.m1)}</td>
-                  <td className="px-3 py-2 text-right">{cella(c.m2)}</td>
-                  <td className="px-3 py-2 text-right">{cella(c.m3)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
     </div>
   );

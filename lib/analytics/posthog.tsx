@@ -93,6 +93,24 @@ export function laPaginaSiPuoFilmare(pathname: string | null | undefined): boole
 }
 
 /**
+ * 6/9/2026 — CHI APRE MYCITY DALL'ICONA IN HOME ERA INDISTINGUIBILE DA CHI LA APRE DAL BROWSER.
+ *
+ * IL DIFETTO CHE QUESTA FUNZIONE CHIUDE. Il banner invita a installare, ma nessun numero diceva se
+ * qualcuno installava davvero, né se chi ha l'icona in Home torna di più. «App nativa? Non ora, la
+ * PWA basta» è una decisione che si prende con due numeri — quanti la installano e se tornano dopo
+ * una settimana — e nessuno dei due si poteva calcolare: `display-mode` veniva letto solo per
+ * nascondere il banner, e non partiva mai verso la raccolta eventi.
+ *
+ * DUE MODI DI SAPERLO, PERCHÉ UNO SOLO NON BASTA. `display-mode: standalone` è la verità del
+ * momento, ma non risponde in un caso che conta: le schede aperte da un link condiviso dentro
+ * l'app. Il manifesto dichiara `start_url: "/?source=pwa"`, quindi la prima pagina di ogni
+ * sessione partita dall'icona porta quel marcatore. Se uno dei due dice «Home», è Home.
+ */
+export function comeSiApre(standalone: boolean, sorgente: string | null | undefined): 'standalone' | 'browser' {
+  return standalone || sorgente === 'pwa' ? 'standalone' : 'browser';
+}
+
+/**
  * Come si registra lo schermo.
  *
  * Prima c'erano i soli `maskAllInputs` + `maskInputOptions`: mascherano quello
@@ -360,6 +378,35 @@ export default function PostHogProvider() {
       ph.capture('$pageview');
     });
   }, [pathname, searchParams]);
+
+  // 6/9/2026 — DA DOVE È STATA APERTA MYCITY: DALL'ICONA IN HOME O DAL BROWSER.
+  //
+  // È una proprietà appiccicata a TUTTI gli eventi della sessione (super-property), non un evento
+  // a sé: solo così si possono separare gli utenti attivi che usano l'app installata e misurarne
+  // il ritorno a 7 e a 30 giorni. Con un evento isolato quel confronto non si fa.
+  //
+  // Si rifà anche al consenso, e non solo al montaggio: chi accetta i cookie stando già dentro
+  // una pagina non rimonta questo componente, e senza il secondo giro la sua sessione partirebbe
+  // senza la proprietà — cioè finirebbe fra i «browser» qualunque cosa stia usando.
+  useEffect(() => {
+    if (!POSTHOG_KEY) return;
+    if (typeof window === 'undefined') return;
+    const modo = comeSiApre(
+      window.matchMedia('(display-mode: standalone)').matches,
+      new URLSearchParams(window.location.search).get('source'),
+    );
+    const dichiara = () => { void registraProprietaPersistenti({ display_mode: modo }); };
+    dichiara();
+    // Il momento esatto in cui l'installazione va a buon fine: è il numeratore del tasso di
+    // installazione, e prima non lo ascoltava nessuno.
+    const installata = () => { void track('pwa_installata', { display_mode: modo }); };
+    window.addEventListener('appinstalled', installata);
+    window.addEventListener('mc:consent-change', dichiara);
+    return () => {
+      window.removeEventListener('appinstalled', installata);
+      window.removeEventListener('mc:consent-change', dichiara);
+    };
+  }, []);
 
   // Capture Web Vitals (Core Web Vitals: LCP, FID/INP, CLS)
   useEffect(() => {

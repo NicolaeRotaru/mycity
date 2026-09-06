@@ -1,4 +1,5 @@
 import type { getAdminSupabase } from '@/lib/supabase/server';
+import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { logger } from '@/lib/logger';
 
 type Admin = ReturnType<typeof getAdminSupabase>;
@@ -608,6 +609,64 @@ export async function contantiAncoraDaVersare(admin: Admin, userId: string): Pro
   };
 }
 
+/**
+ * 6/9/2026 — I DATI NON STANNO SOLO A CASA NOSTRA.
+ *
+ * Chi ha pagato un abbonamento ha un cliente su Stripe, con nome, email,
+ * indirizzo di fatturazione e lo storico dei pagamenti. Il filo che lo collega
+ * a noi è una colonna sola, `profiles.stripe_customer_id`, e la cancellazione
+ * la buttava via insieme al profilo: su Stripe restava tutto, sotto un codice
+ * che noi non conoscevamo più. Il fornaio che chiude l'account a settembre
+ * restava cliente attivo là, e se il giorno dopo avesse scritto «cancellate
+ * anche là» non avremmo più avuto il modo di trovarlo.
+ *
+ * La cancellazione (art. 17) va estesa a chi tiene una copia dei dati, e va
+ * estesa PRIMA del passo irreversibile: dopo, il riferimento non c'è più.
+ *
+ * PERCHÉ `customers.del` E NON UNO SVUOTAMENTO DEI CAMPI: cancellare il
+ * cliente su Stripe toglie i suoi dati personali e i metodi di pagamento, ma
+ * lascia in piedi pagamenti e fatture, che vanno conservati per obbligo
+ * fiscale. Chiude anche gli abbonamenti aperti, che è esattamente quello che
+ * si vuole per un account che se ne va.
+ *
+ * SE NON RIESCE, NON SI VA AVANTI. Un errore di rete qui e un `deleteUser`
+ * subito dopo lasciano il dato su Stripe e buttano via la chiave per
+ * raggiungerlo: il buco diventa impossibile da chiudere. Meglio un giorno di
+ * ritardo e la richiesta riprovata stanotte.
+ */
+async function propagaLaCancellazioneAStripe(
+  admin: Admin,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; errore: string }> {
+  const { data, error } = await admin.from('profiles').select('stripe_customer_id').eq('id', userId);
+  if (error) {
+    // Non sappiamo se c'è un cliente là fuori. Andare avanti al buio
+    // significherebbe scegliere di non poterlo più sapere.
+    logger.error('[cancellazione] codice cliente Stripe non letto', { userId, err: error.message });
+    return { ok: false, errore: `il codice del cliente Stripe non è stato letto (${error.message})` };
+  }
+  const clienteStripe = (data?.[0] as { stripe_customer_id?: string | null } | undefined)?.stripe_customer_id;
+  if (!clienteStripe) return { ok: true };
+
+  if (!isStripeConfigured()) {
+    logger.error('[cancellazione] cliente Stripe da cancellare ma Stripe non è configurato', { userId });
+    return { ok: false, errore: 'Stripe non è configurato e il cliente collegato non può essere cancellato' };
+  }
+
+  try {
+    await getStripe().customers.del(clienteStripe);
+    logger.info('[cancellazione] cliente Stripe cancellato', { userId });
+    return { ok: true };
+  } catch (err) {
+    // Su Stripe non c'è già più: la promessa è mantenuta, si tira dritto.
+    const codice = (err as { code?: string })?.code;
+    if (codice === 'resource_missing') return { ok: true };
+    const messaggio = err instanceof Error ? err.message : 'errore sconosciuto';
+    logger.error('[cancellazione] cliente Stripe non cancellato', { userId, err: messaggio });
+    return { ok: false, errore: `il cliente su Stripe non è stato cancellato (${messaggio})` };
+  }
+}
+
 export type EsitoCancellazione = {
   ok: boolean;
   errore?: string;
@@ -637,6 +696,9 @@ export type EsitoCancellazione = {
  *    stessa regola vista dall'altro verso: il senso del ② è che dopo non si
  *    ritrova più niente, quindi andare avanti su una pulizia fallita renderebbe
  *    permanente un guasto di stanotte. Si riprova domani.
+ * ②ter I responsabili esterni che tengono una copia (Stripe). Anche loro
+ *    prima del ③, e per la stessa ragione: dopo, il codice che li collega alla
+ *    persona non esiste più.
  * ③ La cancellazione dell'account: il passo che può fallire.
  * ④ Il profilo (nome, indirizzo, nome del negozio) solo se il ③ è riuscito.
  */
@@ -687,6 +749,20 @@ export async function cancellaAccount(admin: Admin, userId: string): Promise<Esi
         `L'account non è stato cancellato: prima non siamo riusciti a togliere i dati personali che ` +
         `restano anche dopo (${elenco}). Cancellarlo adesso li lascerebbe in chiaro e senza più nessun ` +
         `legame con la persona. Si riprova.`,
+      fileRimossi: file.rimossi + prove.rimossi,
+      erroriFile: [...file.errori, ...prove.errori],
+    };
+  }
+
+  // ②ter Chi tiene una copia dei dati fuori da qui. Va fatto adesso: dopo il
+  // ③ la riga del profilo non c'è più, e con lei il codice del cliente Stripe.
+  const fuori = await propagaLaCancellazioneAStripe(admin, userId);
+  if (!fuori.ok) {
+    return {
+      ok: false,
+      errore:
+        `L'account non è stato cancellato: ${fuori.errore}. Cancellarlo adesso lascerebbe quei dati ` +
+        'su Stripe senza più il codice per ritrovarli. Si riprova.',
       fileRimossi: file.rimossi + prove.rimossi,
       erroriFile: [...file.errori, ...prove.errori],
     };

@@ -36,7 +36,8 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
     .from('orders')
     // 054 — serve `delivery_status`: un ordine già consegnato non torna «annullato».
     // 061 — serve `rider_payout_reversed_cents` per il residuo dello storno rider.
-    .select('id, user_id, total_price, seller_id, payout_status, payment_status, delivery_status, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
+    // 6/9/2026 — serve `coupon_code`: il rimborso fatto a mano su Stripe bruciava il buono del cliente.
+    .select('id, user_id, total_price, seller_id, payout_status, payment_status, delivery_status, coupon_code, stripe_transfer_id, seller_payout_cents, seller_payout_reversed_cents, stripe_reversal_id, rider_id, rider_transfer_id, rider_payout_status, rider_payout_reversed_cents, rider_fee_cents, shipping_cost')
     .eq('stripe_payment_intent', pi);
 
   if (!orders || orders.length === 0) return;
@@ -205,6 +206,59 @@ export async function handleChargeRefunded(charge: Stripe.Charge) {
   for (const o of orders) {
     if (o.payment_status === 'REFUNDED') continue;
     await admin.rpc('restore_stock_for_order', { p_order_id: o.id });
+  }
+
+  /**
+   * 6/9/2026 — E IL CODICE SCONTO TORNA AL CLIENTE, COME PER LE ALTRE STRADE.
+   *
+   * Il codice si consuma prima di creare l'ordine (`claim_coupon`) e si
+   * restituisce quando l'ordine se ne va. La restituzione era stata aggiunta
+   * porta per porta — annullo del cliente, rifiuto del negozio, carrello
+   * scaduto (R121) — e questa porta era rimasta fuori: chi veniva rimborsato a
+   * mano dall'amministrazione perdeva il buono senza aver comprato niente, e
+   * lo scopriva premendo «Applica» mentre riprovava a ordinare.
+   *
+   * DUE COSE LA RENDONO SICURA, e sono la parte difficile:
+   *
+   * ① `payment_status === 'REFUNDED'` vuol dire che il rimborso l'abbiamo
+   *    fatto noi (`refundOrder`), e allora il codice è già stato restituito
+   *    da `annullaERimborsa`. Questo evento è solo l'eco di Stripe: se
+   *    restituissimo di nuovo, toglieremmo un uso VERO — su un buono con
+   *    tetto 2 usato da due ordini il contatore torna a 0 e il buono accetta
+   *    altri due sconti che nessuno ha deciso di regalare. È lo stesso
+   *    segnale con cui, due righe sopra, si evita di rimettere a scaffale
+   *    merce già rimessa.
+   * ② Un carrello da due negozi sono due ordini con lo stesso codice, e qui
+   *    se ne vanno insieme: si restituisce una volta sola per codice.
+   *
+   * La chiave per ordine (`p_order_id`) è la cintura: la funzione del
+   * database scala l'uso solo se `orders.coupon_released_at` è ancora vuoto.
+   * Finché quella migrazione non è firmata si ripiega sulla firma vecchia,
+   * ma SOLO su PGRST202 («funzione inesistente»), che è un errore di forma e
+   * non può aver scritto niente — su un errore di rete riprovare scalerebbe
+   * due volte (stessa regola di lib/ordini/annulla.ts).
+   */
+  const daRestituire = new Map<string, string>();
+  for (const o of orders) {
+    if (o.payment_status === 'REFUNDED') continue;
+    const codice = o.coupon_code?.trim();
+    if (codice && !daRestituire.has(codice)) daRestituire.set(codice, o.id);
+  }
+  for (const [codice, orderId] of daRestituire) {
+    try {
+      const { error: cErr } = await admin.rpc('release_coupon', { p_code: codice, p_order_id: orderId });
+      if (!cErr) continue;
+      if ((cErr as { code?: string }).code !== 'PGRST202') {
+        logger.warn('[stripe] codice sconto non restituito dopo il rimborso', { orderId, err: cErr.message });
+        continue;
+      }
+      const { error: senzaChiave } = await admin.rpc('release_coupon', { p_code: codice });
+      if (senzaChiave) {
+        logger.warn('[stripe] codice sconto non restituito dopo il rimborso', { orderId, err: senzaChiave.message });
+      }
+    } catch (err) {
+      logger.warn('[stripe] codice sconto non restituito dopo il rimborso', { orderId, err });
+    }
   }
 
   // Email buyer (una sola email anche se sono N ordini — è la stessa charge)

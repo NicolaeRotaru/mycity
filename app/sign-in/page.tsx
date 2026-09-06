@@ -260,7 +260,7 @@ const SignInForm = () => {
           </p>
         )}
         <Button type="submit" size="lg" loading={isLoading} iconRight={ArrowRight} fullWidth>
-          {isLoading ? 'Accesso in corso...' : 'Accedi'}
+          {isLoading ? 'Accesso in corso…' : 'Accedi'}
         </Button>
       </form>
 
