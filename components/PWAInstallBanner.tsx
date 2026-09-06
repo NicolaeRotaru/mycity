@@ -217,9 +217,15 @@ export default function PWAInstallBanner() {
           ) : null}
           <div className="flex gap-2 mt-3">
             {modo === 'pulsante' ? <Button onClick={install} size="sm">Installa</Button> : null}
+            {/* 6/9/2026 — I DUE MODI DI CHIUDERE ERANO PIU' PICCOLI DEL POLLICE.
+                Il pulsante era alto quanto il suo testo, circa 28 pixel, e la
+                croce qui sotto circa 24: sotto i 44 che servono per centrarli
+                al primo tocco. Il banner sta in fondo allo schermo, sopra la
+                barra delle schede: chi sbagliava mira apriva una scheda che non
+                voleva, e il banner restava li'. L'area cresce, il testo no. */}
             <button
               onClick={() => dismiss()}
-              className="text-ink-500 hover:text-ink-700 px-3 py-1.5 text-xs"
+              className="inline-flex min-h-[44px] items-center text-ink-500 hover:text-ink-700 px-3 text-xs"
             >
               {modo === 'istruzioni' ? 'Ho capito' : 'Più tardi'}
             </button>
@@ -228,7 +234,9 @@ export default function PWAInstallBanner() {
         <button
           onClick={() => dismiss()}
           aria-label="Chiudi"
-          className="text-ink-400 hover:text-ink-700 p-1 -mt-1 -mr-1"
+          // I margini negativi tengono la croce dov'era: cresce l'area da
+          // toccare, non lo spazio che occupa nel banner.
+          className="inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center text-ink-400 hover:text-ink-700 p-3 -mt-3 -mr-3"
         >
           <X size={16} />
         </button>

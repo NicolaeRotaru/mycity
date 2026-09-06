@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { apiErrorMessage } from '@/lib/errors';
+import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { Check, ArrowLeft } from 'lucide-react';
 import { controlloEta } from './maggiore-eta';
 
@@ -140,7 +140,15 @@ export default function RiderOnboardingPage() {
       toast.success(data.status === 'APPROVED' ? 'KYC approvato!' : 'KYC inviato, verifica in corso');
       router.push('/rider');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Errore');
+      // 6/9/2026 — L'AVVISO DICEVA SOLTANTO «ERRORE».
+      // Quando quello che viene lanciato non e' un Error — capita con un
+      // reject nudo o con una stringa — restava la parola secca «Errore»: non
+      // dice cosa e' successo ne' cosa fare, e chi la legge puo' solo
+      // riprovare a caso. `friendlyError` tiene il messaggio del server
+      // quando c'e' ed e' leggibile, e altrimenti mette la frase che il sito
+      // usa gia' dappertutto: «Qualcosa non ha funzionato. Riprova fra un
+      // momento.»
+      toast.error(friendlyError(e));
     } finally {
       setSubmitting(false);
     }

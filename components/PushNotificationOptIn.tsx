@@ -11,6 +11,7 @@ import {
   scollegaQuestoDispositivo,
 } from '@/lib/push/dispositivo';
 import { eApple, percheNienteNotifiche, type PercheNienteNotifiche } from '@/lib/installabile';
+import { friendlyError } from '@/lib/errors';
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
 
@@ -168,7 +169,15 @@ export default function PushNotificationOptIn({ compact = false }: { compact?: b
       setStatus('unsubscribed');
       toast.success('Notifiche disattivate');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Errore');
+      // 6/9/2026 — L'AVVISO DICEVA SOLTANTO «ERRORE».
+      // Quando quello che viene lanciato non e' un Error — capita con un
+      // reject nudo o con una stringa — restava la parola secca «Errore»: non
+      // dice cosa e' successo ne' cosa fare, e chi la legge puo' solo
+      // riprovare a caso. `friendlyError` tiene il messaggio del server
+      // quando c'e' ed e' leggibile, e altrimenti mette la frase che il sito
+      // usa gia' dappertutto: «Qualcosa non ha funzionato. Riprova fra un
+      // momento.»
+      toast.error(friendlyError(err));
     } finally {
       setWorking(false);
     }

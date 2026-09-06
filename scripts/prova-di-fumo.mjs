@@ -101,9 +101,25 @@ export const CONTROLLI = [
  * rispondere 401 ne' 403: `/api/health` e `/api/health/ready` rispondono 200 o
  * 503 e basta (il segreto serve solo a mostrare i dettagli, non a entrare), e
  * `/` e' pubblica — `middleware.ts` non nega niente, al massimo rimanda altrove.
- * Se arriva un 401 o un 403, a rispondere non e' stato il sito: e' qualcuno
- * davanti a lui. Gli indizi (il biscotto `_vercel_sso_nonce`, la pagina di
- * Vercel) servono solo a dire CHI, non SE.
+ * Se arriva un 401, a rispondere non e' stato il sito: e' qualcuno davanti a
+ * lui. Il 401 vuol dire «serve una chiave» ed e' esattamente cio' che risponde
+ * la schermata di accesso di Vercel; le tre porte non lo sanno dire.
+ *
+ * 6/9/2026 — MA IL 403 NUDO NON E' UN MURO, E TRATTARLO COME TALE COSTA CARO.
+ * Fin qui QUALUNQUE 401 o 403 diventava «non ho potuto vedere», uscita 4, e
+ * sul 4 il lavoro di rilascio non annulla niente. Cioe': un rilascio davvero
+ * rotto che finisca dietro un 403 — una protezione anti-robot, un blocco per
+ * zona, un limite di richieste sulla rete condivisa del lavoro — resta in
+ * produzione, e il riepilogo dice tranquillamente «non ho potuto vedere».
+ * Il muro copriva il guasto invece di segnalarlo.
+ *
+ * Adesso il 403 vale muro solo se PORTA UN INDIZIO che davanti c'e' Vercel
+ * (il biscotto `_vercel_sso_nonce`, la sua pagina di accesso, il suo blocco di
+ * sicurezza). Un 403 nudo, senza nessun indizio, vale come una porta che non
+ * risponde: la prova riprova, e se insiste il rilascio torna indietro.
+ * Il prezzo di questa scelta, dichiarato: se un giorno un filtro davanti al
+ * sito rispondesse 403 senza firmarsi, si annullerebbe un rilascio sano — un
+ * danno rumoroso e reversibile, mentre quello di prima era silenzioso.
  *
  * La chiave per passare esiste ed e' di Vercel: Settings → Deployment
  * Protection → Protection Bypass for Automation. Se il segreto c'e', si passa e
@@ -116,10 +132,16 @@ export function muroDavantiAlSito(stato, indizi = {}) {
   if (stato !== 401 && stato !== 403) return null;
   const biscotto = String(indizi.biscotto ?? '');
   const corpo = String(indizi.corpo ?? '');
-  if (/_vercel_sso_nonce/i.test(biscotto) || /sso-api|authentication required/i.test(corpo)) {
-    return 'ha risposto il login di Vercel, non il sito';
-  }
-  return 'qualcuno davanti al sito ha rifiutato la chiamata prima che arrivasse';
+  const firmaDiVercel =
+    /_vercel_sso_nonce/i.test(biscotto) ||
+    /sso-api|authentication required|vercel security checkpoint|deployment protection/i.test(corpo);
+  if (firmaDiVercel) return 'ha risposto il login di Vercel, non il sito';
+  // Il 401 e' «serve una chiave»: le tre porte non lo sanno dire, quindi a
+  // rispondere e' per forza qualcuno davanti. Il 403 nudo no: puo' essere
+  // chiunque, e chiamarlo muro vuol dire lasciare in produzione un rilascio
+  // rotto senza che nessuno lo annulli.
+  if (stato === 401) return 'qualcuno davanti al sito ha chiesto una chiave che non ho';
+  return null;
 }
 
 /**

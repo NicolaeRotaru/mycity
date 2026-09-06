@@ -400,6 +400,20 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* 6/9/2026 — CHI CHIEDE MENO ANIMAZIONI RESTAVA SENZA IL SEGNALE DI ATTESA.
+     La regola qui sopra ferma tutto, rotelline comprese: `animate-spin` e' la
+     Loader2 di ogni pulsante che sta lavorando (Button.tsx) e di LoadingState,
+     `.skeleton` e' il grigio che scorre mentre arriva la lista. Fermarli non
+     toglie il movimento fastidioso: toglie l'unica cosa che dice «sto
+     lavorando», e il pulsante diventa un rettangolo grigio con un cerchietto
+     immobile. Chi ha quell'impostazione chiede movimento MENO invadente, non
+     zero informazione: qui girano lenti, senza scatti ne' rimbalzi. */
+  .animate-spin,
+  .skeleton {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
 /* Card hover lift universale */
@@ -484,7 +498,7 @@ h3 { font-size: var(--text-lg); font-weight: var(--weight-bold); line-height: va
  * fidandosi di questa riga avrebbe usato var(--store-accent) e ottenuto un
  * colore vuoto. La variabile morta e' stata tolta dalle due pagine e la riga
  * dice come stanno le cose: i temi qui sotto toccano angoli, ombre, fondo e
- * spaziatura — mai il colore del negozio, che arriva per prop. */
+ * spaziatura — mai il colore del negozio, che arriva per prop.
  * ========================================================================== */
 
 /* Moderno: angoli netti, ombre minime */

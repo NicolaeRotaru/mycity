@@ -85,11 +85,19 @@ export default function NewReturnPage() {
         }),
       });
       const data = await r.json();
-      if (!r.ok) throw new Error(apiErrorMessage(data, 'Errore'));
+      if (!r.ok) throw new Error(apiErrorMessage(data));
       toast.success('Richiesta di reso inviata');
       router.push(`/orders/${params.id}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Errore');
+      // 6/9/2026 — L'AVVISO DICEVA SOLTANTO «ERRORE».
+      // Quando quello che viene lanciato non e' un Error — capita con un
+      // reject nudo o con una stringa — restava la parola secca «Errore»: non
+      // dice cosa e' successo ne' cosa fare, e chi la legge puo' solo
+      // riprovare a caso. `friendlyError` tiene il messaggio del server
+      // quando c'e' ed e' leggibile, e altrimenti mette la frase che il sito
+      // usa gia' dappertutto: «Qualcosa non ha funzionato. Riprova fra un
+      // momento.»
+      toast.error(friendlyError(e));
     } finally {
       setSubmitting(false);
     }
