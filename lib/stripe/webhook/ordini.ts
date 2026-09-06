@@ -560,6 +560,15 @@ export async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
   const admin = getAdminSupabase();
   const pid = session.client_reference_id ?? session.metadata?.pending_checkout_id;
   if (!pid) return;
+  // 162 — PRIMA DI RIMETTERE A SCAFFALE, GUARDA SE E' GIA' STATO VENDUTO: col pagamento riuscito e
+  // il webhook morto a meta' gli ordini esistono gia', e ripristinare qui vuol dire rivendere pezzi
+  // gia' usciti. Il giro periodico questa guardia ce l'ha — e avvisa gli amministratori; qui no.
+  const { data: giaNati, error: errOrdini } = await admin.from('orders').select('id').eq('stripe_session_id', session.id).limit(1);
+  if (errOrdini) throw new Error(`[stripe] carrello scaduto: controllo ordini fallito (${errOrdini.message})`);
+  if (giaNati?.length) {
+    logger.error('[stripe] carrello scaduto con ordini gia creati: merce NON rimessa in vendita', { pid });
+    return;
+  }
   // 064 — Prima si leggeva, si rilasciava la merce e POI si scriveva EXPIRED:
   // il cron `expire-checkouts` e questo evento potevano passare insieme e
   // rimettere in magazzino la stessa merce due volte, e restituire due volte il
@@ -585,5 +594,4 @@ export async function handleCheckoutExpired(session: Stripe.Checkout.Session) {
     const { error: cErr } = await admin.rpc('release_coupon', { p_code: codiceAbbandonato });
     if (cErr) logger.warn('[stripe] codice sconto non restituito', { pid, message: cErr.message });
   }
-
 }

@@ -124,7 +124,7 @@ export default function Navbar() {
         <div className="hidden md:block">
           <div className="container mx-auto px-4 py-3">
             <div className="flex items-center gap-4">
-              <Link href="/" className="text-2xl font-serif font-bold tracking-tight whitespace-nowrap leading-none focus-visible:outline-white">
+              <Link href="/" className="text-2xl font-serif font-extrabold tracking-tight whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <LocationPill />
@@ -142,7 +142,19 @@ export default function Navbar() {
                         della barra stacca 3,87 volte, sotto il 4,5 richiesto a
                         un testo. `accent-200` arriva a 4,87. */}
                     <Link href="/sign-in" className="px-3 py-2 hover:text-accent-200 font-medium focus-visible:outline-white">Accedi</Link>
-                    <Link href="/sign-up" className="bg-accent-500 hover:bg-accent-600 text-ink-900 px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
+                    {/*
+                      6/9/2026 — DUE PILLOLE GIALLE IDENTICHE, UNA ACCANTO ALL'ALTRA.
+                      Il carrello e «Registrati» avevano lo stesso riempimento giallo,
+                      lo stesso testo scuro e la stessa forma: cambiava solo un po' di
+                      spazio ai lati. Nell'angolo in alto a destra due azioni molto
+                      diverse pesavano uguale, e chi ha già scelto cosa comprare non
+                      trovava subito il carrello. Ora il pieno giallo resta a uno solo —
+                      il carrello, che è la strada per pagare — e «Registrati» diventa
+                      un contorno bianco sul terracotta della barra: si vede benissimo
+                      (il bianco su quel fondo stacca 6,7 volte, ne bastano 4,5) ma non
+                      compete più col carrello.
+                    */}
+                    <Link href="/sign-up" className="border border-white/70 hover:border-white hover:bg-white/10 text-white px-4 py-2 rounded-full font-semibold transition-colors focus-visible:outline-white">
                       Registrati
                     </Link>
                   </>
@@ -202,7 +214,7 @@ export default function Navbar() {
         <div className="md:hidden">
           <div className="container mx-auto px-3 py-2.5">
             <div className="flex items-center gap-2">
-              <Link href="/" className="shrink-0 text-xl font-serif font-bold whitespace-nowrap leading-none focus-visible:outline-white">
+              <Link href="/" className="shrink-0 text-xl font-serif font-extrabold whitespace-nowrap leading-none focus-visible:outline-white">
                 <span className="text-accent-300">{branding.wordmark.accent}</span>{branding.wordmark.rest}
               </Link>
               <div className="min-w-0 flex-1 flex justify-center">
@@ -335,11 +347,20 @@ const UserMenu = ({ displayName, storeLogo, role, isSeller, isRider, isAdmin, on
   useEffect(() => setOpen(false), [pathname]);
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
+    /**
+     * 6/9/2026 — SUL TELEFONO IL PANNELLO POTEVA RESTARE APERTO.
+     * Si ascoltava solo `mousedown`, che è un evento del mouse: su Safari iOS
+     * il tocco lo fa nascere solo sopra gli elementi che il browser considera
+     * cliccabili, quindi un dito appoggiato su un pezzo qualunque di pagina
+     * poteva non chiudere niente. `pointerdown` è lo stesso gesto per dito,
+     * penna e mouse insieme: un solo ascoltatore, tutti e tre i modi di
+     * indicare. (Il dito su un vero iPhone non l'ho potuto provare da qui.)
+     */
+    const onClick = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('pointerdown', onClick);
+    return () => document.removeEventListener('pointerdown', onClick);
   }, [open]);
 
   /**

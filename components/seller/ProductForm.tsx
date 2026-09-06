@@ -87,7 +87,14 @@ interface ProductFormProps {
   /** create: scarta la bozza in corso (svuota l'autosalvataggio e torna indietro). */
   onDiscard?: () => void;
   productId?: string;
-  sellerOffersExpress?: boolean;
+  sellerOffersExpress?: boolean | null;
+  /**
+   * 6/9/2026 — «NON SO SE IL NEGOZIO OFFRE LA CONSEGNA VELOCE» non è «non la
+   * offre». Quando la lettura delle impostazioni del negozio fallisce, il
+   * modulo lo dice invece di mostrare l'avviso sbagliato («attivala dal
+   * profilo») a chi l'ha già attiva.
+   */
+  consegnaDelNegozioNonLetta?: boolean;
   /** create: chiave localStorage per l'autosalvataggio della bozza. */
   autosaveKey?: string;
 }
@@ -104,6 +111,7 @@ export default function ProductForm({
   onDiscard,
   productId,
   sellerOffersExpress = false,
+  consegnaDelNegozioNonLetta = false,
   autosaveKey,
 }: ProductFormProps) {
   const schema = useMemo(
@@ -149,7 +157,7 @@ export default function ProductForm({
       ? true
       : initialValues?.expressEnabled === false
         ? false
-        : sellerOffersExpress,
+        : Boolean(sellerOffersExpress),
   );
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
   const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
@@ -917,11 +925,18 @@ export default function ProductForm({
               </span>
             </button>
           </div>
-          {fastDelivery && !sellerOffersExpress && (
-            <p className="text-xs text-ink-400 mt-1.5">
-              La consegna veloce richiede l&apos;Express attivo per il negozio: attivalo dal{' '}
-              <Link href="/seller/profile" className="text-primary-700 hover:underline">profilo negozio</Link>.
+          {consegnaDelNegozioNonLetta ? (
+            <p className="text-xs text-amber-700 mt-1.5">
+              Non riesco a leggere le impostazioni di consegna del tuo negozio. Ricarica la pagina
+              prima di salvare: altrimenti rischi di togliere la consegna veloce a questo prodotto.
             </p>
+          ) : (
+            fastDelivery && !sellerOffersExpress && (
+              <p className="text-xs text-ink-400 mt-1.5">
+                La consegna veloce richiede l&apos;Express attivo per il negozio: attivalo dal{' '}
+                <Link href="/seller/profile" className="text-primary-700 hover:underline">profilo negozio</Link>.
+              </p>
+            )
           )}
         </div>
 

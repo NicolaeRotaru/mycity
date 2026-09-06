@@ -84,7 +84,7 @@ export default function MobileAccountSheet({ open, onClose, role, displayName, s
             ) : (
               <span className={`w-11 h-11 rounded-full flex items-center justify-center text-base font-bold uppercase shrink-0 ${
                 isSeller ? 'bg-accent-500 text-ink-900' :
-                isRider  ? 'bg-olive-500 text-white' :
+                isRider  ? 'bg-olive-600 text-white' :
                 isAdmin  ? 'bg-secondary-500 text-white' :
                            'bg-primary-100 text-primary-700'
               }`}>

@@ -2,32 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import { Star, StarHalf, User, BadgeCheck, ThumbsUp } from 'lucide-react';
+import { Star, User, BadgeCheck, ThumbsUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
 import { sizedImage } from '@/lib/image-url';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 import type { SectionContext, SectionReview } from './SectionContext';
 import { RatingStars } from '@/components/ui/RatingStars';
-
-/**
- * Media a stelle con mezza-stella: arrotonda al mezzo punto (es. 4,3 → 4,5) e
- * rende 5 icone — piene, una mezza, vuote. Parità token col mockup: accent-500.
- */
-function AverageStars({ value }: { value: number }) {
-  const rounded = Math.round(value * 2) / 2;
-  const full = Math.floor(rounded);
-  const hasHalf = rounded - full === 0.5;
-  return (
-    <span className="inline-flex items-center" aria-label={`${value.toFixed(1)} su 5 stelle`}>
-      {Array.from({ length: 5 }, (_, i) => {
-        if (i < full) return <Star key={i} size={16} className="fill-accent-500 text-accent-500" aria-hidden />;
-        if (i === full && hasHalf) return <StarHalf key={i} size={16} className="fill-accent-500 text-accent-500" aria-hidden />;
-        return <Star key={i} size={16} className="fill-cream-200 text-cream-200" aria-hidden />;
-      })}
-    </span>
-  );
-}
 
 /**
  * Recensione singola arricchita con dati reali (store_reviews + profilo autore):
@@ -179,7 +160,17 @@ function ReviewItem({ r, accent }: { r: SectionReview; accent: string }) {
         }`}
         style={
           hasVoted
-            ? { backgroundColor: `color-mix(in srgb, ${accent} 12%, white)`, color: accent, borderColor: accent }
+            ? {
+                backgroundColor: `color-mix(in srgb, ${accent} 12%, white)`,
+                // 6/9/2026 — qui c'era `color: accent`, cioe' l'accent puro sopra il
+                // suo stesso velo al 12%: su tre preset degli otto il testo scendeva
+                // sotto 4,5:1 (oliva 4,10 · terracotta 4,20 · senape 4,27) mentre e'
+                // scritto a 12px in grassetto. Scurendolo verso l'inchiostro il
+                // peggiore risale a 6,10:1 e il colore resta quello del negozio.
+                // Il bordo tiene l'accent pieno: li' l'identita' si vede e basta.
+                color: `color-mix(in srgb, ${accent} 70%, #1C1A18)`,
+                borderColor: accent,
+              }
             : undefined
         }
       >
@@ -204,7 +195,13 @@ export default function ReviewsSection({ ctx }: { ctx: SectionContext }) {
           Recensioni clienti
         </h2>
         <div className="flex items-center gap-1.5">
-          <AverageStars value={avgRating} />
+          {/* 6/9/2026 — le stelle della media erano disegnate qui dentro, in proprio:
+              accent-500 sulle piene (2,16:1 sul bianco) e cream-200 sulle vuote
+              (1,17:1), cioe' sotto il 3:1 che WCAG 1.4.11 chiede a un elemento
+              grafico. La cura era gia' scritta e gia' in uso due righe sopra, per
+              le stelle della singola recensione: RatingStars, accent-700 (5,00:1)
+              e vuote ink-400. Una sola casa per la regola. */}
+          <RatingStars rating={avgRating} size={16} />
           <span className="text-sm font-medium text-ink-600">
             {avgRating.toFixed(1).replace('.', ',')} ({reviews.length})
           </span>

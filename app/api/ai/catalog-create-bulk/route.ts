@@ -9,8 +9,16 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { writeAudit } from '@/lib/audit';
-import { buildDraftProductInsert } from '@/lib/products/draftFromVision';
-import type { CategoryRow } from '@/lib/products/aiPatch';
+import {
+  buildDraftProductInsert,
+  MAX_ALT_TEXT,
+  MAX_VALORE_ATTRIBUTO,
+} from '@/lib/products/draftFromVision';
+import {
+  MAX_NOME_PRODOTTO,
+  MAX_DESCRIZIONE_PRODOTTO,
+  type CategoryRow,
+} from '@/lib/products/aiPatch';
 import {
   productSnapshot,
   PRODUCT_SNAPSHOT_COLS,
@@ -28,16 +36,24 @@ import {
 
 export const runtime = 'nodejs';
 
+/**
+ * 6/9/2026 — I TETTI CHE MANCAVANO ALL'ALT E AGLI ATTRIBUTI.
+ *
+ * `alt_text` e i valori degli attributi entravano senza nessun limite di
+ * lunghezza e finivano interi in `products.attributes`. Il taglio vero sta in
+ * `buildDraftProductInsert`, che è la porta unica; qui c'è il gemello, così chi
+ * manda troppo se lo sente dire invece di vedersi tagliare il testo in silenzio.
+ */
 const DraftSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
+  name: z.string().max(MAX_NOME_PRODOTTO * 4).optional(),
+  description: z.string().max(MAX_DESCRIZIONE_PRODOTTO * 2).optional(),
   category_id: z.string().uuid().nullable().optional(),
   subcategory_id: z.string().uuid().nullable().optional(),
-  category_slug: z.string().optional(),
+  category_slug: z.string().max(200).optional(),
   suggested_price: z.number().nullable().optional(),
-  attributes: z.record(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
-  alt_text: z.string().nullable().optional(),
+  attributes: z.record(z.string().max(MAX_VALORE_ATTRIBUTO)).optional(),
+  tags: z.array(z.string().max(60)).max(50).optional(),
+  alt_text: z.string().max(MAX_ALT_TEXT).nullable().optional(),
 });
 
 const BodySchema = z.object({

@@ -14,6 +14,7 @@ import {
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
 import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
+import { useBranding } from '@/components/hooks/useBranding';
 
 /** Chiave su cui agganciare un badge "live" (pallino) calcolato da un conteggio. */
 type BadgeKey = 'disputes' | 'sos';
@@ -67,12 +68,23 @@ function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(href + '/');
 }
 
-/** Logo wordmark MyCity · Admin (riusato da sidebar desktop e topbar mobile). */
+/**
+ * Logo wordmark del marketplace · Admin (riusato da sidebar desktop e topbar mobile).
+ *
+ * 6/9/2026 — LE DUE PAROLE ERANO SCRITTE A MANO. Chi rinomina il marketplace dal
+ * pannello (Aspetto → Nome del marketplace) vedeva cambiare la barra in alto e il
+ * fondo pagina, ma questa sidebar continuava a dire «MyCity»: l'unico posto che
+ * mentiva era proprio quello dove l'amministratore lavora. Ora legge lo stesso
+ * nome degli altri due, dalla cache condivisa di useBranding: nessuna chiamata in
+ * più. Il peso resta 800 come il marchio ufficiale, e su fondo scuro la parte
+ * evidenziata è accent-300, come nella barra in alto.
+ */
 function AdminLogo() {
+  const branding = useBranding();
   return (
     <div className="font-serif text-[22px] font-extrabold leading-none tracking-tight">
-      <span className="text-accent-300">My</span>
-      <span className="text-white">City</span>
+      <span className="text-accent-300">{branding.wordmark.accent}</span>
+      <span className="text-white">{branding.wordmark.rest}</span>
       <span className="ml-1.5 font-sans text-[11px] font-bold uppercase tracking-[0.08em] text-secondary-300">
         Admin
       </span>

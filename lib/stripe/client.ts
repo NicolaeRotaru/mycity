@@ -1,8 +1,32 @@
 import Stripe from 'stripe';
 import { env } from '@/lib/env';
+import { logger } from '@/lib/logger';
 import { MARKETPLACE_FEE_BPS } from '@/lib/constants';
 
 let _stripe: Stripe | null = null;
+
+/**
+ * Il minimo che Stripe accetta per `expires_at` è mezz'ora. Teniamo un minuto
+ * di margine perché fra il conto e la chiamata passa del tempo.
+ */
+export const MINIMO_SCADENZA_STRIPE_SEC = 31 * 60;
+
+/**
+ * ALLA RISERVA RESTA MENO DI QUANTO STRIPE PERMETTA DI TENERE APERTA LA CASSA.
+ *
+ * Non è un errore nostro da nascondere: è il carrello scaduto. Chi la riceve
+ * rimette la merce in vendita, restituisce il codice sconto e dice al cliente
+ * di rifare l'ordine — invece di aprire una cassa che sopravvive alla merce.
+ */
+export class RiservaTroppoCorta extends Error {
+  readonly name = 'RiservaTroppoCorta';
+  constructor(readonly secondiRimasti: number) {
+    super(
+      `Alla riserva della merce restano ${Math.max(0, Math.round(secondiRimasti / 60))} minuti: ` +
+        'Stripe non accetta una cassa che scade prima di mezz\'ora.',
+    );
+  }
+}
 
 /**
  * Lazy-init di Stripe. Lancia se chiamata senza chiave configurata.
@@ -196,12 +220,37 @@ export async function createMultiSellerCheckoutSession(
   // dopo tre ore riusciva a pagare, e il webhook creava l'ordine di merce che
   // nel frattempo era stata rimessa a magazzino — e magari venduta a un altro.
   // Stripe accetta un minimo di 30 minuti e un massimo di 24 ore.
+  //
+  // 6/9/2026 — IL `Math.max` FACEVA VIVERE LA CASSA PIÙ A LUNGO DELLA MERCE.
+  //
+  // Quando alla riserva restava meno del minimo di Stripe, la vecchia riga
+  // alzava la scadenza al minimo e creava la sessione lo stesso: con dieci
+  // minuti di riserva la pagina di pagamento moriva ventuno minuti DOPO che la
+  // merce era già tornata in vendita. In quella finestra il giro periodico
+  // rimette il pezzo a magazzino e restituisce il codice sconto, e intanto il
+  // cliente può ancora pagarlo: nasce l'ordine di una cosa già venduta a un
+  // altro. Oggi la riserva nasce a due ore e il caso non capita, ma è una rete
+  // che non tiene: basta accorciare la riserva sul fresco per aprirla.
+  //
+  // Adesso i due tempi o coincidono o non si parte: sotto il minimo la sessione
+  // non nasce e chi ha chiamato rimette a posto merce e codice sconto.
+  const oraSec = Math.floor(Date.now() / 1000);
   const scadenzaRiservaSec = Math.floor((input.pendingExpiresAt ?? 0) / 1000);
-  const minimoSec = Math.floor(Date.now() / 1000) + 31 * 60;
-  const massimoSec = Math.floor(Date.now() / 1000) + 23 * 60 * 60;
-  const expiresAt = scadenzaRiservaSec > 0
-    ? Math.min(Math.max(scadenzaRiservaSec, minimoSec), massimoSec)
-    : undefined;
+  const minimoSec = oraSec + MINIMO_SCADENZA_STRIPE_SEC;
+  const massimoSec = oraSec + 23 * 60 * 60;
+  let expiresAt: number | undefined;
+  if (scadenzaRiservaSec > 0) {
+    if (scadenzaRiservaSec < minimoSec) throw new RiservaTroppoCorta(scadenzaRiservaSec - oraSec);
+    // Il taglio verso l'alto è il verso sicuro: la cassa muore prima della
+    // riserva, mai dopo. Resta una traccia perché i due tempi divergono.
+    expiresAt = Math.min(scadenzaRiservaSec, massimoSec);
+    if (expiresAt !== scadenzaRiservaSec) {
+      logger.warn('[stripe] la cassa scade prima della riserva (tetto 23 ore di Stripe)', {
+        scadenzaRiservaSec,
+        expiresAt,
+      });
+    }
+  }
 
   return await stripe.checkout.sessions.create({
     mode: 'payment',

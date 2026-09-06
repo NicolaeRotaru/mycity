@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { leggiPerMetadati } from '@/lib/supabase/lettura-per-metadati';
+import { sizedImage } from '@/lib/image-url';
 
 export const runtime = 'edge';
 export const alt = 'Prodotto su MyCity';
@@ -28,7 +29,16 @@ export default async function ProductOG({ params }: { params: { id: string } }) 
   const name = p?.name ?? 'Prodotto su MyCity';
   const store = p?.profiles?.store_name ?? 'MyCity Piacenza';
   const price = typeof p?.price === 'number' ? `€${p.price.toFixed(2)}` : '';
-  const photo = Array.isArray(p?.images) && p?.images[0] ? p.images[0] : null;
+  // 6/9/2026 — QUI SI SCARICAVA LA FOTO ORIGINALE PER UN RIQUADRO DA 460 PIXEL.
+  // Questa immagine si genera su runtime edge, che ha un tempo massimo stretto, e
+  // prendeva la foto com'e' stata caricata dal telefono del negoziante — fino a
+  // 5 MB dopo la ricompressione nel browser — per disegnarla in un riquadro largo
+  // 460 (il 45% di 1200, meno 40 di margine per lato). Su una foto pesante la
+  // generazione rallenta o scade, e chi incolla il link su WhatsApp vede
+  // l'anteprima senza foto: proprio il momento in cui il prodotto si mostra.
+  // Si chiede la larghezza vera del riquadro, come fa il resto del sito.
+  const raw = Array.isArray(p?.images) && p?.images[0] ? p.images[0] : null;
+  const photo = raw ? sizedImage(raw, 460) : null;
 
   return new ImageResponse(
     (

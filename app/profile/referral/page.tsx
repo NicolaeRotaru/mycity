@@ -123,7 +123,7 @@ export default function ReferralPage() {
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => void trackReferralSent('whatsapp')}
-            className="inline-flex items-center justify-center gap-2 bg-olive-500 hover:bg-olive-600 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
+            className="inline-flex items-center justify-center gap-2 bg-olive-600 hover:bg-olive-700 text-white px-4 py-2.5 rounded-lg font-semibold text-sm text-center"
           >
             <MessageCircle size={16} className="text-white" aria-hidden />
             WhatsApp

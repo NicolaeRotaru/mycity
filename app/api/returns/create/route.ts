@@ -4,7 +4,7 @@ import { getServerSupabase, getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { withAuthRateLimit } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
-import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { CorpoTroppoGrande, jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
 import { fotoDiCasa } from '@/lib/storage/foto-di-casa';
 
 export const runtime = 'nodejs';
@@ -42,6 +42,17 @@ export const POST = withAuthRateLimit({ name: 'returns-create', max: 10, windowM
   try {
     body = Body.parse(await jsonRichiesta(req, TETTO_JSON));
   } catch (e) {
+  /**
+   * 6/9/2026 — «TROPPO GRANDE» E «DATI NON VALIDI» NON SONO LA STESSA COSA.
+   *
+   * Il tetto sul corpo lancia un errore che porta con sé lo stato giusto (413).
+   * Questo `catch` lo raccoglieva insieme a un JSON rotto e rispondeva 400
+   * «Dati non validi»: chi manda troppa roba non capisce che deve solo mandarne
+   * meno, e nei registri un limite superato non si distingue da un errore del
+   * browser. Le rotte AI questa distinzione ce l'hanno da fine agosto (R153),
+   * queste tre no.
+   */
+    if (e instanceof CorpoTroppoGrande) return ApiErrors.payloadTooLarge('La richiesta è troppo grande: allega meno foto o scrivi una nota più corta.');
     return ApiErrors.invalidRequest('Dati non validi', e instanceof Error ? e.message : undefined);
   }
 

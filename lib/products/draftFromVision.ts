@@ -8,6 +8,28 @@ import {
 } from '@/lib/products/aiPatch';
 
 /**
+ * 6/9/2026 — IL TETTO CHE MANCAVA A TUTTO CIÒ CHE FINISCE IN `attributes`.
+ *
+ * Il 30/8 (R158) il nome e la descrizione hanno preso un tetto condiviso, 120 e
+ * 4000 caratteri. Il testo alternativo della foto e i valori testuali degli
+ * attributi no: arrivavano dal browser e venivano copiati interi dentro
+ * `products.attributes`, che è una colonna JSONB. Con un corpo da un megabyte
+ * una sola bozza poteva portarsi dietro un megabyte di JSON: pesa su ogni
+ * lettura del catalogo del venditore e su ogni esportazione, e il giorno in cui
+ * l'alt finisce nell'HTML pubblico — che è il suo mestiere — la pagina del
+ * prodotto pesa un megabyte.
+ *
+ * Il tetto sta qui e non nello zod delle rotte perché questa è la porta unica:
+ * le due rotte che creano bozze passano tutte e due da `buildDraftProductInsert`.
+ * Nelle rotte c'è comunque un `.max()` gemello, così chi manda troppo lo sa
+ * subito invece di vedersi tagliare il testo in silenzio.
+ */
+/** Il testo alternativo di una foto: una frase, non un romanzo. */
+export const MAX_ALT_TEXT = 300;
+/** Il valore testuale di un attributo di categoria (materiale, colore, ...). */
+export const MAX_VALORE_ATTRIBUTO = 500;
+
+/**
  * Costruisce il payload di INSERT (status='draft') di un prodotto a partire dai
  * dati estratti dalle foto (vision) + le immagini caricate. Sorgente unica
  * usata sia da /api/ai/catalog-create (un prodotto) sia da
@@ -88,11 +110,13 @@ export function buildDraftProductInsert(opts: {
         if (!opt) continue;
         attributes[targetKey] = opt;
       } else {
-        attributes[targetKey] = value;
+        attributes[targetKey] = value.slice(0, MAX_VALORE_ATTRIBUTO);
       }
     }
   }
-  if (draft.alt_text && draft.alt_text.trim()) attributes.alt_text = draft.alt_text.trim();
+  if (draft.alt_text && draft.alt_text.trim()) {
+    attributes.alt_text = draft.alt_text.trim().slice(0, MAX_ALT_TEXT);
+  }
 
   // Tag: lowercase, dedup, max 15.
   const tags: string[] = [];

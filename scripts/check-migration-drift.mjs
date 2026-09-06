@@ -31,15 +31,25 @@ const MIGRATIONS_DIR = path.resolve(process.cwd(), 'migrations');
 const NAME_RE = /^(\d{3}[a-z]?)_([a-z0-9_]+)\.sql$/;
 
 /**
- * #46 — Si confronta anche il PREFISSO NUMERICO e il CONTENUTO, non solo il
- * nome.
+ * #46 — Si confronta il PREFISSO NUMERICO oltre al nome. Il contenuto NO: si
+ * calcola e si stampa soltanto.
  *
  * Prima il confronto era `applied.has(m.name)`, cioe' solo la parte descrittiva
- * del nome file. Due conseguenze: due migrazioni con lo stesso nome e numero
- * diverso (e capita: `108_x` e `108b_x`) risultavano la stessa cosa, e una
- * migrazione MODIFICATA dopo essere stata applicata risultava «a posto» —
- * mentre il database ha ancora la versione vecchia. Il controllo diceva verde
- * proprio nel caso che doveva prendere.
+ * del nome file, e due migrazioni con lo stesso nome e numero diverso (capita:
+ * `108_x` e `108b_x`) risultavano la stessa cosa. Quello e' chiuso: sotto si
+ * guardano tutti e due.
+ *
+ * ⚠️ QUELLO CHE QUESTO CONTROLLO NON PRENDE, detto qui perche' fin qui il
+ * commento prometteva piu' di quanto il codice facesse (misurato il 6/9/2026).
+ * Una migrazione MODIFICATA dopo essere stata applicata passa verde: il numero
+ * e il nome nel database ci sono ancora, e nessuno confronta il contenuto. Sotto
+ * si calcola l'impronta md5 di ogni file, ma serve solo a stamparne cinque nel
+ * log — non entra in nessun confronto. Per confrontarla davvero servirebbe una
+ * colonna dove conservarla in `supabase_migrations.schema_migrations`, che oggi
+ * non c'e': e' una modifica al database, cioe' una decisione da firmare, non una
+ * riga da aggiungere qui. Finche' quella colonna non esiste, la frase giusta e'
+ * «il database conosce queste migrazioni», non «il database e' allineato al
+ * codice».
  */
 function repoMigrationNames() {
   return fs
@@ -101,11 +111,12 @@ async function main() {
 
   if (missing.length === 0) {
     console.log(`✅ check-migration-drift: tutte le ${repo.length} migrazioni risultano applicate.`);
-    // #46 — L'impronta del contenuto, per chi verra' dopo. Il registro di
-    // Supabase non la conserva, quindi qui la si stampa: chi indaga un guasto
-    // puo' confrontare l'impronta di oggi con quella scritta nel log del
-    // rilascio in cui la migrazione e' stata applicata, e vedere se il file e'
-    // stato toccato da allora.
+    // #46 — L'impronta del contenuto, STAMPATA e non confrontata (vedi la nota
+    // in testa al file). Il registro di Supabase non ha una colonna dove
+    // conservarla, quindi resta un appiglio per chi indaga a mano: si confronta
+    // l'impronta di oggi con quella scritta nel log del rilascio in cui la
+    // migrazione e' stata applicata, e si vede se il file e' stato toccato da
+    // allora. Un occhio umano, non un cancello.
     for (const m of repo.slice(-5)) console.log(`   ${m.file} · md5 ${m.impronta}`);
     process.exit(0);
   }

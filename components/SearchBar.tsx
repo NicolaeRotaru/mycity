@@ -134,13 +134,22 @@ export default function SearchBar({ className = '', placeholder = 'Cerca prodott
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
+    /**
+     * 6/9/2026 — SUL TELEFONO IL PANNELLO POTEVA RESTARE APERTO.
+     * Si ascoltava solo `mousedown`, che è un evento del mouse: su Safari iOS
+     * il tocco lo fa nascere solo sopra gli elementi che il browser considera
+     * cliccabili, quindi un dito appoggiato su un pezzo qualunque di pagina
+     * poteva non chiudere niente. `pointerdown` è lo stesso gesto per dito,
+     * penna e mouse insieme: un solo ascoltatore, tutti e tre i modi di
+     * indicare. (Il dito su un vero iPhone non l'ho potuto provare da qui.)
+     */
+    const onClick = (e: PointerEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', onClick);
-    return () => document.removeEventListener('mousedown', onClick);
+    document.addEventListener('pointerdown', onClick);
+    return () => document.removeEventListener('pointerdown', onClick);
   }, [open]);
 
   /**

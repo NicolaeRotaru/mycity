@@ -77,6 +77,8 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     }
   }
 
+  /** Perche' l'avviso agli amministratori non e' partito: `null` = e' partito, o non serviva. */
+  let avvisoNonPartito: string | null = null;
   const daSalvare = (candidati ?? []).filter((c) => {
     const sid = (c as { stripe_session_id?: string | null }).stripe_session_id;
     return !!sid && conOrdini.has(sid);
@@ -87,7 +89,16 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
     logger.error('[cron] carrelli scaduti ma con ordini gia creati: non toccati', {
       ids: daSalvare.map((c) => c.id),
     });
-    const { data: admins } = await admin.from('profiles').select('id').eq('role', 'admin');
+    // 6/9/2026 — E L'UNICO AVVISO SU QUESTO CASO POTEVA SPARIRE IN SILENZIO.
+    //
+    // La riga si scriveva con un `await ... .insert(righe)` di cui nessuno
+    // leggeva l'esito, e il client Supabase non solleva eccezioni: categoria
+    // rifiutata, permesso cambiato, riga non valida, e il giro rispondeva
+    // comunque «ok». Il caso e' il piu' delicato che il sistema conosca —
+    // merce gia' venduta e cliente da rimborsare a mano — e restava scritto
+    // solo nel log tecnico. Ogni altra scrittura di questo file l'errore lo
+    // legge gia': qui era saltato perche' e' un ramo che quasi mai gira.
+    const { data: admins, error: errAdmins } = await admin.from('profiles').select('id').eq('role', 'admin');
     const righe = (admins ?? []).map((a) => ({
       category: 'system',
       user_id: a.id,
@@ -95,7 +106,21 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
       body: `${daSalvare.length} carrello/i sono scaduti ma hanno gia' degli ordini: la merce NON e' stata rimessa in vendita. Vanno chiusi a mano.`,
       link: '/admin/orders',
     }));
-    if (righe.length > 0) await admin.from('notifications').insert(righe);
+    if (errAdmins) {
+      logger.error('[cron] elenco amministratori non letto: avviso non partito', errAdmins);
+      avvisoNonPartito = errAdmins.message;
+    } else if (righe.length === 0) {
+      // Nessun amministratore in tabella: riprovare non lo fa comparire, ma
+      // nemmeno questo puo' restare una riga di log che non guarda nessuno.
+      logger.error('[cron] nessun amministratore da avvisare: carrello pagato a meta senza destinatario');
+      avvisoNonPartito = 'nessun amministratore a cui scrivere';
+    } else {
+      const { error: errAvviso } = await admin.from('notifications').insert(righe);
+      if (errAvviso) {
+        logger.error('[cron] avviso agli amministratori non scritto', errAvviso);
+        avvisoNonPartito = errAvviso.message;
+      }
+    }
   }
 
   // `includes` su un elenco costa un giro dell'elenco per ogni candidato: con
@@ -172,6 +197,17 @@ export const POST = withCronAuth(async (): Promise<NextResponse> => {
 
   if (count > 0) {
     logger.spesa(`[cron] expired ${count} pending checkouts`);
+  }
+
+  // L'avviso mancato non si perde in un log: il giro si dichiara fallito, cosi'
+  // Vercel lo ritenta. Il lavoro fatto qui sopra e' gia' idempotente — scade
+  // solo cio' che e' ancora PENDING — quindi al giro dopo si riprova l'avviso
+  // e non si ripristina niente due volte.
+  if (avvisoNonPartito) {
+    return NextResponse.json(
+      { ok: false, error: `avviso agli amministratori non partito: ${avvisoNonPartito}`, expired: count, saltati: daSalvare.length },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true, expired: count, saltati: daSalvare.length }, { status: 200 });

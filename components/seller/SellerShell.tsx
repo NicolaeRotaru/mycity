@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { useProfile } from '@/components/hooks/useProfile';
+import { useBottomSheetA11y } from '@/components/hooks/useBottomSheetA11y';
 import { queryKeys } from '@/lib/queries/keys';
 
 type NavItem = { href: string; icon: LucideIcon; label: string; badge?: 'todo' };
@@ -117,7 +118,33 @@ function useNotifUnread(userId: string | null) {
   return data;
 }
 
-function NotifPopover({ unread, onClose }: { unread: number; onClose: () => void }) {
+/**
+ * 6/9/2026 — IL PANNELLO DICEVA DI ESSERE UNA FINESTRA DI DIALOGO E NON LO ERA.
+ *
+ * C'erano `role="dialog"` e l'etichetta, ma niente di quello che un dialogo deve
+ * fare: il tasto Esc non lo chiudeva, il fuoco non entrava dentro e alla
+ * chiusura non tornava al campanello. Chi lavora da sola tastiera apriva le
+ * notifiche degli ordini e per uscirne doveva ritrovare il pulsante a mano.
+ *
+ * La regola della casa e' scritta in `components/hooks/useBottomSheetA11y.ts`:
+ * nessun pannello sovrapposto scritto a mano: o passa da `components/ui/Modal.tsx`,
+ * o passa da quell'hook. Qui passa dall'hook, come gia' fanno i filtri della
+ * ricerca, il cassetto dell'amministrazione e la foto ingrandita del prodotto.
+ */
+function NotifPopover({
+  unread,
+  onClose,
+  triggerRef,
+}: {
+  unread: number;
+  onClose: () => void;
+  triggerRef: RefObject<HTMLButtonElement>;
+}) {
+  const pannelloRef = useRef<HTMLDivElement>(null);
+  // Il pannello esiste solo da aperto: il montaggio e' l'apertura, e lo
+  // smontaggio riporta il fuoco sul campanello.
+  useBottomSheetA11y(true, pannelloRef, triggerRef, onClose);
+
   return (
     <>
       <div
@@ -126,7 +153,10 @@ function NotifPopover({ unread, onClose }: { unread: number; onClose: () => void
         className="fixed inset-0 z-dropdown"
       />
       <div
+        ref={pannelloRef}
+        id="pannello-notifiche-venditore"
         role="dialog"
+        aria-modal="true"
         aria-label="Notifiche"
         className="absolute right-0 top-[calc(100%+10px)] z-modal w-[330px] max-w-[88vw] overflow-hidden rounded-xl border border-cream-200 bg-surface-0 text-ink-900 shadow-warm-xl"
       >
@@ -162,6 +192,8 @@ export default function SellerShell({ children }: { children: React.ReactNode })
   const [navOpen, setNavOpen] = useState(false);     // mobile off-canvas drawer
   const [notifOpen, setNotifOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const notifTriggerRef = useRef<HTMLButtonElement>(null);
+  const topbarRef = useRef<HTMLElement>(null);
 
   // L'identità arriva dal profilo già condiviso: due chiamate di rete al minuto in meno (R075).
   const todo = useSellerTodoCount(profile?.id ?? null);
@@ -173,6 +205,33 @@ export default function SellerShell({ children }: { children: React.ReactNode })
 
   // Chiude il drawer mobile a ogni cambio rotta.
   useEffect(() => { setNavOpen(false); }, [pathname]);
+
+  /**
+   * 6/9/2026 — QUANTO E' ALTA QUESTA BARRA, DETTO A CHI STA SOTTO.
+   *
+   * La barra in cima all'area venditore resta ferma mentre la pagina scorre, e
+   * passa sopra a tutto quello che si ferma anche lui. Chi si deve fermare piu'
+   * in basso — l'anteprima della vetrina, per esempio — tirava a indovinare
+   * («sedici pixel») e finiva coperto, perche' la barra e' alta quanto il campo
+   * di ricerca piu' i suoi margini.
+   *
+   * Adesso l'altezza vera la scrive qui la barra stessa, in una variabile che
+   * chiunque puo' leggere: `--seller-topbar-height`. E' lo stesso modo in cui il
+   * sito pubblico dichiara `--header-height` in globals.css, ma misurata invece
+   * che scritta a mano, cosi' resta giusta anche quando la barra cambia.
+   */
+  useEffect(() => {
+    const scrivi = () => {
+      const h = topbarRef.current?.offsetHeight;
+      if (h) document.documentElement.style.setProperty('--seller-topbar-height', `${h}px`);
+    };
+    scrivi();
+    window.addEventListener('resize', scrivi);
+    return () => {
+      window.removeEventListener('resize', scrivi);
+      document.documentElement.style.removeProperty('--seller-topbar-height');
+    };
+  }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -342,7 +401,10 @@ export default function SellerShell({ children }: { children: React.ReactNode })
       {/* MAIN COLUMN */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* TOPBAR */}
-        <header className="sticky top-0 z-sticky flex items-center gap-4 border-b border-cream-300 bg-surface-0 px-4 py-3 sm:px-6 lg:px-7">
+        <header
+          ref={topbarRef}
+          className="sticky top-0 z-sticky flex items-center gap-4 border-b border-cream-300 bg-surface-0 px-4 py-3 sm:px-6 lg:px-7"
+        >
           {/* Hamburger — mobile */}
           <button
             type="button"
@@ -381,11 +443,13 @@ export default function SellerShell({ children }: { children: React.ReactNode })
             {/* Notifiche */}
             <div className="relative">
               <button
+                ref={notifTriggerRef}
                 type="button"
                 onClick={() => setNotifOpen((o) => !o)}
                 aria-label="Notifiche"
                 aria-haspopup="dialog"
                 aria-expanded={notifOpen}
+                aria-controls="pannello-notifiche-venditore"
                 className="relative inline-flex items-center justify-center rounded-full p-2 text-ink-600 hover:bg-cream-100"
               >
                 <Bell size={20} aria-hidden />
@@ -393,7 +457,13 @@ export default function SellerShell({ children }: { children: React.ReactNode })
                   <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-secondary-600" aria-hidden />
                 )}
               </button>
-              {notifOpen && <NotifPopover unread={notifUnread} onClose={() => setNotifOpen(false)} />}
+              {notifOpen && (
+                <NotifPopover
+                  unread={notifUnread}
+                  onClose={() => setNotifOpen(false)}
+                  triggerRef={notifTriggerRef}
+                />
+              )}
             </div>
 
             {/* Avatar negozio */}

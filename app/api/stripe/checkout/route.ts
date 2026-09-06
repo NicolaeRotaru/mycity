@@ -2,7 +2,7 @@ import { prezziDelCarrello } from '@/lib/ordini/prezzi';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getAdminSupabase, getServerSupabase } from '@/lib/supabase/server';
-import { createMultiSellerCheckoutSession, getStripe, isStripeConfigured } from '@/lib/stripe/client';
+import { createMultiSellerCheckoutSession, getStripe, isStripeConfigured, RiservaTroppoCorta } from '@/lib/stripe/client';
 import { createHash } from 'node:crypto';
 import { env } from '@/lib/env';
 import { logger } from '@/lib/logger';
@@ -740,7 +740,19 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
     // rispondeva un oggetto nudo, come la rotta dei contanti prima di ieri.
     return apiSuccess({ id: session.id, url: session.url });
   } catch (e) {
-    logger.error('[stripe] checkout creation failed', e);
+    /**
+     * 6/9/2026 — LA RISERVA TROPPO CORTA NON È UN GUASTO NOSTRO.
+     *
+     * Se alla merce riservata resta meno di mezz'ora, Stripe non può tenere
+     * aperta una cassa che scada insieme a lei: prima si alzava la scadenza al
+     * minimo e si apriva lo stesso, e la pagina di pagamento sopravviveva alla
+     * merce. Adesso non si parte: la pulizia qui sotto è la stessa (merce
+     * rimessa in vendita, codice sconto restituito, riga di intento annullata),
+     * cambia solo cosa legge il cliente — «rifai l'ordine», non «errore».
+     */
+    const carrelloScaduto = e instanceof RiservaTroppoCorta;
+    if (carrelloScaduto) logger.warn('[stripe] riserva troppo corta per aprire la cassa', { message: (e as Error).message });
+    else logger.error('[stripe] checkout creation failed', e);
     // Rilascia la riserva di stock e marca il pending come CANCELED (no orphan).
     await admin.rpc('restore_stock', { p_items: stockItems });
     // Il codice sconto era già stato «consumato» prima di creare la sessione:
@@ -751,6 +763,9 @@ export const POST = withAuthRateLimit({ name: 'stripe-checkout', max: 30, window
       .from('pending_checkouts')
       .update({ status: 'CANCELED' })
       .eq('id', pending.id);
+    if (carrelloScaduto) {
+      return ApiErrors.conflict('Il carrello è scaduto. Rimetti i prodotti nel carrello e riprova.');
+    }
     return ApiErrors.internal('Errore nella creazione del pagamento.');
   }
 });

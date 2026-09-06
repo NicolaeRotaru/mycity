@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Store, Percent, Sparkles, Gift, MapPin, Flame, PiggyBank,
-  LayoutGrid, ChevronDown, Search,
+  LayoutGrid, ChevronDown, Search, X,
   Shirt, Apple, Home as HomeIcon, Smartphone, Leaf, Gamepad2, BookOpen, Trophy, Tag,
   type LucideIcon,
 } from 'lucide-react';
@@ -125,7 +125,16 @@ const CategoryBar = () => {
 
   useEffect(() => {
     if (!open) return;
-    const onClick = (e: MouseEvent) => {
+    /**
+     * 6/9/2026 — SUL TELEFONO IL PANNELLO POTEVA RESTARE APERTO.
+     * Si ascoltava solo `mousedown`, che è un evento del mouse: su Safari iOS
+     * il tocco lo fa nascere solo sopra gli elementi che il browser considera
+     * cliccabili, quindi un dito appoggiato su un pezzo qualunque di pagina
+     * poteva non chiudere niente. `pointerdown` è lo stesso gesto per dito,
+     * penna e mouse insieme: un solo ascoltatore, tutti e tre i modi di
+     * indicare. (Il dito su un vero iPhone non l'ho potuto provare da qui.)
+     */
+    const onClick = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     };
     const onEsc = (e: KeyboardEvent) => {
@@ -133,10 +142,10 @@ const CategoryBar = () => {
       setOpen(false);
       pulsanteRef.current?.focus();
     };
-    document.addEventListener('mousedown', onClick);
+    document.addEventListener('pointerdown', onClick);
     document.addEventListener('keydown', onEsc);
     return () => {
-      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('pointerdown', onClick);
       document.removeEventListener('keydown', onEsc);
     };
   }, [open]);
@@ -230,6 +239,33 @@ const CategoryBar = () => {
               id={PANNELLO_ID}
               className="pointer-events-auto mt-1 max-h-[70vh] w-full max-w-[900px] overflow-y-auto overscroll-contain rounded-2xl bg-white p-5 text-ink-800 shadow-warm-lg ring-1 ring-cream-300"
             >
+              {/*
+                6/9/2026 — DAL TELEFONO NON SI SAPEVA COME USCIRE.
+                Il pannello copre quasi tutto lo schermo e le uniche due uscite
+                erano toccare una categoria — cioè andarsene dalla pagina — o
+                ritrovare il pulsante «Tutte le categorie», che a pannello aperto
+                sta sopra il bordo e non sembra più un interruttore. Nessuna X,
+                nessun velo da toccare dietro. Qui c'è la X, come nel pannello dei
+                filtri e in quello dell'account: 44 punti di lato, il minimo per
+                un pollice, e chiudendo il fuoco torna sul pulsante che ha aperto,
+                come già fa Esc. Su schermo grande non serve e non si vede: lì il
+                mega-menu si chiude allontanando il puntatore o cliccando fuori.
+              */}
+              <div className="mb-3 flex items-center justify-between sm:hidden">
+                <span className="text-sm font-bold text-ink-900">Categorie</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    pulsanteRef.current?.focus();
+                  }}
+                  aria-label="Chiudi le categorie"
+                  className="-mr-2 flex h-11 w-11 items-center justify-center rounded-full text-ink-600 transition-colors hover:bg-cream-100 hover:text-ink-900"
+                >
+                  <X size={20} strokeWidth={2.4} aria-hidden />
+                </button>
+              </div>
+
               <div className="mb-4 flex flex-wrap gap-2 border-b border-cream-200 pb-4">
                 <Link href="/stores" onClick={() => setOpen(false)} className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1.5 text-sm font-semibold text-primary-700 hover:bg-primary-100">
                   <Store size={15} strokeWidth={2.2} /> Tutti i negozi

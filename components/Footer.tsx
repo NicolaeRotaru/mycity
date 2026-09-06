@@ -171,7 +171,22 @@ const Footer = () => {
       <div className={`container mx-auto px-4 sm:px-6 py-12 grid grid-cols-2 ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-2 md:col-span-1">
-          <h3 className="font-serif font-bold mb-3 text-2xl">
+          {/*
+            6/9/2026 — IL MARCHIO ERA DISEGNATO IN QUATTRO MODI DIVERSI.
+            Il marchio vero (docs/mockup/assets) è in Fraunces peso 800 con la
+            prima parte in giallo mostarda. Qui e nella barra in alto il peso era
+            700, nella sidebar dell'amministratore era 800 ma le due parole erano
+            scritte a mano, e l'anteprima del pannello lo mostrava terracotta, un
+            colore che il marchio non ha da nessuna parte. Ora il peso è 800
+            ovunque e il nome lo decide sempre il pannello.
+            Restano due sole rese, e sono una scelta, non una svista:
+              · su fondo scuro (barra in alto, sidebar) la parte evidenziata è
+                accent-300, che sul terracotta si legge;
+              · qui e nell'anteprima, che stanno su crema, è accent-700: il
+                giallo chiaro su crema staccherebbe troppo poco per leggersi.
+            Chi tocca questi colori tocchi tutti e quattro i punti insieme.
+          */}
+          <h3 className="font-serif font-extrabold mb-3 text-2xl">
             <span className="text-accent-700">{branding.wordmark.accent}</span><span className="text-ink-900">{branding.wordmark.rest}</span>
           </h3>
           <p className="text-sm text-ink-500 mb-4 leading-relaxed">

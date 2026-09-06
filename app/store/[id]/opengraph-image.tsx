@@ -55,8 +55,13 @@ export default async function StoreOG({ params }: { params: { id: string } }) {
             boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
           }}>
             {logo ? (
+              // 6/9/2026 — il riquadro e' 220x220 e il marchio ci veniva dentro a
+              // riempimento: un logo largo — la forma normale di un'insegna col nome
+              // scritto sopra — perdeva i due lati proprio nell'anteprima che il
+              // negoziante manda ai suoi clienti. La scheda prodotto, stesso
+              // meccanismo e stesso tipo di file, lo conteneva gia'.
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={logo} alt="" width={220} height={220} style={{ objectFit: 'cover' }} />
+              <img src={logo} alt="" width={220} height={220} style={{ objectFit: 'contain' }} />
             ) : (
               <div style={{ fontSize: 130, fontWeight: 900, color: '#A03B25' }}>My</div>
             )}

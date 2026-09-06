@@ -17,6 +17,7 @@ import ShareCartButton from '@/components/ShareCartButton';
 import EmptyState from '@/components/EmptyState';
 import { FreeShippingProgress } from '@/components/ui/FreeShippingProgress';
 import { StepIndicator, CHECKOUT_STEPS } from '@/components/checkout/StepIndicator';
+import { vaiAlPrimoBlocco } from '@/components/checkout/OrderSummary';
 import { CartUpsell } from '@/components/cart/CartUpsell';
 import { AlertCircle, Banknote, Check, Lightbulb, Lock, Package, RotateCcw, ShieldCheck, ShoppingCart, Store, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -467,6 +468,25 @@ export default function CartPage() {
   const groupSubtotal = (g: { items: CartItem[] }) =>
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
 
+  /**
+   * 6/9/2026 — LA RIGA DICEVA «TOGLILO PER CONTINUARE» E IL PULSANTE LASCIAVA CONTINUARE.
+   *
+   * Con un articolo esaurito la riga si tingeva di rosso e chiedeva di toglierlo, ma «Procedi al
+   * checkout» restava un collegamento acceso: si arrivava alla cassa, e solo lì il muro fermava
+   * l'ordine (`handleSubmit` con `stockIssues`, e il pulsante del riepilogo con `aria-disabled`).
+   * Non era un vicolo cieco — era un'istruzione che si contraddice da sola, pagata con un
+   * passaggio in più proprio in fondo al percorso, dove si abbandona di più.
+   *
+   * Stessa regola della riga rossa qui sopra (`massimo(...) === 0`), così le due non possono
+   * separarsi: finché non si sa quanto ce n'è, `massimo` risponde `null` e non blocca niente.
+   */
+  const bloccanti = righe.filter((it) => massimo(it.id, it.variantId) === 0);
+  /** Cosa c'è scritto sul pulsante quando l'ordine non può partire: dice il gesto, non il divieto. */
+  const cosaFarePrima =
+    bloccanti.length === 1
+      ? 'Togli l’articolo esaurito per continuare'
+      : 'Togli gli articoli esauriti per continuare';
+
   return (
     // Lo spazio in fondo è per la barra fissa del telefono: senza, copre l'ultima riga della pagina.
     <div className="container mx-auto px-4 sm:px-6 py-8 pb-28 lg:pb-8">
@@ -552,7 +572,7 @@ export default function CartPage() {
                         const quando = quandoArrivaScrittoNelCarrello(oraDiAdesso);
                         if (rimasti === 0) {
                           return (
-                            <p className="text-xs text-red-600 font-semibold flex items-center gap-1">
+                            <p role="alert" className="text-xs text-red-600 font-semibold flex items-center gap-1">
                               <AlertCircle size={13} strokeWidth={2.5} aria-hidden />
                               Non più disponibile · toglilo per continuare
                             </p>
@@ -714,12 +734,27 @@ export default function CartPage() {
               </div>
             </div>
 
-            <Link
-              href="/checkout"
-              className="flex items-center justify-center gap-2 w-full text-center bg-primary-700 hover:bg-primary-800 text-white py-3.5 rounded-lg font-bold shadow-warm-sm hover:shadow-warm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
-            >
-              <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
-            </Link>
+            {/* Il pulsante resta raggiungibile da tastiera e dichiara di essere bloccato con
+                `aria-disabled` — un elemento `disabled` esce dal giro del Tab e sparisce senza
+                spiegazioni. Premendolo si va sulla prima riga da sistemare: è lo stesso
+                comportamento della cassa (`vaiAlPrimoBlocco`), non una seconda regola scritta qui. */}
+            {bloccanti.length > 0 ? (
+              <button
+                type="button"
+                aria-disabled="true"
+                onClick={vaiAlPrimoBlocco}
+                className="flex items-center justify-center gap-2 w-full text-center bg-primary-700 text-white py-3.5 rounded-lg font-bold shadow-warm-sm aria-disabled:opacity-50 aria-disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+              >
+                <AlertCircle size={16} strokeWidth={2.4} aria-hidden /> {cosaFarePrima}
+              </button>
+            ) : (
+              <Link
+                href="/checkout"
+                className="flex items-center justify-center gap-2 w-full text-center bg-primary-700 hover:bg-primary-800 text-white py-3.5 rounded-lg font-bold shadow-warm-sm hover:shadow-warm transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+              >
+                <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
+              </Link>
+            )}
 
             {/* Lista spesa condivisibile — Growth PM: viral coefficient,
                 Behavioral Scientist: social proof + commitment partner */}
@@ -788,12 +823,23 @@ export default function CartPage() {
           <div className="text-xs font-semibold uppercase tracking-label text-ink-500">Totale</div>
           <div className="font-serif text-xl font-extrabold text-ink-900">{formatPrice(finalTotal)}</div>
         </div>
-        <Link
-          href="/checkout"
-          className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
-        >
-          <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
-        </Link>
+        {bloccanti.length > 0 ? (
+          <button
+            type="button"
+            aria-disabled="true"
+            onClick={vaiAlPrimoBlocco}
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 text-white py-3 rounded-lg font-extrabold text-base aria-disabled:opacity-50 aria-disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+          >
+            <AlertCircle size={16} strokeWidth={2.4} aria-hidden /> {cosaFarePrima}
+          </button>
+        ) : (
+          <Link
+            href="/checkout"
+            className="flex-1 inline-flex items-center justify-center gap-2 bg-primary-700 hover:bg-primary-800 text-white py-3 rounded-lg font-extrabold text-base transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-2"
+          >
+            <Lock size={16} strokeWidth={2.4} aria-hidden /> Procedi al checkout
+          </Link>
+        )}
       </div>
     </div>
   );

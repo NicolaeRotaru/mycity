@@ -201,7 +201,17 @@ const ProductCard = ({
       <div className="relative z-10 flex flex-1 flex-col gap-1 p-2.5">
         {storeName && (
           <div className="flex items-center gap-1.5">
-            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-[8px] font-bold text-white">
+            {/*
+              6/9/2026 — LE INIZIALI DEL NEGOZIO ERANO A OTTO PIXEL.
+              Due maiuscole dentro un cerchio da 16 punti: era il carattere più
+              piccolo di tutto il sito, poco più della metà del testo che si legge
+              normalmente, e a quella misura non si leggeva una sigla — si vedeva
+              una macchia. Ora il cerchio è 20 punti e le lettere 10 (`text-2xs`),
+              che è il gradino più piccolo dichiarato dal sistema dei caratteri:
+              la sigla si legge, e il pallino resta il segno del negozio accanto
+              al nome per esteso, che sta già qui a destra.
+            */}
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-2xs font-bold text-white">
               {initials}
             </span>
             <span className="truncate text-[11px] font-semibold text-ink-500">{storeName}</span>
