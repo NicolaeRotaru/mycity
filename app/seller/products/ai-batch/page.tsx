@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
+import { sizedImage } from '@/lib/image-url';
 import CatalogCopilot from '@/components/seller/CatalogCopilot';
 import SellerPageTitle from '@/components/seller/SellerPageTitle';
 import ImportFromUrlBox, { type ImportResult } from '@/components/products/ImportFromUrlBox';
@@ -287,7 +288,7 @@ function UrlImportPanel() {
           <div className="flex gap-4">
             {imported.image_urls[0] ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={imported.image_urls[0]} alt="" className="h-20 w-20 shrink-0 rounded-lg object-cover" />
+              <img src={sizedImage(imported.image_urls[0], 160)} alt="" className="h-20 w-20 shrink-0 rounded-lg object-cover" />
             ) : null}
             <div className="min-w-0 flex-1">
               <p className="font-semibold text-ink-900">{imported.name || 'Prodotto importato'}</p>

@@ -4,6 +4,7 @@ import { rateLimitAsync } from '@/lib/rate-limit';
 import { withSellerAuth } from '@/lib/api/middleware';
 import { ApiErrors } from '@/lib/api/responses';
 import { env } from '@/lib/env';
+import { formatPrice } from '@/lib/format';
 import { MODELS, AiConfigError } from '@/lib/ai/client';
 import { runMessage, AiCallError, mapAiError } from '@/lib/ai/run';
 import { buildProductContext, type ProductContextInput } from '@/lib/ai/productContext';
@@ -117,7 +118,7 @@ export const POST = withSellerAuth(async ({ user, req }): Promise<NextResponse> 
   const econ = sellerEconomics(price);
   const lead = `Capisci perché questo prodotto non vende e proponi correzioni. ${
     price
-      ? `Sul prezzo attuale di €${econ.price.toFixed(2)} il venditore incassa circa €${econ.netToSeller.toFixed(2)} dopo la commissione del ${(econ.feeRate * 100).toFixed(0)}%.`
+      ? `Sul prezzo attuale di ${formatPrice(econ.price)} il venditore incassa circa ${formatPrice(econ.netToSeller)} dopo la commissione del ${(econ.feeRate * 100).toFixed(0)}%.`
       : 'Prezzo non impostato.'
   }`;
   const content = buildProductContext(body, { lead });

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Upload, Download, ArrowLeft, FileSpreadsheet, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
+import { formatPrice } from '@/lib/format';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Button } from '@/components/ui/Button';
@@ -245,7 +246,7 @@ export default function BulkImportProductsPage() {
                   <tr key={i} className={`border-t border-cream-200 ${r.errors.length > 0 ? 'bg-secondary-50' : ''}`}>
                     <td className="p-2 text-ink-400">{i + 1}</td>
                     <td className="p-2 font-medium text-ink-900 truncate max-w-xs">{r.name || '—'}</td>
-                    <td className="p-2">€{r.price.toFixed(2)}</td>
+                    <td className="p-2">{formatPrice(r.price)}</td>
                     <td className="p-2">{r.stock}</td>
                     <td className="p-2"><code className="text-[10px] bg-cream-100 px-1 rounded">{r.category_slug}</code></td>
                     <td className="p-2">

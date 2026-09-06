@@ -4,7 +4,7 @@
   "description": "Compra dai negozi di Piacenza, consegna in 30-60 min, pagamento alla consegna.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
+  "background_color": "#FBF7F0",
   "theme_color": "#C0492C",
   "orientation": "portrait",
   "icons": [

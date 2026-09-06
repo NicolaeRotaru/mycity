@@ -247,7 +247,11 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
               </button>
               <button
                 onClick={async () => {
-                  const ok = await confirmDialog({ title: 'Eliminare la lista?', danger: true });
+                  const ok = await confirmDialog({
+                    title: 'Eliminare la lista?',
+                    message: 'La lista e i prodotti salvati dentro andranno persi. Non si può annullare.',
+                    danger: true,
+                  });
                   if (ok) deleteList.mutate();
                 }}
                 aria-label="Elimina"
@@ -280,9 +284,9 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
               <li key={p.id} className="bg-white border border-cream-300 rounded-xl p-4 flex gap-3 items-start">
                 <Link href={`/product/${p.id}`} className="flex-shrink-0">
                   {img ? (
-                    <Image src={sizedImage(img, 'thumb')} alt="" width={72} height={72} className="rounded-lg object-cover w-18 h-18" />
+                    <Image src={sizedImage(img, 'thumb')} alt="" width={72} height={72} className="rounded-lg object-cover w-[72px] h-[72px]" />
                   ) : (
-                    <div className="w-18 h-18 rounded-lg bg-cream-100 flex items-center justify-center"><Package size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden /></div>
+                    <div className="w-[72px] h-[72px] rounded-lg bg-cream-100 flex items-center justify-center"><Package size={24} strokeWidth={2.2} className="text-ink-400" aria-hidden /></div>
                   )}
                 </Link>
                 <div className="flex-1 min-w-0">
@@ -293,6 +297,7 @@ export default function ListDetailPage(props: { params: Promise<{ id: string }> 
                   {isOwner ? (
                     <input
                       defaultValue={it.note ?? ''}
+                      aria-label={`Perché hai messo ${p.name} in lista?`}
                       placeholder="Perché l'hai messo in lista?"
                       onBlur={(e) => {
                         if (e.target.value !== (it.note ?? '')) {

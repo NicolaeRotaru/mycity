@@ -1,5 +1,5 @@
 'use client';
-import { use, type CSSProperties } from 'react';
+import { use } from 'react';
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -65,7 +65,6 @@ export default function StoreCustomPage(props: { params: Promise<{ id: string; s
   return (
     <div
       data-theme={site.theme}
-      style={{ ['--store-accent']: accent } as CSSProperties}
       className={CONTENITORE_PAGINA_NEGOZIO}
     >
       <Breadcrumb items={[

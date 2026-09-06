@@ -211,7 +211,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Navbar />
             <SellerShoppingBanner />
             <WelcomeCreditBanner />
-            <main id="main-content" className="min-h-screen">{children}</main>
+            <main id="main-content" className="contenuto-almeno-una-schermata">{children}</main>
             <Footer />
             <MobileTabBar />
             <SupportChatButton />

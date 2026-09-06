@@ -192,6 +192,25 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   });
 
   const { isLoading, isError, refetch, isFetching } = domanda;
+
+  /**
+   * 6/9/2026 — CAMBIANDO UN FILTRO LA GRIGLIA RESTAVA IDENTICA, SENZA UN SEGNO.
+   *
+   * La lettura tiene a schermo i prodotti di prima mentre arrivano i nuovi
+   * (`placeholderData: keepPreviousData`), e la chiave della domanda contiene prezzo,
+   * disponibilità, negozio aperto, voto minimo e ordinamento. Quindi al cambio di un filtro parte
+   * una lettura nuova ma `isLoading` resta falso: per chi guarda non succede niente, e su una rete
+   * lenta si tocca il filtro due o tre volte pensando che non abbia preso.
+   *
+   * Adesso mentre si aggiorna la griglia si schiarisce e si dichiara occupata (`aria-busy`), e chi
+   * usa un lettore di schermo sente una riga che glielo dice.
+   *
+   * ⚠️ NON si spegne il tocco sui prodotti: durante un aggiornamento le schede vecchie sono ancora
+   * vere e cliccabili, e togliere il tocco farebbe perdere il prodotto a chi lo stava premendo.
+   * ⚠️ E NON conta il «Carica altri prodotti»: lì si aggiungono righe in fondo, il pulsante dice
+   * già «Carico…», e schiarire tutta la griglia sarebbe uno sfarfallio senza motivo.
+   */
+  const stoAggiornando = isFetching && !domanda.isFetchingNextPage;
   // Le pagine gia' lette si uniscono togliendo i doppioni: mentre si sfoglia un
   // prodotto nuovo puo' entrare in cima e spostare tutte le righe di uno.
   const products = unisciPagine(domanda.data?.pages ?? []);
@@ -305,11 +324,24 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       // Ridondante ma innocuo: il filtro vero ora e' nella query (#91).
       arr = arr.filter((p) => p.stock == null || p.stock > 0);
     }
+    /**
+     * 6/9/2026 — «PIÙ RECENSITI» ORDINAVA PER MEDIA DEI VOTI, NON PER QUANTE RECENSIONI CI SONO.
+     *
+     * Questo ordinamento si chiama «Più recensiti» in italiano e «Most reviewed» in inglese, ma
+     * confrontava `avg`: un prodotto con UNA recensione a cinque stelle scavalcava uno con
+     * quaranta recensioni a 4,8. Chi cerca il prodotto più recensito cerca la prova che in tanti
+     * l'hanno comprato — cioè il numero, non la media. Il voto alto ha già la sua strada: il
+     * filtro «voto minimo» qui sopra, e nella scheda prodotto l'ordinamento «Voto più alto».
+     *
+     * A parità di numero di recensioni decide la media, così due prodotti con lo stesso conto non
+     * escono in un ordine che cambia a ogni caricamento.
+     */
     if (sort === 'rating') {
       arr = [...arr].sort((a, b) => {
-        const ra = ratings[a.id]?.avg ?? 0;
-        const rb = ratings[b.id]?.avg ?? 0;
-        return rb - ra;
+        const ca = ratings[a.id]?.count ?? 0;
+        const cb = ratings[b.id]?.count ?? 0;
+        if (cb !== ca) return cb - ca;
+        return (ratings[b.id]?.avg ?? 0) - (ratings[a.id]?.avg ?? 0);
       });
     }
     if (sort === 'discount_desc') {
@@ -500,13 +532,21 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   // impedisce alle due forme di tornare a divergere.
   if (formaFila) {
     const railRow = (
-      <div className={CLASSI_FILA}>
-        {filtered.map((p, i) => (
-          <div key={p.id} className={CLASSI_CASELLA_FILA}>
-            {renderCard(p, i)}
-          </div>
-        ))}
-      </div>
+      <>
+        <div
+          className={`${CLASSI_FILA} transition-opacity${stoAggiornando ? ' opacity-50' : ''}`}
+          aria-busy={stoAggiornando}
+        >
+          {filtered.map((p, i) => (
+            <div key={p.id} className={CLASSI_CASELLA_FILA}>
+              {renderCard(p, i)}
+            </div>
+          ))}
+        </div>
+        <p role="status" aria-live="polite" className="sr-only">
+          {stoAggiornando ? 'Aggiorno i risultati…' : ''}
+        </p>
+      </>
     );
     if (!isSection) return railRow;
     return (
@@ -551,11 +591,17 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   return (
     <>
-      <div className={classiDellaGriglia}>
+      <div
+        className={`${classiDellaGriglia} transition-opacity${stoAggiornando ? ' opacity-50' : ''}`}
+        aria-busy={stoAggiornando}
+      >
         {filtered.map((p, i) => (
           <div key={p.id}>{renderCard(p, i)}</div>
         ))}
       </div>
+      <p role="status" aria-live="polite" className="sr-only">
+        {stoAggiornando ? 'Aggiorno i risultati…' : ''}
+      </p>
       {forseCeNeSonoAltri && (
         <div className="mt-6 flex justify-center">
           <button

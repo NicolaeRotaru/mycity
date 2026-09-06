@@ -127,7 +127,7 @@ export const MARKETPLACE_FEE_BPS = 1000; // 10.00%
 // (quel file importa questo, e il giro si chiuderebbe su se stesso), ma il numero e' lo stesso e
 // una prova tiene le due frasi allineate.
 export const VALUE_PROPS = [
-  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra €${FREE_SHIPPING_THRESHOLD} per negozio${PLATFORM_DELIVERY_FEE_CENTS > 0 ? ` · ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} di consegna` : ''}` },
+  { icon: 'Truck',      title: 'Spedizione gratuita',      subtitle: `sopra ${FREE_SHIPPING_THRESHOLD} € per negozio${PLATFORM_DELIVERY_FEE_CENTS > 0 ? ` · ${formatPrice(PLATFORM_DELIVERY_FEE_CENTS / 100)} di consegna` : ''}` },
   { icon: 'BanknoteArrowUp', title: 'Pagamento alla consegna', subtitle: 'in contanti, zero rischi' },
   { icon: 'Store',      title: '100% locale',              subtitle: 'venditori della tua città' },
   { icon: 'Zap',        title: 'Consegna rapida',          subtitle: `in ${EXPRESS_ETA_LABEL} dalla conferma del negozio` },

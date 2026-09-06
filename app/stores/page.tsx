@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Search } from 'lucide-react';
+import { Search, Store as IconaNegozio } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import StorePreviewCard, { type ProductPreview, type StoreCardData } from '@/components/StorePreviewCard';
+import CollectionHeader from '@/components/CollectionHeader';
 import { DAY_KEYS, isOpenNow, type StoreHours } from '@/lib/store-hours';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -24,13 +25,29 @@ type Category = { id: string; slug: string; name: string; parent_id: string | nu
 
 type SortMode = 'rating' | 'name' | 'most-products';
 
+/**
+ * Quanti negozi al massimo si portano a casa in una volta: un tetto scritto,
+ * invece di quello a sorpresa.
+ *
+ * 6/9/2026 — qui non c'era nessun limite, e PostgREST ne ha uno suo: mille
+ * righe, sempre, anche quando nessuno lo chiede. Superate quelle, dei negozi
+ * sparirebbero dall'elenco senza che niente lo dica — e la pagina che mostra i
+ * negozi diventerebbe piu' lenta ogni volta che se ne firma uno nuovo. Duecento
+ * e' una scelta dichiarata, come su «Vicino a te». Oltre quel numero serve la
+ * paginazione vera (`.range()`), che non e' un lavoro da questo lotto.
+ */
+const TETTO_NEGOZI = 200;
+
 const fetchStoresData = async () => {
   // 22/8/2026 — vedi near/page: senza ripiego, su un database indietro di una
   // migrazione l'elenco dei negozi esce vuoto invece che senza due bandierine.
+  // 6/9/2026 — `store_media` (la galleria fotografica) resta: qui si vede
+  // davvero, la mostra `StoreMediaCarousel` dentro `StorePreviewCard`. Su
+  // «Vicino a te» era stata tolta perche' li' non compariva da nessuna parte.
   const SELECT_STORES =
     'id, store_name, store_phone, store_address, store_lat, store_lng, store_logo, store_hours, store_media, is_approved, stripe_charges_enabled, stripe_payouts_enabled';
   const conBandierine = () =>
-    supabase.from('seller_public_profiles').select(SELECT_STORES).order('store_name');
+    supabase.from('seller_public_profiles').select(SELECT_STORES).order('store_name').limit(TETTO_NEGOZI);
   const { data: storesRaw, error } = await conRipiegoSchema(
     'stores/page:seller_public_profiles',
     conBandierine,
@@ -39,7 +56,8 @@ const fetchStoresData = async () => {
         supabase
           .from('seller_public_profiles')
           .select(senzaColonne(SELECT_STORES, COLONNE_124_VISTA))
-          .order('store_name'),
+          .order('store_name')
+          .limit(TETTO_NEGOZI),
       ),
   );
   if (error) throw error;
@@ -212,26 +230,46 @@ export default function StoresPage() {
     return result;
   }, [stores, search, onlyOpen, sort, categoryId, reviewsByStore, countByStore, categoriesByStore]);
 
+  // C'E' UN FILTRO ACCESO? La riga di conteggio dice due cose diverse nei due casi.
+  const filtriAccesi = search !== '' || onlyOpen || categoryId !== '';
+
+  // 6/9/2026 — QUI SOTTO IL TITOLO C'ERA SEMPRE IL TOTALE, ANCHE COI FILTRI ACCESI.
+  //
+  // La riga stampava `stores.length`, cioe' tutti i negozi letti; la griglia invece
+  // mostra `filtered`, cioe' quelli rimasti dopo ricerca, settore e «aperti ora».
+  // Con un filtro acceso la pagina dichiarava «12 negozi» e a schermo ne restavano tre.
+  // Adesso il numero grande e' quello che si vede davvero, e il totale resta scritto
+  // accanto: cosi' si capisce anche quanto sta togliendo il filtro.
+  const rigaDelConteggio = filtriAccesi
+    ? `${filtered.length} ${filtered.length === 1 ? 'negozio' : 'negozi'} su ${stores.length}`
+    : `${stores.length} ${stores.length === 1 ? 'negozio locale pronto' : 'negozi locali pronti'} a consegnarti a casa`;
+
   // IL TITOLO DELLA PAGINA STA SOPRA I TRE STATI, NON DENTRO UNO SOLO.
   //
   // 3/9/2026: finche' questa pagina arrivava al browser senza JavaScript nessuno se n'era
   // accorto, ma mentre i negozi caricano — e se la lettura fallisce — la pagina non aveva
   // NESSUN titolo di primo livello. Per chi naviga con lo screen reader vuol dire arrivare
   // su una pagina che non dice come si chiama; per Google, una pagina senza titolo.
+  //
+  // 6/9/2026: l'intestazione era scritta a mano, ed era l'unica vetrina senza briciolo di
+  // pane — nessuna scala per tornare alla home, mentre «Novita'», «Piu' venduti», «Vicino a
+  // te» e le categorie ce l'hanno tutte. Adesso usa lo stesso componente delle altre.
   const titoloDellaPagina = (
-    <div className="mb-6">
-      <h1 className="text-3xl sm:text-4xl font-extrabold text-ink-900">Negozi di Piacenza</h1>
-      {!isLoading && !isError && (
-        <p className="text-ink-500 mt-1">
-          {stores.length} negozi locali pronti a consegnarti a casa
-        </p>
-      )}
-    </div>
+    <>
+      <CollectionHeader
+        icon={IconaNegozio}
+        eyebrow="Tutti i negozi"
+        title="Negozi di Piacenza"
+        blurb="Le botteghe della citta', con consegna a casa tua."
+        breadcrumb={[{ label: 'Home', href: '/' }, { label: 'Negozi' }]}
+      />
+      {!isLoading && !isError && <p className="mb-6 text-ink-500">{rigaDelConteggio}</p>}
+    </>
   );
 
   if (isLoading) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
         {titoloDellaPagina}
         <LoadingState />
       </div>
@@ -240,7 +278,7 @@ export default function StoresPage() {
 
   if (isError) {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
+      <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
         {titoloDellaPagina}
         <ErrorState
           title="Impossibile caricare i negozi"
@@ -251,7 +289,7 @@ export default function StoresPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <div className="container mx-auto max-w-7xl px-4 py-8 sm:px-6">
       {titoloDellaPagina}
 
       {/* Filtri */}
@@ -265,11 +303,15 @@ export default function StoresPage() {
             aria-label="Cerca un negozio per nome"
             className="flex-1 min-w-[160px] border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-700"
           />
+          {/* 6/9/2026 — da acceso questo filtro era bianco su olive-500 (#7C8B5A): 3,69 contro
+              il 4,5 che serve a un testo (WCAG 2.1 — 1.4.3, livello AA). Con olive-600
+              (#5A7C42, il verde «success» del brand) si sale a 4,78. Il pallino accanto resta
+              olive-500: e' un elemento grafico, e li' la soglia e' 3. */}
           <button
             onClick={() => setOnlyOpen((v) => !v)}
             aria-pressed={onlyOpen}
             className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
-              onlyOpen ? 'bg-olive-500 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
+              onlyOpen ? 'bg-olive-600 text-white' : 'bg-cream-100 text-ink-700 hover:bg-cream-200'
             }`}
           >
             <span className={`h-2 w-2 rounded-full ${onlyOpen ? 'bg-white' : 'bg-olive-500'}`} aria-hidden />

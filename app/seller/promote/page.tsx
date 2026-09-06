@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Megaphone, Sparkles, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase/client';
-import { formatPrice } from '@/lib/format';
+import { formatPrice, formatDate } from '@/lib/format';
 import { sizedImage } from '@/lib/image-url';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -239,7 +239,7 @@ export default function SellerPromotePage() {
               <div key={c.id} className="py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-semibold text-ink-900 truncate">{c.product?.name ?? '—'}</p>
-                  <p className="text-xs text-ink-500">{c.start_date} → {c.end_date}</p>
+                  <p className="text-xs text-ink-500">{formatDate(c.start_date)} → {formatDate(c.end_date)}</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs text-ink-500">{c.impressions.toLocaleString('it-IT')} viste · {c.clicks} click</p>

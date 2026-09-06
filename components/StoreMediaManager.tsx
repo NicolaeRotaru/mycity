@@ -7,6 +7,7 @@ import { Image as ImageIcon, Video, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 import type { StoreMediaItem } from './StoreMediaCarousel';
 import { friendlyError } from '@/lib/errors';
+import { sizedImage } from '@/lib/image-url';
 import { caricaImmagine } from '@/lib/storage/carica-immagine';
 import { useTranslations } from 'next-intl';
 
@@ -26,15 +27,39 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
   const videoCount = value.filter((m) => m.type === 'video').length;
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    // Le foto: solo i tre formati che il deposito accetta davvero (prima diceva «image/*»,
-    // cioe' anche SVG, che viene respinto alla fine del caricamento).
+    /**
+     * 6/9/2026 — IL VIDEO DELLA VETRINA NON POTEVA FUNZIONARE PER NESSUNO.
+     *
+     * Qui c'era anche `'video/*': []`, e la scritta sotto prometteva «fino a 3 immagini e 1
+     * video». Ma il file finisce nel deposito pubblico `products`, e quel deposito — dalla
+     * migrazione 070 — accetta soltanto sette tipi di immagine, con un tetto di 10 MB. Nessun
+     * video e' mai entrato: il fornaio che voleva far vedere il forno acceso trascinava il
+     * filmato, aspettava, e si prendeva un errore. E anche se il tipo passasse, quindici secondi
+     * fatti col telefono pesano 30-60 MB, cioe' tre volte il tetto.
+     *
+     * Fra il riaprire il video (deposito nuovo, tetto piu' alto, compressione nel browser: un
+     * lavoro vero, con una migrazione, che non e' di questo lotto) e il non prometterlo piu', si
+     * toglie la promessa. Adesso il riquadro chiede foto e basta, e chi ci trascina un filmato lo
+     * scopre subito invece che dopo aver aspettato il caricamento.
+     *
+     * I video gia' caricati restano visibili e rimovibili qui sotto: si smette di accettarne di
+     * nuovi, non si butta via quello che c'e'.
+     */
     accept: {
       'image/jpeg': ['.jpg', '.jpeg'],
       'image/png': ['.png'],
       'image/webp': ['.webp'],
-      'video/*': [],
     },
     multiple: true,
+    // Senza questa riga il file rifiutato spariva in silenzio, che e' il modo peggiore di dire di no.
+    onDropRejected: (rifiutati) => {
+      const video = rifiutati.some((r) => r.file.type.startsWith('video/'));
+      toast.error(
+        video
+          ? 'Qui vanno solo foto: il video della vetrina per ora non si puo\' caricare.'
+          : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+      );
+    },
     onDrop: async (files) => {
       setUploading(true);
       try {
@@ -98,15 +123,17 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
     onChange(value.filter((_, idx) => idx !== i));
   };
 
-  const canAddMore = imageCount < MAX_IMAGES || videoCount < MAX_VIDEOS;
+  // Solo le foto: il posto per il video non si conta piu', perche' un video non si puo' caricare.
+  const canAddMore = imageCount < MAX_IMAGES;
 
   return (
     <div className="space-y-3">
       <div>
         <label className="block text-sm font-medium text-ink-700 mb-1">Copertina negozio</label>
         <p className="text-xs text-ink-500">
-          Aggiungi fino a {MAX_IMAGES} immagini e 1 video. Trascina per riordinare.
-          Attualmente: {imageCount}/{MAX_IMAGES} foto · {videoCount}/{MAX_VIDEOS} video.
+          Aggiungi fino a {MAX_IMAGES} foto (JPG, PNG o WEBP). Trascina per riordinare.
+          Attualmente: {imageCount}/{MAX_IMAGES} foto
+          {videoCount > 0 && ' · ' + videoCount + ' video caricato in passato'}.
         </p>
       </div>
 
@@ -116,8 +143,11 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
             <li key={i} className="flex items-center gap-3 border rounded-lg p-2 bg-cream-50">
               <div className="w-20 h-16 rounded overflow-hidden bg-black shrink-0">
                 {m.type === 'image' ? (
+                  // 6/9/2026 — La foto arrivava alla misura con cui era stata caricata (fino a 10 MB, il tetto
+                  // del deposito) per stare in un francobollo. Adesso si chiede al server la copia della misura
+                  // del riquadro, il doppio in pixel perche' i telefoni ne hanno due per ognuno.
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={m.url} alt="" loading="lazy" className="w-full h-full object-cover" />
+                  <img src={sizedImage(m.url, 160)} alt="" loading="lazy" className="w-full h-full object-cover" />
                 ) : (
                   <video src={m.url} muted playsInline className="w-full h-full object-cover" />
                 )}
@@ -168,16 +198,16 @@ const StoreMediaManager = ({ value, onChange }: Props) => {
 
       {canAddMore && (
         <div
-          {...getRootProps({ role: 'button', 'aria-label': 'Carica foto o video del negozio: trascina i file o premi Invio' })}
+          {...getRootProps({ role: 'button', 'aria-label': 'Carica le foto del negozio: trascina i file o premi Invio' })}
           className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors ${
             isDragActive ? 'border-primary-400 bg-primary-50' : 'border-cream-300 hover:border-cream-400'
           } ${uploading ? 'opacity-50 pointer-events-none' : ''}`}
         >
-          <input {...getInputProps({ 'aria-label': 'Carica foto o video del negozio' })} />
+          <input {...getInputProps({ 'aria-label': 'Carica le foto del negozio' })} />
           <p className="text-sm text-ink-600">
             {uploading
               ? tStates('loading')
-              : 'Trascina foto o video qui, oppure clicca per scegliere'}
+              : 'Trascina le foto qui, oppure clicca per sceglierle'}
           </p>
         </div>
       )}

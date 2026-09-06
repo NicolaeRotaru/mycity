@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase/client';
 import { uploadProductImages, ALLOWED_IMAGE_TYPES } from '@/lib/products/uploadImages';
 import { friendlyError, apiErrorMessage } from '@/lib/errors';
 import { formatPrice } from '@/lib/format';
+import { sizedImage } from '@/lib/image-url';
 import type { AiProductPatch } from '@/lib/products/aiPatch';
 import type { ProductSnapshot } from '@/lib/products/aiSnapshot';
 
@@ -343,7 +344,7 @@ export default function SupportProductAssistant() {
         <div className="flex items-center gap-3 border-b border-cream-200 bg-cream-50 px-4 py-2">
           {focused.image ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={focused.image} alt="" className="h-10 w-10 rounded-lg object-cover" />
+            <img src={sizedImage(focused.image, 80)} alt="" className="h-10 w-10 rounded-lg object-cover" />
           ) : (
             <div className="h-10 w-10 rounded-lg bg-cream-200" />
           )}
@@ -390,7 +391,7 @@ export default function SupportProductAssistant() {
                   <div className="mb-1.5 flex flex-wrap gap-1.5">
                     {m.images.map((url) => (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img key={url} src={url} alt="" className="h-16 w-16 rounded-lg object-cover" />
+                      <img key={url} src={sizedImage(url, 128)} alt="" className="h-16 w-16 rounded-lg object-cover" />
                     ))}
                   </div>
                 )}
@@ -403,7 +404,7 @@ export default function SupportProductAssistant() {
                   <div className="mb-2 flex items-center gap-2">
                     {m.proposal.product.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.proposal.product.image} alt="" className="h-9 w-9 rounded-lg object-cover" />
+                      <img src={sizedImage(m.proposal.product.image, 72)} alt="" className="h-9 w-9 rounded-lg object-cover" />
                     ) : (
                       <div className="h-9 w-9 rounded-lg bg-cream-200" />
                     )}
@@ -457,7 +458,7 @@ export default function SupportProductAssistant() {
                   <div className="mb-2 flex items-center gap-2">
                     {m.newDraft.imageUrls[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.newDraft.imageUrls[0]} alt="" className="h-12 w-12 rounded-lg object-cover" />
+                      <img src={sizedImage(m.newDraft.imageUrls[0], 96)} alt="" className="h-12 w-12 rounded-lg object-cover" />
                     ) : (
                       <div className="h-12 w-12 rounded-lg bg-cream-200" />
                     )}
@@ -537,7 +538,7 @@ export default function SupportProductAssistant() {
               {pending.map((url) => (
                 <div key={url} className="relative">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="h-14 w-14 rounded-lg object-cover" />
+                  <img src={sizedImage(url, 112)} alt="" className="h-14 w-14 rounded-lg object-cover" />
                   <button
                     type="button"
                     onClick={() => setPending((prev) => prev.filter((u) => u !== url))}

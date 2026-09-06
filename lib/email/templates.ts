@@ -21,6 +21,8 @@ import { env } from '@/lib/env';
 // indietro — e restano indietro senza dirlo a nessuno.
 import { escapeHtml } from '@/lib/html-escape';
 import { recapitoPrivacy } from '@/lib/legal/titolare';
+import { formatPrice } from '@/lib/format';
+import { FREE_SHIPPING_THRESHOLD } from '@/lib/constants';
 
 const BRAND = 'MyCity';
 
@@ -129,7 +131,7 @@ export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderI
     <p style="margin:0 0 12px;line-height:1.6">${saluto(args.name)} abbiamo ricevuto il tuo ordine da <strong>${escapeHtml(args.storeName)}</strong>.</p>
     <table cellpadding="0" cellspacing="0" style="width:100%;margin:16px 0">
       <tr><td style="padding:8px 0;color:${COLORI.tenue}">Ordine</td><td style="padding:8px 0;text-align:right;font-family:monospace">#${escapeHtml(args.orderId.slice(0, 8))}</td></tr>
-      <tr><td style="padding:8px 0;color:${COLORI.tenue}">Totale</td><td style="padding:8px 0;text-align:right;font-weight:600">€${args.total.toFixed(2)}</td></tr>
+      <tr><td style="padding:8px 0;color:${COLORI.tenue}">Totale</td><td style="padding:8px 0;text-align:right;font-weight:600">${formatPrice(args.total)}</td></tr>
     </table>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi ordine')}</p>
     <p style="margin:0;font-size:13px;color:${COLORI.tenue}">Riceverai aggiornamenti quando il negozio prepara e il rider ritira l'ordine.</p>
@@ -137,7 +139,7 @@ export function orderConfirmedBuyerTemplate(args: { name?: string | null; orderI
   return {
     subject: `Ordine #${args.orderId.slice(0, 8)} ricevuto — ${BRAND}`,
     html: shell('Ordine ricevuto', body),
-    text: `Ordine ricevuto. Totale €${args.total.toFixed(2)}. Dettaglio: ${orderUrl}`,
+    text: `Ordine ricevuto. Totale ${formatPrice(args.total)}. Dettaglio: ${orderUrl}`,
   };
 }
 
@@ -145,14 +147,14 @@ export function newOrderSellerTemplate(args: { sellerName?: string | null; order
   const orderUrl = `${appUrl()}/seller/orders/${args.orderId}`;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🛒 Nuovo ordine</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Hai ricevuto un nuovo ordine di ${args.itemsCount} articol${args.itemsCount === 1 ? 'o' : 'i'} per <strong>€${args.total.toFixed(2)}</strong>.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Hai ricevuto un nuovo ordine di ${args.itemsCount} articol${args.itemsCount === 1 ? 'o' : 'i'} per <strong>${formatPrice(args.total)}</strong>.</p>
     <p style="margin:0 0 12px;line-height:1.6;color:${COLORI.attenzione};font-weight:600">Accetta o rifiuta l'ordine entro 15 minuti.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Gestisci ordine')}</p>
   `;
   return {
-    subject: `🛒 Nuovo ordine — €${args.total.toFixed(2)}`,
+    subject: `🛒 Nuovo ordine — ${formatPrice(args.total)}`,
     html: shell('Nuovo ordine', body),
-    text: `Nuovo ordine per €${args.total.toFixed(2)}. Gestiscilo qui: ${orderUrl}`,
+    text: `Nuovo ordine per ${formatPrice(args.total)}. Gestiscilo qui: ${orderUrl}`,
   };
 }
 
@@ -240,15 +242,15 @@ export function refundIssuedTemplate(args: { orderId: string; amount: number; re
   const orderUrl = `${appUrl()}/orders/${args.orderId}`;
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">💶 Rimborso emesso</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Abbiamo emesso un rimborso di <strong>€${args.amount.toFixed(2)}</strong> sul tuo ordine.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Abbiamo emesso un rimborso di <strong>${formatPrice(args.amount)}</strong> sul tuo ordine.</p>
     ${args.reason ? `<p style="margin:0 0 12px;color:${COLORI.tenue}">Motivo: ${escapeHtml(args.reason)}</p>` : ''}
     <p style="margin:0 0 12px;line-height:1.6">Il rimborso arriverà sul tuo metodo di pagamento entro 5-10 giorni lavorativi.</p>
     <p style="margin:24px 0">${btn(orderUrl, 'Vedi dettaglio')}</p>
   `;
   return {
-    subject: `💶 Rimborso emesso — €${args.amount.toFixed(2)}`,
+    subject: `💶 Rimborso emesso — ${formatPrice(args.amount)}`,
     html: shell('Rimborso emesso', body),
-    text: `Rimborso di €${args.amount.toFixed(2)} emesso. Dettaglio: ${orderUrl}`,
+    text: `Rimborso di ${formatPrice(args.amount)} emesso. Dettaglio: ${orderUrl}`,
   };
 }
 
@@ -281,7 +283,7 @@ export function giftCardRecipientTemplate(args: { code: string; amountEuro: numb
   const from = args.senderName?.trim() ? escapeHtml(args.senderName.trim()) : 'Qualcuno';
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">🎁 Hai ricevuto una gift card</h1>
-    <p style="margin:0 0 12px;line-height:1.6"><strong>${from}</strong> ti ha regalato una gift card MyCity da <strong>€${args.amountEuro.toFixed(2)}</strong>, spendibile nei negozi di Piacenza.</p>
+    <p style="margin:0 0 12px;line-height:1.6"><strong>${from}</strong> ti ha regalato una gift card MyCity da <strong>${formatPrice(args.amountEuro)}</strong>, spendibile nei negozi di Piacenza.</p>
     ${args.message?.trim() ? `<p style="margin:0 0 16px;padding:12px 16px;background:${COLORI.piede};border-radius:8px;font-style:italic;color:${COLORI.citazione}">«${escapeHtml(args.message.trim())}»</p>` : ''}
     <p style="margin:0 0 8px;color:${COLORI.tenue}">Il tuo codice</p>
     <p style="margin:0 0 20px;font-family:monospace;font-size:24px;font-weight:700;letter-spacing:2px;color:${COLORI.marchio}">${escapeHtml(args.code)}</p>
@@ -292,10 +294,10 @@ export function giftCardRecipientTemplate(args: { code: string; amountEuro: numb
   const dove = recapitoPrivacy();
   const doveTesto = dove.eUnaCasella ? dove.testo : `${appUrl()}${dove.href}`;
   return {
-    subject: `🎁 ${from} ti ha regalato €${args.amountEuro.toFixed(2)} su ${BRAND}`,
+    subject: `🎁 ${from} ti ha regalato ${formatPrice(args.amountEuro)} su ${BRAND}`,
     html: shell('Hai ricevuto una gift card', body, piedeDelDestinatarioDelRegalo(from)),
     text:
-      `${from} ti ha regalato una gift card MyCity da €${args.amountEuro.toFixed(2)}. Codice: ${args.code}. ` +
+      `${from} ti ha regalato una gift card MyCity da ${formatPrice(args.amountEuro)}. Codice: ${args.code}. ` +
       `Riscattalo su ${redeemUrl}\n\n` +
       `Hai ricevuto questa email perché ${from} ha comprato un buono regalo per te e ci ha lasciato il tuo indirizzo: ` +
       `non hai un account ${BRAND} e non ti abbiamo iscritto a nulla. Conserviamo nome, email e messaggio solo per ` +
@@ -308,15 +310,15 @@ export function giftCardBuyerTemplate(args: { code: string; amountEuro: number; 
   const to = args.recipientName?.trim() ? escapeHtml(args.recipientName.trim()) : 'il destinatario';
   const body = `
     <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Gift card acquistata ✓</h1>
-    <p style="margin:0 0 12px;line-height:1.6">Grazie! La tua gift card da <strong>€${args.amountEuro.toFixed(2)}</strong> per <strong>${to}</strong> è pronta e gli abbiamo inviato il codice via email.</p>
+    <p style="margin:0 0 12px;line-height:1.6">Grazie! La tua gift card da <strong>${formatPrice(args.amountEuro)}</strong> per <strong>${to}</strong> è pronta e gli abbiamo inviato il codice via email.</p>
     <p style="margin:0 0 8px;color:${COLORI.tenue}">Codice (in caso voglia condividerlo tu)</p>
     <p style="margin:0 0 20px;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:2px;color:${COLORI.marchio}">${escapeHtml(args.code)}</p>
     <p style="margin:24px 0">${btn(url, 'Le mie gift card')}</p>
   `;
   return {
-    subject: `Gift card da €${args.amountEuro.toFixed(2)} acquistata — ${BRAND}`,
+    subject: `Gift card da ${formatPrice(args.amountEuro)} acquistata — ${BRAND}`,
     html: shell('Gift card acquistata', body),
-    text: `Gift card da €${args.amountEuro.toFixed(2)} acquistata per ${to}. Codice: ${args.code}.`,
+    text: `Gift card da ${formatPrice(args.amountEuro)} acquistata per ${to}. Codice: ${args.code}.`,
   };
 }
 
@@ -352,6 +354,12 @@ export type DatiCicloDiVita = {
   storeAddress?: string | null;
   pickupCode?: string | null;
   totalEuro?: number | null;
+  /**
+   * Cosa c'e' dentro il carrello lasciato indietro. I nomi li scrivono i
+   * negozi, quindi sono testo di un altro: il template li filtra.
+   * Il totale NON si passa apposta (vedi `abandoned_cart_4h`).
+   */
+  cartItems?: Array<{ name?: string | null; quantity?: number | null }> | null;
 };
 export type EmailPronta = { subject: string; html: string; text: string };
 
@@ -380,7 +388,7 @@ const TEMPLATE_CICLO_DI_VITA = {
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">3 cose da sapere</h1>
       <ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">
         <li>Paghi alla consegna: la carta non e' obbligatoria</li>
-        <li>Spedizione gratis sopra €30</li>
+        <li>Spedizione gratis sopra ${FREE_SHIPPING_THRESHOLD} € nello stesso negozio</li>
         <li>Invita un amico: quando riceve il primo ordine, tu ricevi €5 di credito</li>
       </ul>
       <p style="margin:24px 0">${btn(appUrl(), `Vai su ${BRAND}`)}</p>
@@ -388,7 +396,9 @@ const TEMPLATE_CICLO_DI_VITA = {
     return {
       subject: `3 cose da sapere su ${BRAND}`,
       html: shell('3 cose da sapere', body),
-      text: 'Tre cose da sapere: paghi alla consegna, spedizione gratis sopra €30, e se inviti un amico ricevi €5 di credito quando lui riceve il primo ordine.',
+      text:
+        `Tre cose da sapere: paghi alla consegna, spedizione gratis sopra ${FREE_SHIPPING_THRESHOLD} € nello stesso negozio, ` +
+        'e se inviti un amico ricevi €5 di credito quando lui riceve il primo ordine.',
     };
   },
 
@@ -466,16 +476,47 @@ const TEMPLATE_CICLO_DI_VITA = {
     });
   },
 
-  abandoned_cart_4h: (): EmailPronta => {
+  /**
+   * 6/9/2026 — QUESTO MESSAGGIO AVEVA DUE CASE, E UNA DELLE DUE PARTIVA NUDA.
+   *
+   * Il cron dei carrelli (`app/api/cron/abandoned-carts`) si costruiva l'HTML a
+   * mano: quattro paragrafi senza <html>, senza la testata col nome MyCity e
+   * senza il piede coi link legali. Font e colori erano quelli di serie del
+   * programma di posta. Le due versioni portavano lo stesso tag
+   * «abandoned_cart_4h» e divergevano senza che nessuno se ne accorgesse: chi
+   * lasciava il carrello riceveva l'unica email che non somigliava né al sito
+   * né alle altre nostre.
+   *
+   * Adesso la casa e' una sola, questa. Il nome e la lista di cosa c'e' dentro
+   * arrivano da fuori, cosi' il cron non ha piu' niente da scrivere da solo.
+   *
+   * IL TOTALE NON SI SCRIVE, ed e' voluto: `cart_total` e' la fotografia del
+   * carrello al momento in cui e' stato lasciato: se il negozio ha ritoccato un
+   * prezzo, o una promozione e' partita o finita, quella cifra non esiste piu'.
+   * Il totale vero lo dice il carrello, che lo rilegge dal database.
+   */
+  abandoned_cart_4h: (d: DatiCicloDiVita): EmailPronta => {
+    const articoli = (d.cartItems ?? []).slice(0, 5);
+    const righe = articoli
+      .map((i) => `<li>${i.quantity ?? 1}× ${escapeHtml(i.name ?? 'Prodotto')}</li>`)
+      .join('');
+    const inChiaro = articoli
+      .map((i) => `${i.quantity ?? 1}× ${(i.name ?? 'Prodotto').trim()}`)
+      .join(', ');
     const body = `
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:${COLORI.titolo}">Il tuo carrello ti aspetta</h1>
+      <p style="margin:0 0 16px;line-height:1.6">${saluto(d.name)}</p>
       <p style="margin:0 0 16px;line-height:1.6">Hai lasciato qualcosa nel carrello: e' ancora li'.</p>
+      ${righe ? `<ul style="margin:0 0 16px;padding-left:20px;line-height:1.8">${righe}</ul>` : ''}
       <p style="margin:24px 0">${btn(`${appUrl()}/cart`, 'Vai al carrello')}</p>
+      <p style="margin:0;line-height:1.6;color:${COLORI.tenue}">Se hai cambiato idea, ignora questa email: non ti scriveremo piu' per questo carrello.</p>
     `;
     return {
       subject: 'Hai dimenticato qualcosa nel carrello',
       html: shell('Il tuo carrello ti aspetta', body),
-      text: `Il tuo carrello ti aspetta su ${BRAND}.`,
+      text: inChiaro
+        ? `Il tuo carrello ti aspetta su ${BRAND}: ${inChiaro}. Vai su ${appUrl()}/cart.`
+        : `Il tuo carrello ti aspetta su ${BRAND}. Vai su ${appUrl()}/cart.`,
     };
   },
 } satisfies Record<string, (d: DatiCicloDiVita) => EmailPronta | null>;

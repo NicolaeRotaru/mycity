@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/errors';
+import { sizedImage } from '@/lib/image-url';
 import { useTranslations } from 'next-intl';
 import { Banknote, Camera } from 'lucide-react';
 
@@ -200,7 +201,7 @@ function PhotoSlot({
       </div>
       <div className="mt-1 flex h-24 items-center justify-center rounded-lg border-2 border-dashed border-cream-300 bg-cream-50">
         {url ? (
-          <img src={url} alt="" loading="lazy" className="h-full w-full rounded-lg object-cover" />
+          <img src={sizedImage(url, 400)} alt="" loading="lazy" className="h-full w-full rounded-lg object-cover" />
         ) : uploading ? (
           <span className="text-xl text-ink-400">…</span>
         ) : (

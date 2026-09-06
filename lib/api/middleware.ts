@@ -121,7 +121,7 @@ function getSupabaseAuthClient() {
   }
 }
 
-async function authenticate(req: NextRequest): Promise<
+async function authenticate(req: NextRequest, ctx?: ContestoRotta): Promise<
   | { ok: true; user: User; profile: Profile; supaUtente: ClientDiChiChiama }
   | { ok: false; response: NextResponse }
 > {
@@ -141,7 +141,12 @@ async function authenticate(req: NextRequest): Promise<
   // involucro nuovo lo eredita senza che nessuno debba ricordarsene. La chiave
   // e' il percorso della richiesta, cosi' una raffica su una rotta non spegne
   // tutto il resto del sito.
-  const frenato = await frenoDiRete(req, chiaveDelFreno(percorsoDi(req)));
+  //
+  // 6/9/2026 — i pezzi variabili dell'indirizzo arrivano da Next e servono al
+  // nome del contatore: senza, `/api/admin/cms/aaa` e `/api/admin/cms/aab`
+  // erano due contatori distinti. Risolverli non costa un giro di rete e non
+  // lancia mai, quindi resta la prima cosa che si fa.
+  const frenato = await frenoDiRete(req, chiaveDelFreno(percorsoDi(req), await risolviParametri(ctx)));
   if (frenato) return { ok: false, response: frenato };
 
   /**
@@ -248,7 +253,7 @@ export function assertCanPurchase(profile: Profile): NextResponse | null {
  */
 export function withAuth(handler: GenericHandler) {
   return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
-    const auth = await authenticate(req);
+    const auth = await authenticate(req, ctx);
     if (!auth.ok) return auth.response;
     return handler({
       user: auth.user, profile: auth.profile, req, supaUtente: auth.supaUtente,
@@ -310,6 +315,25 @@ const FINESTRA_RETE_MS = 60_000;
  *
  * I pezzi che sono identificativi — numeri, UUID, stringhe esadecimali lunghe —
  * diventano `:id`, cosi' la chiave e' la ROTTA e non la singola risorsa.
+ *
+ * 6/9/2026 — MA UN IDENTIFICATIVO CHE E' UNA PAROLA NON SI RICONOSCE A OCCHIO.
+ *
+ * Riconoscere le FORME degli identificativi copre i numeri e gli UUID, non le
+ * rotte il cui pezzo variabile e' una parola: le pagine modificabili stanno su
+ * `/api/admin/cms/<parola>`, e nessuno dei tre schemi la prendeva. Ogni parola
+ * diversa era un contatore nuovo col budget pieno — `…/aaa`, `…/aab`, `…/aac` —
+ * e il freno non scattava mai. Ogni tentativo con un gettone finto ci costa
+ * comunque una chiamata al servizio di accesso: e' proprio la spesa che il
+ * freno esisteva per evitare.
+ *
+ * La cura non e' aggiungere un quarto schema, che sarebbe di nuovo indovinare:
+ * e' CHIEDERLO A NEXT. Next ha gia' scelto la rotta e sa quali pezzi erano
+ * `[id]` o `[slug]`; quei valori arrivano nel secondo argomento della rotta e
+ * `authenticate()` glieli passa. Un pezzo del percorso che vale quanto un
+ * parametro dinamico e' un identificativo, comunque sia fatto — e vale per
+ * tutte le rotte dinamiche di domani, non solo per quelle che sembrano numeri.
+ *
+ * Chiamata con il solo percorso, la funzione si comporta esattamente come prima.
  */
 /**
  * Il percorso della richiesta, senza mai lanciare.
@@ -327,12 +351,29 @@ function percorsoDi(req: NextRequest): string {
   }
 }
 
-export function chiaveDelFreno(percorso: string): string {
+export function chiaveDelFreno(percorso: string, pezziDinamici: ParametriRotta = {}): string {
   if (!percorso) return 'sconosciuto';
+  // I valori che Next ha riconosciuto come pezzi variabili dell'indirizzo. Nel
+  // percorso possono arrivare codificati (`citt%C3%A0`), nei parametri no: si
+  // confrontano tutte e due le forme.
+  const variabili = new Set<string>();
+  for (const valore of Object.values(pezziDinamici)) {
+    for (const v of Array.isArray(valore) ? valore : [valore]) {
+      if (typeof v === 'string' && v) variabili.add(v);
+    }
+  }
+  const decodifica = (pezzo: string) => {
+    try {
+      return decodeURIComponent(pezzo);
+    } catch {
+      return pezzo;
+    }
+  };
   return percorso
     .split('/')
     .map((pezzo) => {
       if (!pezzo) return pezzo;
+      if (variabili.size > 0 && (variabili.has(pezzo) || variabili.has(decodifica(pezzo)))) return ':id';
       if (/^\d+$/.test(pezzo)) return ':id';
       if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(pezzo)) return ':id';
       if (/^[0-9a-f]{16,}$/i.test(pezzo)) return ':id';
@@ -356,7 +397,7 @@ export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandl
     // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
     // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
     // stessa difesa.
-    const auth = await authenticate(req);
+    const auth = await authenticate(req, ctx);
     if (!auth.ok) return auth.response;
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });
     if (!rl.allowed) return ApiErrors.rateLimited(rl.retryAfterSec);
@@ -372,7 +413,7 @@ export function withAuthRateLimit(opts: AuthRateLimitOpts, handler: GenericHandl
  */
 export function withSellerAuth(handler: GenericHandler) {
   return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
-    const auth = await authenticate(req);
+    const auth = await authenticate(req, ctx);
     if (!auth.ok) return auth.response;
     const { profile } = auth;
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
@@ -394,7 +435,7 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
     // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
     // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
     // stessa difesa.
-    const auth = await authenticate(req);
+    const auth = await authenticate(req, ctx);
     if (!auth.ok) return auth.response;
     const { profile } = auth;
     if (profile.role !== 'admin' && (profile.role !== 'seller' || !profile.is_approved)) {
@@ -414,7 +455,7 @@ export function withSellerAuthRateLimit(opts: AuthRateLimitOpts, handler: Generi
  */
 export function withAdminAuth(handler: GenericHandler) {
   return (async (req: NextRequest, ctx?: ContestoRotta): Promise<NextResponse> => {
-    const auth = await authenticate(req);
+    const auth = await authenticate(req, ctx);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
     return handler({
@@ -433,7 +474,7 @@ export function withAdminAuthRateLimit(opts: AuthRateLimitOpts, handler: Generic
     // tre involucri su sei, e li' invece lo prendono tutti. Qui restava una
     // seconda chiamata con una chiave diversa, cioe' due giri di rete per la
     // stessa difesa.
-    const auth = await authenticate(req);
+    const auth = await authenticate(req, ctx);
     if (!auth.ok) return auth.response;
     if (auth.profile.role !== 'admin') return ApiErrors.forbidden('Solo admin');
     const rl = await rateLimitAsync({ key: `${opts.name}:${auth.user.id}`, max: opts.max, windowMs: opts.windowMs });

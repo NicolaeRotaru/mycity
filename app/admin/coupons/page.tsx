@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ticket, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
+import { formatPrice } from '@/lib/format';
 import { toast } from 'sonner';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -208,9 +209,9 @@ export default function AdminCouponsPage() {
                   {c.first_order_only && <span className="ml-2 text-xs bg-accent-100 text-accent-700 px-1.5 py-0.5 rounded">1° ordine</span>}
                 </td>
                 <td className="p-3 text-right font-semibold">
-                  {c.type === 'PERCENT' ? `${c.value}%` : c.type === 'FIXED' ? `€${Number(c.value).toFixed(2)}` : '—'}
+                  {c.type === 'PERCENT' ? `${c.value}%` : c.type === 'FIXED' ? formatPrice(c.value) : '—'}
                 </td>
-                <td className="p-3 text-right text-ink-600">€{Number(c.min_subtotal).toFixed(2)}</td>
+                <td className="p-3 text-right text-ink-600">{formatPrice(c.min_subtotal)}</td>
                 <td className="p-3 text-right text-ink-600">
                   {c.uses_count}{c.max_uses ? ` / ${c.max_uses}` : ''}
                 </td>
