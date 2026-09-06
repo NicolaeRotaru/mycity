@@ -5,7 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { Camera, Sparkles, Star, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyError } from '@/lib/errors';
-import { uploadProductImages } from '@/lib/products/uploadImages';
+import { fotoTroppoPiccole, uploadProductImages } from '@/lib/products/uploadImages';
 import { LoadingState } from '@/components/ui/LoadingState';
 import CameraCapture from '@/components/seller/CameraCapture';
 import BackgroundRemovalPreview from '@/components/seller/BackgroundRemovalPreview';
@@ -65,11 +65,25 @@ export default function ProductImagesField({
     async (files: File[]) => {
       if (files.length === 0) return;
       setUploading(true);
+      // Le misuriamo mentre l'upload parte: l'avviso arriva dopo, senza far
+      // aspettare nessuno. Vedi `fotoTroppoPiccole` per il perche' e' un avviso
+      // e non un rifiuto.
+      const misura = fotoTroppoPiccole(files).catch((): string[] => []);
       try {
         const uploaded = await uploadProductImages(files);
         onChange([...value, ...uploaded]);
         onUploadSuccess?.();
         toast.success('Immagini caricate');
+        const piccole = await misura;
+        if (piccole.length === 1) {
+          toast.warning(
+            `«${piccole[0]}» è una foto piccola: sulla scheda si vedrà sgranata. Se puoi, caricane una più grande.`,
+          );
+        } else if (piccole.length > 1) {
+          toast.warning(
+            `${piccole.length} foto sono piccole: sulla scheda si vedranno sgranate. Se puoi, caricane di più grandi.`,
+          );
+        }
       } catch (err) {
         toast.error(friendlyError(err));
       } finally {

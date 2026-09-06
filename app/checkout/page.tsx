@@ -381,7 +381,7 @@ export default function CheckoutPage() {
     g.items.reduce((s, it) => s + it.price * it.quantity, 0);
 
   // Check stato auth all'avvio
-  const { data: authUser } = useQuery({
+  const { data: authUser, isPending: controlloAccessoInCorso } = useQuery({
     queryKey: queryKeys.checkout.authUser,
     queryFn: async () => (await supabase.auth.getUser()).data.user,
     staleTime: 60_000,
@@ -389,7 +389,7 @@ export default function CheckoutPage() {
 
   // Indirizzi salvati
   type SavedAddress = { id: string; full_name: string; address: string; city: string; zip: string; phone: string; notes: string | null; lat: number | null; lng: number | null; is_default: boolean };
-  const { data: savedAddresses = [] } = useQuery({
+  const { data: savedAddresses = [], isLoading: indirizziInArrivo } = useQuery({
     queryKey: queryKeys.checkout.userAddresses(authUser?.id ?? ''),
     enabled: !!authUser?.id,
     queryFn: async (): Promise<SavedAddress[]> => {
@@ -401,6 +401,11 @@ export default function CheckoutPage() {
       return (data ?? []) as SavedAddress[];
     },
   });
+
+  // Vero finche' non si sa se questo cliente ha indirizzi salvati: o perche' il
+  // controllo dell'accesso non e' ancora tornato, o perche' la lista e' per
+  // strada. Da ospite entrambe si spengono subito e il modulo si apre normale.
+  const nonSoAncoraGliIndirizzi = controlloAccessoInCorso || indirizziInArrivo;
 
   // Credito MyCity (gift card / punti convertiti) — spendibile sugli ordini COD.
   const { data: walletCents = 0 } = useQuery({
@@ -1174,6 +1179,7 @@ export default function CheckoutPage() {
             <ShippingAddressForm
               form={form}
               savedAddresses={savedAddresses}
+              caricamento={nonSoAncoraGliIndirizzi}
               errors={errors}
               onChange={handleChange}
               onSubmit={handleSubmit}

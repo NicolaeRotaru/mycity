@@ -56,6 +56,16 @@ interface Props {
   sort?: SortOption;
   /** Layout "rail" orizzontale scrollabile (per le righe curate della home). */
   rail?: boolean;
+  /**
+   * 6/9/2026 — Le prime quattro foto vengono chieste al browser come urgenti
+   * (`priority`, che diventa un precaricamento). Ha senso solo se questa
+   * griglia e' la prima cosa della pagina. Chi mette la griglia sotto qualcos'
+   * altro — una collezione di negozio, per esempio — passa `false`: le foto si
+   * caricano quando servono, senza rubare la coda a quello che si sta guardando.
+   * Resta acceso di serie per non cambiare le pagine in cui la griglia E' la
+   * prima cosa (novita', piu-venduti, ricerca, categoria).
+   */
+  prioritaPrimeFoto?: boolean;
   /** Modalità "sezione" (solo con `rail`): mostra un'intestazione "titolo + Vedi tutto"
    *  sopra la rail e si auto-nasconde quando non ci sono prodotti. Usata nelle pagine
    *  categoria-hub, una rail per sottocategoria. */
@@ -84,7 +94,7 @@ interface Props {
   maxColumns?: GridMaxColumns;
 }
 
-const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
+const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPrice, minPrice, onlyOpenStores, onlyPromo, onlyInStock, minRating, sort = 'relevance', rail, prioritaPrimeFoto = true, title, titleHref, seeAllHref, emptyTitle, emptyDescription, onReset, emptySuggestions, onCount, maxColumns = 'default' }: Props) => {
   /**
    * #127 — Il catalogo si fermava a 96 prodotti e non lo diceva.
    *
@@ -523,7 +533,7 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
       // corrispondeva a niente di visibile.
       compareAtPrice={p.compare_at_price != null ? Number(p.compare_at_price) : null}
       hasVariants={p.has_variants ?? false}
-      priority={i < 4}
+      priority={prioritaPrimeFoto && i < 4}
     />
   );
 

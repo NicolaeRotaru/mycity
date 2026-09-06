@@ -24,6 +24,30 @@ const SUPABASE_CODE_MAP: Record<string, string> = {
 const GENERIC_FALLBACK = 'Qualcosa non ha funzionato. Riprova fra un momento.';
 
 /**
+ * LE PAROLE CHE SOLO UN MOTORE SCRIVE — la rete che mancava all'ultimo ramo.
+ *
+ * 6/9/2026 — L'ULTIMO RAMO DI `friendlyError` DECIDEVA «questa frase e' nostra»
+ * dalla LUNGHEZZA e dalla PRIMA LETTERA: meno di 200 caratteri, niente a capo,
+ * comincia per lettera. I messaggi di Postgres hanno esattamente quella forma,
+ * quindi passavano tali e quali. Provati tre errori normalissimi:
+ * «invalid input syntax for type numeric», «canceling statement due to
+ * statement timeout», e prima del rattoppo anche «value too long for type
+ * character varying». Il negoziante di Piacenza premeva Salva e leggeva
+ * quello: non sapeva cosa aveva sbagliato ne' cosa doveva correggere.
+ *
+ * La cura vera sarebbe marcare alla fonte le frasi scritte per l'utente e
+ * fidarsi solo di quelle: tocca il contratto delle rotte e tutti i chiamanti,
+ * ed e' un lavoro suo. Qui si chiude il buco dal lato giusto della porta —
+ * il vocabolario di un database non e' quello di una frase italiana scritta per
+ * un negoziante, e queste parole non compaiono in nessun testo nostro.
+ *
+ * Il prezzo e' qualche frase inglese legittima buttata sul generico. Si paga
+ * volentieri: il generico non aiuta, ma non spaventa e non svela niente.
+ */
+const PAROLE_DEL_MOTORE =
+  /\b(syntax|constraint|relation|column|table|row|query|statement|varchar|varying|violates|null value|does not exist|out of range|deadlock|serializ|unrecognized|operator|integer|numeric|boolean|timestamp|jsonb|uuid|regclass)\b/i;
+
+/**
  * GLI ERRORI DI SUPABASE AUTH, IN ITALIANO — o `null` se non lo riconosco.
  *
  * PERCHÉ ESISTE QUI. Una funzione con lo stesso mestiere viveva dentro
@@ -141,6 +165,13 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         trackErrorShown('permission_denied', e.message, context?.page);
         return 'Non hai i permessi per questa azione.';
       }
+      // Il database che si ferma da solo dopo troppo tempo NON e' un problema di
+      // rete: finiva nel ramo qui sotto e il negoziante andava a controllare il
+      // wifi mentre il guasto era dall'altra parte. Sta prima apposta.
+      if (/canceling statement|statement timeout/i.test(e.message)) {
+        trackErrorShown('tempo_scaduto', e.message, context?.page);
+        return 'Ci ha messo troppo e si e\' fermato. Riprova fra qualche secondo.';
+      }
       if (/network|fetch|timeout|aborted/i.test(e.message)) {
         trackErrorShown('network', e.message, context?.page);
         return 'Problema di connessione. Controlla la rete e riprova.';
@@ -190,6 +221,13 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         trackErrorShown('testo_troppo_lungo', e.message, context?.page);
         return 'Testo troppo lungo: accorcialo e riprova.';
       }
+      // «invalid input syntax for type numeric», «invalid input value for enum»:
+      // e' un campo compilato in un formato che il database non accetta — quasi
+      // sempre un numero con la virgola sbagliata o una data storta.
+      if (/invalid input\b/i.test(e.message)) {
+        trackErrorShown('valore_non_valido', e.message, context?.page);
+        return 'Uno dei dati inseriti non e\' nel formato giusto: controlla numeri e date, poi riprova.';
+      }
       trackErrorShown(e.code ?? 'unknown', e.message, context?.page);
       // Strip technical details
       const cleaned = e.message
@@ -207,7 +245,9 @@ export function friendlyError(err: unknown, context?: { page?: string; action?: 
         cleaned.length > 0 &&
         cleaned.length < 200 &&
         !cleaned.includes('\n') &&
-        /^[a-zA-ZÀ-ſ]/.test(cleaned)
+        /^[a-zA-ZÀ-ſ]/.test(cleaned) &&
+        // ...e non parla come un motore. Vedi PAROLE_DEL_MOTORE in cima al file.
+        !PAROLE_DEL_MOTORE.test(cleaned)
       ) {
         return cleaned;
       }

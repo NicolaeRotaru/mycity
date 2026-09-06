@@ -50,7 +50,7 @@ function ManualCollection({
     .map((id) => products.find((p) => p.id === id))
     .filter((p): p is Row => Boolean(p));
 
-  const card = (p: Row, i: number) => (
+  const card = (p: Row) => (
     <ProductCard
       key={p.id}
       id={p.id}
@@ -63,16 +63,23 @@ function ManualCollection({
       createdAt={p.created_at}
       storeName={ctx.store.store_name ?? undefined}
       sellerId={ctx.storeId}
-      priority={i < 4}
+      // 6/9/2026 — Ogni collezione e' una sezione impilata sotto la copertina del
+      // negozio: nessuna e' la prima cosa che si vede. Marcarne quattro foto come
+      // urgenti, per ogni collezione, faceva gara con la copertina vera.
+      priority={false}
     />
   );
 
   if (layout === 'carousel') {
+    // La riga scorrevole deve avere lo stesso margine del contenitore che la
+    // ospita (CONTENITORE_PAGINA_NEGOZIO = px-4 a ogni misura di schermo). Con
+    // sm:-mx-6 sm:px-6 da 640px in su sbordava di 8px per lato e faceva
+    // comparire la barra di scorrimento orizzontale sui tablet.
     return (
-      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-4 pb-2 sm:-mx-6 sm:px-6">
-        {ordered.map((p, i) => (
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide px-4 pb-2">
+        {ordered.map((p) => (
           <div key={p.id} className="w-40 shrink-0 snap-start sm:w-44">
-            {card(p, i)}
+            {card(p)}
           </div>
         ))}
       </div>
@@ -80,7 +87,7 @@ function ManualCollection({
   }
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-      {ordered.map((p, i) => card(p, i))}
+      {ordered.map((p) => card(p))}
     </div>
   );
 }
@@ -107,6 +114,7 @@ export default function CollectionSection({
           categoryId={config.source.categoryId}
           limit={config.source.limit}
           rail={config.layout === 'carousel'}
+          prioritaPrimeFoto={false}
           sort="newest"
         />
       )}

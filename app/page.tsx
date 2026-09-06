@@ -143,9 +143,6 @@ export default async function Home() {
   );
   const heroDefaults = HERO_VARIANTS[heroVariant] ?? HERO_VARIANTS.a;
 
-  const site = await loadHomeSite();
-  const sections = homeEnabledSections(site);
-
   /**
    * 30/8/2026 (R068) — LA HOME ARRIVAVA VUOTA NELL'HTML.
    *
@@ -164,8 +161,16 @@ export default async function Home() {
    * una chiave che dipende da una decina di filtri, e precaricarla vuol dire
    * ricostruire quella chiave identica sul server — se sbaglia, il browser
    * rilegge tutto e nessuno se ne accorge. E' il pezzo successivo, non questo.
+   *
+   * ── 6/9/2026: LE DUE LETTURE PARTONO INSIEME ────────────────────────────
+   * Erano due attese in fila: prima la composizione della pagina, e solo
+   * quando quella era tornata partiva il precarico delle categorie. Due cose
+   * che non si guardano nemmeno, messe in coda una all'altra: chi apre la home
+   * pagava due viaggi verso il database invece di uno. Adesso partono insieme
+   * e si aspetta la piu' lenta delle due, non la somma.
    */
-  const precarico = await precaricoDellaHome();
+  const [site, precarico] = await Promise.all([loadHomeSite(), precaricoDellaHome()]);
+  const sections = homeEnabledSections(site);
 
   return (
     <div className="bg-surface-50">

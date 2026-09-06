@@ -166,7 +166,7 @@ export default function RiderHelpPage() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-bold text-ink-900">Scrivi al supporto</p>
-              <p className="text-xs text-ink-500">Risposta entro 24h</p>
+              <p className="text-xs text-ink-500">Risposta entro 24 ore lavorative</p>
             </div>
           </Link>
         </div>

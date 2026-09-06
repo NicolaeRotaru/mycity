@@ -46,6 +46,8 @@ export type SavedAddress = {
 type Props = {
   form: AddressForm;
   savedAddresses: SavedAddress[];
+  /** Gli indirizzi salvati non sono ancora arrivati: non si sa se ce ne sono. */
+  caricamento?: boolean;
   errors?: Partial<Record<keyof AddressForm, string>>;
   onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   onSubmit: (e: FormEvent) => void;
@@ -55,6 +57,7 @@ type Props = {
 export function ShippingAddressForm({
   form,
   savedAddresses,
+  caricamento = false,
   errors = {},
   onChange,
   onSubmit,
@@ -77,6 +80,16 @@ export function ShippingAddressForm({
   const editing = manualOpen || conErrori || savedAddresses.length === 0;
   const setEditing = setManualOpen;
 
+  // 6/9/2026 — Finche' gli indirizzi salvati non sono arrivati, `savedAddresses`
+  // e' una lista vuota, quindi `editing` vale true e il primo passo della cassa
+  // si apriva col modulo da compilare. Un attimo dopo arrivavano gli indirizzi,
+  // il modulo spariva e comparivano le mattonelle: il passo 1 si riorganizzava
+  // sotto le dita di chi stava gia' toccando lo schermo. Ora, finche' non si sa,
+  // non si decide: si mostra l'attesa e basta. L'attesa NON copre pero' il caso
+  // della regola 127 qui sopra: se il modulo ha errori si mostra sempre, perche'
+  // altrimenti «Conferma ordine» resterebbe di nuovo muto.
+  const mostroAttesa = caricamento && !conErrori;
+
   // Tile attiva = indirizzo salvato i cui campi combaciano col form corrente.
   // Pura derivazione visiva, nessuna logica di stato dell'indirizzo qui.
   const activeId = savedAddresses.find(
@@ -90,6 +103,26 @@ export function ShippingAddressForm({
     onApplySavedAddress(id);
     setEditing(false);
   };
+
+  if (mostroAttesa) {
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        aria-live="polite"
+        aria-label="Carico i tuoi indirizzi salvati"
+        className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+      >
+        {[0, 1].map((i) => (
+          <div key={i} className="rounded-xl border-2 border-cream-300 p-4" aria-hidden>
+            <div className="skeleton h-4 w-20 rounded mb-2" />
+            <div className="skeleton h-4 w-2/3 rounded mb-2" />
+            <div className="skeleton h-4 w-full rounded" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -111,7 +144,7 @@ export function ShippingAddressForm({
               >
                 <div className="flex items-center gap-2 mb-1">
                   {a.label && <Badge variant="local">{a.label}</Badge>}
-                  {a.is_default && <span className="text-2xs text-ink-400">Predefinito</span>}
+                  {a.is_default && <span className="text-2xs text-ink-500">Predefinito</span>}
                 </div>
                 {a.full_name && <p className="text-sm font-semibold text-ink-900">{a.full_name}</p>}
                 <p className="text-sm text-ink-600">{a.address}, {a.city}</p>

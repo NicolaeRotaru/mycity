@@ -53,14 +53,25 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       if (error) throw error;
       const righe = (data ?? []) as Array<SubcatRow & { parent_id: string | null }>;
       const padre = righe.find((r) => r.slug === slug) ?? null;
+      // 6/9/2026 — Il briciolo di pane saltava la categoria madre: su
+      // /category/libri-romanzi diceva «Home › Categorie › Romanzi», senza
+      // «Libri». Chi voleva risalire di un livello doveva riaprire il menu, e
+      // i dati strutturati per Google avevano lo stesso buco. La madre e' gia'
+      // qui dentro — le righe sono tutte lette sopra — bastava cercarla.
+      const madre = padre?.parent_id
+        ? righe.find((r) => r.id === padre.parent_id) ?? null
+        : null;
       return {
         category: padre,
+        madre,
         subcategories: padre ? righe.filter((r) => r.parent_id === padre.id) : [],
       };
     },
     staleTime: 10 * 60_000,
   });
   const category = alberoCategoria?.category ?? null;
+  /** La categoria che sta un livello sopra questa, quando questa e' una sottocategoria. */
+  const madre = alberoCategoria?.madre ?? null;
   const subcategories: SubcatRow[] = alberoCategoria?.subcategories ?? [];
   const subsLoading = isLoading;
 
@@ -142,7 +153,8 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
     itemListElement: [
       { '@type': 'ListItem', position: 1, name: 'Home', item: '/' },
       { '@type': 'ListItem', position: 2, name: 'Categorie', item: '/categorie' },
-      { '@type': 'ListItem', position: 3, name: category.name, item: `/category/${slug}` },
+      ...(madre ? [{ '@type': 'ListItem', position: 3, name: madre.name, item: `/category/${madre.slug}` }] : []),
+      { '@type': 'ListItem', position: madre ? 4 : 3, name: category.name, item: `/category/${slug}` },
     ],
   };
 
@@ -172,6 +184,7 @@ export default function CategoryPage(props: { params: Promise<{ slug: string }> 
       breadcrumb={[
         { label: tn('home'), href: '/' },
         { label: 'Categorie', href: '/categorie' },
+        ...(madre ? [{ label: madre.name, href: `/category/${madre.slug}` }] : []),
         { label: category.name },
       ]}
     />

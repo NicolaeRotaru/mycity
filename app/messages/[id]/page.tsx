@@ -254,7 +254,11 @@ export default function ConversationThreadPage(props: { params: Promise<{ id: st
       <div className="bg-white sm:border sm:rounded-xl flex flex-col h-[calc(100dvh-160px)] sm:h-[calc(100dvh-200px)]">
         {/* HEADER */}
         <div className="flex items-center gap-3 p-4 border-b">
-          <Link href="/messages" className="text-ink-500 hover:text-ink-700">
+          <Link
+            href="/messages"
+            aria-label="Torna a tutti i messaggi"
+            className="text-ink-500 hover:text-ink-700"
+          >
             <ArrowLeft size={20} />
           </Link>
           <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${

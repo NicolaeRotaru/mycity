@@ -67,11 +67,25 @@ export default function GiftCardsPage() {
     }
   }, []);
 
-  const { data: balanceCents = 0 } = useQuery({
+  /**
+   * 6/9/2026 — UN CREDITO NON LETTO NON E' UN CREDITO A ZERO.
+   *
+   * L'errore della lettura veniva buttato via e al suo posto usciva `0`: per il
+   * contenitore delle query quella era una lettura RIUSCITA, quindi niente
+   * secondo tentativo, nessun avviso, e lo zero finto restava in cache sotto la
+   * chiave del portafoglio — la stessa che usa la pagina «Punti». A video una
+   * cliente con 25 euro di gift card leggeva «0,00 €» come chi il credito non
+   * ce l'ha davvero, e la prima cosa che pensa e' che il regalo sia sparito.
+   *
+   * Regola: un importo in euro non ha mai un valore di ripiego. O e' letto, o si
+   * dice che non si e' riusciti a leggerlo.
+   */
+  const { data: balanceCents, isError: saldoNonLetto, refetch: rileggiSaldo } = useQuery({
     queryKey: queryKeys.wallet.byUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async (): Promise<number> => {
-      const { data } = await supabase.from('profiles').select('wallet_balance_cents').eq('id', userId!).single();
+      const { data, error } = await supabase.from('profiles').select('wallet_balance_cents').eq('id', userId!).single();
+      if (error) throw error;
       return (data?.wallet_balance_cents as number) ?? 0;
     },
   });
@@ -175,7 +189,22 @@ export default function GiftCardsPage() {
         </div>
         <div>
           <p className="text-xs uppercase tracking-wider opacity-80">Il tuo credito MyCity</p>
-          <p className="text-3xl font-serif font-extrabold">{formatPrice(balanceCents / 100)}</p>
+          {saldoNonLetto ? (
+            <>
+              <p className="text-base font-semibold">Non riusciamo a leggere il tuo credito.</p>
+              <button
+                type="button"
+                onClick={() => { void rileggiSaldo(); }}
+                className="mt-1.5 rounded-full bg-white/20 px-3 py-1 text-sm font-bold hover:bg-white/30"
+              >
+                Riprova
+              </button>
+            </>
+          ) : (
+            <p className="text-3xl font-serif font-extrabold">
+              {balanceCents === undefined ? '—' : formatPrice(balanceCents / 100)}
+            </p>
+          )}
         </div>
       </div>
 

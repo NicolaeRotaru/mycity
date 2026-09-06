@@ -31,7 +31,7 @@ export default function ShippingPage() {
       <div className="grid sm:grid-cols-3 gap-4 mb-10">
         <div className="bg-olive-50 border border-olive-200 rounded-xl p-5 text-center">
           <div className="mb-2 flex justify-center"><Gift size={28} className="text-olive-600" aria-hidden /></div>
-          <div className="font-bold text-green-900">Spedizione GRATIS</div>
+          <div className="font-bold text-olive-900">Spedizione GRATIS</div>
           <div className="text-sm text-olive-700 mt-1">Per ordini ≥ €30 dallo stesso venditore</div>
         </div>
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-5 text-center">
@@ -48,8 +48,10 @@ export default function ShippingPage() {
         )}
       </div>
 
-      <section className="prose prose-gray max-w-none space-y-6 text-ink-700 leading-relaxed">
-        <div>
+      {/* Niente classi `prose`: il plugin @tailwindcss/typography non e' installato, quindi
+          non facevano niente. La spaziatura dentro i blocchi e' scritta qui, esplicita. */}
+      <section className="max-w-none space-y-8 text-ink-700 leading-relaxed">
+        <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Tempi di consegna</h2>
           <p>Consegniamo in <strong>{EXPRESS_ETA_LABEL}</strong> dalla conferma del venditore. È la nostra promessa:
           il negozio è nella tua città, il rider fa un percorso breve.</p>
@@ -60,7 +62,7 @@ export default function ShippingPage() {
           </ul>
         </div>
 
-        <div>
+        <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Costi di spedizione</h2>
           <p>Il costo dipende dalla distanza dal negozio e dal venditore:</p>
           <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -100,14 +102,14 @@ export default function ShippingPage() {
         </div>
 
         {riquadroRitiroInNegozio() && (
-          <div>
+          <div className="space-y-3">
             <h2 className="text-xl font-bold text-ink-900 mb-2">Ritiro in negozio</h2>
             <p>Scegliendo il ritiro in negozio non paghi spese di spedizione. Riceverai una notifica
             appena l&apos;ordine sarà pronto.</p>
           </div>
         )}
 
-        <div>
+        <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Tracciamento</h2>
           <p>Da <Link href="/orders" className="text-primary-700 underline">"I miei ordini"</Link> vedi in tempo reale:</p>
           <ul className="space-y-1 list-none pl-0">
@@ -119,13 +121,13 @@ export default function ShippingPage() {
           </ul>
         </div>
 
-        <div>
+        <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Aree servite</h2>
           <p>Attualmente operiamo a <strong>Piacenza</strong> e nei comuni limitrofi entro 15 km. Stiamo espandendo
           progressivamente. Inserendo il tuo indirizzo al checkout sapremo se siamo già nella tua zona.</p>
         </div>
 
-        <div>
+        <div className="space-y-3">
           <h2 className="text-xl font-bold text-ink-900 mb-2">Problemi con la consegna?</h2>
           <p>Se la consegna è in ritardo, il pacco è danneggiato o non arrivato, contatta il nostro supporto entro 48h:
           <Link href="/contact" className="text-primary-700 underline ml-1">vai ai contatti</Link>.</p>

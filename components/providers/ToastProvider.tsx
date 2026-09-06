@@ -37,7 +37,29 @@ const ToastProvider = () => {
     };
   }, []);
 
-  return <Toaster position="top-right" richColors />;
+  /**
+   * 6/9/2026 — GLI AVVISI PARLANO COI COLORI DI MYCITY.
+   *
+   * `richColors` accendeva la tavolozza di fabbrica di sonner: verde, rosso, ambra e
+   * blu saturi. Il blu era l'unico di tutto il marketplace, e ogni «aggiunto al
+   * carrello» lo mostrava. Qui i quattro stati tornano sui colori del marchio —
+   * oliva per il buon esito, vino per l'errore, mostarda per l'avviso, crema per
+   * l'informazione. Le classi vincono di sicuro: sonner avvolge le sue regole in
+   * `:where(...)`, che pesa zero nel foglio di stile.
+   */
+  return (
+    <Toaster
+      position="top-right"
+      toastOptions={{
+        classNames: {
+          success: 'bg-olive-50 text-olive-800 border-olive-200',
+          error: 'bg-secondary-50 text-secondary-800 border-secondary-200',
+          warning: 'bg-accent-50 text-accent-800 border-accent-200',
+          info: 'bg-cream-100 text-ink-800 border-cream-300',
+        },
+      }}
+    />
+  );
 };
 
 export default ToastProvider;

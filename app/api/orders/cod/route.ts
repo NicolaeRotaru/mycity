@@ -104,7 +104,7 @@ function ordineGiaInCorso(): NextResponse {
   return NextResponse.json(
     {
       ok: false,
-      error: { code: 'CONFLICT', message: 'Ordine gia in corso, attendi qualche secondo.' },
+      error: { code: 'CONFLICT', message: 'Ordine già in corso, attendi qualche secondo.' },
       inCorso: true,
     },
     { status: 409 },
@@ -199,7 +199,7 @@ export const POST = withAuthRateLimit(
           logger.error('[cod] rivendicazione del tentativo fallita', {
             chiave: chiaveTentativo, message: errRivendica.message,
           });
-          return ApiErrors.unavailable('Impossibile registrare l ordine, riprova.');
+          return ApiErrors.unavailable("Impossibile registrare l'ordine, riprova.");
         }
 
         // Chiave gia' presa: o e' lo stesso invio ripetuto, o e' il gemello
@@ -264,7 +264,7 @@ export const POST = withAuthRateLimit(
      * il doppio clic vero. Ma nessuna delle uscite di errore la restituiva, e il
      * browser la butta solo quando l'ordine riesce. Bastava un «negozio chiuso»
      * o un «articolo esaurito» — errori normalissimi, di cui la persona non ha
-     * colpa — e il tentativo successivo si sentiva rispondere «Ordine gia in
+     * colpa — e il tentativo successivo si sentiva rispondere «Ordine già in
      * corso, attendi qualche secondo»: una frase falsa, davanti a chi sta
      * comprando, che nessuna attesa sbloccava prima di un minuto pieno.
      *

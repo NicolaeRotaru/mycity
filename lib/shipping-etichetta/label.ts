@@ -88,7 +88,12 @@ export async function buildShippingLabel(data: LabelData): Promise<Buffer> {
         doc.lineWidth(1.5).strokeColor('#C0492C')
           .rect(8 * MM_TO_PT, y, LABEL_W - 16 * MM_TO_PT, 35)
           .stroke();
-        doc.fillColor('#C0492C').fontSize(8).font('Helvetica-Bold').text('💰 CONTRASSEGNO', 10 * MM_TO_PT, y + 4);
+        // Niente emoji su questa riga: l'etichetta usa i font standard di PDFKit
+        // (Helvetica, Courier), che sanno scrivere solo i caratteri WinAnsi. Il
+        // sacchetto di soldi finiva nel PDF come due mezzi caratteri e il fattorino
+        // leggeva «Ø=Ü° CONTRASSEGNO» proprio sopra la cifra da riscuotere. Per
+        // rimettere un'icona serve prima incorporare un font vero (doc.registerFont).
+        doc.fillColor('#C0492C').fontSize(8).font('Helvetica-Bold').text('CONTRASSEGNO', 10 * MM_TO_PT, y + 4);
         doc.fontSize(14).font('Helvetica-Bold').text(`Riscuoti: €${(data.totalCents / 100).toFixed(2)}`, 10 * MM_TO_PT, y + 16);
         doc.fillColor('#000000');
         doc.y = y + 40;

@@ -106,7 +106,7 @@ describe('gli errori della cassa in contanti', () => {
       typeof corpo.error === 'object' && corpo.error !== null,
       `l'errore e' ancora una stringa nuda: ${JSON.stringify(corpo.error)}`,
     ).toBe(true);
-    expect(corpo.error?.message, 'il motivo vero non arriva a schermo').toContain('Ordine gia in corso');
+    expect(corpo.error?.message, 'il motivo vero non arriva a schermo').toContain('Ordine già in corso');
     expect(corpo.error?.code).toBe('CONFLICT');
   });
 

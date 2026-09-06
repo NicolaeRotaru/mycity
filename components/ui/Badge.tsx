@@ -7,6 +7,13 @@ import { cn } from '@/lib/cn';
  *
  * Corregge anche il colore sconto fuori-brand (rose Tailwind) → secondary
  * (vino), coerente col design system "Mediterranean Modern".
+ *
+ * 6/9/2026 — Le maiuscole respirano col token, non con l'omonimo di Tailwind.
+ * Il design system ha un solo valore per le maiuscole: 0,04em, esposto come
+ * `tracking-label`. L'utility `tracking-wide` sembra la stessa cosa — il token CSS
+ * si chiama proprio `--tracking-wide` — ma vale il default di Tailwind, 0,025em:
+ * chi la scriveva credeva di usare il token e ne usava un altro. Stessa storia per
+ * `text-[10px]`, che è `text-2xs` scritto a mano.
  */
 
 export type BadgeVariant =
@@ -23,10 +30,10 @@ export type BadgeVariant =
 type BadgeSize = 'sm' | 'md';
 
 const VARIANTS: Record<BadgeVariant, string> = {
-  discount:     'bg-secondary-600 text-white uppercase tracking-wide',
-  new:          'bg-olive-600 text-white uppercase tracking-wide',
-  soldout:      'bg-ink-700 text-white uppercase tracking-wide',
-  lowstock:     'bg-secondary-500 text-white uppercase tracking-wide',
+  discount:     'bg-secondary-600 text-white uppercase tracking-label',
+  new:          'bg-olive-600 text-white uppercase tracking-label',
+  soldout:      'bg-ink-700 text-white uppercase tracking-label',
+  lowstock:     'bg-secondary-500 text-white uppercase tracking-label',
   lowstocksoft: 'bg-secondary-50 text-secondary-700',
   free:         'bg-olive-50 text-olive-700',
   cod:          'bg-olive-50 text-olive-700',
@@ -35,7 +42,7 @@ const VARIANTS: Record<BadgeVariant, string> = {
 };
 
 const SIZES: Record<BadgeSize, string> = {
-  sm: 'text-[10px] px-1.5 py-0.5 gap-0.5',
+  sm: 'text-2xs px-1.5 py-0.5 gap-0.5',
   md: 'text-xs px-2 py-1 gap-1',
 };
 

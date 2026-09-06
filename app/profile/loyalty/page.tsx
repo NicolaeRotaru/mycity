@@ -71,11 +71,18 @@ export default function LoyaltyPage() {
 
   const qc = useQueryClient();
 
-  const { data: walletCents = 0 } = useQuery<number>({
+  /**
+   * 6/9/2026 — Stessa lettura e stessa chiave della pagina «Gift card»: l'errore
+   * diventava lo zero, e lo zero finto restava in cache per tutte e due. Qui si
+   * vedeva di meno (la frase «Hai gia' … di credito» spariva e basta), ma era la
+   * stessa bugia: adesso l'errore esce e la pagina lo dice.
+   */
+  const { data: walletCents = 0, isError: creditoNonLetto } = useQuery<number>({
     queryKey: queryKeys.wallet.byUser(userId ?? ''),
     enabled: !!userId,
     queryFn: async () => {
-      const { data } = await supabase.from('profiles').select('wallet_balance_cents').eq('id', userId!).single();
+      const { data, error } = await supabase.from('profiles').select('wallet_balance_cents').eq('id', userId!).single();
+      if (error) throw error;
       return (data?.wallet_balance_cents as number) ?? 0;
     },
   });
@@ -172,7 +179,9 @@ export default function LoyaltyPage() {
         </div>
         <p className="text-sm text-ink-600 mb-3">
           {POINTS_REDEEM_RATE} punti = €5 di credito MyCity, spendibile negli ordini con pagamento alla consegna.
-          {walletCents > 0 && <> Hai già <strong>{formatPrice(walletCents / 100)}</strong> di credito.</>}
+          {creditoNonLetto
+            ? <> Il credito che hai gi&agrave; non riusciamo a leggerlo adesso.</>
+            : walletCents > 0 && <> Hai già <strong>{formatPrice(walletCents / 100)}</strong> di credito.</>}
         </p>
         {convertiblePoints >= 100 ? (
           <Button onClick={() => convert.mutate(convertiblePoints)} loading={convert.isPending} icon={Wallet}>
