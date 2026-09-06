@@ -187,7 +187,7 @@ const ProductCard = ({
           disabled={!cuorePremibile}
           aria-label={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti' : isFav ? 'Rimuovi dai preferiti' : 'Aggiungi ai preferiti'}
           title={!cuorePremibile ? 'Non sono riuscito a leggere i tuoi preferiti: riprova fra un momento' : undefined}
-          className={`absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow transition-transform ${cuorePremibile ? 'hover:scale-110 hover:bg-white' : 'cursor-not-allowed opacity-60'}`}
+          className={`absolute top-2 right-2 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-white/95 shadow-sm-neutral transition-transform ${cuorePremibile ? 'hover:scale-110 hover:bg-white' : 'cursor-not-allowed opacity-60'}`}
         >
           <Heart
             size={16}
@@ -253,7 +253,7 @@ const ProductCard = ({
               onClick={handleAdd}
               disabled={isOutOfStock}
               aria-label={hasVariants ? `Scegli le opzioni di ${name}` : `Aggiungi ${name} al carrello`}
-              className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
+              className="ml-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm-neutral transition-all hover:bg-primary-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-cream-200 disabled:text-ink-400 disabled:active:scale-100"
             >
               <Plus size={18} strokeWidth={2.6} aria-hidden />
             </button>

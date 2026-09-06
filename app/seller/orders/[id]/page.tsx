@@ -15,6 +15,7 @@ import { OrderStatusBadge } from '@/components/ui/OrderStatusBadge';
 import OrderTimeline from '@/components/OrderTimeline';
 import SimpleQR from '@/components/SimpleQR';
 import { LoadingState } from '@/components/ui/LoadingState';
+import { ErrorState } from '@/components/ui/ErrorState';
 import { Button } from '@/components/ui/Button';
 import { friendlyError } from '@/lib/errors';
 import { trackSellerOrderAccepted } from '@/lib/analytics/events';
@@ -95,7 +96,7 @@ function RejectDialog({
       aria-labelledby="reject-title"
     >
       <div
-        className="w-full overflow-hidden rounded-t-3xl bg-white shadow-2xl animate-slideUp sm:w-auto sm:min-w-[440px] sm:max-w-md sm:rounded-2xl sm:animate-popIn"
+        className="w-full overflow-hidden rounded-t-3xl bg-white shadow-warm-xl animate-slideUp sm:w-auto sm:min-w-[440px] sm:max-w-md sm:rounded-2xl sm:animate-popIn"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="h-1.5 bg-gradient-to-r from-secondary-600 via-primary-600 to-accent-500" />
@@ -134,7 +135,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   const [rejectOpen, setRejectOpen] = useState(false);
   const [codiceRitiro, setCodiceRitiro] = useState('');
 
-  const { data: order, isLoading } = useQuery({
+  const { data: order, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.seller.order(id),
     queryFn: async () => {
       const sel = (pay: string) => `
@@ -152,15 +153,18 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       // servono al riepilogo, che senza non torna. Se una di queste colonne non è (ancora)
       // presente in questo ambiente, ricadiamo sulla select senza romperci — e in quel caso il
       // riepilogo lo dichiara invece di mostrare voci che non fanno il totale.
+      // «Non trovato» e «non raggiungibile» sono due cose diverse: `.maybeSingle()` fa tornare
+      // `null` quando la riga non c'e', cosi' l'ordine mancante finisce nel suo ramo e il guasto
+      // di rete resta un errore vero, con il suo «Riprova». Con `.single()` erano la stessa cosa.
       const withPay = await supabase
         .from('orders')
         .select(sel(' payment_method, delivery_fee_cents, discount_amount, wallet_applied_cents,'))
         .eq('id', id)
-        .single();
-      if (!withPay.error) return withPay.data as unknown as OrderRow;
-      const fallback = await supabase.from('orders').select(sel('')).eq('id', id).single();
+        .maybeSingle();
+      if (!withPay.error) return (withPay.data ?? null) as unknown as OrderRow | null;
+      const fallback = await supabase.from('orders').select(sel('')).eq('id', id).maybeSingle();
       if (fallback.error) throw fallback.error;
-      return fallback.data as unknown as OrderRow;
+      return (fallback.data ?? null) as unknown as OrderRow | null;
     },
     refetchInterval: 30_000,
   });
@@ -305,6 +309,21 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
   });
 
   if (isLoading) return <LoadingState />;
+  // Se la lettura fallisce, il negoziante leggeva «Ordine non trovato» su un ordine che ha appena
+  // incassato, e non aveva nessun modo di riprovare: se non accetta in tempo, l'ordine scade.
+  // Adesso il guasto di rete dice cos'e' successo e offre il «Riprova» — come la pagina gemella
+  // del cliente (app/orders/[id]/page.tsx), riparata prima solo da un lato.
+  if (isError) {
+    return (
+      <ErrorState
+        title="Non riesco a caricare l'ordine"
+        description="Sembra un problema di collegamento. L'ordine c'e': riprova."
+        retry={() => { void refetch(); }}
+        backHref="/seller/orders"
+        backLabel="Tutti gli ordini"
+      />
+    );
+  }
   if (!order) return <EmptyState icon={Package} title="Ordine non trovato" description="L'ordine non esiste o non hai i permessi per vederlo." ctaLabel="Tutti gli ordini" ctaHref="/seller/orders" />;
 
   const subtotal = order.order_items.reduce((s, it) => s + it.quantity * Number(it.unit_price), 0);
@@ -400,7 +419,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
       )}
       {/* CODICE RITIRO (visibile dopo ACCEPTED) */}
       {showPickupCode && (
-        <div className="bg-gradient-to-br from-primary-500 to-secondary-600 text-white rounded-2xl p-6 shadow-lg">
+        <div className="bg-gradient-to-br from-primary-500 to-secondary-600 text-white rounded-2xl p-6 shadow-warm-lg">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
               <p className="text-xs uppercase tracking-widest text-primary-100 font-semibold">Codice ritiro</p>
@@ -499,7 +518,7 @@ export default function SellerOrderDetailPage(props: { params: Promise<{ id: str
                   ) : <Package size={20} className="text-ink-400" aria-hidden />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-ink-900 truncate">{nomeDellaRigaOrdine(it)}</p>
+                  <p className="font-medium text-ink-900 line-clamp-2 break-words">{nomeDellaRigaOrdine(it)}</p>
                   <p className="text-xs text-ink-500">{formatPrice(Number(it.unit_price))} × {it.quantity}</p>
                 </div>
                 <div className="text-right shrink-0">

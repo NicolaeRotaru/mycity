@@ -2,7 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen, MessageCircle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Banknote, Truck, Lock, RotateCcw, Mail, Phone, MapPin, MessageCircle,
+  Shirt, Apple, Home as HomeIcon, Smartphone, BookOpen,
+  Sparkles, Leaf, Gamepad2, Trophy, LayoutGrid, Tag,
+  type LucideIcon,
+} from 'lucide-react';
+import { supabase } from '@/lib/supabase/client';
 import { useProfile } from './hooks/useProfile';
 import { useBranding } from './hooks/useBranding';
 import NewsletterForm from './NewsletterForm';
@@ -84,6 +91,45 @@ const SOCIALS = [
   },
 ];
 
+type Categoria = { id?: string; slug: string; name: string; parent_id?: string | null };
+
+/** Stessa mappa slug→icona di CategoryBar e CategoryShowcase; sconosciuto = etichetta. */
+const ICONE: Record<string, LucideIcon> = {
+  abbigliamento: Shirt, alimentari: Apple, bellezza: Sparkles,
+  'casa-cucina': HomeIcon, casa: HomeIcon, cucina: HomeIcon,
+  elettronica: Smartphone, giardino: Leaf, giocattoli: Gamepad2,
+  libri: BookOpen, sport: Trophy,
+};
+const iconaDi = (slug: string): LucideIcon => ICONE[slug] ?? Tag;
+
+/**
+ * 6/9/2026 — IL PIEDE MOSTRAVA CINQUE CATEGORIE SU NOVE.
+ *
+ * Erano cinque link scritti a mano: Bellezza, Giardino, Giocattoli e Sport non
+ * comparivano da nessuna parte, e non c'era modo di arrivare all'indice
+ * completo. Chi scendeva in fondo alla pagina vedeva un catalogo più piccolo di
+ * quello che il menu in alto gli aveva appena mostrato.
+ *
+ * Adesso l'elenco arriva dal database, con la stessa chiave di cache del
+ * mega-menu in alto: su una pagina normale il dato è già in casa, quindi qui
+ * non parte nessuna lettura in più, e una categoria aggiunta domani compare da
+ * sola. QUESTE NOVE RESTANO COME RISERVA — sono le madri create dalle
+ * migrazioni 002 e 013, in ordine alfabetico come le ordina il database. Servono
+ * per il primo disegno della pagina e per il giorno in cui la lettura fallisce:
+ * un piede con la colonna vuota è peggio di un piede un po' vecchio.
+ */
+const CATEGORIE_DI_RISERVA: Categoria[] = [
+  { slug: 'abbigliamento', name: 'Abbigliamento' },
+  { slug: 'alimentari',    name: 'Alimentari' },
+  { slug: 'bellezza',      name: 'Bellezza' },
+  { slug: 'casa',          name: 'Casa & Cucina' },
+  { slug: 'elettronica',   name: 'Elettronica' },
+  { slug: 'giardino',      name: 'Giardino' },
+  { slug: 'giocattoli',    name: 'Giocattoli' },
+  { slug: 'libri',         name: 'Libri' },
+  { slug: 'sport',         name: 'Sport' },
+];
+
 const Footer = () => {
   const chiSiamo = titolare();
   const identita = rigaIdentita(chiSiamo);
@@ -96,11 +142,33 @@ const Footer = () => {
 
   // Cockpit admin, shell seller e shell rider: footer globale nascosto (shell
   // standalone con chrome dedicata su /admin, /seller e /rider).
-  if (pathname?.startsWith('/admin') || pathname?.startsWith('/seller') || pathname?.startsWith('/rider')) return null;
+  const areaPro = !!pathname && (pathname.startsWith('/admin') || pathname.startsWith('/seller') || pathname.startsWith('/rider'));
+
+  // Stessa chiave e stessa domanda di CategoryBar: dove il piede si disegna, il
+  // menu in alto ha già chiesto le categorie e la risposta è condivisa. Dove il
+  // piede non si disegna — le pagine di lavoro — non si chiede niente.
+  const { data: categorie } = useQuery({
+    queryKey: ['categories', 'tree'],
+    staleTime: 10 * 60_000,
+    enabled: !areaPro && !isSellerArea,
+    queryFn: async (): Promise<Categoria[]> => {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, slug, name, parent_id, icon')
+        .order('name');
+      if (error) throw error;
+      return (data ?? []) as Categoria[];
+    },
+  });
+
+  const madriLette = (categorie ?? []).filter((c) => c.parent_id === null);
+  const madri = madriLette.length > 0 ? madriLette : CATEGORIE_DI_RISERVA;
+
+  if (areaPro) return null;
 
   return (
     <footer className="bg-cream-200 border-t border-cream-300 text-ink-700 mt-12">
-      <div className={`container mx-auto px-6 py-12 grid grid-cols-2 ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
+      <div className={`container mx-auto px-4 sm:px-6 py-12 grid grid-cols-2 ${isSellerArea ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-8`}>
         {/* Brand + descrizione */}
         <div className="col-span-2 md:col-span-1">
           <h3 className="font-serif font-bold mb-3 text-2xl">
@@ -147,11 +215,21 @@ const Footer = () => {
           <div>
             <h3 className="font-bold text-ink-900 mb-3 text-sm uppercase tracking-wide">Categorie</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="/category/alimentari" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><Apple size={14} strokeWidth={2.2} className="text-primary-600" />Alimentari</Link></li>
-              <li><Link href="/category/abbigliamento" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><Shirt size={14} strokeWidth={2.2} className="text-primary-600" />Abbigliamento</Link></li>
-              <li><Link href="/category/casa" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><HomeIcon size={14} strokeWidth={2.2} className="text-primary-600" />Casa &amp; Cucina</Link></li>
-              <li><Link href="/category/elettronica" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><Smartphone size={14} strokeWidth={2.2} className="text-primary-600" />Elettronica</Link></li>
-              <li><Link href="/category/libri" className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors"><BookOpen size={14} strokeWidth={2.2} className="text-primary-600" />Libri</Link></li>
+              {madri.map((c) => {
+                const Icona = iconaDi(c.slug);
+                return (
+                  <li key={c.slug}>
+                    <Link href={`/category/${c.slug}`} className="inline-flex items-center gap-2 text-ink-600 hover:text-primary-700 transition-colors">
+                      <Icona size={14} strokeWidth={2.2} className="text-primary-600" />{c.name}
+                    </Link>
+                  </li>
+                );
+              })}
+              <li className="pt-1">
+                <Link href="/categorie" className="inline-flex items-center gap-2 font-semibold text-primary-700 hover:text-primary-800 transition-colors">
+                  <LayoutGrid size={14} strokeWidth={2.2} />Tutte le categorie
+                </Link>
+              </li>
             </ul>
           </div>
         )}
@@ -210,7 +288,7 @@ const Footer = () => {
       {/* Newsletter */}
       {!isSellerArea && (
         <div className="border-t border-cream-300 bg-cream-100">
-          <div className="container mx-auto px-6 py-6 max-w-2xl">
+          <div className="container mx-auto px-4 sm:px-6 py-6 max-w-2xl">
             <NewsletterForm variant="light" />
           </div>
         </div>
@@ -218,7 +296,7 @@ const Footer = () => {
 
       {/* Trust strip + contatti compatti */}
       <div className="border-t border-cream-300">
-        <div className="container mx-auto px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-ink-600">
+        <div className="container mx-auto px-4 sm:px-6 py-5 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-ink-600">
           <div className="flex items-center gap-5 flex-wrap justify-center">
             <span className="flex items-center gap-1.5">
               <Banknote size={14} strokeWidth={2} className="text-olive-600" /> Pagamento alla consegna

@@ -296,7 +296,7 @@ export default function OrdersPage() {
         return (
           <div
             key={order.id}
-            className="bg-white border border-cream-300 rounded-xl hover:shadow-md hover:border-primary-200 transition-all overflow-hidden"
+            className="bg-white border border-cream-300 rounded-xl hover:shadow-card hover:border-primary-200 transition-all overflow-hidden"
           >
             {/* HEADER (link al dettaglio): negozio + data + stato */}
             <Link

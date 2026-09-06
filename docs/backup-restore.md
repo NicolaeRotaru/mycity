@@ -33,8 +33,9 @@
 >
 > **Quello che è certo, oggi:** la copia notturna di GitHub Actions
 > (`.github/workflows/backup-db.yml`) gira ogni notte alle 02:17 UTC, esce
-> cifrata (segreto `BACKUP_PASSPHRASE`), comprende gli utenti dal 20 agosto e
-> resta 30 giorni fra gli artefatti. È la rete che sappiamo esserci.
+> cifrata (segreto `BACKUP_PASSPHRASE`), comprende gli utenti dal 20 agosto —
+> e dal 6 settembre anche il loro collegamento con Google e i secondi fattori —
+> e resta 30 giorni fra gli artefatti. È la rete che sappiamo esserci.
 
 ## TL;DR
 
@@ -174,6 +175,15 @@ qualche euro al mese: **la decide Nicola.**
 | `STORAGE_SYNC_SOURCE` | il remote rclone del fornitore (finisce con `:`) | `supabase:` |
 | `STORAGE_SYNC_DEST` | il remote rclone di destinazione | `b2:mycity-foto` |
 | `STORAGE_SYNC_BUCKETS` | quali secchi copiare (facoltativa) | `products stories reviews` |
+| `STORAGE_SYNC_STORICO` | dove finiscono i file spariti dall'origine (facoltativa) | `b2:mycity-foto-storico` |
+
+> ⚠️ **I secchi da creare sono due, non uno.** Le foto vive vanno nella
+> destinazione; quelle sparite dall'origine non vengono cancellate, vengono
+> spostate in un **secondo** secchio — di regola la destinazione con `-storico`
+> in fondo. Va creato prima, e la chiave deve poterci scrivere. La copia
+> notturna prova a crearlo da sé e, se non ci riesce, lo scrive a chiare
+> lettere nel registro della notte. **Non è mai stato provato con chiavi
+> vere:** la prima notte che si accende, quella riga si guarda.
 
 Ogni notte il lavoro scrive una riga che dice come è andata, e non ne esiste
 una quarta:
@@ -200,7 +210,7 @@ con dentro il GDPR, e va presa prima — poi si aggiungono a
 #### Per accenderla (quando c'è la destinazione)
 
 ```bash
-# 1. crea il secchio di destinazione presso il fornitore scelto e le chiavi
+# 1. crea i DUE secchi presso il fornitore scelto (destinazione e storico) e le chiavi
 # 2. configura i due remote rclone (una volta, sulla macchina che fa la copia)
 rclone config   # un remote per Supabase (S3-compatibile) e uno per la destinazione
 
@@ -258,6 +268,25 @@ verde e scrive `esito-foto: non-configurato`.
    pg_restore --no-owner --no-acl --dbname=prova mycity-elenco-foto_<data>.dump
    psql -d prova -c "SELECT bucket_id, count(*) FROM storage.objects GROUP BY 1;"
    ```
+
+   Gli utenti stanno in un terzo file (`mycity_<data>_utenti.dump[.gpg]`) e
+   vanno rimessi nello stesso database di prova: senza, ordini e negozi tornano
+   senza nessuno a cui appartengano. Dentro ci sono tre tabelle: le persone, il
+   loro collegamento con Google e i secondi fattori.
+
+   ```bash
+   psql -d prova -c "CREATE SCHEMA IF NOT EXISTS auth;"
+   pg_restore --no-owner --no-acl --dbname=prova mycity_<data>_utenti.dump
+   psql -d prova -c "SELECT count(*) FROM auth.users;"
+   psql -d prova -c "SELECT provider, count(*) FROM auth.identities GROUP BY 1;"
+   psql -d prova -c "SELECT count(*) FROM auth.mfa_factors;"
+   ```
+
+   Se chi entra con Google c'è fra gli utenti ma non fra le identità, il
+   ripristino non è finito: quelle persone non rientrerebbero come prima. Chi
+   aveva acceso la doppia verifica va controllato allo stesso modo — se i
+   fattori sono zero e prima non lo erano, si ritroverebbe senza protezione
+   senza che nessuno glielo dica.
 
 4. **Smoke test app**
    - Cambia env `NEXT_PUBLIC_SUPABASE_URL` localmente al project test

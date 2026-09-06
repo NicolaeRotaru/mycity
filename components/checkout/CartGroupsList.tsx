@@ -47,7 +47,7 @@ export function CartGroupsList({ groups }: Props) {
                 />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-ink-800 text-sm truncate">{item.name}</p>
+                <p className="font-medium text-ink-800 text-sm line-clamp-2 break-words">{item.name}</p>
                 {item.variantLabel && (
                   <p className="text-xs font-semibold text-ink-500 truncate">{item.variantLabel}</p>
                 )}
