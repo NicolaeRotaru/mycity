@@ -62,6 +62,10 @@ beforeEach(() => {
   vi.stubEnv('RESEND_API_KEY', 're_prova');
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://mycity.example');
   vi.stubEnv('NODE_ENV', 'production');
+  // Qui si simula la produzione, e in produzione senza RESEND_FROM la posta non
+  // parte per niente (lib/env.ts): senza questa riga si misurerebbe quel guasto,
+  // non quello del segreto della disiscrizione.
+  vi.stubEnv('RESEND_FROM', 'MyCity <ordini@mycity.test>');
   vi.stubEnv('UNSUBSCRIBE_SECRET', undefined);
 });
 

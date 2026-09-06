@@ -1013,6 +1013,34 @@ export default function CheckoutPage() {
   const ordineBloccato =
     groups.length === 0 || stockIssues.length > 0 || variantIssues.length > 0 || !consegnaConfermabile;
 
+  /*
+   * 6/9/2026 — E LA FRASE CHE SPIEGA IL BLOCCO, MOTIVO PER MOTIVO.
+   *
+   * Il pulsante bloccato mandava «al primo riquadro con role=alert». I riquadri
+   * pero' li avevano solo tre motivi su quattro: quando a fermare l'ordine era
+   * la fascia di consegna — bozza salvata con «Adesso», cassa riaperta dopo le
+   * 21 — di riquadri non ce n'era nessuno, e il pulsante si premeva senza che
+   * succedesse niente.
+   *
+   * La regola adesso e' una: OGNI motivo che spegne il pulsante porta la sua
+   * frase, e la frase finisce a schermo attaccata al pulsante (`motivoBlocco`
+   * in OrderSummary). L'ordine dei rami e' quello in cui conviene sistemarli.
+   * Le due liste devono restare la stessa lista: se qui manca un motivo che
+   * sta in `ordineBloccato`, la prova
+   * `tests/unit/alla-cassa-nessun-blocco-resta-senza-il-suo-avviso.test.ts`
+   * diventa rossa.
+   */
+  const motivoDelBlocco =
+    groups.length === 0
+      ? 'Non riusciamo a leggere i prodotti del carrello. Ricarica la pagina e riprova.'
+      : stockIssues.length > 0
+        ? 'Alcuni articoli superano la disponibilità: riduci le quantità o toglili dal carrello.'
+        : variantIssues.length > 0
+          ? 'Scegli le opzioni (taglia/colore) degli articoli segnalati qui sopra.'
+          : !consegnaConfermabile
+            ? rigaQuandoArriva(consegna)
+            : null;
+
   const validateAddress = (): Partial<Record<keyof AddressForm, string>> => {
     const e: Partial<Record<keyof AddressForm, string>> = {};
     if (!form.fullName.trim()) e.fullName = 'Inserisci nome e cognome';
@@ -1489,6 +1517,7 @@ export default function CheckoutPage() {
               isCheckingOut={isCheckingOut}
               paymentMethod={paymentMethod}
               disabled={ordineBloccato}
+              motivoBlocco={motivoDelBlocco}
             />
           </Card>
         </div>
@@ -1535,7 +1564,10 @@ export default function CheckoutPage() {
             ordineBloccato && !isCheckingOut
               ? (e) => {
                   e.preventDefault();
-                  vaiAlPrimoBlocco();
+                  // Rete di sicurezza: se a schermo non c'e' nessun riquadro da
+                  // raggiungere, il motivo si dice comunque. Un tocco che non
+                  // produce niente e' peggio di un pulsante spento.
+                  if (!vaiAlPrimoBlocco() && motivoDelBlocco) toast.error(motivoDelBlocco);
                 }
               : undefined
           }

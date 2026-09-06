@@ -106,13 +106,22 @@ export function ShippingAddressForm({
 
   if (mostroAttesa) {
     return (
+      /*
+       * 6/9/2026, secondo giro — QUI L'ATTESA ERA MUTA.
+       * C'era `aria-label="Carico i tuoi indirizzi salvati"` e dentro nessuna
+       * parola: solo due mattonelle grigie, per giunta `aria-hidden`. Una regione
+       * viva annuncia il proprio CONTENUTO quando cambia, non il proprio nome —
+       * quindi al primo passo dell'ordine un lettore di schermo non diceva niente,
+       * proprio dove l'incertezza costa un ordine. Adesso la frase c'e' davvero,
+       * come nella griglia dei prodotti.
+       */
       <div
         role="status"
         aria-busy="true"
         aria-live="polite"
-        aria-label="Carico i tuoi indirizzi salvati"
         className="grid grid-cols-1 sm:grid-cols-2 gap-3"
       >
+        <span className="sr-only">Carico i tuoi indirizzi salvati…</span>
         {[0, 1].map((i) => (
           <div key={i} className="rounded-xl border-2 border-cream-300 p-4" aria-hidden>
             <div className="skeleton h-4 w-20 rounded mb-2" />

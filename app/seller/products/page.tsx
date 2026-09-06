@@ -292,7 +292,7 @@ export default function SellerProductsPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-cream-300 bg-cream-50">
-                  {(['Prodotto', 'Prezzo', 'Stock', 'Venduti', 'Stato', ''] as const).map((h, i) => (
+                  {(['Prodotto', 'Prezzo', 'Stock', 'Venduti da sempre', 'Stato', ''] as const).map((h, i) => (
                     <th
                       key={h || i}
                       className={`px-4 py-3 text-[11px] font-bold uppercase tracking-[0.03em] text-ink-500 ${
@@ -460,7 +460,7 @@ export default function SellerProductsPage() {
                         {vendutiIgnoti ? (
                           <span className="text-xs text-ink-400">· venduti non letti</span>
                         ) : soldByProduct[p.id] ? (
-                          <span className="text-xs text-ink-500">· {soldByProduct[p.id]} venduti</span>
+                          <span className="text-xs text-ink-500">· {soldByProduct[p.id]} venduti da sempre</span>
                         ) : null}
                       </div>
                     )}
@@ -501,6 +501,32 @@ export default function SellerProductsPage() {
               </div>
             ))}
           </div>
+
+          {/*
+            6/9/2026 — DUE PAROLE «VENDUTI», TRE SIGNIFICATI, A UN CLIC DI
+            DISTANZA.
+
+            Il cruscotto ha imparato a dire la sua finestra («Ultimi 30
+            giorni»); questa colonna no, e nel frattempo conta un'altra cosa
+            ancora. Le differenze sono tre insieme: la finestra (trenta giorni
+            contro sempre), l'unita' (li' quante volte un prodotto e' stato
+            ordinato, qui quanti pezzi sono stati consegnati) e lo stato (li'
+            pagato e non annullato, qui consegnato). Il negoziante che somma
+            questa colonna ottiene un numero piu' grande di quello scritto in
+            cima al cruscotto, e nessuna delle due schermate gli dice perche'.
+
+            Il numero non si tocca: farlo coincidere vorrebbe dire cambiare
+            `venduti_per_prodotto` (migrazione 141), ed e' una migrazione — cioe'
+            una firma, non un ritocco. Quello che si puo' fare senza toccare i
+            conti e' smettere di chiamare «venduti» due grandezze diverse senza
+            dirlo.
+          */}
+          <p className="border-t border-cream-200 px-4 py-3 text-xs leading-relaxed text-ink-500">
+            «Venduti» sono i pezzi che hai già consegnato, da quando hai aperto il negozio.
+            Nel cruscotto il riquadro «Articoli venduti» conta un&apos;altra cosa: quante volte un
+            tuo prodotto è stato ordinato negli ultimi 30 giorni. Per questo i due numeri non
+            coincidono.
+          </p>
         </Card>
       )}
 

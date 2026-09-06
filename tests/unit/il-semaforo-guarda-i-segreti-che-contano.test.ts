@@ -42,6 +42,11 @@ const TUTTE_LE_IMPORTANTI: Record<string, string> = {
   STRIPE_SECRET_KEY: 'sk_test',
   STRIPE_WEBHOOK_SECRET: 'whsec_test',
   RESEND_API_KEY: 're_test',
+  // 6/9/2026 — la quindicesima. La chiave della posta senza il mittente non spedisce
+  // niente: da oggi, in produzione, se RESEND_FROM manca lib/email/client.ts si ferma
+  // prima di chiamare Resend. Il ciclo qui sotto genera da solo la prova che il
+  // semaforo se ne accorge.
+  RESEND_FROM: 'MyCity <ordini@mycity.test>',
   CRON_SECRET: 'cron_test',
   UPSTASH_REDIS_REST_URL: 'https://upstash.test',
   UPSTASH_REDIS_REST_TOKEN: 'tok_test',

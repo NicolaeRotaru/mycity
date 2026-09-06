@@ -159,6 +159,21 @@ export default function ProductForm({
         ? false
         : Boolean(sellerOffersExpress),
   );
+  /**
+   * 6/9/2026 — IL TEMPO DI CONSEGNA L'HA SCELTO IL NEGOZIANTE, O L'ABBIAMO
+   * INDOVINATO NOI?
+   *
+   * Serve a distinguere le due cose al momento del salvataggio. Quando il
+   * prodotto eredita la consegna dal negozio (`express_enabled` a NULL) e le
+   * impostazioni del negozio non si sono lette, quello che si vede a video è un
+   * ripiego, non una scelta: salvarlo scriverebbe un «no» che nessuno ha
+   * chiesto. Diventa vero solo se il negoziante tocca davvero il selettore.
+   */
+  const [consegnaSceltaDalNegoziante, setConsegnaSceltaDalNegoziante] = useState(false);
+  const scegliTempoDiConsegna = (veloce: boolean) => {
+    setFastDelivery(veloce);
+    setConsegnaSceltaDalNegoziante(true);
+  };
   const [status, setStatus] = useState<string>(initialValues?.status ?? 'available');
   const [variants, setVariants] = useState<ProductVariant[]>(initialValues?.variants ?? []);
   // Assi di variante attivi (chiave campo → valori). Ricostruiti dalle varianti
@@ -635,6 +650,26 @@ export default function ProductForm({
         status: finalStatus,
       });
       if (hasVariants) payload.stock = totalVariantStock(variants);
+      /**
+       * 6/9/2026 — UN SALVATAGGIO SCRIVE SOLO QUELLO CHE L'UTENTE HA CHIESTO.
+       *
+       * Il modulo avvisava del rischio e lasciava il pulsante acceso: chi
+       * entrava per cambiare il prezzo, con le impostazioni del negozio non
+       * lette, usciva col prodotto tolto dalla consegna veloce. Il selettore
+       * mostrava «Spedizione 2-3 giorni», ma era un ripiego, non una scelta —
+       * e il salvataggio lo scriveva in banca dati come se fosse una scelta.
+       *
+       * Un avviso non è un freno. Se non sappiamo cosa offre il negozio e il
+       * negoziante non ha toccato il selettore, il campo non parte proprio: in
+       * banca dati resta quello che c'era, e il prezzo si salva lo stesso.
+       * Disabilitare il pulsante l'avrebbe lasciato senza poter salvare niente
+       * per colpa di una lettura che non c'entra col suo lavoro.
+       *
+       * LA PROVA: tests/unit/il-salvataggio-non-scrive-quello-che-nessuno-ha-toccato.test.ts
+       */
+      if (consegnaDelNegozioNonLetta && !consegnaSceltaDalNegoziante) {
+        delete (payload as Partial<ProductPayload>).express_enabled;
+      }
       onSubmit(payload, { intent, variants });
     });
 
@@ -892,7 +927,7 @@ export default function ProductForm({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setFastDelivery(true)}
+              onClick={() => scegliTempoDiConsegna(true)}
               aria-pressed={fastDelivery}
               className={cn(
                 'flex items-start gap-2.5 rounded-lg border-2 p-3 text-left transition',
@@ -909,7 +944,7 @@ export default function ProductForm({
             </button>
             <button
               type="button"
-              onClick={() => setFastDelivery(false)}
+              onClick={() => scegliTempoDiConsegna(false)}
               aria-pressed={!fastDelivery}
               className={cn(
                 'flex items-start gap-2.5 rounded-lg border-2 p-3 text-left transition',
@@ -927,8 +962,9 @@ export default function ProductForm({
           </div>
           {consegnaDelNegozioNonLetta ? (
             <p className="text-xs text-amber-700 mt-1.5">
-              Non riesco a leggere le impostazioni di consegna del tuo negozio. Ricarica la pagina
-              prima di salvare: altrimenti rischi di togliere la consegna veloce a questo prodotto.
+              Non riesco a leggere le impostazioni di consegna del tuo negozio. Il resto lo salvi
+              tranquillo: il tempo di consegna di questo prodotto resta com&apos;è, a meno che tu non
+              scelga qui sopra. Per vederlo giusto, ricarica la pagina.
             </p>
           ) : (
             fastDelivery && !sellerOffersExpress && (

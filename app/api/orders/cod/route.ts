@@ -28,6 +28,7 @@ import { liberaRiserveAbbandonate } from '@/lib/ordini/riserve-abbandonate';
 import { campoFasciaConsegna } from '@/lib/ordini/fascia-consegna';
 import { rispostaPerCarrelloNonVendibile, validaRigaDelCarrello } from '@/lib/ordini/valida-carrello';
 import { jsonRichiesta, TETTO_JSON } from '@/lib/api/corpo';
+import { formatPriceFromCents } from '@/lib/format';
 
 // 009 / 190 — Queste risposte uscivano come `{ error: '…' }` grezzo, mentre
 // tutto il resto del progetto risponde `{ ok:false, error:{ code, message } }`
@@ -829,7 +830,9 @@ export const POST = withAuthRateLimit(
         category: 'order',
         user_id: c.sellerId,
         title: '🎉 Nuovo ordine!',
-        body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · €${(c.totalCents / 100).toFixed(2)} · pagamento alla consegna`,
+        // 6/9/2026 — Stessa cifra, stesso ordine: si scrive come la scrive
+        // l'email, non a mano all'inglese. Vedi lib/format.ts.
+        body: `Ordine #${c.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(c.totalCents)} · pagamento alla consegna`,
         link: `/seller/orders/${c.orderId}`,
       },
       {

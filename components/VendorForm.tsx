@@ -117,6 +117,17 @@ const VendorForm = ({ onSubmit, isLoading = false, defaultValues, mode = 'all' }
       'image/webp': ['.webp'],
     },
     maxFiles: 1,
+    // Il filtro qui sopra scarta, ma scartava in silenzio: chi trascinava una foto dell'iPhone
+    // (HEIC) la vedeva sparire e non capiva se stesse caricando o no. Stesse parole di
+    // StoreMediaManager, perche' il sito deve dire no in un modo solo.
+    onDropRejected: (rifiutati) => {
+      const troppi = rifiutati.some((r) => r.errors.some((e) => e.code === 'too-many-files'));
+      toast.error(
+        troppi
+          ? 'Una foto alla volta: trascinane una sola.'
+          : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+      );
+    },
     onDrop: async (files) => {
       const file = files[0];
       if (!file) return;

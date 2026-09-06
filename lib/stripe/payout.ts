@@ -734,6 +734,40 @@ export class RimborsoNonRitentabile extends Error {
   }
 }
 
+/**
+ * 6/9/2026 (stesso giorno, riparazione) — «L'ORDINE NON C'E'» E «NON SONO
+ * RIUSCITO A LEGGERLO» NON SONO LA STESSA COSA.
+ *
+ * La lettura dell'ordine puo' fallire per due motivi opposti. Il primo: la
+ * riga non esiste piu', e nessun tentativo futuro la trovera'. Il secondo: il
+ * database non ha risposto — timeout, connessione caduta, PostgREST che
+ * risponde 503 — e allora fra mezz'ora lo stesso ordine si legge benissimo.
+ *
+ * Metterli nella stessa condizione (`if (error || !order)`) lo pagava il
+ * cliente: aveva pagato con la carta, l'ordine restava annullato, il rimborso
+ * portava il marchio «non ritentare mai piu'», e i soldi restavano a noi
+ * finche' una persona non leggeva l'avviso nel pannello. Prima lo stesso
+ * intoppo rimetteva l'ordine in coda e mezz'ora dopo il rimborso partiva da
+ * solo.
+ *
+ * Qui si riconosce SOLO il primo caso: PostgREST risponde `PGRST116` quando la
+ * `single()` non trova nessuna riga. Qualunque altro codice, e qualunque
+ * guasto di rete, resta ritentabile. Sui soldi di chi ha pagato l'incertezza
+ * si risolve riprovando, non tenendoli.
+ */
+function eOrdineInesistente(errore: unknown): boolean {
+  if (!errore || typeof errore !== 'object') return false;
+  const e = errore as { code?: unknown; details?: unknown; message?: unknown };
+  if (e.code === 'PGRST116') return true;
+  // Un codice diverso da PGRST116 e' un guasto (57014 timeout, 08006
+  // connessione persa, 503): si ritenta, non si giudica.
+  if (typeof e.code === 'string' && e.code !== '') return false;
+  const testo = `${typeof e.message === 'string' ? e.message : ''} ${
+    typeof e.details === 'string' ? e.details : ''
+  }`.toLowerCase();
+  return /no rows|0 rows|not found|nessuna riga/.test(testo);
+}
+
 export async function refundOrder(
   opts: RefundOrderOpts,
 ): Promise<{ refundId: string; reversedCents: number }> {
@@ -745,7 +779,18 @@ export async function refundOrder(
     () => admin.from('orders').select(senzaColonne(COLONNE_RIMBORSO, COLONNE_124)).eq('id', opts.orderId).single(),
   );
 
-  if (error || !order) throw new RimborsoNonRitentabile('refundOrder: ordine non trovato');
+  // Un guasto di lettura NON e' un ordine che non esiste: si riprova (vedi
+  // `eOrdineInesistente` qui sopra). Solo la riga davvero assente e' senza
+  // ritorno, e il messaggio resta quello che il giro dei rimborsi gia' scrive.
+  if (error && !eOrdineInesistente(error)) {
+    logger.error('[refundOrder] lettura ordine caduta, il rimborso si ritenta', {
+      orderId: opts.orderId,
+      code: (error as { code?: string }).code,
+      message: (error as { message?: string }).message,
+    });
+    throw new Error('refundOrder: lettura ordine non riuscita, riprovare');
+  }
+  if (!order) throw new RimborsoNonRitentabile('refundOrder: ordine non trovato');
 
   // 055 — DUE BASI DIVERSE, E IL CONTO NON TORNAVA.
   //

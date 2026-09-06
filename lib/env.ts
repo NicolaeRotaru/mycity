@@ -42,22 +42,30 @@ export const env = {
   // Resend (email transazionale)
   resendKey: () => readEnv('RESEND_API_KEY'),
   /**
-   * 6/9/2026 — IL MITTENTE FINTO FACEVA FALLIRE LE EMAIL UNA PER UNA.
+   * 6/9/2026 — IL MITTENTE DI RIPIEGO FACEVA FALLIRE LE EMAIL UNA PER UNA.
    *
-   * Se RESEND_FROM mancava, qui si ripiegava su «no-reply@example.com» e
-   * `lib/email/client.ts` lo usava come mittente vero. Resend rifiuta un
-   * dominio non verificato, quindi la conferma d'ordine al cliente e l'avviso
-   * al negozio fallivano all'INVIO, uno alla volta, e non alla configurazione:
-   * il sito incassava e nessuno riceveva niente. È lo stesso errore già
-   * riparato per NEXT_PUBLIC_APP_URL qui sotto — lì «localhost» finiva
-   * nell'HTML, qui «example.com» finiva nella busta.
+   * Se RESEND_FROM mancava, qui si ripiegava su un indirizzo che nessuno
+   * aveva configurato e `lib/email/client.ts` lo usava come mittente vero.
+   * Resend rifiuta un dominio non verificato, quindi la conferma d'ordine al
+   * cliente e l'avviso al negozio fallivano all'INVIO, uno alla volta, e non
+   * alla configurazione: il sito incassava e nessuno riceveva niente. È lo
+   * stesso errore già riparato per NEXT_PUBLIC_APP_URL qui sotto — lì
+   * «localhost» finiva nell'HTML, qui un dominio non nostro finiva nella busta.
    *
-   * In rete non c'è più nessun ripiego: manca il mittente, la posta non parte
-   * e lo si sa subito (`lib/email/client.ts` e il semaforo `/api/health`). Sul
-   * computer di chi sviluppa il ripiego resta, perché lì non parte niente
-   * comunque.
+   * IN RETE NON C'È PIÙ NESSUN RIPIEGO, e adesso è vero nel codice, non solo
+   * qui scritto: se la variabile manca questa funzione non restituisce niente,
+   * `lib/email/client.ts` si ferma prima di chiamare Resend e scrive l'errore
+   * nei log, e `app/api/health/route.ts` tiene RESEND_FROM fra le variabili
+   * che guarda, quindi il semaforo passa a «degradato» e lo dice a chi
+   * sorveglia. Un guasto solo, detto una volta sola, invece di una email persa
+   * per volta.
+   *
+   * Sul computer di chi sviluppa il ripiego resta: lì senza RESEND_API_KEY
+   * `sendEmail` salta l'invio comunque, e far fallire ogni prova per una
+   * variabile che in locale non spedisce niente non aiuta nessuno.
    */
-  resendFrom: () => readEnv('RESEND_FROM') ?? MITTENTE_DI_RISERVA,
+  resendFrom: (): string | undefined =>
+    readEnv('RESEND_FROM') ?? (siamoInRete() ? undefined : MITTENTE_DI_RISERVA),
   resendReplyTo: () => readEnv('RESEND_REPLY_TO'),
 
   // Cloudflare Turnstile (CAPTCHA)
@@ -101,14 +109,18 @@ export const env = {
 export const DOMINIO_PUBBLICO = 'https://mycity-marketplace.com';
 
 /**
- * Il mittente di riserva, sullo STESSO dominio con cui il sito si presenta al mondo.
+ * Il mittente usato SOLO sul computer di chi sviluppa, quando RESEND_FROM non è impostata.
  *
- * Vale la regola di qui sopra: è l'ultima rete di sicurezza, non la configurazione. Il mittente
- * vero lo decide RESEND_FROM. Ma se quella variabile manca, è meglio partire da un indirizzo
- * NOSTRO che da uno che non esiste: `example.com` è un dominio riservato agli esempi, Resend non
- * lo verificherà mai, e ogni singola email — conferma d'ordine al cliente e avviso al negozio —
- * falliva all'INVIO, una alla volta, mentre il sito incassava. Il guasto si scopriva una email per
- * volta invece che una volta sola.
+ * Attenzione a non leggerlo come la regola di qui sopra: per l'indirizzo pubblico il ripiego è
+ * davvero l'ultima rete di sicurezza, perché una pagina servita con l'indirizzo sbagliato è
+ * comunque meglio di una pagina che non esce. Per il mittente no. Un mittente che nessuno ha
+ * verificato non è una rete: è una email che parte e viene rifiutata, una alla volta, mentre il
+ * sito incassa. Quindi in rete non si ripiega — `resendFrom` qui sopra si ferma — e questo valore
+ * serve solo a far girare l'ambiente locale e le prove, dove la posta non parte comunque.
+ *
+ * Sta sullo stesso dominio con cui il sito si presenta al mondo per una ragione minore ma vera:
+ * anche un indirizzo che non spedisce finisce sotto gli occhi di qualcuno nei log e nelle prove,
+ * e lì è meglio leggere un dominio nostro che un segnaposto preso in prestito.
  */
 const MITTENTE_DI_RISERVA = `MyCity <no-reply@${DOMINIO_PUBBLICO.replace(/^https?:\/\//, '')}>`;
 

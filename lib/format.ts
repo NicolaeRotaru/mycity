@@ -26,6 +26,34 @@ const PREZZO_IT = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 
 export const formatPrice = (n: number | string) => PREZZO_IT.format(Number(n));
 
 /**
+ * 6/9/2026 — I SOLDI ARRIVANO IN CENTESIMI, E OGNI CANALE SE LI DIVIDEVA DA SOLO.
+ *
+ * Passo indietro. Gli importi nel database stanno in centesimi interi (3500),
+ * non in euro con la virgola: sui numeri interi non esistono errori di
+ * arrotondamento, ed e' il motivo per cui li teniamo cosi'. Ma chi deve
+ * SCRIVERE quella cifra a una persona la deve prima riportare in euro, e finora
+ * ognuno lo faceva sul posto: `(cents / 100).toFixed(2)`. Quel `toFixed` e'
+ * l'inglese — rimette il punto al posto della virgola — e chi lo usava ci
+ * attaccava davanti l'euro a mano.
+ *
+ * Esempio vero di oggi. Un ordine da 3500 centesimi: al negoziante arrivava
+ * «35,00 €» nell'email e «€35.00» nella notifica sul telefono; il fattorino
+ * leggeva «€35.00» sull'etichetta da stampare e «€35.00» nella schermata dove
+ * dichiara quanti contanti ha in mano. Stesso ordine, stessa cifra, quattro
+ * modi di scriverla. Chi la legge si ferma a controllare se e' lo stesso
+ * ordine — e quel dubbio, sulla riga dei soldi, e' il danno.
+ *
+ * Ripetuto con altre parole: la divisione per cento si fa QUI, in un posto
+ * solo, e da qui si passa per `formatPrice`. Chi la rifa' per conto suo torna a
+ * scrivere l'inglese senza accorgersene.
+ *
+ * Attenzione: questa serve a MOSTRARE una cifra a una persona. Il valore che
+ * finisce dentro un campo da compilare (`<input type="number">`) non passa di
+ * qui: li' il punto decimale serve al browser, e la virgola lo romperebbe.
+ */
+export const formatPriceFromCents = (cents: number) => formatPrice(cents / 100);
+
+/**
  * 6/9/2026 — La data in lettere portava lo zero davanti al giorno: «03 settembre
  * 2026». In italiano lo zero iniziale si usa solo nella forma tutta numerica
  * (03/09/2026), mai col mese scritto per esteso. `day: 'numeric'` toglie lo zero

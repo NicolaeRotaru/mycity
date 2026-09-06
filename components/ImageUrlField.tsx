@@ -41,6 +41,16 @@ export function ImageUrlField({ value, onChange, bucket = 'products', pathPrefix
     maxFiles: 1,
     multiple: false,
     disabled: uploading,
+    // Il filtro qui sopra scarta, ma scartava in silenzio: il file finito nel cestino non lasciava
+    // traccia a schermo. Stesse parole di StoreMediaManager: il sito dice no in un modo solo.
+    onDropRejected: (rifiutati) => {
+      const troppi = rifiutati.some((r) => r.errors.some((e) => e.code === 'too-many-files'));
+      toast.error(
+        troppi
+          ? 'Una foto alla volta: trascinane una sola.'
+          : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+      );
+    },
     onDrop: async (files) => {
       const file = files[0];
       if (!file) return;

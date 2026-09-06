@@ -23,8 +23,19 @@ import { ALTEZZA_COPERTINA, CONTENITORE_PAGINA_NEGOZIO } from './misure-vetrina'
  *    non annuncia niente, e `aria-busy="true"` chiedeva all'ausilio di tacere
  *    fino a che non fosse tornato falso — cosa che non succedeva mai, perche'
  *    il componente viene sostituito dal negozio vero. Prima si sentiva
- *    «Caricamento…»; poi piu' niente. Adesso la regione ha un nome
- *    (`aria-label`), come lo scheletro della cassa, e non chiede piu' silenzio.
+ *    «Caricamento…»; poi piu' niente.
+ *
+ *    ⚠️ 6/9/2026, secondo giro — IL PRIMO RIMEDIO NON RIMEDIAVA NIENTE, E LO
+ *    DICHIARAVA FATTO. Qui c'era scritto «adesso la regione ha un nome
+ *    (`aria-label`)»: ma una regione viva annuncia il proprio CONTENUTO quando
+ *    cambia, non il proprio nome. Su un `role="status"` vuoto quel nome nessuno
+ *    va a leggerlo, perche' nessuno ci naviga sopra: NVDA, VoiceOver e TalkBack
+ *    continuavano a dire niente, esattamente come prima. Adesso dentro la regione
+ *    c'e' una frase vera, letta solo dai lettori di schermo (`sr-only`) — lo
+ *    stesso modo con cui la griglia dei prodotti dice «Aggiorno i risultati…»
+ *    (components/ProductGrid.tsx) e lo scheletro delle recensioni dice «Carico le
+ *    recensioni…» (app/product/[id]/page.tsx). E `aria-busy` torna al suo posto:
+ *    non sostituisce la frase, l'accompagna.
  * ② Chi ha chiesto meno animazioni. `animate-pulse` non e' nell'elenco che
  *    `app/globals.css` tiene vivo dentro `prefers-reduced-motion` (li' ci sono
  *    la rotellina dei pulsanti e `.skeleton`): con quell'impostazione il battito si
@@ -36,10 +47,14 @@ export default function ScheletroNegozio() {
   return (
     <div
       role="status"
+      aria-busy="true"
       aria-live="polite"
-      aria-label="Sto aprendo il negozio"
       className={CONTENITORE_PAGINA_NEGOZIO}
     >
+      {/* La frase che la regione annuncia. Senza di lei qui dentro c'e' solo
+          grigio, e una regione viva senza testo non annuncia niente. */}
+      <span className="sr-only">Sto aprendo il negozio…</span>
+
       {/* Briciole di pane */}
       <div className="h-4 w-56 max-w-full rounded skeleton" />
 

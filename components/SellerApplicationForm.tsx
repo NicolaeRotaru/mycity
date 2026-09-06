@@ -157,6 +157,20 @@ export default function SellerApplicationForm({ defaultValues, onSubmit, isLoadi
     accept: { 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'], 'image/webp': ['.webp'] },
     maxFiles: 1,
     maxSize: 3 * 1024 * 1024,
+    // Questo e' il primo modulo che compila un negozio nuovo, e il tetto dei 3 MB scartava senza
+    // dire niente: una foto fatta col telefono lo supera quasi sempre, e il negoziante restava a
+    // guardare un riquadro vuoto alla sua prima impressione di MyCity. Stesse parole di
+    // StoreMediaManager, cosi' il sito dice no in un modo solo.
+    onDropRejected: (rifiutati) => {
+      const motivi = rifiutati.flatMap((r) => r.errors.map((e) => e.code));
+      toast.error(
+        motivi.includes('file-too-large')
+          ? 'Foto troppo pesante: serve sotto i 3 MB.'
+          : motivi.includes('too-many-files')
+            ? 'Una foto alla volta: trascinane una sola.'
+            : 'Formato non accettato: servono foto in JPG, PNG o WEBP.',
+      );
+    },
     onDrop: async (files) => {
       const file = files[0];
       if (!file) return;

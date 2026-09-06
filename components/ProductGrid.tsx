@@ -37,6 +37,39 @@ export type SortOption = OrdineGriglia;
 // disegna devono guardare la stessa definizione.
 export type GridMaxColumns = ColonneMassime;
 
+/**
+ * IL SEGNO CHE LA GRIGLIA SI STA AGGIORNANDO.
+ *
+ * 6/9/2026, secondo giro — LO STESSO SEGNALE CANCELLAVA I PRODOTTI A CHI VEDE POCO.
+ *
+ * Il segnale di prima schiariva tutta la griglia a meta' (`opacity-50`) lasciando
+ * le schede cliccabili. Una schiaritura sul contenitore non tocca solo il grigio
+ * di sfondo: mescola col fondo pagina OGNI cosa che sta dentro. Rifatto il conto
+ * sui colori veri di `tailwind.config.ts`, mentre arrivavano i nuovi risultati il
+ * nome del prodotto passava da 15,9 a 3,3 volte il fondo (ne servono 4,5), il nome
+ * del negozio a 2,3, e il «+» che mette nel carrello a 2,1 (ne servono 3). Cioe':
+ * chi tocca un filtro su una rete lenta smette di leggere i prodotti che stava
+ * guardando, e il pulsante che fa comprare quasi sparisce — proprio la persona per
+ * cui il segnale era stato pensato.
+ *
+ * Il segnale adesso e' una riga sottile sopra la griglia: si vede che sta
+ * lavorando, e non tocca il contrasto di niente. Restano dov'erano `aria-busy`
+ * sul contenitore e la riga «Aggiorno i risultati…» per chi ascolta.
+ *
+ * `animate-progress-fill` e non una pulsazione: una pulsazione fa ballare
+ * l'opacita', ed e' esattamente la cosa da cui veniamo. La riga ha un colore
+ * fermo — `primary-700` sul fondo pagina stacca 6,3 volte — e chi ha chiesto meno
+ * animazioni la vede comparire ferma, che e' comunque il segnale.
+ */
+function BarraSiAggiorna({ acceso }: { acceso: boolean }) {
+  if (!acceso) return null;
+  return (
+    <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-cream-200" aria-hidden>
+      <div className="h-full w-full rounded-full bg-primary-700 animate-progress-fill" />
+    </div>
+  );
+}
+
 interface Props {
   categoryId?: string;
   /** Più categorie (es. categoria padre + sottocategorie): usa IN al posto di EQ. */
@@ -212,9 +245,12 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
    * una lettura nuova ma `isLoading` resta falso: per chi guarda non succede niente, e su una rete
    * lenta si tocca il filtro due o tre volte pensando che non abbia preso.
    *
-   * Adesso mentre si aggiorna la griglia si schiarisce e si dichiara occupata (`aria-busy`), e chi
-   * usa un lettore di schermo sente una riga che glielo dice.
+   * Adesso mentre si aggiorna compare una riga sottile sopra la griglia (`BarraSiAggiorna`), il
+   * contenitore si dichiara occupato (`aria-busy`), e chi usa un lettore di schermo sente una riga
+   * che glielo dice.
    *
+   * ⚠️ LA GRIGLIA NON SI SCHIARISCE PIU'. Il primo tentativo la portava a meta' opacita': il perche'
+   * non si puo' fare sta scritto sopra `BarraSiAggiorna`, coi contrasti rifatti sui colori veri.
    * ⚠️ NON si spegne il tocco sui prodotti: durante un aggiornamento le schede vecchie sono ancora
    * vere e cliccabili, e togliere il tocco farebbe perdere il prodotto a chi lo stava premendo.
    * ⚠️ E NON conta il «Carica altri prodotti»: lì si aggiungono righe in fondo, il pulsante dice
@@ -543,8 +579,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
   if (formaFila) {
     const railRow = (
       <>
+        <BarraSiAggiorna acceso={stoAggiornando} />
         <div
-          className={`${CLASSI_FILA} transition-opacity${stoAggiornando ? ' opacity-50' : ''}`}
+          className={CLASSI_FILA}
           aria-busy={stoAggiornando}
         >
           {filtered.map((p, i) => (
@@ -601,8 +638,9 @@ const ProductGrid = ({ categoryId, categoryIds, sellerId, search, limit, maxPric
 
   return (
     <>
+      <BarraSiAggiorna acceso={stoAggiornando} />
       <div
-        className={`${classiDellaGriglia} transition-opacity${stoAggiornando ? ' opacity-50' : ''}`}
+        className={classiDellaGriglia}
         aria-busy={stoAggiornando}
       >
         {filtered.map((p, i) => (

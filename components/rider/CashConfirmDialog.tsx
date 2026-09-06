@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { apiErrorMessage, friendlyError } from '@/lib/errors';
 import { sizedImage } from '@/lib/image-url';
+import { formatPriceFromCents } from '@/lib/format';
 import { useTranslations } from 'next-intl';
 import { Banknote, Camera } from 'lucide-react';
 
@@ -31,6 +32,12 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
   const tStates = useTranslations('states');
   const tActions = useTranslations('actions');
   const [open, setOpen] = useState(false);
+  // 6/9/2026 — QUESTO `toFixed(2)` RESTA, ED E' VOLUTO.
+  // Non e' una cifra da leggere: e' il valore dentro `<input type="number">`,
+  // che il browser accetta solo col punto decimale e che qui sotto rileggiamo
+  // con `parseFloat`. Scriverlo «35,00 €» svuoterebbe il campo e il fattorino
+  // si troverebbe la casella vuota al momento di dichiarare i contanti.
+  // Le cifre da LEGGERE, qui sotto, passano invece da `formatPriceFromCents`.
   const [amount, setAmount] = useState((expectedCents / 100).toFixed(2));
   const [cashPhoto, setCashPhoto] = useState<string | null>(null);
   const [deliveryPhoto, setDeliveryPhoto] = useState<string | null>(null);
@@ -149,9 +156,9 @@ export default function CashConfirmDialog({ orderId, expectedCents, compensoTenu
           className="mt-1 w-full rounded-lg border border-cream-300 px-3 py-2 text-lg font-mono"
         />
         <p className="mt-1 text-xs text-ink-500">
-          Previsto: €{(expectedCents / 100).toFixed(2)}
+          Previsto: {formatPriceFromCents(expectedCents)}
           {compensoTenutoCents > 0 && (
-            <> — hai già trattenuto €{(compensoTenutoCents / 100).toFixed(2)} di compenso.</>
+            <> — hai già trattenuto {formatPriceFromCents(compensoTenutoCents)} di compenso.</>
           )}
         </p>
 

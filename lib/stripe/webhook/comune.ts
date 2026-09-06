@@ -20,6 +20,7 @@ import type Stripe from 'stripe';
 import { getAdminSupabase } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { COLONNE_124, conRipiegoSchema, senzaColonne } from '@/lib/db/migrazione-124';
+import { formatPriceFromCents } from '@/lib/format';
 
 export type DisputeOrderRow = {
   id: string;
@@ -140,7 +141,11 @@ export async function suonaLaCampanellaAiNegozi(
       category: 'order',
       user_id: created.sellerId,
       title: '📦 Nuovo ordine ricevuto',
-      body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · €${(created.totalCents / 100).toFixed(2)} · ${created.itemsCount} articoli`,
+      // 6/9/2026 — LA CIFRA QUI SI SCRIVEVA A MANO, E CONTRADDICEVA L'EMAIL.
+      // C'era `€${(created.totalCents / 100).toFixed(2)}`: sul telefono del
+      // negoziante arrivava «€35.00» mentre l'email dello STESSO ordine, partita
+      // nello stesso minuto, diceva gia' «35,00 €». Si passa dalla casa dei formati.
+      body: `Ordine #${created.orderId.slice(0, 6).toUpperCase()} · ${formatPriceFromCents(created.totalCents)} · ${created.itemsCount} articoli`,
       link: `/seller/orders/${created.orderId}`,
     })),
   );

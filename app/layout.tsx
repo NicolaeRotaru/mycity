@@ -195,7 +195,30 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <link rel="dns-prefetch" href="https://api.stripe.com" />
         <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
       </head>
-      <body className={`${inter.className} bg-cream-100 text-ink-800`}>
+      {/*
+        6/9/2026, secondo giro — DELLA «ZONA SICURA» LEGGEVAMO SOLO IL BORDO DI SOTTO.
+        Accendendo `viewportFit: 'cover'` qui sopra, `env(safe-area-inset-*)` smette di
+        valere zero su un iPhone senza tasto casa. Il commento della viewport elenca chi
+        consuma il bordo DI SOTTO, e va bene. Il problema e' quello che non elencava:
+        `safe-area-inset-left` e `safe-area-inset-right` non comparivano in nessun file
+        del progetto. Col telefono ruotato, il notch e l'angolo arrotondato si mangiano
+        44 punti per lato, e il padding piu' largo che abbiamo e' 24 (`sm:px-6`): il
+        marchio in alto a sinistra e i comandi account/carrello in alto a destra
+        finivano sotto il bordo. E chi ruota il telefono spesso lo ruota apposta — e'
+        uno dei modi con cui chi vede poco si ingrandisce le cose.
+        Sta sul <body> e non su un contenitore: la barra in alto e' `relative` sul
+        telefono e `md:sticky` sul computer, cioe' resta nel flusso del documento e il
+        padding del body la protegge. Il bordo di sotto NON si tocca qui: quello ha gia'
+        la sua casa in app/globals.css e in lib/ui/barra-in-fondo.ts, e contarlo due
+        volte era il difetto di agosto.
+      */}
+      <body
+        className={`${inter.className} bg-cream-100 text-ink-800`}
+        style={{
+          paddingLeft: 'env(safe-area-inset-left, 0px)',
+          paddingRight: 'env(safe-area-inset-right, 0px)',
+        }}
+      >
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:bg-primary-700 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold"

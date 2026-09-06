@@ -210,8 +210,21 @@ const ProductCard = ({
               che è il gradino più piccolo dichiarato dal sistema dei caratteri:
               la sigla si legge, e il pallino resta il segno del negozio accanto
               al nome per esteso, che sta già qui a destra.
+
+              6/9/2026, secondo giro — LA MISURA ERA SISTEMATA, IL COLORE NO.
+              Il gradiente partiva da `primary-500` (#D55F3F): bianco sopra quel
+              colore stacca 3,79 volte, e per un testo di 10 pixel ne servono 4,5.
+              Sulla meta' chiara del cerchio le due maiuscole restavano quindi
+              sotto soglia — cioe' esattamente la macchia che il lavoro di stamattina
+              diceva di aver tolto. Adesso il gradiente parte da `primary-600`
+              (#C0492C, il colore del marchio): bianco sopra stacca 4,96 volte, e il
+              caso peggiore del cerchio — l'angolo in alto a sinistra, dove il
+              gradiente comincia — passa. L'altro capo, `primary-700`, stava gia'
+              a 6,67. L'alternativa era dichiararlo decorativo e nasconderlo al
+              lettore di schermo, ma il pallino il negozio lo dice davvero: si
+              tiene, e si legge.
             */}
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-2xs font-bold text-white">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-600 to-primary-700 text-2xs font-bold text-white">
               {initials}
             </span>
             <span className="truncate text-[11px] font-semibold text-ink-500">{storeName}</span>

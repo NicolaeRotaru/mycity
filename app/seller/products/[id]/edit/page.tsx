@@ -11,6 +11,7 @@ import { confirmDialog } from '@/components/ConfirmDialog';
 import { friendlyError } from '@/lib/errors';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { queryKeys } from '@/lib/queries/keys';
+import { useConsegnaVeloceDelNegozio } from '@/lib/queries/consegna-veloce-del-negozio';
 import { normalizeCondition, type ProductCondition, type ProductUnit } from '@/lib/products/schema';
 import { type ProductVariant } from '@/lib/products/variants';
 import { saveProductVariants, loadProductVariants } from '@/lib/products/persistVariants';
@@ -57,7 +58,7 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
   });
 
   /**
-   * 6/9/2026 — UNA LETTURA CHE NON RIESCE SCRIVEVA UN «NO» DEFINITIVO.
+   * 6/9/2026 — UNA LETTURA CHE NON RIESCE NON SCRIVE PIÙ UN «NO» DEFINITIVO.
    *
    * Il valore di ripiego era `false`, e nessuno guardava se la lettura fosse
    * andata a buon fine. Con la rete lenta o la sessione non ancora pronta, il
@@ -69,26 +70,16 @@ export default function EditProductPage(props: { params: Promise<{ id: string }>
    * che la rete era tornata. Il negoziante cambiava il prezzo e perdeva il
    * vantaggio commerciale, senza vedere niente.
    *
-   * Adesso: la sessione non pronta è una lettura fallita, non un «no»; il
-   * modulo aspetta che la lettura sia arrivata; e se è rotta lo dice, invece di
-   * far finta di sapere.
+   * La domanda «il negozio offre la consegna veloce?» ha una funzione sola, in
+   * `lib/queries/consegna-veloce-del-negozio`: questa pagina e «Nuovo prodotto»
+   * condividono la stessa riga di cache, quindi devono condividere anche la
+   * risposta.
    */
   const {
-    data: offersExpress,
-    isLoading: consegnaInLettura,
-    isError: consegnaNonLetta,
-  } = useQuery({
-    queryKey: [...queryKeys.seller.profile, 'offers-express'],
-    queryFn: async (): Promise<boolean> => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Sessione non ancora pronta');
-      const { data, error } = await supabase.from('profiles').select('offers_express').eq('id', user.id).single();
-      // «Non ho letto il profilo» non è «non offre la consegna espressa»: senza questa riga il
-      // negoziante che l'ha attivata non vede il campo per impostarla, e non capisce perché.
-      if (error) throw error;
-      return Boolean((data as { offers_express?: boolean } | null)?.offers_express);
-    },
-  });
+    offre: offersExpress,
+    inLettura: consegnaInLettura,
+    nonLetta: consegnaNonLetta,
+  } = useConsegnaVeloceDelNegozio();
 
   const update = useMutation({
     mutationFn: async ({ payload, variants: nextVariants }: { payload: ProductPayload; variants: ProductVariant[] }) => {

@@ -13,6 +13,7 @@
  */
 
 import PDFDocument from 'pdfkit';
+import { formatPriceFromCents } from '@/lib/format';
 
 export type LabelData = {
   orderId: string;
@@ -94,7 +95,14 @@ export async function buildShippingLabel(data: LabelData): Promise<Buffer> {
         // leggeva «Ø=Ü° CONTRASSEGNO» proprio sopra la cifra da riscuotere. Per
         // rimettere un'icona serve prima incorporare un font vero (doc.registerFont).
         doc.fillColor('#C0492C').fontSize(8).font('Helvetica-Bold').text('CONTRASSEGNO', 10 * MM_TO_PT, y + 4);
-        doc.fontSize(14).font('Helvetica-Bold').text(`Riscuoti: €${(data.totalCents / 100).toFixed(2)}`, 10 * MM_TO_PT, y + 16);
+        // 6/9/2026 — QUI LA CIFRA SI SCRIVEVA A MANO, E DICEVA UN'ALTRA COSA.
+        // C'era `€${(data.totalCents / 100).toFixed(2)}`: sul foglio usciva
+        // «Riscuoti: €35.00» mentre la stessa cifra, nell'email al negoziante,
+        // era gia' «35,00 €». Il fattorino e il negoziante leggevano lo stesso
+        // ordine scritto in due modi. Ora si passa dalla casa dei formati.
+        // Il font e' Helvetica standard: l'euro (WinAnsi 0x80) e lo spazio
+        // unificatore (0xA0) hanno entrambi il loro glifo, quindi si stampano.
+        doc.fontSize(14).font('Helvetica-Bold').text(`Riscuoti: ${formatPriceFromCents(data.totalCents)}`, 10 * MM_TO_PT, y + 16);
         doc.fillColor('#000000');
         doc.y = y + 40;
       }

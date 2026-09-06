@@ -66,6 +66,11 @@ describe('GET /api/health', () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test';
     process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test';
     process.env.RESEND_API_KEY = 're_test';
+    // 6/9/2026 — la chiave della posta senza il mittente non spedisce niente: da oggi,
+    // in produzione, se RESEND_FROM manca lib/email/client.ts si ferma prima di chiamare
+    // Resend. Le due variabili si guardano insieme, quindi «ambiente completo» le vuole
+    // tutte e due.
+    process.env.RESEND_FROM = 'MyCity <ordini@mycity.test>';
     process.env.CRON_SECRET = 'cron_test';
     process.env.UPSTASH_REDIS_REST_URL = 'https://upstash.test';
     // 27/8/2026 (R184) — L'elenco delle variabili «importanti» e' passato da

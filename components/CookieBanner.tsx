@@ -14,7 +14,9 @@ import {
   osservatoreDelBrowser,
   paddingDiScorrimento,
   seguiAltezza,
+  VARIABILE_ALTEZZA,
 } from '@/lib/altezza-banner';
+import { corsieSotto, fondoDellaBarra } from '@/lib/ui/barra-in-fondo';
 
 /**
  * Banner cookie GDPR/ePrivacy conforme Garante (linee guida 2021):
@@ -106,7 +108,22 @@ export default function CookieBanner() {
       role="dialog"
       aria-labelledby="cookie-banner-title"
       aria-describedby="cookie-banner-desc"
-      className="fixed inset-x-0 bottom-[var(--tabbar-height)] md:bottom-0 z-[100] p-3 sm:p-4"
+      /*
+       * 6/9/2026, secondo giro — ALLA PRIMA VISITA IL BANNER COPRIVA LA BARRA IN FONDO.
+       * Qui c'era `bottom-[var(--tabbar-height)]`, cioe' i 72 punti della barra a schede
+       * scritti a mano. Da quando `viewportFit: 'cover'` e' acceso (app/layout.tsx), la
+       * barra a schede si e' alzata: components/MobileTabBar.tsx ha `pb-safe`, quindi su
+       * un iPhone senza tasto casa e' alta 72 + 34 = 106. Il banner restava a 72 e, con
+       * il suo `z-[100]` contro lo `z-30` della barra, le copriva la fascia superiore —
+       * cioe' un pezzo delle cinque destinazioni (Home, Cerca, Carrello, Ordini,
+       * Profilo), e proprio nel momento in cui uno arriva sul sito per la prima volta.
+       * Il conto adesso lo fa `lib/ui/barra-in-fondo.ts`, che e' la casa unica di chi sta
+       * sopra chi: questo era l'ultimo elemento in fondo che se lo scriveva da solo.
+       * Via anche `md:bottom-0`: da 768 in su `--tabbar-height` vale gia' 0 di suo
+       * (app/globals.css), quindi era una seconda verita' sullo stesso fatto.
+       */
+      style={{ bottom: fondoDellaBarra(corsieSotto(VARIABILE_ALTEZZA)) }}
+      className="fixed inset-x-0 z-[100] p-3 sm:p-4"
     >
       <div className="relative mx-auto max-w-3xl rounded-2xl bg-white p-5 shadow-2xl ring-1 ring-cream-300">
         <h2 id="cookie-banner-title" ref={titoloRef} tabIndex={-1} className="flex items-center gap-2 text-base font-semibold text-ink-900 focus:outline-none">
