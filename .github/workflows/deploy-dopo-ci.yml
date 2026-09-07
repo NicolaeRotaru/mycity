@@ -28,6 +28,31 @@ name: Rilascio dopo CI verde
 #   2. SOLO DOPO, una parola in `vercel.json`:
 #      "main": true   diventa   "main": false
 #
+# 🛡️ 7/9/2026 — PERCHE' `"main": true` E' ANCORA LI', E PERCHE' ADESSO NON FA
+# PIU' PAURA. La domanda se la fara' chiunque legga questo file, e la risposta
+# non puo' stare in `vercel.json`, che essendo JSON non ammette commenti.
+#
+# Girare quella parola oggi non chiuderebbe il difetto: lo scambierebbe con uno
+# peggiore. Questo lavoro non rilascia (mancano i segreti), quindi con `false`
+# il sito smetterebbe di aggiornarsi e basta — e il sito adesso e' pubblico e
+# raggiungibile, quindi sarebbe un peggioramento vero.
+#
+# Il difetto e' stato chiuso da un'altra parte: il cancello e' stato messo
+# DENTRO il build, dove non servono segreti. `vercel.json` dichiara
+# `"buildCommand": "npm run verify && next build"`, cioe' typecheck + lint +
+# prove PRIMA della compilazione. Se una prova e' rossa, `next build` non parte
+# nemmeno e Vercel non ha niente da pubblicare.
+#
+# Quanto era largo il buco davvero, misurato: `next build` fa gia' girare il
+# controllo dei tipi ed eslint (`next.config.js` non li spegne), quindi quelli
+# fermavano gia' un rilascio. Le PROVE no. Era quella la fessura, ed e' quella
+# che il `buildCommand` chiude.
+#
+# Quando i segreti arriveranno, i due cancelli convivono senza pestarsi: questo
+# lavoro diventa l'unica strada e il `buildCommand` resta come seconda rete.
+# La prova che tiene chiuso tutto questo:
+# `tests/rilascio/le-prove-rosse-non-arrivano-in-produzione.sh`.
+#
 # ⚠️ 3/9/2026 — E C'E' UNA TERZA COSA, SCOPERTA GUARDANDO IL PROGETTO VERO.
 #
 # Sul progetto Vercel `mycity` non c'e' NESSUN dominio personalizzato, e la
@@ -37,6 +62,16 @@ name: Rilascio dopo CI verde
 # fumo qui sotto. Il giorno in cui si accendono i segreti, senza una chiave di
 # passaggio la prova avrebbe trovato tre porte chiuse e annullato un rilascio
 # sano a ogni pubblicazione.
+#
+# ✅ 7/9/2026 — META' DI QUESTA TERZA COSA NON E' PIU' VERA, e lasciarla scritta
+# manderebbe qualcuno a cercare un problema che non c'e'. Il dominio ADESSO
+# c'e': il progetto ha `mycity-marketplace.com` e `www.mycity-marketplace.com`
+# fra i suoi domini, il DNS punta a Vercel, e la pagina risponde 200 con la
+# vetrina vera. La protezione resta `all_except_custom_domains`, ma proprio per
+# questo il dominio personalizzato ne e' ESENTE. Resta vero il consiglio sul
+# quarto segreto — serve se un domani la prova di fumo bussa a un indirizzo
+# `*.vercel.app` invece che al dominio — ma non e' piu' una porta chiusa in
+# faccia a ogni rilascio.
 #
 #   3. quindi, insieme ai tre segreti, conviene mettere anche il quarto:
 #      · VERCEL_AUTOMATION_BYPASS_SECRET
