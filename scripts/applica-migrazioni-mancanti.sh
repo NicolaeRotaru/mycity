@@ -51,6 +51,76 @@ CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
 );
 SQL
 
+# =============================================================================
+# CONTROLLO PREVENTIVO: il database che ha una storia PRIMA del registro
+# =============================================================================
+# COSA E' SUCCESSO DAVVERO (misurato il 7/9/2026 sulla produzione, in sola
+# lettura, e poi riprodotto in locale su una copia fedele).
+#
+# La produzione ha 90 righe in `supabase_migrations.schema_migrations`, tutte
+# con `version` a timestamp (20260529013234) e `name` descrittivo
+# (payout_reversal_and_disputes). I file in `migrations/` si chiamano invece
+# `001_create_tables.sql`, cioe' version `001` e name `create_tables`. La regola
+# di salto qui sotto e' `version = '001' OR name = 'create_tables'`: in
+# produzione nessuna delle due combacia, quindi la 001 risulta DA APPLICARE.
+#
+# Ma `001_create_tables.sql` contiene `CREATE TABLE public.profiles (` senza
+# IF NOT EXISTS, e in produzione `public.profiles` esiste (9 righe). Con
+# ON_ERROR_STOP=1 e `set -e`, questo script muore sul PRIMO file:
+#
+#   ▶ applico 001_create_tables.sql
+#   psql: ERROR:  relation "profiles" already exists
+#   (uscita 3, zero migrazioni applicate)
+#
+# Cioe': la riparazione che la scheda del difetto bloccante prescrive
+# («lanciare una volta questo script contro produzione, e' idempotente»)
+# NON funziona sulla produzione. E' idempotente sul database di PROVA, che
+# `tests/sql/harness/apply.sh` costruisce applicando i file in ordine e
+# registrandoli tutti: li' ogni file e' registrato col suo numero, quindi viene
+# saltato. La produzione quella storia non ce l'ha: e' nata prima del registro.
+#
+# Misurato anche quanto sarebbe costato tirare dritto: riapplicando i 149 file
+# a un database che li ha gia' tutti, 13 si rompono (001, 002, 020, 024, 036,
+# 056, 059, 060, 085, 097, 104, 114, 115). «Riapplica tutto» non e' mai
+# un'operazione sicura su questo repo.
+#
+# COSA FA QUESTO CONTROLLO. Riconosce il database nato prima del registro — il
+# registro non e' vuoto, ma non conosce la PRIMA migrazione della cartella — e
+# si FERMA prima di toccare qualsiasi cosa, spiegando cosa fare. Un rifiuto
+# pulito al posto di un'esplosione a meta' strada.
+#
+# Non si ferma: su un database nuovo (registro vuoto -> si applica tutto da
+# capo) e su un database la cui storia e' tracciata dall'inizio (registro che
+# conosce la prima migrazione -> il salto per nome/numero funziona).
+PRIMA_MIGRAZIONE="$(basename "$(ls "$MIG"/*.sql | sort -V | head -1)")"
+PRIMA_VERSIONE="${PRIMA_MIGRAZIONE%%_*}"
+PRIMA_NOME="${PRIMA_MIGRAZIONE#*_}"; PRIMA_NOME="${PRIMA_NOME%.sql}"
+
+righe_registro="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
+  -c "SELECT count(*) FROM supabase_migrations.schema_migrations")"
+conosce_la_prima="$(psql "$DB" -X -A -t -v ON_ERROR_STOP=1 \
+  -c "SELECT 1 FROM supabase_migrations.schema_migrations
+       WHERE version = '$PRIMA_VERSIONE' OR name = '$PRIMA_NOME' LIMIT 1")"
+
+if [ "$righe_registro" -gt 0 ] && [ -z "$conosce_la_prima" ]; then
+  cat >&2 <<FINE
+✗ MI FERMO: questo database ha una storia precedente al registro delle migrazioni.
+
+  Il registro ha $righe_registro migrazioni, ma non conosce la prima della
+  cartella ($PRIMA_MIGRAZIONE). Se andassi avanti proverei ad applicarla,
+  e fallirei subito: contiene CREATE senza IF NOT EXISTS su tabelle che questo
+  database ha gia'.
+
+  Cosa fare, una volta sola, prima di rilanciarmi:
+  registrare come applicate le migrazioni che il database ha gia' (il
+  «baseline»), senza rieseguirle. La procedura misurata e la lista esatta
+  stanno in  docs/migrazioni-baseline-produzione.md
+
+  Nessuna migrazione e' stata applicata. Il database non e' stato toccato.
+FINE
+  exit 2
+fi
+
 applicate=0
 saltate=0
 
