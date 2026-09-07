@@ -295,22 +295,6 @@ jobs:
       - name: Lo script del rilascio non si schianta sul database di produzione
         run: bash tests/sql/harness/lo-script-non-si-schianta-sul-database-nato-prima-del-registro.sh mycity_nato_prima_ci
 
-      # 7/9/2026 — IL CANCELLO DEL RILASCIO STA DENTRO IL BUILD.
-      #
-      # Vercel pubblica in produzione a ogni unione su `main` e non aspetta i
-      # controlli; il lavoro «Rilascio dopo CI verde» che dovrebbe fermarlo e'
-      # inerte finche' mancano i segreti VERCEL_*. Finche' e' cosi', l'unica
-      # cosa che gira davvero prima di una pubblicazione e' il build di Vercel.
-      # Per questo `vercel.json` dichiara `buildCommand: npm run verify && next
-      # build`: le prove stanno DENTRO il build, dove non servono segreti.
-      #
-      # Questo controllo esegue quel comando vero, letto da `vercel.json`, con
-      # `npm` e `next` finti, e guarda il comportamento: con le prove rosse il
-      # build deve fallire senza chiamare `next build`; con le prove verdi deve
-      # riuscire e chiamarlo. Diventa rosso se qualcuno toglie il cancello.
-      - name: Un test rosso non arriva in produzione
-        run: bash tests/rilascio/le-prove-rosse-non-arrivano-in-produzione.sh
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:

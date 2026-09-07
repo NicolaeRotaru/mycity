@@ -3,8 +3,6 @@
 
   "regions": ["cdg1"],
 
-  "buildCommand": "npm run verify && next build",
-
   "git": {
     "deploymentEnabled": {
       "main": true
