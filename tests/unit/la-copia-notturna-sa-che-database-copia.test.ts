@@ -16,6 +16,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 const leggi = (p: string) => readFileSync(join(process.cwd(), p), 'utf8');
@@ -58,6 +59,64 @@ describe('il lavoro che copia il database ogni notte', () => {
     // fino alla prima volta che serve davvero una copia.
     expect(workflow).toContain('pg_dump --version');
     expect(workflow).toMatch(/::error::pg_dump non e' la versione/);
+  });
+});
+
+describe('il controllo sulla forma dell\'indirizzo del database', () => {
+  // 7/9/2026 — La prima corsa con le chiavi collegate è morta dicendo «connection to server on
+  // socket /var/run/postgresql/... failed»: sembra un database locale rotto, ed è invece pg_dump
+  // che, non riconoscendo un indirizzo, prende l'ultimo argomento come NOME del database.
+  // Il messaggio mandava a cercare il guasto dalla parte sbagliata.
+  //
+  // Questa prova non cerca una parola nel file: ESEGUE il pezzo di shell vero, preso dal lavoro,
+  // e gli dà i valori che una persona può incollare per sbaglio.
+  const workflow = leggi('.github/workflows/backup-db.yml');
+
+  // Se il controllo sparisce dal lavoro, `blocco` resta null e ogni prova qui sotto fallisce
+  // dicendo perché — invece di far saltare la lettura dell'intero file.
+  const blocco: string | null = (() => {
+    const i = workflow.indexOf('case "$SUPABASE_DB_URL" in');
+    if (i < 0) return null;
+    const j = workflow.indexOf('esac', i);
+    if (j < 0) return null;
+    // Le righe del YAML sono indentate: le riporto a filo per darle a bash.
+    return workflow.slice(i, j + 4).split('\n').map((r) => r.replace(/^ {10}/, '')).join('\n');
+  })();
+
+  const provaCon = (valore: string) => {
+    expect(blocco, 'il controllo della forma non c\'è più nel lavoro: nessuno ferma un valore incollato male').not.toBeNull();
+    return spawnSync('bash', ['-c', blocco as string], {
+      encoding: 'utf8',
+      env: { ...process.env, SUPABASE_DB_URL: valore },
+    });
+  };
+
+  it('lascia passare un indirizzo vero', () => {
+    for (const buono of [
+      'postgresql://postgres:segreta@db.abcdefgh.supabase.co:5432/postgres',
+      'postgres://postgres:segreta@db.abcdefgh.supabase.co:5432/postgres',
+    ]) {
+      expect(provaCon(buono).status, `bocciato un indirizzo valido: ${buono}`).toBe(0);
+    }
+  });
+
+  it('ferma i quattro modi in cui si sbaglia a incollarlo', () => {
+    const sbagliati = [
+      'psql "postgresql://postgres:segreta@db.abcdefgh.supabase.co:5432/postgres"', // il comando intero
+      '"postgresql://postgres:segreta@db.abcdefgh.supabase.co:5432/postgres"', // con le virgolette
+      ' postgresql://postgres:segreta@db.abcdefgh.supabase.co:5432/postgres', // uno spazio davanti
+      'https://abcdefgh.supabase.co', // l'indirizzo del progetto, non del database
+    ];
+    for (const brutto of sbagliati) {
+      const r = provaCon(brutto);
+      expect(r.status, `lasciato passare un valore che pg_dump non capirebbe: ${brutto}`).not.toBe(0);
+      expect(r.stdout + r.stderr).toContain('deve cominciare con postgresql://');
+    }
+  });
+
+  it('non stampa mai il valore del segreto', () => {
+    const r = provaCon('valore-segretissimo-da-non-stampare');
+    expect(r.stdout + r.stderr).not.toContain('valore-segretissimo-da-non-stampare');
   });
 });
 
